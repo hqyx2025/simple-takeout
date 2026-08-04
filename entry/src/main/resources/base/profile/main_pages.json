@@ -11,6 +11,7 @@
     "pages/ProfileEditPage",
     "pages/SettingsPage",
     "pages/MerchantOrdersPage",
-    "pages/MerchantStatsPage"
+    "pages/MerchantStatsPage",
+    "pages/MerchantCenterPage"
   ]
 }
