@@ -213,6 +213,17 @@ export function removeGoodsFromStore(storeId: number, goodsId: number): void {
   AppStorage.setOrCreate('allGoodsMap', goodsMap)
 }
 
+export function updateGoodsToStore(storeId: number, goods: GoodsItem): void {
+  const goodsMap: Record<string, GoodsItem[]> = AppStorage.get<Record<string, GoodsItem[]>>('allGoodsMap') || {}
+  const storeGoods: GoodsItem[] = goodsMap[storeId.toString()] || []
+  const index = storeGoods.findIndex(g => g.id === goods.id)
+  if (index >= 0) {
+    storeGoods[index] = goods
+    goodsMap[storeId.toString()] = storeGoods
+    AppStorage.setOrCreate('allGoodsMap', goodsMap)
+  }
+}
+
 export function getGoodsForStore(storeId: number): GoodsItem[] {
   const goodsMap: Record<string, GoodsItem[]> = AppStorage.get<Record<string, GoodsItem[]>>('allGoodsMap') || {}
   return goodsMap[storeId.toString()] || []

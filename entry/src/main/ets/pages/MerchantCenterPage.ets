@@ -3,9 +3,10 @@
  * 商户可查看自己的店铺列表、管理店铺、上架食物
  */
 import { StoreItem, GoodsItem, UserRole, User } from '../model/Models'
-import { getStoresByOwner, getGoodsForStore, addGoodsToStore, removeGoodsFromStore, createStore } from '../service/AppStorageManager'
+import { getStoresByOwner, getGoodsForStore, addGoodsToStore, removeGoodsFromStore, createStore, updateStore, updateGoodsToStore } from '../service/AppStorageManager'
 import { formatSales } from '../service/MockDataService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { promptAction } from '@kit.ArkUI'
 
 @Component
 export struct MerchantCenterPage {
@@ -30,6 +31,21 @@ export struct MerchantCenterPage {
   @State newGoodsDesc: string = ''
   @State newGoodsPrice: string = ''
   @State newGoodsCategory: string = '1'
+
+  // 编辑店铺表单
+  @State showEditStore: boolean = false
+  @State editStoreName: string = ''
+  @State editStoreNotice: string = ''
+  @State editStoreDeliveryFee: string = ''
+  @State editStoreMinOrder: string = ''
+  @State editingStoreId: number = 0
+
+  // 编辑商品表单
+  @State showEditGoods: boolean = false
+  @State editingGoodsId: number = 0
+  @State editGoodsName: string = ''
+  @State editGoodsDesc: string = ''
+  @State editGoodsPrice: string = ''
 
   aboutToAppear() {
     this.refreshStores()
@@ -133,6 +149,9 @@ export struct MerchantCenterPage {
                 .layoutWeight(1)
                 .alignItems(HorizontalAlign.Start)
                 Blank()
+                Text('编辑').fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
+                  .padding({ left: 8, right: 8 })
+                  .onClick(() => { this.startEditStore(store) })
                 Text('管理 ›')
                   .fontSize(FONT_SIZE.MD).fontColor(COLORS.PRIMARY)
               }
@@ -200,6 +219,48 @@ export struct MerchantCenterPage {
         .alignItems(HorizontalAlign.Center)
       }
 
+      // 编辑店铺弹窗
+      if (this.showEditStore) {
+        Column() {
+          Column({ space: SPACING.MD }) {
+            Text('编辑店铺')
+              .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+            TextInput({ placeholder: '店铺名称', text: this.editStoreName })
+              .width('100%').height(44).onChange((v: string) => { this.editStoreName = v })
+            TextInput({ placeholder: '店铺公告', text: this.editStoreNotice })
+              .width('100%').height(44).onChange((v: string) => { this.editStoreNotice = v })
+            Row({ space: SPACING.MD }) {
+              TextInput({ placeholder: '配送费', text: this.editStoreDeliveryFee })
+                .layoutWeight(1).height(44).type(InputType.Number)
+                .onChange((v: string) => { this.editStoreDeliveryFee = v })
+              TextInput({ placeholder: '起送价', text: this.editStoreMinOrder })
+                .layoutWeight(1).height(44).type(InputType.Number)
+                .onChange((v: string) => { this.editStoreMinOrder = v })
+            }
+            Row({ space: SPACING.MD }) {
+              Button('取消')
+                .layoutWeight(1).height(44).fontSize(FONT_SIZE.MD)
+                .fontColor(COLORS.TEXT_SECONDARY).backgroundColor('#F5F5F5')
+                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                .onClick(() => { this.showEditStore = false })
+              Button('保存')
+                .layoutWeight(1).height(44).fontSize(FONT_SIZE.MD)
+                .fontColor(Color.White).backgroundColor(COLORS.PRIMARY)
+                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                .onClick(() => { this.doEditStore() })
+            }
+          }
+          .width('90%')
+          .padding(SPACING.XL)
+          .backgroundColor(Color.White)
+          .borderRadius(BORDER_RADIUS.XL)
+        }
+        .width('100%').height('100%')
+        .backgroundColor('rgba(0,0,0,0.5)')
+        .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Center)
+      }
+
       // 商品管理面板（选中店铺后显示）
       if (this.selectedStoreId > 0 && !this.showAddStore) {
         Column() {
@@ -214,7 +275,7 @@ export struct MerchantCenterPage {
               .height(32).fontSize(FONT_SIZE.SM).fontColor(Color.White)
               .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.ROUND)
               .type(ButtonType.Capsule)
-              .onClick(() => { this.showAddGoods = true })
+              .onClick(() => { this.showAddGoods = true; this.showEditGoods = false })
           }
           .width('100%').height(50)
           .padding({ left: SPACING.LG, right: SPACING.LG })
@@ -254,6 +315,35 @@ export struct MerchantCenterPage {
             .borderRadius(BORDER_RADIUS.LG)
           }
 
+          // 编辑商品表单
+          if (this.showEditGoods) {
+            Column({ space: SPACING.SM }) {
+              Text('编辑商品').fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+              TextInput({ placeholder: '商品名称', text: this.editGoodsName })
+                .width('100%').height(40).onChange((v: string) => { this.editGoodsName = v })
+              TextInput({ placeholder: '商品描述', text: this.editGoodsDesc })
+                .width('100%').height(40).onChange((v: string) => { this.editGoodsDesc = v })
+              TextInput({ placeholder: '价格', text: this.editGoodsPrice })
+                .width('100%').height(40).type(InputType.Number)
+                .onChange((v: string) => { this.editGoodsPrice = v })
+              Row({ space: SPACING.SM }) {
+                Button('取消').layoutWeight(1).height(36).fontSize(FONT_SIZE.SM)
+                  .fontColor(COLORS.TEXT_SECONDARY).backgroundColor('#F5F5F5')
+                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                  .onClick(() => { this.showEditGoods = false })
+                Button('保存').layoutWeight(1).height(36).fontSize(FONT_SIZE.SM)
+                  .fontColor(Color.White).backgroundColor(COLORS.PRIMARY)
+                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                  .onClick(() => { this.doEditGoods() })
+              }
+            }
+            .width('100%')
+            .padding(SPACING.MD)
+            .margin({ top: SPACING.SM })
+            .backgroundColor('#FFF8F0')
+            .borderRadius(BORDER_RADIUS.LG)
+          }
+
           // 商品列表
           List({ space: SPACING.SM }) {
             ForEach(this.selectedStoreGoods, (goods: GoodsItem) => {
@@ -271,14 +361,34 @@ export struct MerchantCenterPage {
                   Column({ space: 4 }) {
                     Text(`¥${goods.price}`)
                       .fontSize(FONT_SIZE.LG).fontColor(COLORS.PRICE_RED).fontWeight(FontWeight.Bold)
-                    Button('删除')
-                      .height(28).fontSize(FONT_SIZE.XS).fontColor(COLORS.ERROR)
-                      .backgroundColor('#FFF0F0').borderRadius(BORDER_RADIUS.ROUND)
-                      .type(ButtonType.Capsule)
-                      .onClick(() => {
-                        removeGoodsFromStore(this.selectedStoreId, goods.id)
-                        this.selectedStoreGoods = getGoodsForStore(this.selectedStoreId)
-                      })
+                    Row({ space: SPACING.XS }) {
+                      Button('删除')
+                        .height(28).fontSize(FONT_SIZE.XS).fontColor(COLORS.ERROR)
+                        .backgroundColor('#FFF0F0').borderRadius(BORDER_RADIUS.ROUND)
+                        .type(ButtonType.Capsule)
+                        .onClick(() => {
+                          removeGoodsFromStore(this.selectedStoreId, goods.id)
+                          this.selectedStoreGoods = getGoodsForStore(this.selectedStoreId)
+                        })
+                      Button('编辑')
+                        .height(28).fontSize(FONT_SIZE.XS).fontColor(COLORS.PRIMARY)
+                        .backgroundColor(COLORS.TAG_BG).borderRadius(BORDER_RADIUS.ROUND)
+                        .type(ButtonType.Capsule)
+                        .onClick(() => { this.startEditGoods(goods) })
+                      if (goods.isOnShelf === false) {
+                        Button('上架')
+                          .height(28).fontSize(FONT_SIZE.XS).fontColor(COLORS.SUCCESS)
+                          .backgroundColor('#E8F5E9').borderRadius(BORDER_RADIUS.ROUND)
+                          .type(ButtonType.Capsule)
+                          .onClick(() => { this.toggleGoodsShelf(goods, true) })
+                      } else {
+                        Button('下架')
+                          .height(28).fontSize(FONT_SIZE.XS).fontColor(COLORS.WARNING)
+                          .backgroundColor('#FFF3E0').borderRadius(BORDER_RADIUS.ROUND)
+                          .type(ButtonType.Capsule)
+                          .onClick(() => { this.toggleGoodsShelf(goods, false) })
+                      }
+                    }
                   }
                 }
                 .width('100%')
@@ -363,5 +473,104 @@ export struct MerchantCenterPage {
     this.newGoodsPrice = ''
     this.showAddGoods = false
     this.selectedStoreGoods = getGoodsForStore(this.selectedStoreId)
+  }
+
+  startEditStore(store: StoreItem) {
+    this.editingStoreId = store.id
+    this.editStoreName = store.name
+    this.editStoreNotice = store.notice
+    this.editStoreDeliveryFee = store.deliveryFee.toString()
+    this.editStoreMinOrder = store.minOrder.toString()
+    this.showEditStore = true
+  }
+
+  doEditStore() {
+    if (this.editStoreName === '') {
+      promptAction.showToast({ message: '店铺名称不能为空' })
+      return
+    }
+    const originalStore = this.myStores.find(s => s.id === this.editingStoreId)
+    if (originalStore === undefined || originalStore === null) {
+      return
+    }
+    const fee = Number(this.editStoreDeliveryFee) || 0
+    const minOrder = Number(this.editStoreMinOrder) || 0
+    const updatedStore: StoreItem = {
+      id: originalStore.id,
+      name: this.editStoreName,
+      image: originalStore.image,
+      rating: originalStore.rating,
+      monthlySales: originalStore.monthlySales,
+      deliveryFee: fee,
+      minOrder: minOrder,
+      deliveryTime: originalStore.deliveryTime,
+      distance: originalStore.distance,
+      tags: originalStore.tags,
+      notice: this.editStoreNotice || '欢迎光临',
+      categoryId: originalStore.categoryId,
+      categoryIds: originalStore.categoryIds,
+      ownerId: originalStore.ownerId,
+    }
+    updateStore(updatedStore)
+    this.refreshStores()
+    this.showEditStore = false
+    promptAction.showToast({ message: '保存成功' })
+  }
+
+  startEditGoods(goods: GoodsItem) {
+    this.editingGoodsId = goods.id
+    this.editGoodsName = goods.name
+    this.editGoodsDesc = goods.description
+    this.editGoodsPrice = goods.price.toString()
+    this.showAddGoods = false
+    this.showEditGoods = true
+  }
+
+  doEditGoods() {
+    if (this.editGoodsName === '') {
+      promptAction.showToast({ message: '商品名称不能为空' })
+      return
+    }
+    const originalGoods = this.selectedStoreGoods.find(g => g.id === this.editingGoodsId)
+    if (originalGoods === undefined || originalGoods === null) {
+      return
+    }
+    const price = Number(this.editGoodsPrice) || 0
+    const updatedGoods: GoodsItem = {
+      id: originalGoods.id,
+      name: this.editGoodsName,
+      description: this.editGoodsDesc || '美味可口',
+      price: price,
+      originalPrice: originalGoods.originalPrice,
+      image: originalGoods.image,
+      categoryId: originalGoods.categoryId,
+      sales: originalGoods.sales,
+      rating: originalGoods.rating,
+      tag: originalGoods.tag,
+      isOnShelf: originalGoods.isOnShelf,
+    }
+    updateGoodsToStore(this.selectedStoreId, updatedGoods)
+    this.showEditGoods = false
+    this.selectedStoreGoods = getGoodsForStore(this.selectedStoreId)
+    promptAction.showToast({ message: '保存成功' })
+  }
+
+  toggleGoodsShelf(goods: GoodsItem, onShelf: boolean) {
+    const updatedGoods: GoodsItem = {
+      id: goods.id,
+      name: goods.name,
+      description: goods.description,
+      price: goods.price,
+      originalPrice: goods.originalPrice,
+      image: goods.image,
+      categoryId: goods.categoryId,
+      sales: goods.sales,
+      rating: goods.rating,
+      tag: goods.tag,
+      isOnShelf: onShelf,
+    }
+    updateGoodsToStore(this.selectedStoreId, updatedGoods)
+    this.selectedStoreGoods = getGoodsForStore(this.selectedStoreId)
+    promptAction.showToast({ message: onShelf ? '已上架' : '已下架' })
   }
 }
