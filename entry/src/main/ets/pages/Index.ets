@@ -2,11 +2,12 @@
  * 主页面 - 简单外卖App
  * 包含：搜索栏、分类导航、店铺列表、店铺详情、购物车、订单列表、个人中心、底部Tab导航
  */
-import { Category, StoreItem, GoodsItem, CartItem, Order, User, UserRole } from '../model/Models'
-import { getCategories, formatSales } from '../service/MockDataService'
-import { addToCart, updateCartItemQuantity, confirmOrder, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore } from '../service/AppStorageManager'
+import { Category, StoreItem, GoodsItem, CartItem, Order, User, UserRole, Review } from '../model/Models'
+import { getCategories, formatSales, getGoodsCategories } from '../service/MockDataService'
+import { addToCart, updateCartItemQuantity, confirmOrder, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, toggleFavorite, isFavorited, getStoreReviews } from '../service/AppStorageManager'
 import { LoginPage } from './LoginPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
+import { promptAction } from '@kit.ArkUI'
 import router from '@ohos.router'
 
 // 定义快捷入口和订单Tab的数据类型，解决 arkts-no-untyped-obj-literals 错误
@@ -425,6 +426,10 @@ struct StoreDetailContent {
   @State storeNotice: string = ''
   @State cartCount: number = 0
   @State cartTotal: number = 0
+  @State isFav: boolean = false
+  @State storeReviews: Review[] = []
+  @State currentCat: string = '全部'
+  @State goodsCats: string[] = ['全部']
   @StorageLink('cartItems') cartItems: CartItem[] = []
 
   aboutToAppear() {
@@ -441,6 +446,11 @@ struct StoreDetailContent {
       this.storeTags = store.tags
       this.storeNotice = store.notice
     }
+    this.isFav = isFavorited(this.storeId)
+    this.storeReviews = getStoreReviews(this.storeId)
+    const cats: string[] = getGoodsCategories(this.storeId)
+    this.goodsCats = ['全部', ...cats]
+    this.currentCat = '全部'
     this.updateCartInfo()
   }
 
@@ -451,12 +461,49 @@ struct StoreDetailContent {
     this.cartTotal = sc.reduce((s, i) => s + i.goods.price * i.quantity, 0)
   }
 
+  // 按当前分类筛选商品
+  get filteredGoods(): GoodsItem[] {
+    if (this.currentCat === '全部') {
+      return this.goodsList
+    }
+    const categoryNames: Record<string, string> = {
+      '1': '热销菜', '2': '快餐', '3': '饮品', '4': '甜品', '5': '火锅', '6': '烧烤', '7': '面食'
+    }
+    return this.goodsList.filter(g => {
+      const name: string | undefined = categoryNames[g.categoryId.toString()]
+      return name !== undefined && name === this.currentCat
+    })
+  }
+
+  // 生成评分星星字符串
+  getStars(rating: number): string {
+    let stars: string = ''
+    for (let i = 0; i < rating; i++) {
+      stars += '★'
+    }
+    return stars
+  }
+
   build() {
     Column() {
       // 店铺信息
       Column({ space: 6 }) {
-        Text(this.storeName)
-          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+        Row() {
+          Text(this.storeName)
+            .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+            .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text(this.isFav ? '❤️' : '🤍')
+            .fontSize(24)
+            .onClick(() => {
+              const fav: boolean = toggleFavorite(this.storeId)
+              this.isFav = fav
+              promptAction.showToast({
+                message: fav ? '已收藏' : '已取消收藏',
+                duration: 2000
+              })
+            })
+        }
+        .width('100%')
         Row({ space: 12 }) {
           Text(`${this.storeRating}分`).fontSize(FONT_SIZE.MD).fontColor(COLORS.PRIMARY).fontWeight(FontWeight.Bold)
           Text(`月售${formatSales(this.storeMonthlySales)}`).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_SECONDARY)
@@ -487,15 +534,16 @@ struct StoreDetailContent {
       // 分类Tab
       Scroll() {
         Row({ space: SPACING.SM }) {
-          Text('全部').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_WHITE)
-            .backgroundColor(COLORS.PRIMARY)
-            .padding({ left: 12, right: 12, top: 4, bottom: 4 }).borderRadius(BORDER_RADIUS.ROUND).height(28)
-          Text('热销').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_SECONDARY)
-            .backgroundColor('#F5F5F5')
-            .padding({ left: 12, right: 12, top: 4, bottom: 4 }).borderRadius(BORDER_RADIUS.ROUND).height(28)
-          Text('优惠').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_SECONDARY)
-            .backgroundColor('#F5F5F5')
-            .padding({ left: 12, right: 12, top: 4, bottom: 4 }).borderRadius(BORDER_RADIUS.ROUND).height(28)
+          ForEach(this.goodsCats, (catName: string) => {
+            Text(catName)
+              .fontSize(FONT_SIZE.MD)
+              .fontColor(this.currentCat === catName ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
+              .backgroundColor(this.currentCat === catName ? COLORS.PRIMARY : '#F5F5F5')
+              .padding({ left: 12, right: 12, top: 4, bottom: 4 })
+              .borderRadius(BORDER_RADIUS.ROUND)
+              .height(28)
+              .onClick(() => { this.currentCat = catName })
+          }, (catName: string) => catName)
         }
         .padding({ left: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
       }
@@ -506,7 +554,7 @@ struct StoreDetailContent {
       Stack({ alignContent: Alignment.Bottom }) {
         Scroll() {
           Column() {
-            ForEach(this.goodsList, (goods: GoodsItem) => {
+            ForEach(this.filteredGoods, (goods: GoodsItem) => {
               Row({ space: SPACING.MD }) {
                 // 商品图片
                 Column() {
@@ -553,6 +601,9 @@ struct StoreDetailContent {
               }
               .width('100%').padding(SPACING.MD)
             }, (item: GoodsItem) => item.id.toString())
+
+            // 用户评价列表区域
+            this.ReviewsSection()
           }
           .padding({ bottom: 60 })
         }
@@ -629,6 +680,58 @@ struct StoreDetailContent {
     .width('100%').height(56)
     .padding({ left: SPACING.LG, right: SPACING.SM })
     .backgroundColor(COLORS.TEXT_PRIMARY)
+  }
+
+  @Builder
+  ReviewsSection() {
+    Column({ space: SPACING.SM }) {
+      Text(`用户评价（${this.storeReviews.length}条）`)
+        .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+        .width('100%')
+
+      if (this.storeReviews.length === 0) {
+        Text('暂无评价')
+          .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
+          .width('100%').textAlign(TextAlign.Center)
+          .padding({ top: SPACING.LG, bottom: SPACING.LG })
+      } else {
+        ForEach(this.storeReviews.slice(0, 3), (review: Review) => {
+          Column({ space: 4 }) {
+            Row({ space: 8 }) {
+              Text(review.username)
+                .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY).fontWeight(FontWeight.Bold)
+              Text(this.getStars(review.rating))
+                .fontSize(FONT_SIZE.SM).fontColor(COLORS.WARNING)
+            }
+            .width('100%')
+            Text(review.content)
+              .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+              .width('100%')
+            if (review.tags.length > 0) {
+              Flex({ wrap: FlexWrap.Wrap }) {
+                ForEach(review.tags, (tag: string) => {
+                  Text(tag)
+                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TAG_TEXT).backgroundColor(COLORS.TAG_BG)
+                    .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+                    .borderRadius(BORDER_RADIUS.SM)
+                    .margin({ right: 4, bottom: 4 })
+                }, (tag: string) => tag)
+              }
+              .width('100%')
+            }
+            Text(review.createTime)
+              .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+              .width('100%')
+          }
+          .width('100%')
+          .padding(SPACING.MD)
+          .backgroundColor(COLORS.BG_WHITE)
+          .borderRadius(BORDER_RADIUS.MD)
+        }, (review: Review) => review.id.toString())
+      }
+    }
+    .width('100%')
+    .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.LG })
   }
 
   submitOrder() {
