@@ -7,6 +7,7 @@ import { getCategories, formatSales, getGoodsCategories } from '../service/MockD
 import { addToCart, updateCartItemQuantity, confirmOrder, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, toggleFavorite, isFavorited, getStoreReviews } from '../service/AppStorageManager'
 import { LoginPage } from './LoginPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
+import { EmptyState } from '../components/EmptyState'
 import { promptAction } from '@kit.ArkUI'
 import router from '@ohos.router'
 
@@ -34,6 +35,60 @@ class OrderTabItem {
     item.title = title
     item.status = status
     return item
+  }
+}
+
+// 店铺列表懒加载数据源（实现 IDataSource）
+class StoreDataSource implements IDataSource {
+  private list: StoreItem[] = []
+  private listeners: DataChangeListener[] = []
+
+  totalCount(): number {
+    return this.list.length
+  }
+
+  getData(index: number): StoreItem {
+    return this.list[index]
+  }
+
+  registerDataChangeListener(listener: DataChangeListener): void {
+    this.listeners.push(listener)
+  }
+
+  unregisterDataChangeListener(listener: DataChangeListener): void {
+    this.listeners = this.listeners.filter((l: DataChangeListener) => l !== listener)
+  }
+
+  setData(data: StoreItem[]): void {
+    this.list = data
+    this.listeners.forEach((l: DataChangeListener) => l.onDataReloaded())
+  }
+}
+
+// 订单列表懒加载数据源（实现 IDataSource）
+class OrderDataSource implements IDataSource {
+  private list: Order[] = []
+  private listeners: DataChangeListener[] = []
+
+  totalCount(): number {
+    return this.list.length
+  }
+
+  getData(index: number): Order {
+    return this.list[index]
+  }
+
+  registerDataChangeListener(listener: DataChangeListener): void {
+    this.listeners.push(listener)
+  }
+
+  unregisterDataChangeListener(listener: DataChangeListener): void {
+    this.listeners = this.listeners.filter((l: DataChangeListener) => l !== listener)
+  }
+
+  setData(data: Order[]): void {
+    this.list = data
+    this.listeners.forEach((l: DataChangeListener) => l.onDataReloaded())
   }
 }
 
@@ -140,12 +195,15 @@ struct HomePage {
   @State stores: StoreItem[] = []
   @State searchText: string = ''
   @State currentCategory: number = 0
+  @State isRefreshing: boolean = false
   onStoreClick: (store: StoreItem) => void = () => {}
   onNavigateLogin: () => void = () => {}
+  private storeDataSource: StoreDataSource = new StoreDataSource()
 
   aboutToAppear() {
     this.categories = getCategories()
     this.stores = getAllStoresList()
+    this.storeDataSource.setData(this.stores)
   }
 
   build() {
@@ -218,6 +276,7 @@ struct HomePage {
                     this.stores = getAllStoresList().filter(s => s.categoryId === cat.id ||
                       (s.categoryIds && s.categoryIds.includes(cat.id)))
                   }
+                  this.storeDataSource.setData(this.stores)
                 })
               }
             }, (item: Category) => item.id.toString())
@@ -290,16 +349,31 @@ struct HomePage {
           .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.SM })
 
           // 店铺列表
-          List({ space: SPACING.SM }) {
-            ForEach(this.stores, (store: StoreItem) => {
-              ListItem() {
-                this.StoreCard(store)
+          if (this.stores.length === 0) {
+            EmptyState({ icon: '🏪', title: '暂无店铺', description: '暂无符合条件的店铺' })
+          } else {
+            Refresh({ refreshing: this.isRefreshing }) {
+              List({ space: SPACING.SM }) {
+                LazyForEach(this.storeDataSource, (store: StoreItem) => {
+                  ListItem() {
+                    this.StoreCard(store)
+                  }
+                }, (item: StoreItem) => item.id.toString())
               }
-            }, (item: StoreItem) => item.id.toString())
+              .width('100%')
+              .padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.LG })
+              .divider({ strokeWidth: 0 })
+              .cachedCount(5)
+            }
+            .onRefreshing(() => {
+              this.stores = getAllStoresList()
+              if (this.currentCategory > 0) {
+                this.stores = this.stores.filter(s => s.categoryId === this.currentCategory || (s.categoryIds && s.categoryIds.includes(this.currentCategory)))
+              }
+              this.storeDataSource.setData(this.stores)
+              this.isRefreshing = false
+            })
           }
-          .width('100%')
-          .padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.LG })
-          .divider({ strokeWidth: 0 })
         }
       }
       .scrollBar(BarState.Off)
@@ -461,15 +535,16 @@ struct StoreDetailContent {
     this.cartTotal = sc.reduce((s, i) => s + i.goods.price * i.quantity, 0)
   }
 
-  // 按当前分类筛选商品
+  // 按当前分类筛选商品，并过滤已下架商品
   get filteredGoods(): GoodsItem[] {
+    const onShelfGoods: GoodsItem[] = this.goodsList.filter(g => g.isOnShelf !== false)
     if (this.currentCat === '全部') {
-      return this.goodsList
+      return onShelfGoods
     }
     const categoryNames: Record<string, string> = {
       '1': '热销菜', '2': '快餐', '3': '饮品', '4': '甜品', '5': '火锅', '6': '烧烤', '7': '面食'
     }
-    return this.goodsList.filter(g => {
+    return onShelfGoods.filter(g => {
       const name: string | undefined = categoryNames[g.categoryId.toString()]
       return name !== undefined && name === this.currentCat
     })
@@ -783,8 +858,30 @@ struct StoreDetailContent {
 // ===================== 订单列表 =====================
 @Component
 struct OrderListMainPage {
-  @StorageLink('orderList') orderList: Order[] = []
-  @State currentStatus: number = -1
+  @StorageLink('orderList') @Watch('onOrderListChange') orderList: Order[] = []
+  @State @Watch('onFilterChange') currentStatus: number = -1
+  @State isRefreshing: boolean = false
+  private orderDataSource: OrderDataSource = new OrderDataSource()
+
+  aboutToAppear() {
+    this.refreshDataSource()
+  }
+
+  onOrderListChange(): void {
+    this.refreshDataSource()
+  }
+
+  onFilterChange(): void {
+    this.refreshDataSource()
+  }
+
+  private refreshDataSource(): void {
+    let filtered: Order[] = this.orderList || []
+    if (this.currentStatus !== -1) {
+      filtered = filtered.filter(o => o.status === this.currentStatus)
+    }
+    this.orderDataSource.setData(filtered)
+  }
 
   build() {
     Column() {
@@ -819,24 +916,27 @@ struct OrderListMainPage {
       .width('100%').backgroundColor(COLORS.BG_WHITE)
 
       if (this.filteredOrders.length === 0) {
-        Column() {
-          Text('📦').fontSize(60).margin({ top: 100 })
-          Text('暂无订单').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: 16 })
-          Text('快去点一份美味吧').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT).margin({ top: 8 })
-        }
-        .width('100%').layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+        EmptyState({ icon: '📦', title: '暂无订单', description: '快去点一份美味吧' })
       } else {
-        List({ space: SPACING.SM }) {
-          ForEach(this.filteredOrders, (order: Order) => {
-            ListItem() {
-              this.OrderCard(order)
-            }
-          }, (item: Order) => item.id.toString())
+        Refresh({ refreshing: this.isRefreshing }) {
+          List({ space: SPACING.SM }) {
+            LazyForEach(this.orderDataSource, (order: Order) => {
+              ListItem() {
+                this.OrderCard(order)
+              }
+            }, (item: Order) => item.id.toString())
+          }
+          .layoutWeight(1)
+          .width('100%')
+          .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.LG })
+          .scrollBar(BarState.Off).divider({ strokeWidth: 0 })
+          .cachedCount(5)
         }
-        .layoutWeight(1)
-        .width('100%')
-        .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.LG })
-        .scrollBar(BarState.Off).divider({ strokeWidth: 0 })
+        .onRefreshing(() => {
+          this.orderList = AppStorage.get<Order[]>('orderList') || []
+          this.refreshDataSource()
+          this.isRefreshing = false
+        })
       }
     }
     .width('100%').height('100%')
@@ -873,7 +973,11 @@ struct OrderListMainPage {
         if (order.status === 3) {
           Button('确认收货').height(32).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_WHITE)
             .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-            .onClick(() => { confirmOrder(order.id); this.orderList = AppStorage.get<Order[]>('orderList') || [] })
+            .onClick(() => {
+              confirmOrder(order.id)
+              this.orderList = AppStorage.get<Order[]>('orderList') || []
+              this.refreshDataSource()
+            })
         } else if (order.status === 4) {
           Button('再来一单').height(32).fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
             .backgroundColor(Color.Transparent).borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
