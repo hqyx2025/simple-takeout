@@ -1,0 +1,220 @@
+/**
+ * 登录/注册页面
+ * 支持商户账户和普通用户账户
+ */
+import { UserRole } from '../model/Models'
+import { login, register } from '../service/AppStorageManager'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+
+@Component
+export struct LoginPage {
+  @State isLoginMode: boolean = true  // true=登录 false=注册
+  @State selectedRole: UserRole = UserRole.CUSTOMER
+  @State phone: string = ''
+  @State password: string = ''
+  @State username: string = ''
+  @State errorMsg: string = ''
+  onLoginSuccess: () => void = () => {}
+
+  build() {
+    Column() {
+      // 顶部Logo区域
+      Column({ space: 8 }) {
+        Text('🍜')
+          .fontSize(60)
+        Text('简单外卖')
+          .fontSize(FONT_SIZE.TITLE)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(COLORS.TEXT_PRIMARY)
+        Text('美味送到家')
+          .fontSize(FONT_SIZE.MD)
+          .fontColor(COLORS.TEXT_HINT)
+      }
+      .width('100%')
+      .margin({ top: 60, bottom: 40 })
+
+      // 角色选择（仅注册模式显示）
+      if (!this.isLoginMode) {
+        Text('选择账户类型')
+          .fontSize(FONT_SIZE.MD)
+          .fontColor(COLORS.TEXT_SECONDARY)
+          .width('100%')
+        Row({ space: SPACING.MD }) {
+          Button('我是用户')
+            .width('45%')
+            .height(44)
+            .fontSize(FONT_SIZE.MD)
+            .fontColor(this.selectedRole === UserRole.CUSTOMER ? Color.White : COLORS.PRIMARY)
+            .backgroundColor(this.selectedRole === UserRole.CUSTOMER ? COLORS.PRIMARY : Color.Transparent)
+            .borderRadius(BORDER_RADIUS.ROUND)
+            .type(ButtonType.Capsule)
+            .borderWidth(this.selectedRole === UserRole.CUSTOMER ? 0 : 1)
+            .borderColor(COLORS.PRIMARY)
+            .onClick(() => { this.selectedRole = UserRole.CUSTOMER })
+
+          Button('我是商户')
+            .width('45%')
+            .height(44)
+            .fontSize(FONT_SIZE.MD)
+            .fontColor(this.selectedRole === UserRole.MERCHANT ? Color.White : COLORS.PRIMARY)
+            .backgroundColor(this.selectedRole === UserRole.MERCHANT ? COLORS.PRIMARY : Color.Transparent)
+            .borderRadius(BORDER_RADIUS.ROUND)
+            .type(ButtonType.Capsule)
+            .borderWidth(this.selectedRole === UserRole.MERCHANT ? 0 : 1)
+            .borderColor(COLORS.PRIMARY)
+            .onClick(() => { this.selectedRole = UserRole.MERCHANT })
+        }
+        .width('100%')
+        .justifyContent(FlexAlign.Center)
+        .margin({ bottom: SPACING.LG })
+      }
+
+      // 角色提示（登录模式下显示）
+      if (this.isLoginMode) {
+        Text('请选择身份登录')
+          .fontSize(FONT_SIZE.SM)
+          .fontColor(COLORS.TEXT_HINT)
+          .width('100%')
+          .margin({ bottom: 4 })
+        Row({ space: SPACING.SM }) {
+          Text('👤 用户点餐')
+            .fontSize(FONT_SIZE.SM)
+            .fontColor(this.selectedRole === UserRole.CUSTOMER ? COLORS.PRIMARY : COLORS.TEXT_HINT)
+            .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+            .backgroundColor(this.selectedRole === UserRole.CUSTOMER ? COLORS.TAG_BG : '#F5F5F5')
+            .borderRadius(BORDER_RADIUS.ROUND)
+            .onClick(() => { this.selectedRole = UserRole.CUSTOMER })
+          Text('🏪 商户管理')
+            .fontSize(FONT_SIZE.SM)
+            .fontColor(this.selectedRole === UserRole.MERCHANT ? COLORS.PRIMARY : COLORS.TEXT_HINT)
+            .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+            .backgroundColor(this.selectedRole === UserRole.MERCHANT ? COLORS.TAG_BG : '#F5F5F5')
+            .borderRadius(BORDER_RADIUS.ROUND)
+            .onClick(() => { this.selectedRole = UserRole.MERCHANT })
+        }
+        .width('100%')
+        .margin({ bottom: SPACING.LG })
+      }
+
+      // 用户名（注册时显示）
+      if (!this.isLoginMode) {
+        TextInput({ placeholder: '请输入用户名', text: this.username })
+          .fontSize(FONT_SIZE.LG)
+          .width('100%')
+          .height(48)
+          .margin({ bottom: SPACING.MD })
+          .onChange((value: string) => { this.username = value })
+      }
+
+      // 手机号
+      TextInput({ placeholder: '请输入手机号', text: this.phone })
+        .fontSize(FONT_SIZE.LG)
+        .width('100%')
+        .height(48)
+        .margin({ bottom: SPACING.MD })
+        .type(InputType.PhoneNumber)
+        .onChange((value: string) => { this.phone = value })
+
+      // 密码
+      TextInput({ placeholder: '请输入密码', text: this.password })
+        .fontSize(FONT_SIZE.LG)
+        .width('100%')
+        .height(48)
+        .margin({ bottom: SPACING.LG })
+        .type(InputType.Password)
+        .onChange((value: string) => { this.password = value })
+
+      // 错误提示
+      if (this.errorMsg) {
+        Text(this.errorMsg)
+          .fontSize(FONT_SIZE.SM)
+          .fontColor(COLORS.ERROR)
+          .width('100%')
+          .margin({ bottom: SPACING.SM })
+      }
+
+      // 登录/注册按钮
+      Button(this.isLoginMode ? '登 录' : '注 册')
+        .width('100%')
+        .height(48)
+        .fontSize(FONT_SIZE.XL)
+        .fontColor(Color.White)
+        .backgroundColor(COLORS.PRIMARY)
+        .borderRadius(BORDER_RADIUS.ROUND)
+        .type(ButtonType.Capsule)
+        .margin({ top: SPACING.SM })
+        .onClick(() => {
+          this.errorMsg = ''
+          if (this.phone === '' || this.password === '') {
+            this.errorMsg = '请输入手机号和密码'
+            return
+          }
+          if (!this.isLoginMode && this.username === '') {
+            this.errorMsg = '请输入用户名'
+            return
+          }
+
+          if (this.isLoginMode) {
+            const user = login(this.phone, this.password)
+            if (user) {
+              if (user.role !== this.selectedRole) {
+                this.errorMsg = this.selectedRole === UserRole.MERCHANT ? '该账号不是商户账号' : '该账号不是用户账号'
+                return
+              }
+              this.onLoginSuccess()
+            } else {
+              this.errorMsg = '手机号或密码错误'
+            }
+          } else {
+            const newUser = register(this.username, this.phone, this.password, this.selectedRole)
+            if (newUser) {
+              const loginUser = login(this.phone, this.password)
+              if (loginUser) {
+                this.onLoginSuccess()
+              }
+            } else {
+              this.errorMsg = '该手机号已注册'
+            }
+          }
+        })
+
+      // 切换登录/注册
+      Row({ space: 4 }) {
+        Text(this.isLoginMode ? '还没有账号？' : '已有账号？')
+          .fontSize(FONT_SIZE.MD)
+          .fontColor(COLORS.TEXT_HINT)
+        Text(this.isLoginMode ? '立即注册' : '去登录')
+          .fontSize(FONT_SIZE.MD)
+          .fontColor(COLORS.PRIMARY)
+          .fontWeight(FontWeight.Bold)
+          .onClick(() => {
+            this.isLoginMode = !this.isLoginMode
+            this.errorMsg = ''
+          })
+      }
+      .margin({ top: SPACING.LG })
+
+      // 测试账号提示
+      Column({ space: 4 }) {
+        Text('测试账号（密码均为123456）：')
+          .fontSize(FONT_SIZE.SM)
+          .fontColor(COLORS.TEXT_HINT)
+        Text('用户：13800138000')
+          .fontSize(FONT_SIZE.SM)
+          .fontColor(COLORS.TEXT_SECONDARY)
+        Text('商户：13600136000')
+          .fontSize(FONT_SIZE.SM)
+          .fontColor(COLORS.TEXT_SECONDARY)
+      }
+      .width('100%')
+      .margin({ top: 40 })
+      .padding(SPACING.MD)
+      .backgroundColor('#FFF8F0')
+      .borderRadius(BORDER_RADIUS.LG)
+    }
+    .width('100%')
+    .height('100%')
+    .padding({ left: SPACING.XL, right: SPACING.XL })
+    .backgroundColor(COLORS.BG_WHITE)
+  }
+}
