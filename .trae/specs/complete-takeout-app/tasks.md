@@ -64,10 +64,10 @@
 - [x] Task 15: 商户收入统计页（MerchantStatsPage）
   - [x] SubTask 15.1: 创建 `pages/MerchantStatsPage.ets`，展示今日/本周/月数据
   - [x] SubTask 15.2: 实现简单数据卡片展示
-- [ ] Task 16: 商户店铺信息编辑
-  - [ ] SubTask 16.1: 在 `MerchantCenterPage.ets` 增加店铺信息编辑入口与表单
-- [ ] Task 17: 商户商品管理增强
-  - [ ] SubTask 17.1: 在 `MerchantCenterPage.ets` 商品项增加编辑（价格/描述）与上下架切换
+- [x] Task 16: 商户店铺信息编辑
+  - [x] SubTask 16.1: 在 `MerchantCenterPage.ets` 增加店铺信息编辑入口与表单
+- [x] Task 17: 商户商品管理增强
+  - [x] SubTask 17.1: 在 `MerchantCenterPage.ets` 商品项增加编辑（价格/描述）与上下架切换
 
 ## 阶段四：体验优化与集成（Polish & Integration）
 - [x] Task 18: 路由与导航集成
@@ -78,10 +78,10 @@
   - [x] SubTask 19.1: 店铺详情增加收藏按钮（收藏/已收藏状态切换）
   - [x] SubTask 19.2: 店铺详情增加评价入口与评价列表
   - [x] SubTask 19.3: 商品分类Tab支持按分类筛选
-- [ ] Task 20: 列表性能与刷新
-  - [ ] SubTask 20.1: 首页店铺列表接入 LazyForEach + Refresh 下拉刷新
-  - [ ] SubTask 20.2: 订单列表接入 LazyForEach + Refresh 下拉刷新
-  - [ ] SubTask 20.3: 各列表页空数据时展示 EmptyState 组件
+- [x] Task 20: 列表性能与刷新
+  - [x] SubTask 20.1: 首页店铺列表接入 LazyForEach + Refresh 下拉刷新
+  - [x] SubTask 20.2: 订单列表接入 LazyForEach + Refresh 下拉刷新
+  - [x] SubTask 20.3: 各列表页空数据时展示 EmptyState 组件
 - [~] Task 21: 结算链路打通
   - [x] SubTask 21.1: 店铺详情"去结算"按钮跳转到结算页（替代当前直接下单）
   - [x] SubTask 21.2: 结算页与购物车数据打通
