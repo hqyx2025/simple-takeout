@@ -28,6 +28,7 @@ export interface GoodsItem {
   sales: number
   rating: number
   tag?: string
+  isOnShelf?: boolean
 }
 
 // 店铺模型
