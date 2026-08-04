@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "简单外卖主模块"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "简单外卖应用"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "简单外卖"
+    }
+  ]
+}
