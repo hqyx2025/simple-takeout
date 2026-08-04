@@ -7,6 +7,7 @@ import { getCategories, formatSales } from '../service/MockDataService'
 import { addToCart, updateCartItemQuantity, confirmOrder, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore } from '../service/AppStorageManager'
 import { LoginPage } from './LoginPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
+import router from '@ohos.router'
 
 // 定义快捷入口和订单Tab的数据类型，解决 arkts-no-untyped-obj-literals 错误
 class QuickEntryItem {
@@ -181,6 +182,7 @@ struct HomePage {
           .backgroundColor('#F0F0F0')
           .borderRadius(BORDER_RADIUS.ROUND)
           .layoutWeight(1)
+          .onClick(() => { router.pushUrl({ url: 'pages/SearchPage' }) })
         }
         .width('100%')
         .padding({ left: SPACING.LG, right: SPACING.LG, top: 8, bottom: 8 })
@@ -619,8 +621,8 @@ struct StoreDetailContent {
         .width(100).enabled(this.cartCount > 0)
         .onClick(() => {
           if (this.cartCount > 0) {
-            // 下单：创建订单并清空购物车
-            this.submitOrder()
+            AppStorage.setOrCreate<number>('checkoutStoreId', this.storeId)
+            router.pushUrl({ url: 'pages/CheckoutPage' })
           }
         })
     }
@@ -781,6 +783,10 @@ struct OrderListMainPage {
     }
     .width('100%').padding(SPACING.MD)
     .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+    .onClick(() => {
+      AppStorage.setOrCreate<Order>('currentOrder', order)
+      router.pushUrl({ url: 'pages/OrderDetailPage' })
+    })
   }
 }
 
@@ -830,6 +836,8 @@ struct ProfileMainPage {
           .onClick(() => {
             if (!this.loggedIn) {
               this.onNavigateLogin()
+            } else {
+              router.pushUrl({ url: 'pages/ProfileEditPage' })
             }
           })
         }
@@ -843,9 +851,9 @@ struct ProfileMainPage {
 
         // 资产区域
         Row() {
-          this.AssetItem(this.user.balance.toFixed(2), '余额')
-          this.AssetItem(this.user.coupons.filter(c => !c.used).length.toString(), '优惠券')
-          this.AssetItem(this.user.orders.length.toString(), '订单')
+          this.AssetItem(this.user.balance.toFixed(2), '余额', () => {})
+          this.AssetItem(this.user.coupons.filter(c => !c.used).length.toString(), '优惠券', () => { router.pushUrl({ url: 'pages/CouponCenterPage' }) })
+          this.AssetItem(this.user.orders.length.toString(), '订单', () => {})
         }
         .width('100%').padding(SPACING.LG)
         .margin({ top: SPACING.SM })
@@ -865,10 +873,10 @@ struct ProfileMainPage {
 
         // 功能菜单
         Column() {
-          this.ProfileMenuRow('📍', '收货地址')
-          this.ProfileMenuRow('❤️', '我的收藏')
-          this.ProfileMenuRow('📞', '联系客服')
-          this.ProfileMenuRow('⚙️', '设置')
+          this.ProfileMenuRow('📍', '收货地址', () => { router.pushUrl({ url: 'pages/AddressListPage' }) })
+          this.ProfileMenuRow('❤️', '我的收藏', () => { router.pushUrl({ url: 'pages/FavoriteListPage' }) })
+          this.ProfileMenuRow('📞', '联系客服', () => {})
+          this.ProfileMenuRow('⚙️', '设置', () => { router.pushUrl({ url: 'pages/SettingsPage' }) })
         }
         .width('100%')
         .padding({ top: SPACING.SM })
@@ -883,10 +891,10 @@ struct ProfileMainPage {
               .fontColor(COLORS.PRIMARY)
               .width('100%')
               .padding({ left: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
-            this.ProfileMenuRow('📋', '店铺管理')
-            this.ProfileMenuRow('📦', '商品上架')
-            this.ProfileMenuRow('📊', '订单管理')
-            this.ProfileMenuRow('💰', '收入统计')
+            this.ProfileMenuRow('📋', '店铺管理', () => {})
+            this.ProfileMenuRow('📦', '商品上架', () => {})
+            this.ProfileMenuRow('📊', '订单管理', () => {})
+            this.ProfileMenuRow('💰', '收入统计', () => {})
           }
           .width('100%')
           .padding({ top: SPACING.SM })
@@ -902,12 +910,13 @@ struct ProfileMainPage {
   }
 
   @Builder
-  AssetItem(value: string, label: string) {
+  AssetItem(value: string, label: string, action: () => void) {
     Column({ space: 4 }) {
       Text(value).fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRIMARY)
       Text(label).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
     }
     .layoutWeight(1).alignItems(HorizontalAlign.Center)
+    .onClick(() => { action() })
   }
 
   @Builder
@@ -920,7 +929,7 @@ struct ProfileMainPage {
   }
 
   @Builder
-  ProfileMenuRow(icon: string, title: string) {
+  ProfileMenuRow(icon: string, title: string, action: () => void) {
     Row({ space: SPACING.MD }) {
       Text(icon).fontSize(18)
       Text(title).fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
@@ -928,6 +937,6 @@ struct ProfileMainPage {
     }
     .width('100%').height(52)
     .padding({ left: SPACING.LG, right: SPACING.LG })
-    .onClick(() => {})
+    .onClick(() => { action() })
   }
 }

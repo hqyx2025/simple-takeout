@@ -1,5 +1,14 @@
 {
   "src": [
-    "pages/Index"
+    "pages/Index",
+    "pages/SearchPage",
+    "pages/AddressListPage",
+    "pages/CheckoutPage",
+    "pages/OrderDetailPage",
+    "pages/CouponCenterPage",
+    "pages/FavoriteListPage",
+    "pages/ReviewPage",
+    "pages/ProfileEditPage",
+    "pages/SettingsPage"
   ]
 }
