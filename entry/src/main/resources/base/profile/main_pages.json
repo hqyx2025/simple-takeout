@@ -9,6 +9,8 @@
     "pages/FavoriteListPage",
     "pages/ReviewPage",
     "pages/ProfileEditPage",
-    "pages/SettingsPage"
+    "pages/SettingsPage",
+    "pages/MerchantOrdersPage",
+    "pages/MerchantStatsPage"
   ]
 }
