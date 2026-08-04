@@ -161,3 +161,12 @@ export interface StoreCategory {
   id: number
   name: string
 }
+
+// 商户统计数据
+export interface MerchantStatsData {
+  todayOrders: number
+  todayRevenue: number
+  completedOrders: number
+  totalOrders: number
+  totalRevenue: number
+}

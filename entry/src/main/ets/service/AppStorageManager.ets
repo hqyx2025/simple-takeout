@@ -1,8 +1,8 @@
 /**
  * 全局状态管理 - 使用AppStorage管理应用级状态
  */
-import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem } from '../model/Models'
-import { getDefaultUser, getDefaultAddresses, getDefaultCoupons, getDefaultOrders, getMockUsers, getStores, getGoodsByStore } from './MockDataService'
+import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, MerchantStatsData } from '../model/Models'
+import { getDefaultUser, getDefaultAddresses, getDefaultCoupons, getDefaultOrders, getMockUsers, getStores, getGoodsByStore, getDefaultReviews, getDefaultFavorites, getReviewsByStore, getClaimableCoupons } from './MockDataService'
 
 // 初始化全局数据
 export function initAppStorage() {
@@ -46,6 +46,15 @@ export function initAppStorage() {
       goodsMap[stores[i].id.toString()] = getGoodsByStore(stores[i].id)
     }
     AppStorage.setOrCreate('allGoodsMap', goodsMap)
+  }
+  if (!AppStorage.has('favoriteList')) {
+    AppStorage.setOrCreate('favoriteList', getDefaultFavorites())
+  }
+  if (!AppStorage.has('reviewList')) {
+    AppStorage.setOrCreate('reviewList', getDefaultReviews())
+  }
+  if (!AppStorage.has('claimableCoupons')) {
+    AppStorage.setOrCreate('claimableCoupons', getClaimableCoupons())
   }
 }
 
@@ -262,4 +271,180 @@ export function generateOrderId(): number {
 
 export function formatPrice(price: number): string {
   return '¥' + price.toFixed(2)
+}
+
+// ============ 收藏操作 ============
+export function toggleFavorite(storeId: number): boolean {
+  const user: User | undefined = AppStorage.get<User>('user')
+  if (user === undefined || user === null) return false
+
+  let favorites: Favorite[] = AppStorage.get<Favorite[]>('favoriteList') || getDefaultFavorites()
+  const existIndex = favorites.findIndex(f => f.storeId === storeId && f.userId === user.id)
+
+  if (existIndex >= 0) {
+    // 取消收藏
+    favorites = favorites.filter(f => !(f.storeId === storeId && f.userId === user.id))
+    AppStorage.setOrCreate('favoriteList', favorites)
+    return false
+  } else {
+    // 添加收藏
+    const stores: StoreItem[] = getAllStoresList()
+    const store = stores.find(s => s.id === storeId)
+    if (store) {
+      const favorite: Favorite = {
+        id: Date.now(),
+        userId: user.id,
+        storeId: storeId,
+        storeName: store.name,
+        storeImage: store.image,
+        createTime: formatDateTime(new Date())
+      }
+      favorites.push(favorite)
+      AppStorage.setOrCreate('favoriteList', favorites)
+      return true
+    }
+    return false
+  }
+}
+
+export function getFavorites(): Favorite[] {
+  const user: User | undefined = AppStorage.get<User>('user')
+  if (user === undefined || user === null) return []
+  const favorites: Favorite[] = AppStorage.get<Favorite[]>('favoriteList') || getDefaultFavorites()
+  return favorites.filter(f => f.userId === user.id)
+}
+
+export function isFavorited(storeId: number): boolean {
+  const user: User | undefined = AppStorage.get<User>('user')
+  if (user === undefined || user === null) return false
+  const favorites: Favorite[] = AppStorage.get<Favorite[]>('favoriteList') || getDefaultFavorites()
+  return favorites.some(f => f.storeId === storeId && f.userId === user.id)
+}
+
+// ============ 评价操作 ============
+export function addReview(review: Review): void {
+  let reviews: Review[] = AppStorage.get<Review[]>('reviewList') || getDefaultReviews()
+  review.id = Date.now()
+  reviews.unshift(review)
+  AppStorage.setOrCreate('reviewList', reviews)
+
+  // 标记订单已评价
+  const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
+  const order = orders.find(o => o.id === review.orderId)
+  if (order) {
+    // 在remark字段标记已评价
+    order.remark = order.remark + ' [已评价]'
+    AppStorage.setOrCreate('orderList', orders)
+  }
+}
+
+export function getStoreReviews(storeId: number): Review[] {
+  const reviews: Review[] = AppStorage.get<Review[]>('reviewList') || getDefaultReviews()
+  return reviews.filter(r => r.storeId === storeId)
+}
+
+// ============ 商户订单状态流转 ============
+export function merchantAcceptOrder(orderId: number): void {
+  const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
+  const order = orders.find(o => o.id === orderId)
+  if (order && order.status === 1) {
+    order.status = 2  // 待接单 -> 制作中
+    order.payTime = formatDateTime(new Date())
+    AppStorage.setOrCreate('orderList', orders)
+  }
+}
+
+export function merchantStartDelivery(orderId: number): void {
+  const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
+  const order = orders.find(o => o.id === orderId)
+  if (order && order.status === 2) {
+    order.status = 3  // 制作中 -> 配送中
+    order.deliverTime = formatDateTime(new Date())
+    AppStorage.setOrCreate('orderList', orders)
+  }
+}
+
+export function merchantCompleteOrder(orderId: number): void {
+  const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
+  const order = orders.find(o => o.id === orderId)
+  if (order && order.status === 3) {
+    order.status = 4  // 配送中 -> 已完成
+    order.completeTime = formatDateTime(new Date())
+    AppStorage.setOrCreate('orderList', orders)
+
+    // 商户余额增加
+    const user: User | undefined = AppStorage.get<User>('user')
+    if (user !== undefined && user !== null && user.role === UserRole.MERCHANT) {
+      user.balance += order.payAmount
+      AppStorage.setOrCreate('user', user)
+    }
+  }
+}
+
+// 商户获取自己店铺的订单
+export function getMerchantOrders(merchantId: number): Order[] {
+  const stores: StoreItem[] = getStoresByOwner(merchantId)
+  const storeIds: number[] = stores.map(s => s.id)
+  const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
+  return orders.filter(o => storeIds.includes(o.storeId))
+}
+
+// ============ 商户收入统计 ============
+export function getMerchantTodayStats(merchantId: number): MerchantStatsData {
+  const orders: Order[] = getMerchantOrders(merchantId)
+  const today = new Date()
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+
+  const todayOrders = orders.filter(o => o.createTime.startsWith(todayStr))
+  const completedOrders = todayOrders.filter(o => o.status === 4)
+  const revenue = completedOrders.reduce((sum, o) => sum + o.payAmount, 0)
+
+  const stats: MerchantStatsData = {
+    todayOrders: todayOrders.length,
+    todayRevenue: revenue,
+    completedOrders: completedOrders.length,
+    totalOrders: orders.length,
+    totalRevenue: orders.filter(o => o.status === 4).reduce((sum, o) => sum + o.payAmount, 0)
+  }
+  return stats
+}
+
+export function getMerchantWeekStats(merchantId: number): MerchantStatsData {
+  const orders: Order[] = getMerchantOrders(merchantId)
+  const now = new Date()
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+
+  const weekOrders = orders.filter(o => {
+    const orderDate = new Date(o.createTime.replace(/-/g, '/'))
+    return orderDate >= weekAgo
+  })
+  const completedOrders = weekOrders.filter(o => o.status === 4)
+  const revenue = completedOrders.reduce((sum, o) => sum + o.payAmount, 0)
+
+  const stats: MerchantStatsData = {
+    todayOrders: weekOrders.length,
+    todayRevenue: revenue,
+    completedOrders: completedOrders.length,
+    totalOrders: orders.length,
+    totalRevenue: orders.filter(o => o.status === 4).reduce((sum, o) => sum + o.payAmount, 0)
+  }
+  return stats
+}
+
+// ============ 用户信息更新 ============
+export function updateUserProfile(username: string, phone: string): void {
+  const user: User | undefined = AppStorage.get<User>('user')
+  if (user !== undefined && user !== null) {
+    user.username = username
+    user.phone = phone
+    AppStorage.setOrCreate('user', user)
+
+    // 更新allUsers中的对应用户
+    const allUsers: User[] = AppStorage.get<User[]>('allUsers') || []
+    const index = allUsers.findIndex(u => u.id === user.id)
+    if (index >= 0) {
+      allUsers[index] = user
+      AppStorage.setOrCreate('allUsers', allUsers)
+    }
+  }
 }
