@@ -2,8 +2,8 @@
  * 主页面 - 简单外卖App
  * 包含：搜索栏、分类导航、店铺列表、店铺详情、购物车、订单列表、个人中心、底部Tab导航
  */
-import { Category, StoreItem, GoodsItem, CartItem, Order, User, UserRole, Review } from '../model/Models'
-import { getCategories, formatSales, getGoodsCategories } from '../service/MockDataService'
+import { Category, StoreItem, GoodsItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite } from '../model/Models'
+import { getCategories, formatSales, getGoodsCategories, getDefaultUser } from '../service/MockDataService'
 import { addToCart, updateCartItemQuantity, confirmOrder, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, toggleFavorite, isFavorited, getStoreReviews } from '../service/AppStorageManager'
 import { LoginPage } from './LoginPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
@@ -105,6 +105,36 @@ struct Index {
     // 初始化全局数据
     initAppStorage()
     this.loggedIn = isLoggedIn()
+    // 数据格式保险：校验 AppStorage 关键数据，异常（非数组/非对象）时重置，防止渲染崩溃
+    this.sanitizeAppData()
+  }
+
+  // 校验并修复 AppStorage 关键数据的格式（兼容损坏/旧版数据）
+  private sanitizeAppData(): void {
+    const orders: Object = AppStorage.get<Object>('orderList') as Object
+    if (orders !== undefined && orders !== null && !Array.isArray(orders)) {
+      AppStorage.setOrCreate<Order[]>('orderList', [])
+    }
+    const cart: Object = AppStorage.get<Object>('cartItems') as Object
+    if (cart !== undefined && cart !== null && !Array.isArray(cart)) {
+      AppStorage.setOrCreate<CartItem[]>('cartItems', [])
+    }
+    const favorites: Object = AppStorage.get<Object>('favoriteList') as Object
+    if (favorites !== undefined && favorites !== null && !Array.isArray(favorites)) {
+      AppStorage.setOrCreate<Favorite[]>('favoriteList', [])
+    }
+    const coupons: Object = AppStorage.get<Object>('couponList') as Object
+    if (coupons !== undefined && coupons !== null && !Array.isArray(coupons)) {
+      AppStorage.setOrCreate<Coupon[]>('couponList', [])
+    }
+    const addresses: Object = AppStorage.get<Object>('addressList') as Object
+    if (addresses !== undefined && addresses !== null && !Array.isArray(addresses)) {
+      AppStorage.setOrCreate<Address[]>('addressList', [])
+    }
+    const user: Object = AppStorage.get<Object>('user') as Object
+    if (user !== undefined && user !== null && (typeof user !== 'object' || Array.isArray(user))) {
+      AppStorage.setOrCreate<User>('user', getDefaultUser())
+    }
   }
 
   // 从子路由页面（收藏页/搜索页）返回时，处理店铺详情跳转
@@ -876,27 +906,41 @@ struct StoreDetailContent {
 // ===================== 订单列表 =====================
 @Component
 struct OrderListMainPage {
+  // 注意：数据源必须在 @StorageLink+@Watch 字段之前声明，
+  // 避免 @StorageLink 首次绑定时触发 @Watch 回调访问到未初始化的数据源
+  private orderDataSource: OrderDataSource = new OrderDataSource()
   @StorageLink('orderList') @Watch('onOrderListChange') orderList: Order[] = []
   @State @Watch('onFilterChange') currentStatus: number = -1
   @State isRefreshing: boolean = false
-  private orderDataSource: OrderDataSource = new OrderDataSource()
 
   aboutToAppear() {
     this.refreshDataSource()
   }
 
   onOrderListChange(): void {
+    // 防御：@StorageLink 首次绑定也可能触发本回调，数据源未就绪时直接返回
+    if (this.orderDataSource === undefined || this.orderDataSource === null) {
+      return
+    }
     this.refreshDataSource()
   }
 
   onFilterChange(): void {
+    if (this.orderDataSource === undefined || this.orderDataSource === null) {
+      return
+    }
     this.refreshDataSource()
   }
 
   private refreshDataSource(): void {
-    let filtered: Order[] = this.orderList || []
+    // 绝对防御：orderList 非数组时按空数组处理，避免 LazyForEach 崩溃
+    let list: Order[] = []
+    if (Array.isArray(this.orderList)) {
+      list = this.orderList
+    }
+    let filtered: Order[] = list
     if (this.currentStatus !== -1) {
-      filtered = filtered.filter(o => o.status === this.currentStatus)
+      filtered = filtered.filter(o => o !== null && typeof o === 'object' && o.status === this.currentStatus)
     }
     this.orderDataSource.setData(filtered)
   }
@@ -962,9 +1006,14 @@ struct OrderListMainPage {
   }
 
   get filteredOrders(): Order[] {
-    if (!this.orderList || this.orderList.length === 0) return []
-    if (this.currentStatus === -1) return this.orderList
-    return this.orderList.filter(o => o.status === this.currentStatus)
+    // 绝对防御：非数组 / 空数组均返回空列表
+    if (!Array.isArray(this.orderList) || this.orderList.length === 0) {
+      return []
+    }
+    if (this.currentStatus === -1) {
+      return this.orderList
+    }
+    return this.orderList.filter(o => o !== null && typeof o === 'object' && o.status === this.currentStatus)
   }
 
   @Builder
