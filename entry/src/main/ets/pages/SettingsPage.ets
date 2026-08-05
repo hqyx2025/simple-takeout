@@ -19,6 +19,7 @@ export struct SettingsPage {
   onLogout: () => void = () => {}
 
   aboutToAppear() {
+    logInfo('Page', '进入设置页 SettingsPage')
     this.calculateCacheSize()
   }
 

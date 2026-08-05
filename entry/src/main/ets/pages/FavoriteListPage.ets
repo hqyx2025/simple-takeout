@@ -9,6 +9,7 @@ import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { Favorite } from '../model/Models'
 import { getFavorites, toggleFavorite } from '../service/AppStorageManager'
 import { EmptyState } from '../components/EmptyState'
+import { logInfo } from '../service/AppLogger'
 
 // 收藏列表懒加载数据源（实现 IDataSource）
 class FavoriteDataSource implements IDataSource {
@@ -48,6 +49,7 @@ export struct FavoriteListPage {
   private dataSource: FavoriteDataSource = new FavoriteDataSource()
 
   aboutToAppear() {
+    logInfo('Page', '进入收藏列表页 FavoriteListPage')
     this.loadFavorites()
   }
 
@@ -168,6 +170,7 @@ export struct FavoriteListPage {
   private onCancelFavorite(storeId: number): void {
     toggleFavorite(storeId)
     this.loadFavorites()
+    logInfo('Favorite', `收藏页取消收藏 storeId=${storeId}`)
     promptAction.showToast({ message: '已取消收藏' })
   }
 

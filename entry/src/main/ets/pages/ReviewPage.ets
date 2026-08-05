@@ -8,6 +8,7 @@ import { promptAction } from '@kit.ArkUI'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, REVIEW_TAGS } from '../common/Constants'
 import { Order, Review, User } from '../model/Models'
 import { addReview, getCurrentUser } from '../service/AppStorageManager'
+import { logInfo, logWarn } from '../service/AppLogger'
 
 @Entry
 @Component
@@ -35,6 +36,7 @@ export struct ReviewPage {
   private starList: number[] = [1, 2, 3, 4, 5]
 
   aboutToAppear() {
+    logInfo('Page', '进入评价页 ReviewPage')
     this.orderId = AppStorage.get<number>('currentOrderId') || 0
     const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
     this.order = orders.find((o: Order) => o.id === this.orderId) || null
@@ -94,6 +96,7 @@ export struct ReviewPage {
     }
     if (this.rating === 0) {
       promptAction.showToast({ message: '请先选择评分' })
+      logWarn('Review', '提交评价失败：未选择评分')
       return
     }
     const user: User | undefined = getCurrentUser()
@@ -115,6 +118,7 @@ export struct ReviewPage {
       createTime: this.formatCurrentTime()
     }
     addReview(review)
+    logInfo('Review', `提交评价 orderId=${review.orderId} 评分=${review.rating} 标签=${review.tags.length}个`)
 
     promptAction.showToast({ message: '评价成功' })
     this.submitting = false

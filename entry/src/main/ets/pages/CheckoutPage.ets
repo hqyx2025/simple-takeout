@@ -24,6 +24,7 @@ export struct CheckoutPage {
   @State submitting: boolean = false
 
   aboutToAppear() {
+    logInfo('Page', '进入结算页 CheckoutPage')
     this.checkoutStoreId = AppStorage.get<number>('checkoutStoreId') || 0
     const cart: CartItem[] = AppStorage.get<CartItem[]>('cartItems') || []
     this.storeItems = cart.filter((c: CartItem) => c.storeId === this.checkoutStoreId)

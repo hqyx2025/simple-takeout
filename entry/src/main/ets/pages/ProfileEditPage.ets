@@ -7,6 +7,7 @@ import { promptAction } from '@kit.ArkUI'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { User, UserRole } from '../model/Models'
 import { getCurrentUser, updateUserProfile } from '../service/AppStorageManager'
+import { logInfo } from '../service/AppLogger'
 
 @Entry
 @Component
@@ -16,6 +17,7 @@ export struct ProfileEditPage {
   @State role: UserRole = UserRole.CUSTOMER
 
   aboutToAppear() {
+    logInfo('Page', '进入个人信息编辑页 ProfileEditPage')
     const user: User | undefined = getCurrentUser()
     if (user !== undefined && user !== null) {
       this.username = user.username
@@ -50,6 +52,7 @@ export struct ProfileEditPage {
       return
     }
     updateUserProfile(name, this.phone)
+    logInfo('Profile', `保存个人信息 昵称=${name} 手机号=${this.phone}`)
     promptAction.showToast({ message: '保存成功' })
     router.back()
   }

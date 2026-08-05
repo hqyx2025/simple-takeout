@@ -4,6 +4,7 @@
  */
 import { UserRole } from '../model/Models'
 import { login, register } from '../service/AppStorageManager'
+import { logInfo, logWarn } from '../service/AppLogger'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 
 @Component
@@ -146,19 +147,23 @@ export struct LoginPage {
         .onClick(() => {
           this.errorMsg = ''
           if (this.phone === '' || this.password === '') {
+            logWarn('Auth', '登录/注册提交失败：手机号或密码为空')
             this.errorMsg = '请输入手机号和密码'
             return
           }
           if (!this.isLoginMode && this.username === '') {
+            logWarn('Auth', '注册提交失败：用户名为空')
             this.errorMsg = '请输入用户名'
             return
           }
+          logInfo('Auth', `用户点击${this.isLoginMode ? '登录' : '注册'} phone=${this.phone} role=${this.selectedRole === UserRole.MERCHANT ? '商户' : '用户'}`)
 
           if (this.isLoginMode) {
             const user = login(this.phone, this.password)
             if (user) {
               if (user.role !== this.selectedRole) {
                 this.errorMsg = this.selectedRole === UserRole.MERCHANT ? '该账号不是商户账号' : '该账号不是用户账号'
+                logWarn('Auth', `登录角色不匹配 phone=${this.phone} 期望角色=${this.selectedRole}`)
                 return
               }
               this.onLoginSuccess()
@@ -174,6 +179,7 @@ export struct LoginPage {
               }
             } else {
               this.errorMsg = '该手机号已注册'
+              logWarn('Auth', `注册失败：手机号已存在 phone=${this.phone}`)
             }
           }
         })
@@ -190,6 +196,7 @@ export struct LoginPage {
           .onClick(() => {
             this.isLoginMode = !this.isLoginMode
             this.errorMsg = ''
+            logInfo('Auth', `切换${this.isLoginMode ? '登录' : '注册'}模式`)
           })
       }
       .margin({ top: SPACING.LG })

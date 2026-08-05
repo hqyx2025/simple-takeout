@@ -6,6 +6,7 @@ import router from '@ohos.router'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusColor } from '../common/Constants'
 import { MerchantStatsData, User } from '../model/Models'
 import { getCurrentUser, getMerchantTodayStats, getMerchantWeekStats, getMerchantWeekRevenue, getMerchantTodayStatusOrders, formatPrice } from '../service/AppStorageManager'
+import { logInfo } from '../service/AppLogger'
 
 @Entry
 @Component
@@ -35,6 +36,7 @@ export struct MerchantStatsPage {
   private statusChartContext: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true))
 
   aboutToAppear() {
+    logInfo('Page', '进入商户收入统计页 MerchantStatsPage')
     const user: User | undefined = getCurrentUser()
     if (user !== undefined && user !== null) {
       this.balance = user.balance
