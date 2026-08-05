@@ -914,6 +914,8 @@ struct OrderListMainPage {
   @State isRefreshing: boolean = false
 
   aboutToAppear() {
+    // 诊断日志：确认启动渲染时订单数据状态
+    this.debugOrderState()
     this.refreshDataSource()
   }
 
@@ -977,7 +979,7 @@ struct OrderListMainPage {
       .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
       .width('100%').backgroundColor(COLORS.BG_WHITE)
 
-      if (this.filteredOrders.length === 0) {
+      if (!Array.isArray(this.orderList) || this.orderList.length === 0) {
         EmptyState({ icon: '📦', title: '暂无订单', description: '快去点一份美味吧' })
       } else {
         Refresh({ refreshing: this.isRefreshing }) {
@@ -1014,6 +1016,11 @@ struct OrderListMainPage {
       return this.orderList
     }
     return this.orderList.filter(o => o !== null && typeof o === 'object' && o.status === this.currentStatus)
+  }
+
+  // 诊断：确认订单列表在渲染时的真实状态（排查崩溃后保留）
+  private debugOrderState(): void {
+    console.info(`[OrderList] orderList type=${typeof this.orderList} isArray=${Array.isArray(this.orderList)} len=${Array.isArray(this.orderList) ? (this.orderList as Order[]).length : -1} currentStatus=${this.currentStatus}`)
   }
 
   @Builder
