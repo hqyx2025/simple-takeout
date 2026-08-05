@@ -5,6 +5,8 @@
  */
 import preferences from '@ohos.data.preferences'
 import common from '@ohos.app.ability.common'
+import { User, Order, CartItem, Favorite, Coupon, Address } from '../model/Models'
+import { getDefaultUser, getDefaultOrders, getDefaultAddresses, getDefaultCoupons, getDefaultFavorites } from './MockDataService'
 
 const PERSISTENCE_NAME: string = 'takeout_app_data'
 
@@ -37,6 +39,99 @@ async function getPrefs(): Promise<preferences.Preferences> {
 }
 
 /**
+ * 数据归一化：兼容旧版本持久化数据（缺字段/格式异常），避免渲染崩溃
+ */
+function normalizeUser(value: Object): Object {
+  if (value === null || typeof value !== 'object') {
+    return getDefaultUser()
+  }
+  const user: User = value as User
+  if (!Array.isArray(user.coupons)) {
+    user.coupons = []
+  }
+  if (!Array.isArray(user.orders)) {
+    user.orders = []
+  }
+  if (!Array.isArray(user.storeIds)) {
+    user.storeIds = []
+  }
+  if (typeof user.balance !== 'number') {
+    user.balance = 0
+  }
+  if (typeof user.id !== 'number') {
+    user.id = 0
+  }
+  if (typeof user.username !== 'string') {
+    user.username = '用户'
+  }
+  if (typeof user.phone !== 'string') {
+    user.phone = ''
+  }
+  return user
+}
+
+function normalizeOrderList(value: Object): Object {
+  if (!Array.isArray(value)) {
+    return getDefaultOrders()
+  }
+  const raw: Object[] = value as Object[]
+  const result: Order[] = []
+  for (let i = 0; i < raw.length; i++) {
+    const o: Object = raw[i]
+    if (o === null || typeof o !== 'object') {
+      continue
+    }
+    const order: Order = o as Order
+    // 缺少核心字段的旧订单直接丢弃
+    if (typeof order.id !== 'number') {
+      continue
+    }
+    // items 缺失时兜底为空数组，避免 ForEach/reduce 崩溃
+    if (!Array.isArray(order.items)) {
+      order.items = []
+    }
+    if (typeof order.status !== 'number') {
+      order.status = 1
+    }
+    if (order.address === null || order.address === undefined || typeof order.address !== 'object') {
+      order.address = getDefaultAddresses()[0]
+    }
+    result.push(order)
+  }
+  return result
+}
+
+// 归一化入口：按 key 处理对应数据
+function normalizeData(key: string, value: Object): Object {
+  if (key === 'user') {
+    return normalizeUser(value)
+  }
+  if (key === 'orderList') {
+    return normalizeOrderList(value)
+  }
+  if (key === 'cartItems' || key === 'favoriteList' || key === 'couponList' || key === 'addressList') {
+    if (Array.isArray(value)) {
+      return value
+    }
+    // 非数组（null/损坏数据）时回退默认值
+    if (key === 'cartItems') {
+      const empty: CartItem[] = []
+      return empty
+    }
+    if (key === 'favoriteList') {
+      return getDefaultFavorites()
+    }
+    if (key === 'couponList') {
+      return getDefaultCoupons()
+    }
+    if (key === 'addressList') {
+      return getDefaultAddresses()
+    }
+  }
+  return value
+}
+
+/**
  * 从持久化存储中加载所有数据到 AppStorage
  * 通常在 App 启动时调用
  */
@@ -49,7 +144,9 @@ export async function loadAllData(): Promise<void> {
       if (json !== '') {
         try {
           const value: Object = JSON.parse(json)
-          AppStorage.setOrCreate(key, value)
+          // 归一化：确保数据格式与模型一致，兼容旧版本数据
+          const normalized: Object = normalizeData(key, value)
+          AppStorage.setOrCreate(key, normalized)
         } catch (parseErr) {
           console.error(`DataPersistence: Failed to parse ${key}`, JSON.stringify(parseErr))
         }
