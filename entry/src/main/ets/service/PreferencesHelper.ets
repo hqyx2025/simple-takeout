@@ -5,6 +5,7 @@
  */
 import preferences from '@ohos.data.preferences'
 import common from '@ohos.app.ability.common'
+import { logInfo, logWarn } from './AppLogger'
 
 const PREFERENCES_NAME: string = 'takeout_preferences'
 const SEARCH_HISTORY_KEY: string = 'search_history'
@@ -49,8 +50,9 @@ export async function addSearchHistory(keyword: string): Promise<void> {
 
     await prefs.put(SEARCH_HISTORY_KEY, history.join(','))
     await prefs.flush()
+    logInfo('Search', `添加搜索历史 keyword=${keyword} 当前共${history.length}条`)
   } catch (e) {
-    // 忽略错误
+    logWarn('Search', `添加搜索历史失败 keyword=${keyword}`)
   }
 }
 
@@ -60,8 +62,9 @@ export async function clearSearchHistory(): Promise<void> {
     const prefs: preferences.Preferences = await getPreferences()
     await prefs.delete(SEARCH_HISTORY_KEY)
     await prefs.flush()
+    logInfo('Search', '清空搜索历史')
   } catch (e) {
-    // 忽略错误
+    logWarn('Search', '清空搜索历史失败')
   }
 }
 

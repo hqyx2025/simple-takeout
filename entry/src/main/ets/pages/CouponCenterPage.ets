@@ -4,6 +4,7 @@
  */
 import { Coupon } from '../model/Models'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { logInfo } from '../service/AppLogger'
 
 // Tab项 - 使用class避免无类型对象字面量
 class CouponTab {
@@ -225,6 +226,7 @@ export struct CouponCenterPage {
     const existing: Coupon[] = AppStorage.get<Coupon[]>('couponList') || []
     // 检查是否已领取
     if (existing.find((c: Coupon) => c.id === coupon.id)) {
+      logInfo('Coupon', `领取优惠券已领取过 couponId=${coupon.id}`)
       return  // 已领取
     }
     existing.push(coupon)
@@ -234,5 +236,6 @@ export struct CouponCenterPage {
     const claimable: Coupon[] = AppStorage.get<Coupon[]>('claimableCoupons') || []
     const newClaimable = claimable.filter((c: Coupon) => c.id !== coupon.id)
     AppStorage.setOrCreate('claimableCoupons', newClaimable)
+    logInfo('Coupon', `领取优惠券成功 couponId=${coupon.id} 金额=${coupon.amount} 门槛=${coupon.minOrder}`)
   }
 }

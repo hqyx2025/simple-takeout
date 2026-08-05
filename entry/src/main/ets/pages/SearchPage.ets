@@ -7,6 +7,7 @@ import { getAllStoresList } from '../service/AppStorageManager'
 import { getSearchHistory, addSearchHistory, clearSearchHistory } from '../service/PreferencesHelper'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import router from '@ohos.router'
+import { logInfo } from '../service/AppLogger'
 
 @Entry
 @Component
@@ -42,6 +43,7 @@ export struct SearchPage {
     // 搜索店铺：从所有店铺中过滤名称包含关键词的
     const allStores: StoreItem[] = getAllStoresList()
     this.searchResults = allStores.filter((s: StoreItem) => s.name.includes(keyword))
+    logInfo('Search', `执行搜索 keyword=${keyword} 命中${this.searchResults.length}家店铺`)
     // 保存搜索历史
     await addSearchHistory(keyword)
     await this.loadHistory()
