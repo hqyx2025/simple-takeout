@@ -21,6 +21,7 @@ class OrderStatusTab {
   }
 }
 
+@Entry
 @Component
 export struct MerchantOrdersPage {
   @State currentStatus: number = -1

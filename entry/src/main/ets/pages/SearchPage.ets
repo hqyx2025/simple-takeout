@@ -7,6 +7,7 @@ import { getAllStoresList } from '../service/AppStorageManager'
 import { getSearchHistory, addSearchHistory, clearSearchHistory } from '../service/PreferencesHelper'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 
+@Entry
 @Component
 export struct SearchPage {
   @State searchText: string = ''

@@ -9,6 +9,7 @@ import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, REVIEW_TAGS } from '../commo
 import { Order, Review, User } from '../model/Models'
 import { addReview, getCurrentUser } from '../service/AppStorageManager'
 
+@Entry
 @Component
 export struct ReviewPage {
   @State order: Order | null = null

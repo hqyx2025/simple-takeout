@@ -7,6 +7,7 @@ import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { MerchantStatsData, User } from '../model/Models'
 import { getCurrentUser, getMerchantTodayStats, getMerchantWeekStats, formatPrice } from '../service/AppStorageManager'
 
+@Entry
 @Component
 export struct MerchantStatsPage {
   @State todayStats: MerchantStatsData = {

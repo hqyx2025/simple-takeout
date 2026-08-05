@@ -17,6 +17,7 @@ class CouponTab {
   }
 }
 
+@Entry
 @Component
 export struct CouponCenterPage {
   @StorageLink('couponList') couponList: Coupon[] = []

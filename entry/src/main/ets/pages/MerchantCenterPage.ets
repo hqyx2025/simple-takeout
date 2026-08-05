@@ -8,6 +8,7 @@ import { formatSales } from '../service/MockDataService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { promptAction } from '@kit.ArkUI'
 
+@Entry
 @Component
 export struct MerchantCenterPage {
   @StorageLink('user') user: User = {
