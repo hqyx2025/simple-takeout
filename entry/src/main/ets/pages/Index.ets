@@ -548,7 +548,7 @@ struct StoreDetailContent {
 
   updateCartInfo() {
     this.cartItems = AppStorage.get<CartItem[]>('cartItems') || []
-    const sc = this.cartItems.filter(c => c.storeId === this.storeId)
+    const sc = (this.cartItems || []).filter(c => c.storeId === this.storeId)
     this.cartCount = sc.reduce((s, i) => s + i.quantity, 0)
     this.cartTotal = sc.reduce((s, i) => s + i.goods.price * i.quantity, 0)
   }
@@ -860,7 +860,7 @@ struct StoreDetailContent {
     AppStorage.setOrCreate('orderList', orders)
 
     // 清空该店铺购物车
-    const remainCart = this.cartItems.filter(c => c.storeId !== this.storeId)
+    const remainCart = (this.cartItems || []).filter(c => c.storeId !== this.storeId)
     AppStorage.setOrCreate('cartItems', remainCart)
     this.cartCount = 0
     this.cartTotal = 0
@@ -868,7 +868,7 @@ struct StoreDetailContent {
   }
 
   getQty(goodsId: number): number {
-    const item = this.cartItems.find(c => c.goods.id === goodsId && c.storeId === this.storeId)
+    const item = (this.cartItems || []).find(c => c.goods.id === goodsId && c.storeId === this.storeId)
     return item ? item.quantity : 0
   }
 }
@@ -976,14 +976,14 @@ struct OrderListMainPage {
         Text(getOrderStatusText(order.status))
           .fontSize(FONT_SIZE.MD).fontColor(getOrderStatusColor(order.status)).fontWeight(FontWeight.Bold)
       }
-      ForEach(order.items, (item: CartItem) => {
+      ForEach(order.items || [], (item: CartItem) => {
         Row() {
           Text(item.goods.name).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_SECONDARY).layoutWeight(1)
           Text(`x${item.quantity}`).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
         }.width('100%')
       }, (item: CartItem) => `${item.goods.id}`)
       Row() {
-        Text(`共${order.items.reduce((s, i) => s + i.quantity, 0)}件 实付`)
+        Text(`共${(order.items || []).reduce((s, i) => s + i.quantity, 0)}件 实付`)
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
         Text(`¥${order.payAmount.toFixed(2)}`)
           .fontSize(FONT_SIZE.LG).fontColor(COLORS.PRICE_RED).fontWeight(FontWeight.Bold)
@@ -1077,8 +1077,8 @@ struct ProfileMainPage {
         // 资产区域
         Row() {
           this.AssetItem(this.user.balance.toFixed(2), '余额', () => {})
-          this.AssetItem(this.user.coupons.filter(c => !c.used).length.toString(), '优惠券', () => { router.pushUrl({ url: 'pages/CouponCenterPage' }) })
-          this.AssetItem(this.user.orders.length.toString(), '订单', () => {})
+          this.AssetItem((this.user.coupons || []).filter(c => !c.used).length.toString(), '优惠券', () => { router.pushUrl({ url: 'pages/CouponCenterPage' }) })
+          this.AssetItem((this.user.orders || []).length.toString(), '订单', () => {})
         }
         .width('100%').padding(SPACING.LG)
         .margin({ top: SPACING.SM })
