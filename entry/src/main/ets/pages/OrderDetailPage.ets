@@ -3,25 +3,28 @@
  * 展示订单状态时间轴、店铺与商品、配送信息、金额明细、订单信息
  * 根据订单状态显示对应操作按钮（取消订单 / 确认收货 / 再来一单 / 去评价）
  */
+import router from '@ohos.router'
+import { promptAction } from '@kit.ArkUI'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
 import { Order, CartItem, DeliveryStep } from '../model/Models'
 import { getDeliverySteps } from '../service/MockDataService'
-import { cancelOrder, confirmOrder } from '../service/AppStorageManager'
+import { cancelOrder, confirmOrder, addToCart } from '../service/AppStorageManager'
 import { OrderStatusTimeline } from '../components/OrderStatusTimeline'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 
+@Entry
 @Component
 export struct OrderDetailPage {
   @State order: Order | null = null
   @State showCancelDialog: boolean = false
   @State showConfirmDialog: boolean = false
   orderId: number = 0
-  onBack: () => void = () => {}
-  onReview: (orderId: number) => void = () => {}
 
   aboutToAppear() {
+    const routerOrderId: number = AppStorage.get<number>('currentOrderId') || 0
+    const orderId: number = this.orderId || routerOrderId
     const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
-    this.order = orders.find(o => o.id === this.orderId) || null
+    this.order = orders.find(o => o.id === orderId) || null
   }
 
   private reloadOrder(): void {
@@ -50,7 +53,7 @@ export struct OrderDetailPage {
           Text('‹')
             .fontSize(28)
             .fontColor(COLORS.TEXT_PRIMARY)
-            .onClick(() => { this.onBack() })
+            .onClick(() => { router.back() })
           Text('订单详情')
             .fontSize(FONT_SIZE.XL)
             .fontWeight(FontWeight.Bold)
@@ -420,7 +423,14 @@ export struct OrderDetailPage {
             .type(ButtonType.Capsule)
             .borderWidth(1)
             .borderColor(COLORS.PRIMARY)
-            .onClick(() => { this.onBack() })
+            .onClick(() => {
+              if (this.order !== null) {
+                for (let i = 0; i < this.order.items.length; i++) {
+                  addToCart(this.order.items[i])
+                }
+                promptAction.showToast({ message: '已加入购物车' })
+              }
+            })
           Button('去评价')
             .layoutWeight(1)
             .height(44)
@@ -429,7 +439,12 @@ export struct OrderDetailPage {
             .backgroundColor(COLORS.PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
             .type(ButtonType.Capsule)
-            .onClick(() => { this.onReview(this.order!.id) })
+            .onClick(() => {
+              if (this.order !== null) {
+                AppStorage.setOrCreate<number>('currentOrderId', this.order.id)
+                router.pushUrl({ url: 'pages/ReviewPage' })
+              }
+            })
         }
       }
       .width('100%')

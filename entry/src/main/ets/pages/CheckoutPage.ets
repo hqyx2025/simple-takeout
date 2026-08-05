@@ -9,6 +9,7 @@ import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { CartItem, Order, Address, Coupon, StoreItem } from '../model/Models'
 import { generateOrderId, addOrder, updateCartItemQuantity, useCoupon, getAllStoresList } from '../service/AppStorageManager'
 
+@Entry
 @Component
 export struct CheckoutPage {
   @State checkoutStoreId: number = 0
@@ -125,14 +126,13 @@ export struct CheckoutPage {
     }
 
     // 存入 currentOrder 供订单详情页读取
+    AppStorage.setOrCreate<number>('currentOrderId', order.id)
     AppStorage.setOrCreate<Order>('currentOrder', order)
-
     // 重置已选优惠券
     AppStorage.setOrCreate<Coupon | null>('selectedCoupon', null)
-
-    promptAction.showToast({ message: '订单提交成功' })
     this.submitting = false
-    router.back()
+    promptAction.showToast({ message: '订单提交成功！' })
+    router.pushUrl({ url: 'pages/OrderDetailPage' })
   }
 
   build() {

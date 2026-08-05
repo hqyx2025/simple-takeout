@@ -40,6 +40,7 @@ class AddressTag {
   static readonly ALL: string[] = [AddressTag.SCHOOL, AddressTag.HOME, AddressTag.COMPANY, AddressTag.OTHER]
 }
 
+@Entry
 @Component
 export struct AddressListPage {
   @StorageLink('addressList') addressList: Address[] = []

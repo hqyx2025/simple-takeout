@@ -8,6 +8,7 @@ import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { User, UserRole } from '../model/Models'
 import { getCurrentUser, updateUserProfile } from '../service/AppStorageManager'
 
+@Entry
 @Component
 export struct ProfileEditPage {
   @State username: string = ''

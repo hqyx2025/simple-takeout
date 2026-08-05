@@ -7,6 +7,7 @@ import { logout } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 
+@Entry
 @Component
 export struct SettingsPage {
   @StorageLink('isLoggedIn') loggedIn: boolean = false

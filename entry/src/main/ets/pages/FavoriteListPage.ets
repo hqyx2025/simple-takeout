@@ -41,6 +41,7 @@ class FavoriteDataSource implements IDataSource {
   }
 }
 
+@Entry
 @Component
 export struct FavoriteListPage {
   @State favoriteList: Favorite[] = []
