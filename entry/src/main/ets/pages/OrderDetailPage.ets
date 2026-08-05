@@ -30,6 +30,7 @@ export struct OrderDetailPage {
     const orderId: number = this.orderId || routerOrderId
     const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
     this.order = orders.find(o => o.id === orderId) || null
+    logInfo('Page', `进入订单详情页 OrderDetailPage orderId=${orderId} 状态=${this.order !== null ? this.order.status : -1}`)
     // 配送中状态启动骑手动画
     if (this.order !== null && this.order.status === 3) {
       this.startRiderAnimation()

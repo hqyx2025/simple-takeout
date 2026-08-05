@@ -25,6 +25,7 @@ export struct SearchPage {
   onBack: () => void = () => { router.back() }
 
   aboutToAppear() {
+    logInfo('Page', '进入搜索页 SearchPage')
     this.hotWords = getHotSearchWords()
     this.loadHistory()
   }

@@ -6,6 +6,7 @@
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
 import { Order, CartItem, User } from '../model/Models'
 import { getCurrentUser, getMerchantOrders, merchantAcceptOrder, merchantStartDelivery, merchantCompleteOrder } from '../service/AppStorageManager'
+import { logInfo } from '../service/AppLogger'
 import router from '@ohos.router'
 import { promptAction } from '@kit.ArkUI'
 
@@ -36,6 +37,7 @@ export struct MerchantOrdersPage {
   ]
 
   aboutToAppear() {
+    logInfo('Page', '进入商户订单管理页 MerchantOrdersPage')
     const user: User | undefined = getCurrentUser()
     if (user !== undefined && user !== null) {
       this.merchantId = user.id
@@ -58,18 +60,21 @@ export struct MerchantOrdersPage {
 
   private handleAccept(order: Order): void {
     merchantAcceptOrder(order.id)
+    logInfo('Merchant', `点击接单 orderId=${order.id} 店铺=${order.storeName}`)
     promptAction.showToast({ message: '已接单' })
     this.loadOrders()
   }
 
   private handleStartDelivery(order: Order): void {
     merchantStartDelivery(order.id)
+    logInfo('Merchant', `点击出餐 orderId=${order.id} 店铺=${order.storeName}`)
     promptAction.showToast({ message: '已出餐，配送中' })
     this.loadOrders()
   }
 
   private handleComplete(order: Order): void {
     merchantCompleteOrder(order.id)
+    logInfo('Merchant', `点击确认送达 orderId=${order.id} 店铺=${order.storeName}`)
     promptAction.showToast({ message: '已确认送达' })
     this.loadOrders()
   }

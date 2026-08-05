@@ -27,6 +27,10 @@ export struct CouponCenterPage {
   onBack: () => void = () => {}
   onSelectCoupon: (coupon: Coupon) => void = () => {}  // 选择优惠券回调（结算页用）
 
+  aboutToAppear() {
+    logInfo('Page', '进入优惠券中心页 CouponCenterPage')
+  }
+
   build() {
     Column() {
       // 导航栏

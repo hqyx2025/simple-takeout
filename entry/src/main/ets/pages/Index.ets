@@ -140,6 +140,7 @@ struct Index {
 
   // 从子路由页面（收藏页/搜索页）返回时，处理店铺详情跳转
   onPageShow() {
+    logInfo('Page', '首页 Index onPageShow')
     const storeId: number = AppStorage.get<number>('currentStoreId') || 0
     if (storeId > 0) {
       AppStorage.setOrCreate<number>('currentStoreId', 0)
@@ -209,7 +210,10 @@ struct Index {
     }
     .barHeight(50)
     .barBackgroundColor('#FFFFFF')
-    .onChange((index: number) => { this.currentTab = index })
+    .onChange((index: number) => {
+      this.currentTab = index
+      logInfo('Page', `首页 Tab 切换 index=${index}`)
+    })
     .scrollable(false)
     .animationDuration(0)
     .width('100%')

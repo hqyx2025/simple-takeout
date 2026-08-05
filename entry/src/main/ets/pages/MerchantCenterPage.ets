@@ -7,6 +7,7 @@ import { getStoresByOwner, getGoodsForStore, addGoodsToStore, removeGoodsFromSto
 import { formatSales } from '../service/MockDataService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { promptAction } from '@kit.ArkUI'
+import { logInfo } from '../service/AppLogger'
 
 @Entry
 @Component
@@ -49,6 +50,7 @@ export struct MerchantCenterPage {
   @State editGoodsPrice: string = ''
 
   aboutToAppear() {
+    logInfo('Page', '进入商户中心页 MerchantCenterPage')
     this.refreshStores()
   }
 
