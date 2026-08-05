@@ -19,12 +19,58 @@ export struct OrderDetailPage {
   @State showCancelDialog: boolean = false
   @State showConfirmDialog: boolean = false
   orderId: number = 0
+  // 骑手配送动画状态
+  @State riderProgress: number = 0
+  @State trackWidth: number = 300
+  private riderTimer: number = -1
 
   aboutToAppear() {
     const routerOrderId: number = AppStorage.get<number>('currentOrderId') || 0
     const orderId: number = this.orderId || routerOrderId
     const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
     this.order = orders.find(o => o.id === orderId) || null
+    // 配送中状态启动骑手动画
+    if (this.order !== null && this.order.status === 3) {
+      this.startRiderAnimation()
+    }
+  }
+
+  aboutToDisappear() {
+    this.stopRiderAnimation()
+  }
+
+  // 启动骑手位置动画（模拟骑手向配送点移动）
+  private startRiderAnimation(): void {
+    this.stopRiderAnimation()
+    this.riderProgress = 0
+    this.riderTimer = setInterval(() => {
+      if (this.riderProgress >= 0.88) {
+        this.stopRiderAnimation()
+        return
+      }
+      this.riderProgress += 0.02
+    }, 250)
+  }
+
+  private stopRiderAnimation(): void {
+    if (this.riderTimer >= 0) {
+      clearInterval(this.riderTimer)
+      this.riderTimer = -1
+    }
+  }
+
+  // 计算配送预估剩余时间（基于下单时间，预估总时长30分钟）
+  private getEstimatedTime(): string {
+    if (this.order === null) {
+      return ''
+    }
+    const createDate: Date = new Date(this.order.createTime.replace(/-/g, '/'))
+    const elapsed: number = Math.floor((Date.now() - createDate.getTime()) / 60000)
+    let remain: number = 30 - elapsed
+    if (remain < 5) {
+      remain = 5
+    }
+    return `预计 ${remain} 分钟送达`
   }
 
   private reloadOrder(): void {
@@ -159,17 +205,86 @@ export struct OrderDetailPage {
   @Builder
   StatusCard() {
     Column({ space: SPACING.MD }) {
-      Text(getOrderStatusText(this.order!.status))
-        .fontSize(FONT_SIZE.BIG_TITLE)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(getOrderStatusColor(this.order!.status))
-        .width('100%')
+      Row() {
+        Text(getOrderStatusText(this.order!.status))
+          .fontSize(FONT_SIZE.BIG_TITLE)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(getOrderStatusColor(this.order!.status))
+        if (this.order!.status === 3) {
+          Text(this.getEstimatedTime())
+            .fontSize(FONT_SIZE.SM)
+            .fontColor(COLORS.TEXT_SECONDARY)
+            .layoutWeight(1)
+            .textAlign(TextAlign.End)
+        }
+      }
+      .width('100%')
 
       OrderStatusTimeline({ steps: this.getDeliverySteps() })
+
+      // 配送中：骑手位置跟踪动画
+      if (this.order!.status === 3) {
+        this.RiderTracking()
+      }
     }
     .width('100%')
     .padding(SPACING.LG)
     .backgroundColor(COLORS.BG_WHITE)
+    .borderRadius(BORDER_RADIUS.LG)
+  }
+
+  // 骑手配送位置跟踪动画
+  @Builder
+  RiderTracking() {
+    Column({ space: SPACING.SM }) {
+      Row() {
+        Text('🛵 骑手配送中')
+          .fontSize(FONT_SIZE.MD)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(COLORS.PRIMARY)
+        Text(this.getEstimatedTime())
+          .fontSize(FONT_SIZE.SM)
+          .fontColor(COLORS.TEXT_SECONDARY)
+          .layoutWeight(1)
+          .textAlign(TextAlign.End)
+      }
+      .width('100%')
+
+      Stack({ alignContent: Alignment.Start }) {
+        // 轨道背景
+        Row()
+          .width('100%')
+          .height(6)
+          .borderRadius(3)
+          .backgroundColor(COLORS.DIVIDER)
+
+        // 已行进进度
+        Row()
+          .width(`${Math.round(this.riderProgress * 100)}%`)
+          .height(6)
+          .borderRadius(3)
+          .backgroundColor(COLORS.PRIMARY)
+
+        // 骑手图标（沿轨道移动）
+        Text('🛵')
+          .fontSize(20)
+          .translate({ x: this.riderProgress * (this.trackWidth - 30) })
+          .animation({ duration: 250, curve: Curve.Linear })
+      }
+      .width('100%')
+      .height(28)
+      .onAreaChange((oldValue: Area, newValue: Area) => {
+        const w: Length = newValue.width
+        if (typeof w === 'number') {
+          this.trackWidth = w
+        } else if (typeof w === 'string') {
+          this.trackWidth = Number.parseFloat(w)
+        }
+      })
+    }
+    .width('100%')
+    .padding(SPACING.LG)
+    .backgroundColor('#FFF8F3')
     .borderRadius(BORDER_RADIUS.LG)
   }
 
