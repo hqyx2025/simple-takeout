@@ -6,6 +6,7 @@ import { getHotSearchWords, formatSales } from '../service/MockDataService'
 import { getAllStoresList } from '../service/AppStorageManager'
 import { getSearchHistory, addSearchHistory, clearSearchHistory } from '../service/PreferencesHelper'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import router from '@ohos.router'
 
 @Entry
 @Component
@@ -15,8 +16,12 @@ export struct SearchPage {
   @State historyWords: string[] = []
   @State searchResults: StoreItem[] = []
   @State hasSearched: boolean = false
-  onStoreClick: (store: StoreItem) => void = () => {}
-  onBack: () => void = () => {}
+  // pushUrl 独立页面无法注入回调，默认实现返回首页
+  onStoreClick: (store: StoreItem) => void = (store: StoreItem) => {
+    AppStorage.setOrCreate<number>('currentStoreId', store.id)
+    router.back()
+  }
+  onBack: () => void = () => { router.back() }
 
   aboutToAppear() {
     this.hotWords = getHotSearchWords()

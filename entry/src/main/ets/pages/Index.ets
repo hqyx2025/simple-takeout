@@ -8,6 +8,7 @@ import { addToCart, updateCartItemQuantity, confirmOrder, initAppStorage, isLogg
 import { LoginPage } from './LoginPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
+import { RatingStars } from '../components/RatingStars'
 import { promptAction } from '@kit.ArkUI'
 import router from '@ohos.router'
 
@@ -106,6 +107,26 @@ struct Index {
     this.loggedIn = isLoggedIn()
   }
 
+  // 从子路由页面（收藏页/搜索页）返回时，处理店铺详情跳转
+  onPageShow() {
+    const storeId: number = AppStorage.get<number>('currentStoreId') || 0
+    if (storeId > 0) {
+      AppStorage.setOrCreate<number>('currentStoreId', 0)
+      this.showStoreDetail(storeId)
+    }
+  }
+
+  // 切换发现Tab并展示指定店铺详情
+  private showStoreDetail(storeId: number): void {
+    AppStorage.setOrCreate<number>('selectedStoreId', storeId)
+    const store: StoreItem | undefined = getAllStoresList().find(s => s.id === storeId)
+    if (store !== undefined) {
+      AppStorage.setOrCreate<string>('selectedStoreName', store.name)
+    }
+    this.currentTab = 1
+    this.tabsController.changeIndex(1)
+  }
+
   build() {
     Stack() {
       // 登录覆盖层
@@ -123,10 +144,7 @@ struct Index {
       TabContent() {
         HomePage({
           onStoreClick: (store: StoreItem) => {
-            AppStorage.setOrCreate<number>('selectedStoreId', store.id)
-            AppStorage.setOrCreate<string>('selectedStoreName', store.name)
-            this.currentTab = 1
-            this.tabsController.changeIndex(1)
+            this.showStoreDetail(store.id)
           },
           onNavigateLogin: () => { this.showLogin = true }
         })
@@ -403,8 +421,7 @@ struct HomePage {
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
 
         Row({ space: 8 }) {
-          Text(`${store.rating}分`)
-            .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY).fontWeight(FontWeight.Bold)
+          RatingStars({ rating: store.rating, fontSize: FONT_SIZE.SM, showNumber: true })
           Text(`月售${formatSales(store.monthlySales)}`)
             .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
           Text('|').fontSize(FONT_SIZE.SM).fontColor(COLORS.DIVIDER)
@@ -423,7 +440,8 @@ struct HomePage {
           ForEach(store.tags, (tag: string) => {
             Text(tag)
               .fontSize(FONT_SIZE.XS).fontColor(COLORS.TAG_TEXT).backgroundColor(COLORS.TAG_BG)
-              .padding({ left: 4, right: 4, top: 2, bottom: 2 }).borderRadius(BORDER_RADIUS.SM)
+              .padding({ left: 6, right: 6, top: 2, bottom: 2 }).borderRadius(BORDER_RADIUS.ROUND)
+              .margin({ top: 2 })
           }, (tag: string) => tag)
         }
         .width('100%')
