@@ -28,8 +28,7 @@ export struct OrderStatusTimeline {
             .height(24)
             .borderRadius(BORDER_RADIUS.CIRCLE)
             .backgroundColor(step.completed ? COLORS.PRIMARY : COLORS.DIVIDER)
-            .justifyContent(FlexAlign.Center)
-            .alignItems(HorizontalAlign.Center)
+            .alignContent(Alignment.Center)
 
             // 连线（最后一个不显示）
             if (index < this.steps.length - 1) {
@@ -60,7 +59,7 @@ export struct OrderStatusTimeline {
           .padding({ bottom: index < this.steps.length - 1 ? SPACING.MD : 0 })
         }
         .width('100%')
-        .alignItems(HorizontalAlign.Top)
+        .alignItems(VerticalAlign.Top)
       }, (step: DeliveryStep) => step.status.toString())
     }
     .width('100%')

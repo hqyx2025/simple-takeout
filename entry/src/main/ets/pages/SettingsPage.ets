@@ -138,8 +138,7 @@ export struct SettingsPage {
         }
         .width('100%')
         .height('100%')
-        .justifyContent(FlexAlign.Center)
-        .alignItems(HorizontalAlign.Center)
+        .alignContent(Alignment.Center)
       }
 
       // 退出确认弹窗
