@@ -9,6 +9,7 @@ import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { CartItem, Order, Address, Coupon, StoreItem } from '../model/Models'
 import { generateOrderId, addOrder, updateCartItemQuantity, useCoupon, getAllStoresList } from '../service/AppStorageManager'
 import { LoadingIndicator } from '../components/LoadingIndicator'
+import { logInfo } from '../service/AppLogger'
 
 @Entry
 @Component
@@ -96,6 +97,7 @@ export struct CheckoutPage {
       return
     }
     this.submitting = true
+    logInfo('Checkout', `开始提交订单 storeId=${this.checkoutStoreId} 商品数=${this.storeItems.length} 应付=${this.getPayAmount()} 优惠=${this.getDiscountAmount()}`)
     // 模拟支付处理，短暂展示加载态
     setTimeout(() => {
       this.doSubmitOrder()

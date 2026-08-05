@@ -11,6 +11,7 @@ import { EmptyState } from '../components/EmptyState'
 import { RatingStars } from '../components/RatingStars'
 import { promptAction } from '@kit.ArkUI'
 import router from '@ohos.router'
+import { logInfo } from '../service/AppLogger'
 
 // 定义快捷入口和订单Tab的数据类型，解决 arkts-no-untyped-obj-literals 错误
 class QuickEntryItem {
@@ -895,6 +896,7 @@ struct StoreDetailContent {
     this.cartCount = 0
     this.cartTotal = 0
     this.cartItems = remainCart
+    logInfo('Order', `首页快捷下单 orderId=${order.id} store=${order.storeName} 商品数=${items.length} 实付=${order.payAmount}`)
   }
 
   getQty(goodsId: number): number {

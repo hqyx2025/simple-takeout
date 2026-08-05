@@ -6,6 +6,7 @@ import { CartItem } from '../model/Models'
 import { logout } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { logInfo } from '../service/AppLogger'
 
 @Entry
 @Component
@@ -33,6 +34,7 @@ export struct SettingsPage {
     AppStorage.setOrCreate<CartItem[]>('cartItems', [])
     // 显示提示
     this.cacheSize = '0KB'
+    logInfo('Settings', '清除缓存（清空购物车）')
   }
 
   doLogout() {
@@ -40,6 +42,7 @@ export struct SettingsPage {
     this.loggedIn = false
     this.showLogoutConfirm = false
     this.onLogout()
+    logInfo('Settings', '设置页退出登录')
   }
 
   build() {

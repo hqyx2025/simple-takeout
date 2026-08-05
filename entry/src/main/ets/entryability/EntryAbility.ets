@@ -2,6 +2,7 @@ import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.Ab
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
 import { loadAllData } from '../service/DataPersistence';
+import { initLogger, logInfo } from '../service/AppLogger';
 
 const DOMAIN = 0x0000;
 
@@ -15,6 +16,9 @@ export default class EntryAbility extends UIAbility {
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
     // 将 AbilityContext 存入 AppStorage，供持久化服务使用
     AppStorage.setOrCreate('appContext', this.context);
+    // 初始化应用日志服务（控制台 + 日志文件）
+    initLogger();
+    logInfo('EntryAbility', 'Ability onCreate');
     // 异步加载持久化数据
     loadAllData();
   }

@@ -4,6 +4,7 @@
 import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, MerchantStatsData } from '../model/Models'
 import { getDefaultUser, getDefaultAddresses, getDefaultCoupons, getDefaultOrders, getMockUsers, getStores, getGoodsByStore, getDefaultReviews, getDefaultFavorites, getReviewsByStore, getClaimableCoupons } from './MockDataService'
 import { saveAllData, clearAllData } from './DataPersistence'
+import { logInfo, logWarn, logError } from './AppLogger'
 
 // 初始化全局数据
 export function initAppStorage() {
@@ -61,6 +62,7 @@ export function initAppStorage() {
   if (!AppStorage.has('claimableCoupons')) {
     AppStorage.setOrCreate('claimableCoupons', getClaimableCoupons())
   }
+  logInfo('AppStorage', 'initAppStorage 完成，全局数据初始化就绪')
 }
 
 // ============ 登录/登出 ============
@@ -71,8 +73,10 @@ export function login(phone: string, password: string): User | undefined {
     AppStorage.setOrCreate<User>('user', user)
     AppStorage.setOrCreate<boolean>('isLoggedIn', true)
     saveAllData()
+    logInfo('Auth', `用户登录成功 phone=${phone} userId=${user.id} role=${user.role === UserRole.MERCHANT ? '商户' : '用户'}`)
     return user
   }
+  logWarn('Auth', `用户登录失败 phone=${phone}（账号或密码错误）`)
   return undefined
 }
 
@@ -96,6 +100,7 @@ export function register(username: string, phone: string, password: string, role
   users.push(newUser)
   AppStorage.setOrCreate('allUsers', users)
   saveAllData()
+  logInfo('Auth', `用户注册成功 phone=${phone} username=${username} role=${role === UserRole.MERCHANT ? '商户' : '用户'}`)
   return newUser
 }
 
@@ -104,6 +109,7 @@ export function logout(): void {
   AppStorage.setOrCreate<User>('user', getDefaultUser())
   AppStorage.setOrCreate<CartItem[]>('cartItems', [])
   clearAllData()
+  logInfo('Auth', '用户退出登录，已清除登录态与购物车')
 }
 
 export function isLoggedIn(): boolean {
@@ -126,6 +132,7 @@ export function addToCart(item: CartItem): void {
   }
   AppStorage.setOrCreate('cartItems', cart)
   saveAllData()
+  logInfo('Cart', `加入购物车 goods=${item.goods.name} x${item.quantity} storeId=${item.storeId}`)
 }
 
 export function updateCartItemQuantity(goodsId: number, storeId: number, quantity: number): void {
@@ -140,11 +147,13 @@ export function updateCartItemQuantity(goodsId: number, storeId: number, quantit
   }
   AppStorage.setOrCreate('cartItems', cart)
   saveAllData()
+  logInfo('Cart', `更新购物车数量 goodsId=${goodsId} storeId=${storeId} quantity=${quantity}`)
 }
 
 export function clearCart(): void {
   AppStorage.setOrCreate<CartItem[]>('cartItems', [])
   saveAllData()
+  logInfo('Cart', '清空购物车')
 }
 
 // ============ 订单操作 ============
@@ -158,6 +167,7 @@ export function addOrder(order: Order): void {
     AppStorage.setOrCreate('user', user)
   }
   saveAllData()
+  logInfo('Order', `生成新订单 orderId=${order.id} store=${order.storeName} payAmount=${order.payAmount}`)
 }
 
 export function cancelOrder(orderId: number): void {
@@ -167,6 +177,9 @@ export function cancelOrder(orderId: number): void {
     order.status = 5
     order.cancelTime = formatDateTime(new Date())
     AppStorage.setOrCreate('orderList', orders)
+    logInfo('Order', `取消订单 orderId=${orderId}`)
+  } else {
+    logWarn('Order', `取消订单失败：订单不存在 orderId=${orderId}`)
   }
   saveAllData()
 }
@@ -178,6 +191,9 @@ export function confirmOrder(orderId: number): void {
     order.status = 4
     order.completeTime = formatDateTime(new Date())
     AppStorage.setOrCreate('orderList', orders)
+    logInfo('Order', `确认收货 orderId=${orderId}`)
+  } else {
+    logWarn('Order', `确认收货失败：订单不存在 orderId=${orderId}`)
   }
   saveAllData()
 }
@@ -199,6 +215,7 @@ export function createStore(store: StoreItem): void {
     AppStorage.setOrCreate('user', user)
   }
   saveAllData()
+  logInfo('Merchant', `创建店铺 storeId=${store.id} name=${store.name}`)
 }
 
 export function updateStore(store: StoreItem): void {
@@ -207,6 +224,9 @@ export function updateStore(store: StoreItem): void {
   if (index >= 0) {
     stores[index] = store
     AppStorage.setOrCreate('allStores', stores)
+    logInfo('Merchant', `更新店铺信息 storeId=${store.id} name=${store.name} 配送费=${store.deliveryFee} 起送价=${store.minOrder}`)
+  } else {
+    logWarn('Merchant', `更新店铺失败：店铺不存在 storeId=${store.id}`)
   }
   saveAllData()
 }
@@ -220,6 +240,7 @@ export function addGoodsToStore(storeId: number, goods: GoodsItem): void {
   goodsMap[storeId.toString()] = storeGoods
   AppStorage.setOrCreate('allGoodsMap', goodsMap)
   saveAllData()
+  logInfo('Merchant', `新增商品 storeId=${storeId} goodsId=${goods.id} name=${goods.name} price=${goods.price}`)
 }
 
 export function removeGoodsFromStore(storeId: number, goodsId: number): void {
@@ -229,6 +250,7 @@ export function removeGoodsFromStore(storeId: number, goodsId: number): void {
   goodsMap[storeId.toString()] = storeGoods
   AppStorage.setOrCreate('allGoodsMap', goodsMap)
   saveAllData()
+  logInfo('Merchant', `删除商品 storeId=${storeId} goodsId=${goodsId}`)
 }
 
 export function updateGoodsToStore(storeId: number, goods: GoodsItem): void {
@@ -239,6 +261,7 @@ export function updateGoodsToStore(storeId: number, goods: GoodsItem): void {
     storeGoods[index] = goods
     goodsMap[storeId.toString()] = storeGoods
     AppStorage.setOrCreate('allGoodsMap', goodsMap)
+    logInfo('Merchant', `更新商品 storeId=${storeId} goodsId=${goods.id} name=${goods.name} price=${goods.price} 上架=${goods.isOnShelf !== false}`)
   }
   saveAllData()
 }
@@ -267,6 +290,7 @@ export function addAddress(address: Address): void {
   list.push(address)
   AppStorage.setOrCreate('addressList', list)
   saveAllData()
+  logInfo('Address', `新增地址 id=${address.id} name=${address.name} phone=${address.phone} 默认=${address.isDefault}`)
 }
 
 export function deleteAddress(addressId: number): void {
@@ -274,6 +298,7 @@ export function deleteAddress(addressId: number): void {
   list = list.filter(a => a.id !== addressId)
   AppStorage.setOrCreate('addressList', list)
   saveAllData()
+  logInfo('Address', `删除地址 id=${addressId}`)
 }
 
 // ============ 优惠券操作 ============
@@ -283,6 +308,9 @@ export function useCoupon(couponId: number): void {
   if (coupon) {
     coupon.used = true
     AppStorage.setOrCreate('couponList', coupons)
+    logInfo('Coupon', `使用优惠券 couponId=${couponId} 金额=${coupon.amount}`)
+  } else {
+    logWarn('Coupon', `使用优惠券失败：优惠券不存在 couponId=${couponId}`)
   }
   saveAllData()
 }
@@ -339,6 +367,7 @@ export function toggleFavorite(storeId: number): boolean {
     }
   }
   saveAllData()
+  logInfo('Favorite', `切换收藏 storeId=${storeId} ${result ? '已收藏' : '已取消'}`)
   return result
 }
 
@@ -372,6 +401,7 @@ export function addReview(review: Review): void {
     AppStorage.setOrCreate('orderList', orders)
   }
   saveAllData()
+  logInfo('Review', `提交评价 orderId=${review.orderId} storeId=${review.storeId} 评分=${review.rating} 内容=${review.content}`)
 }
 
 export function getStoreReviews(storeId: number): Review[] {
@@ -387,6 +417,9 @@ export function merchantAcceptOrder(orderId: number): void {
     order.status = 2  // 待接单 -> 制作中
     order.payTime = formatDateTime(new Date())
     AppStorage.setOrCreate('orderList', orders)
+    logInfo('Merchant', `商户接单 orderId=${orderId}（待接单 -> 制作中）`)
+  } else {
+    logWarn('Merchant', `商户接单失败：订单不存在或状态不符 orderId=${orderId}`)
   }
   saveAllData()
 }
@@ -398,6 +431,9 @@ export function merchantStartDelivery(orderId: number): void {
     order.status = 3  // 制作中 -> 配送中
     order.deliverTime = formatDateTime(new Date())
     AppStorage.setOrCreate('orderList', orders)
+    logInfo('Merchant', `商户出餐配送 orderId=${orderId}（制作中 -> 配送中）`)
+  } else {
+    logWarn('Merchant', `商户出餐失败：订单不存在或状态不符 orderId=${orderId}`)
   }
   saveAllData()
 }
@@ -416,6 +452,9 @@ export function merchantCompleteOrder(orderId: number): void {
       user.balance += order.payAmount
       AppStorage.setOrCreate('user', user)
     }
+    logInfo('Merchant', `商户确认送达 orderId=${orderId}（配送中 -> 已完成）收入=${order.payAmount}`)
+  } else {
+    logWarn('Merchant', `商户确认送达失败：订单不存在或状态不符 orderId=${orderId}`)
   }
   saveAllData()
 }
@@ -526,6 +565,7 @@ export function updateUserProfile(username: string, phone: string): void {
       allUsers[index] = user
       AppStorage.setOrCreate('allUsers', allUsers)
     }
+    logInfo('Profile', `更新用户信息 userId=${user.id} username=${username} phone=${phone}`)
   }
   saveAllData()
 }

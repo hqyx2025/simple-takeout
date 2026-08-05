@@ -7,6 +7,7 @@ import preferences from '@ohos.data.preferences'
 import common from '@ohos.app.ability.common'
 import { User, Order, CartItem, Favorite, Coupon, Address } from '../model/Models'
 import { getDefaultUser, getDefaultOrders, getDefaultAddresses, getDefaultCoupons, getDefaultFavorites } from './MockDataService'
+import { logInfo, logWarn, logError } from './AppLogger'
 
 const PERSISTENCE_NAME: string = 'takeout_app_data'
 
@@ -147,15 +148,19 @@ export async function loadAllData(): Promise<void> {
           // 归一化：确保数据格式与模型一致，兼容旧版本数据
           const normalized: Object = normalizeData(key, value)
           AppStorage.setOrCreate(key, normalized)
+          logInfo('Persistence', `恢复数据 key=${key} 成功`)
         } catch (parseErr) {
+          logWarn('Persistence', `恢复数据 key=${key} 解析失败，使用默认值`)
           console.error(`DataPersistence: Failed to parse ${key}`, JSON.stringify(parseErr))
         }
+      } else {
+        logInfo('Persistence', `恢复数据 key=${key} 无持久化记录，使用默认值`)
       }
     }
     AppStorage.setOrCreate<boolean>('_persistenceReady', true)
-    console.info('DataPersistence: All data loaded successfully')
+    logInfo('Persistence', '持久化数据全部加载完成')
   } catch (err) {
-    console.error('DataPersistence: Failed to load data', JSON.stringify(err))
+    logError('Persistence', '加载持久化数据失败', err)
   }
 }
 
@@ -176,9 +181,9 @@ export async function saveAllData(): Promise<void> {
       }
     }
     await prefs.flush()
-    console.info('DataPersistence: All data saved successfully')
+    logInfo('Persistence', '数据保存完成（全部 key）')
   } catch (err) {
-    console.error('DataPersistence: Failed to save data', JSON.stringify(err))
+    logError('Persistence', '保存持久化数据失败', err)
   }
 }
 
@@ -193,8 +198,8 @@ export async function clearAllData(): Promise<void> {
     }
     await prefs.flush()
     AppStorage.setOrCreate<boolean>('_persistenceReady', false)
-    console.info('DataPersistence: All data cleared')
+    logInfo('Persistence', '持久化数据已全部清除')
   } catch (err) {
-    console.error('DataPersistence: Failed to clear data', JSON.stringify(err))
+    logError('Persistence', '清除持久化数据失败', err)
   }
 }

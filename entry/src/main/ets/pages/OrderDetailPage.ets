@@ -11,6 +11,7 @@ import { getDeliverySteps } from '../service/MockDataService'
 import { cancelOrder, confirmOrder, addToCart } from '../service/AppStorageManager'
 import { OrderStatusTimeline } from '../components/OrderStatusTimeline'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { logInfo } from '../service/AppLogger'
 
 @Entry
 @Component
@@ -543,6 +544,7 @@ export struct OrderDetailPage {
                 for (let i = 0; i < this.order.items.length; i++) {
                   addToCart(this.order.items[i])
                 }
+                logInfo('Order', `再来一单 orderId=${this.order.id} 商品数=${this.order.items.length} 已加入购物车`)
                 promptAction.showToast({ message: '已加入购物车' })
               }
             })
