@@ -3,9 +3,14 @@
  */
 import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, MerchantStatsData } from '../model/Models'
 import { getDefaultUser, getDefaultAddresses, getDefaultCoupons, getDefaultOrders, getMockUsers, getStores, getGoodsByStore, getDefaultReviews, getDefaultFavorites, getReviewsByStore, getClaimableCoupons } from './MockDataService'
+import { saveAllData, clearAllData } from './DataPersistence'
 
 // 初始化全局数据
 export function initAppStorage() {
+  // 如果持久化数据已加载，跳过默认值初始化
+  if (AppStorage.get<boolean>('_persistenceReady')) {
+    return
+  }
   if (!AppStorage.has('isLoggedIn')) {
     AppStorage.setOrCreate<boolean>('isLoggedIn', false)
   }
@@ -65,6 +70,7 @@ export function login(phone: string, password: string): User | undefined {
   if (user) {
     AppStorage.setOrCreate<User>('user', user)
     AppStorage.setOrCreate<boolean>('isLoggedIn', true)
+    saveAllData()
     return user
   }
   return undefined
@@ -89,6 +95,7 @@ export function register(username: string, phone: string, password: string, role
   }
   users.push(newUser)
   AppStorage.setOrCreate('allUsers', users)
+  saveAllData()
   return newUser
 }
 
@@ -96,6 +103,7 @@ export function logout(): void {
   AppStorage.setOrCreate<boolean>('isLoggedIn', false)
   AppStorage.setOrCreate<User>('user', getDefaultUser())
   AppStorage.setOrCreate<CartItem[]>('cartItems', [])
+  clearAllData()
 }
 
 export function isLoggedIn(): boolean {
@@ -117,6 +125,7 @@ export function addToCart(item: CartItem): void {
     cart.push(item)
   }
   AppStorage.setOrCreate('cartItems', cart)
+  saveAllData()
 }
 
 export function updateCartItemQuantity(goodsId: number, storeId: number, quantity: number): void {
@@ -130,10 +139,12 @@ export function updateCartItemQuantity(goodsId: number, storeId: number, quantit
     }
   }
   AppStorage.setOrCreate('cartItems', cart)
+  saveAllData()
 }
 
 export function clearCart(): void {
   AppStorage.setOrCreate<CartItem[]>('cartItems', [])
+  saveAllData()
 }
 
 // ============ 订单操作 ============
@@ -146,6 +157,7 @@ export function addOrder(order: Order): void {
     user.orders = orders
     AppStorage.setOrCreate('user', user)
   }
+  saveAllData()
 }
 
 export function cancelOrder(orderId: number): void {
@@ -156,6 +168,7 @@ export function cancelOrder(orderId: number): void {
     order.cancelTime = formatDateTime(new Date())
     AppStorage.setOrCreate('orderList', orders)
   }
+  saveAllData()
 }
 
 export function confirmOrder(orderId: number): void {
@@ -166,6 +179,7 @@ export function confirmOrder(orderId: number): void {
     order.completeTime = formatDateTime(new Date())
     AppStorage.setOrCreate('orderList', orders)
   }
+  saveAllData()
 }
 
 // ============ 商户：店铺管理 ============
@@ -184,6 +198,7 @@ export function createStore(store: StoreItem): void {
     user.storeIds.push(store.id)
     AppStorage.setOrCreate('user', user)
   }
+  saveAllData()
 }
 
 export function updateStore(store: StoreItem): void {
@@ -193,6 +208,7 @@ export function updateStore(store: StoreItem): void {
     stores[index] = store
     AppStorage.setOrCreate('allStores', stores)
   }
+  saveAllData()
 }
 
 // ============ 商户：商品管理 ============
@@ -203,6 +219,7 @@ export function addGoodsToStore(storeId: number, goods: GoodsItem): void {
   storeGoods.push(goods)
   goodsMap[storeId.toString()] = storeGoods
   AppStorage.setOrCreate('allGoodsMap', goodsMap)
+  saveAllData()
 }
 
 export function removeGoodsFromStore(storeId: number, goodsId: number): void {
@@ -211,6 +228,7 @@ export function removeGoodsFromStore(storeId: number, goodsId: number): void {
   storeGoods = storeGoods.filter(g => g.id !== goodsId)
   goodsMap[storeId.toString()] = storeGoods
   AppStorage.setOrCreate('allGoodsMap', goodsMap)
+  saveAllData()
 }
 
 export function updateGoodsToStore(storeId: number, goods: GoodsItem): void {
@@ -222,6 +240,7 @@ export function updateGoodsToStore(storeId: number, goods: GoodsItem): void {
     goodsMap[storeId.toString()] = storeGoods
     AppStorage.setOrCreate('allGoodsMap', goodsMap)
   }
+  saveAllData()
 }
 
 export function getGoodsForStore(storeId: number): GoodsItem[] {
@@ -247,12 +266,14 @@ export function addAddress(address: Address): void {
   address.id = list.length + 1
   list.push(address)
   AppStorage.setOrCreate('addressList', list)
+  saveAllData()
 }
 
 export function deleteAddress(addressId: number): void {
   let list: Address[] = AppStorage.get<Address[]>('addressList') || []
   list = list.filter(a => a.id !== addressId)
   AppStorage.setOrCreate('addressList', list)
+  saveAllData()
 }
 
 // ============ 优惠券操作 ============
@@ -263,6 +284,7 @@ export function useCoupon(couponId: number): void {
     coupon.used = true
     AppStorage.setOrCreate('couponList', coupons)
   }
+  saveAllData()
 }
 
 // ============ 工具方法 ============
@@ -292,11 +314,12 @@ export function toggleFavorite(storeId: number): boolean {
   let favorites: Favorite[] = AppStorage.get<Favorite[]>('favoriteList') || getDefaultFavorites()
   const existIndex = favorites.findIndex(f => f.storeId === storeId && f.userId === user.id)
 
+  let result: boolean = false
   if (existIndex >= 0) {
     // 取消收藏
     favorites = favorites.filter(f => !(f.storeId === storeId && f.userId === user.id))
     AppStorage.setOrCreate('favoriteList', favorites)
-    return false
+    result = false
   } else {
     // 添加收藏
     const stores: StoreItem[] = getAllStoresList()
@@ -312,10 +335,11 @@ export function toggleFavorite(storeId: number): boolean {
       }
       favorites.push(favorite)
       AppStorage.setOrCreate('favoriteList', favorites)
-      return true
+      result = true
     }
-    return false
   }
+  saveAllData()
+  return result
 }
 
 export function getFavorites(): Favorite[] {
@@ -347,6 +371,7 @@ export function addReview(review: Review): void {
     order.remark = order.remark + ' [已评价]'
     AppStorage.setOrCreate('orderList', orders)
   }
+  saveAllData()
 }
 
 export function getStoreReviews(storeId: number): Review[] {
@@ -363,6 +388,7 @@ export function merchantAcceptOrder(orderId: number): void {
     order.payTime = formatDateTime(new Date())
     AppStorage.setOrCreate('orderList', orders)
   }
+  saveAllData()
 }
 
 export function merchantStartDelivery(orderId: number): void {
@@ -373,6 +399,7 @@ export function merchantStartDelivery(orderId: number): void {
     order.deliverTime = formatDateTime(new Date())
     AppStorage.setOrCreate('orderList', orders)
   }
+  saveAllData()
 }
 
 export function merchantCompleteOrder(orderId: number): void {
@@ -390,6 +417,7 @@ export function merchantCompleteOrder(orderId: number): void {
       AppStorage.setOrCreate('user', user)
     }
   }
+  saveAllData()
 }
 
 // 商户获取自己店铺的订单
@@ -458,4 +486,5 @@ export function updateUserProfile(username: string, phone: string): void {
       AppStorage.setOrCreate('allUsers', allUsers)
     }
   }
+  saveAllData()
 }
