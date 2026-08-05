@@ -470,6 +470,47 @@ export function getMerchantWeekStats(merchantId: number): MerchantStatsData {
   return stats
 }
 
+// 近7天（含今日）每日已完成订单收入，索引0为7天前，索引6为今日
+// 供商户收入统计页折线图使用
+export function getMerchantWeekRevenue(merchantId: number): number[] {
+  const orders: Order[] = getMerchantOrders(merchantId)
+  const result: number[] = []
+  const now = new Date()
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
+    const dayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const revenue = orders
+      .filter(o => o.status === 4 && (o.completeTime ?? '').startsWith(dayStr))
+      .reduce((sum, o) => sum + o.payAmount, 0)
+    result.push(revenue)
+  }
+  return result
+}
+
+// 今日订单状态分布：[待接单, 制作中, 配送中, 已完成, 已取消]
+// 供商户收入统计页柱状图使用
+export function getMerchantTodayStatusOrders(merchantId: number): number[] {
+  const orders: Order[] = getMerchantOrders(merchantId)
+  const today = new Date()
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  const todayOrders = orders.filter(o => o.createTime.startsWith(todayStr))
+  const dist: number[] = [0, 0, 0, 0, 0]
+  todayOrders.forEach(o => {
+    if (o.status === 1) {
+      dist[0]++
+    } else if (o.status === 2) {
+      dist[1]++
+    } else if (o.status === 3) {
+      dist[2]++
+    } else if (o.status === 4) {
+      dist[3]++
+    } else if (o.status === 5) {
+      dist[4]++
+    }
+  })
+  return dist
+}
+
 // ============ 用户信息更新 ============
 export function updateUserProfile(username: string, phone: string): void {
   const user: User | undefined = AppStorage.get<User>('user')
