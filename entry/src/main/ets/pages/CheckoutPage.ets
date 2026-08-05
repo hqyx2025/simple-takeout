@@ -8,6 +8,7 @@ import { promptAction } from '@kit.ArkUI'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { CartItem, Order, Address, Coupon, StoreItem } from '../model/Models'
 import { generateOrderId, addOrder, updateCartItemQuantity, useCoupon, getAllStoresList } from '../service/AppStorageManager'
+import { LoadingIndicator } from '../components/LoadingIndicator'
 
 @Entry
 @Component
@@ -95,8 +96,15 @@ export struct CheckoutPage {
       return
     }
     this.submitting = true
+    // 模拟支付处理，短暂展示加载态
+    setTimeout(() => {
+      this.doSubmitOrder()
+    }, 800)
+  }
 
-    const address: Address = this.currentAddress
+  // 实际生成订单并跳转
+  private doSubmitOrder(): void {
+    const address: Address = this.currentAddress as Address
     const order: Order = {
       id: generateOrderId(),
       storeId: this.checkoutStoreId,
@@ -166,6 +174,16 @@ export struct CheckoutPage {
 
       if (this.showCouponDialog) {
         this.CouponDialog()
+      }
+
+      // 提交订单加载遮罩（模拟支付中）
+      if (this.submitting) {
+        Column() {
+          LoadingIndicator({ text: '支付处理中...' })
+        }
+        .width('100%')
+        .height('100%')
+        .backgroundColor('rgba(0,0,0,0.3)')
       }
     }
     .width('100%')
