@@ -460,8 +460,20 @@ export function getMockUsers(): User[] {
   ]
 }
 
+// 默认用户：未登录状态（id=0，不占用真实账号）
 export function getDefaultUser(): User {
-  return getMockUsers()[0]
+  return {
+    id: 0,
+    username: '未登录',
+    avatar: '',
+    phone: '',
+    password: '',
+    role: UserRole.CUSTOMER,
+    balance: 0,
+    coupons: [],
+    orders: [],
+    storeIds: [],
+  }
 }
 
 // ============ 搜索热门词 ============
