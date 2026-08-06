@@ -138,6 +138,11 @@ struct Index {
     if (user !== undefined && user !== null && (typeof user !== 'object' || Array.isArray(user))) {
       AppStorage.setOrCreate<User>('user', getDefaultUser())
     }
+    // 未登录时强制重置为“未登录”用户，避免残留旧默认账号昵称（如美食家小张）
+    const loggedInFlag: boolean = AppStorage.get<boolean>('isLoggedIn') || false
+    if (!loggedInFlag) {
+      AppStorage.setOrCreate<User>('user', getDefaultUser())
+    }
   }
 
   // 从子路由页面（收藏页/搜索页）返回时，处理店铺详情跳转
