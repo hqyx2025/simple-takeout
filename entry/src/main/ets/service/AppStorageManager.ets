@@ -92,7 +92,7 @@ export function register(username: string, phone: string, password: string, role
     phone: phone,
     password: password,
     role: role,
-    balance: 0,
+    balance: role === UserRole.CUSTOMER ? 20.0 : 0, // 新注册用户赠送余额，商户从 0 开始靠经营赚钱
     coupons: [],
     orders: [],
     storeIds: [],
@@ -119,6 +119,33 @@ export function isLoggedIn(): boolean {
 // ============ 获取当前用户 ============
 export function getCurrentUser(): User | undefined {
   return AppStorage.get<User>('user')
+}
+
+/**
+ * 同步当前用户与 allUsers 账号数据（登录态恢复后调用）：
+ * 以 allUsers 中的账号信息为基准（保证不同账号余额等初始数据正确），
+ * 保留运行时的订单/优惠券，余额取两者较大值（不丢失商户经营收入）
+ */
+export function syncUserWithAllUsers(): void {
+  const user: User | undefined = AppStorage.get<User>('user')
+  const loggedIn: boolean = AppStorage.get<boolean>('isLoggedIn') || false
+  if (!loggedIn || user === undefined || user === null || user.phone === '') {
+    return
+  }
+  const allUsers: User[] = AppStorage.get<User[]>('allUsers') || []
+  const index: number = allUsers.findIndex(u => u.phone === user.phone)
+  if (index >= 0) {
+    const fresh: User = allUsers[index]
+    fresh.orders = user.orders || []
+    fresh.coupons = user.coupons || []
+    if (user.balance > fresh.balance) {
+      fresh.balance = user.balance
+    }
+    allUsers[index] = fresh
+    AppStorage.setOrCreate('allUsers', allUsers)
+    AppStorage.setOrCreate<User>('user', fresh)
+    logInfo('Auth', `同步用户数据 userId=${fresh.id} username=${fresh.username} balance=${fresh.balance}`)
+  }
 }
 
 // ============ 购物车操作 ============
