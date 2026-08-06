@@ -4,7 +4,7 @@
  */
 import { Category, StoreItem, GoodsItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite } from '../model/Models'
 import { getCategories, formatSales, getGoodsCategories, getDefaultUser } from '../service/MockDataService'
-import { addToCart, updateCartItemQuantity, confirmOrder, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, toggleFavorite, isFavorited, getStoreReviews } from '../service/AppStorageManager'
+import { addToCart, updateCartItemQuantity, confirmOrder, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, toggleFavorite, isFavorited, getStoreReviews, syncUserWithAllUsers } from '../service/AppStorageManager'
 import { LoginPage } from './LoginPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
@@ -105,6 +105,8 @@ struct Index {
   aboutToAppear() {
     // 初始化全局数据
     initAppStorage()
+    // 登录态恢复后同步当前用户与账号库数据（保证不同账号余额等数据独立正确）
+    syncUserWithAllUsers()
     this.loggedIn = isLoggedIn()
     // 数据格式保险：校验 AppStorage 关键数据，异常（非数组/非对象）时重置，防止渲染崩溃
     this.sanitizeAppData()
@@ -249,6 +251,7 @@ struct HomePage {
   @State searchText: string = ''
   @State currentCategory: number = 0
   @State isRefreshing: boolean = false
+  @StorageLink('currentAddress') currentAddress: Address | null = null
   onStoreClick: (store: StoreItem) => void = () => {}
   onNavigateLogin: () => void = () => {}
   private storeDataSource: StoreDataSource = new StoreDataSource()
@@ -267,7 +270,7 @@ struct HomePage {
           Row({ space: 4 }) {
             Text('📍')
               .fontSize(14)
-            Text('清华大学')
+            Text(this.currentAddress !== null ? this.currentAddress.address : '清华大学')
               .fontSize(FONT_SIZE.LG)
               .fontColor(COLORS.TEXT_PRIMARY)
               .fontWeight(FontWeight.Bold)
@@ -278,6 +281,7 @@ struct HomePage {
               .fontSize(10)
               .fontColor(COLORS.TEXT_SECONDARY)
           }
+          .onClick(() => { router.pushUrl({ url: 'pages/AddressListPage' }) })
           Row({ space: 4 }) {
             Text('🔍')
               .fontSize(14)
@@ -383,6 +387,15 @@ struct HomePage {
                   .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
               }
               .alignItems(HorizontalAlign.Center)
+              .onClick(() => {
+                if (item.title === '收藏夹') {
+                  router.pushUrl({ url: 'pages/FavoriteListPage' })
+                } else if (item.title === '领券中心') {
+                  router.pushUrl({ url: 'pages/CouponCenterPage' })
+                } else {
+                  promptAction.showToast({ message: `${item.title}功能即将上线，敬请期待`, duration: 1500 })
+                }
+              })
             }, (item: QuickEntryItem) => item.title)
           }
           .width('100%')
@@ -400,6 +413,13 @@ struct HomePage {
           }
           .width('100%')
           .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.SM })
+          .onClick(() => {
+            // 清除分类筛选，展示全部店铺
+            this.currentCategory = 0
+            this.stores = getAllStoresList()
+            this.storeDataSource.setData(this.stores)
+            promptAction.showToast({ message: '已显示全部店铺', duration: 1500 })
+          })
 
           // 店铺列表
           if (this.stores.length === 0) {

@@ -165,7 +165,11 @@ export struct AddressListPage {
                 .padding(SPACING.LG)
                 .backgroundColor(COLORS.BG_WHITE)
                 .borderRadius(BORDER_RADIUS.LG)
-                .onClick(() => { this.onSelectAddress(addr) })
+                .onClick(() => {
+                  // 选择该地址作为当前配送地址（首页/结算页联动）
+                  AppStorage.setOrCreate<Address>('currentAddress', addr)
+                  this.onSelectAddress(addr)
+                })
               }
             }, (item: Address) => item.id.toString())
           }
