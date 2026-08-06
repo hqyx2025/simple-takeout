@@ -98,7 +98,7 @@ class OrderDataSource implements IDataSource {
 @Component
 struct Index {
   @State currentTab: number = 0
-  @State loggedIn: boolean = false
+  @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State showLogin: boolean = false
   private tabsController: TabsController = new TabsController()
 
@@ -161,16 +161,6 @@ struct Index {
 
   build() {
     Stack() {
-      // 登录覆盖层
-      if (this.showLogin) {
-        LoginPage({
-          onLoginSuccess: () => {
-            this.showLogin = false
-            this.loggedIn = true
-          }
-        })
-      }
-
       Tabs({ controller: this.tabsController, barPosition: BarPosition.End }) {
       // 首页Tab
       TabContent() {
@@ -219,6 +209,16 @@ struct Index {
     .width('100%')
     .height('100%')
     .backgroundColor(COLORS.BG_PRIMARY)
+
+      // 登录覆盖层（必须放在 Tabs 之后，确保在 Stack 中处于上层，否则会被 Tabs 遮挡无法显示/点击）
+      if (this.showLogin) {
+        LoginPage({
+          onLoginSuccess: () => {
+            this.showLogin = false
+            this.loggedIn = true
+          }
+        })
+      }
     }
   }
 

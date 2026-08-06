@@ -5,6 +5,7 @@
 import { Address } from '../model/Models'
 import { addAddress, deleteAddress } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import router from '@ohos.router'
 
 // 表单数据类（用于避免无类型对象字面量）
 class AddressFormData {
@@ -48,7 +49,7 @@ export struct AddressListPage {
   @State editingAddress: Address | null = null
   @State formData: AddressFormData = new AddressFormData()
 
-  onBack: () => void = () => {}
+  onBack: () => void = () => { router.back() }
   onSelectAddress: (address: Address) => void = () => {}
 
   build() {
