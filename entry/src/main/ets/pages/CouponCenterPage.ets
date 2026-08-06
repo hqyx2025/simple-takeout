@@ -5,6 +5,7 @@
 import { Coupon } from '../model/Models'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { logInfo } from '../service/AppLogger'
+import router from '@ohos.router'
 
 // Tab项 - 使用class避免无类型对象字面量
 class CouponTab {
@@ -24,7 +25,7 @@ export struct CouponCenterPage {
   @StorageLink('couponList') couponList: Coupon[] = []
   @StorageLink('claimableCoupons') claimableCoupons: Coupon[] = []
   @State currentTab: number = 0  // 0=可领取, 1=我的优惠券, 2=已使用
-  onBack: () => void = () => {}
+  onBack: () => void = () => { router.back() }
   onSelectCoupon: (coupon: Coupon) => void = () => {}  // 选择优惠券回调（结算页用）
 
   aboutToAppear() {

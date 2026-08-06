@@ -7,6 +7,7 @@ import { logout } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { logInfo } from '../service/AppLogger'
+import router from '@ohos.router'
 
 @Entry
 @Component
@@ -15,7 +16,7 @@ export struct SettingsPage {
   @State showAbout: boolean = false
   @State showLogoutConfirm: boolean = false
   @State cacheSize: string = '0KB'
-  onBack: () => void = () => {}
+  onBack: () => void = () => { router.back() }
   onLogout: () => void = () => {}
 
   aboutToAppear() {
