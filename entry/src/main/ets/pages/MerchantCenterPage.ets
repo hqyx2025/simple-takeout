@@ -8,6 +8,7 @@ import { formatSales } from '../service/MockDataService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { promptAction } from '@kit.ArkUI'
 import { logInfo } from '../service/AppLogger'
+import router from '@ohos.router'
 
 @Entry
 @Component
@@ -63,11 +64,16 @@ export struct MerchantCenterPage {
       Column() {
         // 顶部
         Row() {
+          Text('‹')
+            .fontSize(FONT_SIZE.XXL)
+            .fontColor(COLORS.TEXT_PRIMARY)
+            .onClick(() => { router.back() })
           Text('🏪 商户中心')
             .fontSize(FONT_SIZE.XXL)
             .fontWeight(FontWeight.Bold)
             .fontColor(COLORS.TEXT_PRIMARY)
             .layoutWeight(1)
+            .margin({ left: SPACING.MD })
           Text(this.user.username)
             .fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.TEXT_SECONDARY)
@@ -186,17 +192,37 @@ export struct MerchantCenterPage {
           Column({ space: SPACING.MD }) {
             Text('新建店铺')
               .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
-            TextInput({ placeholder: '店铺名称', text: this.newStoreName })
-              .width('100%').height(44).onChange((v: string) => { this.newStoreName = v })
-            TextInput({ placeholder: '店铺公告', text: this.newStoreNotice })
-              .width('100%').height(44).onChange((v: string) => { this.newStoreNotice = v })
+            Text('创建后将自动归入您的名下，店铺名称为必填项')
+              .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+            Column({ space: SPACING.XS }) {
+              Text('店铺名称（必填）')
+                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+              TextInput({ placeholder: '请输入店铺名称，如：老王快餐店', text: this.newStoreName })
+                .width('100%').height(44).onChange((v: string) => { this.newStoreName = v })
+            }
+            Column({ space: SPACING.XS }) {
+              Text('店铺公告（选填，将展示在店铺详情页）')
+                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+              TextInput({ placeholder: '请输入店铺公告，如：新店开业，欢迎光临', text: this.newStoreNotice })
+                .width('100%').height(44).onChange((v: string) => { this.newStoreNotice = v })
+            }
             Row({ space: SPACING.MD }) {
-              TextInput({ placeholder: '配送费', text: this.newStoreDeliveryFee })
-                .layoutWeight(1).height(44).type(InputType.Number)
-                .onChange((v: string) => { this.newStoreDeliveryFee = v })
-              TextInput({ placeholder: '起送价', text: this.newStoreMinOrder })
-                .layoutWeight(1).height(44).type(InputType.Number)
-                .onChange((v: string) => { this.newStoreMinOrder = v })
+              Column({ space: SPACING.XS }) {
+                Text('配送费（元）')
+                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                TextInput({ placeholder: '如：3', text: this.newStoreDeliveryFee })
+                  .layoutWeight(1).height(44).type(InputType.Number)
+                  .onChange((v: string) => { this.newStoreDeliveryFee = v })
+              }
+              .layoutWeight(1)
+              Column({ space: SPACING.XS }) {
+                Text('起送价（元）')
+                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                TextInput({ placeholder: '如：20', text: this.newStoreMinOrder })
+                  .layoutWeight(1).height(44).type(InputType.Number)
+                  .onChange((v: string) => { this.newStoreMinOrder = v })
+              }
+              .layoutWeight(1)
             }
             Row({ space: SPACING.MD }) {
               Button('取消')
@@ -228,17 +254,37 @@ export struct MerchantCenterPage {
           Column({ space: SPACING.MD }) {
             Text('编辑店铺')
               .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
-            TextInput({ placeholder: '店铺名称', text: this.editStoreName })
-              .width('100%').height(44).onChange((v: string) => { this.editStoreName = v })
-            TextInput({ placeholder: '店铺公告', text: this.editStoreNotice })
-              .width('100%').height(44).onChange((v: string) => { this.editStoreNotice = v })
+            Text('修改后用户端店铺信息将同步更新，店铺名称为必填项')
+              .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+            Column({ space: SPACING.XS }) {
+              Text('店铺名称（必填）')
+                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+              TextInput({ placeholder: '请输入店铺名称，如：老王快餐店', text: this.editStoreName })
+                .width('100%').height(44).onChange((v: string) => { this.editStoreName = v })
+            }
+            Column({ space: SPACING.XS }) {
+              Text('店铺公告（选填，将展示在店铺详情页）')
+                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+              TextInput({ placeholder: '请输入店铺公告，如：本店支持免配送费', text: this.editStoreNotice })
+                .width('100%').height(44).onChange((v: string) => { this.editStoreNotice = v })
+            }
             Row({ space: SPACING.MD }) {
-              TextInput({ placeholder: '配送费', text: this.editStoreDeliveryFee })
-                .layoutWeight(1).height(44).type(InputType.Number)
-                .onChange((v: string) => { this.editStoreDeliveryFee = v })
-              TextInput({ placeholder: '起送价', text: this.editStoreMinOrder })
-                .layoutWeight(1).height(44).type(InputType.Number)
-                .onChange((v: string) => { this.editStoreMinOrder = v })
+              Column({ space: SPACING.XS }) {
+                Text('配送费（元）')
+                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                TextInput({ placeholder: '如：3', text: this.editStoreDeliveryFee })
+                  .layoutWeight(1).height(44).type(InputType.Number)
+                  .onChange((v: string) => { this.editStoreDeliveryFee = v })
+              }
+              .layoutWeight(1)
+              Column({ space: SPACING.XS }) {
+                Text('起送价（元）')
+                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                TextInput({ placeholder: '如：20', text: this.editStoreMinOrder })
+                  .layoutWeight(1).height(44).type(InputType.Number)
+                  .onChange((v: string) => { this.editStoreMinOrder = v })
+              }
+              .layoutWeight(1)
             }
             Row({ space: SPACING.MD }) {
               Button('取消')
@@ -288,18 +334,40 @@ export struct MerchantCenterPage {
           if (this.showAddGoods) {
             Column({ space: SPACING.SM }) {
               Text('添加新商品').fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
-              TextInput({ placeholder: '商品名称', text: this.newGoodsName })
-                .width('100%').height(40).onChange((v: string) => { this.newGoodsName = v })
-              TextInput({ placeholder: '商品描述', text: this.newGoodsDesc })
-                .width('100%').height(40).onChange((v: string) => { this.newGoodsDesc = v })
-              Row({ space: SPACING.SM }) {
-                TextInput({ placeholder: '价格', text: this.newGoodsPrice })
-                  .layoutWeight(1).height(40).type(InputType.Number)
-                  .onChange((v: string) => { this.newGoodsPrice = v })
-                TextInput({ placeholder: '分类ID(1-8)', text: this.newGoodsCategory })
-                  .layoutWeight(1).height(40).type(InputType.Number)
-                  .onChange((v: string) => { this.newGoodsCategory = v })
+              Text('商品名称与价格为必填项，保存后商品将在用户端上架展示')
+                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+              Column({ space: SPACING.XS }) {
+                Text('商品名称（必填）')
+                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                TextInput({ placeholder: '请输入商品名称，如：宫保鸡丁', text: this.newGoodsName })
+                  .width('100%').height(40).onChange((v: string) => { this.newGoodsName = v })
               }
+              Column({ space: SPACING.XS }) {
+                Text('商品描述（选填）')
+                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                TextInput({ placeholder: '请输入商品描述，如：招牌菜，微辣', text: this.newGoodsDesc })
+                  .width('100%').height(40).onChange((v: string) => { this.newGoodsDesc = v })
+              }
+              Row({ space: SPACING.SM }) {
+                Column({ space: SPACING.XS }) {
+                  Text('价格（必填）')
+                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                  TextInput({ placeholder: '如：25.00', text: this.newGoodsPrice })
+                    .layoutWeight(1).height(40).type(InputType.Number)
+                    .onChange((v: string) => { this.newGoodsPrice = v })
+                }
+                .layoutWeight(1)
+                Column({ space: SPACING.XS }) {
+                  Text('分类（选填，默认1）')
+                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                  TextInput({ placeholder: '如：1', text: this.newGoodsCategory })
+                    .layoutWeight(1).height(40).type(InputType.Number)
+                    .onChange((v: string) => { this.newGoodsCategory = v })
+                }
+                .layoutWeight(1)
+              }
+              Text('分类对照：1热销菜 2快餐 3饮品 4甜品 5火锅 6烧烤 7面食')
+                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%')
               Row({ space: SPACING.SM }) {
                 Button('取消').layoutWeight(1).height(36).fontSize(FONT_SIZE.SM)
                   .fontColor(COLORS.TEXT_SECONDARY).backgroundColor('#F5F5F5')
@@ -322,13 +390,27 @@ export struct MerchantCenterPage {
           if (this.showEditGoods) {
             Column({ space: SPACING.SM }) {
               Text('编辑商品').fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
-              TextInput({ placeholder: '商品名称', text: this.editGoodsName })
-                .width('100%').height(40).onChange((v: string) => { this.editGoodsName = v })
-              TextInput({ placeholder: '商品描述', text: this.editGoodsDesc })
-                .width('100%').height(40).onChange((v: string) => { this.editGoodsDesc = v })
-              TextInput({ placeholder: '价格', text: this.editGoodsPrice })
-                .width('100%').height(40).type(InputType.Number)
-                .onChange((v: string) => { this.editGoodsPrice = v })
+              Text('商品名称为必填项，保存后用户端将同步更新')
+                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+              Column({ space: SPACING.XS }) {
+                Text('商品名称（必填）')
+                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                TextInput({ placeholder: '请输入商品名称，如：宫保鸡丁', text: this.editGoodsName })
+                  .width('100%').height(40).onChange((v: string) => { this.editGoodsName = v })
+              }
+              Column({ space: SPACING.XS }) {
+                Text('商品描述（选填）')
+                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                TextInput({ placeholder: '请输入商品描述，如：招牌菜，微辣', text: this.editGoodsDesc })
+                  .width('100%').height(40).onChange((v: string) => { this.editGoodsDesc = v })
+              }
+              Column({ space: SPACING.XS }) {
+                Text('价格（必填）')
+                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                TextInput({ placeholder: '如：25.00', text: this.editGoodsPrice })
+                  .width('100%').height(40).type(InputType.Number)
+                  .onChange((v: string) => { this.editGoodsPrice = v })
+              }
               Row({ space: SPACING.SM }) {
                 Button('取消').layoutWeight(1).height(36).fontSize(FONT_SIZE.SM)
                   .fontColor(COLORS.TEXT_SECONDARY).backgroundColor('#F5F5F5')
