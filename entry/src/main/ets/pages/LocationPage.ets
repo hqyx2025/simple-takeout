@@ -42,6 +42,14 @@ class LocationWebBridge {
   onSearchResult: (jsonStr: string) => void = () => {}
 }
 
+// javaScriptProxy 参数类型（SDK 声明为 object，ArkTS 禁止字面量，需显式 interface）
+interface JavaScriptProxyOptions {
+  object: Object
+  name: string
+  methodList: Array<string>
+  controller: webview.WebviewController
+}
+
 @Entry
 @Component
 export struct LocationPage {
@@ -131,6 +139,17 @@ export struct LocationPage {
     } catch (err) {
       logInfo('LocationPage', '调用地图JS失败（地图可能未加载完成）')
     }
+  }
+
+  // 构造 javaScriptProxy 配置（避免向 object 类型传对象字面量，满足 arkts-no-untyped-obj-literals）
+  private getProxyOptions(): JavaScriptProxyOptions {
+    const options: JavaScriptProxyOptions = {
+      object: this.webBridge,
+      name: 'ohosBridge',
+      methodList: ['onCenterChanged', 'onSearchResult'],
+      controller: this.webController
+    }
+    return options
   }
 
   // 定位当前手机实时位置（成功后地图中心自动移动到定位点）
@@ -240,12 +259,7 @@ export struct LocationPage {
         Web({ src: $rawfile('amap_map.html'), controller: this.webController })
           .javaScriptAccess(true)
           .domStorageAccess(true)
-          .javaScriptProxy({
-            object: this.webBridge,
-            name: 'ohosBridge',
-            methodList: ['onCenterChanged', 'onSearchResult'],
-            controller: this.webController
-          })
+          .javaScriptProxy(this.getProxyOptions())
           .onPageEnd(() => {
             this.isMapReady = true
             // 双向绑定：回显已有定位位置，否则使用本次实时定位结果
