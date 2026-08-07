@@ -34,8 +34,8 @@ export default class EntryAbility extends UIAbility {
       // 1. 隐私政策合规声明（必须在 MapView 创建之前调用）
       MapsInitializer.updatePrivacyShow(AMapPrivacyShowStatus.DidShow, AMapPrivacyInfoStatus.DidContain, this.context);
       MapsInitializer.updatePrivacyAgree(AMapPrivacyAgreeStatus.DidAgree, this.context);
-      // 2. 设置高德 API Key（需在高德开放平台申请 HarmonyOS 平台 Key）
-      MapsInitializer.setApiKey(AMAP_CONFIG.API_KEY);
+      // 2. 设置高德地图SDK Key（需在高德开放平台创建“HarmonyOS”平台应用获取）
+      MapsInitializer.setApiKey(AMAP_CONFIG.MAP_SDK_KEY);
       logInfo('EntryAbility', '高德地图SDK初始化完成');
     } catch (err) {
       logWarn('EntryAbility', `高德地图SDK初始化失败: ${JSON.stringify(err)}`);
