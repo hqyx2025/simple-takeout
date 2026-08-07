@@ -66,6 +66,8 @@ export interface Address {
   detail: string
   isDefault: boolean
   tag?: string
+  latitude?: number  // 定位经纬度（定位选点地址才有，用于地图回显）
+  longitude?: number
 }
 
 // 优惠券模型

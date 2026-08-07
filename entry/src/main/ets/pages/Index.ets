@@ -275,18 +275,32 @@ struct HomePage {
           Row({ space: 4 }) {
             Text('📍')
               .fontSize(14)
-            Text(this.currentAddress !== null ? this.currentAddress.address : '清华大学')
-              .fontSize(FONT_SIZE.LG)
-              .fontColor(COLORS.TEXT_PRIMARY)
-              .fontWeight(FontWeight.Bold)
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-              .constraintSize({ maxWidth: 80 })
+            if (this.currentAddress !== null) {
+              Text(this.currentAddress.address)
+                .fontSize(FONT_SIZE.LG)
+                .fontColor(COLORS.TEXT_PRIMARY)
+                .fontWeight(FontWeight.Bold)
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .constraintSize({ maxWidth: 80 })
+            } else {
+              // 未定位：显示提示并引导用户去定位
+              Text('未定位，点击定位')
+                .fontSize(FONT_SIZE.MD)
+                .fontColor(COLORS.PRIMARY)
+                .fontWeight(FontWeight.Bold)
+            }
             Text('▼')
               .fontSize(10)
               .fontColor(COLORS.TEXT_SECONDARY)
           }
-          .onClick(() => { router.pushUrl({ url: 'pages/LocationPage' }) })
+          .onClick(() => {
+            // 未定位时提示用户去定位，再进入定位选择页
+            if (this.currentAddress === null) {
+              promptAction.showToast({ message: '您尚未定位，请先选择配送位置', duration: 1500 })
+            }
+            router.pushUrl({ url: 'pages/LocationPage' })
+          })
           Row({ space: 4 }) {
             Text('🔍')
               .fontSize(14)

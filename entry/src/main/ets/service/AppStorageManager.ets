@@ -27,10 +27,9 @@ export function initAppStorage() {
   if (!AppStorage.has('addressList')) {
     AppStorage.setOrCreate('addressList', getDefaultAddresses())
   }
+  // 不默认设置 currentAddress：用户未定位/未选择地址时保持空，主页显示“未定位”提示去定位
   if (!AppStorage.has('currentAddress')) {
-    const addresses: Address[] = getDefaultAddresses()
-    const defaultAddr = addresses.find(a => a.isDefault) || addresses[0]
-    AppStorage.setOrCreate('currentAddress', defaultAddr)
+    AppStorage.setOrCreate<Address | null>('currentAddress', null)
   }
   if (!AppStorage.has('orderList')) {
     AppStorage.setOrCreate('orderList', getDefaultOrders())
