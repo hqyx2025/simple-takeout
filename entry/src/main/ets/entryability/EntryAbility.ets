@@ -1,8 +1,11 @@
 import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
+import { MapsInitializer } from '@amap/amap_lbs_map3d';
+import { AMapPrivacyAgreeStatus, AMapPrivacyInfoStatus, AMapPrivacyShowStatus } from '@amap/amap_lbs_common';
 import { loadAllData } from '../service/DataPersistence';
-import { initLogger, logInfo } from '../service/AppLogger';
+import { initLogger, logInfo, logWarn } from '../service/AppLogger';
+import { AMAP_CONFIG } from '../common/Constants';
 
 const DOMAIN = 0x0000;
 
@@ -19,8 +22,24 @@ export default class EntryAbility extends UIAbility {
     // 初始化应用日志服务（控制台 + 日志文件）
     initLogger();
     logInfo('EntryAbility', 'Ability onCreate');
+    // 初始化高德地图SDK（隐私合规 + API Key）
+    this.initAMapSDK();
     // 异步加载持久化数据
     loadAllData();
+  }
+
+  // 初始化高德地图SDK：必须在任何地图SDK接口调用之前完成隐私合规声明与Key设置
+  private initAMapSDK(): void {
+    try {
+      // 1. 隐私政策合规声明（必须在 MapView 创建之前调用）
+      MapsInitializer.updatePrivacyShow(AMapPrivacyShowStatus.DidShow, AMapPrivacyInfoStatus.DidContain, this.context);
+      MapsInitializer.updatePrivacyAgree(AMapPrivacyAgreeStatus.DidAgree, this.context);
+      // 2. 设置高德 API Key（需在高德开放平台申请 HarmonyOS 平台 Key）
+      MapsInitializer.setApiKey(AMAP_CONFIG.API_KEY);
+      logInfo('EntryAbility', '高德地图SDK初始化完成');
+    } catch (err) {
+      logWarn('EntryAbility', `高德地图SDK初始化失败: ${JSON.stringify(err)}`);
+    }
   }
 
   onDestroy(): void {

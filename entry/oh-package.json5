@@ -5,6 +5,10 @@
   "main": "",
   "author": "",
   "license": "",
-  "dependencies": {}
+  "dependencies": {
+    "@amap/amap_lbs_map3d": "^11.1.103",
+    "@amap/amap_lbs_common": "^11.1.103"
+  },
+  "devDependencies": {},
+  "dynamicDependencies": {}
 }
-
