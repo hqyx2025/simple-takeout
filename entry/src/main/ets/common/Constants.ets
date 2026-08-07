@@ -118,3 +118,13 @@ export class API_CONFIG {
     'register': '/api/register'
   }
 }
+
+// 高德地图Web服务配置（申请地址：https://lbs.amap.com，需创建“Web服务”类型Key）
+export class AMAP_CONFIG {
+  // TODO: 请将此处替换为你自己申请的高德Web服务API Key
+  static readonly API_KEY: string = ''
+  // 高德Web服务REST接口域名
+  static readonly RESTO_URL: string = 'https://restapi.amap.com'
+  // 网络请求超时（毫秒）
+  static readonly TIMEOUT: number = 10000
+}

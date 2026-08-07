@@ -188,8 +188,17 @@ export struct AddressListPage {
           .backgroundColor(COLORS.PRIMARY)
           .borderRadius(BORDER_RADIUS.ROUND)
           .type(ButtonType.Capsule)
-          .margin({ top: SPACING.MD, bottom: SPACING.LG })
+          .margin({ top: SPACING.MD, bottom: SPACING.SM })
           .onClick(() => { this.openAddForm() })
+
+        // 定位选择位置入口
+        Text('📍 定位选择当前位置')
+          .fontSize(FONT_SIZE.MD)
+          .fontColor(COLORS.PRIMARY)
+          .width('90%')
+          .textAlign(TextAlign.Center)
+          .margin({ bottom: SPACING.LG })
+          .onClick(() => { router.pushUrl({ url: 'pages/LocationPage' }) })
       }
       .width('100%')
       .height('100%')

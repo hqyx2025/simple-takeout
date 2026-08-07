@@ -286,7 +286,7 @@ struct HomePage {
               .fontSize(10)
               .fontColor(COLORS.TEXT_SECONDARY)
           }
-          .onClick(() => { router.pushUrl({ url: 'pages/AddressListPage' }) })
+          .onClick(() => { router.pushUrl({ url: 'pages/LocationPage' }) })
           Row({ space: 4 }) {
             Text('🔍')
               .fontSize(14)
