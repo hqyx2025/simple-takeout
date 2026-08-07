@@ -119,10 +119,12 @@ export class API_CONFIG {
   }
 }
 
-// 高德地图Web服务配置（申请地址：https://lbs.amap.com，需创建“Web服务”类型Key）
+// 高德地图配置（申请地址：https://lbs.amap.com）
 export class AMAP_CONFIG {
-  // TODO: 请将此处替换为你自己申请的高德Web服务API Key
+  // TODO: 请将此处替换为你自己申请的高德“Web服务”类型API Key（用于逆地理编码/地点搜索）
   static readonly API_KEY: string = ''
+  // TODO: 请将此处替换为高德“HarmonyOS”平台Key（用于地图SDK显示，需绑定应用签名appId）
+  static readonly MAP_SDK_KEY: string = ''
   // 高德Web服务REST接口域名
   static readonly RESTO_URL: string = 'https://restapi.amap.com'
   // 网络请求超时（毫秒）
