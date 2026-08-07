@@ -1,43 +1,53 @@
 /**
  * 选择位置页面
  * 功能：
- * 1. 顶部展示高德地图，支持拖动/双指缩放选点，地图中心固定位置图标，中心即所选位置
- * 2. 进入页面自动实时定位手机当前位置（系统定位 + 高德逆地理编码），地图中心移动到定位点
- * 3. 支持关键词搜索地点并在地图上联动定位
- * 4. 与主页双向绑定：进入时回显已保存的定位地址，选择后写回主页配送地址
+ * 1. 顶部展示高德地图（Web端JS API + Web组件，无native so，模拟器/真机均可运行）
+ * 2. 支持拖动/双指缩放选点，地图中心固定位置图标，中心即所选位置（JS内逆地理编码自动解析地址）
+ * 3. 进入页面自动实时定位手机当前位置，地图中心移动到定位点
+ * 4. 支持关键词搜索地点并在地图上联动定位
+ * 5. 与主页双向绑定：进入时回显已保存的定位地址，选择后写回主页配送地址
  */
 import { Address } from '../model/Models'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
-import { GeoPosition, SearchPlace, getCurrentPosition, reverseGeocode, searchPlaces } from '../service/LocationService'
+import { GeoPosition, getCurrentPosition } from '../service/LocationService'
 import { EmptyState } from '../components/EmptyState'
 import { promptAction } from '@kit.ArkUI'
 import { common } from '@kit.AbilityKit'
+import { webview } from '@kit.ArkWeb'
 import router from '@ohos.router'
 import { logInfo } from '../service/AppLogger'
-import {
-  AMap,
-  MapView,
-  MapViewComponent,
-  MapViewManager,
-  MapViewCreateCallback,
-  CameraPosition,
-  LatLng,
-  OnCameraChangeListener,
-  CameraUpdateFactory,
-  UiSettings
-} from '@amap/amap_lbs_map3d'
 
-// 地图视图名称（与 MapViewComponent 的 mapViewName 一致）
-const MAP_VIEW_NAME: string = 'LocationMapView'
-// 默认缩放级别（城市级到街道级之间）
-const DEFAULT_MAP_ZOOM: number = 16
+// 搜索结果地点（高德输入提示，经JS桥回传）
+class SearchPlace {
+  name: string = ''
+  district: string = ''
+  address: string = ''
+  latitude: number = 0
+  longitude: number = 0
+
+  static create(name: string, district: string, address: string, latitude: number, longitude: number): SearchPlace {
+    const place = new SearchPlace()
+    place.name = name
+    place.district = district
+    place.address = address
+    place.latitude = latitude
+    place.longitude = longitude
+    return place
+  }
+}
+
+// JS桥对象（javaScriptProxy 要求 class 实例，回调由组件在 aboutToAppear 中赋值）
+class LocationWebBridge {
+  onCenterChanged: (lngStr: string, latStr: string, address: string) => void = () => {}
+  onSearchResult: (jsonStr: string) => void = () => {}
+}
 
 @Entry
 @Component
 export struct LocationPage {
-  // 地图对象
-  private mapView: MapView | undefined = undefined
-  private aMap: AMap | undefined = undefined
+  // Web 地图
+  private webController: webview.WebviewController = new webview.WebviewController()
+  private webBridge: LocationWebBridge = new LocationWebBridge()
   @State isMapReady: boolean = false
   // 定位状态
   @State isLocating: boolean = false
@@ -46,9 +56,6 @@ export struct LocationPage {
   @State locateError: string = ''
   // 双向绑定：进入页面时主页已有的定位地址坐标
   private savedPosition: GeoPosition | null = null
-  // 逆地理编码节流
-  private lastResolvePos: GeoPosition | null = null
-  private isResolving: boolean = false
   // 搜索状态
   @State keyword: string = ''
   @State isSearching: boolean = false
@@ -57,124 +64,73 @@ export struct LocationPage {
   // 选中的搜索结果
   @State selectedPlace: SearchPlace | null = null
 
-  // 地图创建回调（由 MapViewComponent 触发，需要 mapViewName 匹配）
-  private mapViewCreateCallback: MapViewCreateCallback = (mapview: MapView | undefined, mapViewName: string | undefined) => {
-    if (!mapview || mapViewName !== MAP_VIEW_NAME) {
-      return
-    }
-    this.mapView = mapview
-    this.mapView.onCreate()
-    this.mapView.getMapAsync((map: AMap) => {
-      this.aMap = map
-      this.isMapReady = true
-      this.setupMapListeners()
-      this.applyMapSettings()
-      this.initialMapCenter()
-      logInfo('LocationPage', '高德地图加载完成')
-    })
-  }
-
   aboutToAppear() {
+    // JS桥回调绑定（Web页面通过 window.ohosBridge 调用）
+    this.webBridge.onCenterChanged = (lngStr: string, latStr: string, address: string): void => {
+      this.onCenterChangedFromJs(lngStr, latStr, address)
+    }
+    this.webBridge.onSearchResult = (jsonStr: string): void => {
+      this.onSearchResultFromJs(jsonStr)
+    }
     // 双向绑定：读取主页已有的定位地址（含经纬度），作为地图初始中心回显
     const saved: Address | null = AppStorage.get<Address>('currentAddress') ?? null
     if (saved !== null && saved.latitude !== undefined && saved.longitude !== undefined) {
       this.savedPosition = { latitude: saved.latitude, longitude: saved.longitude }
       logInfo('LocationPage', '回显已保存定位地址')
     }
-    // 注册地图创建回调
-    MapViewManager.getInstance().registerMapViewCreatedCallback(this.mapViewCreateCallback)
     // 实时定位手机当前位置
     this.locateCurrent()
   }
 
-  aboutToDisappear() {
-    MapViewManager.getInstance().unregisterMapViewCreatedCallback(this.mapViewCreateCallback)
-    if (this.mapView !== undefined) {
-      this.mapView.onDestroy()
-      this.mapView = undefined
-      this.aMap = undefined
-    }
-  }
-
-  // 相机监听：拖动/缩放地图结束后，地图中心即用户选择的位置，自动解析地址
-  private setupMapListeners(): void {
-    if (this.aMap === undefined) {
+  // JS回调：地图中心坐标变化（拖动/缩放/定位联动触发）
+  private onCenterChangedFromJs(lngStr: string, latStr: string, address: string): void {
+    const lng: number = Number(lngStr)
+    const lat: number = Number(latStr)
+    if (Number.isNaN(lng) || Number.isNaN(lat)) {
       return
     }
-    const aMap: AMap = this.aMap as AMap
-    aMap.setOnCameraChangeListener(new OnCameraChangeListener(
-      (position: CameraPosition) => {
-        // 相机移动中：不做处理
-      },
-      (position: CameraPosition) => {
-        // 相机移动结束：解析地图中心地址
-        const target: LatLng = position.target
-        const pos: GeoPosition = { latitude: target.latitude, longitude: target.longitude }
-        this.updateCenterAddress(pos)
-      }
-    ))
-  }
-
-  // 地图UI设置：保留缩放控件与缩放手势，禁用旋转/倾斜（保持地图端正便于选点）
-  private applyMapSettings(): void {
-    const uiSettings: UiSettings | undefined = this.aMap?.getUiSettings()
-    if (uiSettings !== undefined) {
-      uiSettings.setZoomControlsEnabled(true)
-      uiSettings.setCompassEnabled(false)
-      uiSettings.setScaleControlsEnabled(false)
-      uiSettings.setRotateGesturesEnabled(false)
-      uiSettings.setTiltGesturesEnabled(false)
-    }
-  }
-
-  // 初始地图中心：已有定位地址(双向绑定) > 本次实时定位 > 默认（并提示未定位）
-  private initialMapCenter(): void {
-    let target: GeoPosition | null = null
-    if (this.savedPosition !== null) {
-      target = this.savedPosition
-    } else if (this.currentPosition !== null) {
-      target = this.currentPosition
-    }
-    if (target === null) {
-      this.locateError = '未定位，请点击"重新定位"或拖动地图选择位置'
-      return
-    }
-    this.moveMapCenter(target)
-  }
-
-  // 移动地图中心到指定坐标（相机移动结束后自动触发地址解析）
-  private moveMapCenter(pos: GeoPosition): void {
-    if (this.aMap === undefined) {
-      return
-    }
-    const aMap: AMap = this.aMap as AMap
-    const latLng: LatLng = new LatLng(pos.latitude, pos.longitude)
-    aMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, DEFAULT_MAP_ZOOM))
-  }
-
-  // 根据地图中心坐标逆地理编码更新地址文本（带节流，避免频繁请求）
-  private async updateCenterAddress(pos: GeoPosition): Promise<void> {
-    this.currentPosition = pos
-    if (this.isResolving) {
-      return
-    }
-    const last: GeoPosition | null = this.lastResolvePos
-    if (last !== null && Math.abs(last.latitude - pos.latitude) < 0.0001 && Math.abs(last.longitude - pos.longitude) < 0.0001) {
-      return
-    }
-    this.isResolving = true
-    this.lastResolvePos = pos
-    try {
-      const text: string = await reverseGeocode(pos)
-      this.currentAddressText = text
+    this.currentPosition = { latitude: lat, longitude: lng }
+    if (address !== '') {
+      this.currentAddressText = address
       this.locateError = ''
-      logInfo('LocationPage', `地图中心地址解析成功: ${text}`)
-    } catch (err) {
-      if (this.currentAddressText === '') {
-        this.locateError = '地址解析失败，请拖动地图后重试'
-      }
     }
-    this.isResolving = false
+    logInfo('LocationPage', `地图中心更新: ${lngStr}, ${latStr}, ${address}`)
+  }
+
+  // JS回调：搜索结果（JSON字符串）
+  private onSearchResultFromJs(jsonStr: string): void {
+    try {
+      const parsed: Object = JSON.parse(jsonStr)
+      const list: Array<Record<string, Object>> = parsed as Array<Record<string, Object>>
+      const results: SearchPlace[] = []
+      for (let i = 0; i < list.length; i++) {
+        const item: Record<string, Object> = list[i]
+        results.push(SearchPlace.create(
+          String(item['name'] ?? ''),
+          String(item['district'] ?? ''),
+          String(item['address'] ?? ''),
+          Number(item['lat'] ?? 0),
+          Number(item['lng'] ?? 0)
+        ))
+      }
+      this.searchResults = results
+      this.searched = true
+      logInfo('LocationPage', `搜索结果数: ${results.length}`)
+    } catch (err) {
+      this.searchResults = []
+      this.searched = true
+    }
+    this.isSearching = false
+  }
+
+  // 调用JS移动地图中心（触发moveend后JS自动逆地理编码回传地址）
+  private async moveMapCenter(pos: GeoPosition): Promise<void> {
+    const js: string = `moveTo(${pos.longitude.toFixed(6)}, ${pos.latitude.toFixed(6)})`
+    try {
+      await this.webController.runJavaScript(js)
+    } catch (err) {
+      logInfo('LocationPage', '调用地图JS失败（地图可能未加载完成）')
+    }
   }
 
   // 定位当前手机实时位置（成功后地图中心自动移动到定位点）
@@ -199,7 +155,7 @@ export struct LocationPage {
     this.isLocating = false
   }
 
-  // 按关键词搜索地点
+  // 按关键词搜索地点（JS输入提示）
   private async doSearch(): Promise<void> {
     const kw: string = this.keyword.trim()
     if (kw === '') {
@@ -208,23 +164,20 @@ export struct LocationPage {
       return
     }
     this.isSearching = true
+    this.searched = false
+    const safeKw: string = kw.replace(/"/g, '').replace(/'/g, '')
     try {
-      const results: SearchPlace[] = await searchPlaces(kw, this.currentPosition !== null ? this.currentPosition : undefined)
-      this.searchResults = results
-      this.searched = true
+      await this.webController.runJavaScript(`searchKeyword("${safeKw}")`)
     } catch (err) {
-      this.searchResults = []
-      this.searched = true
+      this.isSearching = false
       promptAction.showToast({ message: '搜索失败，请检查网络或API Key配置', duration: 2000 })
     }
-    this.isSearching = false
   }
 
-  // 选中搜索结果：高亮并将地图中心移动到该地点（相机回调自动更新地址）
+  // 选中搜索结果：高亮并将地图中心移动到该地点（JS回调自动更新地址）
   private selectPlace(place: SearchPlace): void {
     this.selectedPlace = place
-    const pos: GeoPosition = { latitude: place.latitude, longitude: place.longitude }
-    this.moveMapCenter(pos)
+    this.moveMapCenter({ latitude: place.latitude, longitude: place.longitude })
   }
 
   // 使用当前地图中心位置作为配送地址
@@ -284,18 +237,26 @@ export struct LocationPage {
 
       // 地图区域：拖动/缩放地图，中心图标即所选位置
       Stack() {
-        MapViewComponent({ mapViewName: MAP_VIEW_NAME })
+        Web({ src: $rawfile('amap_map.html'), controller: this.webController })
+          .javaScriptAccess(true)
+          .domStorageAccess(true)
+          .javaScriptProxy({
+            object: this.webBridge,
+            name: 'ohosBridge',
+            methodList: ['onCenterChanged', 'onSearchResult'],
+            controller: this.webController
+          })
+          .onPageEnd(() => {
+            this.isMapReady = true
+            // 双向绑定：回显已有定位位置，否则使用本次实时定位结果
+            if (this.savedPosition !== null) {
+              this.moveMapCenter(this.savedPosition)
+            } else if (this.currentPosition !== null) {
+              this.moveMapCenter(this.currentPosition)
+            }
+          })
           .width('100%')
           .height('100%')
-
-        // 顶部操作提示
-        Text('拖动地图或双指缩放，中心图标即为所选位置')
-          .fontSize(FONT_SIZE.SM)
-          .fontColor(COLORS.TEXT_PRIMARY)
-          .backgroundColor('rgba(255,255,255,0.92)')
-          .padding({ left: SPACING.MD, right: SPACING.MD, top: 5, bottom: 5 })
-          .borderRadius(BORDER_RADIUS.ROUND)
-          .position({ x: 16, y: 12 })
 
         // 中心位置图标（固定在地图中间，跟随地图中心）
         Column() {
