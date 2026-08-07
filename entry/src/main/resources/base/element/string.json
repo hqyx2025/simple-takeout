@@ -11,6 +11,10 @@
     {
       "name": "EntryAbility_label",
       "value": "简单外卖"
+    },
+    {
+      "name": "location_reason",
+      "value": "用于定位您当前位置，以便选择外卖配送地址"
     }
   ]
 }
