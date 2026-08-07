@@ -186,6 +186,8 @@ export function getStores(categoryId?: number): StoreItem[] {
     stores = stores.filter(s => s.categoryId === categoryId ||
       (s.categoryIds && s.categoryIds.includes(categoryId)))
   }
+  // 扩充至30家店铺（追加生成店铺）
+  stores = stores.concat(buildExtraStores())
   return stores
 }
 
@@ -281,12 +283,14 @@ export function getGoodsByStore(storeId: number): GoodsItem[] {
     ],
   }
 
-  return goodsMap[storeId] || []
+  // 每家店扩充至30个商品（不足部分由生成函数补齐）
+  const baseGoods: GoodsItem[] = goodsMap[storeId] || []
+  return baseGoods.concat(buildExtraGoods(storeId, baseGoods.length))
 }
 
 // ============ 地址数据 ============
 export function getDefaultAddresses(): Address[] {
-  return [
+  const addresses: Address[] = [
     {
       id: 1,
       name: '张三',
@@ -315,22 +319,26 @@ export function getDefaultAddresses(): Address[] {
       tag: '家',
     },
   ]
+  // 扩充至30条地址
+  return addresses.concat(buildExtraAddresses())
 }
 
 // ============ 优惠券数据 ============
 export function getDefaultCoupons(): Coupon[] {
-  return [
+  const coupons: Coupon[] = [
     { id: 1, amount: 5, minOrder: 20, startTime: '2026-01-01', endTime: '2026-12-31', used: false, condition: '满20元可用', storeName: '通用券' },
     { id: 2, amount: 10, minOrder: 35, startTime: '2026-01-01', endTime: '2026-12-31', used: false, condition: '满35元可用', storeName: '通用券' },
     { id: 3, amount: 15, minOrder: 50, startTime: '2026-01-01', endTime: '2026-12-31', used: false, condition: '满50元可用', storeName: '通用券' },
     { id: 4, amount: 8, minOrder: 25, startTime: '2026-01-01', endTime: '2026-12-31', used: false, condition: '满25元可用', storeId: 2, storeName: '星巴克咖啡' },
     { id: 5, amount: 3, minOrder: 15, startTime: '2026-01-01', endTime: '2026-12-31', used: false, condition: '满15元可用', storeId: 5, storeName: '一点点奶茶' },
   ]
+  // 扩充至30张优惠券
+  return coupons.concat(buildExtraCoupons())
 }
 
 // ============ 订单数据 ============
 export function getDefaultOrders(): Order[] {
-  return [
+  const orders: Order[] = [
     {
       id: 10001,
       storeId: 1,
@@ -391,6 +399,8 @@ export function getDefaultOrders(): Order[] {
       remark: '',
     },
   ]
+  // 扩充至30条订单
+  return orders.concat(buildExtraOrders())
 }
 
 // ============ 默认用户 ============
@@ -443,7 +453,7 @@ export function getMockUsers(): User[] {
       balance: 800.0,
       coupons: [],
       orders: [],
-      storeIds: [6, 7, 8],
+      storeIds: [6, 7, 8, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
     },
     {
       id: 102,
@@ -455,7 +465,7 @@ export function getMockUsers(): User[] {
       balance: 600.0,
       coupons: [],
       orders: [],
-      storeIds: [9, 10],
+      storeIds: [9, 10, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
     },
   ]
 }
@@ -478,7 +488,7 @@ export function getDefaultUser(): User {
 
 // ============ 搜索热门词 ============
 export function getHotSearchWords(): string[] {
-  return ['黄焖鸡', '奶茶', '肯德基', '麻辣烫', '拉面', '炸鸡', '火锅', '咖啡']
+  return ['黄焖鸡', '奶茶', '肯德基', '麻辣烫', '拉面', '炸鸡', '火锅', '咖啡', '烤鸭', '川菜', '汉堡', '披萨', '蛋糕', '水果茶', '烧烤', '串串', '寿司', '面条', '饺子', '米饭', '小龙虾', '水煮鱼', '酸菜鱼', '宫保鸡丁', '蛋炒饭', '凉皮', '包子', '粥', '甜品', '夜宵']
 }
 
 // ============ 获取商品分类(店铺内) ============
@@ -533,7 +543,8 @@ export function getDefaultReviews(): Review[] {
     rating: 5, content: '星巴克的拿铁永远好喝',
     tags: ['味道好', '推荐', '干净卫生'], createTime: '2026-07-04 10:00:00'
   })
-  return reviews
+  // 扩充至30条评价
+  return reviews.concat(buildExtraReviews())
 }
 
 // ============ 店铺评价数据 ============
@@ -556,7 +567,8 @@ export function getDefaultFavorites(): Favorite[] {
     id: 3, userId: 1, storeId: 5, storeName: '一点点奶茶', storeImage: '',
     createTime: '2026-07-03 09:15:00'
   })
-  return favorites
+  // 扩充至30条收藏
+  return favorites.concat(buildExtraFavorites())
 }
 
 // ============ 配送时间轴数据 ============
@@ -604,5 +616,250 @@ export function getClaimableCoupons(): Coupon[] {
     id: 105, amount: 4, minOrder: 15, startTime: '2026-01-01', endTime: '2026-12-31',
     used: false, condition: '满15元可用', storeId: 1, storeName: '黄焖鸡米饭'
   })
+  // 扩充至30张可领取优惠券
+  return coupons.concat(buildExtraClaimableCoupons())
+}
+
+// ================= 扩充数据生成（每种数据集30条，用于小规模数据量页面效果验证） =================
+
+// 追加店铺名称池
+const EXTRA_STORE_NAMES: string[] = [
+  '老王烤鸭店', '川味居', '湘味小馆', '沙县小吃', '杨国福麻辣烫',
+  '蜜雪冰城', '茶百道', '书亦烧仙草', '瑞幸咖啡', '必胜客',
+  '海底捞外送', '呷哺呷哺', '鲜芋仙', '满记甜品', '绝味鸭脖',
+  '周黑鸭', '正新鸡排', '汉堡王', '吉野家', '味千拉面'
+]
+const EXTRA_STORE_TAGS: string[] = ['满减', '新客立减', '准时达', '品牌连锁', '夜宵专区', '优惠活动', '好评返现', '新品上市']
+const EXTRA_STORE_NOTICES: string[] = [
+  '本店食材每日新鲜采购', '下单后30分钟内出餐', '欢迎光临，祝您用餐愉快',
+  '支持备注口味，请提前说明', '门店新装开业，全场9折'
+]
+const EXTRA_STORE_IMAGE: string = 'https://img.52z.com/upload/img/2020/06/10/m5edcaa28a4da7a32.jpg'
+
+// 生成扩充店铺（ID 11-30：11-20归商户101，21-30归商户102）
+function buildExtraStores(): StoreItem[] {
+  const stores: StoreItem[] = []
+  const categoryOrder: number[] = [1, 2, 3, 4, 5, 6, 7, 8]
+  for (let i = 0; i < EXTRA_STORE_NAMES.length; i++) {
+    const id: number = 11 + i
+    const catId: number = categoryOrder[i % categoryOrder.length]
+    const ownerId: number = i < 10 ? 101 : 102
+    stores.push({
+      id: id,
+      name: EXTRA_STORE_NAMES[i],
+      image: EXTRA_STORE_IMAGE,
+      rating: 4.0 + ((i * 7) % 10) / 10,
+      monthlySales: 500 + ((i * 373) % 8500),
+      deliveryFee: 2 + (i % 5),
+      minOrder: 12 + ((i * 5) % 35),
+      deliveryTime: `${20 + (i % 26)}分钟`,
+      distance: `${(5 + (i * 3) % 25) / 10}km`,
+      tags: [EXTRA_STORE_TAGS[i % EXTRA_STORE_TAGS.length], EXTRA_STORE_TAGS[(i + 3) % EXTRA_STORE_TAGS.length]],
+      notice: EXTRA_STORE_NOTICES[i % EXTRA_STORE_NOTICES.length],
+      categoryId: catId,
+      categoryIds: [catId, (catId % 8) + 1],
+      ownerId: ownerId,
+    })
+  }
+  return stores
+}
+
+// 商品名模板池（60个通用菜名）
+const EXTRA_GOODS_NAMES: string[] = [
+  '宫保鸡丁', '鱼香肉丝', '麻婆豆腐', '红烧肉', '糖醋里脊', '清蒸鲈鱼',
+  '干煸四季豆', '地三鲜', '木须肉', '回锅肉', '酸辣土豆丝', '手撕包菜',
+  '蒜蓉西兰花', '蚝油生菜', '拍黄瓜', '凉拌木耳', '口水鸡', '夫妻肺片',
+  '水煮鱼', '毛血旺', '番茄炒蛋', '韭菜炒蛋', '葱爆羊肉', '酱爆鸡丁',
+  '香菇青菜', '冬瓜排骨汤', '玉米排骨汤', '酸菜鱼', '剁椒鱼头', '小炒黄牛肉',
+  '梅菜扣肉', '粉蒸肉', '红烧茄子', '鱼香茄子', '干锅花菜', '铁板豆腐',
+  '香煎豆腐', '可乐鸡翅', '红烧排骨', '白灼虾', '油焖大虾', '蒜蓉粉丝虾',
+  '蒸蛋羹', '肉末粉丝', '京酱肉丝', '锅包肉', '溜肉段', '熘肝尖',
+  '尖椒干豆腐', '老虎菜', '酸辣汤', '西湖牛肉羹', '皮蛋瘦肉粥', '小米粥',
+  '蛋炒饭', '扬州炒饭', '葱油饼', '韭菜盒子', '肉夹馍', '凉面'
+]
+
+// 生成扩充商品：每家店补足到30个
+function buildExtraGoods(storeId: number, startCount: number): GoodsItem[] {
+  const goods: GoodsItem[] = []
+  for (let n = startCount; n < 30; n++) {
+    const name: string = EXTRA_GOODS_NAMES[(storeId * 3 + n * 7) % EXTRA_GOODS_NAMES.length]
+    goods.push({
+      id: storeId * 100 + n + 1,
+      name: name,
+      description: `${name}，新鲜制作，美味可口`,
+      price: 6 + ((storeId * 7 + n * 3) % 30),
+      image: '',
+      categoryId: (storeId % 8) + 1,
+      sales: 100 + ((storeId * 11 + n * 5) % 4000),
+      rating: 4.0 + ((storeId + n) % 10) / 10,
+    })
+  }
+  return goods
+}
+
+// 地址模板池
+const EXTRA_DISTRICTS: string[] = ['海淀区', '朝阳区', '东城区', '西城区', '丰台区', '石景山区', '通州区', '昌平区', '大兴区', '顺义区']
+const EXTRA_COMMUNITIES: string[] = ['幸福家园', '阳光小区', '翠湖花园', '锦绣前程', '金色家园', '梧桐苑', '百合公寓', '枫丹白露', '星海名城', '春晖园']
+const EXTRA_ADDRESS_TAGS: string[] = ['学校', '家', '公司', '其他']
+
+// 生成扩充地址（30条）
+function buildExtraAddresses(): Address[] {
+  const addresses: Address[] = []
+  for (let i = 0; i < 27; i++) {
+    addresses.push({
+      id: 4 + i,
+      name: '张三',
+      phone: '13800138000',
+      address: `北京市${EXTRA_DISTRICTS[i % EXTRA_DISTRICTS.length]}`,
+      detail: `${EXTRA_COMMUNITIES[(i * 3) % EXTRA_COMMUNITIES.length]}${(i % 12) + 1}号楼${(i % 6) + 1}单元${100 + ((i * 7) % 800)}室`,
+      isDefault: false,
+      tag: EXTRA_ADDRESS_TAGS[i % EXTRA_ADDRESS_TAGS.length],
+    })
+  }
+  return addresses
+}
+
+// 优惠券面额池
+const EXTRA_COUPON_AMOUNTS: number[] = [5, 8, 10, 15, 20, 3, 6, 12, 18, 25]
+
+// 生成扩充优惠券（30张）
+function buildExtraCoupons(): Coupon[] {
+  const coupons: Coupon[] = []
+  for (let i = 0; i < 25; i++) {
+    const amount: number = EXTRA_COUPON_AMOUNTS[i % EXTRA_COUPON_AMOUNTS.length]
+    const minOrder: number = amount * 3 + 5
+    const storeIndex: number = (i * 5) % 30
+    const store: StoreItem | undefined = getStores()[storeIndex]
+    coupons.push({
+      id: 6 + i,
+      amount: amount,
+      minOrder: minOrder,
+      startTime: '2026-01-01',
+      endTime: '2026-12-31',
+      used: i % 5 === 0,
+      condition: `满${minOrder}元可用`,
+      storeId: store !== undefined ? store.id : undefined,
+      storeName: i % 3 === 0 ? '通用券' : (store !== undefined ? store.name : '通用券'),
+    })
+  }
+  return coupons
+}
+
+// 订单状态池与备注池
+const EXTRA_ORDER_STATUS: number[] = [0, 1, 2, 3, 4, 5, 6]
+const EXTRA_ORDER_REMARKS: string[] = ['不要辣', '少冰', '多放香菜', '微辣', '不要香菜', '多加一份米饭', '', '尽快配送', '电话联系', '少油少盐']
+
+// 生成扩充订单（30条，店铺循环覆盖1-30）
+function buildExtraOrders(): Order[] {
+  const orders: Order[] = []
+  for (let i = 0; i < 27; i++) {
+    const storeId: number = ((i + 3) % 30) + 1
+    const store: StoreItem | undefined = getStores().find(s => s.id === storeId)
+    const storeName: string = store !== undefined ? store.name : `店铺${storeId}`
+    const goods: GoodsItem[] = getGoodsByStore(storeId)
+    const g1: GoodsItem = goods[0]
+    const g2: GoodsItem = goods.length > 1 ? goods[1] : goods[0]
+    const total: number = g1.price + g2.price
+    const deliveryFee: number = 2 + (storeId % 5)
+    const discount: number = total >= 50 ? 10 : (total >= 30 ? 5 : 0)
+    const status: number = EXTRA_ORDER_STATUS[i % EXTRA_ORDER_STATUS.length]
+    const day: string = String((i % 28) + 1).padStart(2, '0')
+    const hour: string = String(10 + (i % 10)).padStart(2, '0')
+    const minute: string = String((i * 7) % 60).padStart(2, '0')
+    const createTime: string = `2026-06-${day} ${hour}:${minute}:00`
+    orders.push({
+      id: 10004 + i,
+      storeId: storeId,
+      storeName: storeName,
+      storeImage: '',
+      items: [
+        { goods: g1, quantity: (i % 3) + 1, storeId: storeId, storeName: storeName },
+        { goods: g2, quantity: 1, storeId: storeId, storeName: storeName },
+      ],
+      totalPrice: total,
+      deliveryFee: deliveryFee,
+      discountAmount: discount,
+      payAmount: total + deliveryFee - discount,
+      status: status,
+      createTime: createTime,
+      payTime: status >= 1 ? `2026-06-${day} ${hour}:01:00` : undefined,
+      deliverTime: status >= 3 ? `2026-06-${day} ${hour}:20:00` : undefined,
+      completeTime: status >= 4 ? `2026-06-${day} ${hour}:55:00` : undefined,
+      address: getDefaultAddresses()[i % getDefaultAddresses().length],
+      remark: EXTRA_ORDER_REMARKS[i % EXTRA_ORDER_REMARKS.length],
+    })
+  }
+  return orders
+}
+
+// 评价文案与标签池
+const EXTRA_REVIEW_CONTENTS: string[] = [
+  '味道很好，分量足', '配送速度快，包装好', '一般般，没有想象中好', '非常好吃，下次还会点',
+  '性价比高，推荐', '老板人很好，服务周到', '食材新鲜，口味正宗', '有点咸，希望改进',
+  '整体不错，就是等得久了点', '五星好评，强烈推荐'
+]
+const EXTRA_REVIEW_TAGS: string[][] = [
+  ['味道好'], ['配送快'], ['分量足'], ['推荐'], ['会回购'], ['干净卫生'], ['服务好'], ['味道好', '配送快']
+]
+
+// 生成扩充评价（30条，店铺循环覆盖1-30）
+function buildExtraReviews(): Review[] {
+  const reviews: Review[] = []
+  for (let i = 0; i < 25; i++) {
+    const day: string = String((i % 28) + 1).padStart(2, '0')
+    reviews.push({
+      id: 6 + i,
+      orderId: 10004 + i,
+      storeId: (i % 30) + 1,
+      userId: (i % 2) + 1,
+      username: i % 2 === 0 ? '美食家小张' : '小王',
+      rating: 3 + (i % 3),
+      content: EXTRA_REVIEW_CONTENTS[i % EXTRA_REVIEW_CONTENTS.length],
+      tags: EXTRA_REVIEW_TAGS[i % EXTRA_REVIEW_TAGS.length],
+      createTime: `2026-06-${day} 12:${String((i * 11) % 60).padStart(2, '0')}:00`,
+    })
+  }
+  return reviews
+}
+
+// 生成扩充收藏（30条，店铺循环覆盖4-30）
+function buildExtraFavorites(): Favorite[] {
+  const favorites: Favorite[] = []
+  for (let i = 0; i < 27; i++) {
+    const storeId: number = i + 4
+    const store: StoreItem | undefined = getStores().find(s => s.id === storeId)
+    const day: string = String((i % 28) + 1).padStart(2, '0')
+    favorites.push({
+      id: 4 + i,
+      userId: 1,
+      storeId: storeId,
+      storeName: store !== undefined ? store.name : `店铺${storeId}`,
+      storeImage: '',
+      createTime: `2026-06-${day} 10:00:00`,
+    })
+  }
+  return favorites
+}
+
+// 生成扩充可领取优惠券（30张）
+function buildExtraClaimableCoupons(): Coupon[] {
+  const coupons: Coupon[] = []
+  for (let i = 0; i < 25; i++) {
+    const amount: number = EXTRA_COUPON_AMOUNTS[(i + 3) % EXTRA_COUPON_AMOUNTS.length]
+    const minOrder: number = amount * 3 + 5
+    const storeIndex: number = (i * 7) % 30
+    const store: StoreItem | undefined = getStores()[storeIndex]
+    coupons.push({
+      id: 106 + i,
+      amount: amount,
+      minOrder: minOrder,
+      startTime: '2026-01-01',
+      endTime: '2026-12-31',
+      used: false,
+      condition: `满${minOrder}元可用`,
+      storeId: store !== undefined ? store.id : undefined,
+      storeName: i % 3 === 0 ? '通用券' : (store !== undefined ? store.name : '通用券'),
+    })
+  }
   return coupons
 }
