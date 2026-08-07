@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>选择位置</title>
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #eee; }
+  #map { width: 100%; height: 100%; }
+  /* 顶部操作提示 */
+  .hint {
+    position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+    background: rgba(255,255,255,0.92); color: #333; font-size: 12px;
+    padding: 5px 14px; border-radius: 14px; z-index: 10; white-space: nowrap;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  }
+  /* 加载/鉴权错误提示 */
+  .err-tip {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    background: rgba(255,255,255,0.96); color: #F44336; font-size: 13px;
+    padding: 12px 16px; border-radius: 8px; z-index: 20; display: none;
+    max-width: 80%; text-align: center; line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="hint">拖动地图或双指缩放，中心图标即为所选位置</div>
+<div class="err-tip" id="errTip"></div>
+
+<script>
+// ============ 高德地图配置 ============
+// AMAP_KEY：高德 Web端(JS API) 类型 Key（高德开放平台 → 应用管理 → 添加Key → 服务平台选“Web端(JS API)”）
+var AMAP_KEY = 'a0373d4b39b6524b7f80e825339e7a28';
+// AMAP_SECURITY_CODE：安全密钥(jscode)，若该Key申请时生成了安全密钥则必须填写（高德控制台该Key的“安全密钥”处查看），否则留空
+var AMAP_SECURITY_CODE = '';
+
+if (AMAP_SECURITY_CODE !== '') {
+  window._AMapSecurityConfig = { securityJsCode: AMAP_SECURITY_CODE };
+}
+</script>
+<script src="https://webapi.amap.com/maps?v=2.0&key=a0373d4b39b6524b7f80e825339e7a28&plugin=AMap.Geocoder,AMap.AutoComplete"></script>
+<script>
+var map = null;
+var lastLng = 0;
+var lastLat = 0;
+
+function showErr(msg) {
+  var el = document.getElementById('errTip');
+  if (el) {
+    el.style.display = 'block';
+    el.textContent = msg;
+  }
+}
+
+function initMap() {
+  try {
+    map = new AMap.Map('map', {
+      zoom: 16,
+      center: [116.397428, 39.90923],
+      viewMode: '2D',
+      resizeEnable: true,
+      touchZoom: true,
+      doubleClickZoom: true,
+      scrollWheel: true
+    });
+  } catch (e) {
+    showErr('地图初始化失败：' + (e && e.message ? e.message : '请检查Key配置'));
+    return;
+  }
+
+  // 逆地理编码：坐标 -> 地址文本，回传宿主
+  function resolveCenter(lng, lat) {
+    var geocoder = new AMap.Geocoder({ radius: 1000, extensions: 'all' });
+    geocoder.getAddress([lng, lat], function (status, result) {
+      var address = '';
+      if (status === 'complete' && result && result.regeocode) {
+        address = result.regeocode.formattedAddress || '';
+      }
+      notifyCenter(lng, lat, address);
+    });
+  }
+
+  // 通知鸿蒙宿主：地图中心坐标 + 地址
+  function notifyCenter(lng, lat, address) {
+    if (window.ohosBridge && window.ohosBridge.onCenterChanged) {
+      window.ohosBridge.onCenterChanged(lng.toFixed(6), lat.toFixed(6), address);
+    }
+  }
+
+  // 地图移动/缩放结束：中心即所选位置
+  function onMoveEnd() {
+    if (map === null) return;
+    var center = map.getCenter();
+    var lng = center.getLng();
+    var lat = center.getLat();
+    if (Math.abs(lng - lastLng) < 0.00001 && Math.abs(lat - lastLat) < 0.00001) {
+      return;
+    }
+    lastLng = lng;
+    lastLat = lat;
+    // 先回传坐标，地址解析完成后再回传一次
+    notifyCenter(lng, lat, '');
+    resolveCenter(lng, lat);
+  }
+
+  map.on('moveend', onMoveEnd);
+  map.on('zoomend', onMoveEnd);
+  // 地图加载完成立即解析一次中心地址
+  onMoveEnd();
+}
+
+// ============ 供鸿蒙宿主(ArkTS)调用的方法 ============
+
+// 移动地图中心到指定坐标（定位/搜索联动）
+function moveTo(lng, lat) {
+  if (map === null) return;
+  lastLng = 0;
+  lastLat = 0;
+  map.setZoomAndCenter(16, [parseFloat(lng), parseFloat(lat)]);
+}
+
+// 关键词搜索地点（输入提示），结果通过 ohosBridge.onSearchResult 回传
+function searchKeyword(keyword) {
+  if (map === null) return;
+  try {
+    var auto = new AMap.AutoComplete({ city: '' });
+    auto.search(keyword, function (status, result) {
+      var list = [];
+      if (status === 'complete' && result && result.tips) {
+        for (var i = 0; i < result.tips.length && i < 20; i++) {
+          var t = result.tips[i];
+          if (t && t.location) {
+            list.push({
+              name: t.name || '',
+              district: t.district || '',
+              address: t.address || '',
+              lng: t.location.lng,
+              lat: t.location.lat
+            });
+          }
+        }
+      }
+      if (window.ohosBridge && window.ohosBridge.onSearchResult) {
+        window.ohosBridge.onSearchResult(JSON.stringify(list));
+      }
+    });
+  } catch (e) {
+    if (window.ohosBridge && window.ohosBridge.onSearchResult) {
+      window.ohosBridge.onSearchResult('[]');
+    }
+  }
+}
+
+window.addEventListener('load', function () {
+  setTimeout(function () {
+    if (typeof AMap === 'undefined') {
+      showErr('地图加载失败：请确认Key为"Web端(JS API)"类型、安全密钥已配置且网络可用');
+      return;
+    }
+    initMap();
+  }, 200);
+});
+</script>
+</body>
+</html>
