@@ -8,7 +8,7 @@ import { promptAction } from '@kit.ArkUI'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
 import { Order, CartItem, DeliveryStep } from '../model/Models'
 import { getDeliverySteps } from '../service/MockDataService'
-import { cancelOrder, confirmOrder, addToCart } from '../service/AppStorageManager'
+import { cancelOrderRemote, confirmOrderRemote, addToCart } from '../service/AppStorageManager'
 import { OrderStatusTimeline } from '../components/OrderStatusTimeline'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { logInfo } from '../service/AppLogger'
@@ -167,9 +167,9 @@ export struct OrderDetailPage {
           content: '确定要取消该订单吗？',
           confirmText: '确定取消',
           cancelText: '再想想',
-          onConfirm: () => {
+          onConfirm: async () => {
             if (this.order !== null) {
-              cancelOrder(this.order.id)
+              await cancelOrderRemote(this.order.id)
               this.reloadOrder()
             }
             this.showCancelDialog = false
@@ -187,9 +187,9 @@ export struct OrderDetailPage {
           content: '确认已收到商品吗？',
           confirmText: '确认收货',
           cancelText: '取消',
-          onConfirm: () => {
+          onConfirm: async () => {
             if (this.order !== null) {
-              confirmOrder(this.order.id)
+              await confirmOrderRemote(this.order.id)
               this.reloadOrder()
             }
             this.showConfirmDialog = false

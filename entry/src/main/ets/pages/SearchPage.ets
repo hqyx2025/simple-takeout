@@ -3,7 +3,7 @@
  */
 import { StoreItem } from '../model/Models'
 import { getHotSearchWords, formatSales } from '../service/MockDataService'
-import { getAllStoresList } from '../service/AppStorageManager'
+import { getAllStoresList, searchStoresRemote } from '../service/AppStorageManager'
 import { getSearchHistory, addSearchHistory, clearSearchHistory } from '../service/PreferencesHelper'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import router from '@ohos.router'
@@ -41,9 +41,14 @@ export struct SearchPage {
       return
     }
     this.hasSearched = true
-    // 搜索店铺：从所有店铺中过滤名称包含关键词的
-    const allStores: StoreItem[] = getAllStoresList()
-    this.searchResults = allStores.filter((s: StoreItem) => s.name.includes(keyword))
+    // 搜索店铺：优先从后端搜索（真实后端模式），失败回退本地过滤
+    const remote: StoreItem[] = await searchStoresRemote(keyword)
+    if (remote.length > 0) {
+      this.searchResults = remote
+    } else {
+      const allStores: StoreItem[] = getAllStoresList()
+      this.searchResults = allStores.filter((s: StoreItem) => s.name.includes(keyword))
+    }
     logInfo('Search', `执行搜索 keyword=${keyword} 命中${this.searchResults.length}家店铺`)
     // 保存搜索历史
     await addSearchHistory(keyword)

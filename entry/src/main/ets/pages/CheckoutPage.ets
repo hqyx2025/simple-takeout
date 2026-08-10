@@ -7,7 +7,7 @@ import router from '@ohos.router'
 import { promptAction } from '@kit.ArkUI'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { CartItem, Order, Address, Coupon, StoreItem } from '../model/Models'
-import { generateOrderId, addOrder, updateCartItemQuantity, useCoupon, getAllStoresList } from '../service/AppStorageManager'
+import { createOrderRemote, updateCartItemQuantity, useCoupon, getAllStoresList } from '../service/AppStorageManager'
 import { LoadingIndicator } from '../components/LoadingIndicator'
 import { logInfo } from '../service/AppLogger'
 
@@ -99,32 +99,20 @@ export struct CheckoutPage {
     }
     this.submitting = true
     logInfo('Checkout', `开始提交订单 storeId=${this.checkoutStoreId} 商品数=${this.storeItems.length} 应付=${this.getPayAmount()} 优惠=${this.getDiscountAmount()}`)
-    // 模拟支付处理，短暂展示加载态
-    setTimeout(() => {
-      this.doSubmitOrder()
-    }, 800)
+    // 调用后端下单（余额扣减+优惠券抵扣由服务端完成）
+    this.doSubmitOrder()
   }
 
-  // 实际生成订单并跳转
-  private doSubmitOrder(): void {
+  // 调后端创建订单并跳转
+  private async doSubmitOrder(): Promise<void> {
     const address: Address = this.currentAddress as Address
-    const order: Order = {
-      id: generateOrderId(),
-      storeId: this.checkoutStoreId,
-      storeName: this.storeInfo !== null ? this.storeInfo.name : '',
-      storeImage: this.storeInfo !== null ? this.storeInfo.image : '',
-      items: this.storeItems,
-      totalPrice: this.getGoodsTotalPrice(),
-      deliveryFee: this.getDeliveryFee(),
-      discountAmount: this.getDiscountAmount(),
-      payAmount: this.getPayAmount(),
-      status: 1,
-      createTime: this.formatCurrentTime(),
-      address: address,
-      remark: this.remark
+    const couponId: number = this.selectedCoupon !== null ? this.selectedCoupon.id : 0
+    const serverOrder: Order | null = await createOrderRemote(this.checkoutStoreId, this.storeItems, address.id, couponId, this.remark)
+    if (serverOrder === null) {
+      this.submitting = false
+      promptAction.showToast({ message: '下单失败，请检查余额或网络' })
+      return
     }
-
-    addOrder(order)
 
     // 清空该店铺的购物车商品
     for (let i = 0; i < this.storeItems.length; i++) {
@@ -137,8 +125,8 @@ export struct CheckoutPage {
     }
 
     // 存入 currentOrder 供订单详情页读取
-    AppStorage.setOrCreate<number>('currentOrderId', order.id)
-    AppStorage.setOrCreate<Order>('currentOrder', order)
+    AppStorage.setOrCreate<number>('currentOrderId', serverOrder.id)
+    AppStorage.setOrCreate<Order>('currentOrder', serverOrder)
     // 重置已选优惠券
     AppStorage.setOrCreate<Coupon | null>('selectedCoupon', null)
     this.submitting = false

@@ -3,6 +3,7 @@
  * 支持领取优惠券、查看我的优惠券（未使用/已使用）
  */
 import { Coupon } from '../model/Models'
+import { claimCouponRemote, syncCouponsRemote } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { logInfo } from '../service/AppLogger'
 import router from '@ohos.router'
@@ -30,6 +31,8 @@ export struct CouponCenterPage {
 
   aboutToAppear() {
     logInfo('Page', '进入优惠券中心页 CouponCenterPage')
+    // 从后端拉取最新优惠券（真实后端模式）
+    syncCouponsRemote()
   }
 
   build() {
@@ -227,20 +230,13 @@ export struct CouponCenterPage {
 
   // 领取优惠券
   doClaim(coupon: Coupon) {
-    // 将可领取的优惠券加入用户优惠券列表
-    const existing: Coupon[] = AppStorage.get<Coupon[]>('couponList') || []
-    // 检查是否已领取
-    if (existing.find((c: Coupon) => c.id === coupon.id)) {
-      logInfo('Coupon', `领取优惠券已领取过 couponId=${coupon.id}`)
-      return  // 已领取
-    }
-    existing.push(coupon)
-    AppStorage.setOrCreate('couponList', existing)
+    // 调用后端领券（真实后端模式）
+    claimCouponRemote(coupon.storeId ?? 0, coupon.condition, coupon.minOrder, coupon.amount)
+    logInfo('Coupon', `领取优惠券 couponId=${coupon.id} 金额=${coupon.amount} 门槛=${coupon.minOrder}`)
 
     // 从可领取列表中移除
     const claimable: Coupon[] = AppStorage.get<Coupon[]>('claimableCoupons') || []
     const newClaimable = claimable.filter((c: Coupon) => c.id !== coupon.id)
     AppStorage.setOrCreate('claimableCoupons', newClaimable)
-    logInfo('Coupon', `领取优惠券成功 couponId=${coupon.id} 金额=${coupon.amount} 门槛=${coupon.minOrder}`)
   }
 }

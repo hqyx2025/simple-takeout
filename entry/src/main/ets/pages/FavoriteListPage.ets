@@ -7,7 +7,7 @@ import router from '@ohos.router'
 import { promptAction } from '@kit.ArkUI'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { Favorite } from '../model/Models'
-import { getFavorites, toggleFavorite } from '../service/AppStorageManager'
+import { getFavorites, toggleFavoriteRemote, syncFavoritesRemote } from '../service/AppStorageManager'
 import { EmptyState } from '../components/EmptyState'
 import { logInfo } from '../service/AppLogger'
 
@@ -53,7 +53,9 @@ export struct FavoriteListPage {
     this.loadFavorites()
   }
 
-  private loadFavorites(): void {
+  private async loadFavorites(): Promise<void> {
+    // 从后端拉取最新收藏（真实后端模式）
+    await syncFavoritesRemote()
     this.favoriteList = getFavorites()
     this.dataSource.setData(this.favoriteList)
   }
@@ -167,8 +169,8 @@ export struct FavoriteListPage {
   }
 
   // 取消收藏：切换状态、刷新列表、提示
-  private onCancelFavorite(storeId: number): void {
-    toggleFavorite(storeId)
+  private async onCancelFavorite(storeId: number): Promise<void> {
+    await toggleFavoriteRemote(storeId)
     this.loadFavorites()
     logInfo('Favorite', `收藏页取消收藏 storeId=${storeId}`)
     promptAction.showToast({ message: '已取消收藏' })

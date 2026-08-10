@@ -3,7 +3,7 @@
  * 支持商户账户和普通用户账户
  */
 import { UserRole } from '../model/Models'
-import { login, register } from '../service/AppStorageManager'
+import { loginRemote, registerRemote } from '../service/AppStorageManager'
 import { logInfo, logWarn } from '../service/AppLogger'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 
@@ -144,7 +144,7 @@ export struct LoginPage {
         .borderRadius(BORDER_RADIUS.ROUND)
         .type(ButtonType.Capsule)
         .margin({ top: SPACING.SM })
-        .onClick(() => {
+        .onClick(async () => {
           this.errorMsg = ''
           if (this.phone === '' || this.password === '') {
             logWarn('Auth', '登录/注册提交失败：手机号或密码为空')
@@ -159,8 +159,8 @@ export struct LoginPage {
           logInfo('Auth', `用户点击${this.isLoginMode ? '登录' : '注册'} phone=${this.phone} role=${this.selectedRole === UserRole.MERCHANT ? '商户' : '用户'}`)
 
           if (this.isLoginMode) {
-            const user = login(this.phone, this.password)
-            if (user) {
+            const user = await loginRemote(this.phone, this.password)
+            if (user !== undefined) {
               if (user.role !== this.selectedRole) {
                 this.errorMsg = this.selectedRole === UserRole.MERCHANT ? '该账号不是商户账号' : '该账号不是用户账号'
                 logWarn('Auth', `登录角色不匹配 phone=${this.phone} 期望角色=${this.selectedRole}`)
@@ -171,10 +171,10 @@ export struct LoginPage {
               this.errorMsg = '手机号或密码错误'
             }
           } else {
-            const newUser = register(this.username, this.phone, this.password, this.selectedRole)
-            if (newUser) {
-              const loginUser = login(this.phone, this.password)
-              if (loginUser) {
+            const newUser = await registerRemote(this.username, this.phone, this.password, this.selectedRole)
+            if (newUser !== undefined) {
+              const loginUser = await loginRemote(this.phone, this.password)
+              if (loginUser !== undefined) {
                 this.onLoginSuccess()
               }
             } else {

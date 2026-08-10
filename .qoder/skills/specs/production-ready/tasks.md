@@ -57,13 +57,14 @@
   - [x] SubTask 32.3: 建表（9 张表）+ 种子数据（8分类/30店/900商品/5账号）
   - [x] SubTask 32.4: 认证/店铺/商品/订单/优惠券/收藏/地址/评价/统计 API 全部实现
   - [x] SubTask 32.5: 全链路冒烟测试通过（下单→接单→出餐→完成→统计）
-- [ ] Task 33: 客户端接入真实后端（关键）
-  - [ ] SubTask 33.1: HttpClient.ets USE_MOCK 改 false，配置 BASE_URL
-  - [ ] SubTask 33.2: 登录/注册/个人信息改调服务端，token 持久化
-  - [ ] SubTask 33.3: 首页店铺/商品改从服务端拉取
-  - [ ] SubTask 33.4: 下单/订单列表/取消/确认/评价走 API
-  - [ ] SubTask 33.5: 商户端订单/统计/店铺管理走 API
-  - [ ] SubTask 33.6: 地址/优惠券/收藏走 API
+- [x] Task 33: 客户端接入真实后端（关键）
+  - [x] SubTask 33.1: HttpClient.ets USE_MOCK 改 false，配置 BASE_URL（10.0.2.2 模拟器/局域网 IP 真机）
+  - [x] SubTask 33.2: 登录/注册/个人信息改调服务端，token 自动注入 Authorization
+  - [x] SubTask 33.3: 首页店铺/商品/评价从后端拉取（Index/店铺详情）
+  - [x] SubTask 33.4: 下单/订单列表/取消/确认/评价走 API（结算页/订单详情/订单Tab/评价页）
+  - [x] SubTask 33.5: 商户端订单/统计走 API（订单管理页/收入统计页）
+  - [x] SubTask 33.6: 地址/优惠券/收藏/搜索走 API（地址/优惠券中心/收藏/搜索页）
+  - [ ] SubTask 33.7: 商户店铺/商品管理走 API（MerchantCenterPage 增删改）
 - [ ] Task 34: 实时同步与部署
   - [ ] SubTask 34.1: 商户新订单轮询/WebSocket 提醒
   - [ ] SubTask 34.2: 用户订单状态变更拉取刷新

@@ -4,7 +4,7 @@
  */
 import { Category, StoreItem, GoodsItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite } from '../model/Models'
 import { getCategories, formatSales, getGoodsCategories, getDefaultUser } from '../service/MockDataService'
-import { addToCart, updateCartItemQuantity, confirmOrder, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, toggleFavorite, isFavorited, getStoreReviews, syncUserWithAllUsers } from '../service/AppStorageManager'
+import { addToCart, updateCartItemQuantity, confirmOrder, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, toggleFavorite, isFavorited, getStoreReviews, syncUserWithAllUsers, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote } from '../service/AppStorageManager'
 import { LoginPage } from './LoginPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
@@ -148,6 +148,11 @@ struct Index {
   // 从子路由页面（收藏页/搜索页）返回时，处理店铺详情跳转
   onPageShow() {
     logInfo('Page', '首页 Index onPageShow')
+    // 从后端拉取最新店铺/订单数据（真实后端模式）
+    syncStoresFromServer()
+    if (isLoggedIn()) {
+      syncUserOrdersFromServer()
+    }
     const storeId: number = AppStorage.get<number>('currentStoreId') || 0
     if (storeId > 0) {
       AppStorage.setOrCreate<number>('currentStoreId', 0)
@@ -263,6 +268,15 @@ struct HomePage {
 
   aboutToAppear() {
     this.categories = getCategories()
+    this.stores = getAllStoresList()
+    this.storeDataSource.setData(this.stores)
+    // 从后端拉取最新店铺列表（真实后端模式）
+    this.refreshStores()
+  }
+
+  // 拉取后端店铺数据并刷新列表
+  private async refreshStores(): Promise<void> {
+    await syncStoresFromServer()
     this.stores = getAllStoresList()
     this.storeDataSource.setData(this.stores)
   }
@@ -618,6 +632,20 @@ struct StoreDetailContent {
     this.goodsCats = ['全部', ...cats]
     this.currentCat = '全部'
     this.updateCartInfo()
+    // 从后端拉取最新商品（真实后端模式）
+    this.refreshGoods()
+  }
+
+  // 拉取后端店铺商品并刷新
+  private async refreshGoods(): Promise<void> {
+    await syncGoodsFromServer(this.storeId)
+    const goods: GoodsItem[] = getGoodsForStore(this.storeId)
+    if (goods.length > 0) {
+      this.goodsList = goods
+    }
+    const cats: string[] = getGoodsCategories(this.storeId)
+    this.goodsCats = ['全部', ...cats]
+    this.currentCat = '全部'
   }
 
   updateCartInfo() {
@@ -661,8 +689,8 @@ struct StoreDetailContent {
             .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           Text(this.isFav ? '❤️' : '🤍')
             .fontSize(24)
-            .onClick(() => {
-              const fav: boolean = toggleFavorite(this.storeId)
+            .onClick(async () => {
+              const fav: boolean = await toggleFavoriteRemote(this.storeId)
               this.isFav = fav
               promptAction.showToast({
                 message: fav ? '已收藏' : '已取消收藏',
@@ -962,6 +990,15 @@ struct OrderListMainPage {
     // 诊断日志：确认启动渲染时订单数据状态
     this.debugOrderState()
     this.refreshDataSource()
+    // 从后端拉取最新订单（真实后端模式）
+    this.refreshOrders()
+  }
+
+  // 拉取后端用户订单并刷新列表
+  private async refreshOrders(): Promise<void> {
+    await syncUserOrdersFromServer()
+    this.orderList = AppStorage.get<Order[]>('orderList') || []
+    this.refreshDataSource()
   }
 
   onOrderListChange(): void {
@@ -1092,8 +1129,8 @@ struct OrderListMainPage {
         if (order.status === 3) {
           Button('确认收货').height(32).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_WHITE)
             .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-            .onClick(() => {
-              confirmOrder(order.id)
+            .onClick(async () => {
+              await confirmOrderRemote(order.id)
               this.orderList = AppStorage.get<Order[]>('orderList') || []
               this.refreshDataSource()
             })

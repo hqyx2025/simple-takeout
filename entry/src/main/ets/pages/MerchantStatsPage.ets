@@ -5,7 +5,8 @@
 import router from '@ohos.router'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusColor } from '../common/Constants'
 import { MerchantStatsData, User } from '../model/Models'
-import { getCurrentUser, getMerchantTodayStats, getMerchantWeekStats, getMerchantWeekRevenue, getMerchantTodayStatusOrders, formatPrice } from '../service/AppStorageManager'
+import { getCurrentUser, getMerchantTodayStats, getMerchantWeekStats, getMerchantWeekRevenue, getMerchantTodayStatusOrders, formatPrice, syncMerchantOrdersFromServer } from '../service/AppStorageManager'
+import { fetchMerchantStatsApi } from '../service/ApiService'
 import { logInfo } from '../service/AppLogger'
 
 @Entry
@@ -52,6 +53,23 @@ export struct MerchantStatsPage {
         labels.push(`${d.getMonth() + 1}/${d.getDate()}`)
       }
       this.weekLabels = labels
+      // 从后端拉取最新统计（真实后端模式）
+      this.refreshRemoteStats()
+    }
+  }
+
+  // 从后端拉取商户统计并刷新
+  private async refreshRemoteStats(): Promise<void> {
+    await syncMerchantOrdersFromServer()
+    const stats = await fetchMerchantStatsApi()
+    if (stats !== null) {
+      this.todayStats = stats
+      this.weekStats = stats
+    }
+    const user: User | undefined = getCurrentUser()
+    if (user !== undefined && user !== null) {
+      this.weekRevenue = getMerchantWeekRevenue(user.id)
+      this.todayStatus = getMerchantTodayStatusOrders(user.id)
     }
   }
 
