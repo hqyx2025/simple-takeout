@@ -12,6 +12,27 @@ description: 鸿蒙HarmonyOS NEXT外卖App(简单外卖)开发技能,包含ArkTS
 - 数据:Mock 驱动,`MockDataService` 唯一数据源,`AppStorage` 状态管理 + `preferences` 持久化
 - 路由:`@ohos.router`(pushUrl/back),页面必须加 `@Entry`
 
+## 技能体系（开发时按需调用）
+
+| 技能 | 适用场景 |
+|---|---|
+| [harmonyos-testing](../harmonyos-testing/SKILL.md) | 编写单元测试、静态检查、上架前体检 |
+| [arkts-performance-optimization](../arkts-performance-optimization/SKILL.md) | 列表卡顿、LazyForEach 改造、状态拆分、动画优化 |
+| [harmonyos-release-publish](../harmonyos-release-publish/SKILL.md) | 签名配置、打包、AGC 上架、审核材料 |
+| [production-ready spec](../specs/production-ready/spec.md) | 可实装迭代规划（测试/上架/性能/打磨） |
+
+## 迭代规范（不断迭代升级的流程基线）
+
+每个迭代固定五步：**规划 → 开发 → 验证 → 体检 → 收尾**
+
+1. **规划**：读 `开发须知.md` 与相关 skill → 确认变更范围 → 更新 spec/tasks
+2. **开发**：按 tasks.md 的 SubTask 粒度编码（每完成一个 SubTask 即 commit + push 到 Gitee）
+3. **验证**：构建 `BUILD SUCCESSFUL` + Code Linter 无 ERROR + 相关测试通过
+4. **体检**：AppAnalyzer 规则体检，修复性能/兼容性告警
+5. **收尾**：更新 checklist.md 勾选状态 → 提交变更 → 推送
+
+> 长期目标：通过 production-ready spec 的阶段十一至十四（测试/上架/性能/打磨），最终产出可安装、可上架 AppGallery 的实装软件。
+
 ## 构建与验证
 
 ```bash
