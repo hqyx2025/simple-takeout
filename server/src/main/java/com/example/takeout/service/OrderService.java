@@ -1,0 +1,325 @@
+package com.example.takeout.service;
+
+import com.example.takeout.common.BizException;
+import com.example.takeout.dao.AddressDao;
+import com.example.takeout.dao.CouponDao;
+import com.example.takeout.dao.GoodsDao;
+import com.example.takeout.dao.OrderDao;
+import com.example.takeout.dao.ReviewDao;
+import com.example.takeout.dao.StoreDao;
+import com.example.takeout.dao.UserDao;
+import com.example.takeout.model.Address;
+import com.example.takeout.model.Coupon;
+import com.example.takeout.model.Goods;
+import com.example.takeout.model.Order;
+import com.example.takeout.model.Review;
+import com.example.takeout.model.Store;
+import com.example.takeout.model.User;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
+
+/**
+ * 订单服务：下单、状态流转（接单→制作→配送→完成）、评价、商户统计
+ * 状态码与客户端对齐：0待付款 1待接单 2制作中 3配送中 4已完成 5已取消 6退款中
+ */
+@Service
+public class OrderService {
+
+    private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    private final OrderDao orderDao;
+    private final StoreDao storeDao;
+    private final GoodsDao goodsDao;
+    private final AddressDao addressDao;
+    private final CouponDao couponDao;
+    private final ReviewDao reviewDao;
+    private final UserDao userDao;
+    private final ObjectMapper objectMapper;
+
+    public OrderService(OrderDao orderDao, StoreDao storeDao, GoodsDao goodsDao, AddressDao addressDao,
+                        CouponDao couponDao, ReviewDao reviewDao, UserDao userDao, ObjectMapper objectMapper) {
+        this.orderDao = orderDao;
+        this.storeDao = storeDao;
+        this.goodsDao = goodsDao;
+        this.addressDao = addressDao;
+        this.couponDao = couponDao;
+        this.reviewDao = reviewDao;
+        this.userDao = userDao;
+        this.objectMapper = objectMapper;
+    }
+
+    /**
+     * 创建订单（模拟支付：直接扣减余额，状态=1 待接单）
+     */
+    @Transactional
+    public Order.OrderView createOrder(long userId, long storeId, List<Order.OrderItem> items,
+                                       long addressId, long couponId, String remark) {
+        if (items == null || items.isEmpty()) {
+            throw new BizException("订单商品不能为空");
+        }
+        Store store = storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
+        Address address = addressDao.listByUser(userId).stream()
+                .filter(a -> a.id() == addressId)
+                .findFirst()
+                .orElseThrow(() -> new BizException("收货地址不存在"));
+
+        // 金额计算：商品总价 + 配送费 - 优惠
+        double goodsAmount = 0;
+        for (Order.OrderItem item : items) {
+            Goods goods = goodsDao.findById(item.goodsId())
+                    .orElseThrow(() -> new BizException("商品不存在：" + item.goodsName()));
+            goodsAmount += goods.price() * item.quantity();
+        }
+        goodsAmount = round2(goodsAmount);
+        double discount = 0;
+        if (couponId > 0) {
+            Coupon coupon = couponDao.listByUser(userId).stream()
+                    .filter(c -> c.id() == couponId && c.status() == 0)
+                    .findFirst()
+                    .orElseThrow(() -> new BizException("优惠券不可用"));
+            if (goodsAmount < coupon.threshold()) {
+                throw new BizException("未达到优惠券使用门槛（满" + (long) coupon.threshold() + "元可用）");
+            }
+            discount = coupon.amount();
+            couponDao.markUsed(couponId);
+        }
+        double payAmount = round2(goodsAmount + store.deliveryFee() - discount);
+
+        // 余额支付（模拟）
+        User user = userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
+        if (user.balance() < payAmount) {
+            throw new BizException("余额不足，请先充值");
+        }
+        userDao.updateBalance(userId, round2(user.balance() - payAmount));
+
+        String now = LocalDateTime.now().format(FMT);
+        String orderNo = genOrderNo();
+        Order order = new Order(0, orderNo, userId, storeId, store.name(), 1,
+                toJson(items), toJson(new Order.AddressInfo(address.id(), address.name(), address.phone(), address.detail())),
+                goodsAmount, store.deliveryFee(), discount, payAmount,
+                remark == null ? "" : remark, 0, now, now, "", "", "");
+        long id = orderDao.insert(order);
+        storeDao.updateMonthlySales(storeId, 1);
+        return orderDetail(id);
+    }
+
+    public List<Order.OrderView> userOrders(long userId) {
+        return orderDao.listByUser(userId).stream().map(this::toView).toList();
+    }
+
+    /**
+     * 商户订单：仅可见自己店铺的订单
+     */
+    public List<Order.OrderView> merchantOrders(long ownerId) {
+        List<Store> stores = storeDao.listByOwner(ownerId);
+        List<Long> storeIds = stores.stream().map(Store::id).toList();
+        if (storeIds.isEmpty()) {
+            return List.of();
+        }
+        return storeIds.stream()
+                .flatMap(sid -> orderDao.listByStore(sid).stream())
+                .sorted((a, b) -> Long.compare(b.id(), a.id()))
+                .map(this::toView)
+                .toList();
+    }
+
+    public Order.OrderView orderDetail(long id) {
+        Order order = orderDao.findById(id).orElseThrow(() -> new BizException("订单不存在"));
+        return toView(order);
+    }
+
+    // ============ 状态流转 ============
+
+    public Order.OrderView cancelOrder(long userId, long orderId) {
+        Order order = requireOrder(orderId);
+        if (order.userId() != userId) {
+            throw new BizException(403, "无权操作该订单");
+        }
+        if (order.status() != 1) {
+            throw new BizException("当前状态不可取消");
+        }
+        // 退款（模拟）
+        User user = userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
+        userDao.updateBalance(userId, round2(user.balance() + order.payAmount()));
+        orderDao.updateStatus(orderId, 5, "complete_time", LocalDateTime.now().format(FMT));
+        return orderDetail(orderId);
+    }
+
+    public Order.OrderView merchantFlow(long ownerId, long orderId, String action) {
+        Order order = requireOrder(orderId);
+        Store store = storeDao.findById(order.storeId()).orElseThrow(() -> new BizException("店铺不存在"));
+        if (store.ownerId() != ownerId) {
+            throw new BizException(403, "无权操作该订单");
+        }
+        String now = LocalDateTime.now().format(FMT);
+        switch (action) {
+            case "accept" -> {          // 商户接单：1 → 2
+                requireStatus(order, 1);
+                orderDao.updateStatus(orderId, 2, "accept_time", now);
+            }
+            case "deliver" -> {         // 出餐配送：2 → 3
+                requireStatus(order, 2);
+                orderDao.updateStatus(orderId, 3, "deliver_time", now);
+            }
+            case "complete" -> {        // 确认送达：3 → 4
+                requireStatus(order, 3);
+                orderDao.updateStatus(orderId, 4, "complete_time", now);
+            }
+            default -> throw new BizException("不支持的操作：" + action);
+        }
+        return orderDetail(orderId);
+    }
+
+    public Order.OrderView confirmOrder(long userId, long orderId) {
+        Order order = requireOrder(orderId);
+        if (order.userId() != userId) {
+            throw new BizException(403, "无权操作该订单");
+        }
+        if (order.status() != 4) {
+            throw new BizException("订单尚未完成，不能确认收货");
+        }
+        return orderDetail(orderId);
+    }
+
+    /**
+     * 评价已完成订单
+     */
+    @Transactional
+    public Review reviewOrder(long userId, long orderId, int rating, String content, List<String> tags) {
+        Order order = requireOrder(orderId);
+        if (order.userId() != userId) {
+            throw new BizException(403, "无权评价该订单");
+        }
+        if (order.status() != 4) {
+            throw new BizException("订单完成后才能评价");
+        }
+        if (order.reviewed() == 1) {
+            throw new BizException("该订单已评价");
+        }
+        User user = userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
+        if (rating < 1 || rating > 5) {
+            throw new BizException("评分范围 1-5");
+        }
+        String now = LocalDateTime.now().format(FMT);
+        long reviewId = reviewDao.insert(order.storeId(), userId, user.username(),
+                rating, content == null ? "" : content, toJson(tags == null ? List.of() : tags), now);
+        orderDao.markReviewed(orderId);
+        return reviewDao.listByStore(order.storeId()).stream()
+                .filter(r -> r.id() == reviewId)
+                .findFirst()
+                .orElseThrow(() -> new BizException("评价失败"));
+    }
+
+    // ============ 商户统计 ============
+
+    public MerchantStats merchantStats(long ownerId, long storeId, String range) {
+        List<Store> stores = storeDao.listByOwner(ownerId);
+        if (stores.isEmpty()) {
+            return new MerchantStats(0, 0, 0, 0, 0, 0);
+        }
+        long sid = storeId > 0 ? storeId : stores.get(0).id();
+        boolean owned = stores.stream().anyMatch(s -> s.id() == sid);
+        if (!owned) {
+            throw new BizException(403, "无权查看该店铺统计");
+        }
+        List<Order> orders = orderDao.listByStore(sid).stream()
+                .filter(o -> o.status() == 4)
+                .toList();
+        LocalDate today = LocalDate.now();
+        LocalDate weekStart = today.minusDays(today.getDayOfWeek().getValue() - 1);
+        LocalDate monthStart = today.withDayOfMonth(1);
+
+        double todayIncome = sumSince(orders, today.atStartOfDay());
+        double weekIncome = sumSince(orders, weekStart.atStartOfDay());
+        double monthIncome = sumSince(orders, monthStart.atStartOfDay());
+        long todayCount = countSince(orders, today.atStartOfDay());
+        long weekCount = countSince(orders, weekStart.atStartOfDay());
+        long monthCount = countSince(orders, monthStart.atStartOfDay());
+        return new MerchantStats(todayCount, todayIncome, weekCount, weekIncome, monthCount, monthIncome);
+    }
+
+    private double sumSince(List<Order> orders, LocalDateTime since) {
+        return orders.stream()
+                .filter(o -> parseTime(o.completeTime()).isAfter(since.minusSeconds(1)))
+                .mapToDouble(Order::payAmount)
+                .sum();
+    }
+
+    private long countSince(List<Order> orders, LocalDateTime since) {
+        return orders.stream()
+                .filter(o -> parseTime(o.completeTime()).isAfter(since.minusSeconds(1)))
+                .count();
+    }
+
+    private LocalDateTime parseTime(String time) {
+        try {
+            return LocalDateTime.parse(time, FMT);
+        } catch (Exception e) {
+            return LocalDateTime.MIN;
+        }
+    }
+
+    public record MerchantStats(long todayCount, double todayIncome, long weekCount, double weekIncome,
+                                long monthCount, double monthIncome) {
+    }
+
+    // ============ 工具 ============
+
+    private Order requireOrder(long orderId) {
+        return orderDao.findById(orderId).orElseThrow(() -> new BizException("订单不存在"));
+    }
+
+    private void requireStatus(Order order, int expected) {
+        if (order.status() != expected) {
+            throw new BizException("订单状态不允许该操作（当前状态码 " + order.status() + "）");
+        }
+    }
+
+    private Order.OrderView toView(Order order) {
+        List<Order.OrderItem> items = parseItems(order.items());
+        Order.AddressInfo address = parseAddress(order.address());
+        return order.toView(items, address);
+    }
+
+    private List<Order.OrderItem> parseItems(String json) {
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<Order.OrderItem>>() {
+            });
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    private Order.AddressInfo parseAddress(String json) {
+        try {
+            return objectMapper.readValue(json, Order.AddressInfo.class);
+        } catch (Exception e) {
+            return new Order.AddressInfo(0, "", "", "");
+        }
+    }
+
+    private String toJson(Object obj) {
+        try {
+            return objectMapper.writeValueAsString(obj);
+        } catch (Exception e) {
+            throw new BizException("数据序列化失败");
+        }
+    }
+
+    private String genOrderNo() {
+        return LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
+                + ThreadLocalRandom.current().nextInt(1000, 9999);
+    }
+
+    private static double round2(double v) {
+        return Math.round(v * 100.0) / 100.0;
+    }
+}

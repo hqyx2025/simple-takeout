@@ -1,0 +1,18 @@
+# Maven
+target/
+*.class
+
+# 运行时数据库
+data/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# 日志
+*.log

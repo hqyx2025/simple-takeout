@@ -1,0 +1,23 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: simple-takeout-server
+  datasource:
+    url: jdbc:sqlite:./data/takeout.db
+    driver-class-name: org.sqlite.JDBC
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+
+# 自定义配置
+takeout:
+  jwt:
+    # HS256 密钥（生产环境请通过环境变量注入）
+    secret: jiandan-waimai-simple-takeout-jwt-secret-2026-32bytes!
+    expire-hours: 72
