@@ -47,7 +47,7 @@ public class OrderDao {
                 o.orderNo(), o.userId(), o.storeId(), o.storeName(), o.status(), o.items(), o.address(),
                 o.goodsAmount(), o.deliveryFee(), o.discount(), o.payAmount(), o.remark(), o.reviewed(),
                 o.createTime(), o.payTime(), o.acceptTime(), o.deliverTime(), o.completeTime());
-        return jdbc.queryForObject("SELECT last_insert_rowid()", Long.class);
+        return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 
     public List<Order> listByUser(long userId) {

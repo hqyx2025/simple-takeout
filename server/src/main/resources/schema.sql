@@ -1,125 +1,124 @@
--- 简单外卖数据库表结构（SQLite）
+-- 简单外卖数据库表结构（MySQL 8.x）
 -- 由 Spring 启动时自动执行（spring.sql.init.mode=always）
 
 CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT NOT NULL,
-    avatar TEXT DEFAULT '',
-    phone TEXT NOT NULL UNIQUE,
-    password TEXT NOT NULL,
-    role INTEGER NOT NULL DEFAULT 0,
-    balance REAL NOT NULL DEFAULT 0,
-    create_time TEXT NOT NULL
-);
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(64) NOT NULL,
+    avatar VARCHAR(255) DEFAULT '',
+    phone VARCHAR(20) NOT NULL UNIQUE,
+    password VARCHAR(128) NOT NULL,
+    role INT NOT NULL DEFAULT 0,
+    balance DECIMAL(10,2) NOT NULL DEFAULT 0,
+    create_time VARCHAR(32) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS stores (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    image TEXT DEFAULT '',
-    rating REAL NOT NULL DEFAULT 4.5,
-    monthly_sales INTEGER NOT NULL DEFAULT 0,
-    delivery_fee REAL NOT NULL DEFAULT 0,
-    min_order REAL NOT NULL DEFAULT 0,
-    delivery_time TEXT DEFAULT '30分钟',
-    distance TEXT DEFAULT '1.0km',
-    tags TEXT DEFAULT '[]',
-    notice TEXT DEFAULT '',
-    category_id INTEGER NOT NULL DEFAULT 1,
-    category_ids TEXT DEFAULT '[]',
-    owner_id INTEGER NOT NULL,
-    status INTEGER NOT NULL DEFAULT 1,
-    create_time TEXT NOT NULL
-);
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(128) NOT NULL,
+    image VARCHAR(255) DEFAULT '',
+    rating DECIMAL(3,1) NOT NULL DEFAULT 4.5,
+    monthly_sales INT NOT NULL DEFAULT 0,
+    delivery_fee DECIMAL(10,2) NOT NULL DEFAULT 0,
+    min_order DECIMAL(10,2) NOT NULL DEFAULT 0,
+    delivery_time VARCHAR(32) DEFAULT '30分钟',
+    distance VARCHAR(32) DEFAULT '1.0km',
+    tags TEXT,
+    notice VARCHAR(512) DEFAULT '',
+    category_id INT NOT NULL DEFAULT 1,
+    category_ids VARCHAR(128) DEFAULT '[]',
+    owner_id BIGINT NOT NULL,
+    status INT NOT NULL DEFAULT 1,
+    create_time VARCHAR(32) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS goods (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    store_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    description TEXT DEFAULT '',
-    price REAL NOT NULL DEFAULT 0,
-    original_price REAL DEFAULT 0,
-    image TEXT DEFAULT '',
-    category_id INTEGER NOT NULL DEFAULT 1,
-    sales INTEGER NOT NULL DEFAULT 0,
-    rating REAL NOT NULL DEFAULT 4.5,
-    tag TEXT DEFAULT '',
-    status INTEGER NOT NULL DEFAULT 1,
-    create_time TEXT NOT NULL
-);
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    store_id BIGINT NOT NULL,
+    name VARCHAR(128) NOT NULL,
+    description VARCHAR(512) DEFAULT '',
+    price DECIMAL(10,2) NOT NULL DEFAULT 0,
+    original_price DECIMAL(10,2) DEFAULT 0,
+    image VARCHAR(255) DEFAULT '',
+    category_id INT NOT NULL DEFAULT 1,
+    sales INT NOT NULL DEFAULT 0,
+    rating DECIMAL(3,1) NOT NULL DEFAULT 4.5,
+    tag VARCHAR(32) DEFAULT '',
+    status INT NOT NULL DEFAULT 1,
+    create_time VARCHAR(32) NOT NULL,
+    KEY idx_goods_store (store_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS orders (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    order_no TEXT NOT NULL UNIQUE,
-    user_id INTEGER NOT NULL,
-    store_id INTEGER NOT NULL,
-    store_name TEXT NOT NULL,
-    status INTEGER NOT NULL DEFAULT 1,
-    items TEXT NOT NULL DEFAULT '[]',
-    address TEXT NOT NULL DEFAULT '{}',
-    goods_amount REAL NOT NULL DEFAULT 0,
-    delivery_fee REAL NOT NULL DEFAULT 0,
-    discount REAL NOT NULL DEFAULT 0,
-    pay_amount REAL NOT NULL DEFAULT 0,
-    remark TEXT DEFAULT '',
-    reviewed INTEGER NOT NULL DEFAULT 0,
-    create_time TEXT NOT NULL,
-    pay_time TEXT DEFAULT '',
-    accept_time TEXT DEFAULT '',
-    deliver_time TEXT DEFAULT '',
-    complete_time TEXT DEFAULT ''
-);
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_no VARCHAR(32) NOT NULL UNIQUE,
+    user_id BIGINT NOT NULL,
+    store_id BIGINT NOT NULL,
+    store_name VARCHAR(128) NOT NULL,
+    status INT NOT NULL DEFAULT 1,
+    items TEXT NOT NULL,
+    address TEXT NOT NULL,
+    goods_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+    delivery_fee DECIMAL(10,2) NOT NULL DEFAULT 0,
+    discount DECIMAL(10,2) NOT NULL DEFAULT 0,
+    pay_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+    remark VARCHAR(255) DEFAULT '',
+    reviewed INT NOT NULL DEFAULT 0,
+    create_time VARCHAR(32) NOT NULL,
+    pay_time VARCHAR(32) DEFAULT '',
+    accept_time VARCHAR(32) DEFAULT '',
+    deliver_time VARCHAR(32) DEFAULT '',
+    complete_time VARCHAR(32) DEFAULT '',
+    KEY idx_orders_user (user_id),
+    KEY idx_orders_store (store_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS coupons (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    store_id INTEGER NOT NULL DEFAULT 0,
-    name TEXT NOT NULL,
-    threshold REAL NOT NULL DEFAULT 0,
-    amount REAL NOT NULL DEFAULT 0,
-    status INTEGER NOT NULL DEFAULT 0,
-    expire_time TEXT NOT NULL,
-    source TEXT DEFAULT 'default',
-    create_time TEXT NOT NULL
-);
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    store_id BIGINT NOT NULL DEFAULT 0,
+    name VARCHAR(64) NOT NULL,
+    threshold DECIMAL(10,2) NOT NULL DEFAULT 0,
+    amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+    status INT NOT NULL DEFAULT 0,
+    expire_time VARCHAR(32) NOT NULL,
+    source VARCHAR(16) DEFAULT 'default',
+    create_time VARCHAR(32) NOT NULL,
+    KEY idx_coupons_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS reviews (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    store_id INTEGER NOT NULL,
-    user_id INTEGER NOT NULL,
-    user_name TEXT NOT NULL,
-    rating INTEGER NOT NULL DEFAULT 5,
-    content TEXT DEFAULT '',
-    tags TEXT DEFAULT '[]',
-    create_time TEXT NOT NULL
-);
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    store_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    user_name VARCHAR(64) NOT NULL,
+    rating INT NOT NULL DEFAULT 5,
+    content VARCHAR(512) DEFAULT '',
+    tags TEXT,
+    create_time VARCHAR(32) NOT NULL,
+    KEY idx_reviews_store (store_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS favorites (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    store_id INTEGER NOT NULL,
-    create_time TEXT NOT NULL,
-    UNIQUE (user_id, store_id)
-);
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    store_id BIGINT NOT NULL,
+    create_time VARCHAR(32) NOT NULL,
+    UNIQUE KEY uk_fav (user_id, store_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS addresses (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    phone TEXT NOT NULL,
-    detail TEXT NOT NULL,
-    is_default INTEGER NOT NULL DEFAULT 0,
-    create_time TEXT NOT NULL
-);
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    name VARCHAR(64) NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    detail VARCHAR(255) NOT NULL,
+    is_default INT NOT NULL DEFAULT 0,
+    create_time VARCHAR(32) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS categories (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    icon TEXT DEFAULT '',
-    color TEXT DEFAULT '#FF6B35'
-);
-
-CREATE INDEX IF NOT EXISTS idx_goods_store ON goods(store_id);
-CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
-CREATE INDEX IF NOT EXISTS idx_orders_store ON orders(store_id);
-CREATE INDEX IF NOT EXISTS idx_reviews_store ON reviews(store_id);
-CREATE INDEX IF NOT EXISTS idx_coupons_user ON coupons(user_id);
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(32) NOT NULL,
+    icon VARCHAR(16) DEFAULT '',
+    color VARCHAR(16) DEFAULT '#FF6B35'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

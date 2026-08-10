@@ -5,8 +5,10 @@ spring:
   application:
     name: simple-takeout-server
   datasource:
-    url: jdbc:sqlite:./data/takeout.db
-    driver-class-name: org.sqlite.JDBC
+    url: jdbc:mysql://localhost:3306/takeout?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8&allowPublicKeyRetrieval=true
+    username: root
+    password: '123456'
+    driver-class-name: com.mysql.cj.jdbc.Driver
   sql:
     init:
       mode: always
