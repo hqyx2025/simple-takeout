@@ -52,7 +52,7 @@ public class GoodsDao {
         jdbc.update("INSERT INTO goods(store_id, name, description, price, original_price, image, category_id, sales, rating, tag, status, create_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                 g.storeId(), g.name(), g.description(), g.price(), g.originalPrice(), g.image(),
                 g.categoryId(), g.sales(), g.rating(), g.tag(), g.status(), g.createTime());
-        return jdbc.queryForObject("SELECT last_insert_rowid()", Long.class);
+        return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 
     public void update(Goods g) {

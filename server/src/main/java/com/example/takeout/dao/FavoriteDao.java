@@ -38,7 +38,7 @@ public class FavoriteDao {
 
     public long insert(long userId, long storeId, String now) {
         jdbc.update("INSERT INTO favorites(user_id, store_id, create_time) VALUES(?,?,?)", userId, storeId, now);
-        return jdbc.queryForObject("SELECT last_insert_rowid()", Long.class);
+        return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 
     public void delete(long userId, long storeId) {

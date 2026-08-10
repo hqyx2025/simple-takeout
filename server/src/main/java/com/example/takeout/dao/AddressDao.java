@@ -39,7 +39,7 @@ public class AddressDao {
         }
         jdbc.update("INSERT INTO addresses(user_id, name, phone, detail, is_default, create_time) VALUES(?,?,?,?,?,?)",
                 userId, name, phone, detail, isDefault, now);
-        return jdbc.queryForObject("SELECT last_insert_rowid()", Long.class);
+        return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 
     public void delete(long userId, long id) {

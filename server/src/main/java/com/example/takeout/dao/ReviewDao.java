@@ -38,6 +38,6 @@ public class ReviewDao {
                        String tagsJson, String now) {
         jdbc.update("INSERT INTO reviews(store_id, user_id, user_name, rating, content, tags, create_time) VALUES(?,?,?,?,?,?,?)",
                 storeId, userId, userName, rating, content, tagsJson, now);
-        return jdbc.queryForObject("SELECT last_insert_rowid()", Long.class);
+        return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 }

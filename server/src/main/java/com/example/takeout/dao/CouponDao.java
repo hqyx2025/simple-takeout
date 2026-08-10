@@ -40,7 +40,7 @@ public class CouponDao {
                        String expireTime, String source, String now) {
         jdbc.update("INSERT INTO coupons(user_id, store_id, name, threshold, amount, status, expire_time, source, create_time) VALUES(?,?,?,?,?,?,?,?,?)",
                 userId, storeId, name, threshold, amount, 0, expireTime, source, now);
-        return jdbc.queryForObject("SELECT last_insert_rowid()", Long.class);
+        return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 
     public void markUsed(long id) {
