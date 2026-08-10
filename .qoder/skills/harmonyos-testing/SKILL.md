@@ -68,7 +68,7 @@ export default function testsuite() {
 
 ## 二、UI 自动化测试（Hypium UiTest）
 
-```typescript
+```
 import { Driver, ON, Component } from '@kit.UiTestKit';
 
 it('loginFlow', 0, async () => {
