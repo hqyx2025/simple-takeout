@@ -4,6 +4,8 @@
 import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, MerchantStatsData } from '../model/Models'
 import { getDefaultUser, getDefaultAddresses, getDefaultCoupons, getDefaultOrders, getMockUsers, getStores, getGoodsByStore, getDefaultReviews, getDefaultFavorites, getReviewsByStore, getClaimableCoupons } from './MockDataService'
 import { saveAllData, clearAllData } from './DataPersistence'
+import { apiLogin, apiRegister, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, deleteAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi } from './ApiService'
+import { setAuthToken } from './HttpClient'
 import { logInfo, logWarn, logError } from './AppLogger'
 
 // 初始化全局数据
@@ -104,6 +106,7 @@ export function register(username: string, phone: string, password: string, role
 }
 
 export function logout(): void {
+  setAuthToken('')
   AppStorage.setOrCreate<boolean>('isLoggedIn', false)
   AppStorage.setOrCreate<User>('user', getDefaultUser())
   AppStorage.setOrCreate<CartItem[]>('cartItems', [])
@@ -594,4 +597,312 @@ export function updateUserProfile(username: string, phone: string): void {
     logInfo('Profile', `更新用户信息 userId=${user.id} username=${username} phone=${phone}`)
   }
   saveAllData()
+}
+
+// ==================== 真实后端 API 接入（ApiService） ====================
+// 以下方法在非 Mock 模式下调用后端；页面 onShow/关键操作处调用
+// ==================== 认证 ====================
+
+/**
+ * 远程登录：成功返回用户并写入 AppStorage；失败返回 undefined
+ */
+export async function loginRemote(phone: string, password: string): Promise<User | undefined> {
+  const user: User | null = await apiLogin(phone, password)
+  if (user !== null) {
+    AppStorage.setOrCreate<User>('user', user)
+    AppStorage.setOrCreate<boolean>('isLoggedIn', true)
+    logInfo('Api', `远程登录成功 userId=${user.id} role=${user.role === UserRole.MERCHANT ? '商户' : '用户'}`)
+    return user
+  }
+  logWarn('Api', '远程登录失败')
+  return undefined
+}
+
+/**
+ * 远程注册：成功返回用户；失败返回 undefined
+ */
+export async function registerRemote(username: string, phone: string, password: string, role: UserRole): Promise<User | undefined> {
+  const user: User | null = await apiRegister(username, phone, password, role)
+  if (user !== null) {
+    logInfo('Api', `远程注册成功 userId=${user.id}`)
+    return user
+  }
+  logWarn('Api', '远程注册失败')
+  return undefined
+}
+
+// ==================== 数据拉取 ====================
+
+/**
+ * 从后端拉取店铺列表并写入 allStores（首页 onShow 调用）
+ */
+export async function syncStoresFromServer(): Promise<void> {
+  const stores: StoreItem[] = await fetchStores()
+  if (stores.length > 0) {
+    AppStorage.setOrCreate<StoreItem[]>('allStores', stores)
+    logInfo('Api', `同步店铺数据 ${stores.length} 家`)
+  }
+}
+
+/**
+ * 从后端拉取指定店铺商品并写入 allGoodsMap
+ */
+export async function syncGoodsFromServer(storeId: number): Promise<void> {
+  const goods: GoodsItem[] = await fetchStoreGoods(storeId)
+  if (goods.length > 0) {
+    const goodsMap: Record<string, GoodsItem[]> = AppStorage.get<Record<string, GoodsItem[]>>('allGoodsMap') || {}
+    goodsMap[storeId.toString()] = goods
+    AppStorage.setOrCreate('allGoodsMap', goodsMap)
+    logInfo('Api', `同步店铺商品 storeId=${storeId} ${goods.length} 个`)
+  }
+}
+
+/**
+ * 从后端拉取当前用户订单并写入 orderList
+ */
+export async function syncUserOrdersFromServer(): Promise<void> {
+  const orders: Order[] = await fetchUserOrdersApi()
+  if (orders.length > 0) {
+    AppStorage.setOrCreate<Order[]>('orderList', orders)
+    const user: User | undefined = AppStorage.get<User>('user')
+    if (user !== undefined && user !== null) {
+      user.orders = orders
+      AppStorage.setOrCreate('user', user)
+    }
+    logInfo('Api', `同步用户订单 ${orders.length} 条`)
+  }
+}
+
+/**
+ * 从后端拉取商户订单并写入 orderList（商户端 onShow 调用）
+ */
+export async function syncMerchantOrdersFromServer(): Promise<void> {
+  const orders: Order[] = await fetchMerchantOrdersApi()
+  AppStorage.setOrCreate<Order[]>('orderList', orders)
+  logInfo('Api', `同步商户订单 ${orders.length} 条`)
+}
+
+// ==================== 订单操作 ====================
+
+/**
+ * 远程下单：成功返回服务端订单；失败返回 null
+ */
+export async function createOrderRemote(storeId: number, cartItems: CartItem[], addressId: number, couponId: number, remark: string): Promise<Order | null> {
+  const order: Order | null = await createOrderApi(storeId, cartItems, addressId, couponId, remark)
+  if (order !== null) {
+    const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
+    orders.unshift(order)
+    AppStorage.setOrCreate('orderList', orders)
+    const user: User | undefined = AppStorage.get<User>('user')
+    if (user !== undefined && user !== null) {
+      user.orders = orders
+      AppStorage.setOrCreate('user', user)
+    }
+    saveAllData()
+    logInfo('Api', `远程下单成功 orderId=${order.id}`)
+  }
+  return order
+}
+
+/**
+ * 远程取消订单：成功同步更新本地
+ */
+export async function cancelOrderRemote(orderId: number): Promise<boolean> {
+  const ok: boolean = await cancelOrderApi(orderId)
+  if (ok) {
+    const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
+    const order = orders.find(o => o.id === orderId)
+    if (order) {
+      order.status = 5
+      order.cancelTime = formatDateTime(new Date())
+      AppStorage.setOrCreate('orderList', orders)
+    }
+    saveAllData()
+    logInfo('Api', `远程取消订单 orderId=${orderId}`)
+  }
+  return ok
+}
+
+/**
+ * 远程确认收货：同步本地订单状态
+ */
+export async function confirmOrderRemote(orderId: number): Promise<boolean> {
+  const ok: boolean = await confirmOrderApi(orderId)
+  if (ok) {
+    const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
+    const order = orders.find(o => o.id === orderId)
+    if (order) {
+      order.status = 4
+      order.completeTime = formatDateTime(new Date())
+      AppStorage.setOrCreate('orderList', orders)
+    }
+    saveAllData()
+    logInfo('Api', `远程确认收货 orderId=${orderId}`)
+  }
+  return ok
+}
+
+/**
+ * 远程商户订单流转：action = accept(接单)/deliver(出餐)/complete(完成)
+ */
+export async function merchantActionRemote(orderId: number, action: string): Promise<boolean> {
+  const ok: boolean = await merchantActionApi(orderId, action)
+  if (ok) {
+    const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
+    const order = orders.find(o => o.id === orderId)
+    if (order) {
+      if (action === 'accept') {
+        order.status = 2
+        order.payTime = formatDateTime(new Date())
+      } else if (action === 'deliver') {
+        order.status = 3
+        order.deliverTime = formatDateTime(new Date())
+      } else if (action === 'complete') {
+        order.status = 4
+        order.completeTime = formatDateTime(new Date())
+      }
+      AppStorage.setOrCreate('orderList', orders)
+    }
+    saveAllData()
+    logInfo('Api', `商户操作成功 orderId=${orderId} action=${action}`)
+  }
+  return ok
+}
+
+// ==================== 用户中心同步 ====================
+
+/**
+ * 远程收藏切换：返回最新收藏状态（true=已收藏）
+ */
+export async function toggleFavoriteRemote(storeId: number): Promise<boolean> {
+  const favorited: boolean = await toggleFavoriteApi(storeId)
+  await syncFavoritesRemote()
+  logInfo('Api', `远程收藏切换 storeId=${storeId} 结果=${favorited}`)
+  return favorited
+}
+
+/**
+ * 从后端拉取收藏列表并写入 favoriteList
+ */
+export async function syncFavoritesRemote(): Promise<void> {
+  const favorites: Favorite[] = await fetchFavoritesApi()
+  AppStorage.setOrCreate<Favorite[]>('favoriteList', favorites)
+  logInfo('Api', `同步收藏 ${favorites.length} 条`)
+}
+
+/**
+ * 从后端拉取优惠券并写入 couponList
+ */
+export async function syncCouponsRemote(): Promise<void> {
+  const coupons: Coupon[] = await fetchCouponsApi()
+  AppStorage.setOrCreate<Coupon[]>('couponList', coupons)
+  logInfo('Api', `同步优惠券 ${coupons.length} 张`)
+}
+
+/**
+ * 远程领取优惠券
+ */
+export async function claimCouponRemote(storeId: number, name: string, threshold: number, amount: number): Promise<boolean> {
+  const ok: boolean = await claimCouponApi(storeId, name, threshold, amount)
+  if (ok) {
+    await syncCouponsRemote()
+    logInfo('Api', `远程领券成功 ${name}`)
+  }
+  return ok
+}
+
+/**
+ * 从后端拉取商户自己的店铺并合并进 allStores
+ */
+export async function syncMerchantStoresRemote(): Promise<void> {
+  const stores: StoreItem[] = await fetchMerchantStoresApi()
+  if (stores.length > 0) {
+    const all: StoreItem[] = AppStorage.get<StoreItem[]>('allStores') || []
+    for (let i = 0; i < stores.length; i++) {
+      const idx: number = all.findIndex(s => s.id === stores[i].id)
+      if (idx >= 0) {
+        all[idx] = stores[i]
+      } else {
+        all.push(stores[i])
+      }
+    }
+    AppStorage.setOrCreate<StoreItem[]>('allStores', all)
+    logInfo('Api', `同步商户店铺 ${stores.length} 家`)
+  }
+}
+
+/**
+ * 从后端搜索店铺
+ */
+export async function searchStoresRemote(keyword: string): Promise<StoreItem[]> {
+  const result: StoreItem[] = await searchStoresApi(keyword)
+  logInfo('Api', `远程搜索 keyword=${keyword} 结果=${result.length} 条`)
+  return result
+}
+
+/**
+ * 远程提交订单评价
+ */
+export async function submitReviewRemote(orderId: number, rating: number, content: string, tags: string[]): Promise<boolean> {
+  const ok: boolean = await submitReviewApi(orderId, rating, content, tags)
+  if (ok) {
+    logInfo('Api', `远程提交评价 orderId=${orderId} 评分=${rating}`)
+  }
+  return ok
+}
+
+/**
+ * 从后端拉取店铺评价
+ */
+export async function syncStoreReviewsRemote(storeId: number): Promise<void> {
+  const reviews: Review[] = await fetchStoreReviews(storeId)
+  if (reviews.length > 0) {
+    AppStorage.setOrCreate<Review[]>('reviewList', reviews)
+    logInfo('Api', `同步店铺评价 storeId=${storeId} ${reviews.length} 条`)
+  }
+}
+
+/**
+ * 从后端拉取地址并写入 addressList
+ */
+export async function syncAddressesRemote(): Promise<void> {
+  const addresses: Address[] = await fetchAddressesApi()
+  AppStorage.setOrCreate<Address[]>('addressList', addresses)
+  logInfo('Api', `同步地址 ${addresses.length} 条`)
+}
+
+/**
+ * 远程新增地址
+ */
+export async function addAddressRemote(name: string, phone: string, detail: string, isDefault: boolean): Promise<boolean> {
+  const ok: boolean = await addAddressApi(name, phone, detail, isDefault)
+  if (ok) {
+    await syncAddressesRemote()
+    logInfo('Api', '远程新增地址成功')
+  }
+  return ok
+}
+
+/**
+ * 远程删除地址
+ */
+export async function deleteAddressRemote(addressId: number): Promise<boolean> {
+  const ok: boolean = await deleteAddressApi(addressId)
+  if (ok) {
+    await syncAddressesRemote()
+    logInfo('Api', `远程删除地址 addressId=${addressId}`)
+  }
+  return ok
+}
+
+/**
+ * 远程设置默认地址
+ */
+export async function setDefaultAddressRemote(addressId: number): Promise<boolean> {
+  const ok: boolean = await setDefaultAddressApi(addressId)
+  if (ok) {
+    await syncAddressesRemote()
+    logInfo('Api', `远程设置默认地址 addressId=${addressId}`)
+  }
+  return ok
 }

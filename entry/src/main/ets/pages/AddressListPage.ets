@@ -3,7 +3,7 @@
  * 支持地址的增删改查与设置默认地址
  */
 import { Address } from '../model/Models'
-import { addAddress, deleteAddress } from '../service/AppStorageManager'
+import { addAddressRemote, deleteAddressRemote, setDefaultAddressRemote, syncAddressesRemote } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import router from '@ohos.router'
 
@@ -51,6 +51,11 @@ export struct AddressListPage {
 
   onBack: () => void = () => { router.back() }
   onSelectAddress: (address: Address) => void = () => {}
+
+  aboutToAppear() {
+    // 从后端拉取最新地址（真实后端模式）
+    syncAddressesRemote()
+  }
 
   build() {
     Stack() {
@@ -150,7 +155,7 @@ export struct AddressListPage {
                       .fontSize(FONT_SIZE.SM)
                       .fontColor(COLORS.ERROR)
                       .padding({ left: SPACING.SM, right: SPACING.SM })
-                      .onClick(() => { deleteAddress(addr.id) })
+                      .onClick(() => { deleteAddressRemote(addr.id) })
                     if (!addr.isDefault) {
                       Text('设为默认')
                         .fontSize(FONT_SIZE.SM)
@@ -333,6 +338,7 @@ export struct AddressListPage {
 
   // 设为默认地址
   setDefault(addr: Address): void {
+    setDefaultAddressRemote(addr.id)
     this.addressList.forEach(a => {
       a.isDefault = (a.id === addr.id)
     })
@@ -357,7 +363,7 @@ export struct AddressListPage {
         isDefault: this.formData.isDefault,
         tag: this.formData.tag
       }
-      addAddress(addr)
+      addAddressRemote(this.formData.name, this.formData.phone, this.formData.address + ' ' + this.formData.detail, this.formData.isDefault)
     } else {
       // 编辑 - 直接修改现有地址
       this.editingAddress.name = this.formData.name

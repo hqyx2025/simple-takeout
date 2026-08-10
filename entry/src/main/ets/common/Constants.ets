@@ -105,17 +105,24 @@ export class ORDER_TIMELINE {
   }
 }
 
-// API端点常量（当前对接Mock，预留真实API结构）
+// API端点常量
+// BASE_URL：模拟器访问宿主机用 10.0.2.2；真机联调改为电脑局域网 IP，如 http://192.168.1.100:8080
 export class API_CONFIG {
-  static readonly BASE_URL: string = ''
+  static readonly BASE_URL: string = 'http://10.0.2.2:8080'
   static readonly TIMEOUT: number = 10000
   static readonly ENDPOINTS: Record<string, string> = {
+    'categories': '/api/categories',
     'stores': '/api/stores',
-    'goods': '/api/goods',
+    'search': '/api/search',
+    'login': '/api/auth/login',
+    'register': '/api/auth/register',
     'orders': '/api/orders',
-    'user': '/api/user',
-    'login': '/api/login',
-    'register': '/api/register'
+    'merchantOrders': '/api/merchant/orders',
+    'merchantStats': '/api/merchant/stats',
+    'merchantStores': '/api/merchant/stores',
+    'coupons': '/api/coupons',
+    'favorites': '/api/favorites',
+    'addresses': '/api/addresses'
   }
 }
 

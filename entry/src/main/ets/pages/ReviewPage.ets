@@ -7,7 +7,7 @@ import router from '@ohos.router'
 import { promptAction } from '@kit.ArkUI'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, REVIEW_TAGS } from '../common/Constants'
 import { Order, Review, User } from '../model/Models'
-import { addReview, getCurrentUser } from '../service/AppStorageManager'
+import { addReview, getCurrentUser, submitReviewRemote } from '../service/AppStorageManager'
 import { logInfo, logWarn } from '../service/AppLogger'
 
 @Entry
@@ -117,12 +117,23 @@ export struct ReviewPage {
       tags: this.selectedTags,
       createTime: this.formatCurrentTime()
     }
-    addReview(review)
-    logInfo('Review', `提交评价 orderId=${review.orderId} 评分=${review.rating} 标签=${review.tags.length}个`)
+    // 调用后端提交评价（真实后端模式）
+    this.submitRemote(review)
+  }
 
-    promptAction.showToast({ message: '评价成功' })
-    this.submitting = false
-    router.back()
+  // 远程提交评价
+  private async submitRemote(review: Review): Promise<void> {
+    const ok: boolean = await submitReviewRemote(review.orderId, review.rating, review.content, review.tags)
+    if (ok) {
+      addReview(review)
+      logInfo('Review', `提交评价成功 orderId=${review.orderId} 评分=${review.rating} 标签=${review.tags.length}个`)
+      promptAction.showToast({ message: '评价成功' })
+      this.submitting = false
+      router.back()
+    } else {
+      this.submitting = false
+      promptAction.showToast({ message: '评价提交失败，请重试' })
+    }
   }
 
   build() {

@@ -5,7 +5,7 @@
  */
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
 import { Order, CartItem, User } from '../model/Models'
-import { getCurrentUser, getMerchantOrders, merchantAcceptOrder, merchantStartDelivery, merchantCompleteOrder } from '../service/AppStorageManager'
+import { getCurrentUser, getMerchantOrders, merchantActionRemote, syncMerchantOrdersFromServer } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
 import router from '@ohos.router'
 import { promptAction } from '@kit.ArkUI'
@@ -45,7 +45,9 @@ export struct MerchantOrdersPage {
     }
   }
 
-  private loadOrders(): void {
+  private async loadOrders(): Promise<void> {
+    // 先从后端拉取最新订单，再按本地商户过滤展示
+    await syncMerchantOrdersFromServer()
     if (this.merchantId > 0) {
       this.allOrders = getMerchantOrders(this.merchantId)
     }
@@ -58,22 +60,22 @@ export struct MerchantOrdersPage {
     return this.allOrders.filter(o => o.status === this.currentStatus)
   }
 
-  private handleAccept(order: Order): void {
-    merchantAcceptOrder(order.id)
+  private async handleAccept(order: Order): Promise<void> {
+    await merchantActionRemote(order.id, 'accept')
     logInfo('Merchant', `点击接单 orderId=${order.id} 店铺=${order.storeName}`)
     promptAction.showToast({ message: '已接单' })
     this.loadOrders()
   }
 
-  private handleStartDelivery(order: Order): void {
-    merchantStartDelivery(order.id)
+  private async handleStartDelivery(order: Order): Promise<void> {
+    await merchantActionRemote(order.id, 'deliver')
     logInfo('Merchant', `点击出餐 orderId=${order.id} 店铺=${order.storeName}`)
     promptAction.showToast({ message: '已出餐，配送中' })
     this.loadOrders()
   }
 
-  private handleComplete(order: Order): void {
-    merchantCompleteOrder(order.id)
+  private async handleComplete(order: Order): Promise<void> {
+    await merchantActionRemote(order.id, 'complete')
     logInfo('Merchant', `点击确认送达 orderId=${order.id} 店铺=${order.storeName}`)
     promptAction.showToast({ message: '已确认送达' })
     this.loadOrders()
