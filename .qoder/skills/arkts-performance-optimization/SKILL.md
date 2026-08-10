@@ -60,8 +60,10 @@ class StoreDataSource implements IDataSource {
     })
   }
 }
+```
 
-// 2. 页面中使用
+```
+// 2. 页面中使用（片段示意，需在 build() 内）
 List() {
   LazyForEach(this.dataSource, (item: StoreItem) => {
     ListItem() {
@@ -78,7 +80,7 @@ List() {
 
 高频滚动列表的列表项组件加 `@Reusable`：
 
-```typescript
+```
 @Reusable
 @Component
 export struct StoreCard {

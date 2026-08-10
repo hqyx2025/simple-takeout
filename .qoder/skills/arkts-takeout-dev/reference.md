@@ -13,9 +13,9 @@
 
 `TopStart` / `Top` / `TopEnd` / `Start`(垂直居中+水平起始) / `Center` / `End` / `BottomStart` / `Bottom` / `BottomEnd`
 
-### 常见误用
+### 常见误用（以下均为非法写法，仅作对比展示）
 
-```typescript
+```
 // ❌ 错误
 Stack() { ... }
   .justifyContent(FlexAlign.Center)     // Stack 无此属性
@@ -38,7 +38,7 @@ Row() { ... }
 
 宽高、`Area.width`、`position` 等返回 `Length`(string | number | Resource),**不能直接 Number.parseFloat**:
 
-```typescript
+```
 .onAreaChange((oldValue: Area, newValue: Area) => {
   const w: Length = newValue.width
   if (typeof w === 'number') {
@@ -51,7 +51,7 @@ Row() { ... }
 
 ## 三、动画模式(骑手配送动画参考)
 
-```typescript
+```
 @State riderProgress: number = 0
 private riderTimer: number = -1
 
