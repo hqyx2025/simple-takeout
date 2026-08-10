@@ -32,16 +32,30 @@ export interface ApiResponse<T> {
   data: T
 }
 
+/**
+ * Mock 模式空数据占位类型。
+ * Mock 模式下实际数据由调用方从 MockDataService 获取，此处仅保证结构完整。
+ */
+class MockEmptyData {
+  static create(): MockEmptyData {
+    return new MockEmptyData()
+  }
+}
+
+// 构造 Mock 模式空响应（避免无类型对象字面量 arkts-no-untyped-obj-literals）
+function createMockResponse<T>(): ApiResponse<T> {
+  const response: ApiResponse<T> = {
+    code: 200,
+    message: 'success',
+    data: (MockEmptyData.create() as object) as T
+  }
+  return response
+}
+
 // GET请求
 export async function get<T>(url: string, params?: Record<string, string>): Promise<ApiResponse<T>> {
   if (USE_MOCK) {
-    // Mock模式：直接返回空数据结构，实际数据由调用方从MockDataService获取
-    const response: ApiResponse<T> = {
-      code: 200,
-      message: 'success',
-      data: {} as T
-    }
-    return response
+    return createMockResponse<T>()
   }
   const config: AxiosRequestConfig = {
     params: params
@@ -53,12 +67,7 @@ export async function get<T>(url: string, params?: Record<string, string>): Prom
 // POST请求
 export async function post<T>(url: string, data?: Record<string, string>): Promise<ApiResponse<T>> {
   if (USE_MOCK) {
-    const response: ApiResponse<T> = {
-      code: 200,
-      message: 'success',
-      data: {} as T
-    }
-    return response
+    return createMockResponse<T>()
   }
   const response: AxiosResponse<ApiResponse<T>> = await getClient().post(url, data)
   return response.data
@@ -67,12 +76,7 @@ export async function post<T>(url: string, data?: Record<string, string>): Promi
 // PUT请求
 export async function put<T>(url: string, data?: Record<string, string>): Promise<ApiResponse<T>> {
   if (USE_MOCK) {
-    const response: ApiResponse<T> = {
-      code: 200,
-      message: 'success',
-      data: {} as T
-    }
-    return response
+    return createMockResponse<T>()
   }
   const response: AxiosResponse<ApiResponse<T>> = await getClient().put(url, data)
   return response.data
@@ -81,12 +85,7 @@ export async function put<T>(url: string, data?: Record<string, string>): Promis
 // DELETE请求
 export async function del<T>(url: string): Promise<ApiResponse<T>> {
   if (USE_MOCK) {
-    const response: ApiResponse<T> = {
-      code: 200,
-      message: 'success',
-      data: {} as T
-    }
-    return response
+    return createMockResponse<T>()
   }
   const response: AxiosResponse<ApiResponse<T>> = await getClient().delete(url)
   return response.data
