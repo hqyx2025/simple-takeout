@@ -50,6 +50,26 @@
   - [ ] SubTask 31.1: 持久化版本迁移机制（version 字段 + 迁移函数）
   - [ ] SubTask 31.2: 极端数据模拟验证（空 items/余额不足/券过期）
 
+## 阶段十五：真实后端数据链路（Backend & Sync）
+- [x] Task 32: 后端服务搭建（server/ 目录，2026-08 完成）
+  - [x] SubTask 32.1: Spring Boot 3.5 + Java 25 + SQLite 项目骨架（pom/配置/主类）
+  - [x] SubTask 32.2: JWT 认证 + 拦截器 + 统一响应/全局异常
+  - [x] SubTask 32.3: 建表（9 张表）+ 种子数据（8分类/30店/900商品/5账号）
+  - [x] SubTask 32.4: 认证/店铺/商品/订单/优惠券/收藏/地址/评价/统计 API 全部实现
+  - [x] SubTask 32.5: 全链路冒烟测试通过（下单→接单→出餐→完成→统计）
+- [ ] Task 33: 客户端接入真实后端（关键）
+  - [ ] SubTask 33.1: HttpClient.ets USE_MOCK 改 false，配置 BASE_URL
+  - [ ] SubTask 33.2: 登录/注册/个人信息改调服务端，token 持久化
+  - [ ] SubTask 33.3: 首页店铺/商品改从服务端拉取
+  - [ ] SubTask 33.4: 下单/订单列表/取消/确认/评价走 API
+  - [ ] SubTask 33.5: 商户端订单/统计/店铺管理走 API
+  - [ ] SubTask 33.6: 地址/优惠券/收藏走 API
+- [ ] Task 34: 实时同步与部署
+  - [ ] SubTask 34.1: 商户新订单轮询/WebSocket 提醒
+  - [ ] SubTask 34.2: 用户订单状态变更拉取刷新
+  - [ ] SubTask 34.3: 部署到服务器，局域网真机联调
+  - [ ] SubTask 34.4: JWT 密钥环境变量化（可选 BCrypt）
+
 # Task Dependencies
 - Task 22-23（质量加固）不依赖其他任务，可与业务并行，最先执行
 - Task 24-27（上架准备）依赖 Task 22-23（质量达标才能发布）
