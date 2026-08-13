@@ -58,6 +58,11 @@ public class StoreService {
         return storeDao.listByOwner(ownerId).stream().map(this::toView).toList();
     }
 
+    public List<Goods> merchantGoods(long ownerId, long storeId) {
+        requireOwned(ownerId, storeId);
+        return goodsDao.listByStoreAll(storeId);
+    }
+
     public Store.StoreView createStore(long ownerId, String name, int categoryId, double deliveryFee,
                                        double minOrder, String deliveryTime, String notice) {
         if (name == null || name.isBlank()) {

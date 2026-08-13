@@ -3,7 +3,7 @@
 ## 迭代规范检查（每个迭代）
 - [ ] 已读取 `开发须知.md` 与相关 skill（arkts-takeout-dev / harmonyos-testing / arkts-performance-optimization / harmonyos-release-publish）
 - [ ] 每完成一个 SubTask 已 commit 并 push 到 Gitee
-- [ ] 构建 `BUILD SUCCESSFUL` 后才标记任务完成
+- [x] 构建 `BUILD SUCCESSFUL` 后才标记任务完成（33.7 已验证）
 - [ ] 迭代收尾更新了 spec.md / tasks.md / checklist.md
 
 ## 阶段十一：质量加固

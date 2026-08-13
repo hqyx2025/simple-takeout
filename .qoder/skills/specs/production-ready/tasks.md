@@ -64,7 +64,7 @@
   - [x] SubTask 33.4: 下单/订单列表/取消/确认/评价走 API（结算页/订单详情/订单Tab/评价页）
   - [x] SubTask 33.5: 商户端订单/统计走 API（订单管理页/收入统计页）
   - [x] SubTask 33.6: 地址/优惠券/收藏/搜索走 API（地址/优惠券中心/收藏/搜索页）
-  - [ ] SubTask 33.7: 商户店铺/商品管理走 API（MerchantCenterPage 增删改）
+  - [x] SubTask 33.7: 商户店铺/商品管理走 API（MerchantCenterPage 增删改；客户端真实 API + 后端 owner 权限校验，2026-08 完成）
 - [ ] Task 34: 实时同步与部署
   - [ ] SubTask 34.1: 商户新订单轮询/WebSocket 提醒
   - [ ] SubTask 34.2: 用户订单状态变更拉取刷新

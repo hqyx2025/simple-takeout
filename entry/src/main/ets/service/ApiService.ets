@@ -191,6 +191,35 @@ interface CouponClaimRequest {
   amount: number
 }
 
+interface MerchantStoreRequest {
+  name: string
+  categoryId: number
+  deliveryFee: number
+  minOrder: number
+  deliveryTime: string
+  notice: string
+}
+
+interface MerchantStorePatch {
+  name: string
+  deliveryFee: number
+  minOrder: number
+  deliveryTime: string
+  notice: string
+  status: number
+}
+
+interface MerchantGoodsRequest {
+  name: string
+  description: string
+  price: number
+  originalPrice: number
+  image: string
+  categoryId: number
+  tag: string
+  status: number
+}
+
 // ==================== 认证 ====================
 
 /**
@@ -358,6 +387,60 @@ export async function fetchMerchantStoresApi(): Promise<StoreItem[]> {
     return []
   }
   return resp.data.map((s: ServerStore) => toStoreItem(s))
+}
+
+export async function fetchMerchantGoodsApi(storeId: number): Promise<GoodsItem[]> {
+  const resp: ApiResponse<ServerGoods[]> = await get<ServerGoods[]>(`/api/merchant/stores/${storeId}/goods`)
+  if (resp.code !== 200 || resp.data === null) {
+    return []
+  }
+  return resp.data.map((g: ServerGoods) => toGoodsItem(g))
+}
+
+export async function createMerchantStoreApi(name: string, categoryId: number, deliveryFee: number,
+  minOrder: number, deliveryTime: string, notice: string): Promise<StoreItem | null> {
+  const req: MerchantStoreRequest = {
+    name: name, categoryId: categoryId, deliveryFee: deliveryFee, minOrder: minOrder,
+    deliveryTime: deliveryTime, notice: notice
+  }
+  const resp: ApiResponse<ServerStore> = await post<ServerStore>(API_CONFIG.ENDPOINTS['merchantStores'], req)
+  return resp.code === 200 && resp.data !== null ? toStoreItem(resp.data) : null
+}
+
+export async function updateMerchantStoreApi(storeId: number, name: string, deliveryFee: number,
+  minOrder: number, deliveryTime: string, notice: string): Promise<StoreItem | null> {
+  const req: MerchantStorePatch = {
+    name: name, deliveryFee: deliveryFee, minOrder: minOrder,
+    deliveryTime: deliveryTime, notice: notice, status: -1
+  }
+  const resp: ApiResponse<ServerStore> = await put<ServerStore>(`/api/merchant/stores/${storeId}`, req)
+  return resp.code === 200 && resp.data !== null ? toStoreItem(resp.data) : null
+}
+
+function toMerchantGoodsRequest(goods: GoodsItem, status: number): MerchantGoodsRequest {
+  const req: MerchantGoodsRequest = {
+    name: goods.name, description: goods.description, price: goods.price,
+    originalPrice: goods.originalPrice || goods.price, image: goods.image,
+    categoryId: goods.categoryId, tag: goods.tag || '', status: status
+  }
+  return req
+}
+
+export async function createMerchantGoodsApi(storeId: number, goods: GoodsItem): Promise<GoodsItem | null> {
+  const resp: ApiResponse<ServerGoods> = await post<ServerGoods>(
+    `/api/merchant/stores/${storeId}/goods`, toMerchantGoodsRequest(goods, 1))
+  return resp.code === 200 && resp.data !== null ? toGoodsItem(resp.data) : null
+}
+
+export async function updateMerchantGoodsApi(goods: GoodsItem, onShelf: boolean): Promise<GoodsItem | null> {
+  const resp: ApiResponse<ServerGoods> = await put<ServerGoods>(
+    `/api/merchant/goods/${goods.id}`, toMerchantGoodsRequest(goods, onShelf ? 1 : 0))
+  return resp.code === 200 && resp.data !== null ? toGoodsItem(resp.data) : null
+}
+
+export async function deleteMerchantGoodsApi(goodsId: number): Promise<boolean> {
+  const resp: ApiResponse<Object> = await del<Object>(`/api/merchant/goods/${goodsId}`)
+  return resp.code === 200
 }
 
 // ==================== 用户中心（需登录） ====================
