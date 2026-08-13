@@ -3,6 +3,7 @@ import orderCalculationsTest from './OrderCalculations.test';
 import orderStatusTest from './OrderStatus.test';
 import dataPersistenceTest from './DataPersistence.test';
 import mockDataIntegrityTest from './MockDataIntegrity.test';
+import authValidationTest from './AuthValidation.test';
 
 export default function testsuite() {
   localUnitTest();
@@ -10,4 +11,5 @@ export default function testsuite() {
   orderStatusTest();
   dataPersistenceTest();
   mockDataIntegrityTest();
+  authValidationTest();
 }
