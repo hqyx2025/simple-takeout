@@ -75,6 +75,7 @@
   - [ ] SubTask 34.4: JWT 密钥环境变量化（可选 BCrypt）
 
 # Task Dependencies
+- [x] SubTask 22.2：订单状态流转纯逻辑与 Hypium Local Test 覆盖（2026-08 完成）
 - [x] SubTask 22.1：金额计算纯函数化与 Hypium Local Test 覆盖（2026-08 完成）
 - [x] SubTask 33.11：首页图标资源替换与顶部区域转场动画优化（2026-08 完成）
 - Task 22-23（质量加固）不依赖其他任务，可与业务并行，最先执行
