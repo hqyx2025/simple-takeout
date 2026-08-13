@@ -262,6 +262,7 @@ struct HomePage {
   @State currentCategory: number = 0
   @State isRefreshing: boolean = false
   @StorageLink('currentAddress') currentAddress: Address | null = null
+  @State isHeaderVisible: boolean = false
   onStoreClick: (store: StoreItem) => void = () => {}
   onNavigateLogin: () => void = () => {}
   private storeDataSource: StoreDataSource = new StoreDataSource()
@@ -283,6 +284,7 @@ struct HomePage {
   }
 
   aboutToAppear() {
+    this.isHeaderVisible = true
     this.categories = getCategories()
     this.stores = getAllStoresList()
     this.storeDataSource.setData(this.stores)
@@ -303,8 +305,9 @@ struct HomePage {
       Column({ space: SPACING.SM }) {
         Row({ space: 4 }) {
           Row({ space: 4 }) {
-            Text('📍')
-              .fontSize(14)
+            Image($r('app.media.location_icon'))
+              .width(20)
+              .height(20)
             if (this.currentAddress !== null) {
               Text(this.getDisplayAddress())
                 .fontSize(FONT_SIZE.LG)
@@ -312,7 +315,7 @@ struct HomePage {
                 .fontWeight(FontWeight.Bold)
                 .maxLines(1)
                 .textOverflow({ overflow: TextOverflow.Ellipsis })
-                .constraintSize({ maxWidth: 80 })
+                .layoutWeight(1)
             } else {
               // 未定位：显示提示并引导用户去定位
               Text('未定位，点击定位')
@@ -320,9 +323,9 @@ struct HomePage {
                 .fontColor(COLORS.PRIMARY)
                 .fontWeight(FontWeight.Bold)
             }
-            Text('▼')
-              .fontSize(10)
-              .fontColor(COLORS.TEXT_SECONDARY)
+            Image($r('app.media.chevron_down_icon'))
+              .width(16)
+              .height(16)
           }
           .onClick(() => {
             // 未定位时提示用户去定位，再进入定位选择页
@@ -333,8 +336,9 @@ struct HomePage {
           })
           .width('100%')
           Row({ space: 4 }) {
-            Text('🔍')
-              .fontSize(14)
+            Image($r('app.media.search_icon'))
+              .width(20)
+              .height(20)
             TextInput({ placeholder: '搜索美食、店铺', text: '' })
               .fontSize(FONT_SIZE.MD)
               .backgroundColor(Color.Transparent)
@@ -351,11 +355,14 @@ struct HomePage {
           .onClick(() => { router.pushUrl({ url: 'pages/SearchPage' }) })
         }
         .width('100%')
-        .padding({ left: SPACING.LG, right: SPACING.LG })
+        .padding({ left: 0, right: 0 })
       }
       .width('100%')
       .padding({ left: SPACING.LG, right: SPACING.LG, top: 40, bottom: SPACING.MD })
       .backgroundColor(COLORS.BG_WHITE)
+      .opacity(this.isHeaderVisible ? 1 : 0)
+      .translate({ y: this.isHeaderVisible ? 0 : 8 })
+      .animation({ duration: 260, curve: Curve.EaseInOut })
 
       Scroll() {
         Column() {
