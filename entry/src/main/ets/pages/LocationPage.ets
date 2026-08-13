@@ -141,6 +141,20 @@ export struct LocationPage {
     }
   }
 
+  // 刷新地图当前视图并重新解析中心地址
+  private async refreshMap(): Promise<void> {
+    if (!this.isMapReady) {
+      promptAction.showToast({ message: '地图正在加载，请稍后再试', duration: 1500 })
+      return
+    }
+    try {
+      await this.webController.runJavaScript('refreshMap()')
+      promptAction.showToast({ message: '地图已刷新', duration: 1200 })
+    } catch (err) {
+      promptAction.showToast({ message: '地图刷新失败，请稍后重试', duration: 1500 })
+    }
+  }
+
   // 构造 javaScriptProxy 配置（避免向 object 类型传对象字面量，满足 arkts-no-untyped-obj-literals）
   private getProxyOptions(): JavaScriptProxyOptions {
     const options: JavaScriptProxyOptions = {
@@ -299,10 +313,15 @@ export struct LocationPage {
                 .fontColor(COLORS.TEXT_PRIMARY)
                 .margin({ left: SPACING.SM })
               Blank()
-              Text('重新定位')
+              Button('刷新地图')
+                .height(32)
                 .fontSize(FONT_SIZE.SM)
                 .fontColor(COLORS.PRIMARY)
-                .onClick(() => { this.locateCurrent() })
+                .backgroundColor(COLORS.BG_PRIMARY)
+                .borderRadius(BORDER_RADIUS.ROUND)
+                .type(ButtonType.Capsule)
+                .padding({ left: SPACING.SM, right: SPACING.SM })
+                .onClick(() => { this.refreshMap() })
             }
             .width('100%')
             .alignItems(VerticalAlign.Center)
@@ -319,20 +338,32 @@ export struct LocationPage {
                   .margin({ left: SPACING.SM })
               }
               .width('100%')
-            } else if (this.currentAddressText !== '') {
-              Text(this.currentAddressText)
+            } else if (this.currentPosition !== null) {
+              Text(this.currentAddressText !== '' ? this.currentAddressText : '请拖动地图中心图标选择配送位置')
                 .fontSize(FONT_SIZE.MD)
                 .fontColor(COLORS.TEXT_SECONDARY)
                 .width('100%')
-              Button(this.selectedPlace !== null ? '使用所选位置' : '使用地图中心位置')
-                .width('100%')
-                .height(40)
-                .fontSize(FONT_SIZE.MD)
-                .fontColor(Color.White)
-                .backgroundColor(COLORS.PRIMARY)
-                .borderRadius(BORDER_RADIUS.ROUND)
-                .type(ButtonType.Capsule)
-                .onClick(() => { this.useCenterPosition() })
+              Row({ space: SPACING.SM }) {
+                Button('重新定位')
+                  .layoutWeight(1)
+                  .height(40)
+                  .fontSize(FONT_SIZE.MD)
+                  .fontColor(COLORS.PRIMARY)
+                  .backgroundColor(COLORS.BG_PRIMARY)
+                  .borderRadius(BORDER_RADIUS.ROUND)
+                  .type(ButtonType.Capsule)
+                  .onClick(() => { this.locateCurrent() })
+                Button('确认位置')
+                  .layoutWeight(1)
+                  .height(40)
+                  .fontSize(FONT_SIZE.MD)
+                  .fontColor(Color.White)
+                  .backgroundColor(COLORS.PRIMARY)
+                  .borderRadius(BORDER_RADIUS.ROUND)
+                  .type(ButtonType.Capsule)
+                  .onClick(() => { this.useCenterPosition() })
+              }
+              .width('100%')
             } else {
               Text(this.locateError !== '' ? this.locateError : '正在加载地图...')
                 .fontSize(FONT_SIZE.MD)

@@ -15,6 +15,11 @@ export interface GeoPosition {
   longitude: number
 }
 
+interface LocationFailure {
+  code?: number
+  message?: string
+}
+
 // 权限授权结果码
 const GRANTED: number = 0
 
@@ -63,7 +68,11 @@ export async function getCurrentPosition(context: common.UIAbilityContext): Prom
     logInfo('Location', `获取当前位置成功: ${position.longitude.toFixed(6)}, ${position.latitude.toFixed(6)}`)
     return position
   } catch (err) {
+    const failure: LocationFailure = err as LocationFailure
     logError('Location', '获取当前位置失败', err as Object)
+    if (failure.code === 3301100 || (failure.message !== undefined && failure.message.indexOf('location switch is off') >= 0)) {
+      throw new Error('系统定位服务已关闭，请打开设备定位开关后重试；也可以拖动地图或搜索地点选择位置')
+    }
     throw new Error('定位失败，请拖动地图或手动搜索选择位置')
   }
 }

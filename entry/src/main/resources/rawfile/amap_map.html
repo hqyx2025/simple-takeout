@@ -120,6 +120,17 @@ function moveTo(lng, lat) {
   map.setZoomAndCenter(16, [parseFloat(lng), parseFloat(lat)]);
 }
 
+// 刷新当前地图尺寸与中心位置，适配页面重新显示或 Web 地图短暂加载异常
+function refreshMap() {
+  if (map === null) return;
+  var center = map.getCenter();
+  map.resize();
+  map.setCenter(center);
+  lastLng = 0;
+  lastLat = 0;
+  onMoveEnd();
+}
+
 // 关键词搜索地点（输入提示），结果通过 ohosBridge.onSearchResult 回传
 function searchKeyword(keyword) {
   if (map === null) return;
