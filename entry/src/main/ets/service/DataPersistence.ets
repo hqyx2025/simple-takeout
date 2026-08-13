@@ -103,7 +103,7 @@ function normalizeOrderList(value: Object): Object {
 }
 
 // 归一化入口：按 key 处理对应数据
-function normalizeData(key: string, value: Object): Object {
+export function normalizeData(key: string, value: Object): Object {
   if (key === 'user') {
     return normalizeUser(value)
   }
