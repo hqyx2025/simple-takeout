@@ -9,7 +9,7 @@
  */
 import { Address } from '../model/Models'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
-import { GeoPosition, getCurrentPosition } from '../service/LocationService'
+import { GeoPosition, getCurrentPosition, reverseGeocodePosition } from '../service/LocationService'
 import { EmptyState } from '../components/EmptyState'
 import { promptAction } from '@kit.ArkUI'
 import { common } from '@kit.AbilityKit'
@@ -193,7 +193,7 @@ export struct LocationPage {
       }
       this.currentPosition = position
       this.hasNativeLocation = true
-      this.currentAddressText = ''
+      this.currentAddressText = await reverseGeocodePosition(position)
       if (this.isMapReady) {
         await this.moveMapCenter(position)
       }
@@ -239,16 +239,31 @@ export struct LocationPage {
   }
 
   // 使用当前地图中心位置作为配送地址
-  private useCenterPosition(): void {
+  private async useCenterPosition(): Promise<void> {
     if (this.currentPosition === null) {
       promptAction.showToast({ message: '请先定位或拖动地图选择位置', duration: 1500 })
       return
     }
     const pos: GeoPosition = this.currentPosition as GeoPosition
     const detail: string = this.selectedPlace !== null ? (this.selectedPlace as SearchPlace).name : ''
-    const addressText: string = this.currentAddressText !== ''
-      ? this.currentAddressText
-      : `(${pos.latitude.toFixed(6)}, ${pos.longitude.toFixed(6)})`
+    let addressText: string = this.currentAddressText
+    if (addressText === '') {
+      addressText = await reverseGeocodePosition(pos)
+    }
+    if (addressText === '' && this.selectedPlace !== null) {
+      const place: SearchPlace = this.selectedPlace as SearchPlace
+      addressText = place.district !== '' ? `${place.district} ${place.address}` : place.address
+      if (addressText === '') {
+        addressText = place.name
+      }
+    }
+    if (addressText === '') {
+      promptAction.showToast({ message: '正在解析当前位置，请稍后再点击确认位置', duration: 1800 })
+      if (this.isMapReady) {
+        await this.refreshMap()
+      }
+      return
+    }
     this.applyAddress(addressText, detail, pos)
   }
 

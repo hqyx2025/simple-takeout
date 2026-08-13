@@ -266,6 +266,22 @@ struct HomePage {
   onNavigateLogin: () => void = () => {}
   private storeDataSource: StoreDataSource = new StoreDataSource()
 
+  private getDisplayAddress(): string {
+    if (this.currentAddress === null) {
+      return '未定位，点击定位'
+    }
+    const address: string = this.currentAddress.address.trim()
+    const coordinatePattern: RegExp = /^\(-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?\)$/
+    if (address !== '' && !coordinatePattern.test(address)) {
+      return address
+    }
+    const detail: string = this.currentAddress.detail.trim()
+    if (detail !== '' && !coordinatePattern.test(detail)) {
+      return detail
+    }
+    return '位置已获取，点击查看地址'
+  }
+
   aboutToAppear() {
     this.categories = getCategories()
     this.stores = getAllStoresList()
@@ -284,13 +300,13 @@ struct HomePage {
   build() {
     Column() {
       // 顶部地址栏 + 搜索
-      Column() {
-        Row({ space: 8 }) {
+      Column({ space: SPACING.SM }) {
+        Row({ space: 4 }) {
           Row({ space: 4 }) {
             Text('📍')
               .fontSize(14)
             if (this.currentAddress !== null) {
-              Text(this.currentAddress.address)
+              Text(this.getDisplayAddress())
                 .fontSize(FONT_SIZE.LG)
                 .fontColor(COLORS.TEXT_PRIMARY)
                 .fontWeight(FontWeight.Bold)
@@ -315,6 +331,7 @@ struct HomePage {
             }
             router.pushUrl({ url: 'pages/LocationPage' })
           })
+          .width('100%')
           Row({ space: 4 }) {
             Text('🔍')
               .fontSize(14)
@@ -330,14 +347,14 @@ struct HomePage {
           .height(32)
           .backgroundColor('#F0F0F0')
           .borderRadius(BORDER_RADIUS.ROUND)
-          .layoutWeight(1)
+          .width('100%')
           .onClick(() => { router.pushUrl({ url: 'pages/SearchPage' }) })
         }
         .width('100%')
-        .padding({ left: SPACING.LG, right: SPACING.LG, top: 8, bottom: 8 })
+        .padding({ left: SPACING.LG, right: SPACING.LG })
       }
       .width('100%')
-      .padding({ top: 40 })
+      .padding({ left: SPACING.LG, right: SPACING.LG, top: 40, bottom: SPACING.MD })
       .backgroundColor(COLORS.BG_WHITE)
 
       Scroll() {

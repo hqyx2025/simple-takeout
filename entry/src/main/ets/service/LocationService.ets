@@ -20,6 +20,40 @@ interface LocationFailure {
   message?: string
 }
 
+/** 将经纬度转换为可展示的中文地址（逆地理编码）。 */
+export async function reverseGeocodePosition(position: GeoPosition): Promise<string> {
+  try {
+    const request: geoLocationManager.ReverseGeoCodeRequest = {
+      latitude: position.latitude,
+      longitude: position.longitude,
+      maxItems: 1,
+      locale: 'zh'
+    }
+    const addresses: Array<geoLocationManager.GeoAddress> = await geoLocationManager.getAddressesFromLocation(request)
+    if (addresses.length === 0) {
+      return ''
+    }
+    const address: geoLocationManager.GeoAddress = addresses[0]
+    const parts: string[] = []
+    const append = (value: string | undefined): void => {
+      if (value !== undefined && value !== '' && (parts.length === 0 || parts[parts.length - 1] !== value)) {
+        parts.push(value)
+      }
+    }
+    append(address.countryName)
+    append(address.administrativeArea)
+    append(address.locality)
+    append(address.subLocality)
+    append(address.roadName)
+    append(address.premises)
+    append(address.placeName)
+    return parts.join('')
+  } catch (err) {
+    logWarn('Location', '逆地理编码失败')
+    return ''
+  }
+}
+
 // 权限授权结果码
 const GRANTED: number = 0
 
