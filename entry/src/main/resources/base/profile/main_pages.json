@@ -11,6 +11,7 @@
     "pages/ReviewPage",
     "pages/ProfileEditPage",
     "pages/SettingsPage",
+    "pages/PrivacyPolicyPage",
     "pages/MerchantOrdersPage",
     "pages/MerchantStatsPage",
     "pages/MerchantCenterPage"

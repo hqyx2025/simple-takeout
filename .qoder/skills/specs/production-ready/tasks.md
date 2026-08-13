@@ -77,6 +77,9 @@
 # Task Dependencies
 - [x] SubTask 24.1：AppScope 版本信息与 vendor 元数据核对（2026-08 完成）
 - [x] SubTask 24.3：模块权限 reason/usedScene 与权限范围核对（2026-08 完成）
+- [x] SubTask 25.1：隐私政策页面与设置页入口（2026-08 完成）
+- [x] SubTask 25.2：首次启动隐私同意弹窗与本地持久化状态（2026-08 完成）
+- [ ] SubTask 25.3：公网可访问隐私政策网页（需部署到正式域名）
 - [x] SubTask 22.5：登录凭证、角色判断与重复注册测试（2026-08 完成）
 - [x] SubTask 22.4：MockDataService 数据完整性与 ID 唯一性测试（2026-08 完成）
 - [x] SubTask 22.3：DataPersistence.normalizeData 脏数据回退测试（2026-08 完成）

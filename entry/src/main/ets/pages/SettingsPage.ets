@@ -89,6 +89,9 @@ export struct SettingsPage {
           this.SettingItem('ℹ️', '关于我们', '', false, () => {
             this.showAbout = true
           })
+          this.SettingItem('🔒', '隐私政策', '', false, () => {
+            router.pushUrl({ url: 'pages/PrivacyPolicyPage' })
+          })
         }
         .width('100%')
         .margin({ top: SPACING.SM })
