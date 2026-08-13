@@ -12,6 +12,7 @@ import { RatingStars } from '../components/RatingStars'
 import { promptAction } from '@kit.ArkUI'
 import router from '@ohos.router'
 import { logInfo } from '../service/AppLogger'
+import { saveAllData } from '../service/DataPersistence'
 
 // 定义快捷入口和订单Tab的数据类型，解决 arkts-no-untyped-obj-literals 错误
 class QuickEntryItem {
@@ -263,6 +264,7 @@ struct HomePage {
   @State isRefreshing: boolean = false
   @StorageLink('currentAddress') currentAddress: Address | null = null
   @State isHeaderVisible: boolean = false
+  @State showPrivacyDialog: boolean = false
   onStoreClick: (store: StoreItem) => void = () => {}
   onNavigateLogin: () => void = () => {}
   private storeDataSource: StoreDataSource = new StoreDataSource()
@@ -285,6 +287,7 @@ struct HomePage {
 
   aboutToAppear() {
     this.isHeaderVisible = true
+    this.showPrivacyDialog = !(AppStorage.get<boolean>('privacyConsent') || false)
     this.categories = getCategories()
     this.stores = getAllStoresList()
     this.storeDataSource.setData(this.stores)
@@ -504,10 +507,63 @@ struct HomePage {
               this.isRefreshing = false
             })
           }
+          }
+          .layoutWeight(1)
         }
+
+      if (this.showPrivacyDialog) {
+        Stack() {
+          Column()
+            .width('100%')
+            .height('100%')
+            .backgroundColor('rgba(0,0,0,0.5)')
+          Column({ space: SPACING.MD }) {
+            Text('隐私政策提示')
+              .fontSize(FONT_SIZE.XL)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(COLORS.TEXT_PRIMARY)
+            Text('为了提供登录、定位、配送和订单服务，我们需要按照隐私政策处理必要信息。请阅读并同意后继续使用。')
+              .fontSize(FONT_SIZE.MD)
+              .fontColor(COLORS.TEXT_SECONDARY)
+              .textAlign(TextAlign.Center)
+            Text('查看《隐私政策》')
+              .fontSize(FONT_SIZE.MD)
+              .fontColor(COLORS.PRIMARY)
+              .onClick(() => { router.pushUrl({ url: 'pages/PrivacyPolicyPage' }) })
+            Row({ space: SPACING.MD }) {
+              Button('暂不同意')
+                .layoutWeight(1)
+                .height(44)
+                .backgroundColor('#F5F5F5')
+                .fontColor(COLORS.TEXT_SECONDARY)
+                .borderRadius(BORDER_RADIUS.ROUND)
+                .type(ButtonType.Capsule)
+                .onClick(() => { promptAction.showToast({ message: '请先同意隐私政策后继续使用' }) })
+              Button('同意并继续')
+                .layoutWeight(1)
+                .height(44)
+                .backgroundColor(COLORS.PRIMARY)
+                .fontColor(Color.White)
+                .borderRadius(BORDER_RADIUS.ROUND)
+                .type(ButtonType.Capsule)
+                .onClick(() => {
+                  AppStorage.setOrCreate<boolean>('privacyConsent', true)
+                  saveAllData()
+                  this.showPrivacyDialog = false
+                })
+            }
+            .width('100%')
+          }
+          .width('82%')
+          .padding(SPACING.XL)
+          .backgroundColor(COLORS.BG_WHITE)
+          .borderRadius(BORDER_RADIUS.XL)
+          .alignItems(HorizontalAlign.Center)
+        }
+        .width('100%')
+        .height('100%')
+        .alignContent(Alignment.Center)
       }
-      .scrollBar(BarState.Off)
-      .layoutWeight(1)
     }
     .width('100%')
     .height('100%')
