@@ -62,8 +62,10 @@ export struct LocationPage {
   @State currentAddressText: string = ''        // 地图中心/当前定位的地址文本
   @State currentPosition: GeoPosition | null = null  // 地图中心坐标（即用户选择的坐标）
   @State locateError: string = ''
+  @State hasNativeLocation: boolean = false
   // 双向绑定：进入页面时主页已有的定位地址坐标
   private savedPosition: GeoPosition | null = null
+  private locationRequestId: number = 0
   // 搜索状态
   @State keyword: string = ''
   @State isSearching: boolean = false
@@ -96,6 +98,17 @@ export struct LocationPage {
     const lat: number = Number(latStr)
     if (Number.isNaN(lng) || Number.isNaN(lat)) {
       return
+    }
+    // 定位请求进行中时，忽略高德地图的默认初始中心回调，避免覆盖真实系统定位结果。
+    if (this.locationRequestId > 0 && !this.hasNativeLocation && this.currentPosition === null) {
+      logInfo('LocationPage', `忽略地图默认中心，等待系统定位: ${lngStr}, ${latStr}`)
+      return
+    }
+    if (this.hasNativeLocation && this.currentPosition !== null) {
+      const distance: number = Math.abs(this.currentPosition.longitude - lng) + Math.abs(this.currentPosition.latitude - lat)
+      if (distance < 0.00001 && address === '') {
+        return
+      }
     }
     this.currentPosition = { latitude: lat, longitude: lng }
     if (address !== '') {
@@ -168,14 +181,21 @@ export struct LocationPage {
 
   // 定位当前手机实时位置（成功后地图中心自动移动到定位点）
   private async locateCurrent(): Promise<void> {
+    const requestId: number = Date.now()
+    this.locationRequestId = requestId
     this.isLocating = true
     this.locateError = ''
     try {
       const context: common.UIAbilityContext = getContext(this) as common.UIAbilityContext
       const position: GeoPosition = await getCurrentPosition(context)
+      if (this.locationRequestId !== requestId) {
+        return
+      }
       this.currentPosition = position
+      this.hasNativeLocation = true
+      this.currentAddressText = ''
       if (this.isMapReady) {
-        this.moveMapCenter(position)
+        await this.moveMapCenter(position)
       }
       logInfo('LocationPage', '定位当前位置成功')
     } catch (err) {
@@ -184,8 +204,13 @@ export struct LocationPage {
         msg = err.message
       }
       this.locateError = msg !== '' ? msg : '定位失败，请拖动地图或手动搜索选择位置'
+      if (this.locationRequestId === requestId) {
+        this.locationRequestId = 0
+      }
     }
-    this.isLocating = false
+    if (this.locationRequestId === requestId) {
+      this.isLocating = false
+    }
   }
 
   // 按关键词搜索地点（JS输入提示）
