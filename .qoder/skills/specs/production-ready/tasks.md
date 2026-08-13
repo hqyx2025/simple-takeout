@@ -75,6 +75,8 @@
   - [ ] SubTask 34.4: JWT 密钥环境变量化（可选 BCrypt）
 
 # Task Dependencies
+- [x] SubTask 24.1：AppScope 版本信息与 vendor 元数据核对（2026-08 完成）
+- [x] SubTask 24.3：模块权限 reason/usedScene 与权限范围核对（2026-08 完成）
 - [x] SubTask 22.5：登录凭证、角色判断与重复注册测试（2026-08 完成）
 - [x] SubTask 22.4：MockDataService 数据完整性与 ID 唯一性测试（2026-08 完成）
 - [x] SubTask 22.3：DataPersistence.normalizeData 脏数据回退测试（2026-08 完成）
