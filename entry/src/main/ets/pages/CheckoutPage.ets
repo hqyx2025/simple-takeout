@@ -10,6 +10,7 @@ import { CartItem, Order, Address, Coupon, StoreItem } from '../model/Models'
 import { createOrderRemote, updateCartItemQuantity, useCoupon, getAllStoresList } from '../service/AppStorageManager'
 import { LoadingIndicator } from '../components/LoadingIndicator'
 import { logInfo } from '../service/AppLogger'
+import { calculatePayAmount } from '../service/OrderCalculations'
 
 @Entry
 @Component
@@ -58,8 +59,7 @@ export struct CheckoutPage {
   }
 
   private getPayAmount(): number {
-    const pay: number = this.getGoodsTotalPrice() + this.getDeliveryFee() - this.getDiscountAmount()
-    return pay > 0 ? pay : 0
+    return calculatePayAmount(this.getGoodsTotalPrice(), this.getDeliveryFee(), this.getDiscountAmount())
   }
 
   // ============ 优惠券筛选 ============
