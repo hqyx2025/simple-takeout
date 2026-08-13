@@ -75,6 +75,7 @@
   - [ ] SubTask 34.4: JWT 密钥环境变量化（可选 BCrypt）
 
 # Task Dependencies
+- [x] SubTask 22.4：MockDataService 数据完整性与 ID 唯一性测试（2026-08 完成）
 - [x] SubTask 22.3：DataPersistence.normalizeData 脏数据回退测试（2026-08 完成）
 - [x] SubTask 22.2：订单状态流转纯逻辑与 Hypium Local Test 覆盖（2026-08 完成）
 - [x] SubTask 22.1：金额计算纯函数化与 Hypium Local Test 覆盖（2026-08 完成）
