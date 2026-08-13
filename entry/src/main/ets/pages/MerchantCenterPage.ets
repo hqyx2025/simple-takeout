@@ -3,7 +3,8 @@
  * 商户可查看自己的店铺列表、管理店铺、上架食物
  */
 import { StoreItem, GoodsItem, UserRole, User } from '../model/Models'
-import { getStoresByOwner, getGoodsForStore, addGoodsToStore, removeGoodsFromStore, createStore, updateStore, updateGoodsToStore } from '../service/AppStorageManager'
+import { fetchMerchantStoresApi, fetchMerchantGoodsApi, createMerchantStoreApi, updateMerchantStoreApi,
+  createMerchantGoodsApi, updateMerchantGoodsApi, deleteMerchantGoodsApi } from '../service/ApiService'
 import { formatSales } from '../service/MockDataService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { promptAction } from '@kit.ArkUI'
@@ -22,6 +23,7 @@ export struct MerchantCenterPage {
   @State showAddGoods: boolean = false
   @State selectedStoreId: number = 0
   @State selectedStoreGoods: GoodsItem[] = []
+  @State storeGoodsCounts: Record<string, number> = {}
 
   // 新增店铺表单
   @State newStoreName: string = ''
@@ -55,8 +57,14 @@ export struct MerchantCenterPage {
     this.refreshStores()
   }
 
-  refreshStores() {
-    this.myStores = getStoresByOwner(this.user.id)
+  async refreshStores() {
+    this.myStores = await fetchMerchantStoresApi()
+    const counts: Record<string, number> = {}
+    for (const store of this.myStores) {
+      const goods: GoodsItem[] = await fetchMerchantGoodsApi(store.id)
+      counts[store.id.toString()] = goods.length
+    }
+    this.storeGoodsCounts = counts
   }
 
   build() {
@@ -152,7 +160,7 @@ export struct MerchantCenterPage {
                     Text(`配送费¥${store.deliveryFee}`)
                       .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
                   }
-                  Text(`${getGoodsForStore(store.id).length}种商品`)
+                Text(`${this.storeGoodsCounts[store.id.toString()] || 0}种商品`)
                     .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
                 }
                 .layoutWeight(1)
@@ -168,9 +176,10 @@ export struct MerchantCenterPage {
               .padding(SPACING.MD)
               .backgroundColor(COLORS.BG_WHITE)
               .borderRadius(BORDER_RADIUS.LG)
-              .onClick(() => {
+              .onClick(async () => {
                 this.selectedStoreId = store.id
-                this.selectedStoreGoods = getGoodsForStore(store.id)
+                this.selectedStoreGoods = await fetchMerchantGoodsApi(store.id)
+                this.storeGoodsCounts[store.id.toString()] = this.selectedStoreGoods.length
                 this.showAddGoods = false
                 this.showAddStore = false
               })
@@ -451,9 +460,14 @@ export struct MerchantCenterPage {
                         .height(28).fontSize(FONT_SIZE.XS).fontColor(COLORS.ERROR)
                         .backgroundColor('#FFF0F0').borderRadius(BORDER_RADIUS.ROUND)
                         .type(ButtonType.Capsule)
-                        .onClick(() => {
-                          removeGoodsFromStore(this.selectedStoreId, goods.id)
-                          this.selectedStoreGoods = getGoodsForStore(this.selectedStoreId)
+                        .onClick(async () => {
+                            const deleted: boolean = await deleteMerchantGoodsApi(goods.id)
+                            if (deleted) {
+                              this.selectedStoreGoods = await fetchMerchantGoodsApi(this.selectedStoreId)
+                              this.storeGoodsCounts[this.selectedStoreId.toString()] = this.selectedStoreGoods.length
+                            } else {
+                              promptAction.showToast({ message: '删除失败，请稍后重试' })
+                            }
                         })
                       Button('编辑')
                         .height(28).fontSize(FONT_SIZE.XS).fontColor(COLORS.PRIMARY)
@@ -507,35 +521,24 @@ export struct MerchantCenterPage {
     .width('100%').height('100%')
   }
 
-  doCreateStore() {
+  async doCreateStore() {
     if (this.newStoreName === '') {
       return
     }
     const fee = Number(this.newStoreDeliveryFee) || 3
     const minOrder = Number(this.newStoreMinOrder) || 20
-    const newStore: StoreItem = {
-      id: 0,
-      name: this.newStoreName,
-      image: '',
-      rating: 5.0,
-      monthlySales: 0,
-      deliveryFee: fee,
-      minOrder: minOrder,
-      deliveryTime: '30分钟',
-      distance: '1.0km',
-      tags: ['新店'],
-      notice: this.newStoreNotice || '欢迎光临',
-      categoryId: 1,
-      ownerId: this.user.id,
+    const created: StoreItem | null = await createMerchantStoreApi(this.newStoreName, 1, fee, minOrder, '30分钟', this.newStoreNotice || '欢迎光临')
+    if (created === null) {
+      promptAction.showToast({ message: '创建失败，请检查网络或登录状态' })
+      return
     }
-    createStore(newStore)
     this.newStoreName = ''
     this.newStoreNotice = ''
     this.showAddStore = false
     this.refreshStores()
   }
 
-  doAddGoods() {
+  async doAddGoods() {
     if (this.newGoodsName === '' || this.newGoodsPrice === '') {
       return
     }
@@ -552,12 +555,17 @@ export struct MerchantCenterPage {
       rating: 5.0,
       tag: '新品',
     }
-    addGoodsToStore(this.selectedStoreId, goods)
+    const created: GoodsItem | null = await createMerchantGoodsApi(this.selectedStoreId, goods)
+    if (created === null) {
+      promptAction.showToast({ message: '商品创建失败，请稍后重试' })
+      return
+    }
     this.newGoodsName = ''
     this.newGoodsDesc = ''
     this.newGoodsPrice = ''
     this.showAddGoods = false
-    this.selectedStoreGoods = getGoodsForStore(this.selectedStoreId)
+    this.selectedStoreGoods = await fetchMerchantGoodsApi(this.selectedStoreId)
+    this.storeGoodsCounts[this.selectedStoreId.toString()] = this.selectedStoreGoods.length
   }
 
   startEditStore(store: StoreItem) {
@@ -569,7 +577,7 @@ export struct MerchantCenterPage {
     this.showEditStore = true
   }
 
-  doEditStore() {
+  async doEditStore() {
     if (this.editStoreName === '') {
       promptAction.showToast({ message: '店铺名称不能为空' })
       return
@@ -580,23 +588,11 @@ export struct MerchantCenterPage {
     }
     const fee = Number(this.editStoreDeliveryFee) || 0
     const minOrder = Number(this.editStoreMinOrder) || 0
-    const updatedStore: StoreItem = {
-      id: originalStore.id,
-      name: this.editStoreName,
-      image: originalStore.image,
-      rating: originalStore.rating,
-      monthlySales: originalStore.monthlySales,
-      deliveryFee: fee,
-      minOrder: minOrder,
-      deliveryTime: originalStore.deliveryTime,
-      distance: originalStore.distance,
-      tags: originalStore.tags,
-      notice: this.editStoreNotice || '欢迎光临',
-      categoryId: originalStore.categoryId,
-      categoryIds: originalStore.categoryIds,
-      ownerId: originalStore.ownerId,
+    const updated: StoreItem | null = await updateMerchantStoreApi(originalStore.id, this.editStoreName, fee, minOrder, originalStore.deliveryTime, this.editStoreNotice || '欢迎光临')
+    if (updated === null) {
+      promptAction.showToast({ message: '保存失败，请稍后重试' })
+      return
     }
-    updateStore(updatedStore)
     this.refreshStores()
     this.showEditStore = false
     promptAction.showToast({ message: '保存成功' })
@@ -611,7 +607,7 @@ export struct MerchantCenterPage {
     this.showEditGoods = true
   }
 
-  doEditGoods() {
+  async doEditGoods() {
     if (this.editGoodsName === '') {
       promptAction.showToast({ message: '商品名称不能为空' })
       return
@@ -634,13 +630,18 @@ export struct MerchantCenterPage {
       tag: originalGoods.tag,
       isOnShelf: originalGoods.isOnShelf,
     }
-    updateGoodsToStore(this.selectedStoreId, updatedGoods)
+    const updated: GoodsItem | null = await updateMerchantGoodsApi(updatedGoods, updatedGoods.isOnShelf !== false)
+    if (updated === null) {
+      promptAction.showToast({ message: '保存失败，请稍后重试' })
+      return
+    }
     this.showEditGoods = false
-    this.selectedStoreGoods = getGoodsForStore(this.selectedStoreId)
+    this.selectedStoreGoods = await fetchMerchantGoodsApi(this.selectedStoreId)
+    this.storeGoodsCounts[this.selectedStoreId.toString()] = this.selectedStoreGoods.length
     promptAction.showToast({ message: '保存成功' })
   }
 
-  toggleGoodsShelf(goods: GoodsItem, onShelf: boolean) {
+  async toggleGoodsShelf(goods: GoodsItem, onShelf: boolean) {
     const updatedGoods: GoodsItem = {
       id: goods.id,
       name: goods.name,
@@ -654,8 +655,13 @@ export struct MerchantCenterPage {
       tag: goods.tag,
       isOnShelf: onShelf,
     }
-    updateGoodsToStore(this.selectedStoreId, updatedGoods)
-    this.selectedStoreGoods = getGoodsForStore(this.selectedStoreId)
+    const updated: GoodsItem | null = await updateMerchantGoodsApi(updatedGoods, onShelf)
+    if (updated === null) {
+      promptAction.showToast({ message: '上下架操作失败，请稍后重试' })
+      return
+    }
+    this.selectedStoreGoods = await fetchMerchantGoodsApi(this.selectedStoreId)
+    this.storeGoodsCounts[this.selectedStoreId.toString()] = this.selectedStoreGoods.length
     promptAction.showToast({ message: onShelf ? '已上架' : '已下架' })
   }
 }

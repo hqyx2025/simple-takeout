@@ -57,6 +57,12 @@ public class StoreController {
         return ApiResponse.ok(storeService.merchantStores(userId));
     }
 
+    @GetMapping("/merchant/stores/{storeId}/goods")
+    public ApiResponse<List<Goods>> merchantGoods(@RequestAttribute("userId") long userId,
+                                                  @PathVariable long storeId) {
+        return ApiResponse.ok(storeService.merchantGoods(userId, storeId));
+    }
+
     @PostMapping("/merchant/stores")
     public ApiResponse<Store.StoreView> createStore(@RequestAttribute("userId") long userId,
                                                     @RequestBody CreateStoreRequest req) {
