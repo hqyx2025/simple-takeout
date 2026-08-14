@@ -251,6 +251,8 @@ export struct LocationPage {
       }
       this.currentPosition = position
       AppStorage.setOrCreate<GeoPosition>('lastLocationPosition', position)
+      // 定位成功后立即持久化，用户即使暂未点击确认，下一次进入也能回显该位置。
+      saveAllData()
       this.hasNativeLocation = true
       this.currentAddressText = await reverseGeocodePosition(position)
       if (this.isMapReady) {
@@ -418,11 +420,14 @@ export struct LocationPage {
           .onPageEnd(() => {
             this.isMapReady = true
             // 双向绑定：回显已有定位位置，否则使用本次实时定位结果
-            if (this.savedPosition !== null) {
-              this.moveMapCenter(this.savedPosition)
-            } else if (this.currentPosition !== null) {
-              this.moveMapCenter(this.currentPosition)
-            }
+            // 高德 JS 地图在 Web 页面结束回调后还会延迟初始化，延迟调用避免 moveTo 落在 map=null 时被丢弃。
+            setTimeout(() => {
+              if (this.savedPosition !== null) {
+                this.moveMapCenter(this.savedPosition)
+              } else if (this.currentPosition !== null) {
+                this.moveMapCenter(this.currentPosition)
+              }
+            }, 500)
           })
           .width('100%')
           .height('100%')
