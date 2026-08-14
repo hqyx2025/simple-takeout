@@ -89,10 +89,9 @@ export struct ProductListPage {
     candidates.forEach((store: StoreItem) => {
       const goods: GoodsItem[] = getGoodsForStore(store.id)
       goods.forEach((item: GoodsItem) => {
+        const productCategoryId: number = this.getProductCategoryId(store, item)
         if (this.mode === ProductListMode.CATEGORY && this.categoryId > 0) {
-          const storeMatchesCategory: boolean = store.categoryId === this.categoryId ||
-            (store.categoryIds !== undefined && store.categoryIds.includes(this.categoryId))
-          if (!storeMatchesCategory || item.categoryId !== this.categoryId) {
+          if (productCategoryId !== this.categoryId) {
             return
           }
         }
@@ -107,6 +106,15 @@ export struct ProductListPage {
       result.sort((left: ProductListItem, right: ProductListItem) => right.goods.sales - left.goods.sales)
     }
     this.products = result
+  }
+
+  private getProductCategoryId(store: StoreItem, item: GoodsItem): number {
+    // 扩展商品使用统一描述生成；这类商品没有独立食品分类，按所属店铺主分类归类，
+    // 避免所有店铺的扩展菜品被错误分散到同一个分类。
+    if (item.description.indexOf('美味可口') >= 0) {
+      return store.categoryId
+    }
+    return item.categoryId
   }
 
   private getLocationText(): string {

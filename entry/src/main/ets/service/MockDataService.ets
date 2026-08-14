@@ -681,6 +681,7 @@ const EXTRA_GOODS_NAMES: string[] = [
 // 生成扩充商品：每家店补足到30个
 function buildExtraGoods(storeId: number, startCount: number): GoodsItem[] {
   const goods: GoodsItem[] = []
+  const storeCategoryId: number = getStorePrimaryCategoryId(storeId)
   for (let n = startCount; n < 30; n++) {
     const name: string = EXTRA_GOODS_NAMES[(storeId * 3 + n * 7) % EXTRA_GOODS_NAMES.length]
     goods.push({
@@ -689,12 +690,17 @@ function buildExtraGoods(storeId: number, startCount: number): GoodsItem[] {
       description: `${name}，新鲜制作，美味可口`,
       price: 6 + ((storeId * 7 + n * 3) % 30),
       image: '',
-      categoryId: (storeId % 8) + 1,
+      categoryId: storeCategoryId,
       sales: 100 + ((storeId * 11 + n * 5) % 4000),
       rating: 4.0 + ((storeId + n) % 10) / 10,
     })
   }
   return goods
+}
+
+function getStorePrimaryCategoryId(storeId: number): number {
+  const store: StoreItem | undefined = getStores().find((item: StoreItem) => item.id === storeId)
+  return store === undefined ? (storeId % 8) + 1 : store.categoryId
 }
 
 // 地址模板池
