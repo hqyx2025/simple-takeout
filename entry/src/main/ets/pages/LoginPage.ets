@@ -270,7 +270,7 @@ export struct LoginPage {
       if (user !== undefined) {
         logout()
       }
-      this.errorMsg = role === UserRole.MERCHANT ? '商户快捷登录失败，请确认测试账号可用' : '用户快捷登录失败，请确认测试账号可用'
+      this.errorMsg = role === UserRole.MERCHANT ? '商户快捷登录失败，请确认账号可用' : '用户快捷登录失败，请确认账号可用'
     }
     this.submitting = false
   }

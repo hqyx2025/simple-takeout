@@ -487,7 +487,7 @@ export async function updateUserProfileRemote(username: string, phone: string): 
 }
 
 // ==================== 真实后端 API 接入（ApiService） ====================
-// 以下方法在非 Mock 模式下调用后端；页面 onShow/关键操作处调用
+// 以下方法统一调用后端；页面 onShow/关键操作处调用
 // ==================== 认证 ====================
 
 /**
