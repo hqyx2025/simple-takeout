@@ -14,13 +14,10 @@ export default function dataPersistenceTest() {
       expect(result.id).assertEqual(0)
     })
 
-    it('drops malformed orders and supplies safe nested fields', 0, () => {
+    it('drops persisted orders so order data always comes from the backend', 0, () => {
       const raw: Object = JSON.parse('[{"id":"bad"},{"id":100,"items":null,"status":"bad","address":null}]') as Object
       const result: Order[] = normalizeData('orderList', raw) as Order[]
-      expect(result.length).assertEqual(1)
-      expect(Array.isArray(result[0].items)).assertTrue()
-      expect(result[0].status).assertEqual(1)
-      expect(result[0].address !== null).assertTrue()
+      expect(result.length).assertEqual(0)
     })
 
     it('falls back to safe arrays for damaged persisted values', 0, () => {
@@ -30,8 +27,8 @@ export default function dataPersistenceTest() {
       const coupons: Coupon[] = normalizeData('couponList', empty) as Coupon[]
       const favorites: Favorite[] = normalizeData('favoriteList', empty) as Favorite[]
       expect(cart.length).assertEqual(0)
-      expect(addresses.length > 0).assertTrue()
-      expect(coupons.length > 0).assertTrue()
+      expect(addresses.length).assertEqual(0)
+      expect(coupons.length).assertEqual(0)
       expect(favorites.length >= 0).assertTrue()
     })
   })
