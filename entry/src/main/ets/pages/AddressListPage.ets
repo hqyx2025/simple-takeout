@@ -340,12 +340,21 @@ export struct AddressListPage {
   }
 
   // 设为默认地址
-  setDefault(addr: Address): void {
-    setDefaultAddressRemote(addr.id)
-    this.addressList.forEach(a => {
-      a.isDefault = (a.id === addr.id)
+  async setDefault(addr: Address): Promise<void> {
+    const ok: boolean = await setDefaultAddressRemote(addr.id)
+    if (!ok) {
+      return
+    }
+
+    // setDefaultAddressRemote 会同步后端最新地址，基于同步结果创建新数组，
+    // 避免原地修改对象导致 ForEach 无法感知默认状态变化。
+    const syncedAddresses: Address[] = AppStorage.get<Address[]>('addressList') || this.addressList
+    const updatedAddresses: Address[] = syncedAddresses.slice()
+    updatedAddresses.forEach((item: Address) => {
+      item.isDefault = item.id === addr.id
     })
-    AppStorage.setOrCreate('addressList', this.addressList)
+    AppStorage.setOrCreate<Address[]>('addressList', updatedAddresses)
+    this.addressList = updatedAddresses
   }
 
   // 保存地址
