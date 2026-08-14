@@ -119,7 +119,17 @@ async function request<T>(method: string, url: string, data?: Object): Promise<A
       response = await getClient().delete(url, config)
     }
     const result: ApiResponse<T> = response.data
-    logInfo('Http', `后端响应成功：${operation}，状态码=${result.code}，消息=${result.message}`)
+    if (result.code === 200) {
+      logInfo('Http', `后端响应成功：${operation}，状态码=${result.code}，消息=${result.message}`)
+    } else {
+      logWarn('Http', `后端业务失败：${operation}，状态码=${result.code}，消息=${result.message}`)
+      if (result.code === 401) {
+        // 后端可能使用 HTTP 200 返回业务状态码 401，同样需要清理登录态。
+        setAuthToken('')
+        AppStorage.setOrCreate<string>('authToken', '')
+        AppStorage.setOrCreate<boolean>('isLoggedIn', false)
+      }
+    }
     return result
   } catch (err) {
     const axiosErr: AxiosError = err as AxiosError

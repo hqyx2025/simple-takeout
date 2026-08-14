@@ -1383,7 +1383,14 @@ struct ProfileMainPage {
 
         // 功能菜单
         Column() {
-          this.ProfileMenuRow('📍', '收货地址', () => { router.pushUrl({ url: 'pages/AddressListPage' }) })
+          this.ProfileMenuRow('📍', '收货地址', () => {
+            if (!this.loggedIn) {
+              promptAction.showToast({ message: '请先登录后管理收货地址', duration: 1500 })
+              this.onNavigateLogin()
+              return
+            }
+            router.pushUrl({ url: 'pages/AddressListPage' })
+          })
           this.ProfileMenuRow('❤️', '我的收藏', () => { router.pushUrl({ url: 'pages/FavoriteListPage' }) })
           this.ProfileMenuRow('📞', '联系客服', () => {})
           this.ProfileMenuRow('⚙️', '设置', () => { router.pushUrl({ url: 'pages/SettingsPage' }) })
