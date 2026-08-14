@@ -660,8 +660,9 @@ function toAddress(a: ServerAddress): Address {
     id: a.id,
     name: a.name,
     phone: a.phone,
-    address: '',
-    detail: a.detail,
+    // 服务端仅保存合并后的地址文本，回填到 address 字段可保证列表展示和编辑内容一致。
+    address: a.detail,
+    detail: '',
     isDefault: a.isDefault === 1
   }
   return addr
