@@ -316,7 +316,7 @@ struct HomePage {
     this.isHeaderVisible = true
     this.showPrivacyDialog = !(AppStorage.get<boolean>('privacyConsent') || false)
     this.categories = getCategories()
-    this.stores = getAllStoresList()
+    this.stores = this.getNearbyStores()
     this.storeDataSource.setData(this.stores)
     // 隐私同意前不发起网络请求；同意后由确认回调触发同步
     if (AppStorage.get<boolean>('privacyConsent') || false) {
@@ -330,8 +330,41 @@ struct HomePage {
       return
     }
     await syncStoresFromServer()
-    this.stores = getAllStoresList()
+    this.stores = this.getNearbyStores()
     this.storeDataSource.setData(this.stores)
+  }
+
+  private hasCurrentLocation(): boolean {
+    if (this.currentAddress === null) {
+      return false
+    }
+    const address: Address = this.currentAddress as Address
+    return address.address.trim() !== '' || address.detail.trim() !== '' ||
+      (address.latitude !== undefined && address.longitude !== undefined)
+  }
+
+  private parseStoreDistance(distance: string): number {
+    const match: RegExpMatchArray | null = distance.match(/([0-9]+(?:\.[0-9]+)?)/)
+    return match === null ? Number.MAX_VALUE : Number.parseFloat(match[1])
+  }
+
+  private getNearbyStores(): StoreItem[] {
+    if (!this.hasCurrentLocation()) {
+      return []
+    }
+    return getAllStoresList().filter((store: StoreItem) => this.parseStoreDistance(store.distance) <= 2.0)
+  }
+
+  private openProductList(mode: string, categoryId: number, title: string): void {
+    if ((mode === 'nearby' || mode === 'all') && !this.hasCurrentLocation()) {
+      promptAction.showToast({ message: '请先定位，再查看附近商品', duration: 1500 })
+      router.pushUrl({ url: 'pages/LocationPage' })
+      return
+    }
+    AppStorage.setOrCreate<string>('productListMode', mode)
+    AppStorage.setOrCreate<number>('productListCategoryId', categoryId)
+    AppStorage.setOrCreate<string>('productListTitle', title)
+    router.pushUrl({ url: 'pages/ProductListPage' })
   }
 
   build() {
@@ -424,15 +457,7 @@ struct HomePage {
                 .justifyContent(FlexAlign.Center)
                 .alignItems(HorizontalAlign.Center)
                 .onClick(() => {
-                  if (this.currentCategory === cat.id) {
-                    this.currentCategory = 0
-                    this.stores = getAllStoresList()
-                  } else {
-                    this.currentCategory = cat.id
-                    this.stores = getAllStoresList().filter(s => s.categoryId === cat.id ||
-                      (s.categoryIds && s.categoryIds.includes(cat.id)))
-                  }
-                  this.storeDataSource.setData(this.stores)
+                  this.openProductList('category', cat.id, `${cat.name}商品`)
                 })
               }
             }, (item: Category) => item.id.toString())
@@ -492,7 +517,7 @@ struct HomePage {
                 } else if (item.title === '领券中心') {
                   router.pushUrl({ url: 'pages/CouponCenterPage' })
                 } else {
-                  promptAction.showToast({ message: `${item.title}功能即将上线，敬请期待`, duration: 1500 })
+                  this.openProductList('special', 0, `${item.title}商品`)
                 }
               })
             }, (item: QuickEntryItem) => item.title)
@@ -513,16 +538,12 @@ struct HomePage {
           .width('100%')
           .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.SM })
           .onClick(() => {
-            // 清除分类筛选，展示全部店铺
-            this.currentCategory = 0
-            this.stores = getAllStoresList()
-            this.storeDataSource.setData(this.stores)
-            promptAction.showToast({ message: '已显示全部店铺', duration: 1500 })
+            this.openProductList('all', 0, '附近全部商品')
           })
 
           // 店铺列表
           if (this.stores.length === 0) {
-            EmptyState({ icon: '🏪', title: '暂无店铺', description: '暂无符合条件的店铺' })
+            EmptyState({ icon: '🏪', title: this.hasCurrentLocation() ? '暂无附近店铺' : '请先定位', description: this.hasCurrentLocation() ? '暂无符合条件的附近店铺' : '定位后即可查看附近商品' })
           } else {
             Refresh({ refreshing: this.isRefreshing }) {
               List({ space: SPACING.SM }) {
@@ -538,10 +559,7 @@ struct HomePage {
               .cachedCount(5)
             }
             .onRefreshing(() => {
-              this.stores = getAllStoresList()
-              if (this.currentCategory > 0) {
-                this.stores = this.stores.filter(s => s.categoryId === this.currentCategory || (s.categoryIds && s.categoryIds.includes(this.currentCategory)))
-              }
+              this.stores = this.getNearbyStores()
               this.storeDataSource.setData(this.stores)
               this.isRefreshing = false
             })
