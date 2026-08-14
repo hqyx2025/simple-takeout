@@ -55,6 +55,7 @@ class AddressTag {
 export struct AddressListPage {
   @StorageLink('addressList') addressList: Address[] = []
   @StorageLink('isLoggedIn') loggedIn: boolean = false
+  @State addressListRevision: number = 0
   @State showAddForm: boolean = false
   @State editingAddress: Address | null = null
   @State formData: AddressFormData = new AddressFormData()
@@ -193,7 +194,7 @@ export struct AddressListPage {
                   this.onSelectAddress(addr)
                 })
               }
-            }, (item: Address) => `${item.id}-${item.isDefault ? 'default' : 'normal'}`)
+            }, (item: Address) => `${this.addressListRevision}-${item.id}-${item.isDefault ? 'default' : 'normal'}`)
           }
           .width('100%')
           .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM })
@@ -388,6 +389,9 @@ export struct AddressListPage {
     const next: Address[] = this.copyAddresses(deduplicateAddresses(addresses))
     this.addressList = next
     AppStorage.setOrCreate<Address[]>('addressList', next)
+    // ForEach 以地址 ID 复用列表项时，内容字段变化可能不会重新创建子树；
+    // revision 参与 key，确保编辑后姓名、电话和地址文本立即重绘。
+    this.addressListRevision += 1
   }
 
   private getDisplayAddress(addr: Address): string {
@@ -404,6 +408,29 @@ export struct AddressListPage {
       return addressText
     }
     return `${addressText} ${detailText}`
+  }
+
+  private applyEditedAddress(): void {
+    if (this.editingAddress === null) {
+      return
+    }
+    const editingId: number = this.editingAddress.id
+    const source: Address[] = AppStorage.get<Address[]>('addressList') || this.addressList
+    const updated: Address[] = this.copyAddresses(source)
+    const savedDetail: string = this.getFormAddressDetail()
+    updated.forEach((item: Address) => {
+      if (item.id === editingId) {
+        item.name = this.formData.name.trim()
+        item.phone = this.formData.phone.trim()
+        item.address = savedDetail
+        item.detail = ''
+        item.tag = this.formData.tag
+        item.isDefault = this.formData.isDefault
+      } else if (this.formData.isDefault) {
+        item.isDefault = false
+      }
+    })
+    this.applyAddressList(updated)
   }
 
   // 设为默认地址
@@ -481,8 +508,13 @@ export struct AddressListPage {
       }
     }
 
-    const syncedAddresses: Address[] = AppStorage.get<Address[]>('addressList') || this.addressList
-    this.applyAddressList(syncedAddresses)
+    if (this.editingAddress !== null) {
+      // 直接将本次提交的表单值写回本地列表，避免服务端查询延迟导致 UI 仍显示旧内容。
+      this.applyEditedAddress()
+    } else {
+      const syncedAddresses: Address[] = AppStorage.get<Address[]>('addressList') || this.addressList
+      this.applyAddressList(syncedAddresses)
+    }
     this.showAddForm = false
     promptAction.showToast({ message: this.editingAddress === null ? '地址新增成功' : '地址更新成功', duration: 1200 })
   }
