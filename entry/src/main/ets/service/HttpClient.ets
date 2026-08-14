@@ -7,9 +7,6 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError, Ax
 import { API_CONFIG } from '../common/Constants'
 import { logInfo, logWarn, logError } from './AppLogger'
 
-// 是否使用Mock数据（false = 对接真实后端）
-const USE_MOCK: boolean = false
-
 // JWT Token（登录成功后由 ApiService 设置，请求时自动注入）
 let authToken: string = ''
 
@@ -99,10 +96,6 @@ function getOperationName(method: string, url: string): string {
  */
 async function request<T>(method: string, url: string, data?: Object): Promise<ApiResponse<T>> {
   const operation: string = getOperationName(method, url)
-  if (USE_MOCK) {
-    logInfo('Http', `前端执行${operation}，当前使用本地模拟数据`)
-    return createMockResponse<T>()
-  }
   logInfo('Http', `前端请求后端：${operation}（${method} ${url}）`)
   try {
     const config: AxiosRequestConfig = {
@@ -145,28 +138,8 @@ async function request<T>(method: string, url: string, data?: Object): Promise<A
       return resp
     }
     logError('Http', `后端请求异常：${operation}，请检查网络和服务端状态`, err)
-    return { code: 500, message: '网络请求失败，请确认后端服务已启动', data: (MockEmptyData.create() as object) as T }
+    return { code: 500, message: '网络请求失败，请确认后端服务已启动', data: undefined as T }
   }
-}
-
-/**
- * Mock 模式空数据占位类型。
- * Mock 模式下实际数据由调用方从 MockDataService 获取，此处仅保证结构完整。
- */
-class MockEmptyData {
-  static create(): MockEmptyData {
-    return new MockEmptyData()
-  }
-}
-
-// 构造 Mock 模式空响应
-function createMockResponse<T>(): ApiResponse<T> {
-  const response: ApiResponse<T> = {
-    code: 200,
-    message: 'success',
-    data: (MockEmptyData.create() as object) as T
-  }
-  return response
 }
 
 // GET请求
@@ -187,9 +160,4 @@ export async function put<T>(url: string, data?: Object): Promise<ApiResponse<T>
 // DELETE请求
 export async function del<T>(url: string): Promise<ApiResponse<T>> {
   return request<T>('DELETE', url)
-}
-
-// 切换Mock模式（预留）
-export function setMockMode(enabled: boolean): void {
-  logInfo('Http', `本地模拟数据模式切换请求：${enabled ? '开启' : '关闭'}（需重新构建生效）`)
 }

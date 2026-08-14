@@ -2,8 +2,8 @@
  * 搜索页 - 热门搜索、历史搜索、店铺搜索结果
  */
 import { StoreItem } from '../model/Models'
-import { getHotSearchWords, formatSales } from '../service/MockDataService'
-import { getAllStoresList, searchStoresRemote } from '../service/AppStorageManager'
+import { formatSales } from '../common/Constants'
+import { searchStoresRemote } from '../service/AppStorageManager'
 import { getSearchHistory, addSearchHistory, clearSearchHistory } from '../service/PreferencesHelper'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { routerCompat as router } from '../common/UiNavigation'
@@ -26,7 +26,7 @@ export struct SearchPage {
 
   aboutToAppear() {
     logInfo('Page', '进入搜索页 SearchPage')
-    this.hotWords = getHotSearchWords()
+    this.hotWords = []
     this.loadHistory()
   }
 
@@ -41,14 +41,9 @@ export struct SearchPage {
       return
     }
     this.hasSearched = true
-    // 搜索店铺：优先从后端搜索（真实后端模式），失败回退本地过滤
+    // 搜索店铺只使用后端结果，避免本地模拟店铺混入真实搜索结果。
     const remote: StoreItem[] = await searchStoresRemote(keyword)
-    if (remote.length > 0) {
-      this.searchResults = remote
-    } else {
-      const allStores: StoreItem[] = getAllStoresList()
-      this.searchResults = allStores.filter((s: StoreItem) => s.name.includes(keyword))
-    }
+    this.searchResults = remote
     logInfo('Search', `执行搜索 keyword=${keyword} 命中${this.searchResults.length}家店铺`)
     // 保存搜索历史
     await addSearchHistory(keyword)

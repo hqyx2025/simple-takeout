@@ -6,7 +6,6 @@
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
 import { Order, CartItem, DeliveryStep } from '../model/Models'
-import { getDeliverySteps } from '../service/MockDataService'
 import { cancelOrderRemote, confirmOrderRemote, addToCart } from '../service/AppStorageManager'
 import { OrderStatusTimeline } from '../components/OrderStatusTimeline'
 import { ConfirmDialog } from '../components/ConfirmDialog'
@@ -40,7 +39,7 @@ export struct OrderDetailPage {
     this.stopRiderAnimation()
   }
 
-  // 启动骑手位置动画（模拟骑手向配送点移动）
+  // 启动配送进度展示动画
   private startRiderAnimation(): void {
     this.stopRiderAnimation()
     this.riderProgress = 0
@@ -83,13 +82,14 @@ export struct OrderDetailPage {
     if (this.order === null) {
       return []
     }
-    return getDeliverySteps(
-      this.order.status,
-      this.order.createTime,
-      this.order.payTime,
-      this.order.deliverTime,
-      this.order.completeTime
-    )
+    const order: Order = this.order
+    const steps: DeliveryStep[] = [
+      { status: 1, title: '已下单', time: order.createTime, completed: order.status >= 1 },
+      { status: 2, title: '商家接单', time: order.payTime || '', completed: order.status >= 2 },
+      { status: 3, title: '配送中', time: order.deliverTime || '', completed: order.status >= 3 },
+      { status: 4, title: '已送达', time: order.completeTime || '', completed: order.status >= 4 }
+    ]
+    return steps
   }
 
   build() {

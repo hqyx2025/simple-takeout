@@ -118,6 +118,23 @@ export interface User {
   storeIds: number[]  // 商户拥有的店铺ID列表（仅商户有值）
 }
 
+/** 未登录用户占位状态，不包含任何测试账号或业务数据。 */
+export function createEmptyUser(): User {
+  const user: User = {
+    id: 0,
+    username: '未登录',
+    avatar: '',
+    phone: '',
+    password: '',
+    role: UserRole.CUSTOMER,
+    balance: 0,
+    coupons: [],
+    orders: [],
+    storeIds: []
+  }
+  return user
+}
+
 // 商户店铺管理数据
 export interface MerchantStoreData {
   storeId: number

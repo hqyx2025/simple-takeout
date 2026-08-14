@@ -2,7 +2,7 @@
  * 商品列表页：承接主页分类、附近商品和附近全部商品入口。
  */
 import { Address, GoodsItem, StoreItem } from '../model/Models'
-import { getAllStoresList, getGoodsForStore } from '../service/AppStorageManager'
+import { getAllStoresList, getGoodsForStore, syncStoresFromServer, syncGoodsFromServer } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
@@ -83,10 +83,13 @@ export struct ProductListPage {
     return stores.filter((store: StoreItem) => this.parseDistance(store.distance) <= radius)
   }
 
-  private loadProducts(): void {
+  private async loadProducts(): Promise<void> {
+    await syncStoresFromServer()
     const candidates: StoreItem[] = this.getCandidateStores()
     const result: ProductListItem[] = []
-    candidates.forEach((store: StoreItem) => {
+    for (let i = 0; i < candidates.length; i++) {
+      const store: StoreItem = candidates[i]
+      await syncGoodsFromServer(store.id)
       const goods: GoodsItem[] = getGoodsForStore(store.id)
       goods.forEach((item: GoodsItem) => {
         const productCategoryId: number = this.getProductCategoryId(store, item)
@@ -100,7 +103,7 @@ export struct ProductListPage {
         }
         result.push(new ProductListItem(store, item))
       })
-    })
+    }
 
     if (this.mode === ProductListMode.RANKING || this.mode === ProductListMode.SPECIAL) {
       result.sort((left: ProductListItem, right: ProductListItem) => right.goods.sales - left.goods.sales)

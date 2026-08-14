@@ -2,11 +2,10 @@
  * 主页面 - 简单外卖App
  * 包含：搜索栏、分类导航、店铺列表、店铺详情、购物车、订单列表、个人中心、底部Tab导航
  */
-import { Category, StoreItem, GoodsItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite } from '../model/Models'
-import { getCategories, formatSales, getGoodsCategories, getDefaultUser } from '../service/MockDataService'
-import { addToCart, updateCartItemQuantity, confirmOrder, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, toggleFavorite, isFavorited, getStoreReviews, syncUserWithAllUsers, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote } from '../service/AppStorageManager'
+import { Category, StoreItem, GoodsItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, createEmptyUser } from '../model/Models'
+import { addToCart, updateCartItemQuantity, confirmOrder, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncCategoriesFromServer, syncStoreReviewsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote } from '../service/AppStorageManager'
 import { LoginPage } from './LoginPage'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, formatSales } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
 import { RatingStars } from '../components/RatingStars'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
@@ -106,7 +105,6 @@ struct Index {
     // 初始化全局数据
     initAppStorage()
     // 登录态恢复后同步当前用户与账号库数据（保证不同账号余额等数据独立正确）
-    syncUserWithAllUsers()
     this.loggedIn = isLoggedIn()
     // 数据格式保险：校验 AppStorage 关键数据，异常（非数组/非对象）时重置，防止渲染崩溃
     this.sanitizeAppData()
@@ -136,12 +134,12 @@ struct Index {
     }
     const user: Object = AppStorage.get<Object>('user') as Object
     if (user !== undefined && user !== null && (typeof user !== 'object' || Array.isArray(user))) {
-      AppStorage.setOrCreate<User>('user', getDefaultUser())
+      AppStorage.setOrCreate<User>('user', createEmptyUser())
     }
     // 未登录时强制重置为“未登录”用户，避免残留旧默认账号昵称（如美食家小张）
     const loggedInFlag: boolean = AppStorage.get<boolean>('isLoggedIn') || false
     if (!loggedInFlag) {
-      AppStorage.setOrCreate<User>('user', getDefaultUser())
+      AppStorage.setOrCreate<User>('user', createEmptyUser())
     }
   }
 
@@ -152,6 +150,7 @@ struct Index {
       return
     }
     // 从后端拉取最新店铺/订单数据（真实后端模式）
+    syncCategoriesFromServer()
     syncStoresFromServer()
     if (isLoggedIn()) {
       syncUserOrdersFromServer()
@@ -260,7 +259,7 @@ struct Index {
 // ===================== 首页 =====================
 @Component
 struct HomePage {
-  @State categories: Category[] = []
+  @StorageLink('categoryList') categories: Category[] = []
   @State stores: StoreItem[] = []
   @State searchText: string = ''
   @State currentCategory: number = 0
@@ -315,7 +314,6 @@ struct HomePage {
   aboutToAppear() {
     this.isHeaderVisible = true
     this.showPrivacyDialog = !(AppStorage.get<boolean>('privacyConsent') || false)
-    this.categories = getCategories()
     this.stores = this.getNearbyStores()
     this.storeDataSource.setData(this.stores)
     // 隐私同意前不发起网络请求；同意后由确认回调触发同步
@@ -329,6 +327,7 @@ struct HomePage {
     if (!(AppStorage.get<boolean>('privacyConsent') || false)) {
       return
     }
+    await syncCategoriesFromServer()
     await syncStoresFromServer()
     this.stores = this.getNearbyStores()
     this.storeDataSource.setData(this.stores)
@@ -759,6 +758,7 @@ struct StoreDetailContent {
   @State currentCat: string = '全部'
   @State goodsCats: string[] = ['全部']
   @StorageLink('cartItems') cartItems: CartItem[] = []
+  @StorageLink('categoryList') categoryList: Category[] = []
   onNavigateLogin: () => void = () => {}
 
   aboutToAppear() {
@@ -772,6 +772,17 @@ struct StoreDetailContent {
   private loadStoreData(): void {
     this.goodsList = getGoodsForStore(this.storeId)
     const store = getAllStoresList().find(s => s.id === this.storeId)
+    if (store === undefined) {
+      this.storeName = ''
+      this.storeRating = 0
+      this.storeMonthlySales = 0
+      this.storeDeliveryFee = 0
+      this.storeDeliveryTime = ''
+      this.storeDistance = ''
+      this.storeMinOrder = 0
+      this.storeTags = []
+      this.storeNotice = ''
+    }
     if (store) {
       this.storeName = store.name
       this.storeRating = store.rating
@@ -784,25 +795,40 @@ struct StoreDetailContent {
       this.storeNotice = store.notice
     }
     this.isFav = isFavorited(this.storeId)
-    this.storeReviews = getStoreReviews(this.storeId)
-    const cats: string[] = getGoodsCategories(this.storeId)
+    this.storeReviews = []
+    const cats: string[] = this.getGoodsCategoryNames(this.goodsList)
     this.goodsCats = ['全部', ...cats]
     this.currentCat = '全部'
     this.updateCartInfo()
     // 从后端拉取最新商品（真实后端模式）
     this.refreshGoods()
+    this.refreshReviews()
   }
 
   // 拉取后端店铺商品并刷新
   private async refreshGoods(): Promise<void> {
     await syncGoodsFromServer(this.storeId)
     const goods: GoodsItem[] = getGoodsForStore(this.storeId)
-    if (goods.length > 0) {
-      this.goodsList = goods
-    }
-    const cats: string[] = getGoodsCategories(this.storeId)
+    this.goodsList = goods
+    const cats: string[] = this.getGoodsCategoryNames(goods)
     this.goodsCats = ['全部', ...cats]
     this.currentCat = '全部'
+  }
+
+  private async refreshReviews(): Promise<void> {
+    await syncStoreReviewsRemote(this.storeId)
+    this.storeReviews = AppStorage.get<Review[]>('reviewList') || []
+  }
+
+  private getGoodsCategoryNames(goods: GoodsItem[]): string[] {
+    const names: string[] = []
+    goods.forEach((item: GoodsItem) => {
+      const category: Category | undefined = this.categoryList.find((cat: Category) => cat.id === item.categoryId)
+      if (category !== undefined && names.indexOf(category.name) < 0) {
+        names.push(category.name)
+      }
+    })
+    return names
   }
 
   updateCartInfo() {
@@ -818,12 +844,9 @@ struct StoreDetailContent {
     if (this.currentCat === '全部') {
       return onShelfGoods
     }
-    const categoryNames: Record<string, string> = {
-      '1': '热销菜', '2': '快餐', '3': '饮品', '4': '甜品', '5': '火锅', '6': '烧烤', '7': '面食'
-    }
     return onShelfGoods.filter(g => {
-      const name: string | undefined = categoryNames[g.categoryId.toString()]
-      return name !== undefined && name === this.currentCat
+      const category: Category | undefined = this.categoryList.find((cat: Category) => cat.id === g.categoryId)
+      return category !== undefined && category.name === this.currentCat
     })
   }
 
