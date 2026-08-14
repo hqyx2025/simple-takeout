@@ -61,16 +61,6 @@ export function initAppStorage() {
 }
 
 // ============ 登录/登出 ============
-export function login(phone: string, password: string): User | undefined {
-  logWarn('Auth', `本地登录已停用，请使用后端登录 phone=${phone}`)
-  return undefined
-}
-
-export function register(username: string, phone: string, password: string, role: UserRole): User | undefined {
-  logWarn('Auth', `本地注册已停用，请使用后端注册 phone=${phone} username=${username}`)
-  return undefined
-}
-
 export function logout(): void {
   setAuthToken('')
   AppStorage.setOrCreate<string>('authToken', '')
