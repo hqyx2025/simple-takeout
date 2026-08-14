@@ -41,7 +41,7 @@ export struct SearchPage {
       return
     }
     this.hasSearched = true
-    // 搜索店铺只使用后端结果，避免本地模拟店铺混入真实搜索结果。
+    // 搜索店铺只使用后端结果，避免本地缓存混入搜索结果。
     const remote: StoreItem[] = await searchStoresRemote(keyword)
     this.searchResults = remote
     logInfo('Search', `执行搜索 keyword=${keyword} 命中${this.searchResults.length}家店铺`)
