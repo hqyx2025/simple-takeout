@@ -24,8 +24,17 @@ class AddressFormData {
     let form = new AddressFormData()
     form.name = addr.name
     form.phone = addr.phone
-    form.address = addr.address
-    form.detail = addr.detail
+    const addressText: string = addr.address.trim()
+    const detailText: string = addr.detail.trim()
+    // 服务端将地址和详细地址保存为一个 detail 字段，编辑时把完整原文回填到地址输入框，
+    // 避免再次保存时重复拼接。
+    if (addressText === '') {
+      form.address = detailText
+      form.detail = ''
+    } else {
+      form.address = addressText
+      form.detail = detailText
+    }
     form.tag = addr.tag || '学校'
     form.isDefault = addr.isDefault
     return form
@@ -136,7 +145,7 @@ export struct AddressListPage {
                   .width('100%')
 
                   // 地址详情
-                  Text(`${addr.address} ${addr.detail}`)
+                  Text(this.getDisplayAddress(addr))
                     .fontSize(FONT_SIZE.MD)
                     .fontColor(COLORS.TEXT_SECONDARY)
                     .maxLines(2)
@@ -381,6 +390,22 @@ export struct AddressListPage {
     AppStorage.setOrCreate<Address[]>('addressList', next)
   }
 
+  private getDisplayAddress(addr: Address): string {
+    return `${addr.address} ${addr.detail}`.trim()
+  }
+
+  private getFormAddressDetail(): string {
+    const addressText: string = this.formData.address.trim()
+    const detailText: string = this.formData.detail.trim()
+    if (addressText === '') {
+      return detailText
+    }
+    if (detailText === '' || addressText === detailText || addressText.endsWith(` ${detailText}`)) {
+      return addressText
+    }
+    return `${addressText} ${detailText}`
+  }
+
   // 设为默认地址
   async setDefault(addr: Address): Promise<void> {
     if (!isLoggedIn()) {
@@ -442,14 +467,14 @@ export struct AddressListPage {
         tag: this.formData.tag
       }
       const ok: boolean = await addAddressRemote(this.formData.name, this.formData.phone,
-        this.formData.address + ' ' + this.formData.detail, this.formData.isDefault)
+        this.getFormAddressDetail(), this.formData.isDefault)
       if (!ok) {
         this.showOperationFailure('新增地址')
         return
       }
     } else {
       const ok: boolean = await updateAddressRemote(this.editingAddress.id, this.formData.name, this.formData.phone,
-        this.formData.address + ' ' + this.formData.detail, this.formData.isDefault)
+        this.getFormAddressDetail(), this.formData.isDefault)
       if (!ok) {
         this.showOperationFailure('更新地址')
         return
