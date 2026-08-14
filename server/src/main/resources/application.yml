@@ -1,5 +1,6 @@
 server:
-  port: 8080
+  # 8080 位于 Windows 当前排除端口范围（8005-8104）内，改用未排除的 9000
+  port: 9000
 
 spring:
   application:
