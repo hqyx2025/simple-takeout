@@ -22,7 +22,8 @@ const PERSISTENCE_KEYS: string[] = [
   'orderList',
   'favoriteList',
   'addressList',
-  'couponList'
+  'couponList',
+  'currentAddress'
 ]
 
 let prefsInstance: preferences.Preferences | null = null

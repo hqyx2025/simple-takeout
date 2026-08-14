@@ -16,6 +16,7 @@ import { common } from '@kit.AbilityKit'
 import { webview } from '@kit.ArkWeb'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
+import { saveAllData } from '../service/DataPersistence'
 
 // 搜索结果地点（高德输入提示，经JS桥回传）
 class SearchPlace {
@@ -88,7 +89,20 @@ export struct LocationPage {
     const saved: Address | null = AppStorage.get<Address>('currentAddress') ?? null
     if (saved !== null && saved.latitude !== undefined && saved.longitude !== undefined) {
       this.savedPosition = { latitude: saved.latitude, longitude: saved.longitude }
+      this.currentPosition = this.savedPosition
+      const savedText: string = `${saved.address} ${saved.detail}`.trim()
+      this.currentAddressText = savedText
       logInfo('LocationPage', '回显已保存定位地址')
+    }
+    // 兼容用户仅完成定位但尚未确认地址的情况，优先回显本次会话最近一次定位结果。
+    if (this.savedPosition === null) {
+      const lastPosition: GeoPosition | undefined = AppStorage.get<GeoPosition>('lastLocationPosition')
+      if (lastPosition !== undefined && lastPosition !== null &&
+        lastPosition.latitude !== 0 && lastPosition.longitude !== 0) {
+        this.savedPosition = lastPosition
+        this.currentPosition = lastPosition
+        logInfo('LocationPage', '回显最近一次定位坐标')
+      }
     }
     // 实时定位手机当前位置
     this.locateCurrent()
@@ -236,6 +250,7 @@ export struct LocationPage {
         return
       }
       this.currentPosition = position
+      AppStorage.setOrCreate<GeoPosition>('lastLocationPosition', position)
       this.hasNativeLocation = true
       this.currentAddressText = await reverseGeocodePosition(position)
       if (this.isMapReady) {
@@ -343,6 +358,8 @@ export struct LocationPage {
       remoteAddress.latitude = pos.latitude
       remoteAddress.longitude = pos.longitude
       AppStorage.setOrCreate<Address>('currentAddress', remoteAddress)
+      AppStorage.setOrCreate<GeoPosition>('lastLocationPosition', pos)
+      saveAllData()
       router.back()
       return
     }
@@ -363,6 +380,8 @@ export struct LocationPage {
       longitude: pos.longitude
     }
     AppStorage.setOrCreate<Address>('currentAddress', addr)
+    AppStorage.setOrCreate<GeoPosition>('lastLocationPosition', pos)
+    saveAllData()
     logInfo('LocationPage', `已选择配送地址: ${addressText} ${detail}`)
     router.back()
   }
