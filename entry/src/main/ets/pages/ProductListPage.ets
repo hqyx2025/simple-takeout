@@ -74,7 +74,7 @@ export struct ProductListPage {
       return []
     }
 
-    // Mock/服务端 StoreItem.distance 表示当前定位到店铺的距离；附近取 2km 内，
+    // 服务端 StoreItem.distance 表示当前定位到店铺的距离；附近取 2km 内，
     // 查看全部取当前定位周边 5km 内的全部店铺。
     const radius: number = this.mode === ProductListMode.NEARBY ? 2.0 : 5.0
     if (this.mode === ProductListMode.CATEGORY && !this.hasLocation()) {
