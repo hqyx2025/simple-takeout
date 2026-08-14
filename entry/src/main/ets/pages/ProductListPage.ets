@@ -89,8 +89,12 @@ export struct ProductListPage {
     candidates.forEach((store: StoreItem) => {
       const goods: GoodsItem[] = getGoodsForStore(store.id)
       goods.forEach((item: GoodsItem) => {
-        if (this.mode === ProductListMode.CATEGORY && this.categoryId > 0 && item.categoryId !== this.categoryId) {
-          return
+        if (this.mode === ProductListMode.CATEGORY && this.categoryId > 0) {
+          const storeMatchesCategory: boolean = store.categoryId === this.categoryId ||
+            (store.categoryIds !== undefined && store.categoryIds.includes(this.categoryId))
+          if (!storeMatchesCategory || item.categoryId !== this.categoryId) {
+            return
+          }
         }
         if (this.mode === ProductListMode.SPECIAL && item.tag === undefined && item.sales < 1000) {
           return
