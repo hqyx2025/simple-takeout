@@ -3,7 +3,7 @@
  * 支持地址的增删改查与设置默认地址
  */
 import { Address } from '../model/Models'
-import { addAddressRemote, deleteAddressRemote, updateAddressRemote, setDefaultAddressRemote, syncAddressesRemote } from '../service/AppStorageManager'
+import { addAddressRemote, deleteAddressRemote, updateAddressRemote, setDefaultAddressRemote, syncAddressesRemote, deduplicateAddresses } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { routerCompat as router } from '../common/UiNavigation'
 
@@ -53,6 +53,9 @@ export struct AddressListPage {
   onSelectAddress: (address: Address) => void = () => {}
 
   aboutToAppear() {
+    // 先清理本地缓存中的重复地址，再等待后端最新数据，避免重复“当前位置”短暂显示。
+    const cachedAddresses: Address[] = AppStorage.get<Address[]>('addressList') || []
+    AppStorage.setOrCreate<Address[]>('addressList', deduplicateAddresses(cachedAddresses))
     // 从后端拉取最新地址（真实后端模式）
     syncAddressesRemote()
   }
