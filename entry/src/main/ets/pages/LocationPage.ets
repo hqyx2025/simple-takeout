@@ -170,11 +170,15 @@ export struct LocationPage {
         if (this.isMapReady) {
           this.moveMapCenter({ latitude: first.latitude, longitude: first.longitude })
         }
+        promptAction.showToast({ message: `已找到${results.length}个地点，地图已定位`, duration: 1500 })
+      } else {
+        promptAction.showToast({ message: `未找到“${this.keyword.trim()}”相关地点，请换个关键词`, duration: 1800 })
       }
       logInfo('LocationPage', `搜索结果数: ${results.length}`)
     } catch (err) {
       this.searchResults = []
       this.searched = true
+      promptAction.showToast({ message: '搜索结果解析失败，请稍后重试', duration: 1800 })
     }
     this.isSearching = false
   }
@@ -250,10 +254,14 @@ export struct LocationPage {
 
   // 按关键词搜索地点（JS输入提示）
   private async doSearch(): Promise<void> {
+    if (this.isSearching) {
+      return
+    }
     const kw: string = this.keyword.trim()
     if (kw === '') {
       this.searchResults = []
       this.searched = false
+      promptAction.showToast({ message: '请输入要搜索的地点', duration: 1500 })
       return
     }
     if (!this.isMapReady) {
@@ -262,6 +270,7 @@ export struct LocationPage {
     }
     this.isSearching = true
     this.searched = false
+    promptAction.showToast({ message: `正在搜索“${kw}”…`, duration: 1200 })
     const safeKw: string = kw.replace(/"/g, '').replace(/'/g, '')
     try {
       await this.webController.runJavaScript(`searchKeyword("${safeKw}")`)
@@ -473,13 +482,15 @@ export struct LocationPage {
                 .borderRadius(BORDER_RADIUS.ROUND)
                 .onChange((value: string) => { this.keyword = value })
                 .onSubmit(() => { this.doSearch() })
-              Button('搜索')
+              Button(this.isSearching ? '搜索中…' : '搜索')
                 .height(40)
                 .fontSize(FONT_SIZE.MD)
                 .fontColor(Color.White)
                 .backgroundColor(COLORS.PRIMARY)
                 .borderRadius(BORDER_RADIUS.ROUND)
                 .type(ButtonType.Capsule)
+                .id('location-search')
+                .enabled(!this.isSearching)
                 .onClick(() => { this.doSearch() })
             }
             .width('100%')
