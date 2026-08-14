@@ -708,16 +708,20 @@ export async function syncGoodsFromServer(storeId: number): Promise<void> {
  * 从后端拉取当前用户订单并写入 orderList
  */
 export async function syncUserOrdersFromServer(): Promise<void> {
-  const orders: Order[] = await fetchUserOrdersApi()
-  if (orders.length > 0) {
-    AppStorage.setOrCreate<Order[]>('orderList', orders)
-    const user: User | undefined = AppStorage.get<User>('user')
-    if (user !== undefined && user !== null) {
-      user.orders = orders
-      AppStorage.setOrCreate('user', user)
-    }
-    logInfo('Api', `同步用户订单 ${orders.length} 条`)
+  const orders: Order[] | null = await fetchUserOrdersApi()
+  if (orders === null) {
+    logWarn('Api', '同步用户订单失败，保留当前订单列表')
+    return
   }
+
+  // 后端返回空数组也必须覆盖本地数据，避免启动时的模拟订单残留在真实订单页面。
+  AppStorage.setOrCreate<Order[]>('orderList', orders)
+  const user: User | undefined = AppStorage.get<User>('user')
+  if (user !== undefined && user !== null) {
+    user.orders = orders
+    AppStorage.setOrCreate('user', user)
+  }
+  logInfo('Api', `同步用户订单 ${orders.length} 条`)
 }
 
 /**

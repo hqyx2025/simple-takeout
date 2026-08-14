@@ -339,10 +339,10 @@ export async function createOrderApi(storeId: number, cartItems: CartItem[], add
   return toOrder(resp.data)
 }
 
-export async function fetchUserOrdersApi(): Promise<Order[]> {
+export async function fetchUserOrdersApi(): Promise<Order[] | null> {
   const resp: ApiResponse<ServerOrder[]> = await get<ServerOrder[]>(API_CONFIG.ENDPOINTS['orders'])
   if (resp.code !== 200 || resp.data === null) {
-    return []
+    return null
   }
   return resp.data.map((o: ServerOrder) => toOrder(o))
 }
