@@ -806,7 +806,16 @@ export async function toggleFavoriteRemote(storeId: number): Promise<boolean> {
  * 从后端拉取收藏列表并写入 favoriteList
  */
 export async function syncFavoritesRemote(): Promise<void> {
-  const favorites: Favorite[] = await fetchFavoritesApi()
+  const remoteFavorites: Favorite[] = await fetchFavoritesApi()
+  // 远端收藏接口返回店铺视图，不携带本地用户 ID；补齐当前登录用户后，
+  // getFavorites() 才能通过用户隔离校验并正常渲染收藏列表。
+  const user: User | undefined = AppStorage.get<User>('user')
+  const favorites: Favorite[] = user === undefined || user === null
+    ? []
+    : remoteFavorites.map((favorite: Favorite) => {
+      favorite.userId = user.id
+      return favorite
+    })
   AppStorage.setOrCreate<Favorite[]>('favoriteList', favorites)
   logInfo('Api', `同步收藏 ${favorites.length} 条`)
 }
