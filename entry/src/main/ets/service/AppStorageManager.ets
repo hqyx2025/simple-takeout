@@ -155,56 +155,7 @@ export function deduplicateAddresses(addresses: Address[]): Address[] {
   return result
 }
 
-// ============ 地址操作 ============
-export function addAddress(address: Address): void {
-  const list: Address[] = AppStorage.get<Address[]>('addressList') || []
-  if (address.isDefault) {
-    list.forEach(a => a.isDefault = false)
-  }
-  address.id = list.length + 1
-  list.push(address)
-  AppStorage.setOrCreate('addressList', deduplicateAddresses(list))
-  saveAllData()
-  logInfo('Address', `新增地址 id=${address.id} name=${address.name} phone=${address.phone} 默认=${address.isDefault}`)
-}
-
-export function deleteAddress(addressId: number): void {
-  let list: Address[] = AppStorage.get<Address[]>('addressList') || []
-  list = list.filter(a => a.id !== addressId)
-  AppStorage.setOrCreate('addressList', list)
-  saveAllData()
-  logInfo('Address', `删除地址 id=${addressId}`)
-}
-
-// ============ 优惠券操作 ============
-export function useCoupon(couponId: number): void {
-  const coupons: Coupon[] = AppStorage.get<Coupon[]>('couponList') || []
-  const coupon = coupons.find(c => c.id === couponId)
-  if (coupon) {
-    coupon.used = true
-    AppStorage.setOrCreate('couponList', coupons)
-    logInfo('Coupon', `使用优惠券 couponId=${couponId} 金额=${coupon.amount}`)
-  } else {
-    logWarn('Coupon', `使用优惠券失败：优惠券不存在 couponId=${couponId}`)
-  }
-  saveAllData()
-}
-
 // ============ 工具方法 ============
-function formatDateTime(date: Date): string {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  const h = String(date.getHours()).padStart(2, '0')
-  const min = String(date.getMinutes()).padStart(2, '0')
-  const s = String(date.getSeconds()).padStart(2, '0')
-  return `${y}-${m}-${d} ${h}:${min}:${s}`
-}
-
-export function generateOrderId(): number {
-  return Date.now() + Math.floor(Math.random() * 1000)
-}
-
 export function formatPrice(price: number): string {
   return '¥' + price.toFixed(2)
 }
@@ -447,14 +398,7 @@ export async function createOrderRemote(storeId: number, cartItems: CartItem[], 
 export async function cancelOrderRemote(orderId: number): Promise<boolean> {
   const ok: boolean = await cancelOrderApi(orderId)
   if (ok) {
-    const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
-    const order = orders.find(o => o.id === orderId)
-    if (order) {
-      order.status = 5
-      order.cancelTime = formatDateTime(new Date())
-      AppStorage.setOrCreate('orderList', orders)
-    }
-    saveAllData()
+    await syncUserOrdersFromServer()
     logInfo('Api', `远程取消订单 orderId=${orderId}`)
   }
   return ok
@@ -466,14 +410,7 @@ export async function cancelOrderRemote(orderId: number): Promise<boolean> {
 export async function confirmOrderRemote(orderId: number): Promise<boolean> {
   const ok: boolean = await confirmOrderApi(orderId)
   if (ok) {
-    const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
-    const order = orders.find(o => o.id === orderId)
-    if (order) {
-      order.status = 4
-      order.completeTime = formatDateTime(new Date())
-      AppStorage.setOrCreate('orderList', orders)
-    }
-    saveAllData()
+    await syncUserOrdersFromServer()
     logInfo('Api', `远程确认收货 orderId=${orderId}`)
   }
   return ok
@@ -485,22 +422,7 @@ export async function confirmOrderRemote(orderId: number): Promise<boolean> {
 export async function merchantActionRemote(orderId: number, action: string): Promise<boolean> {
   const ok: boolean = await merchantActionApi(orderId, action)
   if (ok) {
-    const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
-    const order = orders.find(o => o.id === orderId)
-    if (order) {
-      if (action === 'accept') {
-        order.status = 2
-        order.payTime = formatDateTime(new Date())
-      } else if (action === 'deliver') {
-        order.status = 3
-        order.deliverTime = formatDateTime(new Date())
-      } else if (action === 'complete') {
-        order.status = 4
-        order.completeTime = formatDateTime(new Date())
-      }
-      AppStorage.setOrCreate('orderList', orders)
-    }
-    saveAllData()
+    await syncMerchantOrdersFromServer()
     logInfo('Api', `商户操作成功 orderId=${orderId} action=${action}`)
   }
   return ok

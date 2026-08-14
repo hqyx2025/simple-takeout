@@ -6,7 +6,7 @@
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { CartItem, Order, Address, Coupon, StoreItem } from '../model/Models'
-import { createOrderRemote, updateCartItemQuantity, useCoupon, getAllStoresList } from '../service/AppStorageManager'
+import { createOrderRemote, updateCartItemQuantity, getAllStoresList, syncCouponsRemote } from '../service/AppStorageManager'
 import { LoadingIndicator } from '../components/LoadingIndicator'
 import { logInfo } from '../service/AppLogger'
 import { calculatePayAmount } from '../service/OrderCalculations'
@@ -122,9 +122,9 @@ export struct CheckoutPage {
       updateCartItemQuantity(this.storeItems[i].goods.id, this.checkoutStoreId, 0)
     }
 
-    // 若使用了优惠券，标记已用
+    // 后端已处理优惠券状态，重新同步真实优惠券列表
     if (this.selectedCoupon !== null) {
-      useCoupon(this.selectedCoupon.id)
+      await syncCouponsRemote()
     }
 
     // 存入 currentOrder 供订单详情页读取
