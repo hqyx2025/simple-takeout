@@ -193,7 +193,8 @@ struct Index {
           onBack: () => {
             this.currentTab = 0
             this.tabsController.changeIndex(0)
-          }
+          },
+          onNavigateLogin: () => { this.showLogin = true }
         })
       }.tabBar(this.tabBuilder('发现', 1))
 
@@ -675,6 +676,7 @@ struct DiscoverPage {
   @StorageLink('selectedStoreId') selectedStoreId: number = 0
   @StorageLink('selectedStoreName') selectedStoreName: string = ''
   onBack: () => void = () => {}
+  onNavigateLogin: () => void = () => {}
 
   build() {
     Column() {
@@ -693,7 +695,10 @@ struct DiscoverPage {
       .backgroundColor(COLORS.BG_WHITE)
 
       if (this.selectedStoreId > 0) {
-        StoreDetailContent({ storeId: this.selectedStoreId })
+        StoreDetailContent({
+          storeId: this.selectedStoreId,
+          onNavigateLogin: this.onNavigateLogin
+        })
       } else {
         Column() {
           Text('🔍')
@@ -716,7 +721,9 @@ struct DiscoverPage {
 // ===================== 店铺详情 =====================
 @Component
 struct StoreDetailContent {
-  storeId: number = 0
+  // 收藏页/搜索页返回后，父组件会复用详情组件实例；使用 @Prop + @Watch
+  // 确保切换店铺时重新加载商品、评分和店铺信息，避免标题与内容错位。
+  @Prop @Watch('onStoreIdChange') storeId: number = 0
   @State goodsList: GoodsItem[] = []
   @State storeName: string = ''
   @State storeRating: number = 0
@@ -734,8 +741,17 @@ struct StoreDetailContent {
   @State currentCat: string = '全部'
   @State goodsCats: string[] = ['全部']
   @StorageLink('cartItems') cartItems: CartItem[] = []
+  onNavigateLogin: () => void = () => {}
 
   aboutToAppear() {
+    this.loadStoreData()
+  }
+
+  onStoreIdChange(): void {
+    this.loadStoreData()
+  }
+
+  private loadStoreData(): void {
     this.goodsList = getGoodsForStore(this.storeId)
     const store = getAllStoresList().find(s => s.id === this.storeId)
     if (store) {
@@ -813,6 +829,14 @@ struct StoreDetailContent {
           Text(this.isFav ? '❤️' : '🤍')
             .fontSize(24)
             .onClick(async () => {
+              if (!isLoggedIn()) {
+                promptAction.showToast({
+                  message: '请先登录后再收藏',
+                  duration: 1500
+                })
+                this.onNavigateLogin()
+                return
+              }
               const fav: boolean = await toggleFavoriteRemote(this.storeId)
               this.isFav = fav
               promptAction.showToast({

@@ -201,6 +201,36 @@ export struct LoginPage {
           }
         })
 
+      // 测试环境快捷登录：直接使用预置账号完成登录，无需手动填写手机号和密码
+      if (this.isLoginMode) {
+        Row({ space: SPACING.MD }) {
+          Button('一键登录用户')
+            .layoutWeight(1)
+            .height(40)
+            .fontSize(FONT_SIZE.SM)
+            .fontColor(COLORS.PRIMARY)
+            .backgroundColor('#FFF8F0')
+            .borderRadius(BORDER_RADIUS.ROUND)
+            .type(ButtonType.Capsule)
+            .id('quick-login-user')
+            .enabled(!this.submitting)
+            .onClick(() => { this.quickLogin('13800138000', UserRole.CUSTOMER) })
+          Button('一键登录商户')
+            .layoutWeight(1)
+            .height(40)
+            .fontSize(FONT_SIZE.SM)
+            .fontColor(COLORS.PRIMARY)
+            .backgroundColor('#FFF8F0')
+            .borderRadius(BORDER_RADIUS.ROUND)
+            .type(ButtonType.Capsule)
+            .id('quick-login-merchant')
+            .enabled(!this.submitting)
+            .onClick(() => { this.quickLogin('13600136000', UserRole.MERCHANT) })
+        }
+        .width('100%')
+        .margin({ top: SPACING.MD })
+      }
+
       // 切换登录/注册
       Row({ space: 4 }) {
         Text(this.isLoginMode ? '还没有账号？' : '已有账号？')
@@ -217,28 +247,31 @@ export struct LoginPage {
           })
       }
       .margin({ top: SPACING.LG })
-
-      // 测试账号提示
-      Column({ space: 4 }) {
-        Text('测试账号（密码均为123456）：')
-          .fontSize(FONT_SIZE.SM)
-          .fontColor(COLORS.TEXT_HINT)
-        Text('用户：13800138000')
-          .fontSize(FONT_SIZE.SM)
-          .fontColor(COLORS.TEXT_SECONDARY)
-        Text('商户：13600136000')
-          .fontSize(FONT_SIZE.SM)
-          .fontColor(COLORS.TEXT_SECONDARY)
-      }
-      .width('100%')
-      .margin({ top: 40 })
-      .padding(SPACING.MD)
-      .backgroundColor('#FFF8F0')
-      .borderRadius(BORDER_RADIUS.LG)
     }
     .width('100%')
     .height('100%')
     .padding({ left: SPACING.XL, right: SPACING.XL })
     .backgroundColor(COLORS.BG_WHITE)
+  }
+
+  private async quickLogin(phone: string, role: UserRole): Promise<void> {
+    if (this.submitting) {
+      return
+    }
+    this.submitting = true
+    this.errorMsg = ''
+    this.selectedRole = role
+    const user = await loginRemote(phone, '123456')
+    if (user !== undefined && user.role === role) {
+      this.phone = phone
+      this.password = '123456'
+      this.onLoginSuccess()
+    } else {
+      if (user !== undefined) {
+        logout()
+      }
+      this.errorMsg = role === UserRole.MERCHANT ? '商户快捷登录失败，请确认测试账号可用' : '用户快捷登录失败，请确认测试账号可用'
+    }
+    this.submitting = false
   }
 }
