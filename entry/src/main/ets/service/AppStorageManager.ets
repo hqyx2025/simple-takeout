@@ -310,6 +310,32 @@ export function getStoresByOwner(ownerId: number): StoreItem[] {
   return stores.filter(s => s.ownerId === ownerId)
 }
 
+// 地址同步去重：同一用户重复确认当前位置可能在服务端生成多条相同地址，
+// 页面只保留一条，且优先保留默认标记和完整经纬度。
+function deduplicateAddresses(addresses: Address[]): Address[] {
+  const result: Address[] = []
+  for (let i = 0; i < addresses.length; i++) {
+    const address: Address = addresses[i]
+    const key: string = `${address.name}|${address.phone}|${address.address}|${address.detail}`
+    const index: number = result.findIndex((item: Address) => {
+      return `${item.name}|${item.phone}|${item.address}|${item.detail}` === key
+    })
+    if (index < 0) {
+      result.push(address)
+      continue
+    }
+    const existing: Address = result[index]
+    existing.isDefault = existing.isDefault || address.isDefault
+    if (existing.latitude === undefined && address.latitude !== undefined) {
+      existing.latitude = address.latitude
+    }
+    if (existing.longitude === undefined && address.longitude !== undefined) {
+      existing.longitude = address.longitude
+    }
+  }
+  return result
+}
+
 // ============ 地址操作 ============
 export function addAddress(address: Address): void {
   const list: Address[] = AppStorage.get<Address[]>('addressList') || []
@@ -318,7 +344,7 @@ export function addAddress(address: Address): void {
   }
   address.id = list.length + 1
   list.push(address)
-  AppStorage.setOrCreate('addressList', list)
+  AppStorage.setOrCreate('addressList', deduplicateAddresses(list))
   saveAllData()
   logInfo('Address', `新增地址 id=${address.id} name=${address.name} phone=${address.phone} 默认=${address.isDefault}`)
 }
@@ -896,9 +922,10 @@ export async function syncStoreReviewsRemote(storeId: number): Promise<void> {
  * 从后端拉取地址并写入 addressList
  */
 export async function syncAddressesRemote(): Promise<void> {
-  const addresses: Address[] = await fetchAddressesApi()
+  const remoteAddresses: Address[] = await fetchAddressesApi()
+  const addresses: Address[] = deduplicateAddresses(remoteAddresses)
   AppStorage.setOrCreate<Address[]>('addressList', addresses)
-  logInfo('Api', `同步地址 ${addresses.length} 条`)
+  logInfo('Api', `同步地址 ${remoteAddresses.length} 条，去重后 ${addresses.length} 条`)
 }
 
 /**
