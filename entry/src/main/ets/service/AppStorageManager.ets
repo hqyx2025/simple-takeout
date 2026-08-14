@@ -721,6 +721,7 @@ export async function syncUserOrdersFromServer(): Promise<void> {
     user.orders = orders
     AppStorage.setOrCreate('user', user)
   }
+  await saveAllData()
   logInfo('Api', `同步用户订单 ${orders.length} 条`)
 }
 
