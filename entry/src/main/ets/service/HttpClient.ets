@@ -79,6 +79,12 @@ async function request<T>(method: string, url: string, data?: Object): Promise<A
     const resp: ApiResponse<T> = axiosErr.response?.data as ApiResponse<T>
     if (resp !== undefined && resp !== null && resp.code !== undefined) {
       logWarn('Http', `${method} ${url} 业务失败 code=${resp.code} msg=${resp.message}`)
+      if (resp.code === 401) {
+        // 认证失效时立即清理内存态和 UI 登录态，避免“界面已登录但接口全部 401”。
+        setAuthToken('')
+        AppStorage.setOrCreate<string>('authToken', '')
+        AppStorage.setOrCreate<boolean>('isLoggedIn', false)
+      }
       return resp
     }
     logError('Http', `${method} ${url} 请求异常`, err)

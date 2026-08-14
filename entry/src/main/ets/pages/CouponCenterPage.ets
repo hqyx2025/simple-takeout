@@ -6,7 +6,7 @@ import { Coupon } from '../model/Models'
 import { claimCouponRemote, syncCouponsRemote } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { logInfo } from '../service/AppLogger'
-import router from '@ohos.router'
+import { routerCompat as router } from '../common/UiNavigation'
 
 // Tab项 - 使用class避免无类型对象字面量
 class CouponTab {

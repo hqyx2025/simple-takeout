@@ -68,6 +68,9 @@ public class StoreService {
         if (name == null || name.isBlank()) {
             throw new BizException("店铺名称不能为空");
         }
+        if (!Double.isFinite(deliveryFee) || deliveryFee < 0 || !Double.isFinite(minOrder) || minOrder < 0) {
+            throw new BizException("配送费和起送价必须为非负数字");
+        }
         String now = LocalDateTime.now().format(FMT);
         Store store = new Store(0, name, "", 4.5, 0, deliveryFee, minOrder,
                 deliveryTime == null || deliveryTime.isBlank() ? "30分钟" : deliveryTime,
@@ -93,6 +96,7 @@ public class StoreService {
 
     public Goods addGoods(long ownerId, long storeId, GoodsInput input) {
         requireOwned(ownerId, storeId);
+        validateGoodsInput(input);
         String now = LocalDateTime.now().format(FMT);
         Goods goods = new Goods(0, storeId, input.name(), input.description(),
                 input.price(), input.originalPrice(), input.image(), input.categoryId(),
@@ -104,6 +108,7 @@ public class StoreService {
     public Goods updateGoods(long ownerId, long goodsId, GoodsInput input) {
         Goods goods = goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品不存在"));
         requireOwned(ownerId, goods.storeId());
+        validateGoodsInput(input);
         Goods updated = new Goods(goods.id(), goods.storeId(), input.name(), input.description(),
                 input.price(), input.originalPrice(), input.image(), input.categoryId(),
                 goods.sales(), goods.rating(), input.tag() == null ? "" : input.tag(),
@@ -124,6 +129,19 @@ public class StoreService {
             throw new BizException(403, "无权操作该店铺");
         }
         return store;
+    }
+
+    private void validateGoodsInput(GoodsInput input) {
+        if (input == null || input.name() == null || input.name().isBlank()) {
+            throw new BizException("商品名称不能为空");
+        }
+        if (!Double.isFinite(input.price()) || input.price() <= 0
+                || !Double.isFinite(input.originalPrice()) || input.originalPrice() < 0) {
+            throw new BizException("商品价格必须为正数");
+        }
+        if (input.status() != 0 && input.status() != 1) {
+            throw new BizException("商品状态不合法");
+        }
     }
 
     private Store.StoreView toView(Store store) {

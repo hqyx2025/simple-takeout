@@ -5,6 +5,7 @@ import com.example.takeout.model.User;
 import com.example.takeout.service.AuthService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,7 +26,7 @@ public class AuthController {
 
     @PostMapping("/register")
     public ApiResponse<User> register(@RequestBody RegisterRequest req) {
-        return ApiResponse.ok(authService.register(req.username(), req.phone(), req.password(), req.role()));
+        return ApiResponse.ok(authService.register(req.username(), req.phone(), req.password(), req.role()).safe());
     }
 
     @PostMapping("/login")
@@ -38,9 +39,18 @@ public class AuthController {
         return ApiResponse.ok(authService.profile(userId));
     }
 
+    @PutMapping("/me")
+    public ApiResponse<User> updateMe(@RequestAttribute("userId") long userId,
+                                      @RequestBody ProfileUpdateRequest req) {
+        return ApiResponse.ok(authService.updateProfile(userId, req.username(), req.phone()));
+    }
+
     public record RegisterRequest(String username, String phone, String password, int role) {
     }
 
     public record LoginRequest(String phone, String password) {
+    }
+
+    public record ProfileUpdateRequest(String username, String phone) {
     }
 }

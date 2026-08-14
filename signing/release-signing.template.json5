@@ -1,0 +1,10 @@
+{
+  // 复制到本机安全目录后填写，禁止将真实密码/私钥提交到 Git。
+  "storeFile": "C:/secure/takeout/release/takeout-release.p12",
+  "storePassword": "<STORE_PASSWORD>",
+  "keyAlias": "takeout_release_2026",
+  "keyPassword": "<KEY_PASSWORD>",
+  "signAlg": "SHA256withECDSA",
+  "profileFile": "C:/secure/takeout/release/takeout-release.p7b",
+  "certpathFile": "C:/secure/takeout/release/takeout-release.cer"
+}

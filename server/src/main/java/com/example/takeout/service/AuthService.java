@@ -67,6 +67,20 @@ public class AuthService {
         return userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在")).safe();
     }
 
+    public User updateProfile(long userId, String username, String phone) {
+        if (username == null || username.isBlank()) {
+            throw new BizException("用户名不能为空");
+        }
+        if (phone == null || !phone.matches("1\\d{10}")) {
+            throw new BizException("手机号格式不正确");
+        }
+        if (userDao.existsByPhoneExceptUser(phone, userId)) {
+            throw new BizException("该手机号已被其他账号使用");
+        }
+        userDao.updateProfile(userId, username.trim(), phone);
+        return profile(userId);
+    }
+
     public record LoginResult(String token, User user) {
     }
 }

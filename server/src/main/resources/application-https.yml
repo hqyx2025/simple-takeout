@@ -1,0 +1,13 @@
+server:
+  port: ${TAKEOUT_HTTPS_PORT:8443}
+  ssl:
+    enabled: true
+    key-store: ${TAKEOUT_SSL_KEY_STORE:classpath:keystore/takeout.p12}
+    key-store-password: ${TAKEOUT_SSL_KEY_STORE_PASSWORD:}
+    key-store-type: PKCS12
+    key-alias: ${TAKEOUT_SSL_KEY_ALIAS:takeout}
+
+spring:
+  config:
+    activate:
+      on-profile: https

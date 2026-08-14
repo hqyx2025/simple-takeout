@@ -4,9 +4,16 @@
 /.idea
 **/build
 /.hvigor
+.m2-repository/
+.agents/
 .cxx
 /.clangd
 /.clang-format
 /.clang-tidy
 **/.test
 /.appanalyzer
+/signing/**/*.p12
+/signing/**/*.cer
+/signing/**/*.p7b
+/signing/**/*.csr
+/signing/**/secrets*

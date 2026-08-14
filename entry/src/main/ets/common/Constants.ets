@@ -108,7 +108,13 @@ export class ORDER_TIMELINE {
 // API端点常量
 // BASE_URL：模拟器访问宿主机用 10.0.2.2；真机联调改为电脑局域网 IP，如 http://192.168.1.100:8080
 export class API_CONFIG {
-  static readonly BASE_URL: string = 'http://10.0.2.2:8080'
+  static readonly DEV_BASE_URL: string = 'http://10.0.2.2:8080'
+  static readonly RELEASE_BASE_URL: string = 'https://api.example.com'
+  // Release 构建前改为 true，并将 RELEASE_BASE_URL 替换为真实 HTTPS 域名。
+  static readonly USE_HTTPS: boolean = false
+  static readonly BASE_URL: string = API_CONFIG.USE_HTTPS
+    ? API_CONFIG.RELEASE_BASE_URL
+    : API_CONFIG.DEV_BASE_URL
   static readonly TIMEOUT: number = 10000
   static readonly ENDPOINTS: Record<string, string> = {
     'categories': '/api/categories',

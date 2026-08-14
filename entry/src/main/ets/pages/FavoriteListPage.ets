@@ -3,8 +3,7 @@
  * 展示当前用户的收藏店铺列表
  * 支持取消收藏与点击跳转店铺（存储 currentStoreId 后 router.back 由首页接收）
  */
-import router from '@ohos.router'
-import { promptAction } from '@kit.ArkUI'
+import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { Favorite } from '../model/Models'
 import { getFavorites, toggleFavoriteRemote, syncFavoritesRemote } from '../service/AppStorageManager'

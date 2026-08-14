@@ -43,6 +43,12 @@ public class UserDao {
         return count != null && count > 0;
     }
 
+    public boolean existsByPhoneExceptUser(String phone, long userId) {
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM users WHERE phone = ? AND id <> ?",
+                Integer.class, phone, userId);
+        return count != null && count > 0;
+    }
+
     public User insert(String username, String phone, String passwordHash, int role, double balance, String now) {
         jdbc.update("INSERT INTO users(username, avatar, phone, password, role, balance, create_time) VALUES(?,?,?,?,?,?,?)",
                 username, "", phone, passwordHash, role, balance, now);

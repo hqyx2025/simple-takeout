@@ -1,5 +1,5 @@
 /** 简单外卖隐私政策页面 */
-import router from '@ohos.router'
+import { routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 
 @Entry

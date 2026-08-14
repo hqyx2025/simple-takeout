@@ -2,11 +2,10 @@
  * 个人信息编辑页
  * 修改昵称和手机号
  */
-import router from '@ohos.router'
-import { promptAction } from '@kit.ArkUI'
+import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { User, UserRole } from '../model/Models'
-import { getCurrentUser, updateUserProfile } from '../service/AppStorageManager'
+import { getCurrentUser, updateUserProfileRemote } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
 
 @Entry
@@ -40,7 +39,12 @@ export struct ProfileEditPage {
     return '普通用户'
   }
 
-  private handleSave(): void {
+  @State saving: boolean = false
+
+  private async handleSave(): Promise<void> {
+    if (this.saving) {
+      return
+    }
     const name: string = this.username.trim()
     if (name.length === 0) {
       promptAction.showToast({ message: '请输入昵称' })
@@ -51,7 +55,13 @@ export struct ProfileEditPage {
       promptAction.showToast({ message: '请输入正确的11位手机号' })
       return
     }
-    updateUserProfile(name, this.phone)
+    this.saving = true
+    const updated: User | undefined = await updateUserProfileRemote(name, this.phone)
+    this.saving = false
+    if (updated === undefined) {
+      promptAction.showToast({ message: '保存失败，请检查网络或手机号是否已使用' })
+      return
+    }
     logInfo('Profile', `保存个人信息 昵称=${name} 手机号=${this.phone}`)
     promptAction.showToast({ message: '保存成功' })
     router.back()
@@ -201,7 +211,7 @@ export struct ProfileEditPage {
   @Builder
   SaveButton() {
     Row() {
-      Button('保存')
+      Button(this.saving ? '保存中…' : '保存')
         .width('100%')
         .height(48)
         .fontSize(FONT_SIZE.LG)
@@ -209,6 +219,7 @@ export struct ProfileEditPage {
         .backgroundColor(COLORS.PRIMARY)
         .borderRadius(BORDER_RADIUS.ROUND)
         .type(ButtonType.Capsule)
+        .enabled(!this.saving)
         .onClick(() => { this.handleSave() })
     }
     .width('100%')

@@ -83,6 +83,13 @@ public class UserCenterController {
         return ApiResponse.ok();
     }
 
+    @PutMapping("/addresses/{id}")
+    public ApiResponse<Address> updateAddress(@RequestAttribute("userId") long userId,
+                                              @PathVariable long id,
+                                              @RequestBody AddressRequest req) {
+        return ApiResponse.ok(service.updateAddress(userId, id, req.name(), req.phone(), req.detail(), req.isDefault()));
+    }
+
     @PutMapping("/addresses/{id}/default")
     public ApiResponse<Void> setDefault(@RequestAttribute("userId") long userId, @PathVariable long id) {
         service.setDefaultAddress(userId, id);

@@ -8,11 +8,14 @@ import common from '@ohos.app.ability.common'
 import { User, Order, CartItem, Favorite, Coupon, Address } from '../model/Models'
 import { getDefaultUser, getDefaultOrders, getDefaultAddresses, getDefaultCoupons, getDefaultFavorites } from './MockDataService'
 import { logInfo, logWarn, logError } from './AppLogger'
+import { setAuthToken } from './HttpClient'
 
 const PERSISTENCE_NAME: string = 'takeout_app_data'
 
 // 需要持久化的 AppStorage 键列表
 const PERSISTENCE_KEYS: string[] = [
+  'privacyConsent',
+  'authToken',
   'isLoggedIn',
   'user',
   'cartItems',
@@ -20,7 +23,6 @@ const PERSISTENCE_KEYS: string[] = [
   'favoriteList',
   'addressList',
   'couponList'
-  , 'privacyConsent'
 ]
 
 let prefsInstance: preferences.Preferences | null = null
@@ -105,6 +107,9 @@ function normalizeOrderList(value: Object): Object {
 
 // 归一化入口：按 key 处理对应数据
 export function normalizeData(key: string, value: Object): Object {
+  if (key === 'authToken') {
+    return typeof value === 'string' ? value : ''
+  }
   if (key === 'user') {
     return normalizeUser(value)
   }
@@ -140,8 +145,19 @@ export function normalizeData(key: string, value: Object): Object {
 export async function loadAllData(): Promise<void> {
   try {
     const prefs: preferences.Preferences = await getPrefs()
+    const consentJson: string = await prefs.get('privacyConsent', '') as string
+    const consented: boolean = consentJson === 'true'
+    AppStorage.setOrCreate<boolean>('privacyConsent', consented)
+    // 未同意隐私政策前不恢复用户、订单、地址和 Token 等敏感数据。
+    if (!consented) {
+      AppStorage.setOrCreate<boolean>('_persistenceReady', true)
+      return
+    }
     for (let i = 0; i < PERSISTENCE_KEYS.length; i++) {
       const key: string = PERSISTENCE_KEYS[i]
+      if (key === 'privacyConsent') {
+        continue
+      }
       const json: string = await prefs.get(key, '') as string
       if (json !== '') {
         try {
@@ -149,6 +165,9 @@ export async function loadAllData(): Promise<void> {
           // 归一化：确保数据格式与模型一致，兼容旧版本数据
           const normalized: Object = normalizeData(key, value)
           AppStorage.setOrCreate(key, normalized)
+          if (key === 'authToken' && typeof normalized === 'string') {
+            setAuthToken(normalized)
+          }
           logInfo('Persistence', `恢复数据 key=${key} 成功`)
         } catch (parseErr) {
           logWarn('Persistence', `恢复数据 key=${key} 解析失败，使用默认值`)
@@ -157,6 +176,12 @@ export async function loadAllData(): Promise<void> {
       } else {
         logInfo('Persistence', `恢复数据 key=${key} 无持久化记录，使用默认值`)
       }
+    }
+    const restoredToken: string = AppStorage.get<string>('authToken') || ''
+    const restoredLoggedIn: boolean = AppStorage.get<boolean>('isLoggedIn') || false
+    if (restoredLoggedIn && restoredToken === '') {
+      AppStorage.setOrCreate<boolean>('isLoggedIn', false)
+      AppStorage.setOrCreate<User>('user', getDefaultUser())
     }
     AppStorage.setOrCreate<boolean>('_persistenceReady', true)
     logInfo('Persistence', '持久化数据全部加载完成')
