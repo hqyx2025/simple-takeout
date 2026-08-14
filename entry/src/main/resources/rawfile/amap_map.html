@@ -39,7 +39,7 @@ if (AMAP_SECURITY_CODE !== '') {
   window._AMapSecurityConfig = { securityJsCode: AMAP_SECURITY_CODE };
 }
 </script>
-<script src="https://webapi.amap.com/maps?v=2.0&key=a0373d4b39b6524b7f80e825339e7a28&plugin=AMap.Geocoder,AMap.AutoComplete"></script>
+<script src="https://webapi.amap.com/maps?v=2.0&key=a0373d4b39b6524b7f80e825339e7a28&plugin=AMap.Geocoder,AMap.AutoComplete,AMap.PlaceSearch"></script>
 <script>
 var map = null;
 var lastLng = 0;
@@ -131,35 +131,74 @@ function refreshMap() {
   onMoveEnd();
 }
 
-// 关键词搜索地点（输入提示），结果通过 ohosBridge.onSearchResult 回传
+// 关键词搜索地点，结果通过 ohosBridge.onSearchResult 回传。
+// 优先使用 PlaceSearch（可直接返回POI坐标），没有结果时再回退到 AutoComplete。
 function searchKeyword(keyword) {
-  if (map === null) return;
+  if (map === null || !keyword) {
+    if (window.ohosBridge && window.ohosBridge.onSearchResult) {
+      window.ohosBridge.onSearchResult('[]');
+    }
+    return;
+  }
+
+  function notifyResults(list) {
+    if (window.ohosBridge && window.ohosBridge.onSearchResult) {
+      window.ohosBridge.onSearchResult(JSON.stringify(list));
+    }
+  }
+
+  function searchByAutoComplete() {
+    try {
+      var auto = new AMap.AutoComplete({ city: '' });
+      auto.search(keyword, function (status, result) {
+        var list = [];
+        if (status === 'complete' && result && result.tips) {
+          for (var i = 0; i < result.tips.length && i < 20; i++) {
+            var t = result.tips[i];
+            if (t && t.location) {
+              list.push({
+                name: t.name || '',
+                district: t.district || '',
+                address: t.address || '',
+                lng: typeof t.location.getLng === 'function' ? t.location.getLng() : t.location.lng,
+                lat: typeof t.location.getLat === 'function' ? t.location.getLat() : t.location.lat
+              });
+            }
+          }
+        }
+        notifyResults(list);
+      });
+    } catch (e) {
+      notifyResults([]);
+    }
+  }
+
   try {
-    var auto = new AMap.AutoComplete({ city: '' });
-    auto.search(keyword, function (status, result) {
+    var placeSearch = new AMap.PlaceSearch({ pageSize: 20, city: '全国' });
+    placeSearch.search(keyword, function (status, result) {
       var list = [];
-      if (status === 'complete' && result && result.tips) {
-        for (var i = 0; i < result.tips.length && i < 20; i++) {
-          var t = result.tips[i];
-          if (t && t.location) {
+      if (status === 'complete' && result && result.poiList && result.poiList.pois) {
+        for (var i = 0; i < result.poiList.pois.length && i < 20; i++) {
+          var poi = result.poiList.pois[i];
+          if (poi && poi.location) {
             list.push({
-              name: t.name || '',
-              district: t.district || '',
-              address: t.address || '',
-              lng: t.location.lng,
-              lat: t.location.lat
+              name: poi.name || '',
+              district: poi.adname || poi.district || '',
+              address: poi.address || '',
+              lng: typeof poi.location.getLng === 'function' ? poi.location.getLng() : poi.location.lng,
+              lat: typeof poi.location.getLat === 'function' ? poi.location.getLat() : poi.location.lat
             });
           }
         }
       }
-      if (window.ohosBridge && window.ohosBridge.onSearchResult) {
-        window.ohosBridge.onSearchResult(JSON.stringify(list));
+      if (list.length > 0) {
+        notifyResults(list);
+      } else {
+        searchByAutoComplete();
       }
     });
   } catch (e) {
-    if (window.ohosBridge && window.ohosBridge.onSearchResult) {
-      window.ohosBridge.onSearchResult('[]');
-    }
+    searchByAutoComplete();
   }
 }
 

@@ -159,6 +159,18 @@ export struct LocationPage {
       }
       this.searchResults = results
       this.searched = true
+      // 搜索成功后直接将首个地点定位到顶部已有地图组件，避免额外创建地图。
+      // 用户仍可在下方结果列表中切换到其他地点。
+      if (results.length > 0) {
+        const first: SearchPlace = results[0]
+        this.selectedPlace = first
+        this.currentPosition = { latitude: first.latitude, longitude: first.longitude }
+        const firstAddress: string = first.district !== '' ? `${first.district} ${first.address}` : first.address
+        this.currentAddressText = firstAddress !== '' ? firstAddress : first.name
+        if (this.isMapReady) {
+          this.moveMapCenter({ latitude: first.latitude, longitude: first.longitude })
+        }
+      }
       logInfo('LocationPage', `搜索结果数: ${results.length}`)
     } catch (err) {
       this.searchResults = []
@@ -244,6 +256,10 @@ export struct LocationPage {
       this.searched = false
       return
     }
+    if (!this.isMapReady) {
+      promptAction.showToast({ message: '地图正在加载，请稍后再搜索', duration: 1500 })
+      return
+    }
     this.isSearching = true
     this.searched = false
     const safeKw: string = kw.replace(/"/g, '').replace(/'/g, '')
@@ -258,6 +274,9 @@ export struct LocationPage {
   // 选中搜索结果：高亮并将地图中心移动到该地点（JS回调自动更新地址）
   private selectPlace(place: SearchPlace): void {
     this.selectedPlace = place
+    this.currentPosition = { latitude: place.latitude, longitude: place.longitude }
+    const placeAddress: string = place.district !== '' ? `${place.district} ${place.address}` : place.address
+    this.currentAddressText = placeAddress !== '' ? placeAddress : place.name
     this.moveMapCenter({ latitude: place.latitude, longitude: place.longitude })
   }
 
