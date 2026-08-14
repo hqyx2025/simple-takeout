@@ -10,7 +10,7 @@
 import { Address, User } from '../model/Models'
 import { addAddressRemoteAndGet } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
-import { GeoPosition, getCurrentPosition, reverseGeocodePosition } from '../service/LocationService'
+import { AddressSearchResult, GeoPosition, getCurrentPosition, reverseGeocodePosition, searchAddress } from '../service/LocationService'
 import { EmptyState } from '../components/EmptyState'
 import { common } from '@kit.AbilityKit'
 import { webview } from '@kit.ArkWeb'
@@ -157,23 +157,7 @@ export struct LocationPage {
           Number(item['lng'] ?? 0)
         ))
       }
-      this.searchResults = results
-      this.searched = true
-      // 搜索成功后直接将首个地点定位到顶部已有地图组件，避免额外创建地图。
-      // 用户仍可在下方结果列表中切换到其他地点。
-      if (results.length > 0) {
-        const first: SearchPlace = results[0]
-        this.selectedPlace = first
-        this.currentPosition = { latitude: first.latitude, longitude: first.longitude }
-        const firstAddress: string = first.district !== '' ? `${first.district} ${first.address}` : first.address
-        this.currentAddressText = firstAddress !== '' ? firstAddress : first.name
-        if (this.isMapReady) {
-          this.moveMapCenter({ latitude: first.latitude, longitude: first.longitude })
-        }
-        promptAction.showToast({ message: `已找到${results.length}个地点，地图已定位`, duration: 1500 })
-      } else {
-        promptAction.showToast({ message: `未找到“${this.keyword.trim()}”相关地点，请换个关键词`, duration: 1800 })
-      }
+      this.applySearchResults(results)
       logInfo('LocationPage', `搜索结果数: ${results.length}`)
     } catch (err) {
       this.searchResults = []
@@ -181,6 +165,27 @@ export struct LocationPage {
       promptAction.showToast({ message: '搜索结果解析失败，请稍后重试', duration: 1800 })
     }
     this.isSearching = false
+  }
+
+  // 统一处理原生地理编码和 Web 地图搜索结果
+  private applySearchResults(results: SearchPlace[]): void {
+    this.searchResults = results
+    this.searched = true
+    // 搜索成功后直接将首个地点定位到顶部已有地图组件，避免额外创建地图。
+    // 用户仍可在下方结果列表中切换到其他地点。
+    if (results.length > 0) {
+      const first: SearchPlace = results[0]
+      this.selectedPlace = first
+      this.currentPosition = { latitude: first.latitude, longitude: first.longitude }
+      const firstAddress: string = first.district !== '' ? `${first.district} ${first.address}` : first.address
+      this.currentAddressText = firstAddress !== '' ? firstAddress : first.name
+      if (this.isMapReady) {
+        this.moveMapCenter({ latitude: first.latitude, longitude: first.longitude })
+      }
+      promptAction.showToast({ message: `已找到${results.length}个地点，地图已定位`, duration: 1500 })
+    } else {
+      promptAction.showToast({ message: `未找到“${this.keyword.trim()}”相关地点，请换个关键词`, duration: 1800 })
+    }
   }
 
   // 调用JS移动地图中心（触发moveend后JS自动逆地理编码回传地址）
@@ -273,6 +278,17 @@ export struct LocationPage {
     promptAction.showToast({ message: `正在搜索“${kw}”…`, duration: 1200 })
     const safeKw: string = kw.replace(/"/g, '').replace(/'/g, '')
     try {
+      // 先走原生 HTTPS 地理编码，确保地址关键词（如“中关村”）能返回坐标。
+      const nativeResults: AddressSearchResult[] = await searchAddress(kw)
+      if (nativeResults.length > 0) {
+        const results: SearchPlace[] = nativeResults.map((item: AddressSearchResult): SearchPlace => {
+          return SearchPlace.create(item.name, item.district, item.address, item.latitude, item.longitude)
+        })
+        this.applySearchResults(results)
+        this.isSearching = false
+        return
+      }
+      // 原生服务无结果时，继续使用地图 WebView 的 POI/输入提示兜底。
       await this.webController.runJavaScript(`searchKeyword("${safeKw}")`)
     } catch (err) {
       this.isSearching = false

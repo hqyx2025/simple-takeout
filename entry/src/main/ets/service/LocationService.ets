@@ -6,6 +6,7 @@
  */
 import { geoLocationManager } from '@kit.LocationKit'
 import { abilityAccessCtrl, common, Permissions } from '@kit.AbilityKit'
+import axios, { AxiosResponse } from '@ohos/axios'
 import { AMAP_CONFIG } from '../common/Constants'
 import { logInfo, logWarn, logError } from './AppLogger'
 
@@ -13,6 +14,141 @@ import { logInfo, logWarn, logError } from './AppLogger'
 export interface GeoPosition {
   latitude: number
   longitude: number
+}
+
+// 地址搜索结果（高德 POI/地理编码接口）
+export interface AddressSearchResult {
+  name: string
+  district: string
+  address: string
+  latitude: number
+  longitude: number
+}
+
+interface AmapAddressComponent {
+  province?: string
+  city?: string
+  district?: string
+}
+
+interface AmapGeocode {
+  formatted_address?: string
+  location?: string
+  addressComponent?: AmapAddressComponent
+}
+
+interface AmapGeocodeResponse {
+  status: string
+  info: string
+  count: string
+  geocodes?: AmapGeocode[]
+}
+
+interface AmapPoi {
+  name?: string
+  address?: string
+  location?: string
+  cityname?: string
+  adname?: string
+}
+
+interface AmapPoiResponse {
+  status: string
+  info: string
+  count: string
+  pois?: AmapPoi[]
+}
+
+function parseAmapLocation(value: string | undefined): GeoPosition | null {
+  if (value === undefined || value === '') {
+    return null
+  }
+  const parts: string[] = value.split(',')
+  if (parts.length < 2) {
+    return null
+  }
+  const longitude: number = Number(parts[0])
+  const latitude: number = Number(parts[1])
+  if (Number.isNaN(longitude) || Number.isNaN(latitude) || (longitude === 0 && latitude === 0)) {
+    return null
+  }
+  return { longitude: longitude, latitude: latitude }
+}
+
+/**
+ * 使用高德 Web 服务 POI/地理编码接口搜索地址。
+ * 相比 WebView 内的输入提示，该接口可以直接将“中关村”等地名转换为坐标，
+ * 由页面复用顶部地图组件进行定位。
+ */
+export async function searchAddress(keyword: string): Promise<AddressSearchResult[]> {
+  const value: string = keyword.trim()
+  if (value === '') {
+    return []
+  }
+  try {
+    // POI 文本搜索优先返回“中关村”这类地名/地标，而不是只返回道路级地理编码。
+    const placeUrl: string = `https://restapi.amap.com/v3/place/text?keywords=${encodeURIComponent(value)}&offset=20&page=1&extensions=all&key=${AMAP_CONFIG.MAP_JS_KEY}`
+    const placeResponse: AxiosResponse<AmapPoiResponse> = await axios.get<AmapPoiResponse>(placeUrl, {
+      timeout: AMAP_CONFIG.TIMEOUT
+    })
+    const placeData: AmapPoiResponse = placeResponse.data
+    const placeResults: AddressSearchResult[] = []
+    if (placeData.status === '1' && placeData.pois !== undefined) {
+      for (let i = 0; i < placeData.pois.length && i < 20; i++) {
+        const item: AmapPoi = placeData.pois[i]
+        const position: GeoPosition | null = parseAmapLocation(item.location)
+        if (position === null) {
+          continue
+        }
+        const address: string = item.address ?? ''
+        placeResults.push({
+          name: item.name ?? value,
+          district: item.adname ?? item.cityname ?? '',
+          address: address !== '' ? address : (item.adname ?? item.cityname ?? value),
+          latitude: position.latitude,
+          longitude: position.longitude
+        })
+      }
+    }
+    if (placeResults.length > 0) {
+      logInfo('Location', `地点搜索成功 keyword=${value} 结果=${placeResults.length}`)
+      return placeResults
+    }
+
+    // POI 无结果时再尝试地理编码，兼容道路、门牌号等纯地址关键词。
+    const geocodeUrl: string = `https://restapi.amap.com/v3/geocode/geo?address=${encodeURIComponent(value)}&output=JSON&key=${AMAP_CONFIG.MAP_JS_KEY}`
+    const response: AxiosResponse<AmapGeocodeResponse> = await axios.get<AmapGeocodeResponse>(geocodeUrl, {
+      timeout: AMAP_CONFIG.TIMEOUT
+    })
+    const data: AmapGeocodeResponse = response.data
+    if (data.status !== '1' || data.geocodes === undefined) {
+      logWarn('Location', `地址搜索无结果 keyword=${value} info=${data.info}`)
+      return []
+    }
+    const results: AddressSearchResult[] = []
+    for (let i = 0; i < data.geocodes.length && i < 20; i++) {
+      const item: AmapGeocode = data.geocodes[i]
+      const position: GeoPosition | null = parseAmapLocation(item.location)
+      if (position === null) {
+        continue
+      }
+      const component: AmapAddressComponent = item.addressComponent ?? {}
+      const district: string = component.district ?? component.city ?? component.province ?? ''
+      const address: string = item.formatted_address ?? value
+      results.push({
+        name: address,
+        district: district,
+        address: address,
+        latitude: position.latitude,
+        longitude: position.longitude
+      })
+    }
+    logInfo('Location', `地址搜索成功 keyword=${value} 结果=${results.length}`)
+    return results
+  } catch (err) {
+    logWarn('Location', `地址搜索请求失败 keyword=${value}`)
+    return []
+  }
 }
 
 interface LocationFailure {

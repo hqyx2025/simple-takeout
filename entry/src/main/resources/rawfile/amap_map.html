@@ -132,7 +132,7 @@ function refreshMap() {
 }
 
 // 关键词搜索地点，结果通过 ohosBridge.onSearchResult 回传。
-// 优先使用 PlaceSearch（可直接返回POI坐标），没有结果时再回退到 AutoComplete。
+// 地址优先使用 Geocoder（例如“中关村”），没有结果时再回退到 POI 和输入提示。
 function searchKeyword(keyword) {
   if (map === null || !keyword) {
     if (window.ohosBridge && window.ohosBridge.onSearchResult) {
@@ -173,33 +173,70 @@ function searchKeyword(keyword) {
     }
   }
 
-  try {
-    var placeSearch = new AMap.PlaceSearch({ pageSize: 20, city: '全国' });
-    placeSearch.search(keyword, function (status, result) {
-      var list = [];
-      if (status === 'complete' && result && result.poiList && result.poiList.pois) {
-        for (var i = 0; i < result.poiList.pois.length && i < 20; i++) {
-          var poi = result.poiList.pois[i];
-          if (poi && poi.location) {
-            list.push({
-              name: poi.name || '',
-              district: poi.adname || poi.district || '',
-              address: poi.address || '',
-              lng: typeof poi.location.getLng === 'function' ? poi.location.getLng() : poi.location.lng,
-              lat: typeof poi.location.getLat === 'function' ? poi.location.getLat() : poi.location.lat
-            });
+  function searchByPlace() {
+    try {
+      var placeSearch = new AMap.PlaceSearch({ pageSize: 20, city: '' });
+      placeSearch.search(keyword, function (status, result) {
+        var list = [];
+        if (status === 'complete' && result && result.poiList && result.poiList.pois) {
+          for (var i = 0; i < result.poiList.pois.length && i < 20; i++) {
+            var poi = result.poiList.pois[i];
+            if (poi && poi.location) {
+              list.push({
+                name: poi.name || '',
+                district: poi.adname || poi.district || '',
+                address: poi.address || '',
+                lng: typeof poi.location.getLng === 'function' ? poi.location.getLng() : poi.location.lng,
+                lat: typeof poi.location.getLat === 'function' ? poi.location.getLat() : poi.location.lat
+              });
+            }
           }
         }
-      }
-      if (list.length > 0) {
-        notifyResults(list);
-      } else {
-        searchByAutoComplete();
-      }
-    });
-  } catch (e) {
-    searchByAutoComplete();
+        if (list.length > 0) {
+          notifyResults(list);
+        } else {
+          searchByAutoComplete();
+        }
+      });
+    } catch (e) {
+      searchByAutoComplete();
+    }
   }
+
+  function searchByGeocoder() {
+    try {
+      var geocoder = new AMap.Geocoder({ city: '' });
+      geocoder.getLocation(keyword, function (status, result) {
+        var list = [];
+        if (status === 'complete' && result && result.geocodes) {
+          for (var i = 0; i < result.geocodes.length && i < 20; i++) {
+            var geocode = result.geocodes[i];
+            if (geocode && geocode.location) {
+              var component = geocode.addressComponent || {};
+              var district = component.district || component.city || component.province || '';
+              list.push({
+                name: geocode.formattedAddress || keyword,
+                district: district,
+                address: geocode.formattedAddress || keyword,
+                lng: typeof geocode.location.getLng === 'function' ? geocode.location.getLng() : geocode.location.lng,
+                lat: typeof geocode.location.getLat === 'function' ? geocode.location.getLat() : geocode.location.lat
+              });
+            }
+          }
+        }
+        if (list.length > 0) {
+          notifyResults(list);
+        } else {
+          searchByPlace();
+        }
+      });
+    } catch (e) {
+      searchByPlace();
+    }
+  }
+
+  // Geocoder 能直接将地址词转换成坐标，保证“中关村”等地址搜索可用。
+  searchByGeocoder();
 }
 
 window.addEventListener('load', function () {
