@@ -3,8 +3,7 @@
  * 展示订单状态时间轴、店铺与商品、配送信息、金额明细、订单信息
  * 根据订单状态显示对应操作按钮（取消订单 / 确认收货 / 再来一单 / 去评价）
  */
-import router from '@ohos.router'
-import { promptAction } from '@kit.ArkUI'
+import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
 import { Order, CartItem, DeliveryStep } from '../model/Models'
 import { getDeliverySteps } from '../service/MockDataService'

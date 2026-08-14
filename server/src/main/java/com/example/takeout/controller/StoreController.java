@@ -53,52 +53,72 @@ public class StoreController {
     }
 
     @GetMapping("/merchant/stores")
-    public ApiResponse<List<Store.StoreView>> myStores(@RequestAttribute("userId") long userId) {
+    public ApiResponse<List<Store.StoreView>> myStores(@RequestAttribute("userId") long userId,
+                                                       @RequestAttribute("role") int role) {
+        requireMerchant(role);
         return ApiResponse.ok(storeService.merchantStores(userId));
     }
 
     @GetMapping("/merchant/stores/{storeId}/goods")
     public ApiResponse<List<Goods>> merchantGoods(@RequestAttribute("userId") long userId,
+                                                  @RequestAttribute("role") int role,
                                                   @PathVariable long storeId) {
+        requireMerchant(role);
         return ApiResponse.ok(storeService.merchantGoods(userId, storeId));
     }
 
     @PostMapping("/merchant/stores")
     public ApiResponse<Store.StoreView> createStore(@RequestAttribute("userId") long userId,
+                                                    @RequestAttribute("role") int role,
                                                     @RequestBody CreateStoreRequest req) {
+        requireMerchant(role);
         return ApiResponse.ok(storeService.createStore(userId, req.name(), req.categoryId(),
                 req.deliveryFee(), req.minOrder(), req.deliveryTime(), req.notice()));
     }
 
     @PutMapping("/merchant/stores/{storeId}")
     public ApiResponse<Store.StoreView> updateStore(@RequestAttribute("userId") long userId,
+                                                    @RequestAttribute("role") int role,
                                                     @PathVariable long storeId,
                                                     @RequestBody StoreService.StorePatch patch) {
+        requireMerchant(role);
         return ApiResponse.ok(storeService.updateStore(userId, storeId, patch));
     }
 
     @PostMapping("/merchant/stores/{storeId}/goods")
     public ApiResponse<Goods> addGoods(@RequestAttribute("userId") long userId,
+                                       @RequestAttribute("role") int role,
                                        @PathVariable long storeId,
                                        @RequestBody StoreService.GoodsInput input) {
+        requireMerchant(role);
         return ApiResponse.ok(storeService.addGoods(userId, storeId, input));
     }
 
     @PutMapping("/merchant/goods/{goodsId}")
     public ApiResponse<Goods> updateGoods(@RequestAttribute("userId") long userId,
+                                          @RequestAttribute("role") int role,
                                           @PathVariable long goodsId,
                                           @RequestBody StoreService.GoodsInput input) {
+        requireMerchant(role);
         return ApiResponse.ok(storeService.updateGoods(userId, goodsId, input));
     }
 
     @DeleteMapping("/merchant/goods/{goodsId}")
     public ApiResponse<Void> deleteGoods(@RequestAttribute("userId") long userId,
+                                         @RequestAttribute("role") int role,
                                          @PathVariable long goodsId) {
+        requireMerchant(role);
         storeService.deleteGoods(userId, goodsId);
         return ApiResponse.ok();
     }
 
     public record CreateStoreRequest(String name, int categoryId, double deliveryFee,
                                      double minOrder, String deliveryTime, String notice) {
+    }
+
+    private void requireMerchant(int role) {
+        if (role != 1) {
+            throw new com.example.takeout.common.BizException(403, "仅商户可以执行该操作");
+        }
     }
 }

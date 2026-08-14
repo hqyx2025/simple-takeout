@@ -6,7 +6,7 @@ import { getHotSearchWords, formatSales } from '../service/MockDataService'
 import { getAllStoresList, searchStoresRemote } from '../service/AppStorageManager'
 import { getSearchHistory, addSearchHistory, clearSearchHistory } from '../service/PreferencesHelper'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
-import router from '@ohos.router'
+import { routerCompat as router } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
 
 @Entry

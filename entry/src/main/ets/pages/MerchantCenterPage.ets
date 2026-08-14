@@ -7,9 +7,9 @@ import { fetchMerchantStoresApi, fetchMerchantGoodsApi, createMerchantStoreApi, 
   createMerchantGoodsApi, updateMerchantGoodsApi, deleteMerchantGoodsApi } from '../service/ApiService'
 import { formatSales } from '../service/MockDataService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
-import { promptAction } from '@kit.ArkUI'
+import { promptCompat as promptAction } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
-import router from '@ohos.router'
+import { routerCompat as router } from '../common/UiNavigation'
 
 @Entry
 @Component

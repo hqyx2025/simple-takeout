@@ -19,6 +19,14 @@ let logDirPath: string = ''
 let logFilePath: string = ''
 let loggerReady: boolean = false
 let currentDateKey: string = ''
+let privacyConsentGranted: boolean = false
+
+export function setPrivacyConsent(granted: boolean): void {
+  privacyConsentGranted = granted
+  if (!granted) {
+    loggerReady = false
+  }
+}
 
 // 格式化时间 YYYY-MM-DD HH:mm:ss.SSS
 function formatTime(): string {
@@ -43,6 +51,10 @@ function todayKey(): string {
  * 初始化日志目录（须在 AppStorage 设置 appContext 后调用，建议在 EntryAbility.onCreate 调用）
  */
 export function initLogger(): void {
+  if (!privacyConsentGranted) {
+    loggerReady = false
+    return
+  }
   try {
     const context: common.UIAbilityContext = AppStorage.get<common.UIAbilityContext>('appContext') as common.UIAbilityContext
     if (context === undefined || context === null) {
@@ -152,7 +164,8 @@ function writeToFile(level: string, message: string): void {
 
 // 通用日志输出（控制台 + 文件）
 function log(level: string, tag: string, message: string): void {
-  const full: string = `[${LOG_TAG}][${level}][${tag}] ${message}`
+  const safeMessage: string = redactSensitive(message)
+  const full: string = `[${LOG_TAG}][${level}][${tag}] ${safeMessage}`
   if (level === 'Error') {
     console.error(full)
   } else if (level === 'Warn') {
@@ -160,7 +173,15 @@ function log(level: string, tag: string, message: string): void {
   } else {
     console.info(full)
   }
-  writeToFile(level, `[${tag}] ${message}`)
+  writeToFile(level, `[${tag}] ${safeMessage}`)
+}
+
+function redactSensitive(message: string): string {
+  let safe: string = message
+  safe = safe.replace(/(phone=|手机号[=:：]?|手机号码[=:：]?)\s*1\d{10}/g, '$1[REDACTED_PHONE]')
+  safe = safe.replace(/(Bearer\s+|token[=:：]?\s*)[A-Za-z0-9._-]+/gi, '$1[REDACTED_TOKEN]')
+  safe = safe.replace(/((?:地址|address|detail)[=:：]\s*)[^|]+/gi, '$1[REDACTED_ADDRESS]')
+  return safe
 }
 
 /** 信息日志 */

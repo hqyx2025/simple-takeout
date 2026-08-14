@@ -3,9 +3,9 @@
  * 支持地址的增删改查与设置默认地址
  */
 import { Address } from '../model/Models'
-import { addAddressRemote, deleteAddressRemote, setDefaultAddressRemote, syncAddressesRemote } from '../service/AppStorageManager'
+import { addAddressRemote, deleteAddressRemote, updateAddressRemote, setDefaultAddressRemote, syncAddressesRemote } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
-import router from '@ohos.router'
+import { routerCompat as router } from '../common/UiNavigation'
 
 // 表单数据类（用于避免无类型对象字面量）
 class AddressFormData {
@@ -346,7 +346,7 @@ export struct AddressListPage {
   }
 
   // 保存地址
-  doSave(): void {
+  async doSave(): Promise<void> {
     // 验证
     if (this.formData.name === '' || this.formData.phone === '' || this.formData.address === '') {
       return
@@ -363,16 +363,17 @@ export struct AddressListPage {
         isDefault: this.formData.isDefault,
         tag: this.formData.tag
       }
-      addAddressRemote(this.formData.name, this.formData.phone, this.formData.address + ' ' + this.formData.detail, this.formData.isDefault)
+      const ok: boolean = await addAddressRemote(this.formData.name, this.formData.phone,
+        this.formData.address + ' ' + this.formData.detail, this.formData.isDefault)
+      if (!ok) {
+        return
+      }
     } else {
-      // 编辑 - 直接修改现有地址
-      this.editingAddress.name = this.formData.name
-      this.editingAddress.phone = this.formData.phone
-      this.editingAddress.address = this.formData.address
-      this.editingAddress.detail = this.formData.detail
-      this.editingAddress.tag = this.formData.tag
-      this.editingAddress.isDefault = this.formData.isDefault
-      AppStorage.setOrCreate('addressList', this.addressList)
+      const ok: boolean = await updateAddressRemote(this.editingAddress.id, this.formData.name, this.formData.phone,
+        this.formData.address + ' ' + this.formData.detail, this.formData.isDefault)
+      if (!ok) {
+        return
+      }
     }
 
     // 如果设为默认，取消其他默认

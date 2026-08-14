@@ -3,7 +3,7 @@
  * 支持商户账户和普通用户账户
  */
 import { UserRole } from '../model/Models'
-import { loginRemote, registerRemote } from '../service/AppStorageManager'
+import { loginRemote, registerRemote, logout } from '../service/AppStorageManager'
 import { logInfo, logWarn } from '../service/AppLogger'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 
@@ -15,6 +15,7 @@ export struct LoginPage {
   @State password: string = ''
   @State username: string = ''
   @State errorMsg: string = ''
+  @State submitting: boolean = false
   onLoginSuccess: () => void = () => {}
 
   build() {
@@ -114,6 +115,7 @@ export struct LoginPage {
         .height(48)
         .margin({ bottom: SPACING.MD })
         .type(InputType.PhoneNumber)
+        .id('login-phone')
         .onChange((value: string) => { this.phone = value })
 
       // 密码
@@ -123,6 +125,7 @@ export struct LoginPage {
         .height(48)
         .margin({ bottom: SPACING.LG })
         .type(InputType.Password)
+        .id('login-password')
         .onChange((value: string) => { this.password = value })
 
       // 错误提示
@@ -135,7 +138,7 @@ export struct LoginPage {
       }
 
       // 登录/注册按钮
-      Button(this.isLoginMode ? '登 录' : '注 册')
+      Button(this.submitting ? '提交中…' : (this.isLoginMode ? '登 录' : '注 册'))
         .width('100%')
         .height(48)
         .fontSize(FONT_SIZE.XL)
@@ -143,17 +146,25 @@ export struct LoginPage {
         .backgroundColor(COLORS.PRIMARY)
         .borderRadius(BORDER_RADIUS.ROUND)
         .type(ButtonType.Capsule)
+        .id('login-submit')
+        .enabled(!this.submitting)
         .margin({ top: SPACING.SM })
         .onClick(async () => {
+          if (this.submitting) {
+            return
+          }
+          this.submitting = true
           this.errorMsg = ''
           if (this.phone === '' || this.password === '') {
             logWarn('Auth', '登录/注册提交失败：手机号或密码为空')
             this.errorMsg = '请输入手机号和密码'
+            this.submitting = false
             return
           }
           if (!this.isLoginMode && this.username === '') {
             logWarn('Auth', '注册提交失败：用户名为空')
             this.errorMsg = '请输入用户名'
+            this.submitting = false
             return
           }
           logInfo('Auth', `用户点击${this.isLoginMode ? '登录' : '注册'} phone=${this.phone} role=${this.selectedRole === UserRole.MERCHANT ? '商户' : '用户'}`)
@@ -163,12 +174,15 @@ export struct LoginPage {
             if (user !== undefined) {
               if (user.role !== this.selectedRole) {
                 this.errorMsg = this.selectedRole === UserRole.MERCHANT ? '该账号不是商户账号' : '该账号不是用户账号'
+                logout()
                 logWarn('Auth', `登录角色不匹配 phone=${this.phone} 期望角色=${this.selectedRole}`)
+                this.submitting = false
                 return
               }
               this.onLoginSuccess()
             } else {
               this.errorMsg = '手机号或密码错误'
+              this.submitting = false
             }
           } else {
             const newUser = await registerRemote(this.username, this.phone, this.password, this.selectedRole)
@@ -176,11 +190,14 @@ export struct LoginPage {
               const loginUser = await loginRemote(this.phone, this.password)
               if (loginUser !== undefined) {
                 this.onLoginSuccess()
+              } else {
+                this.errorMsg = '注册成功，但自动登录失败，请手动登录'
               }
             } else {
               this.errorMsg = '该手机号已注册'
               logWarn('Auth', `注册失败：手机号已存在 phone=${this.phone}`)
             }
+            this.submitting = false
           }
         })
 

@@ -3,8 +3,7 @@
  * 对已完成订单进行评价：星级评分、标签选择、文字评价
  * 提交后调用 addReview 自动标记订单已评价，并返回上一页
  */
-import router from '@ohos.router'
-import { promptAction } from '@kit.ArkUI'
+import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, REVIEW_TAGS } from '../common/Constants'
 import { Order, Review, User } from '../model/Models'
 import { addReview, getCurrentUser, submitReviewRemote } from '../service/AppStorageManager'

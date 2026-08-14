@@ -4,14 +4,14 @@
 import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, MerchantStatsData } from '../model/Models'
 import { getDefaultUser, getDefaultAddresses, getDefaultCoupons, getDefaultOrders, getMockUsers, getStores, getGoodsByStore, getDefaultReviews, getDefaultFavorites, getReviewsByStore, getClaimableCoupons } from './MockDataService'
 import { saveAllData, clearAllData } from './DataPersistence'
-import { apiLogin, apiRegister, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, deleteAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi } from './ApiService'
-import { setAuthToken } from './HttpClient'
+import { apiLogin, apiRegister, updateUserProfileApi, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi } from './ApiService'
+import { getAuthToken, setAuthToken } from './HttpClient'
 import { logInfo, logWarn, logError } from './AppLogger'
 
 // 初始化全局数据
 export function initAppStorage() {
   // 如果持久化数据已加载，跳过默认值初始化
-  if (AppStorage.get<boolean>('_persistenceReady')) {
+  if (AppStorage.get<boolean>('_persistenceReady') && AppStorage.get<boolean>('privacyConsent')) {
     return
   }
   if (!AppStorage.has('isLoggedIn')) {
@@ -107,6 +107,7 @@ export function register(username: string, phone: string, password: string, role
 
 export function logout(): void {
   setAuthToken('')
+  AppStorage.setOrCreate<string>('authToken', '')
   AppStorage.setOrCreate<boolean>('isLoggedIn', false)
   AppStorage.setOrCreate<User>('user', getDefaultUser())
   AppStorage.setOrCreate<CartItem[]>('cartItems', [])
@@ -599,6 +600,24 @@ export function updateUserProfile(username: string, phone: string): void {
   saveAllData()
 }
 
+export async function updateUserProfileRemote(username: string, phone: string): Promise<User | undefined> {
+  const user: User | undefined = await updateUserProfileApi(username, phone)
+  if (user === undefined) {
+    logWarn('Api', '远程更新个人资料失败')
+    return undefined
+  }
+  AppStorage.setOrCreate<User>('user', user)
+  const allUsers: User[] = AppStorage.get<User[]>('allUsers') || []
+  const index: number = allUsers.findIndex(u => u.id === user.id)
+  if (index >= 0) {
+    allUsers[index] = user
+    AppStorage.setOrCreate<User[]>('allUsers', allUsers)
+  }
+  await saveAllData()
+  logInfo('Api', `远程更新个人资料成功 userId=${user.id}`)
+  return user
+}
+
 // ==================== 真实后端 API 接入（ApiService） ====================
 // 以下方法在非 Mock 模式下调用后端；页面 onShow/关键操作处调用
 // ==================== 认证 ====================
@@ -609,6 +628,8 @@ export function updateUserProfile(username: string, phone: string): void {
 export async function loginRemote(phone: string, password: string): Promise<User | undefined> {
   const user: User | null = await apiLogin(phone, password)
   if (user !== null) {
+    const token: string = getAuthToken()
+    AppStorage.setOrCreate<string>('authToken', token)
     AppStorage.setOrCreate<User>('user', user)
     AppStorage.setOrCreate<boolean>('isLoggedIn', true)
     logInfo('Api', `远程登录成功 userId=${user.id} role=${user.role === UserRole.MERCHANT ? '商户' : '用户'}`)
@@ -883,6 +904,15 @@ export async function addAddressRemote(name: string, phone: string, detail: stri
   return ok
 }
 
+export async function addAddressRemoteAndGet(name: string, phone: string, detail: string, isDefault: boolean): Promise<Address | null> {
+  const address: Address | null = await addAddressAndFetchApi(name, phone, detail, isDefault)
+  if (address !== null) {
+    await syncAddressesRemote()
+    logInfo('Api', `远程新增地址成功 addressId=${address.id}`)
+  }
+  return address
+}
+
 /**
  * 远程删除地址
  */
@@ -891,6 +921,15 @@ export async function deleteAddressRemote(addressId: number): Promise<boolean> {
   if (ok) {
     await syncAddressesRemote()
     logInfo('Api', `远程删除地址 addressId=${addressId}`)
+  }
+  return ok
+}
+
+export async function updateAddressRemote(addressId: number, name: string, phone: string, detail: string, isDefault: boolean): Promise<boolean> {
+  const ok: boolean = await updateAddressApi(addressId, name, phone, detail, isDefault)
+  if (ok) {
+    await syncAddressesRemote()
+    logInfo('Api', `远程更新地址 addressId=${addressId}`)
   }
   return ok
 }

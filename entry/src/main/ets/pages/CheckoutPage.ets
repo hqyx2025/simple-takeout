@@ -3,8 +3,7 @@
  * 展示收货地址、商品明细、金额计算、优惠券选择、备注输入
  * 提交订单后生成订单、清空购物车、标记优惠券已用
  */
-import router from '@ohos.router'
-import { promptAction } from '@kit.ArkUI'
+import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { CartItem, Order, Address, Coupon, StoreItem } from '../model/Models'
 import { createOrderRemote, updateCartItemQuantity, useCoupon, getAllStoresList } from '../service/AppStorageManager'
@@ -95,6 +94,10 @@ export struct CheckoutPage {
     }
     if (this.currentAddress === null) {
       promptAction.showToast({ message: '请先添加收货地址' })
+      return
+    }
+    if (this.currentAddress.id <= 0) {
+      promptAction.showToast({ message: '该定位地址尚未保存，请先在地址管理中保存' })
       return
     }
     this.submitting = true
@@ -426,6 +429,7 @@ export struct CheckoutPage {
         .backgroundColor(COLORS.PRIMARY)
         .borderRadius(BORDER_RADIUS.ROUND)
         .type(ButtonType.Capsule)
+        .id('checkout-submit')
         .onClick(() => { this.submitOrder() })
     }
     .width('100%')

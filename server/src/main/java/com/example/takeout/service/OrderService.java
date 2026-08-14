@@ -23,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -66,6 +68,9 @@ public class OrderService {
             throw new BizException("订单商品不能为空");
         }
         Store store = storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
+        if (store.status() != 1) {
+            throw new BizException("店铺当前未营业");
+        }
         Address address = addressDao.listByUser(userId).stream()
                 .filter(a -> a.id() == addressId)
                 .findFirst()
@@ -73,25 +78,49 @@ public class OrderService {
 
         // 金额计算：商品总价 + 配送费 - 优惠
         double goodsAmount = 0;
+        List<Order.OrderItem> normalizedItems = new ArrayList<>();
         for (Order.OrderItem item : items) {
+            if (item == null || item.quantity() <= 0) {
+                throw new BizException("商品数量必须大于 0");
+            }
             Goods goods = goodsDao.findById(item.goodsId())
                     .orElseThrow(() -> new BizException("商品不存在：" + item.goodsName()));
+            if (goods.storeId() != storeId) {
+                throw new BizException("订单包含其他店铺商品");
+            }
+            if (goods.status() != 1) {
+                throw new BizException("商品已下架：" + goods.name());
+            }
             goodsAmount += goods.price() * item.quantity();
+            normalizedItems.add(new Order.OrderItem(goods.id(), goods.name(), goods.price(), item.quantity(), goods.image()));
         }
         goodsAmount = round2(goodsAmount);
+        if (goodsAmount < store.minOrder()) {
+            throw new BizException("未达到店铺起送价（满" + (long) store.minOrder() + "元起送）");
+        }
         double discount = 0;
+        Coupon appliedCoupon = null;
         if (couponId > 0) {
             Coupon coupon = couponDao.listByUser(userId).stream()
                     .filter(c -> c.id() == couponId && c.status() == 0)
                     .findFirst()
                     .orElseThrow(() -> new BizException("优惠券不可用"));
+            if (coupon.storeId() != 0 && coupon.storeId() != storeId) {
+                throw new BizException("该优惠券不适用于当前店铺");
+            }
+            if (isExpired(coupon.expireTime())) {
+                throw new BizException("优惠券已过期");
+            }
             if (goodsAmount < coupon.threshold()) {
                 throw new BizException("未达到优惠券使用门槛（满" + (long) coupon.threshold() + "元可用）");
             }
             discount = coupon.amount();
-            couponDao.markUsed(couponId);
+            appliedCoupon = coupon;
         }
         double payAmount = round2(goodsAmount + store.deliveryFee() - discount);
+        if (payAmount < 0) {
+            throw new BizException("优惠金额不能超过订单金额");
+        }
 
         // 余额支付（模拟）
         User user = userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
@@ -99,11 +128,14 @@ public class OrderService {
             throw new BizException("余额不足，请先充值");
         }
         userDao.updateBalance(userId, round2(user.balance() - payAmount));
+        if (appliedCoupon != null) {
+            couponDao.markUsed(appliedCoupon.id());
+        }
 
         String now = LocalDateTime.now().format(FMT);
         String orderNo = genOrderNo();
         Order order = new Order(0, orderNo, userId, storeId, store.name(), 1,
-                toJson(items), toJson(new Order.AddressInfo(address.id(), address.name(), address.phone(), address.detail())),
+                toJson(normalizedItems), toJson(new Order.AddressInfo(address.id(), address.name(), address.phone(), address.detail())),
                 goodsAmount, store.deliveryFee(), discount, payAmount,
                 remark == null ? "" : remark, 0, now, now, "", "", "");
         long id = orderDao.insert(order);
@@ -133,6 +165,14 @@ public class OrderService {
 
     public Order.OrderView orderDetail(long id) {
         Order order = orderDao.findById(id).orElseThrow(() -> new BizException("订单不存在"));
+        return toView(order);
+    }
+
+    public Order.OrderView orderDetail(long requesterId, int role, long id) {
+        Order order = requireOrder(id);
+        if (order.userId() != requesterId && (role != 1 || !isStoreOwner(requesterId, order.storeId()))) {
+            throw new BizException(403, "无权查看该订单");
+        }
         return toView(order);
     }
 
@@ -172,6 +212,8 @@ public class OrderService {
             case "complete" -> {        // 确认送达：3 → 4
                 requireStatus(order, 3);
                 orderDao.updateStatus(orderId, 4, "complete_time", now);
+                User merchant = userDao.findById(store.ownerId()).orElseThrow(() -> new BizException("商户不存在"));
+                userDao.updateBalance(merchant.id(), round2(merchant.balance() + order.payAmount()));
             }
             default -> throw new BizException("不支持的操作：" + action);
         }
@@ -275,6 +317,18 @@ public class OrderService {
 
     private Order requireOrder(long orderId) {
         return orderDao.findById(orderId).orElseThrow(() -> new BizException("订单不存在"));
+    }
+
+    private boolean isStoreOwner(long userId, long storeId) {
+        return storeDao.findById(storeId).map(store -> store.ownerId() == userId).orElse(false);
+    }
+
+    private boolean isExpired(String expireTime) {
+        try {
+            return LocalDateTime.parse(expireTime, FMT).isBefore(LocalDateTime.now());
+        } catch (DateTimeParseException e) {
+            return true;
+        }
     }
 
     private void requireStatus(Order order, int expected) {

@@ -7,8 +7,7 @@ import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrder
 import { Order, CartItem, User } from '../model/Models'
 import { getCurrentUser, getMerchantOrders, merchantActionRemote, syncMerchantOrdersFromServer } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
-import router from '@ohos.router'
-import { promptAction } from '@kit.ArkUI'
+import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 
 // 状态Tab项（使用 class + static create 避免 arkts-no-untyped-obj-literals）
 class OrderStatusTab {

@@ -9,10 +9,9 @@ import { LoginPage } from './LoginPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
 import { RatingStars } from '../components/RatingStars'
-import { promptAction } from '@kit.ArkUI'
-import router from '@ohos.router'
-import { logInfo } from '../service/AppLogger'
-import { saveAllData } from '../service/DataPersistence'
+import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
+import { initLogger, logInfo, setPrivacyConsent } from '../service/AppLogger'
+import { loadAllData, saveAllData } from '../service/DataPersistence'
 
 // 定义快捷入口和订单Tab的数据类型，解决 arkts-no-untyped-obj-literals 错误
 class QuickEntryItem {
@@ -149,6 +148,9 @@ struct Index {
   // 从子路由页面（收藏页/搜索页）返回时，处理店铺详情跳转
   onPageShow() {
     logInfo('Page', '首页 Index onPageShow')
+    if (!(AppStorage.get<boolean>('privacyConsent') || false)) {
+      return
+    }
     // 从后端拉取最新店铺/订单数据（真实后端模式）
     syncStoresFromServer()
     if (isLoggedIn()) {
@@ -269,6 +271,30 @@ struct HomePage {
   onNavigateLogin: () => void = () => {}
   private storeDataSource: StoreDataSource = new StoreDataSource()
 
+  // 首页定位栏只展示“市 + 区/县/旗”，完整地址仍保留在 currentAddress 中供结算和配送使用
+  private getCityDistrict(address: string): string {
+    const compactAddress: string = address.replace(/\s+/g, '').replace(/^中国/, '')
+    if (compactAddress === '') {
+      return ''
+    }
+    const cityMatch = compactAddress.match(/([^省自治区特别行政区]+市)/)
+    if (cityMatch !== null) {
+      const cityName: string = cityMatch[1]
+      const cityIndex: number = compactAddress.indexOf(cityName)
+      const remainingAddress: string = compactAddress.substring(cityIndex + cityName.length)
+      const districtMatch = remainingAddress.match(/([^市]+?(?:区|县|旗))/)
+      if (districtMatch !== null) {
+        return `${cityName}${districtMatch[1]}`
+      }
+      return cityName
+    }
+    const districtMatch = compactAddress.match(/([^省市自治区特别行政区]+(?:区|县|旗))/)
+    if (districtMatch !== null) {
+      return districtMatch[1]
+    }
+    return compactAddress
+  }
+
   private getDisplayAddress(): string {
     if (this.currentAddress === null) {
       return '未定位，点击定位'
@@ -276,11 +302,11 @@ struct HomePage {
     const address: string = this.currentAddress.address.trim()
     const coordinatePattern: RegExp = /^\(-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?\)$/
     if (address !== '' && !coordinatePattern.test(address)) {
-      return address
+      return this.getCityDistrict(address)
     }
     const detail: string = this.currentAddress.detail.trim()
     if (detail !== '' && !coordinatePattern.test(detail)) {
-      return detail
+      return this.getCityDistrict(detail)
     }
     return '位置已获取，点击查看地址'
   }
@@ -291,12 +317,17 @@ struct HomePage {
     this.categories = getCategories()
     this.stores = getAllStoresList()
     this.storeDataSource.setData(this.stores)
-    // 从后端拉取最新店铺列表（真实后端模式）
-    this.refreshStores()
+    // 隐私同意前不发起网络请求；同意后由确认回调触发同步
+    if (AppStorage.get<boolean>('privacyConsent') || false) {
+      this.refreshStores()
+    }
   }
 
   // 拉取后端店铺数据并刷新列表
   private async refreshStores(): Promise<void> {
+    if (!(AppStorage.get<boolean>('privacyConsent') || false)) {
+      return
+    }
     await syncStoresFromServer()
     this.stores = getAllStoresList()
     this.storeDataSource.setData(this.stores)
@@ -307,59 +338,66 @@ struct HomePage {
       // 顶部地址栏 + 搜索
       Column({ space: SPACING.SM }) {
         Row({ space: 4 }) {
-          Row({ space: 4 }) {
-            Image($r('app.media.location_icon'))
-              .width(20)
-              .height(20)
-            if (this.currentAddress !== null) {
-              Text(this.getDisplayAddress())
-                .fontSize(FONT_SIZE.LG)
-                .fontColor(COLORS.TEXT_PRIMARY)
-                .fontWeight(FontWeight.Bold)
-                .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-                .layoutWeight(1)
-            } else {
-              // 未定位：显示提示并引导用户去定位
-              Text('未定位，点击定位')
+          Column(){
+            // 地址
+            Row({ space: 4 }) {
+              Image($r('app.media.location_icon'))
+                .width(20)
+                .height(20)
+              if (this.currentAddress !== null) {
+                Text(this.getDisplayAddress())
+                  .fontSize(FONT_SIZE.LG)
+                  .fontColor(COLORS.TEXT_PRIMARY)
+                  .fontWeight(FontWeight.Bold)
+                  .maxLines(1)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  .layoutWeight(1)
+              } else {
+                // 未定位：显示提示并引导用户去定位
+                Text('未定位，点击定位')
+                  .fontSize(FONT_SIZE.MD)
+                  .fontColor(COLORS.PRIMARY)
+                  .fontWeight(FontWeight.Bold)
+              }
+              Image($r('app.media.chevron_down_icon'))
+                .width(16)
+                .height(16)
+            }
+            .onClick(() => {
+              // 未定位时提示用户去定位，再进入定位选择页
+              if (this.currentAddress === null) {
+                promptAction.showToast({ message: '您尚未定位，请先选择配送位置', duration: 1500 })
+              }
+              router.pushUrl({ url: 'pages/LocationPage' })
+            })
+            .width('25%')
+
+            // 搜索
+            Row({ space: 4 }) {
+              Image($r('app.media.search_icon'))
+                .width(20)
+                .height(20)
+              TextInput({ placeholder: '搜索美食、店铺', text: '' })
                 .fontSize(FONT_SIZE.MD)
-                .fontColor(COLORS.PRIMARY)
-                .fontWeight(FontWeight.Bold)
+                .backgroundColor(Color.Transparent)
+                .placeholderColor(COLORS.TEXT_HINT)
+                .layoutWeight(1)
+                .height(32)
+                .onChange((value: string) => { this.searchText = value })
             }
-            Image($r('app.media.chevron_down_icon'))
-              .width(16)
-              .height(16)
+            .padding({ left: 12, right: 12 })
+            .height(32)
+            .backgroundColor('#F0F0F0')
+            .borderRadius(BORDER_RADIUS.ROUND)
+            .width('100%')
+            .onClick(() => { router.pushUrl({ url: 'pages/SearchPage' }) })
           }
-          .onClick(() => {
-            // 未定位时提示用户去定位，再进入定位选择页
-            if (this.currentAddress === null) {
-              promptAction.showToast({ message: '您尚未定位，请先选择配送位置', duration: 1500 })
-            }
-            router.pushUrl({ url: 'pages/LocationPage' })
-          })
-          .width('100%')
-          Row({ space: 4 }) {
-            Image($r('app.media.search_icon'))
-              .width(20)
-              .height(20)
-            TextInput({ placeholder: '搜索美食、店铺', text: '' })
-              .fontSize(FONT_SIZE.MD)
-              .backgroundColor(Color.Transparent)
-              .placeholderColor(COLORS.TEXT_HINT)
-              .layoutWeight(1)
-              .height(32)
-              .onChange((value: string) => { this.searchText = value })
-          }
-          .padding({ left: 12, right: 12 })
-          .height(32)
-          .backgroundColor('#F0F0F0')
-          .borderRadius(BORDER_RADIUS.ROUND)
-          .width('100%')
-          .onClick(() => { router.pushUrl({ url: 'pages/SearchPage' }) })
+          .alignItems(HorizontalAlign.Start)
         }
         .width('100%')
         .padding({ left: 0, right: 0 })
       }
+
       .width('100%')
       .padding({ left: SPACING.LG, right: SPACING.LG, top: 40, bottom: SPACING.MD })
       .backgroundColor(COLORS.BG_WHITE)
@@ -540,16 +578,21 @@ struct HomePage {
                 .type(ButtonType.Capsule)
                 .onClick(() => { promptAction.showToast({ message: '请先同意隐私政策后继续使用' }) })
               Button('同意并继续')
+                .id('privacy-accept')
                 .layoutWeight(1)
                 .height(44)
                 .backgroundColor(COLORS.PRIMARY)
                 .fontColor(Color.White)
                 .borderRadius(BORDER_RADIUS.ROUND)
                 .type(ButtonType.Capsule)
-                .onClick(() => {
+                .onClick(async () => {
+                  setPrivacyConsent(true)
                   AppStorage.setOrCreate<boolean>('privacyConsent', true)
-                  saveAllData()
+                  initLogger()
+                  await loadAllData()
+                  await saveAllData()
                   this.showPrivacyDialog = false
+                  await this.refreshStores()
                 })
             }
             .width('100%')

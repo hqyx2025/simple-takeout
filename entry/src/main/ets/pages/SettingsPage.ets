@@ -7,7 +7,7 @@ import { logout } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { logInfo } from '../service/AppLogger'
-import router from '@ohos.router'
+import { routerCompat as router } from '../common/UiNavigation'
 
 @Entry
 @Component

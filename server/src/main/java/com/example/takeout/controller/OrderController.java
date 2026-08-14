@@ -44,8 +44,10 @@ public class OrderController {
     }
 
     @GetMapping("/orders/{id}")
-    public ApiResponse<Order.OrderView> orderDetail(@PathVariable long id) {
-        return ApiResponse.ok(orderService.orderDetail(id));
+    public ApiResponse<Order.OrderView> orderDetail(@RequestAttribute("userId") long userId,
+                                                    @RequestAttribute("role") int role,
+                                                    @PathVariable long id) {
+        return ApiResponse.ok(orderService.orderDetail(userId, role, id));
     }
 
     @PutMapping("/orders/{id}/cancel")
@@ -67,21 +69,27 @@ public class OrderController {
     // ============ 商户端 ============
 
     @GetMapping("/merchant/orders")
-    public ApiResponse<List<Order.OrderView>> merchantOrders(@RequestAttribute("userId") long userId) {
+    public ApiResponse<List<Order.OrderView>> merchantOrders(@RequestAttribute("userId") long userId,
+                                                             @RequestAttribute("role") int role) {
+        requireMerchant(role);
         return ApiResponse.ok(orderService.merchantOrders(userId));
     }
 
     @PutMapping("/merchant/orders/{id}/{action}")
     public ApiResponse<Order.OrderView> merchantFlow(@RequestAttribute("userId") long userId,
+                                                     @RequestAttribute("role") int role,
                                                      @PathVariable long id,
                                                      @PathVariable String action) {
+        requireMerchant(role);
         return ApiResponse.ok(orderService.merchantFlow(userId, id, action));
     }
 
     @GetMapping("/merchant/stats")
     public ApiResponse<OrderService.MerchantStats> stats(@RequestAttribute("userId") long userId,
+                                                         @RequestAttribute("role") int role,
                                                          @RequestParam(defaultValue = "0") long storeId,
                                                          @RequestParam(defaultValue = "week") String range) {
+        requireMerchant(role);
         return ApiResponse.ok(orderService.merchantStats(userId, storeId, range));
     }
 
@@ -90,5 +98,11 @@ public class OrderController {
     }
 
     public record ReviewRequest(int rating, String content, List<String> tags) {
+    }
+
+    private void requireMerchant(int role) {
+        if (role != 1) {
+            throw new com.example.takeout.common.BizException(403, "仅商户可以执行该操作");
+        }
     }
 }

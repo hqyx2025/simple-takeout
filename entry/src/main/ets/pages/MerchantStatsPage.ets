@@ -2,7 +2,7 @@
  * 商户收入统计页
  * 展示今日 / 本周 / 累计收入与订单数据，以及账户余额
  */
-import router from '@ohos.router'
+import { routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusColor } from '../common/Constants'
 import { MerchantStatsData, User } from '../model/Models'
 import { getCurrentUser, getMerchantTodayStats, getMerchantWeekStats, getMerchantWeekRevenue, getMerchantTodayStatusOrders, formatPrice, syncMerchantOrdersFromServer } from '../service/AppStorageManager'

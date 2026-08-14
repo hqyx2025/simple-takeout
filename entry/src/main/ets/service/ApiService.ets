@@ -155,6 +155,11 @@ interface RegisterRequest {
   role: number
 }
 
+interface ProfileUpdateRequest {
+  username: string
+  phone: string
+}
+
 interface OrderItemRequest {
   goodsId: number
   goodsName: string
@@ -248,6 +253,16 @@ export async function apiRegister(username: string, phone: string, password: str
     return null
   }
   logInfo('Api', `注册成功 userId=${resp.data.id}`)
+  return toUser(resp.data)
+}
+
+export async function updateUserProfileApi(username: string, phone: string): Promise<User | undefined> {
+  const req: ProfileUpdateRequest = { username: username, phone: phone }
+  const resp: ApiResponse<ServerUser> = await put<ServerUser>('/api/auth/me', req)
+  if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
+    logWarn('Api', `更新个人资料失败：${resp.message}`)
+    return undefined
+  }
   return toUser(resp.data)
 }
 
@@ -496,8 +511,23 @@ export async function addAddressApi(name: string, phone: string, detail: string,
   return resp.code === 200
 }
 
+export async function addAddressAndFetchApi(name: string, phone: string, detail: string, isDefault: boolean): Promise<Address | null> {
+  const req: AddressRequest = { name: name, phone: phone, detail: detail, isDefault: isDefault ? 1 : 0 }
+  const resp: ApiResponse<ServerAddress> = await post<ServerAddress>(API_CONFIG.ENDPOINTS['addresses'], req)
+  if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
+    return null
+  }
+  return toAddress(resp.data)
+}
+
 export async function deleteAddressApi(addressId: number): Promise<boolean> {
   const resp: ApiResponse<Object> = await del<Object>(`/api/addresses/${addressId}`)
+  return resp.code === 200
+}
+
+export async function updateAddressApi(addressId: number, name: string, phone: string, detail: string, isDefault: boolean): Promise<boolean> {
+  const req: AddressRequest = { name: name, phone: phone, detail: detail, isDefault: isDefault ? 1 : 0 }
+  const resp: ApiResponse<ServerAddress> = await put<ServerAddress>(`/api/addresses/${addressId}`, req)
   return resp.code === 200
 }
 
@@ -585,7 +615,7 @@ function toOrder(o: ServerOrder): Order {
     id: o.address !== null && o.address !== undefined ? o.address.addressId : 0,
     name: o.address !== null && o.address !== undefined ? o.address.name : '',
     phone: o.address !== null && o.address !== undefined ? o.address.phone : '',
-    address: o.address !== null && o.address !== undefined ? o.address.detail : '',
+    address: '',
     detail: o.address !== null && o.address !== undefined ? o.address.detail : '',
     isDefault: false
   }
@@ -630,7 +660,7 @@ function toAddress(a: ServerAddress): Address {
     id: a.id,
     name: a.name,
     phone: a.phone,
-    address: a.detail,
+    address: '',
     detail: a.detail,
     isDefault: a.isDefault === 1
   }

@@ -46,6 +46,14 @@ public class AddressDao {
         jdbc.update("DELETE FROM addresses WHERE id = ? AND user_id = ?", id, userId);
     }
 
+    public void update(long userId, long id, String name, String phone, String detail, int isDefault) {
+        if (isDefault == 1) {
+            clearDefault(userId);
+        }
+        jdbc.update("UPDATE addresses SET name = ?, phone = ?, detail = ?, is_default = ? WHERE id = ? AND user_id = ?",
+                name, phone, detail, isDefault, id, userId);
+    }
+
     public void setDefault(long userId, long id) {
         clearDefault(userId);
         jdbc.update("UPDATE addresses SET is_default = 1 WHERE id = ? AND user_id = ?", id, userId);

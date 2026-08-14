@@ -55,19 +55,44 @@ public class UserCenterService {
     }
 
     public Coupon claimCoupon(long userId, long storeId, String name, double threshold, double amount) {
-        if (name == null || name.isBlank()) {
-            throw new BizException("优惠券名称不能为空");
+        if (storeId > 0) {
+            storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
         }
-        if (amount <= 0) {
-            throw new BizException("优惠金额必须大于 0");
+        // 优惠规则由服务端活动白名单决定，不能信任客户端任意提交的金额和门槛。
+        if (!isAllowedCampaign(threshold, amount)) {
+            throw new BizException("优惠券活动不存在或参数无效");
+        }
+        final double campaignThreshold = threshold;
+        final double campaignAmount = amount;
+        final String campaignName = "满" + (long) campaignThreshold + "减" + (long) campaignAmount;
+        boolean alreadyClaimed = couponDao.listByUser(userId).stream()
+                .anyMatch(c -> c.storeId() == storeId && c.status() == 0 && campaignName.equals(c.name()));
+        if (alreadyClaimed) {
+            throw new BizException("该优惠券已领取");
         }
         String expire = LocalDateTime.now().plusDays(30).format(FMT);
-        long id = couponDao.insert(userId, storeId, name, threshold, amount, expire, "claim",
+        long id = couponDao.insert(userId, storeId, campaignName, campaignThreshold, campaignAmount, expire, "claim",
                 LocalDateTime.now().format(FMT));
         return couponDao.listByUser(userId).stream()
                 .filter(c -> c.id() == id)
                 .findFirst()
                 .orElseThrow(() -> new BizException("领券失败"));
+    }
+
+    private boolean isAllowedCampaign(double threshold, double amount) {
+        if (!Double.isFinite(threshold) || !Double.isFinite(amount) || amount <= 0 || threshold < amount) {
+            return false;
+        }
+        double[][] campaigns = {
+                {10, 2}, {14, 3}, {15, 4}, {20, 5}, {23, 6}, {29, 8},
+                {35, 10}, {41, 12}, {45, 12}, {50, 15}, {59, 18}, {65, 20}, {80, 25}
+        };
+        for (double[] campaign : campaigns) {
+            if (Double.compare(campaign[0], threshold) == 0 && Double.compare(campaign[1], amount) == 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ============ 收藏 ============
@@ -102,14 +127,21 @@ public class UserCenterService {
     }
 
     public Address addAddress(long userId, String name, String phone, String detail, int isDefault) {
-        if (name == null || name.isBlank() || phone == null || phone.isBlank() || detail == null || detail.isBlank()) {
-            throw new BizException("姓名/电话/地址不能为空");
-        }
+        validateAddress(name, phone, detail, isDefault);
         long id = addressDao.insert(userId, name, phone, detail, isDefault, LocalDateTime.now().format(FMT));
         return addressDao.listByUser(userId).stream()
                 .filter(a -> a.id() == id)
                 .findFirst()
                 .orElseThrow(() -> new BizException("地址添加失败"));
+    }
+
+    public Address updateAddress(long userId, long id, String name, String phone, String detail, int isDefault) {
+        validateAddress(name, phone, detail, isDefault);
+        addressDao.update(userId, id, name, phone, detail, isDefault);
+        return addressDao.listByUser(userId).stream()
+                .filter(a -> a.id() == id)
+                .findFirst()
+                .orElseThrow(() -> new BizException("地址不存在"));
     }
 
     public void deleteAddress(long userId, long id) {
@@ -118,6 +150,16 @@ public class UserCenterService {
 
     public void setDefaultAddress(long userId, long id) {
         addressDao.setDefault(userId, id);
+    }
+
+    private void validateAddress(String name, String phone, String detail, int isDefault) {
+        if (name == null || name.isBlank() || phone == null || !phone.matches("1\\d{10}")
+                || detail == null || detail.isBlank()) {
+            throw new BizException("姓名、手机号和地址不能为空且格式正确");
+        }
+        if (isDefault != 0 && isDefault != 1) {
+            throw new BizException("默认地址标记不合法");
+        }
     }
 
     // ============ 评价浏览 ============
