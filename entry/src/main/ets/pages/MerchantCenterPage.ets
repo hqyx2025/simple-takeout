@@ -5,8 +5,7 @@
 import { StoreItem, GoodsItem, UserRole, User } from '../model/Models'
 import { fetchMerchantStoresApi, fetchMerchantGoodsApi, createMerchantStoreApi, updateMerchantStoreApi,
   createMerchantGoodsApi, updateMerchantGoodsApi, deleteMerchantGoodsApi } from '../service/ApiService'
-import { formatSales } from '../service/MockDataService'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, formatSales } from '../common/Constants'
 import { promptCompat as promptAction } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
 import { routerCompat as router } from '../common/UiNavigation'

@@ -1,10 +1,9 @@
 /**
  * 全局状态管理 - 使用AppStorage管理应用级状态
  */
-import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, MerchantStatsData } from '../model/Models'
-import { getDefaultUser, getDefaultAddresses, getDefaultCoupons, getDefaultOrders, getMockUsers, getStores, getGoodsByStore, getDefaultReviews, getDefaultFavorites, getReviewsByStore, getClaimableCoupons } from './MockDataService'
+import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, MerchantStatsData, Category, createEmptyUser } from '../model/Models'
 import { saveAllData, clearAllData } from './DataPersistence'
-import { apiLogin, apiRegister, updateUserProfileApi, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi } from './ApiService'
+import { apiLogin, apiRegister, updateUserProfileApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi } from './ApiService'
 import { getAuthToken, setAuthToken } from './HttpClient'
 import { logInfo, logWarn, logError } from './AppLogger'
 
@@ -18,98 +17,65 @@ export function initAppStorage() {
     AppStorage.setOrCreate<boolean>('isLoggedIn', false)
   }
   if (!AppStorage.has('user')) {
-    AppStorage.setOrCreate<User>('user', getDefaultUser())
-  }
-  if (!AppStorage.has('allUsers')) {
-    AppStorage.setOrCreate<User[]>('allUsers', getMockUsers())
+    AppStorage.setOrCreate<User>('user', createEmptyUser())
   }
   if (!AppStorage.has('cartItems')) {
     AppStorage.setOrCreate<CartItem[]>('cartItems', [])
   }
   if (!AppStorage.has('addressList')) {
-    AppStorage.setOrCreate('addressList', getDefaultAddresses())
+    AppStorage.setOrCreate<Address[]>('addressList', [])
   }
   // 不默认设置 currentAddress：用户未定位/未选择地址时保持空，主页显示“未定位”提示去定位
   if (!AppStorage.has('currentAddress')) {
     AppStorage.setOrCreate<Address | null>('currentAddress', null)
   }
   if (!AppStorage.has('orderList')) {
-    AppStorage.setOrCreate('orderList', getDefaultOrders())
+    AppStorage.setOrCreate<Order[]>('orderList', [])
   }
   if (!AppStorage.has('couponList')) {
-    AppStorage.setOrCreate('couponList', getDefaultCoupons())
+    AppStorage.setOrCreate<Coupon[]>('couponList', [])
   }
   if (!AppStorage.has('selectedCoupon')) {
     AppStorage.setOrCreate<Coupon | null>('selectedCoupon', null)
   }
+  if (!AppStorage.has('categoryList')) {
+    AppStorage.setOrCreate<Category[]>('categoryList', [])
+  }
   // 动态店铺和商品数据（商户可修改）
   if (!AppStorage.has('allStores')) {
-    AppStorage.setOrCreate('allStores', getStores())
+    AppStorage.setOrCreate<StoreItem[]>('allStores', [])
   }
   if (!AppStorage.has('allGoodsMap')) {
-    let goodsMap: Record<string, GoodsItem[]> = {}
-    const stores = getStores()
-    for (let i = 0; i < stores.length; i++) {
-      goodsMap[stores[i].id.toString()] = getGoodsByStore(stores[i].id)
-    }
-    AppStorage.setOrCreate('allGoodsMap', goodsMap)
+    AppStorage.setOrCreate<Record<string, GoodsItem[]>>('allGoodsMap', {})
   }
   if (!AppStorage.has('favoriteList')) {
-    AppStorage.setOrCreate('favoriteList', getDefaultFavorites())
+    AppStorage.setOrCreate<Favorite[]>('favoriteList', [])
   }
   if (!AppStorage.has('reviewList')) {
-    AppStorage.setOrCreate('reviewList', getDefaultReviews())
+    AppStorage.setOrCreate<Review[]>('reviewList', [])
   }
   if (!AppStorage.has('claimableCoupons')) {
-    AppStorage.setOrCreate('claimableCoupons', getClaimableCoupons())
+    AppStorage.setOrCreate<Coupon[]>('claimableCoupons', [])
   }
   logInfo('AppStorage', 'initAppStorage 完成，全局数据初始化就绪')
 }
 
 // ============ 登录/登出 ============
 export function login(phone: string, password: string): User | undefined {
-  const users: User[] = AppStorage.get<User[]>('allUsers') || []
-  const user = users.find(u => u.phone === phone && u.password === password)
-  if (user) {
-    AppStorage.setOrCreate<User>('user', user)
-    AppStorage.setOrCreate<boolean>('isLoggedIn', true)
-    saveAllData()
-    logInfo('Auth', `用户登录成功 phone=${phone} userId=${user.id} role=${user.role === UserRole.MERCHANT ? '商户' : '用户'}`)
-    return user
-  }
-  logWarn('Auth', `用户登录失败 phone=${phone}（账号或密码错误）`)
+  logWarn('Auth', `本地登录已停用，请使用后端登录 phone=${phone}`)
   return undefined
 }
 
 export function register(username: string, phone: string, password: string, role: UserRole): User | undefined {
-  const users: User[] = AppStorage.get<User[]>('allUsers') || []
-  if (users.find(u => u.phone === phone)) {
-    return undefined // 手机号已注册
-  }
-  const newUser: User = {
-    id: Date.now(),
-    username: username,
-    avatar: '',
-    phone: phone,
-    password: password,
-    role: role,
-    balance: role === UserRole.CUSTOMER ? 20.0 : 0, // 新注册用户赠送余额，商户从 0 开始靠经营赚钱
-    coupons: [],
-    orders: [],
-    storeIds: [],
-  }
-  users.push(newUser)
-  AppStorage.setOrCreate('allUsers', users)
-  saveAllData()
-  logInfo('Auth', `用户注册成功 phone=${phone} username=${username} role=${role === UserRole.MERCHANT ? '商户' : '用户'}`)
-  return newUser
+  logWarn('Auth', `本地注册已停用，请使用后端注册 phone=${phone} username=${username}`)
+  return undefined
 }
 
 export function logout(): void {
   setAuthToken('')
   AppStorage.setOrCreate<string>('authToken', '')
   AppStorage.setOrCreate<boolean>('isLoggedIn', false)
-  AppStorage.setOrCreate<User>('user', getDefaultUser())
+  AppStorage.setOrCreate<User>('user', createEmptyUser())
   AppStorage.setOrCreate<CartItem[]>('cartItems', [])
   clearAllData()
   logInfo('Auth', '用户退出登录，已清除登录态与购物车')
@@ -122,33 +88,6 @@ export function isLoggedIn(): boolean {
 // ============ 获取当前用户 ============
 export function getCurrentUser(): User | undefined {
   return AppStorage.get<User>('user')
-}
-
-/**
- * 同步当前用户与 allUsers 账号数据（登录态恢复后调用）：
- * 以 allUsers 中的账号信息为基准（保证不同账号余额等初始数据正确），
- * 保留运行时的订单/优惠券，余额取两者较大值（不丢失商户经营收入）
- */
-export function syncUserWithAllUsers(): void {
-  const user: User | undefined = AppStorage.get<User>('user')
-  const loggedIn: boolean = AppStorage.get<boolean>('isLoggedIn') || false
-  if (!loggedIn || user === undefined || user === null || user.phone === '') {
-    return
-  }
-  const allUsers: User[] = AppStorage.get<User[]>('allUsers') || []
-  const index: number = allUsers.findIndex(u => u.phone === user.phone)
-  if (index >= 0) {
-    const fresh: User = allUsers[index]
-    fresh.orders = user.orders || []
-    fresh.coupons = user.coupons || []
-    if (user.balance > fresh.balance) {
-      fresh.balance = user.balance
-    }
-    allUsers[index] = fresh
-    AppStorage.setOrCreate('allUsers', allUsers)
-    AppStorage.setOrCreate<User>('user', fresh)
-    logInfo('Auth', `同步用户数据 userId=${fresh.id} username=${fresh.username} balance=${fresh.balance}`)
-  }
 }
 
 // ============ 购物车操作 ============
@@ -302,11 +241,11 @@ export function getGoodsForStore(storeId: number): GoodsItem[] {
 }
 
 export function getAllStoresList(): StoreItem[] {
-  return AppStorage.get<StoreItem[]>('allStores') || getStores()
+  return AppStorage.get<StoreItem[]>('allStores') || []
 }
 
 export function getStoresByOwner(ownerId: number): StoreItem[] {
-  const stores: StoreItem[] = AppStorage.get<StoreItem[]>('allStores') || getStores()
+  const stores: StoreItem[] = AppStorage.get<StoreItem[]>('allStores') || []
   return stores.filter(s => s.ownerId === ownerId)
 }
 
@@ -390,79 +329,18 @@ export function formatPrice(price: number): string {
   return '¥' + price.toFixed(2)
 }
 
-// ============ 收藏操作 ============
-export function toggleFavorite(storeId: number): boolean {
-  const user: User | undefined = AppStorage.get<User>('user')
-  if (user === undefined || user === null) return false
-
-  let favorites: Favorite[] = AppStorage.get<Favorite[]>('favoriteList') || getDefaultFavorites()
-  const existIndex = favorites.findIndex(f => f.storeId === storeId && f.userId === user.id)
-
-  let result: boolean = false
-  if (existIndex >= 0) {
-    // 取消收藏
-    favorites = favorites.filter(f => !(f.storeId === storeId && f.userId === user.id))
-    AppStorage.setOrCreate('favoriteList', favorites)
-    result = false
-  } else {
-    // 添加收藏
-    const stores: StoreItem[] = getAllStoresList()
-    const store = stores.find(s => s.id === storeId)
-    if (store) {
-      const favorite: Favorite = {
-        id: Date.now(),
-        userId: user.id,
-        storeId: storeId,
-        storeName: store.name,
-        storeImage: store.image,
-        createTime: formatDateTime(new Date())
-      }
-      favorites.push(favorite)
-      AppStorage.setOrCreate('favoriteList', favorites)
-      result = true
-    }
-  }
-  saveAllData()
-  logInfo('Favorite', `切换收藏 storeId=${storeId} ${result ? '已收藏' : '已取消'}`)
-  return result
-}
-
 export function getFavorites(): Favorite[] {
   const user: User | undefined = AppStorage.get<User>('user')
   if (user === undefined || user === null) return []
-  const favorites: Favorite[] = AppStorage.get<Favorite[]>('favoriteList') || getDefaultFavorites()
+  const favorites: Favorite[] = AppStorage.get<Favorite[]>('favoriteList') || []
   return favorites.filter(f => f.userId === user.id)
 }
 
 export function isFavorited(storeId: number): boolean {
   const user: User | undefined = AppStorage.get<User>('user')
   if (user === undefined || user === null) return false
-  const favorites: Favorite[] = AppStorage.get<Favorite[]>('favoriteList') || getDefaultFavorites()
+  const favorites: Favorite[] = AppStorage.get<Favorite[]>('favoriteList') || []
   return favorites.some(f => f.storeId === storeId && f.userId === user.id)
-}
-
-// ============ 评价操作 ============
-export function addReview(review: Review): void {
-  let reviews: Review[] = AppStorage.get<Review[]>('reviewList') || getDefaultReviews()
-  review.id = Date.now()
-  reviews.unshift(review)
-  AppStorage.setOrCreate('reviewList', reviews)
-
-  // 标记订单已评价
-  const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
-  const order = orders.find(o => o.id === review.orderId)
-  if (order) {
-    // 在remark字段标记已评价
-    order.remark = order.remark + ' [已评价]'
-    AppStorage.setOrCreate('orderList', orders)
-  }
-  saveAllData()
-  logInfo('Review', `提交评价 orderId=${review.orderId} storeId=${review.storeId} 评分=${review.rating} 内容=${review.content}`)
-}
-
-export function getStoreReviews(storeId: number): Review[] {
-  const reviews: Review[] = AppStorage.get<Review[]>('reviewList') || getDefaultReviews()
-  return reviews.filter(r => r.storeId === storeId)
 }
 
 // ============ 商户订单状态流转 ============
@@ -606,26 +484,6 @@ export function getMerchantTodayStatusOrders(merchantId: number): number[] {
   return dist
 }
 
-// ============ 用户信息更新 ============
-export function updateUserProfile(username: string, phone: string): void {
-  const user: User | undefined = AppStorage.get<User>('user')
-  if (user !== undefined && user !== null) {
-    user.username = username
-    user.phone = phone
-    AppStorage.setOrCreate('user', user)
-
-    // 更新allUsers中的对应用户
-    const allUsers: User[] = AppStorage.get<User[]>('allUsers') || []
-    const index = allUsers.findIndex(u => u.id === user.id)
-    if (index >= 0) {
-      allUsers[index] = user
-      AppStorage.setOrCreate('allUsers', allUsers)
-    }
-    logInfo('Profile', `更新用户信息 userId=${user.id} username=${username} phone=${phone}`)
-  }
-  saveAllData()
-}
-
 export async function updateUserProfileRemote(username: string, phone: string): Promise<User | undefined> {
   const user: User | undefined = await updateUserProfileApi(username, phone)
   if (user === undefined) {
@@ -633,12 +491,6 @@ export async function updateUserProfileRemote(username: string, phone: string): 
     return undefined
   }
   AppStorage.setOrCreate<User>('user', user)
-  const allUsers: User[] = AppStorage.get<User[]>('allUsers') || []
-  const index: number = allUsers.findIndex(u => u.id === user.id)
-  if (index >= 0) {
-    allUsers[index] = user
-    AppStorage.setOrCreate<User[]>('allUsers', allUsers)
-  }
   await saveAllData()
   logInfo('Api', `远程更新个人资料成功 userId=${user.id}`)
   return user
@@ -680,15 +532,20 @@ export async function registerRemote(username: string, phone: string, password: 
 
 // ==================== 数据拉取 ====================
 
+/** 从后端拉取首页分类，失败或无数据时显示空状态。 */
+export async function syncCategoriesFromServer(): Promise<void> {
+  const categories: Category[] = await fetchCategories()
+  AppStorage.setOrCreate<Category[]>('categoryList', categories)
+  logInfo('Api', `同步分类数据 ${categories.length} 个`)
+}
+
 /**
  * 从后端拉取店铺列表并写入 allStores（首页 onShow 调用）
  */
 export async function syncStoresFromServer(): Promise<void> {
   const stores: StoreItem[] = await fetchStores()
-  if (stores.length > 0) {
-    AppStorage.setOrCreate<StoreItem[]>('allStores', stores)
-    logInfo('Api', `同步店铺数据 ${stores.length} 家`)
-  }
+  AppStorage.setOrCreate<StoreItem[]>('allStores', stores)
+  logInfo('Api', `同步店铺数据 ${stores.length} 家`)
 }
 
 /**
@@ -696,12 +553,10 @@ export async function syncStoresFromServer(): Promise<void> {
  */
 export async function syncGoodsFromServer(storeId: number): Promise<void> {
   const goods: GoodsItem[] = await fetchStoreGoods(storeId)
-  if (goods.length > 0) {
-    const goodsMap: Record<string, GoodsItem[]> = AppStorage.get<Record<string, GoodsItem[]>>('allGoodsMap') || {}
-    goodsMap[storeId.toString()] = goods
-    AppStorage.setOrCreate('allGoodsMap', goodsMap)
-    logInfo('Api', `同步店铺商品 storeId=${storeId} ${goods.length} 个`)
-  }
+  const goodsMap: Record<string, GoodsItem[]> = AppStorage.get<Record<string, GoodsItem[]>>('allGoodsMap') || {}
+  goodsMap[storeId.toString()] = goods
+  AppStorage.setOrCreate('allGoodsMap', goodsMap)
+  logInfo('Api', `同步店铺商品 storeId=${storeId} ${goods.length} 个`)
 }
 
 /**
@@ -917,10 +772,8 @@ export async function submitReviewRemote(orderId: number, rating: number, conten
  */
 export async function syncStoreReviewsRemote(storeId: number): Promise<void> {
   const reviews: Review[] = await fetchStoreReviews(storeId)
-  if (reviews.length > 0) {
-    AppStorage.setOrCreate<Review[]>('reviewList', reviews)
-    logInfo('Api', `同步店铺评价 storeId=${storeId} ${reviews.length} 条`)
-  }
+  AppStorage.setOrCreate<Review[]>('reviewList', reviews)
+  logInfo('Api', `同步店铺评价 storeId=${storeId} ${reviews.length} 条`)
 }
 
 /**

@@ -94,6 +94,13 @@ export class REVIEW_TAGS {
   static readonly WILL_REORDER: string = '会回购'
 }
 
+export function formatSales(sales: number): string {
+  if (sales >= 10000) {
+    return (sales / 10000).toFixed(1) + '万'
+  }
+  return sales.toString()
+}
+
 // 订单状态时间轴配置
 export class ORDER_TIMELINE {
   static readonly STATUS_LIST: number[] = [1, 2, 3, 4]

@@ -5,8 +5,7 @@
  */
 import preferences from '@ohos.data.preferences'
 import common from '@ohos.app.ability.common'
-import { User, Order, CartItem, Favorite, Coupon, Address } from '../model/Models'
-import { getDefaultUser, getDefaultOrders, getDefaultAddresses, getDefaultCoupons, getDefaultFavorites } from './MockDataService'
+import { User, Order, createEmptyUser } from '../model/Models'
 import { logInfo, logWarn, logError } from './AppLogger'
 import { setAuthToken } from './HttpClient'
 
@@ -49,15 +48,11 @@ async function getPrefs(): Promise<preferences.Preferences> {
  */
 function normalizeUser(value: Object): Object {
   if (value === null || typeof value !== 'object') {
-    return getDefaultUser()
+    return createEmptyUser()
   }
   const user: User = value as User
-  if (!Array.isArray(user.coupons)) {
-    user.coupons = []
-  }
-  if (!Array.isArray(user.orders)) {
-    user.orders = []
-  }
+  user.coupons = []
+  user.orders = []
   if (!Array.isArray(user.storeIds)) {
     user.storeIds = []
   }
@@ -77,34 +72,8 @@ function normalizeUser(value: Object): Object {
 }
 
 function normalizeOrderList(value: Object): Object {
-  if (!Array.isArray(value)) {
-    return getDefaultOrders()
-  }
-  const raw: Object[] = value as Object[]
-  const result: Order[] = []
-  for (let i = 0; i < raw.length; i++) {
-    const o: Object = raw[i]
-    if (o === null || typeof o !== 'object') {
-      continue
-    }
-    const order: Order = o as Order
-    // 缺少核心字段的旧订单直接丢弃
-    if (typeof order.id !== 'number') {
-      continue
-    }
-    // items 缺失时兜底为空数组，避免 ForEach/reduce 崩溃
-    if (!Array.isArray(order.items)) {
-      order.items = []
-    }
-    if (typeof order.status !== 'number') {
-      order.status = 1
-    }
-    if (order.address === null || order.address === undefined || typeof order.address !== 'object') {
-      order.address = getDefaultAddresses()[0]
-    }
-    result.push(order)
-  }
-  return result
+  const emptyOrders: Order[] = []
+  return emptyOrders
 }
 
 // 归一化入口：按 key 处理对应数据
@@ -118,24 +87,16 @@ export function normalizeData(key: string, value: Object): Object {
   if (key === 'orderList') {
     return normalizeOrderList(value)
   }
-  if (key === 'cartItems' || key === 'favoriteList' || key === 'couponList' || key === 'addressList') {
+  if (key === 'cartItems') {
     if (Array.isArray(value)) {
       return value
     }
-    // 非数组（null/损坏数据）时回退默认值
-    if (key === 'cartItems') {
-      const empty: CartItem[] = []
-      return empty
-    }
-    if (key === 'favoriteList') {
-      return getDefaultFavorites()
-    }
-    if (key === 'couponList') {
-      return getDefaultCoupons()
-    }
-    if (key === 'addressList') {
-      return getDefaultAddresses()
-    }
+    const empty: Object[] = []
+    return empty
+  }
+  if (key === 'favoriteList' || key === 'couponList' || key === 'addressList') {
+    const empty: Object[] = []
+    return empty
   }
   return value
 }
@@ -183,7 +144,7 @@ export async function loadAllData(): Promise<void> {
     const restoredLoggedIn: boolean = AppStorage.get<boolean>('isLoggedIn') || false
     if (restoredLoggedIn && restoredToken === '') {
       AppStorage.setOrCreate<boolean>('isLoggedIn', false)
-      AppStorage.setOrCreate<User>('user', getDefaultUser())
+      AppStorage.setOrCreate<User>('user', createEmptyUser())
     }
     AppStorage.setOrCreate<boolean>('_persistenceReady', true)
     logInfo('Persistence', '持久化数据全部加载完成')

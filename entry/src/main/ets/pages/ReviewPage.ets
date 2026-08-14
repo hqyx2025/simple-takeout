@@ -6,7 +6,7 @@
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, REVIEW_TAGS } from '../common/Constants'
 import { Order, Review, User } from '../model/Models'
-import { addReview, getCurrentUser, submitReviewRemote } from '../service/AppStorageManager'
+import { getCurrentUser, submitReviewRemote, syncStoreReviewsRemote } from '../service/AppStorageManager'
 import { logInfo, logWarn } from '../service/AppLogger'
 
 @Entry
@@ -124,7 +124,7 @@ export struct ReviewPage {
   private async submitRemote(review: Review): Promise<void> {
     const ok: boolean = await submitReviewRemote(review.orderId, review.rating, review.content, review.tags)
     if (ok) {
-      addReview(review)
+      await syncStoreReviewsRemote(review.storeId)
       logInfo('Review', `提交评价成功 orderId=${review.orderId} 评分=${review.rating} 标签=${review.tags.length}个`)
       promptAction.showToast({ message: '评价成功' })
       this.submitting = false
