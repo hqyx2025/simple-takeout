@@ -312,7 +312,7 @@ export function getStoresByOwner(ownerId: number): StoreItem[] {
 
 // 地址同步去重：同一用户重复确认当前位置可能在服务端生成多条相同地址，
 // 页面只保留一条，且优先保留默认标记和完整经纬度。
-function deduplicateAddresses(addresses: Address[]): Address[] {
+export function deduplicateAddresses(addresses: Address[]): Address[] {
   const result: Address[] = []
   for (let i = 0; i < addresses.length; i++) {
     const address: Address = addresses[i]
