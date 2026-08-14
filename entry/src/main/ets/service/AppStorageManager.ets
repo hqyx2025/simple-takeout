@@ -921,11 +921,21 @@ export async function syncStoreReviewsRemote(storeId: number): Promise<void> {
 /**
  * 从后端拉取地址并写入 addressList
  */
-export async function syncAddressesRemote(): Promise<void> {
+export async function syncAddressesRemote(): Promise<boolean> {
+  if (!isLoggedIn()) {
+    logWarn('Api', '同步地址跳过：用户未登录')
+    return false
+  }
   const remoteAddresses: Address[] = await fetchAddressesApi()
+  // fetchAddressesApi 在认证失效时会触发 HttpClient 清理登录态，不能用空数组覆盖本地缓存。
+  if (!isLoggedIn()) {
+    logWarn('Api', '同步地址失败：登录已失效，保留本地地址')
+    return false
+  }
   const addresses: Address[] = deduplicateAddresses(remoteAddresses)
   AppStorage.setOrCreate<Address[]>('addressList', addresses)
   logInfo('Api', `同步地址 ${remoteAddresses.length} 条，去重后 ${addresses.length} 条`)
+  return true
 }
 
 /**

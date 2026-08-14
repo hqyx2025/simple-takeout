@@ -3,9 +3,9 @@
  * 支持地址的增删改查与设置默认地址
  */
 import { Address } from '../model/Models'
-import { addAddressRemote, deleteAddressRemote, updateAddressRemote, setDefaultAddressRemote, syncAddressesRemote, deduplicateAddresses } from '../service/AppStorageManager'
+import { addAddressRemote, deleteAddressRemote, updateAddressRemote, setDefaultAddressRemote, syncAddressesRemote, deduplicateAddresses, isLoggedIn } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
-import { routerCompat as router } from '../common/UiNavigation'
+import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 
 // 表单数据类（用于避免无类型对象字面量）
 class AddressFormData {
@@ -45,6 +45,7 @@ class AddressTag {
 @Component
 export struct AddressListPage {
   @StorageLink('addressList') addressList: Address[] = []
+  @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State showAddForm: boolean = false
   @State editingAddress: Address | null = null
   @State formData: AddressFormData = new AddressFormData()
@@ -52,12 +53,16 @@ export struct AddressListPage {
   onBack: () => void = () => { router.back() }
   onSelectAddress: (address: Address) => void = () => {}
 
-  aboutToAppear() {
+  async aboutToAppear(): Promise<void> {
     // 先清理本地缓存中的重复地址，再等待后端最新数据，避免重复“当前位置”短暂显示。
     const cachedAddresses: Address[] = AppStorage.get<Address[]>('addressList') || []
     AppStorage.setOrCreate<Address[]>('addressList', deduplicateAddresses(cachedAddresses))
-    // 从后端拉取最新地址（真实后端模式）
-    syncAddressesRemote()
+    if (!isLoggedIn()) {
+      this.showLoginRequired()
+      return
+    }
+    // 等待首次同步完成，避免它在设置默认地址后用旧数据覆盖 UI。
+    await syncAddressesRemote()
   }
 
   build() {
@@ -158,7 +163,7 @@ export struct AddressListPage {
                       .fontSize(FONT_SIZE.SM)
                       .fontColor(COLORS.ERROR)
                       .padding({ left: SPACING.SM, right: SPACING.SM })
-                      .onClick(() => { deleteAddressRemote(addr.id) })
+                      .onClick(() => { this.deleteAddress(addr) })
                     if (!addr.isDefault) {
                       Text('设为默认')
                         .fontSize(FONT_SIZE.SM)
@@ -179,7 +184,7 @@ export struct AddressListPage {
                   this.onSelectAddress(addr)
                 })
               }
-            }, (item: Address) => item.id.toString())
+            }, (item: Address) => `${item.id}-${item.isDefault ? 'default' : 'normal'}`)
           }
           .width('100%')
           .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM })
@@ -339,28 +344,89 @@ export struct AddressListPage {
     this.formData = form
   }
 
+  private showLoginRequired(): void {
+    promptAction.showToast({ message: '登录状态已失效，请先登录后继续操作', duration: 1800 })
+  }
+
+  private showOperationFailure(action: string): void {
+    if (!isLoggedIn()) {
+      this.showLoginRequired()
+      return
+    }
+    promptAction.showToast({ message: `${action}失败，请检查网络后重试`, duration: 1800 })
+  }
+
+  private copyAddresses(source: Address[], defaultId?: number): Address[] {
+    const copied: Address[] = []
+    source.forEach((item: Address) => {
+      const address: Address = {
+        id: item.id,
+        name: item.name,
+        phone: item.phone,
+        address: item.address,
+        detail: item.detail,
+        isDefault: defaultId === undefined ? item.isDefault : item.id === defaultId,
+        tag: item.tag,
+        latitude: item.latitude,
+        longitude: item.longitude
+      }
+      copied.push(address)
+    })
+    return copied
+  }
+
+  private applyAddressList(addresses: Address[]): void {
+    const next: Address[] = this.copyAddresses(deduplicateAddresses(addresses))
+    this.addressList = next
+    AppStorage.setOrCreate<Address[]>('addressList', next)
+  }
+
   // 设为默认地址
   async setDefault(addr: Address): Promise<void> {
-    const ok: boolean = await setDefaultAddressRemote(addr.id)
-    if (!ok) {
+    if (!isLoggedIn()) {
+      this.showLoginRequired()
       return
     }
 
-    // setDefaultAddressRemote 会同步后端最新地址，基于同步结果创建新数组，
-    // 避免原地修改对象导致 ForEach 无法感知默认状态变化。
+    const previous: Address[] = this.copyAddresses(this.addressList)
+    // 先更新当前页面，接口成功后再用服务端同步结果校准，保证点击后立即有反馈。
+    this.applyAddressList(this.copyAddresses(this.addressList, addr.id))
+    const ok: boolean = await setDefaultAddressRemote(addr.id)
+    if (!ok) {
+      this.applyAddressList(previous)
+      this.showOperationFailure('设置默认地址')
+      return
+    }
+
     const syncedAddresses: Address[] = AppStorage.get<Address[]>('addressList') || this.addressList
-    const updatedAddresses: Address[] = syncedAddresses.slice()
-    updatedAddresses.forEach((item: Address) => {
-      item.isDefault = item.id === addr.id
-    })
-    AppStorage.setOrCreate<Address[]>('addressList', updatedAddresses)
-    this.addressList = updatedAddresses
+    this.applyAddressList(this.copyAddresses(syncedAddresses, addr.id))
+    promptAction.showToast({ message: '已设为默认地址', duration: 1200 })
+  }
+
+  async deleteAddress(addr: Address): Promise<void> {
+    if (!isLoggedIn()) {
+      this.showLoginRequired()
+      return
+    }
+    const ok: boolean = await deleteAddressRemote(addr.id)
+    if (!ok) {
+      this.showOperationFailure('删除地址')
+      return
+    }
+    const syncedAddresses: Address[] = AppStorage.get<Address[]>('addressList') || []
+    this.applyAddressList(syncedAddresses)
+    promptAction.showToast({ message: '地址已删除', duration: 1200 })
   }
 
   // 保存地址
   async doSave(): Promise<void> {
+    if (!isLoggedIn()) {
+      this.showLoginRequired()
+      return
+    }
     // 验证
     if (this.formData.name === '' || this.formData.phone === '' || this.formData.address === '') {
+      promptAction.showToast({ message: '请完善姓名、手机号和地址', duration: 1500 })
       return
     }
 
@@ -378,26 +444,21 @@ export struct AddressListPage {
       const ok: boolean = await addAddressRemote(this.formData.name, this.formData.phone,
         this.formData.address + ' ' + this.formData.detail, this.formData.isDefault)
       if (!ok) {
+        this.showOperationFailure('新增地址')
         return
       }
     } else {
       const ok: boolean = await updateAddressRemote(this.editingAddress.id, this.formData.name, this.formData.phone,
         this.formData.address + ' ' + this.formData.detail, this.formData.isDefault)
       if (!ok) {
+        this.showOperationFailure('更新地址')
         return
       }
     }
 
-    // 如果设为默认，取消其他默认
-    if (this.formData.isDefault) {
-      this.addressList.forEach(a => {
-        if (a.id !== (this.editingAddress !== null ? this.editingAddress.id : 0)) {
-          a.isDefault = false
-        }
-      })
-      AppStorage.setOrCreate('addressList', this.addressList)
-    }
-
+    const syncedAddresses: Address[] = AppStorage.get<Address[]>('addressList') || this.addressList
+    this.applyAddressList(syncedAddresses)
     this.showAddForm = false
+    promptAction.showToast({ message: this.editingAddress === null ? '地址新增成功' : '地址更新成功', duration: 1200 })
   }
 }
