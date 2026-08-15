@@ -5,6 +5,7 @@
     "pages/LocationPage",
     "pages/AddressListPage",
     "pages/CheckoutPage",
+    "pages/CartPage",
     "pages/OrderDetailPage",
     "pages/CouponCenterPage",
     "pages/FavoriteListPage",
