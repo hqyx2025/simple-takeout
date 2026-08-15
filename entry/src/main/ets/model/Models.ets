@@ -5,7 +5,8 @@
 // 用户角色类型
 export enum UserRole {
   CUSTOMER = 0,    // 普通用户（点餐）
-  MERCHANT = 1     // 商户（上架店铺/食物）
+  MERCHANT = 1,    // 商户（管理自己的店铺、商品和订单）
+  ADMIN = 2        // 管理端（管理平台分类、店铺和托管订单）
 }
 
 // 分类模型

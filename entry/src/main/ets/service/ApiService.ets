@@ -545,7 +545,7 @@ function toUser(u: ServerUser): User {
     avatar: u.avatar,
     phone: u.phone,
     password: '',
-    role: u.role === 1 ? UserRole.MERCHANT : UserRole.CUSTOMER,
+    role: u.role === 2 ? UserRole.ADMIN : u.role === 1 ? UserRole.MERCHANT : UserRole.CUSTOMER,
     balance: u.balance,
     coupons: [],
     orders: [],
