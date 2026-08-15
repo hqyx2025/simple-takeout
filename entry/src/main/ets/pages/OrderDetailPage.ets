@@ -15,6 +15,7 @@ import { logInfo } from '../service/AppLogger'
 @Component
 export struct OrderDetailPage {
   @State order: Order | null = null
+  @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State showCancelDialog: boolean = false
   @State showConfirmDialog: boolean = false
   orderId: number = 0
@@ -25,10 +26,18 @@ export struct OrderDetailPage {
 
   aboutToAppear() {
     const routerOrderId: number = AppStorage.get<number>('currentOrderId') || 0
-    const orderId: number = this.orderId || routerOrderId
+    this.orderId = this.orderId || routerOrderId
+    if (!this.loggedIn) {
+      this.order = null
+      logInfo('Page', '进入订单详情页：当前未登录，不读取订单数据')
+      return
+    }
     const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
-    this.order = orders.find(o => o.id === orderId) || null
-    logInfo('Page', `进入订单详情页 OrderDetailPage orderId=${orderId} 状态=${this.order !== null ? this.order.status : -1}`)
+    const cachedOrder: Order | undefined = AppStorage.get<Order>('currentOrder')
+    this.order = orders.find(o => o.id === this.orderId)
+      || (cachedOrder !== undefined && cachedOrder.id === this.orderId ? cachedOrder : undefined)
+      || null
+    logInfo('Page', `进入订单详情页 OrderDetailPage orderId=${this.orderId} 状态=${this.order !== null ? this.order.status : -1}`)
     // 配送中状态启动骑手动画
     if (this.order !== null && this.order.status === 3) {
       this.startRiderAnimation()
@@ -74,6 +83,10 @@ export struct OrderDetailPage {
   }
 
   private reloadOrder(): void {
+    if (!this.loggedIn) {
+      this.order = null
+      return
+    }
     const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
     this.order = orders.find(o => o.id === this.orderId) || null
   }
@@ -118,9 +131,17 @@ export struct OrderDetailPage {
         .alignItems(VerticalAlign.Center)
 
         if (this.order === null) {
-          Column() {
-            Text('📦').fontSize(60).margin({ top: 100 })
-            Text('订单不存在').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: 16 })
+          Column({ space: SPACING.SM }) {
+            Text(this.loggedIn ? '📦' : '🔒').fontSize(60).margin({ top: 100 })
+            Text(this.loggedIn ? '订单不存在' : '暂无登录')
+              .fontSize(FONT_SIZE.LG)
+              .fontColor(COLORS.TEXT_HINT)
+              .margin({ top: SPACING.MD })
+            if (!this.loggedIn) {
+              Text('请登录后查看订单')
+                .fontSize(FONT_SIZE.MD)
+                .fontColor(COLORS.TEXT_HINT)
+            }
           }
           .width('100%')
           .layoutWeight(1)

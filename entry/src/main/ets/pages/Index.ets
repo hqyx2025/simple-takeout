@@ -1117,47 +1117,6 @@ struct StoreDetailContent {
     .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.LG })
   }
 
-  submitOrder() {
-    const items = this.cartItems.filter(c => c.storeId === this.storeId)
-    const total = items.reduce((s, i) => s + i.goods.price * i.quantity, 0)
-    const now = new Date()
-    const timeStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
-
-    const order: Order = {
-      id: Date.now(),
-      storeId: this.storeId,
-      storeName: this.storeName,
-      storeImage: '',
-      items: items,
-      totalPrice: total,
-      deliveryFee: this.storeDeliveryFee,
-      discountAmount: 0,
-      payAmount: total + this.storeDeliveryFee,
-      status: 1, // 已付款
-      createTime: timeStr,
-      payTime: timeStr,
-      address: {
-        id: 1, name: '张三', phone: '13800138000',
-        address: '北京市海淀区', detail: '清华大学学生公寓3号楼205',
-        isDefault: true, tag: '学校'
-      },
-      remark: ''
-    }
-
-    // 添加订单
-    const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
-    orders.unshift(order)
-    AppStorage.setOrCreate('orderList', orders)
-
-    // 清空该店铺购物车
-    const remainCart = (this.cartItems || []).filter(c => c.storeId !== this.storeId)
-    AppStorage.setOrCreate('cartItems', remainCart)
-    this.cartCount = 0
-    this.cartTotal = 0
-    this.cartItems = remainCart
-    logInfo('Order', `首页快捷下单 orderId=${order.id} store=${order.storeName} 商品数=${items.length} 实付=${order.payAmount}`)
-  }
-
   getQty(goodsId: number): number {
     const item = (this.cartItems || []).find(c => c.goods.id === goodsId && c.storeId === this.storeId)
     return item ? item.quantity : 0
@@ -1171,6 +1130,7 @@ struct OrderListMainPage {
   // 避免 @StorageLink 首次绑定时触发 @Watch 回调访问到未初始化的数据源
   private orderDataSource: OrderDataSource = new OrderDataSource()
   @StorageLink('orderList') @Watch('onOrderListChange') orderList: Order[] = []
+  @StorageLink('isLoggedIn') @Watch('onLoginStateChange') loggedIn: boolean = false
   @State @Watch('onFilterChange') currentStatus: number = -1
   @State isRefreshing: boolean = false
 
@@ -1178,12 +1138,30 @@ struct OrderListMainPage {
     // 诊断日志：确认启动渲染时订单数据状态
     this.debugOrderState()
     this.refreshDataSource()
+    if (!this.loggedIn) {
+      this.orderList = []
+      return
+    }
     // 从后端拉取最新订单（真实后端模式）
+    this.refreshOrders()
+  }
+
+  onLoginStateChange(): void {
+    if (!this.loggedIn) {
+      this.orderList = []
+      this.refreshDataSource()
+      return
+    }
     this.refreshOrders()
   }
 
   // 拉取后端用户订单并刷新列表
   private async refreshOrders(): Promise<void> {
+    if (!this.loggedIn) {
+      this.orderList = []
+      this.refreshDataSource()
+      return
+    }
     await syncUserOrdersFromServer()
     this.orderList = AppStorage.get<Order[]>('orderList') || []
     this.refreshDataSource()
@@ -1207,7 +1185,7 @@ struct OrderListMainPage {
   private refreshDataSource(): void {
     // 绝对防御：orderList 非数组时按空数组处理，避免 LazyForEach 崩溃
     let list: Order[] = []
-    if (Array.isArray(this.orderList)) {
+    if (this.loggedIn && Array.isArray(this.orderList)) {
       list = this.orderList
     }
     let filtered: Order[] = list
@@ -1249,7 +1227,9 @@ struct OrderListMainPage {
       .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
       .width('100%').backgroundColor(COLORS.BG_WHITE)
 
-      if (!Array.isArray(this.orderList) || this.orderList.length === 0) {
+      if (!this.loggedIn) {
+        EmptyState({ icon: '??', title: '暂无登录', description: '请登录后查看订单' })
+      } else if (!Array.isArray(this.orderList) || this.orderList.length === 0) {
         EmptyState({ icon: '📦', title: '暂无订单', description: '快去点一份美味吧' })
       } else {
         Refresh({ refreshing: this.isRefreshing }) {
@@ -1336,6 +1316,7 @@ struct OrderListMainPage {
     .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
     .onClick(() => {
       AppStorage.setOrCreate<Order>('currentOrder', order)
+      AppStorage.setOrCreate<number>('currentOrderId', order.id)
       router.pushUrl({ url: 'pages/OrderDetailPage' })
     })
   }
