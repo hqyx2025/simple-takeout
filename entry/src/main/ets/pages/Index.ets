@@ -348,6 +348,8 @@ struct HomePage {
   aboutToAppear() {
     this.isHeaderVisible = true
     this.showPrivacyDialog = !(AppStorage.get<boolean>('privacyConsent') || false)
+    const initialCategories: Category[] = AppStorage.get<Category[]>('categoryList') || []
+    this.categories = initialCategories.slice()
     this.stores = this.getNearbyStores()
     this.storeDataSource.setData(this.stores)
     // 隐私同意前不发起网络请求；同意后由确认回调触发同步
@@ -362,6 +364,8 @@ struct HomePage {
       return
     }
     await syncCategoriesFromServer()
+    const latestCategories: Category[] = AppStorage.get<Category[]>('categoryList') || []
+    this.categories = latestCategories.slice()
     await syncStoresFromServer()
     this.stores = this.getNearbyStores()
     this.storeDataSource.setData(this.stores)
@@ -386,6 +390,20 @@ struct HomePage {
       return []
     }
     return getAllStoresList().filter((store: StoreItem) => this.parseStoreDistance(store.distance) <= 2.0)
+  }
+
+  private getCategoryRowsTemplate(): string {
+    const rowCount: number = Math.max(1, Math.ceil(this.categories.length / 5))
+    let template: string = ''
+    for (let i = 0; i < rowCount; i++) {
+      template += i === 0 ? '1fr' : ' 1fr'
+    }
+    return template
+  }
+
+  private getCategoryGridHeight(): number {
+    const rowCount: number = Math.max(1, Math.ceil(this.categories.length / 5))
+    return rowCount * 80
   }
 
   private getCategoryIcon(category: Category): string {
@@ -505,11 +523,11 @@ struct HomePage {
             }, (item: Category) => item.id.toString())
           }
           .columnsTemplate('1fr 1fr 1fr 1fr 1fr')
-          .rowsTemplate('1fr 1fr')
+          .rowsTemplate(this.getCategoryRowsTemplate())
           .columnsGap(0)
           .rowsGap(4)
           .width('100%')
-          .height(160)
+          .height(this.getCategoryGridHeight())
           .padding({ top: SPACING.MD, bottom: SPACING.SM })
           .backgroundColor(COLORS.BG_WHITE)
           .margin({ top: SPACING.SM })
