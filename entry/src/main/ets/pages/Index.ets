@@ -1326,6 +1326,7 @@ struct OrderListMainPage {
 @Component
 struct ProfileMainPage {
   @StorageLink('isLoggedIn') loggedIn: boolean = false
+  @StorageLink('cartItems') cartItems: CartItem[] = []
   @StorageLink('user') user: User = {
     id: 0, username: '未登录', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER,
     balance: 0, coupons: [], orders: [], storeIds: []
@@ -1413,6 +1414,14 @@ struct ProfileMainPage {
             }
             router.pushUrl({ url: 'pages/AddressListPage' })
           })
+          this.ProfileMenuRow('🛒', this.getCartTitle(), () => {
+            if (!this.loggedIn) {
+              promptAction.showToast({ message: '请先登录后查看购物车', duration: 1500 })
+              this.onNavigateLogin()
+              return
+            }
+            router.pushUrl({ url: 'pages/CartPage' })
+          })
           this.ProfileMenuRow('❤️', '我的收藏', () => { router.pushUrl({ url: 'pages/FavoriteListPage' }) })
           this.ProfileMenuRow('📞', '联系客服', () => {})
           this.ProfileMenuRow('⚙️', '设置', () => { router.pushUrl({ url: 'pages/SettingsPage' }) })
@@ -1465,6 +1474,11 @@ struct ProfileMainPage {
       Text(title).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
     }
     .onClick(() => { this.onNavigate(2) })
+  }
+
+  private getCartTitle(): string {
+    const count: number = this.cartItems.reduce((total: number, item: CartItem) => total + item.quantity, 0)
+    return count > 0 ? `购物车 (${count})` : '购物车'
   }
 
   @Builder
