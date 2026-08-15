@@ -6,6 +6,8 @@ import { Address } from '../model/Models'
 import { addAddressRemote, deleteAddressRemote, updateAddressRemote, setDefaultAddressRemote, syncAddressesRemote, deduplicateAddresses, isLoggedIn } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
+import { common } from '@kit.AbilityKit'
+import { GeoPosition, getCurrentPosition, reverseGeocodePosition } from '../service/LocationService'
 
 // 表单数据类（用于避免无类型对象字面量）
 class AddressFormData {
@@ -59,6 +61,7 @@ export struct AddressListPage {
   @State showAddForm: boolean = false
   @State editingAddress: Address | null = null
   @State formData: AddressFormData = new AddressFormData()
+  @State locatingCurrent: boolean = false
 
   onBack: () => void = () => { router.back() }
   onSelectAddress: (address: Address) => void = () => {}
@@ -214,21 +217,6 @@ export struct AddressListPage {
           .margin({ top: SPACING.MD, bottom: SPACING.SM })
           .onClick(() => { this.openAddForm() })
 
-        // 定位选择位置入口
-        Text('📍 定位选择当前位置')
-          .fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.PRIMARY)
-          .width('90%')
-          .textAlign(TextAlign.Center)
-          .margin({ bottom: SPACING.LG })
-          .onClick(() => {
-            if (!isLoggedIn()) {
-              AppStorage.setOrCreate<boolean>('pendingLocationLoginPrompt', true)
-              router.back()
-              return
-            }
-            router.pushUrl({ url: 'pages/LocationPage' })
-          })
       }
       .width('100%')
       .height('100%')
@@ -255,6 +243,20 @@ export struct AddressListPage {
               .height(44)
               .type(InputType.PhoneNumber)
               .onChange((v: string) => { this.formData.phone = v })
+
+            if (this.editingAddress === null) {
+              Row() {
+                Text('地址')
+                  .fontSize(FONT_SIZE.MD)
+                  .fontColor(COLORS.TEXT_SECONDARY)
+                Blank()
+                Text(this.locatingCurrent ? '正在定位...' : '📍 定位选择当前位置')
+                  .fontSize(FONT_SIZE.SM)
+                  .fontColor(this.locatingCurrent ? COLORS.TEXT_HINT : COLORS.PRIMARY)
+                  .onClick(() => { this.fillCurrentLocation() })
+              }
+              .width('100%')
+            }
 
             TextInput({ placeholder: '地址（如：北京市海淀区）', text: this.formData.address })
               .width('100%')
@@ -339,6 +341,7 @@ export struct AddressListPage {
   openAddForm(): void {
     this.editingAddress = null
     this.formData = AddressFormData.create()
+    this.locatingCurrent = false
     this.showAddForm = true
   }
 
@@ -346,7 +349,41 @@ export struct AddressListPage {
   openEditForm(addr: Address): void {
     this.editingAddress = addr
     this.formData = AddressFormData.fromAddress(addr)
+    this.locatingCurrent = false
     this.showAddForm = true
+  }
+
+  private async fillCurrentLocation(): Promise<void> {
+    if (this.locatingCurrent) {
+      return
+    }
+    if (!isLoggedIn()) {
+      this.showLoginRequired()
+      return
+    }
+    this.locatingCurrent = true
+    try {
+      const context: common.UIAbilityContext = this.getUIContext().getHostContext() as common.UIAbilityContext
+      const position: GeoPosition = await getCurrentPosition(context)
+      const addressText: string = await reverseGeocodePosition(position)
+      if (addressText.trim() === '') {
+        promptAction.showToast({ message: '未能解析当前位置，请手动填写地址', duration: 1800 })
+        return
+      }
+      const nextForm: AddressFormData = new AddressFormData()
+      nextForm.name = this.formData.name
+      nextForm.phone = this.formData.phone
+      nextForm.address = addressText
+      nextForm.detail = ''
+      nextForm.tag = this.formData.tag
+      nextForm.isDefault = this.formData.isDefault
+      this.formData = nextForm
+      promptAction.showToast({ message: '当前位置已填入地址', duration: 1200 })
+    } catch (err) {
+      promptAction.showToast({ message: '定位失败，请手动填写地址', duration: 1800 })
+    } finally {
+      this.locatingCurrent = false
+    }
   }
 
   // 选择标签（重新赋值以触发UI更新）

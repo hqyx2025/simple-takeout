@@ -8,7 +8,7 @@
  * 5. 与主页双向绑定：进入时回显已保存的定位地址，选择后写回主页配送地址
  */
 import { Address, User } from '../model/Models'
-import { addAddressRemoteAndGet, isLoggedIn } from '../service/AppStorageManager'
+import { isLoggedIn } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { AddressSearchResult, GeoPosition, getCurrentPosition, reverseGeocodePosition, searchAddress } from '../service/LocationService'
 import { EmptyState } from '../components/EmptyState'
@@ -353,32 +353,16 @@ export struct LocationPage {
       }
       return
     }
-    const user: User | undefined = AppStorage.get<User>('user')
-    if (user !== undefined && user !== null && user.phone !== '') {
-      const remoteAddress: Address | null = await addAddressRemoteAndGet('当前位置', user.phone, `${addressText} ${detail}`.trim(), true)
-      if (remoteAddress === null) {
-        promptAction.showToast({ message: '地址保存失败，请稍后重试', duration: 1800 })
-        return
-      }
-      remoteAddress.address = addressText
-      remoteAddress.detail = detail
-      remoteAddress.latitude = pos.latitude
-      remoteAddress.longitude = pos.longitude
-      AppStorage.setOrCreate<Address>('currentAddress', remoteAddress)
-      AppStorage.setOrCreate<GeoPosition>('lastLocationPosition', pos)
-      saveAllData()
-      router.back()
-      return
-    }
     this.applyAddress(addressText, detail, pos)
   }
 
   // 保存配送地址并返回（含经纬度，支持双向绑定回显）
   private applyAddress(addressText: string, detail: string, pos: GeoPosition): void {
+    const user: User | undefined = AppStorage.get<User>('user')
     const addr: Address = {
       id: 0,
-      name: '当前位置',
-      phone: '',
+      name: user !== undefined && user !== null ? user.username : '',
+      phone: user !== undefined && user !== null ? user.phone : '',
       address: addressText,
       detail: detail,
       isDefault: false,
