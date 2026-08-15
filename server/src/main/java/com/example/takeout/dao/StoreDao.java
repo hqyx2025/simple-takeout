@@ -52,12 +52,19 @@ public class StoreDao {
     }
 
     public List<Store> listAll() {
-        return jdbc.query("SELECT * FROM stores ORDER BY monthly_sales DESC", MAPPER);
+        return jdbc.query("SELECT * FROM stores WHERE status = 1 ORDER BY monthly_sales DESC", MAPPER);
     }
 
     public List<Store> listByCategory(int categoryId) {
-        return jdbc.query("SELECT * FROM stores WHERE category_id = ? OR category_ids LIKE ? ORDER BY monthly_sales DESC",
-                MAPPER, categoryId, "%" + categoryId + "%");
+        return jdbc.query("SELECT * FROM stores WHERE status = 1 AND " +
+                        "(category_id = ? OR JSON_CONTAINS(COALESCE(category_ids, '[]'), JSON_ARRAY(?))) " +
+                        "ORDER BY monthly_sales DESC",
+                MAPPER, categoryId, categoryId);
+    }
+
+    public boolean categoryExists(long categoryId) {
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM categories WHERE id = ?", Integer.class, categoryId);
+        return count != null && count > 0;
     }
 
     public List<Store> listByOwner(long ownerId) {
