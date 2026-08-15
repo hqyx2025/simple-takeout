@@ -4,7 +4,7 @@
 import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, MerchantStatsData, Category, createEmptyUser } from '../model/Models'
 import { saveAllData, clearAllData } from './DataPersistence'
 import { apiLogin, apiRegister, updateUserProfileApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi } from './ApiService'
-import { getAuthToken, setAuthToken } from './HttpClient'
+import { getAuthToken, setAuthToken, getLastApiErrorMessage } from './HttpClient'
 import { logInfo, logWarn, logError } from './AppLogger'
 
 // 初始化全局数据
@@ -73,6 +73,10 @@ export function logout(): void {
 
 export function isLoggedIn(): boolean {
   return AppStorage.get<boolean>('isLoggedIn') || false
+}
+
+export function getLastRemoteErrorMessage(): string {
+  return getLastApiErrorMessage()
 }
 
 // ============ 获取当前用户 ============

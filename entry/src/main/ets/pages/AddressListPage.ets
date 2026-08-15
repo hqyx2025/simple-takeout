@@ -3,7 +3,7 @@
  * 支持地址的增删改查与设置默认地址
  */
 import { Address } from '../model/Models'
-import { addAddressRemote, deleteAddressRemote, updateAddressRemote, setDefaultAddressRemote, syncAddressesRemote, deduplicateAddresses, isLoggedIn } from '../service/AppStorageManager'
+import { addAddressRemote, deleteAddressRemote, updateAddressRemote, setDefaultAddressRemote, syncAddressesRemote, deduplicateAddresses, isLoggedIn, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { common } from '@kit.AbilityKit'
@@ -404,12 +404,13 @@ export struct AddressListPage {
     promptAction.showToast({ message: '登录状态已失效，请先登录后继续操作', duration: 1800 })
   }
 
-  private showOperationFailure(action: string): void {
+  private showOperationFailure(action: string, detail: string = ''): void {
     if (!isLoggedIn()) {
       this.showLoginRequired()
       return
     }
-    promptAction.showToast({ message: `${action}失败，请检查网络后重试`, duration: 1800 })
+    const message: string = detail.trim() !== '' ? detail : `${action}失败，请检查网络后重试`
+    promptAction.showToast({ message: message, duration: 2200 })
   }
 
   private copyAddresses(source: Address[], defaultId?: number): Address[] {
@@ -523,8 +524,15 @@ export struct AddressListPage {
       return
     }
     // 验证
-    if (this.formData.name === '' || this.formData.phone === '' || this.formData.address === '') {
+    const name: string = this.formData.name.trim()
+    const phone: string = this.formData.phone.trim()
+    const address: string = this.formData.address.trim()
+    if (name === '' || phone === '' || address === '') {
       promptAction.showToast({ message: '请完善姓名、手机号和地址', duration: 1500 })
+      return
+    }
+    if (!/^1\d{10}$/.test(phone)) {
+      promptAction.showToast({ message: '请输入正确的11位手机号', duration: 1800 })
       return
     }
 
@@ -542,14 +550,14 @@ export struct AddressListPage {
       const ok: boolean = await addAddressRemote(this.formData.name, this.formData.phone,
         this.getFormAddressDetail(), this.formData.isDefault)
       if (!ok) {
-        this.showOperationFailure('新增地址')
+        this.showOperationFailure('新增地址', getLastRemoteErrorMessage())
         return
       }
     } else {
       const ok: boolean = await updateAddressRemote(this.editingAddress.id, this.formData.name, this.formData.phone,
         this.getFormAddressDetail(), this.formData.isDefault)
       if (!ok) {
-        this.showOperationFailure('更新地址')
+        this.showOperationFailure('更新地址', getLastRemoteErrorMessage())
         return
       }
     }
