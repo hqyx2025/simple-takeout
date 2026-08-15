@@ -31,16 +31,40 @@ public class DataSeeder implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
+        ensureOrderEscrowColumn();
         // 分类是首页导航的基础数据，即使已有用户数据，也必须单独补齐。
         ensureCategories();
         Integer userCount = jdbc.queryForObject("SELECT COUNT(*) FROM users", Integer.class);
         if (userCount != null && userCount > 0) {
+            ensureAdminUser();
             ensureStoresAndGoods();
             log.info("用户数据已存在（users={}），已校验分类、店铺和商品数据", userCount);
             return;
         }
         seed();
+        ensureAdminUser();
         log.info("种子数据初始化完成：8 分类 / 30 店铺 / 900 商品 / 5 账号");
+    }
+
+    private void ensureOrderEscrowColumn() {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() " +
+                        "AND table_name = 'orders' AND column_name = 'escrow_status'", Integer.class);
+        if (count == null || count == 0) {
+            jdbc.execute("ALTER TABLE orders ADD COLUMN escrow_status INT NOT NULL DEFAULT 0 AFTER reviewed");
+            log.info("订单表已补充托管资金状态字段 escrow_status");
+        }
+    }
+
+    private void ensureAdminUser() {
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM users WHERE phone = ?", Integer.class,
+                "13100131000");
+        if (count == null || count == 0) {
+            jdbc.update("INSERT INTO users(username, avatar, phone, password, role, balance, create_time) " +
+                            "VALUES(?,?,?,?,?,?,?)",
+                    "平台管理员", "", "13100131000", PasswordUtil.hash("123456"), 2, 0.0, now());
+            log.info("已补充管理端测试账号 phone=13100131000");
+        }
     }
 
     private void ensureStoresAndGoods() {

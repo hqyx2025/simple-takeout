@@ -1,7 +1,7 @@
 package com.example.takeout.model;
 
 /**
- * 用户（角色：0=用户 1=商户，与客户端 UserRole 对齐）
+ * 用户（角色：0=用户 1=商户 2=管理端，与客户端 UserRole 对齐）
  */
 public record User(
         long id,

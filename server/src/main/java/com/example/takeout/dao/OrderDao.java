@@ -43,10 +43,10 @@ public class OrderDao {
     }
 
     public long insert(Order o) {
-        jdbc.update("INSERT INTO orders(order_no, user_id, store_id, store_name, status, items, address, goods_amount, delivery_fee, discount, pay_amount, remark, reviewed, create_time, pay_time, accept_time, deliver_time, complete_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        jdbc.update("INSERT INTO orders(order_no, user_id, store_id, store_name, status, items, address, goods_amount, delivery_fee, discount, pay_amount, remark, reviewed, escrow_status, create_time, pay_time, accept_time, deliver_time, complete_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 o.orderNo(), o.userId(), o.storeId(), o.storeName(), o.status(), o.items(), o.address(),
                 o.goodsAmount(), o.deliveryFee(), o.discount(), o.payAmount(), o.remark(), o.reviewed(),
-                o.createTime(), o.payTime(), o.acceptTime(), o.deliverTime(), o.completeTime());
+                0, o.createTime(), o.payTime(), o.acceptTime(), o.deliverTime(), o.completeTime());
         return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 
@@ -56,6 +56,10 @@ public class OrderDao {
 
     public List<Order> listByStore(long storeId) {
         return jdbc.query("SELECT * FROM orders WHERE store_id = ? ORDER BY id DESC", MAPPER, storeId);
+    }
+
+    public List<Order> listAll() {
+        return jdbc.query("SELECT * FROM orders ORDER BY id DESC", MAPPER);
     }
 
     public Optional<Order> findById(long id) {
@@ -68,5 +72,20 @@ public class OrderDao {
 
     public void markReviewed(long id) {
         jdbc.update("UPDATE orders SET reviewed = 1 WHERE id = ?", id);
+    }
+
+    /** 将托管款标记为已退款，条件更新避免重复退款。 */
+    public boolean refundEscrow(long id) {
+        return jdbc.update("UPDATE orders SET escrow_status = 2 WHERE id = ? AND escrow_status = 0", id) == 1;
+    }
+
+    /** 将托管款标记为已结算，条件更新避免重复给商户打款。 */
+    public boolean releaseEscrow(long id) {
+        return jdbc.update("UPDATE orders SET escrow_status = 1 WHERE id = ? AND escrow_status = 0", id) == 1;
+    }
+
+    public List<Order> listSettledByStore(long storeId) {
+        return jdbc.query("SELECT * FROM orders WHERE store_id = ? AND status = 4 AND escrow_status = 1 ORDER BY id DESC",
+                MAPPER, storeId);
     }
 }

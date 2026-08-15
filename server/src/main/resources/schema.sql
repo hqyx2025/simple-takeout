@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS orders (
     pay_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
     remark VARCHAR(255) DEFAULT '',
     reviewed INT NOT NULL DEFAULT 0,
+    escrow_status INT NOT NULL DEFAULT 0,
     create_time VARCHAR(32) NOT NULL,
     pay_time VARCHAR(32) DEFAULT '',
     accept_time VARCHAR(32) DEFAULT '',
