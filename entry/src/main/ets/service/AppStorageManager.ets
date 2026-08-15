@@ -82,29 +82,43 @@ export function getCurrentUser(): User | undefined {
 
 // ============ 购物车操作 ============
 export function addToCart(item: CartItem): void {
-  const cart: CartItem[] = AppStorage.get<CartItem[]>('cartItems') || []
+  const savedCart: CartItem[] = AppStorage.get<CartItem[]>('cartItems') || []
+  const cart: CartItem[] = savedCart.slice()
   const existIndex = cart.findIndex(c => c.goods.id === item.goods.id && c.storeId === item.storeId)
   if (existIndex >= 0) {
-    cart[existIndex].quantity += item.quantity
+    const current: CartItem = cart[existIndex]
+    cart[existIndex] = {
+      goods: current.goods,
+      quantity: current.quantity + item.quantity,
+      storeId: current.storeId,
+      storeName: current.storeName
+    }
   } else {
     cart.push(item)
   }
-  AppStorage.setOrCreate('cartItems', cart)
+  AppStorage.setOrCreate<CartItem[]>('cartItems', cart)
   saveAllData()
   logInfo('Cart', `加入购物车 goods=${item.goods.name} x${item.quantity} storeId=${item.storeId}`)
 }
 
 export function updateCartItemQuantity(goodsId: number, storeId: number, quantity: number): void {
-  let cart: CartItem[] = AppStorage.get<CartItem[]>('cartItems') || []
+  const savedCart: CartItem[] = AppStorage.get<CartItem[]>('cartItems') || []
+  let cart: CartItem[] = savedCart.slice()
   if (quantity <= 0) {
     cart = cart.filter(c => !(c.goods.id === goodsId && c.storeId === storeId))
   } else {
-    const item = cart.find(c => c.goods.id === goodsId && c.storeId === storeId)
-    if (item) {
-      item.quantity = quantity
+    const itemIndex: number = cart.findIndex(c => c.goods.id === goodsId && c.storeId === storeId)
+    if (itemIndex >= 0) {
+      const current: CartItem = cart[itemIndex]
+      cart[itemIndex] = {
+        goods: current.goods,
+        quantity: quantity,
+        storeId: current.storeId,
+        storeName: current.storeName
+      }
     }
   }
-  AppStorage.setOrCreate('cartItems', cart)
+  AppStorage.setOrCreate<CartItem[]>('cartItems', cart)
   saveAllData()
   logInfo('Cart', `更新购物车数量 goodsId=${goodsId} storeId=${storeId} quantity=${quantity}`)
 }
