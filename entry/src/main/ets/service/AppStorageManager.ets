@@ -7,6 +7,9 @@ import { apiLogin, apiRegister, updateUserProfileApi, fetchCategories, fetchStor
 import { getAuthToken, setAuthToken, getLastApiErrorMessage } from './HttpClient'
 import { logInfo, logWarn, logError } from './AppLogger'
 
+let categoriesSyncInFlight: Promise<void> | null = null
+let storesSyncInFlight: Promise<void> | null = null
+
 // 初始化全局数据
 export function initAppStorage() {
   const existingCategories: Category[] | undefined = AppStorage.get<Category[]>('categoryList')
@@ -337,34 +340,56 @@ export async function registerRemote(username: string, phone: string, password: 
 
 /** 从后端拉取首页分类；服务端暂时无数据时保留默认导航，避免首页出现空白区域。 */
 export async function syncCategoriesFromServer(): Promise<void> {
-  const remoteCategories: Category[] = await fetchCategories()
-  const defaults: Category[] = createDefaultCategories()
-  if (remoteCategories.length === 0) {
-    AppStorage.setOrCreate<Category[]>('categoryList', defaults)
-    logWarn('Api', '同步分类数据为空，使用默认分类图标')
+  if (categoriesSyncInFlight !== null) {
+    await categoriesSyncInFlight
     return
   }
-  const categories: Category[] = remoteCategories.map((remote: Category) => {
-    const fallback: Category | undefined = defaults.find((item: Category) => item.id === remote.id)
-    const category: Category = {
-      id: remote.id,
-      name: remote.name.trim() === '' && fallback !== undefined ? fallback.name : remote.name,
-      icon: remote.icon.trim() === '' && fallback !== undefined ? fallback.icon : remote.icon,
-      color: remote.color.trim() === '' && fallback !== undefined ? fallback.color : remote.color
+  categoriesSyncInFlight = (async (): Promise<void> => {
+    const remoteCategories: Category[] = await fetchCategories()
+    const defaults: Category[] = createDefaultCategories()
+    if (remoteCategories.length === 0) {
+      AppStorage.setOrCreate<Category[]>('categoryList', defaults)
+      logWarn('Api', '同步分类数据为空，使用默认分类图标')
+      return
     }
-    return category
-  })
-  AppStorage.setOrCreate<Category[]>('categoryList', categories)
-  logInfo('Api', `同步分类数据 ${categories.length} 个`)
+    const categories: Category[] = remoteCategories.map((remote: Category) => {
+      const fallback: Category | undefined = defaults.find((item: Category) => item.id === remote.id)
+      const category: Category = {
+        id: remote.id,
+        name: remote.name.trim() === '' && fallback !== undefined ? fallback.name : remote.name,
+        icon: remote.icon.trim() === '' && fallback !== undefined ? fallback.icon : remote.icon,
+        color: remote.color.trim() === '' && fallback !== undefined ? fallback.color : remote.color
+      }
+      return category
+    })
+    AppStorage.setOrCreate<Category[]>('categoryList', categories)
+    logInfo('Api', `同步分类数据 ${categories.length} 个`)
+  })()
+  try {
+    await categoriesSyncInFlight
+  } finally {
+    categoriesSyncInFlight = null
+  }
 }
 
 /**
  * 从后端拉取店铺列表并写入 allStores（首页 onShow 调用）
  */
 export async function syncStoresFromServer(): Promise<void> {
-  const stores: StoreItem[] = await fetchStores()
-  AppStorage.setOrCreate<StoreItem[]>('allStores', stores)
-  logInfo('Api', `同步店铺数据 ${stores.length} 家`)
+  if (storesSyncInFlight !== null) {
+    await storesSyncInFlight
+    return
+  }
+  storesSyncInFlight = (async (): Promise<void> => {
+    const stores: StoreItem[] = await fetchStores()
+    AppStorage.setOrCreate<StoreItem[]>('allStores', stores)
+    logInfo('Api', `同步店铺数据 ${stores.length} 家`)
+  })()
+  try {
+    await storesSyncInFlight
+  } finally {
+    storesSyncInFlight = null
+  }
 }
 
 /**
