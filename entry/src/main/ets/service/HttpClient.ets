@@ -6,6 +6,7 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError, AxiosHeaders, AxiosRequestHeaders } from '@ohos/axios'
 import { API_CONFIG } from '../common/Constants'
 import { logInfo, logWarn, logError } from './AppLogger'
+import { promptCompat as promptAction } from '../common/UiNavigation'
 
 // JWT Token（登录成功后由 ApiService 设置，请求时自动注入）
 let authToken: string = ''
@@ -21,6 +22,14 @@ export function getAuthToken(): string {
 
 export function getLastApiErrorMessage(): string {
   return lastApiErrorMessage
+}
+
+function notifyApiError(message: string): void {
+  const text: string = message.trim()
+  if (text === '') {
+    return
+  }
+  promptAction.showToast({ message: text, duration: 2200 })
 }
 
 // 创建axios实例
@@ -101,6 +110,7 @@ function getOperationName(method: string, url: string): string {
  */
 async function request<T>(method: string, url: string, data?: Object): Promise<ApiResponse<T>> {
   const operation: string = getOperationName(method, url)
+  lastApiErrorMessage = ''
   logInfo('Http', `前端请求后端：${operation}（${method} ${url}）`)
   try {
     const config: AxiosRequestConfig = {
@@ -122,6 +132,7 @@ async function request<T>(method: string, url: string, data?: Object): Promise<A
       logInfo('Http', `后端响应成功：${operation}，状态码=${result.code}，消息=${result.message}`)
     } else {
       lastApiErrorMessage = result.message || ''
+      notifyApiError(lastApiErrorMessage)
       logWarn('Http', `后端业务失败：${operation}，状态码=${result.code}，消息=${result.message}`)
       if (result.code === 401) {
         // 后端可能使用 HTTP 200 返回业务状态码 401，同样需要清理登录态。
@@ -136,6 +147,7 @@ async function request<T>(method: string, url: string, data?: Object): Promise<A
     const resp: ApiResponse<T> = axiosErr.response?.data as ApiResponse<T>
     if (resp !== undefined && resp !== null && resp.code !== undefined) {
       lastApiErrorMessage = resp.message || ''
+      notifyApiError(lastApiErrorMessage)
       logWarn('Http', `后端业务失败：${operation}，状态码=${resp.code}，消息=${resp.message}`)
       if (resp.code === 401) {
         // 认证失效时立即清理内存态和 UI 登录态，避免“界面已登录但接口全部 401”。
@@ -147,6 +159,7 @@ async function request<T>(method: string, url: string, data?: Object): Promise<A
     }
     logError('Http', `后端请求异常：${operation}，请检查网络和服务端状态`, err)
     lastApiErrorMessage = '网络请求失败，请确认后端服务已启动'
+    notifyApiError(lastApiErrorMessage)
     return { code: 500, message: '网络请求失败，请确认后端服务已启动', data: undefined as T }
   }
 }
