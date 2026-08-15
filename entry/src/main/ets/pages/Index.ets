@@ -172,6 +172,7 @@ struct Index {
     }
     const storeId: number = AppStorage.get<number>('currentStoreId') || 0
     if (storeId > 0) {
+      AppStorage.setOrCreate<boolean>('pendingStoreDetail', false)
       AppStorage.setOrCreate<number>('currentStoreId', 0)
       this.showStoreDetail(storeId)
     }
