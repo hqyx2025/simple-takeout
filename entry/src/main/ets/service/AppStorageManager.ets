@@ -557,6 +557,7 @@ export async function syncAddressesRemote(): Promise<boolean> {
     return false
   }
   const addresses: Address[] = deduplicateAddresses(remoteAddresses)
+    .filter((address: Address) => address.name !== '当前位置')
   AppStorage.setOrCreate<Address[]>('addressList', addresses)
   logInfo('Api', `同步地址 ${remoteAddresses.length} 条，去重后 ${addresses.length} 条`)
   return true

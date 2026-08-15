@@ -69,7 +69,9 @@ export struct AddressListPage {
   async aboutToAppear(): Promise<void> {
     // 先清理本地缓存中的重复地址，再等待后端最新数据，避免重复“当前位置”短暂显示。
     const cachedAddresses: Address[] = AppStorage.get<Address[]>('addressList') || []
-    AppStorage.setOrCreate<Address[]>('addressList', deduplicateAddresses(cachedAddresses))
+    const visibleAddresses: Address[] = deduplicateAddresses(cachedAddresses)
+      .filter((address: Address) => address.name !== '当前位置')
+    AppStorage.setOrCreate<Address[]>('addressList', visibleAddresses)
     if (!isLoggedIn()) {
       this.showLoginRequired()
       return
