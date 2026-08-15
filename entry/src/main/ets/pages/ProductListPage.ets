@@ -130,6 +130,11 @@ export struct ProductListPage {
   }
 
   private goToLocation(): void {
+    if (!(AppStorage.get<boolean>('isLoggedIn') || false)) {
+      AppStorage.setOrCreate<boolean>('pendingLocationAfterLogin', true)
+      router.back()
+      return
+    }
     router.pushUrl({ url: 'pages/LocationPage' })
   }
 

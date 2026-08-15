@@ -8,7 +8,7 @@
  * 5. 与主页双向绑定：进入时回显已保存的定位地址，选择后写回主页配送地址
  */
 import { Address, User } from '../model/Models'
-import { addAddressRemoteAndGet } from '../service/AppStorageManager'
+import { addAddressRemoteAndGet, isLoggedIn } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { AddressSearchResult, GeoPosition, getCurrentPosition, reverseGeocodePosition, searchAddress } from '../service/LocationService'
 import { EmptyState } from '../components/EmptyState'
@@ -78,6 +78,11 @@ export struct LocationPage {
   @State selectedPlace: SearchPlace | null = null
 
   aboutToAppear() {
+    if (!isLoggedIn()) {
+      AppStorage.setOrCreate<boolean>('pendingLocationAfterLogin', true)
+      router.back()
+      return
+    }
     // JS桥回调绑定（Web页面通过 window.ohosBridge 调用）
     this.webBridge.onCenterChanged = (lngStr: string, latStr: string, address: string): void => {
       this.onCenterChangedFromJs(lngStr, latStr, address)

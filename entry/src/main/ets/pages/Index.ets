@@ -146,6 +146,9 @@ struct Index {
   // 从子路由页面（收藏页/搜索页）返回时，处理店铺详情跳转
   onPageShow() {
     logInfo('Page', '首页 Index onPageShow')
+    if (AppStorage.get<boolean>('pendingLocationAfterLogin') || false) {
+      this.showLogin = true
+    }
     if (!(AppStorage.get<boolean>('privacyConsent') || false)) {
       return
     }
@@ -231,6 +234,11 @@ struct Index {
           onLoginSuccess: () => {
             this.showLogin = false
             this.loggedIn = true
+            const shouldLocate: boolean = AppStorage.get<boolean>('pendingLocationAfterLogin') || false
+            AppStorage.setOrCreate<boolean>('pendingLocationAfterLogin', false)
+            if (shouldLocate) {
+              router.pushUrl({ url: 'pages/LocationPage' })
+            }
           }
         })
       }
@@ -260,6 +268,7 @@ struct Index {
 @Component
 struct HomePage {
   @StorageLink('categoryList') categories: Category[] = []
+  @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State stores: StoreItem[] = []
   @State searchText: string = ''
   @State currentCategory: number = 0
@@ -355,6 +364,13 @@ struct HomePage {
   }
 
   private openProductList(mode: string, categoryId: number, title: string): void {
+    const requiresLocation: boolean = mode !== 'category'
+    if (requiresLocation && !this.loggedIn) {
+      AppStorage.setOrCreate<boolean>('pendingLocationAfterLogin', true)
+      promptAction.showToast({ message: '请先登录后再定位', duration: 1500 })
+      this.onNavigateLogin()
+      return
+    }
     if ((mode === 'nearby' || mode === 'all') && !this.hasCurrentLocation()) {
       promptAction.showToast({ message: '请先定位，再查看附近商品', duration: 1500 })
       router.pushUrl({ url: 'pages/LocationPage' })
@@ -397,9 +413,11 @@ struct HomePage {
                 .height(16)
             }
             .onClick(() => {
-              // 未定位时提示用户去定位，再进入定位选择页
-              if (this.currentAddress === null) {
-                promptAction.showToast({ message: '您尚未定位，请先选择配送位置', duration: 1500 })
+              if (!this.loggedIn) {
+                AppStorage.setOrCreate<boolean>('pendingLocationAfterLogin', true)
+                promptAction.showToast({ message: '请先登录后再定位', duration: 1500 })
+                this.onNavigateLogin()
+                return
               }
               router.pushUrl({ url: 'pages/LocationPage' })
             })

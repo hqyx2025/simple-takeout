@@ -221,7 +221,14 @@ export struct AddressListPage {
           .width('90%')
           .textAlign(TextAlign.Center)
           .margin({ bottom: SPACING.LG })
-          .onClick(() => { router.pushUrl({ url: 'pages/LocationPage' }) })
+          .onClick(() => {
+            if (!isLoggedIn()) {
+              AppStorage.setOrCreate<boolean>('pendingLocationAfterLogin', true)
+              router.back()
+              return
+            }
+            router.pushUrl({ url: 'pages/LocationPage' })
+          })
       }
       .width('100%')
       .height('100%')
