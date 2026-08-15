@@ -157,13 +157,23 @@ export struct ProductListPage {
   }
 
   private openStore(item: ProductListItem): void {
-    AppStorage.setOrCreate<number>('currentStoreId', item.store.id)
+    this.prepareStoreDetail(item.store)
     router.back()
   }
 
   private openStoreByStore(store: StoreItem): void {
-    AppStorage.setOrCreate<number>('currentStoreId', store.id)
+    this.prepareStoreDetail(store)
     router.back()
+  }
+
+  /**
+   * 返回首页时同时写入两个导航状态：currentStoreId 供 Index.onPageShow 消费，
+   * selectedStoreId 供 DiscoverTab 立即渲染，避免只设置单一状态导致点击后停留在列表页。
+   */
+  private prepareStoreDetail(store: StoreItem): void {
+    AppStorage.setOrCreate<number>('currentStoreId', store.id)
+    AppStorage.setOrCreate<number>('selectedStoreId', store.id)
+    AppStorage.setOrCreate<string>('selectedStoreName', store.name)
   }
 
   @Builder
@@ -203,7 +213,6 @@ export struct ProductListPage {
     .padding(SPACING.LG)
     .backgroundColor(COLORS.BG_WHITE)
     .borderRadius(BORDER_RADIUS.LG)
-    .onClick(() => { this.openStoreByStore(store) })
   }
 
   build() {
@@ -243,6 +252,7 @@ export struct ProductListPage {
               ListItem() {
                 this.StoreResultCard(store)
               }
+              .onClick(() => { this.openStoreByStore(store) })
             }, (store: StoreItem) => store.id.toString())
           }
           .width('100%')
