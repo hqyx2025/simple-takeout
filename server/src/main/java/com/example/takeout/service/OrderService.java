@@ -58,9 +58,7 @@ public class OrderService {
         this.objectMapper = objectMapper;
     }
 
-    /**
-     * 创建订单（模拟支付：直接扣减余额，状态=1 待接单）
-     */
+    /** 创建订单：从用户余额扣款后进入平台托管，状态=1 待接单。 */
     @Transactional
     public Order.OrderView createOrder(long userId, long storeId, List<Order.OrderItem> items,
                                        long addressId, long couponId, String remark) {
@@ -122,7 +120,7 @@ public class OrderService {
             throw new BizException("优惠金额不能超过订单金额");
         }
 
-        // 余额支付（模拟）
+        // 余额支付并进入平台托管；商户在用户确认收货前不能收到这笔钱。
         User user = userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
         if (user.balance() < payAmount) {
             throw new BizException("余额不足，请先充值");
@@ -178,15 +176,19 @@ public class OrderService {
 
     // ============ 状态流转 ============
 
+    @Transactional
     public Order.OrderView cancelOrder(long userId, long orderId) {
         Order order = requireOrder(orderId);
         if (order.userId() != userId) {
             throw new BizException(403, "无权操作该订单");
         }
-        if (order.status() != 1) {
+        if (order.status() != 1 && order.status() != 2 && order.status() != 3) {
             throw new BizException("当前状态不可取消");
         }
-        // 退款（模拟）
+        // 仅在托管状态下退款，条件更新避免重复退回余额。
+        if (!orderDao.refundEscrow(orderId)) {
+            throw new BizException("订单资金已处理，不能重复退款");
+        }
         User user = userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
         userDao.updateBalance(userId, round2(user.balance() + order.payAmount()));
         orderDao.updateStatus(orderId, 5, "complete_time", LocalDateTime.now().format(FMT));
@@ -212,14 +214,13 @@ public class OrderService {
             case "complete" -> {        // 确认送达：3 → 4
                 requireStatus(order, 3);
                 orderDao.updateStatus(orderId, 4, "complete_time", now);
-                User merchant = userDao.findById(store.ownerId()).orElseThrow(() -> new BizException("商户不存在"));
-                userDao.updateBalance(merchant.id(), round2(merchant.balance() + order.payAmount()));
             }
             default -> throw new BizException("不支持的操作：" + action);
         }
         return orderDetail(orderId);
     }
 
+    @Transactional
     public Order.OrderView confirmOrder(long userId, long orderId) {
         Order order = requireOrder(orderId);
         if (order.userId() != userId) {
@@ -228,6 +229,12 @@ public class OrderService {
         if (order.status() != 4) {
             throw new BizException("订单尚未完成，不能确认收货");
         }
+        Store store = storeDao.findById(order.storeId()).orElseThrow(() -> new BizException("店铺不存在"));
+        if (!orderDao.releaseEscrow(orderId)) {
+            throw new BizException("订单款项已结算或退款，不能重复确认");
+        }
+        User merchant = userDao.findById(store.ownerId()).orElseThrow(() -> new BizException("商户不存在"));
+        userDao.updateBalance(merchant.id(), round2(merchant.balance() + order.payAmount()));
         return orderDetail(orderId);
     }
 
@@ -272,9 +279,7 @@ public class OrderService {
         if (!owned) {
             throw new BizException(403, "无权查看该店铺统计");
         }
-        List<Order> orders = orderDao.listByStore(sid).stream()
-                .filter(o -> o.status() == 4)
-                .toList();
+        List<Order> orders = orderDao.listSettledByStore(sid);
         LocalDate today = LocalDate.now();
         LocalDate weekStart = today.minusDays(today.getDayOfWeek().getValue() - 1);
         LocalDate monthStart = today.withDayOfMonth(1);

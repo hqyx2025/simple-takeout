@@ -51,8 +51,42 @@ public class StoreDao {
         return jdbc.query("SELECT * FROM categories ORDER BY id", CATEGORY_MAPPER);
     }
 
+    public Optional<Category> findCategoryById(long categoryId) {
+        return jdbc.query("SELECT * FROM categories WHERE id = ?", CATEGORY_MAPPER, categoryId)
+                .stream().findFirst();
+    }
+
+    public boolean categoryNameExists(String name, long excludeId) {
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM categories WHERE name = ? AND id <> ?",
+                Integer.class, name, excludeId);
+        return count != null && count > 0;
+    }
+
+    public long insertCategory(String name, String icon, String color) {
+        jdbc.update("INSERT INTO categories(name, icon, color) VALUES(?,?,?)", name, icon, color);
+        return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+    }
+
+    public void updateCategory(long id, String name, String icon, String color) {
+        jdbc.update("UPDATE categories SET name=?, icon=?, color=? WHERE id=?", name, icon, color, id);
+    }
+
+    public void deleteCategory(long id) {
+        jdbc.update("DELETE FROM categories WHERE id = ?", id);
+    }
+
+    public int countStoresByCategory(long categoryId) {
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM stores WHERE category_id = ? OR " +
+                "JSON_CONTAINS(COALESCE(category_ids, '[]'), JSON_ARRAY(?))", Integer.class, categoryId, categoryId);
+        return count == null ? 0 : count;
+    }
+
     public List<Store> listAll() {
         return jdbc.query("SELECT * FROM stores WHERE status = 1 ORDER BY monthly_sales DESC", MAPPER);
+    }
+
+    public List<Store> listAllForAdmin() {
+        return jdbc.query("SELECT * FROM stores ORDER BY id DESC", MAPPER);
     }
 
     public List<Store> listByCategory(int categoryId) {
@@ -92,5 +126,9 @@ public class StoreDao {
 
     public void updateMonthlySales(long storeId, int sales) {
         jdbc.update("UPDATE stores SET monthly_sales = monthly_sales + ? WHERE id = ?", sales, storeId);
+    }
+
+    public void updateStatus(long storeId, int status) {
+        jdbc.update("UPDATE stores SET status = ? WHERE id = ?", status, storeId);
     }
 }
