@@ -515,6 +515,8 @@ struct HomePage {
                   router.pushUrl({ url: 'pages/FavoriteListPage' })
                 } else if (item.title === '领券中心') {
                   router.pushUrl({ url: 'pages/CouponCenterPage' })
+                } else if (item.title === '排行榜') {
+                  this.openProductList('ranking', 0, '排行榜商品')
                 } else {
                   this.openProductList('special', 0, `${item.title}商品`)
                 }
@@ -1131,12 +1133,14 @@ struct OrderListMainPage {
   private orderDataSource: OrderDataSource = new OrderDataSource()
   @StorageLink('orderList') @Watch('onOrderListChange') orderList: Order[] = []
   @StorageLink('isLoggedIn') @Watch('onLoginStateChange') loggedIn: boolean = false
+  @StorageLink('orderFilterStatus') @Watch('onOrderFilterRequest') requestedStatus: number = -1
   @State @Watch('onFilterChange') currentStatus: number = -1
   @State isRefreshing: boolean = false
 
   aboutToAppear() {
     // 诊断日志：确认启动渲染时订单数据状态
     this.debugOrderState()
+    this.currentStatus = this.requestedStatus
     this.refreshDataSource()
     if (!this.loggedIn) {
       this.orderList = []
@@ -1153,6 +1157,12 @@ struct OrderListMainPage {
       return
     }
     this.refreshOrders()
+  }
+
+  onOrderFilterRequest(): void {
+    if (this.requestedStatus >= -1 && this.requestedStatus <= 6) {
+      this.currentStatus = this.requestedStatus
+    }
   }
 
   // 拉取后端用户订单并刷新列表
@@ -1386,7 +1396,10 @@ struct ProfileMainPage {
         Row() {
           this.AssetItem(this.user.balance.toFixed(2), '余额', () => {})
           this.AssetItem((this.user.coupons || []).filter(c => !c.used).length.toString(), '优惠券', () => { router.pushUrl({ url: 'pages/CouponCenterPage' }) })
-          this.AssetItem((this.user.orders || []).length.toString(), '订单', () => {})
+          this.AssetItem((this.user.orders || []).length.toString(), '订单', () => {
+            AppStorage.setOrCreate<number>('orderFilterStatus', -1)
+            this.onNavigate(2)
+          })
         }
         .width('100%').padding(SPACING.LG)
         .margin({ top: SPACING.SM })
@@ -1394,10 +1407,10 @@ struct ProfileMainPage {
 
         // 订单快捷入口
         Row() {
-          this.ProfileOrderEntry('⏳', '待付款')
-          this.ProfileOrderEntry('📋', '待接单')
-          this.ProfileOrderEntry('🚴', '配送中')
-          this.ProfileOrderEntry('✅', '已完成')
+          this.ProfileOrderEntry('⏳', '待付款', 0)
+          this.ProfileOrderEntry('📋', '待接单', 1)
+          this.ProfileOrderEntry('🚴', '配送中', 3)
+          this.ProfileOrderEntry('✅', '已完成', 4)
         }
         .width('100%').padding(SPACING.LG)
         .margin({ top: SPACING.SM })
@@ -1468,12 +1481,15 @@ struct ProfileMainPage {
   }
 
   @Builder
-  ProfileOrderEntry(icon: string, title: string) {
+  ProfileOrderEntry(icon: string, title: string, status: number) {
     Column({ space: 4 }) {
       Text(icon).fontSize(28)
       Text(title).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
     }
-    .onClick(() => { this.onNavigate(2) })
+    .onClick(() => {
+      AppStorage.setOrCreate<number>('orderFilterStatus', status)
+      this.onNavigate(2)
+    })
   }
 
   private getCartTitle(): string {
