@@ -17,6 +17,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 店铺/商品/分类接口
@@ -26,6 +29,8 @@ import java.util.List;
 @RequestMapping("/api")
 public class StoreController {
 
+    private static final Logger log = LoggerFactory.getLogger(StoreController.class);
+
     private final StoreService storeService;
 
     public StoreController(StoreService storeService) {
@@ -34,12 +39,19 @@ public class StoreController {
 
     @GetMapping("/categories")
     public ApiResponse<List<Category>> categories() {
-        return ApiResponse.ok(storeService.listCategories());
+        List<Category> categories = storeService.listCategories();
+        log.info("[数据] 分类查询返回 count={} items={}", categories.size(),
+                categories.stream().map(c -> c.id() + ":" + c.name()).collect(Collectors.joining(",")));
+        return ApiResponse.ok(categories);
     }
 
     @GetMapping("/stores")
     public ApiResponse<List<Store.StoreView>> stores(@RequestParam(required = false) Integer categoryId) {
-        return ApiResponse.ok(storeService.listStores(categoryId));
+        List<Store.StoreView> stores = storeService.listStores(categoryId);
+        log.info("[数据] 店铺查询 categoryId={} 返回 count={} items={}", categoryId,
+                stores.size(), stores.stream().map(s -> s.id() + ":" + s.name() + ":cat=" + s.categoryId())
+                        .collect(Collectors.joining(",")));
+        return ApiResponse.ok(stores);
     }
 
     @GetMapping("/stores/{id}")
