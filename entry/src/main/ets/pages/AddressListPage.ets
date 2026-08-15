@@ -223,7 +223,7 @@ export struct AddressListPage {
           .margin({ bottom: SPACING.LG })
           .onClick(() => {
             if (!isLoggedIn()) {
-              AppStorage.setOrCreate<boolean>('pendingLocationAfterLogin', true)
+              AppStorage.setOrCreate<boolean>('pendingLocationLoginPrompt', true)
               router.back()
               return
             }

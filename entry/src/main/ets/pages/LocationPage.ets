@@ -79,7 +79,7 @@ export struct LocationPage {
 
   aboutToAppear() {
     if (!isLoggedIn()) {
-      AppStorage.setOrCreate<boolean>('pendingLocationAfterLogin', true)
+      AppStorage.setOrCreate<boolean>('pendingLocationLoginPrompt', true)
       router.back()
       return
     }
