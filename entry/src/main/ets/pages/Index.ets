@@ -388,6 +388,10 @@ struct HomePage {
     return getAllStoresList().filter((store: StoreItem) => this.parseStoreDistance(store.distance) <= 2.0)
   }
 
+  private getCategoryIcon(category: Category): string {
+    return category.icon.trim() === '' || category.icon === '??' ? '🍔' : category.icon
+  }
+
   private openProductList(mode: string, categoryId: number, title: string): void {
     const requiresLocation: boolean = mode !== 'category'
     if (requiresLocation && !this.loggedIn) {
@@ -484,7 +488,7 @@ struct HomePage {
             ForEach(this.categories, (cat: Category) => {
               GridItem() {
                 Column({ space: 4 }) {
-                  Text(cat.icon).fontSize(28)
+                  Text(this.getCategoryIcon(cat)).fontSize(28)
                   Text(cat.name)
                     .fontSize(FONT_SIZE.SM)
                     .fontColor(this.currentCategory === cat.id ? COLORS.PRIMARY : COLORS.TEXT_PRIMARY)
@@ -495,7 +499,7 @@ struct HomePage {
                 .justifyContent(FlexAlign.Center)
                 .alignItems(HorizontalAlign.Center)
                 .onClick(() => {
-                  this.openProductList('category', cat.id, `${cat.name}商品`)
+                  this.openProductList('category', cat.id, `${cat.name}店铺`)
                 })
               }
             }, (item: Category) => item.id.toString())

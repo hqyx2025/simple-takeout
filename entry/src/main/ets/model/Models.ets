@@ -16,6 +16,20 @@ export interface Category {
   color: string
 }
 
+/** 首页分类导航的默认展示数据；服务端返回成功后会以服务端数据为准。 */
+export function createDefaultCategories(): Category[] {
+  return [
+    { id: 1, name: '美食', icon: '🍔', color: '#FF6B35' },
+    { id: 2, name: '快餐', icon: '🍟', color: '#FFB74D' },
+    { id: 3, name: '饮品', icon: '🧋', color: '#4FC3F7' },
+    { id: 4, name: '甜品', icon: '🍰', color: '#F06292' },
+    { id: 5, name: '火锅', icon: '🍲', color: '#E53935' },
+    { id: 6, name: '烧烤', icon: '🍢', color: '#FF7043' },
+    { id: 7, name: '面食', icon: '🍜', color: '#FFA726' },
+    { id: 8, name: '寿司', icon: '🍣', color: '#66BB6A' }
+  ]
+}
+
 // 商品模型
 export interface GoodsItem {
   id: number

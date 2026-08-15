@@ -1,7 +1,7 @@
 /**
  * 全局状态管理 - 使用AppStorage管理应用级状态
  */
-import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, MerchantStatsData, Category, createEmptyUser } from '../model/Models'
+import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, MerchantStatsData, Category, createEmptyUser, createDefaultCategories } from '../model/Models'
 import { saveAllData, clearAllData } from './DataPersistence'
 import { apiLogin, apiRegister, updateUserProfileApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi } from './ApiService'
 import { getAuthToken, setAuthToken, getLastApiErrorMessage } from './HttpClient'
@@ -9,6 +9,10 @@ import { logInfo, logWarn, logError } from './AppLogger'
 
 // 初始化全局数据
 export function initAppStorage() {
+  const existingCategories: Category[] | undefined = AppStorage.get<Category[]>('categoryList')
+  if (existingCategories === undefined || existingCategories.length === 0) {
+    AppStorage.setOrCreate<Category[]>('categoryList', createDefaultCategories())
+  }
   // 如果持久化数据已加载，跳过默认值初始化
   if (AppStorage.get<boolean>('_persistenceReady') && AppStorage.get<boolean>('privacyConsent')) {
     return
@@ -39,7 +43,7 @@ export function initAppStorage() {
     AppStorage.setOrCreate<Coupon | null>('selectedCoupon', null)
   }
   if (!AppStorage.has('categoryList')) {
-    AppStorage.setOrCreate<Category[]>('categoryList', [])
+    AppStorage.setOrCreate<Category[]>('categoryList', createDefaultCategories())
   }
   // 动态店铺和商品数据（商户可修改）
   if (!AppStorage.has('allStores')) {
@@ -331,9 +335,25 @@ export async function registerRemote(username: string, phone: string, password: 
 
 // ==================== 数据拉取 ====================
 
-/** 从后端拉取首页分类，失败或无数据时显示空状态。 */
+/** 从后端拉取首页分类；服务端暂时无数据时保留默认导航，避免首页出现空白区域。 */
 export async function syncCategoriesFromServer(): Promise<void> {
-  const categories: Category[] = await fetchCategories()
+  const remoteCategories: Category[] = await fetchCategories()
+  const defaults: Category[] = createDefaultCategories()
+  if (remoteCategories.length === 0) {
+    AppStorage.setOrCreate<Category[]>('categoryList', defaults)
+    logWarn('Api', '同步分类数据为空，使用默认分类图标')
+    return
+  }
+  const categories: Category[] = remoteCategories.map((remote: Category) => {
+    const fallback: Category | undefined = defaults.find((item: Category) => item.id === remote.id)
+    const category: Category = {
+      id: remote.id,
+      name: remote.name.trim() === '' && fallback !== undefined ? fallback.name : remote.name,
+      icon: remote.icon.trim() === '' && fallback !== undefined ? fallback.icon : remote.icon,
+      color: remote.color.trim() === '' && fallback !== undefined ? fallback.color : remote.color
+    }
+    return category
+  })
   AppStorage.setOrCreate<Category[]>('categoryList', categories)
   logInfo('Api', `同步分类数据 ${categories.length} 个`)
 }
