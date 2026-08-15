@@ -316,7 +316,12 @@ export async function loginRemote(phone: string, password: string): Promise<User
     AppStorage.setOrCreate<string>('authToken', token)
     AppStorage.setOrCreate<User>('user', user)
     AppStorage.setOrCreate<boolean>('isLoggedIn', true)
-    logInfo('Api', `远程登录成功 userId=${user.id} role=${user.role === UserRole.MERCHANT ? '商户' : '用户'}`)
+    // 登录态和 Token 必须在登录成功后立即落盘，避免应用重启后回到未登录状态。
+    await saveAllData()
+    const roleName: string = user.role === UserRole.ADMIN
+      ? '管理端'
+      : user.role === UserRole.MERCHANT ? '商户' : '用户'
+    logInfo('Api', `远程登录成功 userId=${user.id} role=${roleName}`)
     return user
   }
   logWarn('Api', '远程登录失败')

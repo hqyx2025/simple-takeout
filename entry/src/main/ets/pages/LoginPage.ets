@@ -93,6 +93,13 @@ export struct LoginPage {
             .backgroundColor(this.selectedRole === UserRole.MERCHANT ? COLORS.TAG_BG : '#F5F5F5')
             .borderRadius(BORDER_RADIUS.ROUND)
             .onClick(() => { this.selectedRole = UserRole.MERCHANT })
+          Text('🛠 管理端')
+            .fontSize(FONT_SIZE.SM)
+            .fontColor(this.selectedRole === UserRole.ADMIN ? COLORS.PRIMARY : COLORS.TEXT_HINT)
+            .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+            .backgroundColor(this.selectedRole === UserRole.ADMIN ? COLORS.TAG_BG : '#F5F5F5')
+            .borderRadius(BORDER_RADIUS.ROUND)
+            .onClick(() => { this.selectedRole = UserRole.ADMIN })
         }
         .width('100%')
         .margin({ bottom: SPACING.LG })
@@ -167,13 +174,18 @@ export struct LoginPage {
             this.submitting = false
             return
           }
-          logInfo('Auth', `用户点击${this.isLoginMode ? '登录' : '注册'} phone=${this.phone} role=${this.selectedRole === UserRole.MERCHANT ? '商户' : '用户'}`)
+          const roleName: string = this.selectedRole === UserRole.ADMIN
+            ? '管理端'
+            : this.selectedRole === UserRole.MERCHANT ? '商户' : '用户'
+          logInfo('Auth', `用户点击${this.isLoginMode ? '登录' : '注册'} phone=${this.phone} role=${roleName}`)
 
           if (this.isLoginMode) {
             const user = await loginRemote(this.phone, this.password)
             if (user !== undefined) {
               if (user.role !== this.selectedRole) {
-                this.errorMsg = this.selectedRole === UserRole.MERCHANT ? '该账号不是商户账号' : '该账号不是用户账号'
+                this.errorMsg = this.selectedRole === UserRole.ADMIN
+                  ? '该账号不是管理端账号'
+                  : this.selectedRole === UserRole.MERCHANT ? '该账号不是商户账号' : '该账号不是用户账号'
                 logout()
                 logWarn('Auth', `登录角色不匹配 phone=${this.phone} 期望角色=${this.selectedRole}`)
                 this.submitting = false
@@ -226,6 +238,17 @@ export struct LoginPage {
             .id('quick-login-merchant')
             .enabled(!this.submitting)
             .onClick(() => { this.quickLogin('13600136000', UserRole.MERCHANT) })
+          Button('一键登录管理端')
+            .layoutWeight(1)
+            .height(40)
+            .fontSize(FONT_SIZE.SM)
+            .fontColor(COLORS.PRIMARY)
+            .backgroundColor('#FFF8F0')
+            .borderRadius(BORDER_RADIUS.ROUND)
+            .type(ButtonType.Capsule)
+            .id('quick-login-admin')
+            .enabled(!this.submitting)
+            .onClick(() => { this.quickLogin('13100131000', UserRole.ADMIN) })
         }
         .width('100%')
         .margin({ top: SPACING.MD })
@@ -242,6 +265,9 @@ export struct LoginPage {
           .fontWeight(FontWeight.Bold)
           .onClick(() => {
             this.isLoginMode = !this.isLoginMode
+            if (!this.isLoginMode && this.selectedRole === UserRole.ADMIN) {
+              this.selectedRole = UserRole.CUSTOMER
+            }
             this.errorMsg = ''
             logInfo('Auth', `切换${this.isLoginMode ? '登录' : '注册'}模式`)
           })
@@ -270,7 +296,9 @@ export struct LoginPage {
       if (user !== undefined) {
         logout()
       }
-      this.errorMsg = role === UserRole.MERCHANT ? '商户快捷登录失败，请确认账号可用' : '用户快捷登录失败，请确认账号可用'
+      this.errorMsg = role === UserRole.ADMIN
+        ? '管理端快捷登录失败，请确认账号可用'
+        : role === UserRole.MERCHANT ? '商户快捷登录失败，请确认账号可用' : '用户快捷登录失败，请确认账号可用'
     }
     this.submitting = false
   }

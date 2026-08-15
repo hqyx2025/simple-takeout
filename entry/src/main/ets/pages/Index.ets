@@ -98,8 +98,8 @@ class OrderDataSource implements IDataSource {
 @Component
 struct Index {
   @State currentTab: number = 0
-  @StorageLink('isLoggedIn') loggedIn: boolean = false
-  @State showLogin: boolean = false
+  @StorageLink('isLoggedIn') @Watch('onLoginStateChange') loggedIn: boolean = false
+  @State showLogin: boolean = true
   @State showLocationLoginConfirm: boolean = false
   private tabsController: TabsController = new TabsController()
 
@@ -108,8 +108,14 @@ struct Index {
     initAppStorage()
     // 登录态恢复后同步当前用户与账号库数据（保证不同账号余额等数据独立正确）
     this.loggedIn = isLoggedIn()
+    this.showLogin = !this.loggedIn
     // 数据格式保险：校验 AppStorage 关键数据，异常（非数组/非对象）时重置，防止渲染崩溃
     this.sanitizeAppData()
+  }
+
+  onLoginStateChange(): void {
+    // 401、退出登录或角色变化导致的登录态失效，都必须回到登录页。
+    this.showLogin = !this.loggedIn
   }
 
   // 校验并修复 AppStorage 关键数据的格式（兼容损坏/旧版数据）
@@ -1365,18 +1371,17 @@ struct OrderListMainPage {
         Text(`¥${order.payAmount.toFixed(2)}`)
           .fontSize(FONT_SIZE.LG).fontColor(COLORS.PRICE_RED).fontWeight(FontWeight.Bold)
         Blank()
-        if (order.status === 3) {
-          Button('确认收货').height(32).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_WHITE)
+        if (order.status === 4) {
+          Button('确认收货并结算').height(32).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_WHITE)
             .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
             .onClick(async () => {
               await confirmOrderRemote(order.id)
               this.orderList = AppStorage.get<Order[]>('orderList') || []
               this.refreshDataSource()
             })
-        } else if (order.status === 4) {
-          Button('再来一单').height(32).fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
-            .backgroundColor(Color.Transparent).borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-            .borderWidth(1).borderColor(COLORS.PRIMARY)
+        } else if (order.status === 3) {
+          Text('配送中，送达后可确认收货')
+            .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
         } else if (order.status === 5) {
           Button('已取消').height(32).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
             .backgroundColor('#F5F5F5').borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
@@ -1421,7 +1426,9 @@ struct ProfileMainPage {
               Text(this.user.username)
                 .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_WHITE)
               Text(this.loggedIn
-                ? (this.user.role === UserRole.MERCHANT ? '商户账户' : this.user.phone)
+                ? (this.user.role === UserRole.ADMIN
+                  ? '管理端账户'
+                  : this.user.role === UserRole.MERCHANT ? '商户账户' : this.user.phone)
                 : '点击登录')
                 .fontSize(FONT_SIZE.MD).fontColor('rgba(255,255,255,0.8)')
             }
@@ -1517,6 +1524,23 @@ struct ProfileMainPage {
             this.ProfileMenuRow('📦', '商品上架', () => { router.pushUrl({ url: 'pages/MerchantCenterPage' }) })
             this.ProfileMenuRow('📊', '订单管理', () => { router.pushUrl({ url: 'pages/MerchantOrdersPage' }) })
             this.ProfileMenuRow('💰', '收入统计', () => { router.pushUrl({ url: 'pages/MerchantStatsPage' }) })
+          }
+          .width('100%')
+          .padding({ top: SPACING.SM })
+          .margin({ top: SPACING.SM })
+          .backgroundColor('#FFF8F0')
+          .borderRadius(BORDER_RADIUS.LG)
+        }
+        if (this.loggedIn && this.user.role === UserRole.ADMIN) {
+          Column() {
+            Text('🛠 平台管理入口')
+              .fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold)
+              .fontColor(COLORS.PRIMARY)
+              .width('100%')
+              .padding({ left: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
+            this.ProfileMenuRow('🗂', '平台分类、店铺与托管订单', () => {
+              router.pushUrl({ url: 'pages/AdminCenterPage' })
+            })
           }
           .width('100%')
           .padding({ top: SPACING.SM })

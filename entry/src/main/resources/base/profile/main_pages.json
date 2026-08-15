@@ -16,6 +16,7 @@
     "pages/ProductListPage",
     "pages/MerchantOrdersPage",
     "pages/MerchantStatsPage",
-    "pages/MerchantCenterPage"
+    "pages/MerchantCenterPage",
+    "pages/AdminCenterPage"
   ]
 }

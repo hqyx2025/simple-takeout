@@ -520,7 +520,7 @@ export struct OrderDetailPage {
 
   @Builder
   ActionButtons() {
-    if (this.order!.status === 1 || this.order!.status === 3 || this.order!.status === 4) {
+    if (this.order!.status === 1 || this.order!.status === 4) {
       Row({ space: SPACING.MD }) {
         // status===1 (待接单): 取消订单
         if (this.order!.status === 1) {
@@ -536,8 +536,8 @@ export struct OrderDetailPage {
         }
 
         // status===3 (配送中): 确认收货
-        if (this.order!.status === 3) {
-          Button('确认收货')
+        if (this.order!.status === 4) {
+          Button('确认收货并结算')
             .layoutWeight(1)
             .height(44)
             .fontSize(FONT_SIZE.MD)
