@@ -12,6 +12,7 @@ import { isLoggedIn } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { AddressSearchResult, GeoPosition, getCurrentPosition, reverseGeocodePosition, searchAddress } from '../service/LocationService'
 import { EmptyState } from '../components/EmptyState'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { common } from '@kit.AbilityKit'
 import { webview } from '@kit.ArkWeb'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
@@ -76,6 +77,7 @@ export struct LocationPage {
   @State searched: boolean = false
   // 选中的搜索结果
   @State selectedPlace: SearchPlace | null = null
+  @State showSavedDialog: boolean = false
 
   aboutToAppear() {
     if (!isLoggedIn()) {
@@ -353,11 +355,11 @@ export struct LocationPage {
       }
       return
     }
-    this.applyAddress(addressText, detail, pos)
+    await this.applyAddress(addressText, detail, pos)
   }
 
-  // 保存配送地址并返回（含经纬度，支持双向绑定回显）
-  private applyAddress(addressText: string, detail: string, pos: GeoPosition): void {
+  // 保存配送地址后明确提示用户，并由用户确认是否返回首页。
+  private async applyAddress(addressText: string, detail: string, pos: GeoPosition): Promise<void> {
     const user: User | undefined = AppStorage.get<User>('user')
     const addr: Address = {
       id: 0,
@@ -372,13 +374,14 @@ export struct LocationPage {
     }
     AppStorage.setOrCreate<Address>('currentAddress', addr)
     AppStorage.setOrCreate<GeoPosition>('lastLocationPosition', pos)
-    saveAllData()
+    await saveAllData()
     logInfo('LocationPage', `已选择配送地址: ${addressText} ${detail}`)
-    router.back()
+    this.showSavedDialog = true
   }
 
   build() {
-    Column() {
+    Stack() {
+      Column() {
       // 顶部导航栏
       Row() {
         Text('‹')
@@ -624,6 +627,26 @@ export struct LocationPage {
       .width('100%')
       .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.LG })
       .backgroundColor(COLORS.BG_WHITE)
+    }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(COLORS.BG_PRIMARY)
+
+      if (this.showSavedDialog) {
+        ConfirmDialog({
+          title: '地址已保存',
+          content: '当前定位地址已保存，可用于主页配送和下单。是否返回首页？',
+          confirmText: '返回首页',
+          cancelText: '留在此页',
+          onConfirm: () => {
+            this.showSavedDialog = false
+            router.back()
+          },
+          onCancel: () => {
+            this.showSavedDialog = false
+          }
+        })
+      }
     }
     .width('100%')
     .height('100%')
