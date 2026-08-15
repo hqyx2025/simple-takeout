@@ -38,6 +38,12 @@ public class StoreService {
     }
 
     public List<Store.StoreView> listStores(Integer categoryId) {
+        if (categoryId != null && categoryId < 0) {
+            throw new BizException("分类参数不合法");
+        }
+        if (categoryId != null && categoryId > 0 && !storeDao.categoryExists(categoryId)) {
+            throw new BizException(404, "分类不存在");
+        }
         List<Store> stores = categoryId == null || categoryId == 0
                 ? storeDao.listAll()
                 : storeDao.listByCategory(categoryId);
@@ -68,6 +74,7 @@ public class StoreService {
         if (name == null || name.isBlank()) {
             throw new BizException("店铺名称不能为空");
         }
+        validateCategory(categoryId);
         if (!Double.isFinite(deliveryFee) || deliveryFee < 0 || !Double.isFinite(minOrder) || minOrder < 0) {
             throw new BizException("配送费和起送价必须为非负数字");
         }
@@ -97,6 +104,7 @@ public class StoreService {
     public Goods addGoods(long ownerId, long storeId, GoodsInput input) {
         requireOwned(ownerId, storeId);
         validateGoodsInput(input);
+        validateCategory(input.categoryId());
         String now = LocalDateTime.now().format(FMT);
         Goods goods = new Goods(0, storeId, input.name(), input.description(),
                 input.price(), input.originalPrice(), input.image(), input.categoryId(),
@@ -109,6 +117,7 @@ public class StoreService {
         Goods goods = goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品不存在"));
         requireOwned(ownerId, goods.storeId());
         validateGoodsInput(input);
+        validateCategory(input.categoryId());
         Goods updated = new Goods(goods.id(), goods.storeId(), input.name(), input.description(),
                 input.price(), input.originalPrice(), input.image(), input.categoryId(),
                 goods.sales(), goods.rating(), input.tag() == null ? "" : input.tag(),
@@ -141,6 +150,12 @@ public class StoreService {
         }
         if (input.status() != 0 && input.status() != 1) {
             throw new BizException("商品状态不合法");
+        }
+    }
+
+    private void validateCategory(int categoryId) {
+        if (categoryId <= 0 || !storeDao.categoryExists(categoryId)) {
+            throw new BizException("店铺或商品分类不存在");
         }
     }
 

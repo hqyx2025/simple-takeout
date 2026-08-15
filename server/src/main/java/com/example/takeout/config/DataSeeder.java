@@ -35,11 +35,59 @@ public class DataSeeder implements ApplicationRunner {
         ensureCategories();
         Integer userCount = jdbc.queryForObject("SELECT COUNT(*) FROM users", Integer.class);
         if (userCount != null && userCount > 0) {
-            log.info("种子数据已存在（users={}），跳过初始化", userCount);
+            ensureStoresAndGoods();
+            log.info("用户数据已存在（users={}），已校验分类、店铺和商品数据", userCount);
             return;
         }
         seed();
         log.info("种子数据初始化完成：8 分类 / 30 店铺 / 900 商品 / 5 账号");
+    }
+
+    private void ensureStoresAndGoods() {
+        Integer storeCount = jdbc.queryForObject("SELECT COUNT(*) FROM stores", Integer.class);
+        if (storeCount != null && storeCount > 0) {
+            ensureGoods();
+            return;
+        }
+        long[] merchantIds = ensureMerchantUsers();
+        seedStoresAndGoods(merchantIds);
+        log.info("店铺数据为空，已补齐 30 家店铺及对应商品");
+    }
+
+    private void ensureGoods() {
+        Integer goodsCount = jdbc.queryForObject("SELECT COUNT(*) FROM goods", Integer.class);
+        if (goodsCount != null && goodsCount > 0) {
+            return;
+        }
+        List<java.util.Map<String, Object>> stores = jdbc.queryForList("SELECT id, category_id FROM stores");
+        for (java.util.Map<String, Object> store : stores) {
+            long storeId = ((Number) store.get("id")).longValue();
+            int categoryId = ((Number) store.get("category_id")).intValue();
+            seedGoods(storeId, categoryId, 6);
+        }
+        log.info("商品数据为空，已为 {} 家店铺补齐商品", stores.size());
+    }
+
+    private long[] ensureMerchantUsers() {
+        String[][] merchants = {
+                {"黄焖鸡老板", "13600136000"},
+                {"串串香老板", "13700137000"},
+                {"甜品店老板", "13500135000"}
+        };
+        long[] ids = new long[merchants.length];
+        for (int i = 0; i < merchants.length; i++) {
+            List<Long> existing = jdbc.queryForList("SELECT id FROM users WHERE phone = ? LIMIT 1",
+                    Long.class, merchants[i][1]);
+            if (existing.isEmpty()) {
+                jdbc.update("INSERT INTO users(username, avatar, phone, password, role, balance, create_time) " +
+                                "VALUES(?,?,?,?,?,?,?)",
+                        merchants[i][0], "", merchants[i][1], PasswordUtil.hash("123456"), 1, 0.0, now());
+                ids[i] = jdbc.queryForObject("SELECT id FROM users WHERE phone = ?", Long.class, merchants[i][1]);
+            } else {
+                ids[i] = existing.get(0);
+            }
+        }
+        return ids;
     }
 
     private void seed() {
@@ -121,7 +169,7 @@ public class DataSeeder implements ApplicationRunner {
         int[] baseSales = {2356, 5621, 1890, 8900, 3200, 980, 1560, 2100, 4500, 1200};
 
         String now = now();
-        long storeId = 1;
+        long storeSequence = 1;
         for (int i = 0; i < baseStores.length; i++) {
             long owner = merchantIds[i / 4];
             jdbc.update("INSERT INTO stores(name, image, rating, monthly_sales, delivery_fee, min_order, delivery_time, distance, tags, notice, category_id, category_ids, owner_id, status, create_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -130,22 +178,24 @@ public class DataSeeder implements ApplicationRunner {
                     (20 + i * 2) + "分钟", (0.5 + i * 0.3) + "km",
                     "[\"满减\",\"新客立减\"]", "本店菜品现做现卖，保证新鲜",
                     baseCategory[i], "[" + baseCategory[i] + "]", owner, 1, now);
-            seedGoods(storeId, baseCategory[i], 8);
-            storeId++;
+            long persistedStoreId = jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+            seedGoods(persistedStoreId, baseCategory[i], 8);
+            storeSequence++;
         }
         for (String name : extraStores) {
-            long owner = merchantIds[(int) (storeId % 3)];
-            int cat = 1 + (int) (storeId % 8);
+            long owner = merchantIds[(int) (storeSequence % 3)];
+            int cat = 1 + (int) (storeSequence % 8);
             int sales = 300 + ThreadLocalRandom.current().nextInt(5000);
             jdbc.update("INSERT INTO stores(name, image, rating, monthly_sales, delivery_fee, min_order, delivery_time, distance, tags, notice, category_id, category_ids, owner_id, status, create_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     name, "", 4.0 + ThreadLocalRandom.current().nextDouble(0.9),
-                    sales, 2 + (int) (storeId % 4), 10 + (int) (storeId % 3) * 5,
-                    (18 + (int) (storeId % 10) * 3) + "分钟",
-                    (0.3 + (storeId % 20) * 0.2) + "km",
+                    sales, 2 + (int) (storeSequence % 4), 10 + (int) (storeSequence % 3) * 5,
+                    (18 + (int) (storeSequence % 10) * 3) + "分钟",
+                    (0.3 + (storeSequence % 20) * 0.2) + "km",
                     "[\"满减\"]", "欢迎光临" + name,
                     cat, "[" + cat + "]", owner, 1, now);
-            seedGoods(storeId, cat, 6);
-            storeId++;
+            long persistedStoreId = jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+            seedGoods(persistedStoreId, cat, 6);
+            storeSequence++;
         }
     }
 
