@@ -8,6 +8,7 @@ import { LoginPage } from './LoginPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, formatSales } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
 import { RatingStars } from '../components/RatingStars'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { initLogger, logInfo, setPrivacyConsent } from '../service/AppLogger'
 import { loadAllData, saveAllData } from '../service/DataPersistence'
@@ -99,6 +100,7 @@ struct Index {
   @State currentTab: number = 0
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State showLogin: boolean = false
+  @State showLocationLoginConfirm: boolean = false
   private tabsController: TabsController = new TabsController()
 
   aboutToAppear() {
@@ -149,6 +151,10 @@ struct Index {
     if (AppStorage.get<boolean>('pendingLocationAfterLogin') || false) {
       this.showLogin = true
     }
+    if (AppStorage.get<boolean>('pendingLocationLoginPrompt') || false) {
+      AppStorage.setOrCreate<boolean>('pendingLocationLoginPrompt', false)
+      this.showLocationLoginConfirm = true
+    }
     if (!(AppStorage.get<boolean>('privacyConsent') || false)) {
       return
     }
@@ -185,7 +191,8 @@ struct Index {
           onStoreClick: (store: StoreItem) => {
             this.showStoreDetail(store.id)
           },
-          onNavigateLogin: () => { this.showLogin = true }
+          onNavigateLogin: () => { this.showLogin = true },
+          onNavigateLocationLogin: () => { this.showLocationLoginConfirm = true }
         })
       }.tabBar(this.tabBuilder('首页', 0))
 
@@ -242,6 +249,23 @@ struct Index {
           }
         })
       }
+      if (this.showLocationLoginConfirm) {
+        ConfirmDialog({
+          title: '无法定位',
+          content: '当前未登录，无法使用定位功能。是否先登录？',
+          confirmText: '去登录',
+          cancelText: '取消',
+          onConfirm: () => {
+            this.showLocationLoginConfirm = false
+            AppStorage.setOrCreate<boolean>('pendingLocationAfterLogin', true)
+            this.showLogin = true
+          },
+          onCancel: () => {
+            this.showLocationLoginConfirm = false
+            AppStorage.setOrCreate<boolean>('pendingLocationAfterLogin', false)
+          }
+        })
+      }
     }
   }
 
@@ -278,6 +302,7 @@ struct HomePage {
   @State showPrivacyDialog: boolean = false
   onStoreClick: (store: StoreItem) => void = () => {}
   onNavigateLogin: () => void = () => {}
+  onNavigateLocationLogin: () => void = () => {}
   private storeDataSource: StoreDataSource = new StoreDataSource()
 
   // 首页定位栏只展示“市 + 区/县/旗”，完整地址仍保留在 currentAddress 中供结算和配送使用
@@ -366,9 +391,7 @@ struct HomePage {
   private openProductList(mode: string, categoryId: number, title: string): void {
     const requiresLocation: boolean = mode !== 'category'
     if (requiresLocation && !this.loggedIn) {
-      AppStorage.setOrCreate<boolean>('pendingLocationAfterLogin', true)
-      promptAction.showToast({ message: '请先登录后再定位', duration: 1500 })
-      this.onNavigateLogin()
+      this.onNavigateLocationLogin()
       return
     }
     if ((mode === 'nearby' || mode === 'all') && !this.hasCurrentLocation()) {
@@ -414,9 +437,7 @@ struct HomePage {
             }
             .onClick(() => {
               if (!this.loggedIn) {
-                AppStorage.setOrCreate<boolean>('pendingLocationAfterLogin', true)
-                promptAction.showToast({ message: '请先登录后再定位', duration: 1500 })
-                this.onNavigateLogin()
+                this.onNavigateLocationLogin()
                 return
               }
               router.pushUrl({ url: 'pages/LocationPage' })
