@@ -33,6 +33,7 @@ export struct ProductListPage {
   @State title: string = '附近全部商品'
   @State categoryId: number = 0
   @State products: ProductListItem[] = []
+  @State categoryStores: StoreItem[] = []
 
   aboutToAppear(): void {
     this.readRequest()
@@ -86,6 +87,12 @@ export struct ProductListPage {
   private async loadProducts(): Promise<void> {
     await syncStoresFromServer()
     const candidates: StoreItem[] = this.getCandidateStores()
+    if (this.mode === ProductListMode.CATEGORY) {
+      this.categoryStores = candidates.filter((store: StoreItem) => this.matchesCategory(store))
+      this.products = []
+      return
+    }
+    this.categoryStores = []
     const result: ProductListItem[] = []
     for (let i = 0; i < candidates.length; i++) {
       const store: StoreItem = candidates[i]
@@ -109,6 +116,17 @@ export struct ProductListPage {
       result.sort((left: ProductListItem, right: ProductListItem) => right.goods.sales - left.goods.sales)
     }
     this.products = result
+  }
+
+  private matchesCategory(store: StoreItem): boolean {
+    if (this.categoryId <= 0) {
+      return true
+    }
+    if (store.categoryId === this.categoryId) {
+      return true
+    }
+    const categoryIds: number[] = store.categoryIds || []
+    return categoryIds.indexOf(this.categoryId) >= 0
   }
 
   private getProductCategoryId(store: StoreItem, item: GoodsItem): number {
@@ -143,6 +161,51 @@ export struct ProductListPage {
     router.back()
   }
 
+  private openStoreByStore(store: StoreItem): void {
+    AppStorage.setOrCreate<number>('currentStoreId', store.id)
+    router.back()
+  }
+
+  @Builder
+  StoreResultCard(store: StoreItem) {
+    Row({ space: SPACING.MD }) {
+      Text(store.name.substring(0, 1))
+        .width(56)
+        .height(56)
+        .fontSize(FONT_SIZE.XL)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(COLORS.PRIMARY)
+        .backgroundColor('#FFF1EB')
+        .borderRadius(BORDER_RADIUS.MD)
+        .textAlign(TextAlign.Center)
+      Column({ space: 4 }) {
+        Text(store.name)
+          .fontSize(FONT_SIZE.LG)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(COLORS.TEXT_PRIMARY)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Row({ space: SPACING.SM }) {
+          Text(`${store.rating} 分`).fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
+          Text(`月售${store.monthlySales}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+          Text(store.deliveryTime).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+        }
+        Row({ space: SPACING.SM }) {
+          Text(`配送费¥${store.deliveryFee}`).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+          Text(`${store.minOrder}元起送`).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+          Text(store.distance).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+        }
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+    }
+    .width('100%')
+    .padding(SPACING.LG)
+    .backgroundColor(COLORS.BG_WHITE)
+    .borderRadius(BORDER_RADIUS.LG)
+    .onClick(() => { this.openStoreByStore(store) })
+  }
+
   build() {
     Column() {
       Row() {
@@ -171,7 +234,23 @@ export struct ProductListPage {
       .padding({ left: SPACING.LG, right: SPACING.LG })
       .backgroundColor(COLORS.BG_WHITE)
 
-      if (!this.hasLocation() && this.mode !== ProductListMode.CATEGORY) {
+      if (this.mode === ProductListMode.CATEGORY) {
+        if (this.categoryStores.length === 0) {
+          EmptyState({ icon: '🏪', title: '暂无该分类店铺', description: '当前分类暂时没有可展示的店铺' })
+        } else {
+          List({ space: SPACING.SM }) {
+            ForEach(this.categoryStores, (store: StoreItem) => {
+              ListItem() {
+                this.StoreResultCard(store)
+              }
+            }, (store: StoreItem) => store.id.toString())
+          }
+          .width('100%')
+          .layoutWeight(1)
+          .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.LG })
+          .divider({ strokeWidth: 0 })
+        }
+      } else if (!this.hasLocation()) {
         Column({ space: SPACING.MD }) {
           EmptyState({ icon: '📍', title: '请先选择配送位置', description: '定位后才能展示附近商品' })
           Button('去选择位置')

@@ -31,6 +31,8 @@ public class DataSeeder implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
+        // 分类是首页导航的基础数据，即使已有用户数据，也必须单独补齐。
+        ensureCategories();
         Integer userCount = jdbc.queryForObject("SELECT COUNT(*) FROM users", Integer.class);
         if (userCount != null && userCount > 0) {
             log.info("种子数据已存在（users={}），跳过初始化", userCount);
@@ -41,22 +43,47 @@ public class DataSeeder implements ApplicationRunner {
     }
 
     private void seed() {
-        seedCategories();
         long[] userIds = seedUsers();
         long[] merchantIds = {userIds[2], userIds[3], userIds[4]};
         seedStoresAndGoods(merchantIds);
         seedExtras(userIds[0], userIds[1]);
     }
 
+    private void ensureCategories() {
+        String[][] categories = defaultCategories();
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM categories", Integer.class);
+        if (count == null || count == 0) {
+            seedCategories();
+            log.info("分类数据为空，已补齐 {} 个默认分类", categories.length);
+            return;
+        }
+        for (String[] category : categories) {
+            Integer exists = jdbc.queryForObject("SELECT COUNT(*) FROM categories WHERE name = ?", Integer.class,
+                    category[0]);
+            if (exists == null || exists == 0) {
+                jdbc.update("INSERT INTO categories(name, icon, color) VALUES(?,?,?)",
+                        category[0], category[1], category[2]);
+            } else {
+                jdbc.update("UPDATE categories SET icon=?, color=? WHERE name=? " +
+                                "AND (icon IS NULL OR TRIM(icon) = '' OR icon = '??')",
+                        category[1], category[2], category[0]);
+            }
+        }
+    }
+
     private void seedCategories() {
-        String[][] categories = {
+        String[][] categories = defaultCategories();
+        for (String[] c : categories) {
+            jdbc.update("INSERT INTO categories(name, icon, color) VALUES(?,?,?)", c[0], c[1], c[2]);
+        }
+    }
+
+    private String[][] defaultCategories() {
+        return new String[][]{
                 {"美食", "🍔", "#FF6B35"}, {"快餐", "🍟", "#FFB74D"}, {"饮品", "🧋", "#4FC3F7"},
                 {"甜品", "🍰", "#F06292"}, {"火锅", "🍲", "#E53935"}, {"烧烤", "🍢", "#FF7043"},
                 {"面食", "🍜", "#FFA726"}, {"寿司", "🍣", "#66BB6A"}
         };
-        for (String[] c : categories) {
-            jdbc.update("INSERT INTO categories(name, icon, color) VALUES(?,?,?)", c[0], c[1], c[2]);
-        }
     }
 
     private long[] seedUsers() {
