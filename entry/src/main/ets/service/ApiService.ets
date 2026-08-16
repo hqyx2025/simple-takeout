@@ -7,7 +7,7 @@ import { get, post, put, del, ApiResponse, setAuthToken } from './HttpClient'
 import { API_CONFIG } from '../common/Constants'
 import {
   User, UserRole, StoreItem, GoodsItem, Category, Order, CartItem,
-  Address, Coupon, Review, Favorite, MerchantStatsData
+  Address, Coupon, Review, Favorite
 } from '../model/Models'
 import { logInfo, logWarn } from './AppLogger'
 
@@ -131,15 +131,6 @@ interface ServerReview {
 interface LoginResult {
   token: string
   user: ServerUser
-}
-
-interface MerchantStatsResult {
-  todayCount: number
-  todayIncome: number
-  weekCount: number
-  weekIncome: number
-  monthCount: number
-  monthIncome: number
 }
 
 // ==================== 请求 DTO ====================
@@ -391,21 +382,6 @@ export async function fetchMerchantOrdersApi(): Promise<Order[]> {
 export async function merchantActionApi(orderId: number, action: string): Promise<boolean> {
   const resp: ApiResponse<ServerOrder> = await put<ServerOrder>(`/api/merchant/orders/${orderId}/${action}`, undefined)
   return resp.code === 200
-}
-
-export async function fetchMerchantStatsApi(): Promise<MerchantStatsData | null> {
-  const resp: ApiResponse<MerchantStatsResult> = await get<MerchantStatsResult>(API_CONFIG.ENDPOINTS['merchantStats'])
-  if (resp.code !== 200 || resp.data === null) {
-    return null
-  }
-  const s: MerchantStatsData = {
-    todayOrders: resp.data.todayCount,
-    todayRevenue: resp.data.todayIncome,
-    completedOrders: resp.data.todayCount,
-    totalOrders: resp.data.weekCount,
-    totalRevenue: resp.data.weekIncome
-  }
-  return s
 }
 
 export async function fetchMerchantStoresApi(): Promise<StoreItem[]> {

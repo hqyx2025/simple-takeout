@@ -186,9 +186,9 @@ export struct MerchantOrdersPage {
           .fontColor(COLORS.TEXT_PRIMARY)
           .layoutWeight(1)
           .margin({ left: SPACING.SM })
-        Text(getOrderStatusText(order.status))
+        Text(getOrderStatusText(order.status, order.escrowStatus ?? 0))
           .fontSize(FONT_SIZE.MD)
-          .fontColor(getOrderStatusColor(order.status))
+          .fontColor(getOrderStatusColor(order.status, order.escrowStatus ?? 0))
       }
       .width('100%')
 
@@ -279,10 +279,10 @@ export struct MerchantOrdersPage {
         .type(ButtonType.Capsule)
         .onClick(() => { this.handleComplete(order) })
     } else if (order.status === 4) {
-      // 已完成：仅文字
-      Text('已完成')
+      // 已送达待确认收货 / 已结算完成（与大纲 6.4 口径一致）
+      Text(getOrderStatusText(order.status, order.escrowStatus ?? 0))
         .fontSize(FONT_SIZE.SM)
-        .fontColor(COLORS.TEXT_HINT)
+        .fontColor(order.escrowStatus === 1 ? COLORS.TEXT_HINT : COLORS.WARNING)
     } else if (order.status === 5) {
       // 已取消：仅文字
       Text('已取消')

@@ -6,7 +6,6 @@ import { routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusColor } from '../common/Constants'
 import { MerchantStatsData, User, UserRole } from '../model/Models'
 import { getCurrentUser, getMerchantTodayStats, getMerchantWeekStats, getMerchantWeekRevenue, getMerchantTodayStatusOrders, formatPrice, syncMerchantOrdersFromServer } from '../service/AppStorageManager'
-import { fetchMerchantStatsApi } from '../service/ApiService'
 import { logInfo } from '../service/AppLogger'
 
 @Entry
@@ -64,16 +63,13 @@ export struct MerchantStatsPage {
     }
   }
 
-  // 从后端拉取商户统计并刷新
+  // 从后端同步订单后按统一口径重算统计（status=4 且 escrow=1，与大纲 21.4/后端接口一致）
   private async refreshRemoteStats(): Promise<void> {
     await syncMerchantOrdersFromServer()
-    const stats = await fetchMerchantStatsApi()
-    if (stats !== null) {
-      this.todayStats = stats
-      this.weekStats = stats
-    }
     const user: User | undefined = getCurrentUser()
     if (user !== undefined && user !== null) {
+      this.todayStats = getMerchantTodayStats(user.id)
+      this.weekStats = getMerchantWeekStats(user.id)
       this.weekRevenue = getMerchantWeekRevenue(user.id)
       this.todayStatus = getMerchantTodayStatusOrders(user.id)
     }
@@ -485,7 +481,7 @@ export struct MerchantStatsPage {
         .margin({ top: SPACING.XS, bottom: SPACING.XS })
 
       Row() {
-        Text('💡 收入统计仅包含已完成订单')
+        Text('💡 收入统计仅包含已结算订单（用户确认收货后到账）')
           .fontSize(FONT_SIZE.SM)
           .fontColor(COLORS.TEXT_HINT)
       }

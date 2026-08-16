@@ -23,7 +23,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  * 店铺/商品/分类接口
- * 浏览类接口放行游客；管理类接口需登录（商户身份由 ownerId 校验）
+ * 所有接口均需登录（WebConfig 全量拦截，与大纲第 7 章"浏览也需登录"一致）；商户管理类接口由 ownerId 校验归属
  */
 @RestController
 @RequestMapping("/api")

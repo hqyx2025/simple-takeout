@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * 用户中心接口：优惠券、收藏、地址；店铺评价浏览（放行）
+ * 用户中心接口：优惠券、收藏、地址、店铺评价浏览、搜索（均需登录，与大纲第 7 章一致）
  */
 @RestController
 @RequestMapping("/api")
@@ -96,14 +96,14 @@ public class UserCenterController {
         return ApiResponse.ok();
     }
 
-    // ============ 评价浏览（放行） ============
+    // ============ 评价浏览 ============
 
     @GetMapping("/stores/{id}/reviews")
     public ApiResponse<List<Review.ReviewView>> storeReviews(@PathVariable long id) {
         return ApiResponse.ok(service.storeReviews(id));
     }
 
-    // ============ 搜索（放行） ============
+    // ============ 搜索 ============
 
     @GetMapping("/search")
     public ApiResponse<List<Store.StoreView>> search(@RequestParam String keyword) {

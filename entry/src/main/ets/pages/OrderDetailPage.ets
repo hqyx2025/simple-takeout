@@ -191,10 +191,12 @@ export struct OrderDetailPage {
           cancelText: '再想想',
           onConfirm: async () => {
             if (this.order !== null) {
+              // 取消即退（大纲 7.11 现状口径），提示退款金额让用户感知资金回流
+              const refundAmount: number = this.order.payAmount
               const ok: boolean = await cancelOrderRemote(this.order.id)
               if (ok) {
                 this.reloadOrder()
-                promptAction.showToast({ message: '订单已取消', duration: 1500 })
+                promptAction.showToast({ message: `订单已取消，退款 ¥${refundAmount.toFixed(2)} 已退回余额`, duration: 1800 })
               } else {
                 const errorMessage: string = getLastRemoteErrorMessage()
                 promptAction.showToast({ message: errorMessage === '' ? '取消订单失败，请稍后重试' : errorMessage, duration: 2200 })
@@ -244,10 +246,10 @@ export struct OrderDetailPage {
   StatusCard() {
     Column({ space: SPACING.MD }) {
       Row() {
-        Text(getOrderStatusText(this.order!.status))
+        Text(getOrderStatusText(this.order!.status, this.order!.escrowStatus ?? 0))
           .fontSize(FONT_SIZE.BIG_TITLE)
           .fontWeight(FontWeight.Bold)
-          .fontColor(getOrderStatusColor(this.order!.status))
+          .fontColor(getOrderStatusColor(this.order!.status, this.order!.escrowStatus ?? 0))
         if (this.order!.status === 3) {
           Text(this.getEstimatedTime())
             .fontSize(FONT_SIZE.SM)
@@ -536,10 +538,12 @@ export struct OrderDetailPage {
 
   @Builder
   ActionButtons() {
-    if (this.order!.status === 1 || this.order!.status === 4) {
+    // 可操作状态：1/2/3 可取消（大纲 7.11 现状口径：用户取消无商家确认、即时退款）；
+    // 4 且托管未结算可确认收货；4 已结算后提供再来一单/去评价
+    if (this.order!.status >= 1 && this.order!.status <= 4) {
       Row({ space: SPACING.MD }) {
-        // status===1 (待接单): 取消订单
-        if (this.order!.status === 1) {
+        // 待接单/制作中/配送中且托管未处理：取消订单
+        if (this.order!.status >= 1 && this.order!.status <= 3 && (this.order!.escrowStatus ?? 0) === 0) {
           Button('取消订单')
             .layoutWeight(1)
             .height(44)

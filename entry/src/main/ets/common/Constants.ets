@@ -58,25 +58,26 @@ export class BORDER_RADIUS {
   static readonly CIRCLE: number = 999
 }
 
-// 订单状态文本
-export function getOrderStatusText(status: number): string {
+// 订单状态文本（status=4 时需结合托管状态 escrowStatus 区分：
+// 0=已送达待用户确认收货，1=已结算完成；与大纲 6.4/21.6 口径一致）
+export function getOrderStatusText(status: number, escrowStatus?: number): string {
   if (status === 0) { return '待付款' }
   if (status === 1) { return '待接单' }
   if (status === 2) { return '制作中' }
   if (status === 3) { return '配送中' }
-  if (status === 4) { return '已完成' }
+  if (status === 4) { return (escrowStatus ?? 0) === 1 ? '已完成' : '已送达，待确认收货' }
   if (status === 5) { return '已取消' }
   if (status === 6) { return '退款中' }
   return '未知'
 }
 
-// 订单状态颜色
-export function getOrderStatusColor(status: number): string {
+// 订单状态颜色（status=4 时按托管状态区分，待确认用橙色醒目标识）
+export function getOrderStatusColor(status: number, escrowStatus?: number): string {
   if (status === 0) { return '#FF6B35' }
   if (status === 1) { return '#FF9800' }
   if (status === 2) { return '#2196F3' }
   if (status === 3) { return '#4CAF50' }
-  if (status === 4) { return '#999999' }
+  if (status === 4) { return (escrowStatus ?? 0) === 1 ? '#999999' : '#FF9800' }
   if (status === 5) { return '#999999' }
   if (status === 6) { return '#F44336' }
   return '#999999'
@@ -108,7 +109,7 @@ export class ORDER_TIMELINE {
     '1': '已下单',
     '2': '制作中',
     '3': '配送中',
-    '4': '已完成'
+    '4': '已送达'
   }
 }
 
