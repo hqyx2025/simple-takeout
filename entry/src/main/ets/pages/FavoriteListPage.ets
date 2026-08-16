@@ -6,7 +6,7 @@
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { Favorite } from '../model/Models'
-import { getFavorites, toggleFavoriteRemote, syncFavoritesRemote } from '../service/AppStorageManager'
+import { getFavorites, toggleFavoriteRemote, syncFavoritesRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { EmptyState } from '../components/EmptyState'
 import { logInfo } from '../service/AppLogger'
 
@@ -176,6 +176,11 @@ export struct FavoriteListPage {
   // 取消收藏：切换状态、刷新列表、提示
   private async onCancelFavorite(storeId: number): Promise<void> {
     await toggleFavoriteRemote(storeId)
+    const errorMessage: string = getLastRemoteErrorMessage()
+    if (errorMessage !== '') {
+      promptAction.showToast({ message: errorMessage, duration: 2200 })
+      return
+    }
     this.loadFavorites()
     logInfo('Favorite', `收藏页取消收藏 storeId=${storeId}`)
     promptAction.showToast({ message: '已取消收藏' })
