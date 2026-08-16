@@ -116,6 +116,14 @@ struct Index {
   onLoginStateChange(): void {
     // 401、退出登录或角色变化导致的登录态失效，都必须回到登录页。
     this.showLogin = !this.loggedIn
+    if (!this.loggedIn) {
+      const currentUser: User | undefined = AppStorage.get<User>('user')
+      if (currentUser !== undefined && currentUser !== null && currentUser.id > 0) {
+        // 401 清理内存态后还要清除持久化业务缓存，避免账号之间串数据。
+        logout()
+      }
+      return
+    }
     if (this.loggedIn) {
       // 后端业务接口统一要求 JWT，登录成功后再拉取首页真实数据。
       syncCategoriesFromServer()
