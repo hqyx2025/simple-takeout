@@ -3,7 +3,7 @@
  * 包含：搜索栏、分类导航、店铺列表、店铺详情、购物车、订单列表、个人中心、底部Tab导航
  */
 import { Category, StoreItem, GoodsItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, createEmptyUser } from '../model/Models'
-import { addToCart, updateCartItemQuantity, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncCategoriesFromServer, syncStoreReviewsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote } from '../service/AppStorageManager'
+import { addToCart, updateCartItemQuantity, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncCategoriesFromServer, syncStoreReviewsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { LoginPage } from './LoginPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, formatSales } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
@@ -846,6 +846,7 @@ struct StoreDetailContent {
   @State goodsCats: string[] = ['全部']
   @StorageLink('cartItems') cartItems: CartItem[] = []
   @StorageLink('categoryList') categoryList: Category[] = []
+  @StorageLink('isLoggedIn') loggedIn: boolean = false
   onNavigateLogin: () => void = () => {}
 
   aboutToAppear() {
@@ -894,6 +895,9 @@ struct StoreDetailContent {
 
   // 拉取后端店铺商品并刷新
   private async refreshGoods(): Promise<void> {
+    if (!this.loggedIn) {
+      return
+    }
     await syncGoodsFromServer(this.storeId)
     const goods: GoodsItem[] = getGoodsForStore(this.storeId)
     this.goodsList = goods
@@ -903,6 +907,9 @@ struct StoreDetailContent {
   }
 
   private async refreshReviews(): Promise<void> {
+    if (!this.loggedIn) {
+      return
+    }
     await syncStoreReviewsRemote(this.storeId)
     this.storeReviews = AppStorage.get<Review[]>('reviewList') || []
   }
@@ -966,6 +973,11 @@ struct StoreDetailContent {
                 return
               }
               const fav: boolean = await toggleFavoriteRemote(this.storeId)
+              const errorMessage: string = getLastRemoteErrorMessage()
+              if (errorMessage !== '') {
+                promptAction.showToast({ message: errorMessage, duration: 2200 })
+                return
+              }
               this.isFav = fav
               promptAction.showToast({
                 message: fav ? '已收藏' : '已取消收藏',
