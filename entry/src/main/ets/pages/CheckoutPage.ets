@@ -124,8 +124,9 @@ export struct CheckoutPage {
     }
 
     // 清空该店铺的购物车商品
-    for (let i = 0; i < this.storeItems.length; i++) {
-      updateCartItemQuantity(this.storeItems[i].goods.id, this.checkoutStoreId, 0)
+    const itemsToClear: CartItem[] = this.storeItems.slice()
+    for (let i = 0; i < itemsToClear.length; i++) {
+      updateCartItemQuantity(itemsToClear[i].goods.id, this.checkoutStoreId, 0)
     }
 
     // 后端已处理优惠券状态，重新同步真实优惠券列表

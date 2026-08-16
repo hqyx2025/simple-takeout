@@ -49,9 +49,11 @@ export struct MerchantStatsPage {
       // 生成近7天日期标签
       const now: Date = new Date()
       const labels: string[] = []
+      const dayMillis: number = 24 * 60 * 60 * 1000
+      const cursor: Date = new Date(now.getTime() - 6 * dayMillis)
       for (let i = 6; i >= 0; i--) {
-        const d: Date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
-        labels.push(`${d.getMonth() + 1}/${d.getDate()}`)
+        labels.push(`${cursor.getMonth() + 1}/${cursor.getDate()}`)
+        cursor.setTime(cursor.getTime() + dayMillis)
       }
       this.weekLabels = labels
       // 从后端拉取最新统计（真实后端模式）
