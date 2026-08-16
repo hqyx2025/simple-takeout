@@ -4,7 +4,7 @@
  * 支持接单(1→2)、出餐(2→3)、确认送达(3→4)状态流转
  */
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
-import { Order, CartItem, User } from '../model/Models'
+import { Order, CartItem, User, UserRole } from '../model/Models'
 import { getCurrentUser, getMerchantOrders, merchantActionRemote, syncMerchantOrdersFromServer } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
@@ -24,6 +24,7 @@ class OrderStatusTab {
 @Entry
 @Component
 export struct MerchantOrdersPage {
+  @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State currentStatus: number = -1
   @State allOrders: Order[] = []
   @State merchantId: number = 0
@@ -38,9 +39,12 @@ export struct MerchantOrdersPage {
   aboutToAppear() {
     logInfo('Page', '进入商户订单管理页 MerchantOrdersPage')
     const user: User | undefined = getCurrentUser()
-    if (user !== undefined && user !== null) {
+    if (this.loggedIn && user !== undefined && user !== null && user.role === UserRole.MERCHANT) {
       this.merchantId = user.id
       this.loadOrders()
+    } else {
+      promptAction.showToast({ message: '请使用商户账号登录后查看订单', duration: 1800 })
+      router.back()
     }
   }
 

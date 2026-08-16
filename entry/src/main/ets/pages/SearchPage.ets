@@ -12,6 +12,7 @@ import { logInfo } from '../service/AppLogger'
 @Entry
 @Component
 export struct SearchPage {
+  @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State searchText: string = ''
   @State hotWords: string[] = []
   @State historyWords: string[] = []
@@ -36,6 +37,9 @@ export struct SearchPage {
   }
 
   async doSearch() {
+    if (!this.loggedIn) {
+      return
+    }
     const keyword: string = this.searchText.trim()
     if (keyword === '') {
       return
@@ -87,7 +91,9 @@ export struct SearchPage {
       // 内容区
       Scroll() {
         Column() {
-          if (!this.hasSearched) {
+          if (!this.loggedIn) {
+            this.EmptyLoginResult()
+          } else if (!this.hasSearched) {
             // 未搜索时显示：热门搜索 + 历史搜索
             this.HotSearchSection()
             this.HistorySection()
@@ -209,6 +215,19 @@ export struct SearchPage {
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
     .margin({ top: 80 })
+  }
+
+  @Builder
+  EmptyLoginResult() {
+    Column() {
+      Text('🔒').fontSize(60)
+      Text('暂无登录').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
+      Text('请登录后搜索店铺').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.SM })
+    }
+    .width('100%')
+    .layoutWeight(1)
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
   }
 
   @Builder

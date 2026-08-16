@@ -12,6 +12,7 @@ import { logInfo, logWarn } from '../service/AppLogger'
 @Entry
 @Component
 export struct ReviewPage {
+  @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State order: Order | null = null
   @State rating: number = 0
   @State content: string = ''
@@ -36,6 +37,9 @@ export struct ReviewPage {
 
   aboutToAppear() {
     logInfo('Page', '进入评价页 ReviewPage')
+    if (!this.loggedIn) {
+      return
+    }
     this.orderId = AppStorage.get<number>('currentOrderId') || 0
     const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
     this.order = orders.find((o: Order) => o.id === this.orderId) || null
@@ -159,7 +163,17 @@ export struct ReviewPage {
       .backgroundColor(COLORS.BG_WHITE)
       .alignItems(VerticalAlign.Center)
 
-      if (this.order === null) {
+      if (!this.loggedIn) {
+        Column() {
+          Text('🔒').fontSize(60).margin({ top: 100 })
+          Text('暂无登录').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: 16 })
+          Text('请登录后查看和提交评价').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT).margin({ top: 8 })
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Center)
+      } else if (this.order === null) {
         Column() {
           Text('📦').fontSize(60).margin({ top: 100 })
           Text('订单不存在').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: 16 })

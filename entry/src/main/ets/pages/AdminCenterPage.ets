@@ -34,6 +34,7 @@ interface AdminStoreStatusRequest {
 @Entry
 @Component
 export struct AdminCenterPage {
+  @StorageLink('isLoggedIn') loggedIn: boolean = false
   @StorageLink('user') user: User = {
     id: 0, username: '未登录', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER,
     balance: 0, coupons: [], orders: [], storeIds: []
@@ -45,7 +46,7 @@ export struct AdminCenterPage {
   @State loading: boolean = false
 
   aboutToAppear(): void {
-    if (this.user.role !== UserRole.ADMIN) {
+    if (!this.loggedIn || this.user.role !== UserRole.ADMIN) {
       promptAction.showToast({ message: '仅管理端账号可以进入平台管理', duration: 1800 })
       router.back()
       return
