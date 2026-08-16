@@ -4,6 +4,7 @@ import com.example.takeout.common.ApiResponse;
 import com.example.takeout.common.BizException;
 import com.example.takeout.model.Category;
 import com.example.takeout.model.Order;
+import com.example.takeout.model.RefundRecord;
 import com.example.takeout.model.Store;
 import com.example.takeout.service.AdminService;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -84,6 +86,34 @@ public class AdminController {
         return ApiResponse.ok(adminService.refundOrder(id));
     }
 
+    // ============ 退款审批（演进项，见大纲 9.7） ============
+
+    @GetMapping("/refunds")
+    public ApiResponse<List<RefundRecord>> refunds(@RequestAttribute("role") int role,
+                                                   @RequestParam(required = false) String status) {
+        requireAdmin(role);
+        return ApiResponse.ok(adminService.refunds(status));
+    }
+
+    @GetMapping("/refunds/{id}")
+    public ApiResponse<RefundRecord> refundDetail(@RequestAttribute("role") int role, @PathVariable long id) {
+        requireAdmin(role);
+        return ApiResponse.ok(adminService.refundDetail(id));
+    }
+
+    @PostMapping("/refunds/{id}/approve")
+    public ApiResponse<RefundRecord> approveRefund(@RequestAttribute("role") int role, @PathVariable long id) {
+        requireAdmin(role);
+        return ApiResponse.ok(adminService.approveRefund(id));
+    }
+
+    @PostMapping("/refunds/{id}/reject")
+    public ApiResponse<RefundRecord> rejectRefund(@RequestAttribute("role") int role, @PathVariable long id,
+                                                  @RequestBody RefundRejectRequest req) {
+        requireAdmin(role);
+        return ApiResponse.ok(adminService.rejectRefund(id, req == null ? "" : req.rejectReason()));
+    }
+
     private void requireAdmin(int role) {
         if (role != 2) {
             throw new BizException(403, "仅管理端可以执行该操作");
@@ -94,5 +124,8 @@ public class AdminController {
     }
 
     public record StoreStatusRequest(int status) {
+    }
+
+    public record RefundRejectRequest(String rejectReason) {
     }
 }

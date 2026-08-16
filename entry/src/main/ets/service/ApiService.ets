@@ -7,7 +7,7 @@ import { get, post, put, del, ApiResponse, setAuthToken } from './HttpClient'
 import { API_CONFIG } from '../common/Constants'
 import {
   User, UserRole, StoreItem, GoodsItem, Category, Order, CartItem,
-  Address, Coupon, Review, Favorite
+  Address, Coupon, Review, Favorite, RefundRecord
 } from '../model/Models'
 import { logInfo, logWarn } from './AppLogger'
 
@@ -40,6 +40,8 @@ interface ServerGoods {
   originalPrice: number
   image: string
   categoryId: number
+  merchantCategoryId: number
+  stock: number
   sales: number
   rating: number
   tag: string
@@ -214,8 +216,27 @@ interface MerchantGoodsRequest {
   originalPrice: number
   image: string
   categoryId: number
+  merchantCategoryId: number
+  stock: number
   tag: string
   status: number
+}
+
+interface RefundRequest {
+  reason: string
+}
+
+interface MerchantCategoryRequest {
+  name: string
+  sort: number
+}
+
+interface StockRequest {
+  stock: number
+}
+
+interface RefundRejectRequest {
+  rejectReason: string
 }
 
 // ==================== 认证 ====================
@@ -424,7 +445,8 @@ function toMerchantGoodsRequest(goods: GoodsItem, status: number): MerchantGoods
   const req: MerchantGoodsRequest = {
     name: goods.name, description: goods.description, price: goods.price,
     originalPrice: goods.originalPrice || goods.price, image: goods.image,
-    categoryId: goods.categoryId, tag: goods.tag || '', status: status
+    categoryId: goods.categoryId, tag: goods.tag || '', status: status,
+    merchantCategoryId: goods.merchantCategoryId || 0, stock: goods.stock ?? 999
   }
   return req
 }
@@ -443,6 +465,72 @@ export async function updateMerchantGoodsApi(goods: GoodsItem, onShelf: boolean)
 
 export async function deleteMerchantGoodsApi(goodsId: number): Promise<boolean> {
   const resp: ApiResponse<Object> = await del<Object>(`/api/merchant/goods/${goodsId}`)
+  return resp.code === 200
+}
+
+/** 快速补货/清库存（演进项，见大纲 8.4）。 */
+export async function updateGoodsStockApi(goodsId: number, stock: number): Promise<GoodsItem | null> {
+  const req: StockRequest = { stock: stock }
+  const resp: ApiResponse<ServerGoods> = await put<ServerGoods>(`/api/merchant/goods/${goodsId}/stock`, req)
+  return resp.code === 200 && resp.data !== null ? toGoodsItem(resp.data) : null
+}
+
+// ==================== 商户分类（演进项，见大纲 8.3） ====================
+
+/** 用户端：店铺详情展示的店内商户分类。 */
+export async function fetchStoreMerchantCategoriesApi(storeId: number): Promise<Category[]> {
+  const resp: ApiResponse<Category[]> = await get<Category[]>(`/api/stores/${storeId}/categories`)
+  return resp.code === 200 && resp.data !== null ? resp.data : []
+}
+
+export async function fetchMerchantCategoriesApi(): Promise<Category[]> {
+  const resp: ApiResponse<Category[]> = await get<Category[]>('/api/merchant/categories')
+  return resp.code === 200 && resp.data !== null ? resp.data : []
+}
+
+export async function createMerchantCategoryApi(name: string, sort: number): Promise<Category | null> {
+  const req: MerchantCategoryRequest = { name: name, sort: sort }
+  const resp: ApiResponse<Category> = await post<Category>('/api/merchant/categories', req)
+  return resp.code === 200 && resp.data !== null ? resp.data : null
+}
+
+export async function updateMerchantCategoryApi(categoryId: number, name: string, sort: number): Promise<Category | null> {
+  const req: MerchantCategoryRequest = { name: name, sort: sort }
+  const resp: ApiResponse<Category> = await put<Category>(`/api/merchant/categories/${categoryId}`, req)
+  return resp.code === 200 && resp.data !== null ? resp.data : null
+}
+
+export async function deleteMerchantCategoryApi(categoryId: number): Promise<boolean> {
+  const resp: ApiResponse<Object> = await del<Object>(`/api/merchant/categories/${categoryId}`)
+  return resp.code === 200
+}
+
+// ==================== 退款（演进项，见大纲 7.11/9.7） ====================
+
+/** 用户申请退款：订单 status=4 且 escrow=0 且未评价时可用。 */
+export async function applyRefundApi(orderId: number, reason: string): Promise<RefundRecord | null> {
+  const req: RefundRequest = { reason: reason }
+  const resp: ApiResponse<RefundRecord> = await post<RefundRecord>(`/api/orders/${orderId}/refund`, req)
+  return resp.code === 200 && resp.data !== null ? resp.data : null
+}
+
+/** 管理端：退款申请列表（status 为空返回全部）。 */
+export async function fetchAdminRefundsApi(status?: string): Promise<RefundRecord[]> {
+  const url: string = status !== undefined && status !== ''
+    ? `/api/admin/refunds?status=${status}`
+    : '/api/admin/refunds'
+  const resp: ApiResponse<RefundRecord[]> = await get<RefundRecord[]>(url)
+  return resp.code === 200 && resp.data !== null ? resp.data : []
+}
+
+export async function approveRefundApi(refundId: number): Promise<boolean> {
+  const resp: ApiResponse<RefundRecord> = await post<RefundRecord>(`/api/admin/refunds/${refundId}/approve`, undefined)
+  return resp.code === 200
+}
+
+export async function rejectRefundApi(refundId: number, reason: string): Promise<boolean> {
+  const req: RefundRejectRequest = { rejectReason: reason }
+  const resp: ApiResponse<RefundRecord> = await post<RefundRecord>(`/api/admin/refunds/${refundId}/reject`, req)
   return resp.code === 200
 }
 
@@ -571,6 +659,8 @@ function toGoodsItem(g: ServerGoods): GoodsItem {
     originalPrice: g.originalPrice,
     image: g.image,
     categoryId: g.categoryId,
+    merchantCategoryId: g.merchantCategoryId,
+    stock: g.stock,
     sales: g.sales,
     rating: g.rating,
     tag: g.tag,
@@ -619,6 +709,7 @@ function toOrder(o: ServerOrder): Order {
     payAmount: o.payAmount,
     status: o.status,
     escrowStatus: o.escrowStatus,
+    reviewed: o.reviewed,
     createTime: o.createTime,
     payTime: o.payTime,
     deliverTime: o.deliverTime,

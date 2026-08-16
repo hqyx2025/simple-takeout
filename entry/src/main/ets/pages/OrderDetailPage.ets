@@ -6,7 +6,7 @@
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
 import { Order, CartItem, DeliveryStep } from '../model/Models'
-import { cancelOrderRemote, confirmOrderRemote, addToCart, fetchOrderDetailRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
+import { cancelOrderRemote, confirmOrderRemote, applyRefundRemote, addToCart, fetchOrderDetailRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { OrderStatusTimeline } from '../components/OrderStatusTimeline'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { logInfo } from '../service/AppLogger'
@@ -18,6 +18,8 @@ export struct OrderDetailPage {
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State showCancelDialog: boolean = false
   @State showConfirmDialog: boolean = false
+  @State showRefundDialog: boolean = false
+  @State refundReason: string = ''
   orderId: number = 0
   // 骑手配送动画状态
   @State riderProgress: number = 0
@@ -237,6 +239,100 @@ export struct OrderDetailPage {
           }
         })
       }
+
+      // 申请退款弹窗（演进项：退款审批流程，见大纲 7.11）
+      if (this.showRefundDialog) {
+        this.RefundDialog()
+      }
+    }
+    .width('100%')
+    .height('100%')
+  }
+
+  // 提交退款申请
+  private async submitRefund(): Promise<void> {
+    if (this.order === null) {
+      this.showRefundDialog = false
+      return
+    }
+    const ok: boolean = await applyRefundRemote(this.order.id, this.refundReason)
+    this.showRefundDialog = false
+    if (ok) {
+      this.reloadOrder()
+      promptAction.showToast({ message: '退款申请已提交，等待平台审核', duration: 1800 })
+    } else {
+      const errorMessage: string = getLastRemoteErrorMessage()
+      promptAction.showToast({ message: errorMessage === '' ? '退款申请失败，请稍后重试' : errorMessage, duration: 2200 })
+    }
+  }
+
+  @Builder
+  RefundDialog() {
+    Stack({ alignContent: Alignment.Bottom }) {
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor(COLORS.TEXT_PRIMARY)
+        .opacity(0.4)
+        .onClick(() => { this.showRefundDialog = false })
+
+      Column() {
+        Row() {
+          Text('申请退款')
+            .fontSize(FONT_SIZE.LG)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(COLORS.TEXT_PRIMARY)
+            .layoutWeight(1)
+          Text('✕')
+            .fontSize(FONT_SIZE.LG)
+            .fontColor(COLORS.TEXT_HINT)
+            .onClick(() => { this.showRefundDialog = false })
+        }
+        .width('100%')
+        .padding({ bottom: SPACING.MD })
+
+        Text(`退款金额：¥${this.order !== null ? this.order.payAmount.toFixed(2) : '0.00'}（审核通过后退回余额）`)
+          .fontSize(FONT_SIZE.SM)
+          .fontColor(COLORS.TEXT_SECONDARY)
+          .width('100%')
+          .margin({ bottom: SPACING.SM })
+
+        TextArea({ placeholder: '请填写退款原因（选填，最多50字）' })
+          .width('100%')
+          .height(90)
+          .fontSize(FONT_SIZE.MD)
+          .maxLength(50)
+          .borderRadius(BORDER_RADIUS.MD)
+          .backgroundColor(COLORS.BG_PRIMARY)
+          .onChange((value: string) => { this.refundReason = value })
+
+        Row({ space: SPACING.MD }) {
+          Button('取消')
+            .layoutWeight(1)
+            .height(44)
+            .fontSize(FONT_SIZE.MD)
+            .fontColor(COLORS.TEXT_SECONDARY)
+            .backgroundColor('#F5F5F5')
+            .borderRadius(BORDER_RADIUS.ROUND)
+            .type(ButtonType.Capsule)
+            .onClick(() => { this.showRefundDialog = false })
+          Button('提交申请')
+            .layoutWeight(1)
+            .height(44)
+            .fontSize(FONT_SIZE.MD)
+            .fontColor(COLORS.TEXT_WHITE)
+            .backgroundColor(COLORS.PRIMARY)
+            .borderRadius(BORDER_RADIUS.ROUND)
+            .type(ButtonType.Capsule)
+            .onClick(() => { this.submitRefund() })
+        }
+        .width('100%')
+        .margin({ top: SPACING.LG })
+      }
+      .width('100%')
+      .padding(SPACING.LG)
+      .backgroundColor(COLORS.BG_WHITE)
+      .borderRadius({ topLeft: BORDER_RADIUS.XL, topRight: BORDER_RADIUS.XL })
     }
     .width('100%')
     .height('100%')
@@ -566,6 +662,21 @@ export struct OrderDetailPage {
             .borderRadius(BORDER_RADIUS.ROUND)
             .type(ButtonType.Capsule)
             .onClick(() => { this.showConfirmDialog = true })
+        }
+
+        // status===4 且托管未结算、未评价：申请退款（演进项：退款审批，见大纲 7.11）
+        if (this.order!.status === 4 && (this.order!.escrowStatus ?? 0) === 0 && this.order!.reviewed === 0) {
+          Button('申请退款')
+            .layoutWeight(1)
+            .height(44)
+            .fontSize(FONT_SIZE.MD)
+            .fontColor(COLORS.ERROR)
+            .backgroundColor(Color.Transparent)
+            .borderRadius(BORDER_RADIUS.ROUND)
+            .type(ButtonType.Capsule)
+            .borderWidth(1)
+            .borderColor(COLORS.ERROR)
+            .onClick(() => { this.showRefundDialog = true })
         }
 
         // status===4 (已完成): 再来一单 + 去评价

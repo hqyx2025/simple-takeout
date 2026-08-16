@@ -2,6 +2,7 @@ package com.example.takeout.controller;
 
 import com.example.takeout.common.ApiResponse;
 import com.example.takeout.model.Order;
+import com.example.takeout.model.RefundRecord;
 import com.example.takeout.model.Review;
 import com.example.takeout.service.OrderService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -66,6 +67,13 @@ public class OrderController {
         return ApiResponse.ok(orderService.reviewOrder(userId, id, req.rating(), req.content(), req.tags()));
     }
 
+    @PostMapping("/orders/{id}/refund")
+    public ApiResponse<RefundRecord> refund(@RequestAttribute("userId") long userId, @PathVariable long id,
+                                            @RequestBody(required = false) RefundRequest req) {
+        String reason = req == null ? "" : req.reason();
+        return ApiResponse.ok(orderService.applyRefund(userId, id, reason));
+    }
+
     // ============ 商户端 ============
 
     @GetMapping("/merchant/orders")
@@ -98,6 +106,9 @@ public class OrderController {
     }
 
     public record ReviewRequest(int rating, String content, List<String> tags) {
+    }
+
+    public record RefundRequest(String reason) {
     }
 
     private void requireMerchant(int role) {

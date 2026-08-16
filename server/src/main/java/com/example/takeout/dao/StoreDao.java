@@ -38,7 +38,11 @@ public class StoreDao {
             rs.getLong("id"),
             rs.getString("name"),
             rs.getString("icon"),
-            rs.getString("color")
+            rs.getString("color"),
+            rs.getString("type"),
+            rs.getLong("merchant_id"),
+            rs.getInt("sort"),
+            rs.getInt("status")
     );
 
     private final JdbcTemplate jdbc;
@@ -47,8 +51,9 @@ public class StoreDao {
         this.jdbc = jdbc;
     }
 
+    /** 平台分类（首页导航与店铺/商品创建时选择）。 */
     public List<Category> listCategories() {
-        return jdbc.query("SELECT * FROM categories ORDER BY id", CATEGORY_MAPPER);
+        return jdbc.query("SELECT * FROM categories WHERE type = 'PLATFORM' AND status = 1 ORDER BY id", CATEGORY_MAPPER);
     }
 
     public Optional<Category> findCategoryById(long categoryId) {
@@ -57,13 +62,13 @@ public class StoreDao {
     }
 
     public boolean categoryNameExists(String name, long excludeId) {
-        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM categories WHERE name = ? AND id <> ?",
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM categories WHERE name = ? AND id <> ? AND type = 'PLATFORM'",
                 Integer.class, name, excludeId);
         return count != null && count > 0;
     }
 
     public long insertCategory(String name, String icon, String color) {
-        jdbc.update("INSERT INTO categories(name, icon, color) VALUES(?,?,?)", name, icon, color);
+        jdbc.update("INSERT INTO categories(name, icon, color, type) VALUES(?,?,?,'PLATFORM')", name, icon, color);
         return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 
@@ -97,8 +102,52 @@ public class StoreDao {
     }
 
     public boolean categoryExists(long categoryId) {
-        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM categories WHERE id = ?", Integer.class, categoryId);
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM categories WHERE id = ? AND type = 'PLATFORM'",
+                Integer.class, categoryId);
         return count != null && count > 0;
+    }
+
+    // ============ 商户分类（演进项，见大纲 8.3） ============
+
+    public List<Category> listMerchantCategories(long merchantId) {
+        return jdbc.query("SELECT * FROM categories WHERE type = 'MERCHANT' AND merchant_id = ? " +
+                "AND status = 1 ORDER BY sort, id", CATEGORY_MAPPER, merchantId);
+    }
+
+    /** 归属校验：商户分类必须属于当前商户用户。 */
+    public boolean merchantCategoryOwned(long categoryId, long merchantId) {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM categories WHERE id = ? AND type = 'MERCHANT' AND merchant_id = ?",
+                Integer.class, categoryId, merchantId);
+        return count != null && count > 0;
+    }
+
+    public boolean merchantCategoryNameExists(long merchantId, String name, long excludeId) {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM categories WHERE type = 'MERCHANT' AND merchant_id = ? AND name = ? AND id <> ?",
+                Integer.class, merchantId, name, excludeId);
+        return count != null && count > 0;
+    }
+
+    public long insertMerchantCategory(long merchantId, String name, int sort) {
+        jdbc.update("INSERT INTO categories(name, icon, color, type, merchant_id, sort, status) VALUES(?,'','','MERCHANT',?,?,1)",
+                name, merchantId, sort);
+        return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+    }
+
+    public void updateMerchantCategory(long id, String name, int sort) {
+        jdbc.update("UPDATE categories SET name = ?, sort = ? WHERE id = ?", name, sort, id);
+    }
+
+    public void deleteMerchantCategory(long id) {
+        jdbc.update("DELETE FROM categories WHERE id = ?", id);
+    }
+
+    /** 分类下商品引用计数（删除分类前校验）。 */
+    public int countGoodsByMerchantCategory(long categoryId) {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM goods WHERE merchant_category_id = ?", Integer.class, categoryId);
+        return count == null ? 0 : count;
     }
 
     public List<Store> listByOwner(long ownerId) {

@@ -4,6 +4,7 @@
  */
 import { Category, StoreItem, GoodsItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, createEmptyUser } from '../model/Models'
 import { addToCart, updateCartItemQuantity, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncCategoriesFromServer, syncStoreReviewsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
+import { fetchStoreMerchantCategoriesApi } from '../service/ApiService'
 import { LoginPage } from './LoginPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, formatSales } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
@@ -849,6 +850,8 @@ struct StoreDetailContent {
   @State storeReviews: Review[] = []
   @State currentCat: string = '全部'
   @State goodsCats: string[] = ['全部']
+  // 店内商户分类（演进项，见大纲 8.3）：优先按商户分类分组，无商户分类时回退平台分类
+  @State storeMerchantCats: Category[] = []
   @StorageLink('cartItems') cartItems: CartItem[] = []
   @StorageLink('categoryList') categoryList: Category[] = []
   @StorageLink('isLoggedIn') loggedIn: boolean = false
@@ -904,6 +907,7 @@ struct StoreDetailContent {
       return
     }
     await syncGoodsFromServer(this.storeId)
+    this.storeMerchantCats = await fetchStoreMerchantCategoriesApi(this.storeId)
     const goods: GoodsItem[] = getGoodsForStore(this.storeId)
     this.goodsList = goods
     const cats: string[] = this.getGoodsCategoryNames(goods)
@@ -919,8 +923,23 @@ struct StoreDetailContent {
     this.storeReviews = AppStorage.get<Review[]>('reviewList') || []
   }
 
+  // 商品分组名：优先使用店内商户分类；商品均未分组时回退到平台分类名
   private getGoodsCategoryNames(goods: GoodsItem[]): string[] {
     const names: string[] = []
+    let hasMerchantCat: boolean = false
+    goods.forEach((item: GoodsItem) => {
+      const merchantCatId: number = item.merchantCategoryId ?? 0
+      if (merchantCatId > 0) {
+        const category: Category | undefined = this.storeMerchantCats.find((cat: Category) => cat.id === merchantCatId)
+        if (category !== undefined && names.indexOf(category.name) < 0) {
+          names.push(category.name)
+          hasMerchantCat = true
+        }
+      }
+    })
+    if (hasMerchantCat) {
+      return names
+    }
     goods.forEach((item: GoodsItem) => {
       const category: Category | undefined = this.categoryList.find((cat: Category) => cat.id === item.categoryId)
       if (category !== undefined && names.indexOf(category.name) < 0) {
@@ -943,6 +962,12 @@ struct StoreDetailContent {
     if (this.currentCat === '全部') {
       return onShelfGoods
     }
+    // 优先按店内商户分类名匹配
+    const merchantCat: Category | undefined = this.storeMerchantCats.find((cat: Category) => cat.name === this.currentCat)
+    if (merchantCat !== undefined) {
+      return onShelfGoods.filter(g => (g.merchantCategoryId ?? 0) === merchantCat.id)
+    }
+    // 回退：按平台分类名匹配
     return onShelfGoods.filter(g => {
       const category: Category | undefined = this.categoryList.find((cat: Category) => cat.id === g.categoryId)
       return category !== undefined && category.name === this.currentCat

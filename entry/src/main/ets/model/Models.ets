@@ -9,12 +9,15 @@ export enum UserRole {
   ADMIN = 2        // 管理端（管理平台分类、店铺和托管订单）
 }
 
-// 分类模型
+// 分类模型（type：PLATFORM 平台分类 / MERCHANT 商户分类，商户分类带 merchantId/sort）
 export interface Category {
   id: number
   name: string
   icon: string
   color: string
+  type?: string
+  merchantId?: number
+  sort?: number
 }
 
 /** 首页分类导航的默认展示数据；服务端返回成功后会以服务端数据为准。 */
@@ -32,6 +35,7 @@ export function createDefaultCategories(): Category[] {
 }
 
 // 商品模型
+// stock：库存（0 表示售罄）；merchantCategoryId：商户店内分类（0=未分组）
 export interface GoodsItem {
   id: number
   name: string
@@ -40,6 +44,8 @@ export interface GoodsItem {
   originalPrice?: number
   image: string
   categoryId: number
+  merchantCategoryId?: number
+  stock?: number
   sales: number
   rating: number
   tag?: string
@@ -112,6 +118,8 @@ export interface Order {
   status: number
   /** 托管款状态：0托管中，1已结算给商户，2已退款 */
   escrowStatus?: number
+  /** 是否已评价：0未评价 1已评价（后端 orders.reviewed） */
+  reviewed?: number
   createTime: string
   payTime?: string
   deliverTime?: string
@@ -183,6 +191,20 @@ export interface Favorite {
   storeName: string
   storeImage: string
   createTime: string
+}
+
+// 退款记录（用户申请退款 + 管理端审批）
+export interface RefundRecord {
+  id: number
+  orderId: number
+  userId: number
+  merchantId: number
+  reason: string
+  amount: number
+  status: string        // PENDING待审批 / REFUNDED已退款 / REJECTED已拒绝
+  applyTime: string
+  processTime?: string
+  rejectReason?: string
 }
 
 // 配送时间轴节点

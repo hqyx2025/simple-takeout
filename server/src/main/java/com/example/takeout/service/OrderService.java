@@ -5,6 +5,7 @@ import com.example.takeout.dao.AddressDao;
 import com.example.takeout.dao.CouponDao;
 import com.example.takeout.dao.GoodsDao;
 import com.example.takeout.dao.OrderDao;
+import com.example.takeout.dao.RefundDao;
 import com.example.takeout.dao.ReviewDao;
 import com.example.takeout.dao.StoreDao;
 import com.example.takeout.dao.UserDao;
@@ -12,6 +13,7 @@ import com.example.takeout.model.Address;
 import com.example.takeout.model.Coupon;
 import com.example.takeout.model.Goods;
 import com.example.takeout.model.Order;
+import com.example.takeout.model.RefundRecord;
 import com.example.takeout.model.Review;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.User;
@@ -44,10 +46,12 @@ public class OrderService {
     private final CouponDao couponDao;
     private final ReviewDao reviewDao;
     private final UserDao userDao;
+    private final RefundDao refundDao;
     private final ObjectMapper objectMapper;
 
     public OrderService(OrderDao orderDao, StoreDao storeDao, GoodsDao goodsDao, AddressDao addressDao,
-                        CouponDao couponDao, ReviewDao reviewDao, UserDao userDao, ObjectMapper objectMapper) {
+                        CouponDao couponDao, ReviewDao reviewDao, UserDao userDao, RefundDao refundDao,
+                        ObjectMapper objectMapper) {
         this.orderDao = orderDao;
         this.storeDao = storeDao;
         this.goodsDao = goodsDao;
@@ -55,6 +59,7 @@ public class OrderService {
         this.couponDao = couponDao;
         this.reviewDao = reviewDao;
         this.userDao = userDao;
+        this.refundDao = refundDao;
         this.objectMapper = objectMapper;
     }
 
@@ -88,6 +93,9 @@ public class OrderService {
             }
             if (goods.status() != 1) {
                 throw new BizException("商品已下架：" + goods.name());
+            }
+            if (goods.stock() < item.quantity()) {
+                throw new BizException("「" + goods.name() + "」库存不足，仅剩 " + goods.stock() + " 件");
             }
             goodsAmount += goods.price() * item.quantity();
             normalizedItems.add(new Order.OrderItem(goods.id(), goods.name(), goods.price(), item.quantity(), goods.image()));
@@ -128,6 +136,12 @@ public class OrderService {
         userDao.updateBalance(userId, round2(user.balance() - payAmount));
         if (appliedCoupon != null) {
             couponDao.markUsed(appliedCoupon.id());
+        }
+        // 扣减库存（乐观锁条件更新，防超卖）；任一失败整体回滚事务
+        for (Order.OrderItem normalized : normalizedItems) {
+            if (!goodsDao.deductStock(normalized.goodsId(), normalized.quantity())) {
+                throw new BizException("「" + normalized.goodsName() + "」库存不足，请减少数量或联系商家");
+            }
         }
 
         String now = LocalDateTime.now().format(FMT);
@@ -189,10 +203,49 @@ public class OrderService {
         if (!orderDao.refundEscrow(orderId)) {
             throw new BizException("订单资金已处理，不能重复退款");
         }
+        // escrow 条件更新成功才回滚库存（同一事务内，防重复回滚）
+        rollbackStock(order);
         User user = userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
         userDao.updateBalance(userId, round2(user.balance() + order.payAmount()));
         orderDao.updateStatus(orderId, 5, "complete_time", LocalDateTime.now().format(FMT));
         return orderDetail(orderId);
+    }
+
+    /**
+     * 用户申请退款（演进项：退款审批流程，见大纲 7.11/9.7/10.7）
+     * 条件：订单已送达（status=4）、托管未结算（escrow=0）、未评价；申请后订单进入退款中（status=6）。
+     */
+    @Transactional
+    public RefundRecord applyRefund(long userId, long orderId, String reason) {
+        Order order = requireOrder(orderId);
+        if (order.userId() != userId) {
+            throw new BizException(403, "无权操作该订单");
+        }
+        if (order.status() != 4) {
+            throw new BizException("仅已送达订单可申请退款");
+        }
+        if (order.escrowStatus() != 0) {
+            throw new BizException("订单已结算或已退款，不能申请退款");
+        }
+        if (order.reviewed() == 1) {
+            throw new BizException("订单已评价，不能申请退款");
+        }
+        if (refundDao.existsPending(orderId)) {
+            throw new BizException("该订单已有进行中的退款申请，请等待审核");
+        }
+        Store store = storeDao.findById(order.storeId()).orElseThrow(() -> new BizException("店铺不存在"));
+        String now = LocalDateTime.now().format(FMT);
+        long id = refundDao.insert(orderId, userId, store.ownerId(),
+                reason == null ? "" : reason, order.payAmount(), now);
+        orderDao.updateStatusOnly(orderId, 6);
+        return refundDao.findById(id).orElseThrow(() -> new BizException("退款申请失败"));
+    }
+
+    /** 回滚订单商品库存（取消/退款时调用，必须处于 escrow 条件更新成功后的同一事务内）。 */
+    private void rollbackStock(Order order) {
+        for (Order.OrderItem item : parseItems(order.items())) {
+            goodsDao.restoreStock(item.goodsId(), item.quantity());
+        }
     }
 
     public Order.OrderView merchantFlow(long ownerId, long orderId, String action) {

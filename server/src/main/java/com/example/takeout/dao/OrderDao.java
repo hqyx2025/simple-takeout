@@ -71,6 +71,11 @@ public class OrderDao {
         jdbc.update("UPDATE orders SET status = ?, " + timeField + " = ? WHERE id = ?", status, timeValue, id);
     }
 
+    /** 仅更新订单状态，不写时间字段（退款申请/审批回退使用）。 */
+    public void updateStatusOnly(long id, int status) {
+        jdbc.update("UPDATE orders SET status = ? WHERE id = ?", status, id);
+    }
+
     public void markReviewed(long id) {
         jdbc.update("UPDATE orders SET reviewed = 1 WHERE id = ?", id);
     }
