@@ -6,7 +6,7 @@ import { formatSales } from '../common/Constants'
 import { searchStoresRemote } from '../service/AppStorageManager'
 import { getSearchHistory, addSearchHistory, clearSearchHistory } from '../service/PreferencesHelper'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
-import { routerCompat as router } from '../common/UiNavigation'
+import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
 
 @Entry
@@ -38,6 +38,7 @@ export struct SearchPage {
 
   async doSearch() {
     if (!this.loggedIn) {
+      promptAction.showToast({ message: '请先登录后搜索店铺', duration: 1800 })
       return
     }
     const keyword: string = this.searchText.trim()
