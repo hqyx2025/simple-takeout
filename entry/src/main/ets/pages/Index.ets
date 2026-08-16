@@ -1401,13 +1401,19 @@ struct OrderListMainPage {
         Text(`¥${order.payAmount.toFixed(2)}`)
           .fontSize(FONT_SIZE.LG).fontColor(COLORS.PRICE_RED).fontWeight(FontWeight.Bold)
         Blank()
-        if (order.status === 4) {
+        if (order.status === 4 && (order.escrowStatus ?? 0) === 0) {
           Button('确认收货并结算').height(32).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_WHITE)
             .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
             .onClick(async () => {
-              await confirmOrderRemote(order.id)
+              const ok: boolean = await confirmOrderRemote(order.id)
               this.orderList = AppStorage.get<Order[]>('orderList') || []
               this.refreshDataSource()
+              if (ok) {
+                promptAction.showToast({ message: '已确认收货，订单已完成', duration: 1800 })
+              } else {
+                const errorMessage: string = getLastRemoteErrorMessage()
+                promptAction.showToast({ message: errorMessage === '' ? '确认收货失败，请稍后重试' : errorMessage, duration: 2200 })
+              }
             })
         } else if (order.status === 3) {
           Text('配送中，送达后可确认收货')

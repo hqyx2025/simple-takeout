@@ -29,6 +29,7 @@ public class OrderDao {
             rs.getDouble("pay_amount"),
             rs.getString("remark"),
             rs.getInt("reviewed"),
+            rs.getInt("escrow_status"),
             rs.getString("create_time"),
             rs.getString("pay_time"),
             rs.getString("accept_time"),
