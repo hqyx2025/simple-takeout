@@ -5,7 +5,7 @@
 **/build
 /.hvigor
 .m2-repository/
-.agents/
+.qoder/
 .cxx
 /.clangd
 /.clang-format
