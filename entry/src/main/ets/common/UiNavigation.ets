@@ -54,6 +54,17 @@ class RouterCompat {
     navigate(options.url)
   }
 
+  replaceUrl(options: RouterOptionsCompat): void {
+    const context: UIContext | undefined = UIContext.getCallingScopeUIContext()
+    if (context !== undefined) {
+      try {
+        context.getRouter().replaceUrl({ url: options.url })
+      } catch (_) {
+        navigate(options.url)
+      }
+    }
+  }
+
   back(): void {
     goBack()
   }
