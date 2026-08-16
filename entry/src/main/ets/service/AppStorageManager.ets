@@ -309,8 +309,8 @@ export async function updateUserProfileRemote(username: string, phone: string): 
 /**
  * 远程登录：成功返回用户并写入 AppStorage；失败返回 undefined
  */
-export async function loginRemote(phone: string, password: string): Promise<User | undefined> {
-  const user: User | null = await apiLogin(phone, password)
+export async function loginRemote(phone: string, password: string, loginType?: string): Promise<User | undefined> {
+  const user: User | null = await apiLogin(phone, password, loginType)
   if (user !== null) {
     const token: string = getAuthToken()
     AppStorage.setOrCreate<string>('authToken', token)

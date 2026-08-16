@@ -54,13 +54,33 @@ public class AuthService {
      * 登录：成功返回 (token, user)
      */
     public LoginResult login(String phone, String password) {
+        return login(phone, password, null);
+    }
+
+    /** 按登录端校验账号角色，loginType 为空时兼容旧客户端。 */
+    public LoginResult login(String phone, String password, String loginType) {
         User user = userDao.findByPhone(phone)
                 .orElseThrow(() -> new BizException("账号或密码错误"));
         if (!PasswordUtil.matches(password, user.password())) {
             throw new BizException("账号或密码错误");
         }
+        if (loginType != null && !loginType.isBlank()) {
+            int expectedRole = roleOf(loginType);
+            if (user.role() != expectedRole) {
+                throw new BizException(403, "登录端与账号角色不匹配，请切换正确的登录端");
+            }
+        }
         String token = jwtUtil.generateToken(user.id(), user.role());
         return new LoginResult(token, user.safe());
+    }
+
+    private int roleOf(String loginType) {
+        return switch (loginType.trim().toUpperCase()) {
+            case "USER", "CUSTOMER" -> 0;
+            case "MERCHANT" -> 1;
+            case "ADMIN" -> 2;
+            default -> throw new BizException("登录端类型不合法，仅支持 USER、MERCHANT、ADMIN");
+        };
     }
 
     public User profile(long userId) {

@@ -3,14 +3,60 @@ package com.example.takeout.service;
 import com.example.takeout.dao.UserDao;
 import com.example.takeout.model.User;
 import com.example.takeout.security.JwtUtil;
+import com.example.takeout.security.PasswordUtil;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class AuthServiceSecurityTest {
+
+    @Test
+    void loginRejectsAccountWhenLoginTypeDoesNotMatchRole() {
+        UserDao userDao = mock(UserDao.class);
+        JwtUtil jwtUtil = mock(JwtUtil.class);
+        User merchant = new User(2, "商户", "", "13600136000", PasswordUtil.hash("123456"), 1, 0, "now");
+        when(userDao.findByPhone("13600136000")).thenReturn(java.util.Optional.of(merchant));
+
+        com.example.takeout.common.BizException error = assertThrows(
+                com.example.takeout.common.BizException.class,
+                () -> new AuthService(userDao, jwtUtil).login("13600136000", "123456", "USER"));
+
+        assertEquals(403, error.getCode());
+        assertEquals("登录端与账号角色不匹配，请切换正确的登录端", error.getMessage());
+    }
+
+    @Test
+    void loginAcceptsMatchingAdminLoginType() {
+        UserDao userDao = mock(UserDao.class);
+        JwtUtil jwtUtil = mock(JwtUtil.class);
+        User admin = new User(3, "管理员", "", "13100131000", PasswordUtil.hash("123456"), 2, 0, "now");
+        when(userDao.findByPhone("13100131000")).thenReturn(java.util.Optional.of(admin));
+        when(jwtUtil.generateToken(3, 2)).thenReturn("token");
+
+        AuthService.LoginResult result = new AuthService(userDao, jwtUtil)
+                .login("13100131000", "123456", "ADMIN");
+
+        assertEquals("token", result.token());
+        assertEquals(2, result.user().role());
+    }
+
+    @Test
+    void loginRejectsUnknownLoginType() {
+        UserDao userDao = mock(UserDao.class);
+        JwtUtil jwtUtil = mock(JwtUtil.class);
+        User user = new User(1, "用户", "", "13800138000", PasswordUtil.hash("123456"), 0, 20, "now");
+        when(userDao.findByPhone("13800138000")).thenReturn(java.util.Optional.of(user));
+
+        com.example.takeout.common.BizException error = assertThrows(
+                com.example.takeout.common.BizException.class,
+                () -> new AuthService(userDao, jwtUtil).login("13800138000", "123456", "UNKNOWN"));
+
+        assertEquals("登录端类型不合法，仅支持 USER、MERCHANT、ADMIN", error.getMessage());
+    }
 
     @Test
     void registrationResultDoesNotExposePasswordHash() {
