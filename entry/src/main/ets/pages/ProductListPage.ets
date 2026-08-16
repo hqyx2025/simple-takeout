@@ -100,18 +100,20 @@ export struct ProductListPage {
     }
     this.categoryStores = []
     const result: ProductListItem[] = []
+    const currentMode: string = this.mode
+    const currentCategoryId: number = this.categoryId
     for (let i = 0; i < candidates.length; i++) {
       const store: StoreItem = candidates[i]
       await syncGoodsFromServer(store.id)
       const goods: GoodsItem[] = getGoodsForStore(store.id)
       goods.forEach((item: GoodsItem) => {
         const productCategoryId: number = this.getProductCategoryId(store, item)
-        if (this.mode === ProductListMode.CATEGORY && this.categoryId > 0) {
-          if (productCategoryId !== this.categoryId) {
+        if (currentMode === ProductListMode.CATEGORY && currentCategoryId > 0) {
+          if (productCategoryId !== currentCategoryId) {
             return
           }
         }
-        if (this.mode === ProductListMode.SPECIAL && item.tag === undefined && item.sales < 1000) {
+        if (currentMode === ProductListMode.SPECIAL && item.tag === undefined && item.sales < 1000) {
           return
         }
         result.push(new ProductListItem(store, item))

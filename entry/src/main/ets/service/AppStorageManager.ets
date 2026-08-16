@@ -233,8 +233,8 @@ export function getMerchantWeekStats(merchantId: number): MerchantStatsData {
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
   const weekOrders = orders.filter(o => {
-    const orderDate = new Date(o.createTime.replace(/-/g, '/'))
-    return orderDate >= weekAgo
+    const orderTime: number = Date.parse(o.createTime.replace(/-/g, '/'))
+    return !Number.isNaN(orderTime) && orderTime >= weekAgo.getTime()
   })
   const completedOrders = weekOrders.filter(o => o.status === 4)
   const revenue = completedOrders.reduce((sum, o) => sum + o.payAmount, 0)
@@ -255,13 +255,15 @@ export function getMerchantWeekRevenue(merchantId: number): number[] {
   const orders: Order[] = getMerchantOrders(merchantId)
   const result: number[] = []
   const now = new Date()
+  const dayMillis: number = 24 * 60 * 60 * 1000
+  const cursor: Date = new Date(now.getTime() - 6 * dayMillis)
   for (let i = 6; i >= 0; i--) {
-    const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
-    const dayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const dayStr = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`
     const revenue = orders
       .filter(o => o.status === 4 && (o.completeTime ?? '').startsWith(dayStr))
       .reduce((sum, o) => sum + o.payAmount, 0)
     result.push(revenue)
+    cursor.setTime(cursor.getTime() + dayMillis)
   }
   return result
 }
