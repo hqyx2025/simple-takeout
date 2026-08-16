@@ -1,0 +1,1 @@
+尚未完成的质量项：真机 UI 自动化、AppAnalyzer、Release 签名和 HTTPS 联调，目前分别受设备、工具 CLI、证书和 HTTPS 密钥缺失影响。
