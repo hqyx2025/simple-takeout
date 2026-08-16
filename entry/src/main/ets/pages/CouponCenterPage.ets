@@ -3,10 +3,10 @@
  * 支持领取优惠券、查看我的优惠券（未使用/已使用）
  */
 import { Coupon } from '../model/Models'
-import { claimCouponRemote, syncCouponsRemote } from '../service/AppStorageManager'
+import { claimCouponRemote, syncCouponsRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { logInfo } from '../service/AppLogger'
-import { routerCompat as router } from '../common/UiNavigation'
+import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 
 // Tab项 - 使用class避免无类型对象字面量
 class CouponTab {
@@ -234,14 +234,20 @@ export struct CouponCenterPage {
   }
 
   // 领取优惠券
-  doClaim(coupon: Coupon) {
+  async doClaim(coupon: Coupon): Promise<void> {
     // 调用后端领券（真实后端模式）
-    claimCouponRemote(coupon.storeId ?? 0, coupon.condition, coupon.minOrder, coupon.amount)
+    const ok: boolean = await claimCouponRemote(coupon.storeId ?? 0, coupon.condition, coupon.minOrder, coupon.amount)
+    if (!ok) {
+      const errorMessage: string = getLastRemoteErrorMessage()
+      promptAction.showToast({ message: errorMessage === '' ? '优惠券领取失败，请稍后重试' : errorMessage, duration: 2200 })
+      return
+    }
     logInfo('Coupon', `领取优惠券 couponId=${coupon.id} 金额=${coupon.amount} 门槛=${coupon.minOrder}`)
 
     // 从可领取列表中移除
     const claimable: Coupon[] = AppStorage.get<Coupon[]>('claimableCoupons') || []
     const newClaimable = claimable.filter((c: Coupon) => c.id !== coupon.id)
     AppStorage.setOrCreate('claimableCoupons', newClaimable)
+    promptAction.showToast({ message: '优惠券领取成功', duration: 1500 })
   }
 }

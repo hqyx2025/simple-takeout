@@ -64,21 +64,33 @@ export struct MerchantOrdersPage {
   }
 
   private async handleAccept(order: Order): Promise<void> {
-    await merchantActionRemote(order.id, 'accept')
+    const ok: boolean = await merchantActionRemote(order.id, 'accept')
+    if (!ok) {
+      promptAction.showToast({ message: '接单失败，请检查登录状态或订单状态', duration: 2200 })
+      return
+    }
     logInfo('Merchant', `点击接单 orderId=${order.id} 店铺=${order.storeName}`)
     promptAction.showToast({ message: '已接单' })
     this.loadOrders()
   }
 
   private async handleStartDelivery(order: Order): Promise<void> {
-    await merchantActionRemote(order.id, 'deliver')
+    const ok: boolean = await merchantActionRemote(order.id, 'deliver')
+    if (!ok) {
+      promptAction.showToast({ message: '出餐失败，请检查登录状态或订单状态', duration: 2200 })
+      return
+    }
     logInfo('Merchant', `点击出餐 orderId=${order.id} 店铺=${order.storeName}`)
     promptAction.showToast({ message: '已出餐，配送中' })
     this.loadOrders()
   }
 
   private async handleComplete(order: Order): Promise<void> {
-    await merchantActionRemote(order.id, 'complete')
+    const ok: boolean = await merchantActionRemote(order.id, 'complete')
+    if (!ok) {
+      promptAction.showToast({ message: '确认送达失败，请检查登录状态或订单状态', duration: 2200 })
+      return
+    }
     logInfo('Merchant', `点击确认送达 orderId=${order.id} 店铺=${order.storeName}`)
     promptAction.showToast({ message: '已确认送达' })
     this.loadOrders()

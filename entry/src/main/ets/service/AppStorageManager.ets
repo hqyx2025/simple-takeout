@@ -520,6 +520,11 @@ export async function merchantActionRemote(orderId: number, action: string): Pro
  */
 export async function toggleFavoriteRemote(storeId: number): Promise<boolean> {
   const favorited: boolean = await toggleFavoriteApi(storeId)
+  const errorMessage: string = getLastApiErrorMessage()
+  if (errorMessage !== '') {
+    logWarn('Api', `远程收藏操作失败 storeId=${storeId} message=${errorMessage}`)
+    return false
+  }
   await syncFavoritesRemote()
   logInfo('Api', `远程收藏切换 storeId=${storeId} 结果=${favorited}`)
   return favorited
