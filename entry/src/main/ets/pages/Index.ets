@@ -102,6 +102,8 @@ struct Index {
   @StorageLink('isLoggedIn') @Watch('onLoginStateChange') loggedIn: boolean = false
   @State showLogin: boolean = true
   @State showLocationLoginConfirm: boolean = false
+  // 管理端跳转占位：管理端不渲染主页（定位/购物车/订单等 C 端功能），直接进入平台管理页
+  @State adminRedirecting: boolean = false
   private tabsController: TabsController = new TabsController()
 
   aboutToAppear() {
@@ -112,12 +114,27 @@ struct Index {
     this.showLogin = !this.loggedIn
     // 数据格式保险：校验 AppStorage 关键数据，异常（非数组/非对象）时重置，防止渲染崩溃
     this.sanitizeAppData()
+    // 管理端守卫：已登录的管理端不渲染主页，直接跳转平台管理页
+    this.guardAdminRole()
+  }
+
+  // 管理端守卫：登录态为 ADMIN 时立即替换到平台管理页，并阻止主页内容渲染
+  private guardAdminRole(): void {
+    if (!this.loggedIn) {
+      return
+    }
+    const currentUser: User | undefined = AppStorage.get<User>('user')
+    if (currentUser !== undefined && currentUser.role === UserRole.ADMIN) {
+      this.adminRedirecting = true
+      router.replaceUrl({ url: 'pages/AdminCenterPage' })
+    }
   }
 
   onLoginStateChange(): void {
     // 401、退出登录或角色变化导致的登录态失效，都必须回到登录页。
     this.showLogin = !this.loggedIn
     if (!this.loggedIn) {
+      this.adminRedirecting = false
       const currentUser: User | undefined = AppStorage.get<User>('user')
       if (currentUser !== undefined && currentUser !== null && currentUser.id > 0) {
         // 401 清理内存态后还要清除持久化业务缓存，避免账号之间串数据。
@@ -126,6 +143,13 @@ struct Index {
       return
     }
     if (this.loggedIn) {
+      // 管理端登录/恢复登录态：不进入主页，直接跳转平台管理页
+      const currentUser: User | undefined = AppStorage.get<User>('user')
+      if (currentUser !== undefined && currentUser.role === UserRole.ADMIN) {
+        this.adminRedirecting = true
+        router.replaceUrl({ url: 'pages/AdminCenterPage' })
+        return
+      }
       // 后端业务接口统一要求 JWT，登录成功后再拉取首页真实数据。
       syncCategoriesFromServer()
       syncStoresFromServer()
@@ -169,6 +193,13 @@ struct Index {
   // 从子路由页面（收藏页/搜索页）返回时，处理店铺详情跳转
   onPageShow() {
     logInfo('Page', '首页 Index onPageShow')
+    // 管理端防御：任何情况下 Index 对管理端不可见（防止返回键/异常路由回到主页）
+    const pageUser: User | undefined = AppStorage.get<User>('user')
+    if (this.loggedIn && pageUser !== undefined && pageUser.role === UserRole.ADMIN) {
+      this.adminRedirecting = true
+      router.replaceUrl({ url: 'pages/AdminCenterPage' })
+      return
+    }
     if (AppStorage.get<boolean>('pendingLocationAfterLogin') || false) {
       this.showLogin = true
     }
@@ -206,6 +237,21 @@ struct Index {
 
   build() {
     Stack() {
+      if (this.adminRedirecting) {
+        // 管理端跳转占位：不渲染主页/定位/购物车/订单等任何 C 端内容，仅显示过渡提示
+        Column({ space: SPACING.MD }) {
+          Text('🛠️')
+            .fontSize(48)
+          Text('正在进入平台管理…')
+            .fontSize(FONT_SIZE.LG)
+            .fontColor(COLORS.TEXT_SECONDARY)
+        }
+        .width('100%')
+        .height('100%')
+        .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Center)
+        .backgroundColor(COLORS.BG_PRIMARY)
+      } else {
       if (!this.showLogin) {
       Tabs({ controller: this.tabsController, barPosition: BarPosition.End }) {
       // 首页Tab
@@ -295,6 +341,7 @@ struct Index {
             AppStorage.setOrCreate<boolean>('pendingLocationAfterLogin', false)
           }
         })
+      }
       }
     }
   }
