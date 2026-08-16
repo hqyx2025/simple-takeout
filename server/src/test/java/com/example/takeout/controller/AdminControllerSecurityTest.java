@@ -1,0 +1,32 @@
+package com.example.takeout.controller;
+
+import com.example.takeout.common.BizException;
+import com.example.takeout.service.AdminService;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
+
+class AdminControllerSecurityTest {
+
+    @Test
+    void userRoleCannotReadAdminCategories() {
+        AdminController controller = new AdminController(mock(AdminService.class));
+
+        BizException error = assertThrows(BizException.class,
+                () -> controller.categories(0));
+
+        assertEquals(403, error.getCode());
+    }
+
+    @Test
+    void merchantRoleCannotReadAdminCategories() {
+        AdminController controller = new AdminController(mock(AdminService.class));
+
+        BizException error = assertThrows(BizException.class,
+                () -> controller.categories(1));
+
+        assertEquals(403, error.getCode());
+    }
+}
