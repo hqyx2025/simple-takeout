@@ -3,6 +3,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
 import { loadAllData } from '../service/DataPersistence';
 import { initLogger, setPrivacyConsent, logInfo } from '../service/AppLogger';
+import { User, UserRole } from '../model/Models';
 
 const DOMAIN = 0x0000;
 
@@ -54,7 +55,13 @@ export default class EntryAbility extends UIAbility {
     }
     const stage: window.WindowStage = this.mainWindowStage
     this.mainWindowStage = null
-    stage.loadContent('pages/Index', (err) => {
+    const loggedIn: boolean = AppStorage.get<boolean>('isLoggedIn') || false
+    const user: User | undefined = AppStorage.get<User>('user')
+    const initialPage: string = loggedIn && user !== undefined && user.role === UserRole.ADMIN
+      ? 'pages/AdminCenterPage'
+      : 'pages/Index'
+    logInfo('EntryAbility', `启动页面=${initialPage} loggedIn=${loggedIn}`)
+    stage.loadContent(initialPage, (err) => {
       if (err.code) {
         hilog.error(DOMAIN, '测试标签', '无法加载内容。原因： %{public}s', JSON.stringify(err));
         return;

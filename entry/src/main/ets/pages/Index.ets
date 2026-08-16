@@ -265,6 +265,11 @@ struct Index {
           onLoginSuccess: () => {
             this.showLogin = false
             this.loggedIn = true
+            const currentUser: User | undefined = AppStorage.get<User>('user')
+            if (currentUser !== undefined && currentUser.role === UserRole.ADMIN) {
+              router.replaceUrl({ url: 'pages/AdminCenterPage' })
+              return
+            }
             const shouldLocate: boolean = AppStorage.get<boolean>('pendingLocationAfterLogin') || false
             AppStorage.setOrCreate<boolean>('pendingLocationAfterLogin', false)
             if (shouldLocate) {

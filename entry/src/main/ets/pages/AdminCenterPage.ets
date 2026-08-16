@@ -1,5 +1,6 @@
 /** 平台管理端：分类、店铺营业状态和托管订单退款。 */
 import { User, UserRole, Category } from '../model/Models'
+import { logout } from '../service/AppStorageManager'
 import { ApiResponse, get, post, put } from '../service/HttpClient'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
@@ -48,7 +49,7 @@ export struct AdminCenterPage {
   aboutToAppear(): void {
     if (!this.loggedIn || this.user.role !== UserRole.ADMIN) {
       promptAction.showToast({ message: '仅管理端账号可以进入平台管理', duration: 1800 })
-      router.back()
+      router.replaceUrl({ url: 'pages/Index' })
       return
     }
     this.refresh()
@@ -101,7 +102,10 @@ export struct AdminCenterPage {
   build() {
     Column() {
       Row() {
-        Text('‹').fontSize(FONT_SIZE.XXL).onClick(() => { router.back() })
+        Text('退出').fontSize(FONT_SIZE.MD).fontColor(COLORS.PRIMARY).onClick(() => {
+          logout()
+          router.replaceUrl({ url: 'pages/Index' })
+        })
         Text('平台管理').fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).layoutWeight(1)
         Button('刷新').height(32).onClick(() => { this.refresh() })
       }
