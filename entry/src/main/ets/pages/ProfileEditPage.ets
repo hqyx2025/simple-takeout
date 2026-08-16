@@ -11,12 +11,18 @@ import { logInfo } from '../service/AppLogger'
 @Entry
 @Component
 export struct ProfileEditPage {
+  @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State username: string = ''
   @State phone: string = ''
   @State role: UserRole = UserRole.CUSTOMER
 
   aboutToAppear() {
     logInfo('Page', '进入个人信息编辑页 ProfileEditPage')
+    if (!this.loggedIn) {
+      promptAction.showToast({ message: '请先登录后编辑个人资料', duration: 1800 })
+      router.back()
+      return
+    }
     const user: User | undefined = getCurrentUser()
     if (user !== undefined && user !== null) {
       this.username = user.username
