@@ -116,6 +116,12 @@ struct Index {
   onLoginStateChange(): void {
     // 401、退出登录或角色变化导致的登录态失效，都必须回到登录页。
     this.showLogin = !this.loggedIn
+    if (this.loggedIn) {
+      // 后端业务接口统一要求 JWT，登录成功后再拉取首页真实数据。
+      syncCategoriesFromServer()
+      syncStoresFromServer()
+      syncUserOrdersFromServer()
+    }
   }
 
   // 校验并修复 AppStorage 关键数据的格式（兼容损坏/旧版数据）
@@ -164,10 +170,10 @@ struct Index {
     if (!(AppStorage.get<boolean>('privacyConsent') || false)) {
       return
     }
-    // 从后端拉取最新店铺/订单数据（真实后端模式）
-    syncCategoriesFromServer()
-    syncStoresFromServer()
     if (isLoggedIn()) {
+      // 未登录时不发送受保护请求，避免启动阶段出现无意义的 401。
+      syncCategoriesFromServer()
+      syncStoresFromServer()
       syncUserOrdersFromServer()
     }
     const storeId: number = AppStorage.get<number>('currentStoreId') || 0
