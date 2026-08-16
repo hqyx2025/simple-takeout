@@ -28,6 +28,7 @@ class ProductListItem {
 @Entry
 @Component
 export struct ProductListPage {
+  @StorageLink('isLoggedIn') loggedIn: boolean = false
   @StorageLink('currentAddress') currentAddress: Address | null = null
   @State mode: string = ProductListMode.ALL
   @State title: string = '附近全部商品'
@@ -37,12 +38,17 @@ export struct ProductListPage {
 
   aboutToAppear(): void {
     this.readRequest()
+    if (!this.loggedIn) {
+      return
+    }
     this.loadProducts()
   }
 
   onPageShow(): void {
     // 从定位页返回后重新按最新定位筛选商品。
-    this.loadProducts()
+    if (this.loggedIn) {
+      this.loadProducts()
+    }
   }
 
   private readRequest(): void {
@@ -243,7 +249,9 @@ export struct ProductListPage {
       .padding({ left: SPACING.LG, right: SPACING.LG })
       .backgroundColor(COLORS.BG_WHITE)
 
-      if (this.mode === ProductListMode.CATEGORY) {
+      if (!this.loggedIn) {
+        EmptyState({ icon: '🔒', title: '暂无登录', description: '请登录后查看商品' })
+      } else if (this.mode === ProductListMode.CATEGORY) {
         if (this.categoryStores.length === 0) {
           EmptyState({ icon: '🏪', title: '暂无该分类店铺', description: '当前分类暂时没有可展示的店铺' })
         } else {

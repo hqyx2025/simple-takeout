@@ -13,6 +13,7 @@ import { routerCompat as router } from '../common/UiNavigation'
 @Entry
 @Component
 export struct MerchantCenterPage {
+  @StorageLink('isLoggedIn') loggedIn: boolean = false
   @StorageLink('user') user: User = {
     id: 0, username: '未登录', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER,
     balance: 0, coupons: [], orders: [], storeIds: []
@@ -53,6 +54,11 @@ export struct MerchantCenterPage {
 
   aboutToAppear() {
     logInfo('Page', '进入商户中心页 MerchantCenterPage')
+    if (!this.loggedIn || this.user.role !== UserRole.MERCHANT) {
+      promptAction.showToast({ message: '请使用商户账号登录后管理店铺', duration: 1800 })
+      router.back()
+      return
+    }
     this.refreshStores()
   }
 

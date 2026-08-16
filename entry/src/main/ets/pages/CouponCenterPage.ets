@@ -23,6 +23,7 @@ class CouponTab {
 @Entry
 @Component
 export struct CouponCenterPage {
+  @StorageLink('isLoggedIn') loggedIn: boolean = false
   @StorageLink('couponList') couponList: Coupon[] = []
   @StorageLink('claimableCoupons') claimableCoupons: Coupon[] = []
   @State currentTab: number = 0  // 0=可领取, 1=我的优惠券, 2=已使用
@@ -32,7 +33,9 @@ export struct CouponCenterPage {
   aboutToAppear() {
     logInfo('Page', '进入优惠券中心页 CouponCenterPage')
     // 从后端拉取最新优惠券（真实后端模式）
-    syncCouponsRemote()
+    if (this.loggedIn) {
+      syncCouponsRemote()
+    }
   }
 
   build() {
@@ -81,7 +84,9 @@ export struct CouponCenterPage {
       // 内容区
       Scroll() {
         Column({ space: SPACING.MD }) {
-          if (this.currentTab === 0) {
+          if (!this.loggedIn) {
+            this.EmptyView('🔒', '暂无登录', '请登录后查看优惠券')
+          } else if (this.currentTab === 0) {
             // 可领取优惠券
             if (this.claimableCoupons.length === 0) {
               this.EmptyView('🎁', '暂无可领取的优惠券', '')

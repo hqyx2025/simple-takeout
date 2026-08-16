@@ -4,7 +4,7 @@
  */
 import { routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusColor } from '../common/Constants'
-import { MerchantStatsData, User } from '../model/Models'
+import { MerchantStatsData, User, UserRole } from '../model/Models'
 import { getCurrentUser, getMerchantTodayStats, getMerchantWeekStats, getMerchantWeekRevenue, getMerchantTodayStatusOrders, formatPrice, syncMerchantOrdersFromServer } from '../service/AppStorageManager'
 import { fetchMerchantStatsApi } from '../service/ApiService'
 import { logInfo } from '../service/AppLogger'
@@ -12,6 +12,7 @@ import { logInfo } from '../service/AppLogger'
 @Entry
 @Component
 export struct MerchantStatsPage {
+  @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State todayStats: MerchantStatsData = {
     todayOrders: 0,
     todayRevenue: 0,
@@ -39,7 +40,7 @@ export struct MerchantStatsPage {
   aboutToAppear() {
     logInfo('Page', '进入商户收入统计页 MerchantStatsPage')
     const user: User | undefined = getCurrentUser()
-    if (user !== undefined && user !== null) {
+    if (this.loggedIn && user !== undefined && user !== null && user.role === UserRole.MERCHANT) {
       this.balance = user.balance
       this.todayStats = getMerchantTodayStats(user.id)
       this.weekStats = getMerchantWeekStats(user.id)
@@ -55,6 +56,9 @@ export struct MerchantStatsPage {
       this.weekLabels = labels
       // 从后端拉取最新统计（真实后端模式）
       this.refreshRemoteStats()
+    } else {
+      logInfo('Page', '商户统计页跳过加载：未登录或角色不匹配')
+      router.back()
     }
   }
 
