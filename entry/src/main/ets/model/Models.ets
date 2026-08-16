@@ -110,6 +110,8 @@ export interface Order {
   discountAmount: number
   payAmount: number
   status: number
+  /** 托管款状态：0托管中，1已结算给商户，2已退款 */
+  escrowStatus?: number
   createTime: string
   payTime?: string
   deliverTime?: string

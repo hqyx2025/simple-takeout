@@ -76,6 +76,7 @@ interface ServerOrder {
   payAmount: number
   remark: string
   reviewed: number
+  escrowStatus: number
   createTime: string
   payTime: string
   acceptTime: string
@@ -641,6 +642,7 @@ function toOrder(o: ServerOrder): Order {
     discountAmount: o.discount,
     payAmount: o.payAmount,
     status: o.status,
+    escrowStatus: o.escrowStatus,
     createTime: o.createTime,
     payTime: o.payTime,
     deliverTime: o.deliverTime,

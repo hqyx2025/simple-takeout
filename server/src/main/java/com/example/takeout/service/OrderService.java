@@ -135,7 +135,7 @@ public class OrderService {
         Order order = new Order(0, orderNo, userId, storeId, store.name(), 1,
                 toJson(normalizedItems), toJson(new Order.AddressInfo(address.id(), address.name(), address.phone(), address.detail())),
                 goodsAmount, store.deliveryFee(), discount, payAmount,
-                remark == null ? "" : remark, 0, now, now, "", "", "");
+                remark == null ? "" : remark, 0, 0, now, now, "", "", "");
         long id = orderDao.insert(order);
         storeDao.updateMonthlySales(storeId, 1);
         return orderDetail(id);

@@ -53,7 +53,7 @@ class OrderServiceSecurityTest {
     @Test
     void rejectsOrderDetailBelongingToAnotherUser() {
         Order order = new Order(7, "NO7", 2, 10, "测试店", 1, "[]", "{}", 10, 3, 0, 13,
-                "", 0, "", "", "", "", "");
+                "", 0, 0, "", "", "", "", "");
         Store store = new Store(10, "测试店", "", 4.5, 0, 3, 0, "30分钟", "1km", "[]", "", 1, "[1]", 99, 1, "");
         when(orderDao.findById(7)).thenReturn(Optional.of(order));
         when(storeDao.findById(10)).thenReturn(Optional.of(store));
@@ -82,7 +82,7 @@ class OrderServiceSecurityTest {
     void confirmingDeliveredOrderSettlesMerchantOnlyOnce() {
         Order order = new Order(8, "NO8", 1, 10, "测试店铺", 4, "[]",
                 "{\"addressId\":20,\"name\":\"张三\",\"phone\":\"13800138000\",\"detail\":\"宿舍\"}",
-                20, 0, 0, 20, "", 0, "2026-08-16 10:00:00", "2026-08-16 10:00:00", "", "",
+                20, 0, 0, 20, "", 0, 0, "2026-08-16 10:00:00", "2026-08-16 10:00:00", "", "",
                 "2026-08-16 10:10:00");
         Store store = new Store(10, "测试店铺", "", 4.5, 0, 0, 0, "30分钟", "1km", "[]", "", 1, "[1]", 2, 1, "");
         User merchant = new User(2, "商户", "", "13600136000", "", 1, 50, "now");

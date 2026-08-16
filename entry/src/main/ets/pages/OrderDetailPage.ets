@@ -221,6 +221,8 @@ export struct OrderDetailPage {
               if (ok) {
                 this.reloadOrder()
                 promptAction.showToast({ message: '已确认收货', duration: 1500 })
+                // 确认收货后返回订单列表，列表 onPageShow 会重新同步后端数据。
+                router.back()
               } else {
                 const errorMessage: string = getLastRemoteErrorMessage()
                 promptAction.showToast({ message: errorMessage === '' ? '确认收货失败，请稍后重试' : errorMessage, duration: 2200 })
@@ -549,8 +551,8 @@ export struct OrderDetailPage {
             .onClick(() => { this.showCancelDialog = true })
         }
 
-        // status===3 (配送中): 确认收货
-        if (this.order!.status === 4) {
+        // status===4 且托管款未结算：确认收货并结算
+        if (this.order!.status === 4 && (this.order!.escrowStatus ?? 0) === 0) {
           Button('确认收货并结算')
             .layoutWeight(1)
             .height(44)

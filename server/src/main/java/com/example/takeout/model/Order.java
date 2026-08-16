@@ -21,6 +21,7 @@ public record Order(
         double payAmount,
         String remark,
         int reviewed,
+        int escrowStatus,
         String createTime,
         String payTime,
         String acceptTime,
@@ -68,6 +69,7 @@ public record Order(
             double payAmount,
             String remark,
             int reviewed,
+            int escrowStatus,
             String createTime,
             String payTime,
             String acceptTime,
@@ -78,7 +80,7 @@ public record Order(
 
     public OrderView toView(List<OrderItem> itemList, AddressInfo addr) {
         return new OrderView(id, orderNo, userId, storeId, storeName, status, itemList, addr,
-                goodsAmount, deliveryFee, discount, payAmount, remark, reviewed,
+                goodsAmount, deliveryFee, discount, payAmount, remark, reviewed, escrowStatus,
                 createTime, payTime, acceptTime, deliverTime, completeTime);
     }
 }
