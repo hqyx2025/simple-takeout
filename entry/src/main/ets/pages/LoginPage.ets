@@ -3,7 +3,7 @@
  * 支持商户账户和普通用户账户
  */
 import { UserRole } from '../model/Models'
-import { loginRemote, registerRemote, logout } from '../service/AppStorageManager'
+import { loginRemote, registerRemote, logout, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { logInfo, logWarn } from '../service/AppLogger'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 
@@ -193,7 +193,8 @@ export struct LoginPage {
               }
               this.onLoginSuccess()
             } else {
-              this.errorMsg = '手机号或密码错误'
+              const remoteMessage: string = getLastRemoteErrorMessage()
+              this.errorMsg = remoteMessage === '' ? '手机号或密码错误' : remoteMessage
               this.submitting = false
             }
           } else {
@@ -203,10 +204,12 @@ export struct LoginPage {
               if (loginUser !== undefined) {
                 this.onLoginSuccess()
               } else {
-                this.errorMsg = '注册成功，但自动登录失败，请手动登录'
+                const remoteMessage: string = getLastRemoteErrorMessage()
+                this.errorMsg = remoteMessage === '' ? '注册成功，但自动登录失败，请手动登录' : remoteMessage
               }
             } else {
-              this.errorMsg = '该手机号已注册'
+              const remoteMessage: string = getLastRemoteErrorMessage()
+              this.errorMsg = remoteMessage === '' ? '该手机号已注册' : remoteMessage
               logWarn('Auth', `注册失败：手机号已存在 phone=${this.phone}`)
             }
             this.submitting = false
@@ -296,7 +299,8 @@ export struct LoginPage {
       if (user !== undefined) {
         logout()
       }
-      this.errorMsg = role === UserRole.ADMIN
+      const remoteMessage: string = getLastRemoteErrorMessage()
+      this.errorMsg = remoteMessage !== '' ? remoteMessage : role === UserRole.ADMIN
         ? '管理端快捷登录失败，请确认账号可用'
         : role === UserRole.MERCHANT ? '商户快捷登录失败，请确认账号可用' : '用户快捷登录失败，请确认账号可用'
     }
