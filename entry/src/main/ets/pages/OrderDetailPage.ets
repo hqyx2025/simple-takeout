@@ -6,7 +6,7 @@
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
 import { Order, CartItem, DeliveryStep } from '../model/Models'
-import { cancelOrderRemote, confirmOrderRemote, addToCart, fetchOrderDetailRemote } from '../service/AppStorageManager'
+import { cancelOrderRemote, confirmOrderRemote, addToCart, fetchOrderDetailRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { OrderStatusTimeline } from '../components/OrderStatusTimeline'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { logInfo } from '../service/AppLogger'
@@ -191,8 +191,14 @@ export struct OrderDetailPage {
           cancelText: '再想想',
           onConfirm: async () => {
             if (this.order !== null) {
-              await cancelOrderRemote(this.order.id)
-              this.reloadOrder()
+              const ok: boolean = await cancelOrderRemote(this.order.id)
+              if (ok) {
+                this.reloadOrder()
+                promptAction.showToast({ message: '订单已取消', duration: 1500 })
+              } else {
+                const errorMessage: string = getLastRemoteErrorMessage()
+                promptAction.showToast({ message: errorMessage === '' ? '取消订单失败，请稍后重试' : errorMessage, duration: 2200 })
+              }
             }
             this.showCancelDialog = false
           },
@@ -211,8 +217,14 @@ export struct OrderDetailPage {
           cancelText: '取消',
           onConfirm: async () => {
             if (this.order !== null) {
-              await confirmOrderRemote(this.order.id)
-              this.reloadOrder()
+              const ok: boolean = await confirmOrderRemote(this.order.id)
+              if (ok) {
+                this.reloadOrder()
+                promptAction.showToast({ message: '已确认收货', duration: 1500 })
+              } else {
+                const errorMessage: string = getLastRemoteErrorMessage()
+                promptAction.showToast({ message: errorMessage === '' ? '确认收货失败，请稍后重试' : errorMessage, duration: 2200 })
+              }
             }
             this.showConfirmDialog = false
           },
