@@ -146,6 +146,7 @@ interface MerchantStatsResult {
 interface LoginRequest {
   phone: string
   password: string
+  loginType?: string
 }
 
 interface RegisterRequest {
@@ -230,8 +231,10 @@ interface MerchantGoodsRequest {
 /**
  * 登录：成功设置 token 并返回用户，失败返回 null
  */
-export async function apiLogin(phone: string, password: string): Promise<User | null> {
-  const req: LoginRequest = { phone: phone, password: password }
+export async function apiLogin(phone: string, password: string, loginType?: string): Promise<User | null> {
+  const req: LoginRequest = loginType === undefined
+    ? { phone: phone, password: password }
+    : { phone: phone, password: password, loginType: loginType }
   const resp: ApiResponse<LoginResult> = await post<LoginResult>(API_CONFIG.ENDPOINTS['login'], req)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     logWarn('Api', `登录失败：${resp.message}`)

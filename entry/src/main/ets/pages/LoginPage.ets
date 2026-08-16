@@ -180,7 +180,7 @@ export struct LoginPage {
           logInfo('Auth', `用户点击${this.isLoginMode ? '登录' : '注册'} phone=${this.phone} role=${roleName}`)
 
           if (this.isLoginMode) {
-            const user = await loginRemote(this.phone, this.password)
+            const user = await loginRemote(this.phone, this.password, this.loginTypeName())
             if (user !== undefined) {
               if (user.role !== this.selectedRole) {
                 this.errorMsg = this.selectedRole === UserRole.ADMIN
@@ -199,7 +199,7 @@ export struct LoginPage {
           } else {
             const newUser = await registerRemote(this.username, this.phone, this.password, this.selectedRole)
             if (newUser !== undefined) {
-              const loginUser = await loginRemote(this.phone, this.password)
+              const loginUser = await loginRemote(this.phone, this.password, this.loginTypeName())
               if (loginUser !== undefined) {
                 this.onLoginSuccess()
               } else {
@@ -287,7 +287,7 @@ export struct LoginPage {
     this.submitting = true
     this.errorMsg = ''
     this.selectedRole = role
-    const user = await loginRemote(phone, '123456')
+    const user = await loginRemote(phone, '123456', this.loginTypeName())
     if (user !== undefined && user.role === role) {
       this.phone = phone
       this.password = '123456'
@@ -301,5 +301,11 @@ export struct LoginPage {
         : role === UserRole.MERCHANT ? '商户快捷登录失败，请确认账号可用' : '用户快捷登录失败，请确认账号可用'
     }
     this.submitting = false
+  }
+
+  private loginTypeName(): string {
+    return this.selectedRole === UserRole.ADMIN
+      ? 'ADMIN'
+      : this.selectedRole === UserRole.MERCHANT ? 'MERCHANT' : 'USER'
   }
 }

@@ -31,7 +31,7 @@ public class AuthController {
 
     @PostMapping("/login")
     public ApiResponse<AuthService.LoginResult> login(@RequestBody LoginRequest req) {
-        return ApiResponse.ok(authService.login(req.phone(), req.password()));
+        return ApiResponse.ok(authService.login(req.phone(), req.password(), req.loginType()));
     }
 
     @GetMapping("/me")
@@ -48,7 +48,7 @@ public class AuthController {
     public record RegisterRequest(String username, String phone, String password, int role) {
     }
 
-    public record LoginRequest(String phone, String password) {
+    public record LoginRequest(String phone, String password, String loginType) {
     }
 
     public record ProfileUpdateRequest(String username, String phone) {
