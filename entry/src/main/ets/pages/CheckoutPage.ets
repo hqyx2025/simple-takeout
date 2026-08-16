@@ -14,6 +14,7 @@ import { calculatePayAmount } from '../service/OrderCalculations'
 @Entry
 @Component
 export struct CheckoutPage {
+  @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State checkoutStoreId: number = 0
   @State storeItems: CartItem[] = []
   @State storeInfo: StoreItem | null = null
@@ -25,6 +26,11 @@ export struct CheckoutPage {
 
   aboutToAppear() {
     logInfo('Page', '进入结算页 CheckoutPage')
+    if (!this.loggedIn) {
+      promptAction.showToast({ message: '请先登录后提交订单', duration: 1800 })
+      router.back()
+      return
+    }
     this.checkoutStoreId = AppStorage.get<number>('checkoutStoreId') || 0
     const cart: CartItem[] = AppStorage.get<CartItem[]>('cartItems') || []
     this.storeItems = cart.filter((c: CartItem) => c.storeId === this.checkoutStoreId)
