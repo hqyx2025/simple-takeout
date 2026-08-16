@@ -23,6 +23,9 @@ public class GoodsDao {
             rs.getDouble("original_price"),
             rs.getString("image"),
             rs.getInt("category_id"),
+            rs.getLong("merchant_category_id"),
+            rs.getInt("stock"),
+            rs.getInt("version"),
             rs.getInt("sales"),
             rs.getDouble("rating"),
             rs.getString("tag"),
@@ -49,16 +52,35 @@ public class GoodsDao {
     }
 
     public long insert(Goods g) {
-        jdbc.update("INSERT INTO goods(store_id, name, description, price, original_price, image, category_id, sales, rating, tag, status, create_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+        jdbc.update("INSERT INTO goods(store_id, name, description, price, original_price, image, category_id, merchant_category_id, stock, version, sales, rating, tag, status, create_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 g.storeId(), g.name(), g.description(), g.price(), g.originalPrice(), g.image(),
-                g.categoryId(), g.sales(), g.rating(), g.tag(), g.status(), g.createTime());
+                g.categoryId(), g.merchantCategoryId(), g.stock(), 0, g.sales(), g.rating(), g.tag(), g.status(), g.createTime());
         return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 
     public void update(Goods g) {
-        jdbc.update("UPDATE goods SET name=?, description=?, price=?, original_price=?, image=?, category_id=?, tag=?, status=? WHERE id=?",
+        jdbc.update("UPDATE goods SET name=?, description=?, price=?, original_price=?, image=?, category_id=?, merchant_category_id=?, tag=?, status=?, stock=? WHERE id=?",
                 g.name(), g.description(), g.price(), g.originalPrice(), g.image(),
-                g.categoryId(), g.tag(), g.status(), g.id());
+                g.categoryId(), g.merchantCategoryId(), g.tag(), g.status(), g.stock(), g.id());
+    }
+
+    /** 快速补货/清库存：直接设置库存（不经过乐观锁）。 */
+    public void updateStock(long id, int stock) {
+        jdbc.update("UPDATE goods SET stock = ? WHERE id = ?", stock, id);
+    }
+
+    /**
+     * 扣减库存（乐观锁条件更新，防超卖）：
+     * 更新行数为 0 表示库存不足/已下架，由调用方抛业务异常。
+     */
+    public boolean deductStock(long id, int quantity) {
+        return jdbc.update("UPDATE goods SET stock = stock - ?, version = version + 1 " +
+                "WHERE id = ? AND stock >= ? AND status = 1", quantity, id, quantity) == 1;
+    }
+
+    /** 回滚库存（取消订单/退款时恢复；仅在 escrow 条件更新成功后的同一事务内调用）。 */
+    public void restoreStock(long id, int quantity) {
+        jdbc.update("UPDATE goods SET stock = stock + ? WHERE id = ?", quantity, id);
     }
 
     public void delete(long id) {

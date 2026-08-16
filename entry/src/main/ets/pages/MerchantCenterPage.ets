@@ -2,9 +2,10 @@
  * 商户中心页面
  * 商户可查看自己的店铺列表、管理店铺、上架食物
  */
-import { StoreItem, GoodsItem, UserRole, User } from '../model/Models'
+import { StoreItem, GoodsItem, UserRole, User, Category } from '../model/Models'
 import { fetchMerchantStoresApi, fetchMerchantGoodsApi, createMerchantStoreApi, updateMerchantStoreApi,
-  createMerchantGoodsApi, updateMerchantGoodsApi, deleteMerchantGoodsApi } from '../service/ApiService'
+  createMerchantGoodsApi, updateMerchantGoodsApi, deleteMerchantGoodsApi,
+  fetchMerchantCategoriesApi, createMerchantCategoryApi, updateMerchantCategoryApi, deleteMerchantCategoryApi } from '../service/ApiService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, formatSales } from '../common/Constants'
 import { promptCompat as promptAction } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
@@ -36,6 +37,15 @@ export struct MerchantCenterPage {
   @State newGoodsDesc: string = ''
   @State newGoodsPrice: string = ''
   @State newGoodsCategory: string = '1'
+  @State newGoodsStock: string = '999'
+  @State newGoodsMerchantCategory: string = '0'
+
+  // 商户分类管理（演进项，见大纲 8.3）
+  @State merchantCategories: Category[] = []
+  @State showManageCategories: boolean = false
+  @State newCategoryName: string = ''
+  @State editingCategoryId: number = 0
+  @State editCategoryName: string = ''
 
   // 编辑店铺表单
   @State showEditStore: boolean = false
@@ -51,6 +61,8 @@ export struct MerchantCenterPage {
   @State editGoodsName: string = ''
   @State editGoodsDesc: string = ''
   @State editGoodsPrice: string = ''
+  @State editGoodsStock: string = '999'
+  @State editGoodsMerchantCategory: string = '0'
 
   aboutToAppear() {
     logInfo('Page', '进入商户中心页 MerchantCenterPage')
@@ -60,6 +72,26 @@ export struct MerchantCenterPage {
       return
     }
     this.refreshStores()
+    this.refreshCategories()
+  }
+
+  async refreshCategories() {
+    this.merchantCategories = await fetchMerchantCategoriesApi()
+  }
+
+  // 分类提示文案：展示当前可用商户分类，引导商户填写 ID
+  private getCategoryHint(): string {
+    if (this.merchantCategories.length === 0) {
+      return '暂无店内分类，可在上方“分类管理”中创建'
+    }
+    let hint: string = '店内分类：'
+    for (let i = 0; i < this.merchantCategories.length; i++) {
+      hint += `${this.merchantCategories[i].id}=${this.merchantCategories[i].name}`
+      if (i < this.merchantCategories.length - 1) {
+        hint += ' '
+      }
+    }
+    return hint
   }
 
   async refreshStores() {
@@ -134,13 +166,20 @@ export struct MerchantCenterPage {
             this.showAddGoods = false
           })
 
-        // 店铺列表
-        Text('我的店铺')
-          .fontSize(FONT_SIZE.LG)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.TEXT_PRIMARY)
-          .width('100%')
-          .padding({ left: SPACING.LG, top: SPACING.LG, bottom: SPACING.SM })
+        // 我的店铺
+        Row() {
+          Text('我的店铺')
+            .fontSize(FONT_SIZE.LG)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(COLORS.TEXT_PRIMARY)
+            .layoutWeight(1)
+          Text('分类管理')
+            .fontSize(FONT_SIZE.SM)
+            .fontColor(COLORS.PRIMARY)
+            .onClick(() => { this.showManageCategories = true })
+        }
+        .width('100%')
+        .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.SM })
 
         List({ space: SPACING.SM }) {
           ForEach(this.myStores, (store: StoreItem) => {
@@ -324,6 +363,92 @@ export struct MerchantCenterPage {
         .alignItems(HorizontalAlign.Center)
       }
 
+      // 商户分类管理弹窗（演进项，见大纲 8.3）
+      if (this.showManageCategories) {
+        Column() {
+          Column({ space: SPACING.MD }) {
+            Row() {
+              Text('分类管理')
+                .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
+              Text('✕')
+                .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT)
+                .onClick(() => { this.showManageCategories = false })
+            }
+            .width('100%')
+            Text('店内分类用于用户端商品分组展示，创建后可在商品编辑中选择')
+              .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%')
+
+            Row({ space: SPACING.SM }) {
+              TextInput({ placeholder: '新分类名称', text: this.newCategoryName })
+                .layoutWeight(1).height(40)
+                .onChange((v: string) => { this.newCategoryName = v })
+              Button('新增')
+                .height(40).fontSize(FONT_SIZE.SM).fontColor(Color.White)
+                .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.ROUND)
+                .type(ButtonType.Capsule)
+                .onClick(() => { this.doAddCategory() })
+            }
+            .width('100%')
+
+            Scroll() {
+              Column({ space: SPACING.SM }) {
+                if (this.merchantCategories.length === 0) {
+                  Text('暂无分类，请先新增')
+                    .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
+                }
+                ForEach(this.merchantCategories, (category: Category) => {
+                  Row({ space: SPACING.SM }) {
+                    if (this.editingCategoryId === category.id) {
+                      TextInput({ placeholder: '分类名称', text: this.editCategoryName })
+                        .layoutWeight(1).height(36)
+                        .onChange((v: string) => { this.editCategoryName = v })
+                      Button('保存')
+                        .height(30).fontSize(FONT_SIZE.XS).fontColor(Color.White)
+                        .backgroundColor(COLORS.SUCCESS).borderRadius(BORDER_RADIUS.ROUND)
+                        .type(ButtonType.Capsule)
+                        .onClick(() => { this.doEditCategory(category) })
+                      Button('取消')
+                        .height(30).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY)
+                        .backgroundColor('#F5F5F5').borderRadius(BORDER_RADIUS.ROUND)
+                        .type(ButtonType.Capsule)
+                        .onClick(() => { this.editingCategoryId = 0 })
+                    } else {
+                      Text(category.name)
+                        .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
+                      Text('改名')
+                        .fontSize(FONT_SIZE.XS).fontColor(COLORS.PRIMARY)
+                        .onClick(() => {
+                          this.editingCategoryId = category.id
+                          this.editCategoryName = category.name
+                        })
+                      Text('删除')
+                        .fontSize(FONT_SIZE.XS).fontColor(COLORS.ERROR)
+                        .onClick(() => { this.doDeleteCategory(category) })
+                    }
+                  }
+                  .width('100%')
+                  .padding(SPACING.SM)
+                  .backgroundColor(COLORS.BG_PRIMARY)
+                  .borderRadius(BORDER_RADIUS.MD)
+                }, (category: Category) => category.id.toString())
+              }
+              .width('100%')
+            }
+            .layoutWeight(1)
+            .scrollBar(BarState.Off)
+          }
+          .width('90%')
+          .height('70%')
+          .padding(SPACING.XL)
+          .backgroundColor(Color.White)
+          .borderRadius(BORDER_RADIUS.XL)
+        }
+        .width('100%').height('100%')
+        .backgroundColor('rgba(0,0,0,0.5)')
+        .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Center)
+      }
+
       // 商品管理面板（选中店铺后显示）
       if (this.selectedStoreId > 0 && !this.showAddStore) {
         Column() {
@@ -372,15 +497,22 @@ export struct MerchantCenterPage {
                 }
                 .layoutWeight(1)
                 Column({ space: SPACING.XS }) {
-                  Text('分类（选填，默认1）')
+                  Text('库存')
                     .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-                  TextInput({ placeholder: '如：1', text: this.newGoodsCategory })
+                  TextInput({ placeholder: '如：999', text: this.newGoodsStock })
                     .layoutWeight(1).height(40).type(InputType.Number)
-                    .onChange((v: string) => { this.newGoodsCategory = v })
+                    .onChange((v: string) => { this.newGoodsStock = v })
                 }
                 .layoutWeight(1)
               }
-              Text('分类对照：1热销菜 2快餐 3饮品 4甜品 5火锅 6烧烤 7面食')
+              Column({ space: SPACING.XS }) {
+                Text('店内分类（0=未分组）')
+                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                TextInput({ placeholder: '如：1', text: this.newGoodsMerchantCategory })
+                  .width('100%').height(40).type(InputType.Number)
+                  .onChange((v: string) => { this.newGoodsMerchantCategory = v })
+              }
+              Text(this.getCategoryHint())
                 .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%')
               Row({ space: SPACING.SM }) {
                 Button('取消').layoutWeight(1).height(36).fontSize(FONT_SIZE.SM)
@@ -426,6 +558,26 @@ export struct MerchantCenterPage {
                   .onChange((v: string) => { this.editGoodsPrice = v })
               }
               Row({ space: SPACING.SM }) {
+                Column({ space: SPACING.XS }) {
+                  Text('库存')
+                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                  TextInput({ placeholder: '如：999', text: this.editGoodsStock })
+                    .layoutWeight(1).height(40).type(InputType.Number)
+                    .onChange((v: string) => { this.editGoodsStock = v })
+                }
+                .layoutWeight(1)
+                Column({ space: SPACING.XS }) {
+                  Text('店内分类（0=未分组）')
+                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                  TextInput({ placeholder: '如：1', text: this.editGoodsMerchantCategory })
+                    .layoutWeight(1).height(40).type(InputType.Number)
+                    .onChange((v: string) => { this.editGoodsMerchantCategory = v })
+                }
+                .layoutWeight(1)
+              }
+              Text(this.getCategoryHint())
+                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%')
+              Row({ space: SPACING.SM }) {
                 Button('取消').layoutWeight(1).height(36).fontSize(FONT_SIZE.SM)
                   .fontColor(COLORS.TEXT_SECONDARY).backgroundColor('#F5F5F5')
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
@@ -460,6 +612,8 @@ export struct MerchantCenterPage {
                   Column({ space: 4 }) {
                     Text(`¥${goods.price}`)
                       .fontSize(FONT_SIZE.LG).fontColor(COLORS.PRICE_RED).fontWeight(FontWeight.Bold)
+                    Text(`库存 ${goods.stock ?? 999}`)
+                      .fontSize(FONT_SIZE.XS).fontColor(goods.stock !== undefined && goods.stock === 0 ? COLORS.ERROR : COLORS.TEXT_HINT)
                     Row({ space: SPACING.XS }) {
                       Button('删除')
                         .height(28).fontSize(FONT_SIZE.XS).fontColor(COLORS.ERROR)
@@ -549,6 +703,8 @@ export struct MerchantCenterPage {
     }
     const price = Number(this.newGoodsPrice) || 0
     const categoryId = Number(this.newGoodsCategory) || 1
+    const stock = Number(this.newGoodsStock) >= 0 ? Math.floor(Number(this.newGoodsStock)) : 999
+    const merchantCategoryId = Math.floor(Number(this.newGoodsMerchantCategory) || 0)
     const goods: GoodsItem = {
       id: 0,
       name: this.newGoodsName,
@@ -556,6 +712,8 @@ export struct MerchantCenterPage {
       price: price,
       image: '',
       categoryId: categoryId,
+      merchantCategoryId: merchantCategoryId,
+      stock: stock,
       sales: 0,
       rating: 5.0,
       tag: '新品',
@@ -568,6 +726,8 @@ export struct MerchantCenterPage {
     this.newGoodsName = ''
     this.newGoodsDesc = ''
     this.newGoodsPrice = ''
+    this.newGoodsStock = '999'
+    this.newGoodsMerchantCategory = '0'
     this.showAddGoods = false
     this.selectedStoreGoods = await fetchMerchantGoodsApi(this.selectedStoreId)
     this.storeGoodsCounts[this.selectedStoreId.toString()] = this.selectedStoreGoods.length
@@ -608,6 +768,8 @@ export struct MerchantCenterPage {
     this.editGoodsName = goods.name
     this.editGoodsDesc = goods.description
     this.editGoodsPrice = goods.price.toString()
+    this.editGoodsStock = (goods.stock ?? 999).toString()
+    this.editGoodsMerchantCategory = (goods.merchantCategoryId ?? 0).toString()
     this.showAddGoods = false
     this.showEditGoods = true
   }
@@ -622,6 +784,8 @@ export struct MerchantCenterPage {
       return
     }
     const price = Number(this.editGoodsPrice) || 0
+    const stock = Number(this.editGoodsStock) >= 0 ? Math.floor(Number(this.editGoodsStock)) : 999
+    const merchantCategoryId = Math.floor(Number(this.editGoodsMerchantCategory) || 0)
     const updatedGoods: GoodsItem = {
       id: originalGoods.id,
       name: this.editGoodsName,
@@ -630,6 +794,8 @@ export struct MerchantCenterPage {
       originalPrice: originalGoods.originalPrice,
       image: originalGoods.image,
       categoryId: originalGoods.categoryId,
+      merchantCategoryId: merchantCategoryId,
+      stock: stock,
       sales: originalGoods.sales,
       rating: originalGoods.rating,
       tag: originalGoods.tag,
@@ -655,6 +821,8 @@ export struct MerchantCenterPage {
       originalPrice: goods.originalPrice,
       image: goods.image,
       categoryId: goods.categoryId,
+      merchantCategoryId: goods.merchantCategoryId ?? 0,
+      stock: goods.stock ?? 999,
       sales: goods.sales,
       rating: goods.rating,
       tag: goods.tag,
@@ -668,5 +836,44 @@ export struct MerchantCenterPage {
     this.selectedStoreGoods = await fetchMerchantGoodsApi(this.selectedStoreId)
     this.storeGoodsCounts[this.selectedStoreId.toString()] = this.selectedStoreGoods.length
     promptAction.showToast({ message: onShelf ? '已上架' : '已下架' })
+  }
+
+  // ============ 商户分类管理（演进项，见大纲 8.3） ============
+
+  async doAddCategory() {
+    if (this.newCategoryName.trim() === '') {
+      promptAction.showToast({ message: '分类名称不能为空' })
+      return
+    }
+    const created: Category | null = await createMerchantCategoryApi(this.newCategoryName.trim(), this.merchantCategories.length + 1)
+    if (created === null) {
+      return
+    }
+    this.newCategoryName = ''
+    await this.refreshCategories()
+    promptAction.showToast({ message: '分类创建成功' })
+  }
+
+  async doEditCategory(category: Category) {
+    if (this.editCategoryName.trim() === '') {
+      promptAction.showToast({ message: '分类名称不能为空' })
+      return
+    }
+    const updated: Category | null = await updateMerchantCategoryApi(category.id, this.editCategoryName.trim(), category.sort ?? 0)
+    if (updated === null) {
+      return
+    }
+    this.editingCategoryId = 0
+    await this.refreshCategories()
+    promptAction.showToast({ message: '分类已更新' })
+  }
+
+  async doDeleteCategory(category: Category) {
+    const deleted: boolean = await deleteMerchantCategoryApi(category.id)
+    if (!deleted) {
+      return
+    }
+    await this.refreshCategories()
+    promptAction.showToast({ message: '分类已删除' })
   }
 }

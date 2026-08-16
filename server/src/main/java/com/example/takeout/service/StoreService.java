@@ -105,10 +105,12 @@ public class StoreService {
         requireOwned(ownerId, storeId);
         validateGoodsInput(input);
         validateCategory(input.categoryId());
+        validateMerchantCategory(ownerId, input.merchantCategoryId());
         String now = LocalDateTime.now().format(FMT);
         Goods goods = new Goods(0, storeId, input.name(), input.description(),
                 input.price(), input.originalPrice(), input.image(), input.categoryId(),
-                0, 4.5, input.tag() == null ? "" : input.tag(), 1, now);
+                input.merchantCategoryId(), input.stock(), 0, 0, 4.5,
+                input.tag() == null ? "" : input.tag(), 1, now);
         long id = goodsDao.insert(goods);
         return goodsDao.findById(id).orElseThrow(() -> new BizException("商品创建失败"));
     }
@@ -118,12 +120,76 @@ public class StoreService {
         requireOwned(ownerId, goods.storeId());
         validateGoodsInput(input);
         validateCategory(input.categoryId());
+        validateMerchantCategory(ownerId, input.merchantCategoryId());
         Goods updated = new Goods(goods.id(), goods.storeId(), input.name(), input.description(),
                 input.price(), input.originalPrice(), input.image(), input.categoryId(),
+                input.merchantCategoryId(), input.stock(), goods.version(),
                 goods.sales(), goods.rating(), input.tag() == null ? "" : input.tag(),
                 input.status() < 0 ? goods.status() : input.status(), goods.createTime());
         goodsDao.update(updated);
         return goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品更新失败"));
+    }
+
+    /** 快速补货/清库存（演进项，见大纲 8.4）。 */
+    public Goods updateStock(long ownerId, long goodsId, int stock) {
+        if (stock < 0) {
+            throw new BizException("库存不能为负数");
+        }
+        Goods goods = goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品不存在"));
+        requireOwned(ownerId, goods.storeId());
+        goodsDao.updateStock(goodsId, stock);
+        return goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品更新失败"));
+    }
+
+    // ============ 商户分类（演进项，见大纲 8.3） ============
+
+    public List<Category> merchantCategories(long ownerId) {
+        return storeDao.listMerchantCategories(ownerId);
+    }
+
+    /** 用户端：店铺详情展示的店内商户分类。 */
+    public List<Category> publicMerchantCategories(long storeId) {
+        Store store = storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
+        return storeDao.listMerchantCategories(store.ownerId());
+    }
+
+    public Category createMerchantCategory(long ownerId, String name, int sort) {
+        String normalized = normalizeRequired(name, "分类名称不能为空");
+        if (storeDao.merchantCategoryNameExists(ownerId, normalized, 0)) {
+            throw new BizException("分类名称已存在");
+        }
+        long id = storeDao.insertMerchantCategory(ownerId, normalized, Math.max(sort, 0));
+        return storeDao.findCategoryById(id).orElseThrow(() -> new BizException("分类创建失败"));
+    }
+
+    public Category updateMerchantCategory(long ownerId, long categoryId, String name, int sort) {
+        requireMerchantCategoryOwned(ownerId, categoryId);
+        String normalized = normalizeRequired(name, "分类名称不能为空");
+        if (storeDao.merchantCategoryNameExists(ownerId, normalized, categoryId)) {
+            throw new BizException("分类名称已存在");
+        }
+        storeDao.updateMerchantCategory(categoryId, normalized, Math.max(sort, 0));
+        return storeDao.findCategoryById(categoryId).orElseThrow(() -> new BizException("分类更新失败"));
+    }
+
+    public void deleteMerchantCategory(long ownerId, long categoryId) {
+        requireMerchantCategoryOwned(ownerId, categoryId);
+        if (storeDao.countGoodsByMerchantCategory(categoryId) > 0) {
+            throw new BizException("该分类下仍有商品，请先调整商品分类后再删除");
+        }
+        storeDao.deleteMerchantCategory(categoryId);
+    }
+
+    private void requireMerchantCategoryOwned(long ownerId, long categoryId) {
+        if (!storeDao.merchantCategoryOwned(categoryId, ownerId)) {
+            throw new BizException(403, "无权操作该分类");
+        }
+    }
+
+    private void validateMerchantCategory(long ownerId, long merchantCategoryId) {
+        if (merchantCategoryId > 0 && !storeDao.merchantCategoryOwned(merchantCategoryId, ownerId)) {
+            throw new BizException("商户分类不存在");
+        }
     }
 
     public void deleteGoods(long ownerId, long goodsId) {
@@ -150,6 +216,9 @@ public class StoreService {
         }
         if (input.status() != 0 && input.status() != 1) {
             throw new BizException("商品状态不合法");
+        }
+        if (input.stock() < 0) {
+            throw new BizException("库存不能为负数");
         }
     }
 
@@ -197,9 +266,17 @@ public class StoreService {
     }
 
     /**
-     * 商品创建/编辑项
+     * 商品创建/编辑项（merchantCategoryId=商户分类，0=未分组；stock=库存）
      */
     public record GoodsInput(String name, String description, double price, double originalPrice,
-                             String image, int categoryId, String tag, int status) {
+                             String image, int categoryId, String tag, int status,
+                             long merchantCategoryId, int stock) {
+    }
+
+    private String normalizeRequired(String value, String message) {
+        if (value == null || value.isBlank()) {
+            throw new BizException(message);
+        }
+        return value.trim();
     }
 }

@@ -5,6 +5,7 @@ import com.example.takeout.dao.AddressDao;
 import com.example.takeout.dao.CouponDao;
 import com.example.takeout.dao.GoodsDao;
 import com.example.takeout.dao.OrderDao;
+import com.example.takeout.dao.RefundDao;
 import com.example.takeout.dao.ReviewDao;
 import com.example.takeout.dao.StoreDao;
 import com.example.takeout.dao.UserDao;
@@ -34,8 +35,9 @@ class OrderServiceSecurityTest {
     private final CouponDao couponDao = mock(CouponDao.class);
     private final ReviewDao reviewDao = mock(ReviewDao.class);
     private final UserDao userDao = mock(UserDao.class);
+    private final RefundDao refundDao = mock(RefundDao.class);
     private final OrderService service = new OrderService(orderDao, storeDao, goodsDao, addressDao,
-            couponDao, reviewDao, userDao, new ObjectMapper());
+            couponDao, reviewDao, userDao, refundDao, new ObjectMapper());
 
     @Test
     void rejectsNonPositiveQuantity() {
@@ -66,7 +68,7 @@ class OrderServiceSecurityTest {
     @Test
     void rejectsGoodsFromAnotherStore() {
         Store store = new Store(10, "测试店", "", 4.5, 0, 3, 0, "30分钟", "1km", "[]", "", 1, "[1]", 99, 1, "");
-        Goods goods = new Goods(100, 11, "串店商品", "", 10, 10, "", 1, 0, 4.5, "", 1, "");
+        Goods goods = new Goods(100, 11, "串店商品", "", 10, 10, "", 1, 0, 999, 0, 0, 4.5, "", 1, "");
         when(storeDao.findById(10)).thenReturn(Optional.of(store));
         when(addressDao.listByUser(1)).thenReturn(List.of(new Address(20, 1, "张三", "13800138000", "测试地址", 1, "")));
         when(goodsDao.findById(100)).thenReturn(Optional.of(goods));

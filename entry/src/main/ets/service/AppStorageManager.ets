@@ -1,9 +1,9 @@
 /**
  * 全局状态管理 - 使用AppStorage管理应用级状态
  */
-import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, MerchantStatsData, Category, createEmptyUser, createDefaultCategories } from '../model/Models'
+import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, MerchantStatsData, Category, RefundRecord, createEmptyUser, createDefaultCategories } from '../model/Models'
 import { saveAllData, clearAllData } from './DataPersistence'
-import { apiLogin, apiRegister, updateUserProfileApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi } from './ApiService'
+import { apiLogin, apiRegister, updateUserProfileApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi, applyRefundApi } from './ApiService'
 import { getAuthToken, setAuthToken, getLastApiErrorMessage } from './HttpClient'
 import { logInfo, logWarn, logError } from './AppLogger'
 
@@ -502,6 +502,20 @@ export async function confirmOrderRemote(orderId: number): Promise<boolean> {
     logInfo('Api', `远程确认收货 orderId=${orderId}`)
   }
   return ok
+}
+
+/**
+ * 远程申请退款（演进项：退款审批，见大纲 7.11）：成功后订单进入退款中（status=6）
+ */
+export async function applyRefundRemote(orderId: number, reason: string): Promise<boolean> {
+  const record: RefundRecord | null = await applyRefundApi(orderId, reason)
+  if (record !== null) {
+    await syncUserOrdersFromServer()
+    logInfo('Api', `远程申请退款 orderId=${orderId} refundId=${record.id}`)
+    return true
+  }
+  logWarn('Api', '远程申请退款失败')
+  return false
 }
 
 /**

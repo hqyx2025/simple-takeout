@@ -64,6 +64,12 @@ public class StoreController {
         return ApiResponse.ok(storeService.listGoods(id));
     }
 
+    /** 用户端：店铺详情展示的店内商户分类（与商品 merchantCategoryId 对应）。 */
+    @GetMapping("/stores/{id}/categories")
+    public ApiResponse<List<Category>> storeMerchantCategories(@PathVariable long id) {
+        return ApiResponse.ok(storeService.publicMerchantCategories(id));
+    }
+
     @GetMapping("/merchant/stores")
     public ApiResponse<List<Store.StoreView>> myStores(@RequestAttribute("userId") long userId,
                                                        @RequestAttribute("role") int role) {
@@ -124,8 +130,58 @@ public class StoreController {
         return ApiResponse.ok();
     }
 
+    @PutMapping("/merchant/goods/{goodsId}/stock")
+    public ApiResponse<Goods> updateStock(@RequestAttribute("userId") long userId,
+                                          @RequestAttribute("role") int role,
+                                          @PathVariable long goodsId,
+                                          @RequestBody StockRequest req) {
+        requireMerchant(role);
+        return ApiResponse.ok(storeService.updateStock(userId, goodsId, req.stock()));
+    }
+
+    // ============ 商户分类（演进项，见大纲 8.3） ============
+
+    @GetMapping("/merchant/categories")
+    public ApiResponse<List<Category>> merchantCategories(@RequestAttribute("userId") long userId,
+                                                          @RequestAttribute("role") int role) {
+        requireMerchant(role);
+        return ApiResponse.ok(storeService.merchantCategories(userId));
+    }
+
+    @PostMapping("/merchant/categories")
+    public ApiResponse<Category> createMerchantCategory(@RequestAttribute("userId") long userId,
+                                                        @RequestAttribute("role") int role,
+                                                        @RequestBody MerchantCategoryRequest req) {
+        requireMerchant(role);
+        return ApiResponse.ok(storeService.createMerchantCategory(userId, req.name(), req.sort()));
+    }
+
+    @PutMapping("/merchant/categories/{categoryId}")
+    public ApiResponse<Category> updateMerchantCategory(@RequestAttribute("userId") long userId,
+                                                        @RequestAttribute("role") int role,
+                                                        @PathVariable long categoryId,
+                                                        @RequestBody MerchantCategoryRequest req) {
+        requireMerchant(role);
+        return ApiResponse.ok(storeService.updateMerchantCategory(userId, categoryId, req.name(), req.sort()));
+    }
+
+    @DeleteMapping("/merchant/categories/{categoryId}")
+    public ApiResponse<Void> deleteMerchantCategory(@RequestAttribute("userId") long userId,
+                                                    @RequestAttribute("role") int role,
+                                                    @PathVariable long categoryId) {
+        requireMerchant(role);
+        storeService.deleteMerchantCategory(userId, categoryId);
+        return ApiResponse.ok();
+    }
+
     public record CreateStoreRequest(String name, int categoryId, double deliveryFee,
                                      double minOrder, String deliveryTime, String notice) {
+    }
+
+    public record StockRequest(int stock) {
+    }
+
+    public record MerchantCategoryRequest(String name, int sort) {
     }
 
     private void requireMerchant(int role) {

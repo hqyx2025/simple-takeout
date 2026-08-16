@@ -1,11 +1,14 @@
 package com.example.takeout.service;
 
 import com.example.takeout.common.BizException;
+import com.example.takeout.dao.GoodsDao;
 import com.example.takeout.dao.OrderDao;
+import com.example.takeout.dao.RefundDao;
 import com.example.takeout.dao.StoreDao;
 import com.example.takeout.dao.UserDao;
 import com.example.takeout.model.Category;
 import com.example.takeout.model.Order;
+import com.example.takeout.model.RefundRecord;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.User;
 import org.springframework.stereotype.Service;
@@ -20,12 +23,17 @@ public class AdminService {
     private final StoreDao storeDao;
     private final OrderDao orderDao;
     private final UserDao userDao;
+    private final GoodsDao goodsDao;
+    private final RefundDao refundDao;
     private final OrderService orderService;
 
-    public AdminService(StoreDao storeDao, OrderDao orderDao, UserDao userDao, OrderService orderService) {
+    public AdminService(StoreDao storeDao, OrderDao orderDao, UserDao userDao, GoodsDao goodsDao,
+                        RefundDao refundDao, OrderService orderService) {
         this.storeDao = storeDao;
         this.orderDao = orderDao;
         this.userDao = userDao;
+        this.goodsDao = goodsDao;
+        this.refundDao = refundDao;
         this.orderService = orderService;
     }
 
@@ -83,15 +91,65 @@ public class AdminService {
     public Order.OrderView refundOrder(long orderId) {
         Order order = orderDao.findById(orderId).orElseThrow(() -> new BizException("订单不存在"));
         if (order.status() == 4) {
-            throw new BizException("已送达订单不能直接退款");
+            throw new BizException("已送达订单不能直接退款，请走退款审批流程");
         }
         if (!orderDao.refundEscrow(orderId)) {
             throw new BizException("订单资金已处理，不能重复退款");
+        }
+        // escrow 条件更新成功才回滚库存（同一事务内，防重复回滚）
+        Order.OrderView view = orderService.orderDetail(orderId);
+        for (Order.OrderItem item : view.items()) {
+            goodsDao.restoreStock(item.goodsId(), item.quantity());
         }
         User user = userDao.findById(order.userId()).orElseThrow(() -> new BizException("用户不存在"));
         userDao.updateBalance(user.id(), round2(user.balance() + order.payAmount()));
         orderDao.updateStatus(orderId, 5, "complete_time", now());
         return orderService.orderDetail(orderId);
+    }
+
+    // ============ 退款审批（演进项，见大纲 9.7/10.7） ============
+
+    public List<RefundRecord> refunds(String status) {
+        return status == null || status.isBlank() ? refundDao.listAll() : refundDao.listByStatus(status);
+    }
+
+    public RefundRecord refundDetail(long refundId) {
+        return refundDao.findById(refundId).orElseThrow(() -> new BizException("退款申请不存在"));
+    }
+
+    /** 同意退款：escrow 0→2（条件更新）→ 退用户余额 → 回滚库存 → 退款记录 REFUNDED。 */
+    @Transactional
+    public RefundRecord approveRefund(long refundId) {
+        RefundRecord record = requirePending(refundId);
+        Order order = orderDao.findById(record.orderId()).orElseThrow(() -> new BizException("订单不存在"));
+        if (!orderDao.refundEscrow(order.id())) {
+            throw new BizException("订单资金已处理，不能重复退款");
+        }
+        User user = userDao.findById(order.userId()).orElseThrow(() -> new BizException("用户不存在"));
+        userDao.updateBalance(user.id(), round2(user.balance() + order.payAmount()));
+        Order.OrderView view = orderService.orderDetail(order.id());
+        for (Order.OrderItem item : view.items()) {
+            goodsDao.restoreStock(item.goodsId(), item.quantity());
+        }
+        refundDao.updateStatus(refundId, "REFUNDED", now(), "");
+        return refundDao.findById(refundId).orElseThrow(() -> new BizException("退款处理失败"));
+    }
+
+    /** 拒绝退款：退款记录 REJECTED，订单状态回退到已送达（status=4），escrow 保持不变。 */
+    @Transactional
+    public RefundRecord rejectRefund(long refundId, String rejectReason) {
+        RefundRecord record = requirePending(refundId);
+        refundDao.updateStatus(refundId, "REJECTED", now(), rejectReason == null ? "" : rejectReason);
+        orderDao.updateStatusOnly(record.orderId(), 4);
+        return refundDao.findById(refundId).orElseThrow(() -> new BizException("退款处理失败"));
+    }
+
+    private RefundRecord requirePending(long refundId) {
+        RefundRecord record = refundDao.findById(refundId).orElseThrow(() -> new BizException("退款申请不存在"));
+        if (!"PENDING".equals(record.status())) {
+            throw new BizException("该退款申请已处理");
+        }
+        return record;
     }
 
     private Store.StoreView toStoreView(Store store) {

@@ -40,6 +40,9 @@ CREATE TABLE IF NOT EXISTS goods (
     original_price DECIMAL(10,2) DEFAULT 0,
     image VARCHAR(255) DEFAULT '',
     category_id INT NOT NULL DEFAULT 1,
+    merchant_category_id BIGINT NOT NULL DEFAULT 0,
+    stock INT NOT NULL DEFAULT 999,
+    version INT NOT NULL DEFAULT 0,
     sales INT NOT NULL DEFAULT 0,
     rating DECIMAL(3,1) NOT NULL DEFAULT 4.5,
     tag VARCHAR(32) DEFAULT '',
@@ -121,5 +124,24 @@ CREATE TABLE IF NOT EXISTS categories (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(32) NOT NULL,
     icon VARCHAR(16) DEFAULT '',
-    color VARCHAR(16) DEFAULT '#FF6B35'
+    color VARCHAR(16) DEFAULT '#FF6B35',
+    type VARCHAR(16) NOT NULL DEFAULT 'PLATFORM',
+    merchant_id BIGINT NOT NULL DEFAULT 0,
+    sort INT NOT NULL DEFAULT 0,
+    status INT NOT NULL DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS refund_records (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    merchant_id BIGINT NOT NULL,
+    reason VARCHAR(255) DEFAULT '',
+    amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    apply_time VARCHAR(32) NOT NULL,
+    process_time VARCHAR(32) DEFAULT '',
+    reject_reason VARCHAR(255) DEFAULT '',
+    KEY idx_refund_order (order_id),
+    KEY idx_refund_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -32,6 +32,9 @@ public class DataSeeder implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         ensureOrderEscrowColumn();
+        ensureGoodsColumns();
+        ensureCategoryColumns();
+        ensureRefundTable();
         // 分类是首页导航的基础数据，即使已有用户数据，也必须单独补齐。
         ensureCategories();
         Integer userCount = jdbc.queryForObject("SELECT COUNT(*) FROM users", Integer.class);
@@ -53,6 +56,52 @@ public class DataSeeder implements ApplicationRunner {
         if (count == null || count == 0) {
             jdbc.execute("ALTER TABLE orders ADD COLUMN escrow_status INT NOT NULL DEFAULT 0 AFTER reviewed");
             log.info("订单表已补充托管资金状态字段 escrow_status");
+        }
+    }
+
+    /** 存量商品表补充库存/乐观锁/商户分类字段；存量商品默认库存 999（充足），避免旧数据无法下单。 */
+    private void ensureGoodsColumns() {
+        ensureColumn("goods", "stock", "INT NOT NULL DEFAULT 999");
+        ensureColumn("goods", "version", "INT NOT NULL DEFAULT 0");
+        ensureColumn("goods", "merchant_category_id", "BIGINT NOT NULL DEFAULT 0");
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM goods WHERE stock = 0", Integer.class);
+        if (count != null && count > 0) {
+            jdbc.update("UPDATE goods SET stock = 999 WHERE stock = 0");
+            log.info("已为 {} 个存量商品补齐默认库存", count);
+        }
+    }
+
+    /** 分类表补充类型/商户/排序字段（存量行均为平台分类）。 */
+    private void ensureCategoryColumns() {
+        ensureColumn("categories", "type", "VARCHAR(16) NOT NULL DEFAULT 'PLATFORM'");
+        ensureColumn("categories", "merchant_id", "BIGINT NOT NULL DEFAULT 0");
+        ensureColumn("categories", "sort", "INT NOT NULL DEFAULT 0");
+        ensureColumn("categories", "status", "INT NOT NULL DEFAULT 1");
+    }
+
+    /** 退款记录表（演进项落地：用户申请退款 + 管理端审批）。 */
+    private void ensureRefundTable() {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() " +
+                        "AND table_name = 'refund_records'", Integer.class);
+        if (count == null || count == 0) {
+            jdbc.execute("CREATE TABLE IF NOT EXISTS refund_records (" +
+                    "id BIGINT AUTO_INCREMENT PRIMARY KEY, order_id BIGINT NOT NULL, user_id BIGINT NOT NULL, " +
+                    "merchant_id BIGINT NOT NULL, reason VARCHAR(255) DEFAULT '', amount DECIMAL(10,2) NOT NULL DEFAULT 0, " +
+                    "status VARCHAR(20) NOT NULL DEFAULT 'PENDING', apply_time VARCHAR(32) NOT NULL, " +
+                    "process_time VARCHAR(32) DEFAULT '', reject_reason VARCHAR(255) DEFAULT '', " +
+                    "KEY idx_refund_order (order_id), KEY idx_refund_status (status)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            log.info("已创建退款记录表 refund_records");
+        }
+    }
+
+    private void ensureColumn(String table, String column, String definition) {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() " +
+                        "AND table_name = ? AND column_name = ?", Integer.class, table, column);
+        if (count == null || count == 0) {
+            jdbc.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition);
+            log.info("表 {} 已补充字段 {}", table, column);
         }
     }
 
