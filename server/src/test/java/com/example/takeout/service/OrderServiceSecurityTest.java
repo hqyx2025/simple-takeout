@@ -12,6 +12,7 @@ import com.example.takeout.model.Address;
 import com.example.takeout.model.Goods;
 import com.example.takeout.model.Order;
 import com.example.takeout.model.Store;
+import com.example.takeout.model.User;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
@@ -21,6 +22,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class OrderServiceSecurityTest {
@@ -74,5 +76,25 @@ class OrderServiceSecurityTest {
                 () -> service.createOrder(1, 10, List.of(item), 20, 0, ""));
 
         assertEquals("订单包含其他店铺商品", error.getMessage());
+    }
+
+    @Test
+    void confirmingDeliveredOrderSettlesMerchantOnlyOnce() {
+        Order order = new Order(8, "NO8", 1, 10, "测试店铺", 4, "[]",
+                "{\"addressId\":20,\"name\":\"张三\",\"phone\":\"13800138000\",\"detail\":\"宿舍\"}",
+                20, 0, 0, 20, "", 0, "2026-08-16 10:00:00", "2026-08-16 10:00:00", "", "",
+                "2026-08-16 10:10:00");
+        Store store = new Store(10, "测试店铺", "", 4.5, 0, 0, 0, "30分钟", "1km", "[]", "", 1, "[1]", 2, 1, "");
+        User merchant = new User(2, "商户", "", "13600136000", "", 1, 50, "now");
+        when(orderDao.findById(8)).thenReturn(Optional.of(order));
+        when(storeDao.findById(10)).thenReturn(Optional.of(store));
+        when(userDao.findById(2)).thenReturn(Optional.of(merchant));
+        when(orderDao.releaseEscrow(8)).thenReturn(true, false);
+
+        service.confirmOrder(1, 8);
+
+        verify(userDao).updateBalance(2, 70.0);
+        BizException error = assertThrows(BizException.class, () -> service.confirmOrder(1, 8));
+        assertEquals("订单款项已结算或退款，不能重复确认", error.getMessage());
     }
 }
