@@ -1391,8 +1391,8 @@ struct OrderListMainPage {
       Row() {
         Text(order.storeName)
           .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
-        Text(getOrderStatusText(order.status))
-          .fontSize(FONT_SIZE.MD).fontColor(getOrderStatusColor(order.status)).fontWeight(FontWeight.Bold)
+        Text(getOrderStatusText(order.status, order.escrowStatus ?? 0))
+          .fontSize(FONT_SIZE.MD).fontColor(getOrderStatusColor(order.status, order.escrowStatus ?? 0)).fontWeight(FontWeight.Bold)
       }
       ForEach(order.items || [], (item: CartItem) => {
         Row() {

@@ -214,7 +214,8 @@ export function getMerchantTodayStats(merchantId: number): MerchantStatsData {
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 
   const todayOrders = orders.filter(o => o.createTime.startsWith(todayStr))
-  const completedOrders = todayOrders.filter(o => o.status === 4)
+  // 收入口径与大纲 21.4 一致：仅统计已结算订单（status=4 且 escrow=1，用户确认收货后）
+  const completedOrders = todayOrders.filter(o => o.status === 4 && (o.escrowStatus ?? 0) === 1)
   const revenue = completedOrders.reduce((sum, o) => sum + o.payAmount, 0)
 
   const stats: MerchantStatsData = {
@@ -222,7 +223,7 @@ export function getMerchantTodayStats(merchantId: number): MerchantStatsData {
     todayRevenue: revenue,
     completedOrders: completedOrders.length,
     totalOrders: orders.length,
-    totalRevenue: orders.filter(o => o.status === 4).reduce((sum, o) => sum + o.payAmount, 0)
+    totalRevenue: orders.filter(o => o.status === 4 && (o.escrowStatus ?? 0) === 1).reduce((sum, o) => sum + o.payAmount, 0)
   }
   return stats
 }
@@ -236,7 +237,7 @@ export function getMerchantWeekStats(merchantId: number): MerchantStatsData {
     const orderTime: number = Date.parse(o.createTime.replace(/-/g, '/'))
     return !Number.isNaN(orderTime) && orderTime >= weekAgo.getTime()
   })
-  const completedOrders = weekOrders.filter(o => o.status === 4)
+  const completedOrders = weekOrders.filter(o => o.status === 4 && (o.escrowStatus ?? 0) === 1)
   const revenue = completedOrders.reduce((sum, o) => sum + o.payAmount, 0)
 
   const stats: MerchantStatsData = {
@@ -244,7 +245,7 @@ export function getMerchantWeekStats(merchantId: number): MerchantStatsData {
     todayRevenue: revenue,
     completedOrders: completedOrders.length,
     totalOrders: orders.length,
-    totalRevenue: orders.filter(o => o.status === 4).reduce((sum, o) => sum + o.payAmount, 0)
+    totalRevenue: orders.filter(o => o.status === 4 && (o.escrowStatus ?? 0) === 1).reduce((sum, o) => sum + o.payAmount, 0)
   }
   return stats
 }
@@ -260,7 +261,7 @@ export function getMerchantWeekRevenue(merchantId: number): number[] {
   for (let i = 6; i >= 0; i--) {
     const dayStr = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`
     const revenue = orders
-      .filter(o => o.status === 4 && (o.completeTime ?? '').startsWith(dayStr))
+      .filter(o => o.status === 4 && (o.escrowStatus ?? 0) === 1 && (o.completeTime ?? '').startsWith(dayStr))
       .reduce((sum, o) => sum + o.payAmount, 0)
     result.push(revenue)
     cursor.setTime(cursor.getTime() + dayMillis)
