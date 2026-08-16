@@ -350,6 +350,14 @@ export async function fetchUserOrdersApi(): Promise<Order[] | null> {
   return resp.data.map((o: ServerOrder) => toOrder(o))
 }
 
+export async function fetchOrderDetailApi(orderId: number): Promise<Order | null> {
+  const resp: ApiResponse<ServerOrder> = await get<ServerOrder>(`/api/orders/${orderId}`)
+  if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
+    return null
+  }
+  return toOrder(resp.data)
+}
+
 export async function cancelOrderApi(orderId: number): Promise<boolean> {
   const resp: ApiResponse<ServerOrder> = await put<ServerOrder>(`/api/orders/${orderId}/cancel`, undefined)
   return resp.code === 200

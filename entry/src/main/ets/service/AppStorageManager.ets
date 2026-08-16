@@ -3,7 +3,7 @@
  */
 import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, MerchantStatsData, Category, createEmptyUser, createDefaultCategories } from '../model/Models'
 import { saveAllData, clearAllData } from './DataPersistence'
-import { apiLogin, apiRegister, updateUserProfileApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi } from './ApiService'
+import { apiLogin, apiRegister, updateUserProfileApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi } from './ApiService'
 import { getAuthToken, setAuthToken, getLastApiErrorMessage } from './HttpClient'
 import { logInfo, logWarn, logError } from './AppLogger'
 
@@ -427,6 +427,23 @@ export async function syncUserOrdersFromServer(): Promise<void> {
   }
   await saveAllData()
   logInfo('Api', `同步用户订单 ${orders.length} 条`)
+}
+
+export async function fetchOrderDetailRemote(orderId: number): Promise<Order | null> {
+  const order: Order | null = await fetchOrderDetailApi(orderId)
+  if (order === null) {
+    return null
+  }
+  const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
+  const index: number = orders.findIndex(item => item.id === order.id)
+  if (index >= 0) {
+    orders[index] = order
+  } else {
+    orders.unshift(order)
+  }
+  AppStorage.setOrCreate<Order[]>('orderList', orders)
+  logInfo('Api', `远程查询订单详情 orderId=${orderId}`)
+  return order
 }
 
 /**

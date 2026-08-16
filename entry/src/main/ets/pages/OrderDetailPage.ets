@@ -6,7 +6,7 @@
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
 import { Order, CartItem, DeliveryStep } from '../model/Models'
-import { cancelOrderRemote, confirmOrderRemote, addToCart } from '../service/AppStorageManager'
+import { cancelOrderRemote, confirmOrderRemote, addToCart, fetchOrderDetailRemote } from '../service/AppStorageManager'
 import { OrderStatusTimeline } from '../components/OrderStatusTimeline'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { logInfo } from '../service/AppLogger'
@@ -24,7 +24,7 @@ export struct OrderDetailPage {
   @State trackWidth: number = 300
   private riderTimer: number = -1
 
-  aboutToAppear() {
+  async aboutToAppear(): Promise<void> {
     const routerOrderId: number = AppStorage.get<number>('currentOrderId') || 0
     this.orderId = this.orderId || routerOrderId
     if (!this.loggedIn) {
@@ -32,11 +32,13 @@ export struct OrderDetailPage {
       logInfo('Page', '进入订单详情页：当前未登录，不读取订单数据')
       return
     }
-    const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
-    const cachedOrder: Order | undefined = AppStorage.get<Order>('currentOrder')
-    this.order = orders.find(o => o.id === this.orderId)
-      || (cachedOrder !== undefined && cachedOrder.id === this.orderId ? cachedOrder : undefined)
-      || null
+    if (this.orderId <= 0) {
+      this.order = null
+      logInfo('Page', '进入订单详情页：缺少有效订单 ID')
+      return
+    }
+    const remoteOrder: Order | null = await fetchOrderDetailRemote(this.orderId)
+    this.order = remoteOrder
     logInfo('Page', `进入订单详情页 OrderDetailPage orderId=${this.orderId} 状态=${this.order !== null ? this.order.status : -1}`)
     // 配送中状态启动骑手动画
     if (this.order !== null && this.order.status === 3) {
