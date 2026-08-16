@@ -205,6 +205,7 @@ struct Index {
 
   build() {
     Stack() {
+      if (!this.showLogin) {
       Tabs({ controller: this.tabsController, barPosition: BarPosition.End }) {
       // 首页Tab
       TabContent() {
@@ -253,11 +254,13 @@ struct Index {
     .scrollable(false)
     .animationDuration(0)
     .width('100%')
-    .height('100%')
-    .backgroundColor(COLORS.BG_PRIMARY)
+      .height('100%')
+      .backgroundColor(COLORS.BG_PRIMARY)
+
+      }
 
       // 登录覆盖层（必须放在 Tabs 之后，确保在 Stack 中处于上层，否则会被 Tabs 遮挡无法显示/点击）
-      if (this.showLogin) {
+      else {
         LoginPage({
           onLoginSuccess: () => {
             this.showLogin = false
