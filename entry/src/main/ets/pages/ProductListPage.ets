@@ -6,6 +6,7 @@ import { getAllStoresList, getGoodsForStore, syncStoresFromServer, syncGoodsFrom
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
+import { logInfo } from '../service/AppLogger'
 
 class ProductListMode {
   static readonly CATEGORY: string = 'category'
@@ -184,6 +185,7 @@ export struct ProductListPage {
     AppStorage.setOrCreate<string>('selectedStoreName', store.name)
     // 标记本次返回必须打开店铺详情，避免返回首页过程中 currentStoreId 被旧页面生命周期覆盖。
     AppStorage.setOrCreate<boolean>('pendingStoreDetail', true)
+    logInfo('Navigation', `ProductListPage prepare store detail storeId=${store.id} name=${store.name}`)
   }
 
   @Builder

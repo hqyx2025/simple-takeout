@@ -116,6 +116,7 @@ struct Index {
     this.sanitizeAppData()
     // 管理端守卫：已登录的管理端不渲染主页，直接跳转平台管理页
     this.guardAdminRole()
+    this.consumePendingStoreDetail('aboutToAppear')
   }
 
   // 管理端守卫：登录态为 ADMIN 时立即替换到平台管理页，并阻止主页内容渲染
@@ -193,6 +194,7 @@ struct Index {
   // 从子路由页面（收藏页/搜索页）返回时，处理店铺详情跳转
   onPageShow() {
     logInfo('Page', '首页 Index onPageShow')
+    this.consumePendingStoreDetail('onPageShow')
     // 管理端防御：任何情况下 Index 对管理端不可见（防止返回键/异常路由回到主页）
     const pageUser: User | undefined = AppStorage.get<User>('user')
     if (this.loggedIn && pageUser !== undefined && pageUser.role === UserRole.ADMIN) {
@@ -216,17 +218,22 @@ struct Index {
       syncStoresFromServer()
       syncUserOrdersFromServer()
     }
-    // ProductListPage 返回时优先消费 currentStoreId；若路由切换期间该值被旧页面覆盖，
-    // 使用 pendingStoreDetail + selectedStoreId 兜底，确保点击分类店铺不会只回到首页。
+  }
+
+  /** 消费外部列表页返回的店铺详情请求，必须早于首页隐私/数据刷新分支执行。 */
+  private consumePendingStoreDetail(source: string): void {
     const currentStoreId: number = AppStorage.get<number>('currentStoreId') || 0
-    const pendingStoreId: number = AppStorage.get<boolean>('pendingStoreDetail') || false
-      ? (AppStorage.get<number>('selectedStoreId') || 0) : 0
-    const storeId: number = currentStoreId > 0 ? currentStoreId : pendingStoreId
-    if (storeId > 0) {
-      AppStorage.setOrCreate<boolean>('pendingStoreDetail', false)
-      AppStorage.setOrCreate<number>('currentStoreId', 0)
-      this.showStoreDetail(storeId)
+    const selectedStoreId: number = AppStorage.get<number>('selectedStoreId') || 0
+    const pending: boolean = AppStorage.get<boolean>('pendingStoreDetail') || false
+    const storeId: number = currentStoreId > 0 ? currentStoreId : (pending ? selectedStoreId : 0)
+    logInfo('Navigation', `${source} store detail state current=${currentStoreId} selected=${selectedStoreId} pending=${pending} resolved=${storeId}`)
+    if (storeId <= 0) {
+      return
     }
+    AppStorage.setOrCreate<boolean>('pendingStoreDetail', false)
+    AppStorage.setOrCreate<number>('currentStoreId', 0)
+    this.showStoreDetail(storeId)
+    logInfo('Navigation', `${source} switched to store detail storeId=${storeId} tab=${this.currentTab}`)
   }
 
   // 切换发现Tab并展示指定店铺详情
