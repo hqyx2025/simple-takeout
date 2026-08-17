@@ -5,7 +5,7 @@
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { CartItem } from '../model/Models'
-import { deleteCartItemRemote, deleteCartItemsRemote, syncCartRemote, updateCartItemQuantity, updateCartItemQuantityRemote } from '../service/AppStorageManager'
+import { deleteCartItemRemote, deleteCartItemsRemote, syncCartRemote, updateCartItemQuantityRemote } from '../service/AppStorageManager'
 import { EmptyState } from '../components/EmptyState'
 import { logInfo } from '../service/AppLogger'
 
@@ -70,7 +70,6 @@ export struct CartPage {
     }
     this.processing = true
     const nextQuantity: number = item.quantity + delta
-    updateCartItemQuantity(item.goods.id, item.storeId, nextQuantity)
     const ok: boolean = await updateCartItemQuantityRemote(item.goods.id, nextQuantity)
     if (!ok) {
       await syncCartRemote()
@@ -85,7 +84,6 @@ export struct CartPage {
       return
     }
     this.processing = true
-    updateCartItemQuantity(item.goods.id, item.storeId, 0)
     const ok: boolean = await deleteCartItemRemote(item.goods.id)
     if (ok) {
       this.selectedGoodsIds = this.selectedGoodsIds.filter((id: number) => id !== item.goods.id)

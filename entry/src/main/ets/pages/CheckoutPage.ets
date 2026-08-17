@@ -6,7 +6,7 @@
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { CartItem, Order, Address, Coupon, StoreItem } from '../model/Models'
-import { createOrderRemote, deleteCartItemsRemote, syncCartRemote, updateCartItemQuantity, getAllStoresList, syncCouponsRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
+import { createOrderRemote, deleteCartItemsRemote, syncCartRemote, getAllStoresList, syncCouponsRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { LoadingIndicator } from '../components/LoadingIndicator'
 import { logInfo } from '../service/AppLogger'
 import { calculatePayAmount } from '../service/OrderCalculations'
@@ -156,7 +156,6 @@ export struct CheckoutPage {
     const goodsIdsToClear: number[] = []
     for (let i = 0; i < itemsToClear.length; i++) {
       goodsIdsToClear.push(itemsToClear[i].goods.id)
-      updateCartItemQuantity(itemsToClear[i].goods.id, this.checkoutStoreId, 0)
     }
     const cartCleared: boolean = await deleteCartItemsRemote(goodsIdsToClear)
     if (!cartCleared) {
