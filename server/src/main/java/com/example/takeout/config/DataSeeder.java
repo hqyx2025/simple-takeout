@@ -36,6 +36,7 @@ public class DataSeeder implements ApplicationRunner {
         ensureGoodsColumns();
         ensureCategoryColumns();
         ensureRefundTable();
+        ensureReviewGoodsColumn();
         // 分类是首页导航的基础数据，即使已有用户数据，也必须单独补齐。
         ensureCategories();
         Integer userCount = jdbc.queryForObject("SELECT COUNT(*) FROM users", Integer.class);
@@ -99,6 +100,10 @@ public class DataSeeder implements ApplicationRunner {
                     "KEY idx_refund_order (order_id), KEY idx_refund_status (status)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
             log.info("已创建退款记录表 refund_records");
         }
+    }
+
+    private void ensureReviewGoodsColumn() {
+        ensureColumn("reviews", "goods_id", "BIGINT NOT NULL DEFAULT 0 AFTER store_id");
     }
 
     private void ensureColumn(String table, String column, String definition) {
@@ -328,9 +333,10 @@ public class DataSeeder implements ApplicationRunner {
         String[] contents = {"味道很好，分量足，配送也快！", "包装很用心，菜还是热的，好评",
                 "第二次点了，品质稳定，推荐招牌"};
         for (long sid : storeIds) {
+            Long goodsId = jdbc.queryForObject("SELECT id FROM goods WHERE store_id = ? ORDER BY id LIMIT 1", Long.class, sid);
             for (int i = 0; i < contents.length; i++) {
-                jdbc.update("INSERT INTO reviews(store_id, user_id, user_name, rating, content, tags, create_time) VALUES(?,?,?,?,?,?,?)",
-                        sid, user1Id, "美食家小张", 5 - i, contents[i], "[\"味道好\",\"配送快\"]", now);
+                jdbc.update("INSERT INTO reviews(store_id, goods_id, user_id, user_name, rating, content, tags, create_time) VALUES(?,?,?,?,?,?,?,?)",
+                        sid, goodsId == null ? 0 : goodsId, user1Id, "美食家小张", 5 - i, contents[i], "[\"味道好\",\"配送快\"]", now);
             }
         }
     }

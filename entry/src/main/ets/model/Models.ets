@@ -175,6 +175,7 @@ export interface Review {
   id: number
   orderId: number
   storeId: number
+  goodsId: number
   userId: number
   username: string
   rating: number        // 1-5星

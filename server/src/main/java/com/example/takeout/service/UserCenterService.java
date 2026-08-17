@@ -168,6 +168,11 @@ public class UserCenterService {
         return reviewDao.listByStore(storeId).stream().map(this::toReviewView).toList();
     }
 
+    public List<Review.ReviewView> goodsReviews(long goodsId) {
+        goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品不存在"));
+        return reviewDao.listByGoods(goodsId).stream().map(this::toReviewView).toList();
+    }
+
     // ============ 搜索 ============
 
     public List<Store.StoreView> search(String keyword) {

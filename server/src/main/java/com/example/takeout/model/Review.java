@@ -8,6 +8,7 @@ import java.util.List;
 public record Review(
         long id,
         long storeId,
+        long goodsId,
         long userId,
         String userName,
         int rating,
@@ -18,6 +19,7 @@ public record Review(
     public record ReviewView(
             long id,
             long storeId,
+            long goodsId,
             long userId,
             String userName,
             int rating,
@@ -28,6 +30,6 @@ public record Review(
     }
 
     public ReviewView toView(List<String> tagsList) {
-        return new ReviewView(id, storeId, userId, userName, rating, content, tagsList, createTime);
+        return new ReviewView(id, storeId, goodsId, userId, userName, rating, content, tagsList, createTime);
     }
 }

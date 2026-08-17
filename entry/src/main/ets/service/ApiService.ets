@@ -123,6 +123,7 @@ interface ServerAddress {
 interface ServerReview {
   id: number
   storeId: number
+  goodsId: number
   userId: number
   userName: string
   rating: number
@@ -243,6 +244,7 @@ interface CreateOrderRequest {
 }
 
 interface ReviewRequest {
+  goodsId: number
   rating: number
   content: string
   tags: string[]
@@ -406,6 +408,14 @@ export async function fetchStoreReviews(storeId: number): Promise<Review[]> {
   return resp.data.map((r: ServerReview) => toReview(r))
 }
 
+export async function fetchGoodsReviews(goodsId: number): Promise<Review[]> {
+  const resp: ApiResponse<ServerReview[]> = await get<ServerReview[]>(`/api/goods/${goodsId}/reviews`)
+  if (resp.code !== 200 || resp.data === null) {
+    return []
+  }
+  return resp.data.map((r: ServerReview) => toReview(r))
+}
+
 export async function searchStoresApi(keyword: string): Promise<StoreItem[]> {
   const resp: ApiResponse<ServerStore[]> = await get<ServerStore[]>(`${API_CONFIG.ENDPOINTS['search']}?keyword=${encodeURIComponent(keyword)}`)
   if (resp.code !== 200 || resp.data === null) {
@@ -471,8 +481,8 @@ export async function confirmOrderApi(orderId: number): Promise<boolean> {
   return resp.code === 200
 }
 
-export async function submitReviewApi(orderId: number, rating: number, content: string, tags: string[]): Promise<boolean> {
-  const req: ReviewRequest = { rating: rating, content: content, tags: tags }
+export async function submitReviewApi(orderId: number, goodsId: number, rating: number, content: string, tags: string[]): Promise<boolean> {
+  const req: ReviewRequest = { goodsId: goodsId, rating: rating, content: content, tags: tags }
   const resp: ApiResponse<ServerReview> = await post<ServerReview>(`/api/orders/${orderId}/review`, req)
   return resp.code === 200
 }
@@ -993,6 +1003,7 @@ function toReview(r: ServerReview): Review {
     id: r.id,
     orderId: 0,
     storeId: r.storeId,
+    goodsId: r.goodsId || 0,
     userId: r.userId,
     username: r.userName,
     rating: r.rating,

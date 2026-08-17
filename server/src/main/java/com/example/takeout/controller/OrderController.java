@@ -64,7 +64,7 @@ public class OrderController {
     @PostMapping("/orders/{id}/review")
     public ApiResponse<Review> review(@RequestAttribute("userId") long userId, @PathVariable long id,
                                       @RequestBody ReviewRequest req) {
-        return ApiResponse.ok(orderService.reviewOrder(userId, id, req.rating(), req.content(), req.tags()));
+        return ApiResponse.ok(orderService.reviewOrder(userId, id, req.goodsId(), req.rating(), req.content(), req.tags()));
     }
 
     @PostMapping("/orders/{id}/refund")
@@ -105,7 +105,7 @@ public class OrderController {
                                      long couponId, String remark) {
     }
 
-    public record ReviewRequest(int rating, String content, List<String> tags) {
+    public record ReviewRequest(long goodsId, int rating, String content, List<String> tags) {
     }
 
     public record RefundRequest(String reason) {

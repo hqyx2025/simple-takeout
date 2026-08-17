@@ -16,6 +16,7 @@ public class ReviewDao {
     private static final RowMapper<Review> MAPPER = (rs, i) -> new Review(
             rs.getLong("id"),
             rs.getLong("store_id"),
+            rs.getLong("goods_id"),
             rs.getLong("user_id"),
             rs.getString("user_name"),
             rs.getInt("rating"),
@@ -34,10 +35,14 @@ public class ReviewDao {
         return jdbc.query("SELECT * FROM reviews WHERE store_id = ? ORDER BY id DESC", MAPPER, storeId);
     }
 
-    public long insert(long storeId, long userId, String userName, int rating, String content,
+    public List<Review> listByGoods(long goodsId) {
+        return jdbc.query("SELECT * FROM reviews WHERE goods_id = ? ORDER BY id DESC", MAPPER, goodsId);
+    }
+
+    public long insert(long storeId, long goodsId, long userId, String userName, int rating, String content,
                        String tagsJson, String now) {
-        jdbc.update("INSERT INTO reviews(store_id, user_id, user_name, rating, content, tags, create_time) VALUES(?,?,?,?,?,?,?)",
-                storeId, userId, userName, rating, content, tagsJson, now);
+        jdbc.update("INSERT INTO reviews(store_id, goods_id, user_id, user_name, rating, content, tags, create_time) VALUES(?,?,?,?,?,?,?,?)",
+                storeId, goodsId, userId, userName, rating, content, tagsJson, now);
         return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 }

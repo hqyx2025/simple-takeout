@@ -103,6 +103,11 @@ public class UserCenterController {
         return ApiResponse.ok(service.storeReviews(id));
     }
 
+    @GetMapping("/goods/{id}/reviews")
+    public ApiResponse<List<Review.ReviewView>> goodsReviews(@PathVariable long id) {
+        return ApiResponse.ok(service.goodsReviews(id));
+    }
+
     // ============ 搜索 ============
 
     @GetMapping("/search")

@@ -906,7 +906,7 @@ struct StoreDetailContent {
   @State cartCount: number = 0
   @State cartTotal: number = 0
   @State isFav: boolean = false
-  @State storeReviews: Review[] = []
+  @StorageLink('reviewList') storeReviews: Review[] = []
   @State currentCat: string = '全部'
   @State goodsCats: string[] = ['全部']
   // 店内商户分类（演进项，见大纲 8.3）：优先按商户分类分组，无商户分类时回退平台分类
@@ -1151,6 +1151,7 @@ struct StoreDetailContent {
                   Text(goods.description)
                     .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
                     .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+                  this.GoodsReviewSummary(goods)
                   Row({ space: 4 }) {
                     Text(`月售${formatSales(goods.sales)}`).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
                     Text(`好评${goods.rating}%`).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
@@ -1209,6 +1210,52 @@ struct StoreDetailContent {
           this.updateCartInfo()
         })
     }
+  }
+
+  private getGoodsReviews(goodsId: number): Review[] {
+    return (this.storeReviews || []).filter((review: Review) => review.goodsId === goodsId)
+  }
+
+  private canReviewGoods(goodsId: number): boolean {
+    const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
+    return orders.some((order: Order) => order.storeId === this.storeId && order.status === 4
+      && (order.escrowStatus ?? 0) === 1 && order.reviewed === 0
+      && (order.items || []).some((item: CartItem) => item.goods.id === goodsId))
+  }
+
+  private openGoodsReview(goodsId: number): void {
+    const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
+    const order: Order | undefined = orders.find((item: Order) => item.storeId === this.storeId
+      && item.status === 4 && (item.escrowStatus ?? 0) === 1 && item.reviewed === 0
+      && (item.items || []).some((goodsItem: CartItem) => goodsItem.goods.id === goodsId))
+    if (order === undefined) {
+      promptAction.showToast({ message: '完成订单后才能评价该商品', duration: 1600 })
+      return
+    }
+    AppStorage.setOrCreate<number>('currentOrderId', order.id)
+    AppStorage.setOrCreate<number>('currentReviewGoodsId', goodsId)
+    router.pushUrl({ url: 'pages/ReviewPage' })
+  }
+
+  @Builder
+  GoodsReviewSummary(goods: GoodsItem) {
+    Row({ space: SPACING.SM }) {
+      Text(`商品评价${this.getGoodsReviews(goods.id).length}条`)
+        .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+      if (this.getGoodsReviews(goods.id).length > 0) {
+        Text(this.getGoodsReviews(goods.id)[0].content || '用户已评价')
+          .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY)
+          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
+      } else {
+        Text('暂无商品评价').fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).layoutWeight(1)
+      }
+      if (this.canReviewGoods(goods.id)) {
+        Button('去评价').height(26).fontSize(FONT_SIZE.XS)
+          .fontColor(Color.White).backgroundColor(COLORS.PRIMARY)
+          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+          .onClick(() => { this.openGoodsReview(goods.id) })
+      }
+    }.width('100%')
   }
 
   @Builder
@@ -1278,6 +1325,10 @@ struct StoreDetailContent {
             Text(review.content)
               .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
               .width('100%')
+            if (review.goodsId > 0) {
+              Text(`评价商品：${this.getGoodsName(review.goodsId)}`)
+                .fontSize(FONT_SIZE.XS).fontColor(COLORS.PRIMARY).width('100%')
+            }
             if (review.tags.length > 0) {
               Flex({ wrap: FlexWrap.Wrap }) {
                 ForEach(review.tags, (tag: string) => {
@@ -1303,6 +1354,11 @@ struct StoreDetailContent {
     }
     .width('100%')
     .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.LG })
+  }
+
+  private getGoodsName(goodsId: number): string {
+    const goods: GoodsItem | undefined = this.goodsList.find((item: GoodsItem) => item.id === goodsId)
+    return goods === undefined ? '店内商品' : goods.name
   }
 
   getQty(goodsId: number): number {

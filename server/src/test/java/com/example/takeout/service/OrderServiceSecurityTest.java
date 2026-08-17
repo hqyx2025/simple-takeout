@@ -12,6 +12,7 @@ import com.example.takeout.dao.UserDao;
 import com.example.takeout.model.Address;
 import com.example.takeout.model.Goods;
 import com.example.takeout.model.Order;
+import com.example.takeout.model.Review;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.User;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -98,5 +99,77 @@ class OrderServiceSecurityTest {
         verify(userDao).updateBalance(2, 70.0);
         BizException error = assertThrows(BizException.class, () -> service.confirmOrder(1, 8));
         assertEquals("订单款项已结算或退款，不能重复确认", error.getMessage());
+    }
+
+    @Test
+    void rejectsReviewForGoodsNotInOrder() {
+        Order order = completedOrder(9, 100, 1, 0);
+        when(orderDao.findById(9)).thenReturn(Optional.of(order));
+        when(userDao.findById(1)).thenReturn(Optional.of(testUser()));
+
+        BizException error = assertThrows(BizException.class,
+                () -> service.reviewOrder(1, 9, 999, 5, "不错", List.of()));
+
+        assertEquals("评价商品不在该订单中", error.getMessage());
+        verify(reviewDao, org.mockito.Mockito.never()).insert(
+                org.mockito.Mockito.anyLong(), org.mockito.Mockito.anyLong(), org.mockito.Mockito.anyLong(),
+                org.mockito.Mockito.anyString(), org.mockito.Mockito.anyInt(), org.mockito.Mockito.anyString(),
+                org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString());
+        verify(orderDao, org.mockito.Mockito.never()).markReviewed(9);
+    }
+
+    @Test
+    void rejectsReviewBeforeEscrowSettlement() {
+        Order order = completedOrder(10, 100, 0, 0);
+        when(orderDao.findById(10)).thenReturn(Optional.of(order));
+
+        BizException error = assertThrows(BizException.class,
+                () -> service.reviewOrder(1, 10, 100, 5, "不错", List.of()));
+
+        assertEquals("确认收货并结算后才能评价商品", error.getMessage());
+        verify(userDao, org.mockito.Mockito.never()).findById(1);
+    }
+
+    @Test
+    void rejectsDuplicateOrderReview() {
+        Order order = completedOrder(11, 100, 1, 1);
+        when(orderDao.findById(11)).thenReturn(Optional.of(order));
+
+        BizException error = assertThrows(BizException.class,
+                () -> service.reviewOrder(1, 11, 100, 5, "不错", List.of()));
+
+        assertEquals("该订单已评价", error.getMessage());
+        verify(userDao, org.mockito.Mockito.never()).findById(1);
+    }
+
+    @Test
+    void savesReviewAgainstSelectedOrderGoods() {
+        Order order = completedOrder(12, 100, 1, 0);
+        Review saved = new Review(88, 10, 100, 1, "测试用户", 5, "不错", "[]", "2026-08-16 11:00:00");
+        when(orderDao.findById(12)).thenReturn(Optional.of(order));
+        when(userDao.findById(1)).thenReturn(Optional.of(testUser()));
+        when(reviewDao.insert(org.mockito.ArgumentMatchers.eq(10L), org.mockito.ArgumentMatchers.eq(100L),
+                org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.eq("测试用户"),
+                org.mockito.ArgumentMatchers.eq(5), org.mockito.ArgumentMatchers.eq("不错"),
+                org.mockito.ArgumentMatchers.eq("[]"), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(88L);
+        when(reviewDao.listByStore(10)).thenReturn(List.of(saved));
+
+        Review result = service.reviewOrder(1, 12, 100, 5, "不错", List.of());
+
+        assertEquals(100, result.goodsId());
+        verify(orderDao).markReviewed(12);
+    }
+
+    private Order completedOrder(long id, long goodsId, int escrowStatus, int reviewed) {
+        String items = "[{\"goodsId\":" + goodsId + ",\"goodsName\":\"测试商品\",\"price\":12.5,\"quantity\":1,\"image\":\"\"}]";
+        return new Order(id, "NO" + id, 1, 10, "测试店铺", 4, items,
+                "{}", 12.5, 0, 0, 12.5, "", reviewed, escrowStatus,
+                "2026-08-16 10:00:00", "2026-08-16 10:00:00", "", "",
+                "2026-08-16 10:10:00");
+    }
+
+    private User testUser() {
+        return new User(1, "测试用户", "", "13800138000", "", 0, 20, "2026-08-16 10:00:00");
     }
 }
