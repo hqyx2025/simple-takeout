@@ -175,10 +175,7 @@ export struct ProductListPage {
     router.back()
   }
 
-  /**
-   * 返回首页时同时写入两个导航状态：currentStoreId 供 Index.onPageShow 消费，
-   * selectedStoreId 供 DiscoverTab 立即渲染，避免只设置单一状态导致点击后停留在列表页。
-   */
+  /** 返回首页后由 Index.onPageShow 消费状态，再进入独立 StoreDetailPage。 */
   private prepareStoreDetail(store: StoreItem): void {
     AppStorage.setOrCreate<number>('currentStoreId', store.id)
     AppStorage.setOrCreate<number>('selectedStoreId', store.id)
