@@ -48,7 +48,7 @@
 
 ## 6. 数据库现状（差异以 22.8 节清单为准）
 
-- 实际表名（复数）：`users` `stores` `goods` `orders` `coupons` `reviews` `favorites` `addresses` `categories` `refund_records`
+- 实际表名（复数）：`users` `stores` `goods` `orders` `coupons` `reviews` `favorites` `addresses` `categories` `refund_records` `cart_items`
 - 关键现状：goods 有 `stock/version/merchant_category_id`（演进项已落地）；orders 的 items/address 为 **JSON 快照**（无独立明细表）；categories 有 `type`（PLATFORM/MERCHANT）+ `merchant_id`；reviews **无 order_id/reply**（防重靠 orders.reviewed）
 - 演进项（未落地，勿实现）：banner/announcement 表、order_item/payment_record/user_coupon/order_status_log 表、address 经纬度、商户配送半径、逻辑删除字段
 
@@ -78,6 +78,7 @@
 - 同一个用户动作只能由一个层级负责最终错误提示；业务页需要展示后端具体原因时，应关闭该请求的网络层自动 Toast，避免连续弹窗互相覆盖造成提示一闪而过。错误提示建议至少持续 3 秒。
 - 当前没有适配本工程 ArkTS 的原生 Lottie ohpm 包；需要动画弹窗时使用 `lottie-web` 在 `rawfile` Web 页面中播放，外层使用 ArkUI 自定义 Dialog，并保留无网络时的静态降级图标。
 - Tabs 内长期复用的子组件不能只依赖一次构建时的派生文本；购物车数量、订单数量等状态返回页面或切换 Tab 时要通过 `@Watch` 和显式刷新触发器重新读取 `AppStorage`，避免显示旧计数。
+- 购物车服务已按明确授权使用 MyBatis-Plus：`cart_items` 只保存用户、商品和数量，接口按 JWT 用户隔离；其余既有业务 DAO 暂时继续使用 JdbcTemplate，避免无关迁移。
 
 ## 9. 提交规范
 

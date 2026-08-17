@@ -6,7 +6,7 @@
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { CartItem, Order, Address, Coupon, StoreItem } from '../model/Models'
-import { createOrderRemote, updateCartItemQuantity, getAllStoresList, syncCouponsRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
+import { createOrderRemote, deleteCartItemsRemote, syncCartRemote, updateCartItemQuantity, getAllStoresList, syncCouponsRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { LoadingIndicator } from '../components/LoadingIndicator'
 import { logInfo } from '../service/AppLogger'
 import { calculatePayAmount } from '../service/OrderCalculations'
@@ -153,8 +153,14 @@ export struct CheckoutPage {
 
     // 清空该店铺的购物车商品
     const itemsToClear: CartItem[] = this.storeItems.slice()
+    const goodsIdsToClear: number[] = []
     for (let i = 0; i < itemsToClear.length; i++) {
+      goodsIdsToClear.push(itemsToClear[i].goods.id)
       updateCartItemQuantity(itemsToClear[i].goods.id, this.checkoutStoreId, 0)
+    }
+    const cartCleared: boolean = await deleteCartItemsRemote(goodsIdsToClear)
+    if (!cartCleared) {
+      await syncCartRemote()
     }
 
     // 后端已处理优惠券状态，重新同步真实优惠券列表

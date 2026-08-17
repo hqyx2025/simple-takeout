@@ -3,7 +3,7 @@
  * 包含：搜索栏、分类导航、店铺列表、店铺详情、购物车、订单列表、个人中心、底部Tab导航
  */
 import { Category, StoreItem, GoodsItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, createEmptyUser } from '../model/Models'
-import { addToCart, updateCartItemQuantity, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
+import { addToCart, addCartItemRemote, updateCartItemQuantity, updateCartItemQuantityRemote, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCartRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { fetchRecommendedStoresApi, fetchStoreMerchantCategoriesApi } from '../service/ApiService'
 import { LoginPage } from './LoginPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, formatSales } from '../common/Constants'
@@ -218,6 +218,7 @@ struct Index {
     if (isLoggedIn()) {
       // 未登录时不发送受保护请求，避免启动阶段出现无意义的 401。
       syncAddressesRemote()
+      syncCartRemote()
       syncCategoriesFromServer()
       syncStoresFromServer()
       syncUserOrdersFromServer()
@@ -1133,6 +1134,29 @@ export struct StoreDetailContent {
     this.cartTotal = sc.reduce((s, i) => s + i.goods.price * i.quantity, 0)
   }
 
+  private async addGoodsToCart(goods: GoodsItem): Promise<void> {
+    const item: CartItem = { goods: goods, quantity: 1, storeId: this.storeId, storeName: this.storeName }
+    addToCart(item)
+    this.updateCartInfo()
+    const ok: boolean = await addCartItemRemote(item)
+    if (!ok) {
+      await syncCartRemote()
+      this.updateCartInfo()
+      promptAction.showToast({ message: '加入购物车失败，请稍后重试', duration: 2200 })
+    }
+  }
+
+  private async changeGoodsQuantity(goods: GoodsItem, quantity: number): Promise<void> {
+    updateCartItemQuantity(goods.id, this.storeId, quantity)
+    this.updateCartInfo()
+    const ok: boolean = await updateCartItemQuantityRemote(goods.id, quantity)
+    if (!ok) {
+      await syncCartRemote()
+      this.updateCartInfo()
+      promptAction.showToast({ message: '修改购物车失败，请稍后重试', duration: 2200 })
+    }
+  }
+
   // 按当前分类筛选商品，并显式保存结果，避免 ArkUI 渲染期间计算 getter 时序异常
   private updateFilteredGoods(): void {
     const onShelfGoods: GoodsItem[] = this.goodsList.filter(g => g.isOnShelf !== false)
@@ -1336,8 +1360,7 @@ export struct StoreDetailContent {
         Text('-').width(24).height(24).fontSize(16).fontColor(COLORS.TEXT_WHITE)
           .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.CIRCLE)
           .textAlign(TextAlign.Center).onClick(() => {
-            updateCartItemQuantity(goods.id, this.storeId, this.getQty(goods.id) - 1)
-            this.updateCartInfo()
+            this.changeGoodsQuantity(goods, this.getQty(goods.id) - 1)
           })
         Text(this.getQty(goods.id).toString()).width(28).height(24).fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_PRIMARY).textAlign(TextAlign.Center)
@@ -1345,8 +1368,7 @@ export struct StoreDetailContent {
       Text('+').width(24).height(24).fontSize(16).fontColor(COLORS.TEXT_WHITE)
         .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.CIRCLE)
         .textAlign(TextAlign.Center).onClick(() => {
-          addToCart({ goods: goods, quantity: 1, storeId: this.storeId, storeName: this.storeName })
-          this.updateCartInfo()
+          this.addGoodsToCart(goods)
         })
     }
   }

@@ -36,6 +36,13 @@
       <artifactId>spring-boot-starter-jdbc</artifactId>
     </dependency>
 
+    <!-- 购物车数据层：按需求使用 MyBatis-Plus，与现有 JdbcTemplate DAO 并存 -->
+    <dependency>
+      <groupId>com.baomidou</groupId>
+      <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+      <version>3.5.12</version>
+    </dependency>
+
     <!-- MySQL 驱动 -->
     <dependency>
       <groupId>com.mysql</groupId>

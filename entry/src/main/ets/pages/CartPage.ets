@@ -5,7 +5,7 @@
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { CartItem } from '../model/Models'
-import { updateCartItemQuantity } from '../service/AppStorageManager'
+import { deleteCartItemRemote, deleteCartItemsRemote, syncCartRemote, updateCartItemQuantity, updateCartItemQuantityRemote } from '../service/AppStorageManager'
 import { EmptyState } from '../components/EmptyState'
 import { logInfo } from '../service/AppLogger'
 
@@ -14,9 +14,13 @@ import { logInfo } from '../service/AppLogger'
 export struct CartPage {
   @StorageLink('cartItems') cartItems: CartItem[] = []
   @StorageLink('isLoggedIn') loggedIn: boolean = false
+  @State editing: boolean = false
+  @State selectedGoodsIds: number[] = []
+  @State processing: boolean = false
 
-  aboutToAppear() {
+  async aboutToAppear(): Promise<void> {
     logInfo('Page', `进入购物车页面 CartPage，商品种类=${this.cartItems.length}`)
+    await syncCartRemote()
   }
 
   private getStoreIds(): number[] {
@@ -47,10 +51,72 @@ export struct CartPage {
     return this.cartItems.reduce((total: number, item: CartItem) => total + item.goods.price * item.quantity, 0)
   }
 
-  private changeQuantity(item: CartItem, delta: number): void {
+  private isSelected(goodsId: number): boolean {
+    return this.selectedGoodsIds.indexOf(goodsId) >= 0
+  }
+
+  private toggleSelected(goodsId: number): void {
+    if (this.isSelected(goodsId)) {
+      this.selectedGoodsIds = this.selectedGoodsIds.filter((id: number) => id !== goodsId)
+    } else {
+      this.selectedGoodsIds = this.selectedGoodsIds.concat([goodsId])
+    }
+  }
+
+  private async changeQuantity(item: CartItem, delta: number): Promise<void> {
+    if (this.processing) {
+      promptAction.showToast({ message: '购物车操作正在处理，请稍候', duration: 1500 })
+      return
+    }
+    this.processing = true
     const nextQuantity: number = item.quantity + delta
     updateCartItemQuantity(item.goods.id, item.storeId, nextQuantity)
-    this.cartItems = AppStorage.get<CartItem[]>('cartItems') || []
+    const ok: boolean = await updateCartItemQuantityRemote(item.goods.id, nextQuantity)
+    if (!ok) {
+      await syncCartRemote()
+      promptAction.showToast({ message: '修改购物车失败，请稍后重试', duration: 2200 })
+    }
+    this.processing = false
+  }
+
+  private async deleteOne(item: CartItem): Promise<void> {
+    if (this.processing) {
+      promptAction.showToast({ message: '购物车操作正在处理，请稍候', duration: 1500 })
+      return
+    }
+    this.processing = true
+    updateCartItemQuantity(item.goods.id, item.storeId, 0)
+    const ok: boolean = await deleteCartItemRemote(item.goods.id)
+    if (ok) {
+      this.selectedGoodsIds = this.selectedGoodsIds.filter((id: number) => id !== item.goods.id)
+      promptAction.showToast({ message: '商品已删除', duration: 1500 })
+    } else {
+      await syncCartRemote()
+      promptAction.showToast({ message: '删除商品失败，请稍后重试', duration: 2200 })
+    }
+    this.processing = false
+  }
+
+  private async deleteSelected(): Promise<void> {
+    if (this.selectedGoodsIds.length === 0) {
+      promptAction.showToast({ message: '请先选择要删除的商品', duration: 1600 })
+      return
+    }
+    if (this.processing) {
+      promptAction.showToast({ message: '购物车操作正在处理，请稍候', duration: 1500 })
+      return
+    }
+    this.processing = true
+    const ids: number[] = this.selectedGoodsIds.slice()
+    const ok: boolean = await deleteCartItemsRemote(ids)
+    if (ok) {
+      this.selectedGoodsIds = []
+      promptAction.showToast({ message: `已删除 ${ids.length} 件商品`, duration: 1600 })
+    } else {
+      await syncCartRemote()
+      promptAction.showToast({ message: '批量删除失败，请稍后重试', duration: 2200 })
+    }
+    this.processing = false
   }
 
   private checkoutStore(storeId: number): void {
@@ -76,9 +142,17 @@ export struct CartPage {
           .fontColor(COLORS.TEXT_PRIMARY)
           .layoutWeight(1)
           .textAlign(TextAlign.Center)
-        Text(' ')
-          .fontSize(FONT_SIZE.BIG_TITLE)
-          .width(FONT_SIZE.BIG_TITLE)
+        Text(this.editing ? '完成' : '管理')
+          .fontSize(FONT_SIZE.MD)
+          .fontColor(COLORS.PRIMARY)
+          .width(48)
+          .textAlign(TextAlign.End)
+          .onClick(() => {
+            this.editing = !this.editing
+            if (!this.editing) {
+              this.selectedGoodsIds = []
+            }
+          })
       }
       .width('100%')
       .height(56)
@@ -105,20 +179,35 @@ export struct CartPage {
         .backgroundColor(COLORS.BG_PRIMARY)
 
         Row() {
-          Column({ space: SPACING.XS }) {
-            Text(`共${this.getTotalCount()}件`)
+          if (this.editing) {
+            Text(`已选 ${this.selectedGoodsIds.length} 件`)
               .fontSize(FONT_SIZE.MD)
               .fontColor(COLORS.TEXT_SECONDARY)
-            Text(`¥${this.getTotalPrice().toFixed(2)}`)
-              .fontSize(FONT_SIZE.XL)
-              .fontWeight(FontWeight.Bold)
-              .fontColor(COLORS.PRICE_RED)
+              .layoutWeight(1)
+            Button('删除选中')
+              .height(40)
+              .fontSize(FONT_SIZE.MD)
+              .fontColor(COLORS.TEXT_WHITE)
+              .backgroundColor(COLORS.ERROR)
+              .borderRadius(BORDER_RADIUS.ROUND)
+              .type(ButtonType.Capsule)
+              .onClick(() => { this.deleteSelected() })
+          } else {
+            Column({ space: SPACING.XS }) {
+              Text(`共${this.getTotalCount()}件`)
+                .fontSize(FONT_SIZE.MD)
+                .fontColor(COLORS.TEXT_SECONDARY)
+              Text(`¥${this.getTotalPrice().toFixed(2)}`)
+                .fontSize(FONT_SIZE.XL)
+                .fontWeight(FontWeight.Bold)
+                .fontColor(COLORS.PRICE_RED)
+            }
+            .alignItems(HorizontalAlign.Start)
+            .layoutWeight(1)
+            Text('请选择店铺结算')
+              .fontSize(FONT_SIZE.SM)
+              .fontColor(COLORS.TEXT_HINT)
           }
-          .alignItems(HorizontalAlign.Start)
-          .layoutWeight(1)
-          Text('请选择店铺结算')
-            .fontSize(FONT_SIZE.SM)
-            .fontColor(COLORS.TEXT_HINT)
         }
         .width('100%')
         .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
@@ -140,14 +229,16 @@ export struct CartPage {
           .fontWeight(FontWeight.Bold)
           .fontColor(COLORS.TEXT_PRIMARY)
           .layoutWeight(1)
-        Button('去结算')
-          .height(32)
-          .fontSize(FONT_SIZE.SM)
-          .fontColor(COLORS.TEXT_WHITE)
-          .backgroundColor(COLORS.PRIMARY)
-          .borderRadius(BORDER_RADIUS.ROUND)
-          .type(ButtonType.Capsule)
-          .onClick(() => { this.checkoutStore(storeId) })
+        if (!this.editing) {
+          Button('去结算')
+            .height(32)
+            .fontSize(FONT_SIZE.SM)
+            .fontColor(COLORS.TEXT_WHITE)
+            .backgroundColor(COLORS.PRIMARY)
+            .borderRadius(BORDER_RADIUS.ROUND)
+            .type(ButtonType.Capsule)
+            .onClick(() => { this.checkoutStore(storeId) })
+        }
       }
       ForEach(this.getStoreItems(storeId), (item: CartItem) => {
         this.CartItemRow(item)
@@ -162,6 +253,15 @@ export struct CartPage {
   @Builder
   CartItemRow(item: CartItem) {
     Row({ space: SPACING.MD }) {
+      if (this.editing) {
+        Text(this.isSelected(item.goods.id) ? '✓' : '○')
+          .width(24)
+          .height(24)
+          .fontSize(FONT_SIZE.LG)
+          .fontColor(this.isSelected(item.goods.id) ? COLORS.PRIMARY : COLORS.TEXT_HINT)
+          .textAlign(TextAlign.Center)
+          .onClick(() => { this.toggleSelected(item.goods.id) })
+      }
       if (item.goods.image !== '') {
         Image(item.goods.image)
           .width(64)
@@ -216,6 +316,16 @@ export struct CartPage {
           .onClick(() => { this.changeQuantity(item, 1) })
       }
       .alignItems(VerticalAlign.Center)
+      if (this.editing) {
+        Button('删除')
+          .height(30)
+          .fontSize(FONT_SIZE.SM)
+          .fontColor(COLORS.ERROR)
+          .backgroundColor('#FFF1F0')
+          .borderRadius(BORDER_RADIUS.ROUND)
+          .type(ButtonType.Capsule)
+          .onClick(() => { this.deleteOne(item) })
+      }
     }
     .width('100%')
     .padding({ top: SPACING.XS, bottom: SPACING.XS })
