@@ -1931,7 +1931,7 @@ struct ProfileMainPage {
             router.pushUrl({ url: 'pages/CartPage' })
           })
           this.ProfileMenuRow('❤️', '我的收藏', () => { router.pushUrl({ url: 'pages/FavoriteListPage' }) })
-          this.ProfileMenuRow('📞', '联系客服', () => {})
+          this.ProfileMenuRow('📞', '联系客服', () => { router.pushUrl({ url: 'pages/ContactCustomerServicePage' }) })
           this.ProfileMenuRow('⚙️', '设置', () => { router.pushUrl({ url: 'pages/SettingsPage' }) })
         }
         .width('100%')

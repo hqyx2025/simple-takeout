@@ -13,6 +13,7 @@
     "pages/ProfileEditPage",
     "pages/SettingsPage",
     "pages/PrivacyPolicyPage",
+    "pages/ContactCustomerServicePage",
     "pages/ProductListPage",
     "pages/StoreDetailPage",
     "pages/MerchantOrdersPage",
