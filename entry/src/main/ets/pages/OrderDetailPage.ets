@@ -679,7 +679,7 @@ export struct OrderDetailPage {
             .onClick(() => { this.showRefundDialog = true })
         }
 
-        // status===4 (已完成): 再来一单 + 去评价
+        // status===4 (已送达/已完成): 再来一单 + 商品评价
         if (this.order!.status === 4) {
           Button('再来一单')
             .layoutWeight(1)
@@ -700,20 +700,29 @@ export struct OrderDetailPage {
                 promptAction.showToast({ message: '已加入购物车' })
               }
             })
-          Button('去评价')
-            .layoutWeight(1)
-            .height(44)
-            .fontSize(FONT_SIZE.MD)
-            .fontColor(COLORS.TEXT_WHITE)
-            .backgroundColor(COLORS.PRIMARY)
-            .borderRadius(BORDER_RADIUS.ROUND)
-            .type(ButtonType.Capsule)
-            .onClick(() => {
-              if (this.order !== null) {
-                AppStorage.setOrCreate<number>('currentOrderId', this.order.id)
-                router.pushUrl({ url: 'pages/ReviewPage' })
-              }
-            })
+          if ((this.order!.escrowStatus ?? 0) === 1 && this.order!.reviewed === 0) {
+            Button('评价商品')
+              .layoutWeight(1)
+              .height(44)
+              .fontSize(FONT_SIZE.MD)
+              .fontColor(COLORS.TEXT_WHITE)
+              .backgroundColor(COLORS.PRIMARY)
+              .borderRadius(BORDER_RADIUS.ROUND)
+              .type(ButtonType.Capsule)
+              .onClick(() => {
+                if (this.order !== null && this.order.items.length > 0) {
+                  AppStorage.setOrCreate<number>('currentOrderId', this.order.id)
+                  AppStorage.setOrCreate<number>('currentReviewGoodsId', this.order.items[0].goods.id)
+                  router.pushUrl({ url: 'pages/ReviewPage' })
+                } else {
+                  promptAction.showToast({ message: '订单中没有可评价的商品' })
+                }
+              })
+          } else if ((this.order!.escrowStatus ?? 0) === 0 && this.order!.reviewed === 0) {
+            Text('确认收货后可评价商品').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+          } else if (this.order!.reviewed === 1) {
+            Text('已评价商品').fontSize(FONT_SIZE.SM).fontColor(COLORS.SUCCESS)
+          }
         }
       }
       .width('100%')

@@ -94,13 +94,15 @@ CREATE TABLE IF NOT EXISTS coupons (
 CREATE TABLE IF NOT EXISTS reviews (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     store_id BIGINT NOT NULL,
+    goods_id BIGINT NOT NULL DEFAULT 0,
     user_id BIGINT NOT NULL,
     user_name VARCHAR(64) NOT NULL,
     rating INT NOT NULL DEFAULT 5,
     content VARCHAR(512) DEFAULT '',
     tags TEXT,
     create_time VARCHAR(32) NOT NULL,
-    KEY idx_reviews_store (store_id)
+    KEY idx_reviews_store (store_id),
+    KEY idx_reviews_goods (goods_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS favorites (

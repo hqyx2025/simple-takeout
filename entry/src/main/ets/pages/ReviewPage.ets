@@ -5,8 +5,8 @@
  */
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, REVIEW_TAGS } from '../common/Constants'
-import { Order, Review, User } from '../model/Models'
-import { getCurrentUser, submitReviewRemote, syncStoreReviewsRemote } from '../service/AppStorageManager'
+import { CartItem, Order, Review, User } from '../model/Models'
+import { getCurrentUser, submitReviewRemote, syncStoreReviewsRemote, syncUserOrdersFromServer } from '../service/AppStorageManager'
 import { logInfo, logWarn } from '../service/AppLogger'
 
 @Entry
@@ -18,6 +18,7 @@ export struct ReviewPage {
   @State content: string = ''
   @State selectedTags: string[] = []
   @State submitting: boolean = false
+  @State selectedGoodsId: number = 0
   orderId: number = 0
 
   // 评价标签列表（来自 Constants.REVIEW_TAGS）
@@ -43,6 +44,11 @@ export struct ReviewPage {
     this.orderId = AppStorage.get<number>('currentOrderId') || 0
     const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
     this.order = orders.find((o: Order) => o.id === this.orderId) || null
+    if (this.order !== null && this.order.items.length > 0) {
+      const requestedGoodsId: number = AppStorage.get<number>('currentReviewGoodsId') || 0
+      const exists: boolean = this.order.items.some((item: CartItem) => item.goods.id === requestedGoodsId)
+      this.selectedGoodsId = exists ? requestedGoodsId : this.order.items[0].goods.id
+    }
   }
 
   // ============ 评分文案 ============
@@ -97,6 +103,10 @@ export struct ReviewPage {
       promptAction.showToast({ message: '订单不存在' })
       return
     }
+    if (this.selectedGoodsId <= 0 || this.order.items.length === 0) {
+      promptAction.showToast({ message: '订单中没有可评价的商品' })
+      return
+    }
     if (this.rating === 0) {
       promptAction.showToast({ message: '请先选择评分' })
       logWarn('Review', '提交评价失败：未选择评分')
@@ -113,6 +123,7 @@ export struct ReviewPage {
       id: Date.now(),
       orderId: this.order.id,
       storeId: this.order.storeId,
+      goodsId: this.selectedGoodsId,
       userId: user.id,
       username: user.username,
       rating: this.rating,
@@ -126,9 +137,10 @@ export struct ReviewPage {
 
   // 远程提交评价
   private async submitRemote(review: Review): Promise<void> {
-    const ok: boolean = await submitReviewRemote(review.orderId, review.rating, review.content, review.tags)
+    const ok: boolean = await submitReviewRemote(review.orderId, review.goodsId, review.rating, review.content, review.tags)
     if (ok) {
       await syncStoreReviewsRemote(review.storeId)
+      await syncUserOrdersFromServer()
       logInfo('Review', `提交评价成功 orderId=${review.orderId} 评分=${review.rating} 标签=${review.tags.length}个`)
       promptAction.showToast({ message: '评价成功' })
       this.submitting = false
@@ -187,6 +199,9 @@ export struct ReviewPage {
           Column({ space: SPACING.SM }) {
             // 店铺与商品简略信息
             this.StoreInfoCard()
+
+            // 选择本次要评价的具体商品
+            this.ProductSelectCard()
 
             // 评分卡片
             this.RatingCard()
@@ -250,6 +265,36 @@ export struct ReviewPage {
     .padding(SPACING.LG)
     .backgroundColor(COLORS.BG_WHITE)
     .borderRadius(BORDER_RADIUS.LG)
+  }
+
+  @Builder
+  ProductSelectCard() {
+    if (this.order !== null && this.order.items.length > 0) {
+      Column({ space: SPACING.SM }) {
+        Text('评价商品').fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
+          .fontColor(COLORS.TEXT_PRIMARY).width('100%')
+        if (this.order.items.length === 1) {
+          Text(this.order.items[0].goods.name).fontSize(FONT_SIZE.MD).fontColor(COLORS.PRIMARY)
+            .width('100%').padding(SPACING.MD).backgroundColor(COLORS.TAG_BG)
+            .borderRadius(BORDER_RADIUS.MD)
+        } else {
+          Flex({ wrap: FlexWrap.Wrap }) {
+            ForEach(this.order.items, (item: CartItem) => {
+              Text(item.goods.name)
+                .fontSize(FONT_SIZE.MD)
+                .fontColor(this.selectedGoodsId === item.goods.id ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
+                .backgroundColor(this.selectedGoodsId === item.goods.id ? COLORS.PRIMARY : COLORS.TAG_BG)
+                .padding({ left: SPACING.MD, right: SPACING.MD, top: SPACING.SM, bottom: SPACING.SM })
+                .margin({ right: SPACING.SM, bottom: SPACING.SM })
+                .borderRadius(BORDER_RADIUS.ROUND)
+                .onClick(() => { this.selectedGoodsId = item.goods.id })
+            }, (item: CartItem) => item.goods.id.toString())
+          }.width('100%')
+        }
+      }
+      .width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE)
+      .borderRadius(BORDER_RADIUS.LG)
+    }
   }
 
   @Builder

@@ -296,12 +296,18 @@ public class OrderService {
      */
     @Transactional
     public Review reviewOrder(long userId, long orderId, int rating, String content, List<String> tags) {
+        return reviewOrder(userId, orderId, 0, rating, content, tags);
+    }
+
+    /** 评价已完成订单中的一个具体商品。一个订单仍保持一次评价幂等口径。 */
+    @Transactional
+    public Review reviewOrder(long userId, long orderId, long goodsId, int rating, String content, List<String> tags) {
         Order order = requireOrder(orderId);
         if (order.userId() != userId) {
             throw new BizException(403, "无权评价该订单");
         }
-        if (order.status() != 4) {
-            throw new BizException("订单完成后才能评价");
+        if (order.status() != 4 || order.escrowStatus() != 1) {
+            throw new BizException("确认收货并结算后才能评价商品");
         }
         if (order.reviewed() == 1) {
             throw new BizException("该订单已评价");
@@ -310,8 +316,18 @@ public class OrderService {
         if (rating < 1 || rating > 5) {
             throw new BizException("评分范围 1-5");
         }
+        List<Order.OrderItem> orderItems = parseItems(order.items());
+        long targetGoodsId = goodsId;
+        if (targetGoodsId <= 0 && !orderItems.isEmpty()) {
+            targetGoodsId = orderItems.get(0).goodsId();
+        }
+        final long selectedGoodsId = targetGoodsId;
+        Order.OrderItem targetItem = orderItems.stream()
+                .filter(item -> item.goodsId() == selectedGoodsId)
+                .findFirst()
+                .orElseThrow(() -> new BizException("评价商品不在该订单中"));
         String now = LocalDateTime.now().format(FMT);
-        long reviewId = reviewDao.insert(order.storeId(), userId, user.username(),
+        long reviewId = reviewDao.insert(order.storeId(), targetItem.goodsId(), userId, user.username(),
                 rating, content == null ? "" : content, toJson(tags == null ? List.of() : tags), now);
         orderDao.markReviewed(orderId);
         return reviewDao.listByStore(order.storeId()).stream()

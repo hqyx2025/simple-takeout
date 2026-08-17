@@ -618,8 +618,8 @@ export async function searchStoresRemote(keyword: string): Promise<StoreItem[]> 
 /**
  * 远程提交订单评价
  */
-export async function submitReviewRemote(orderId: number, rating: number, content: string, tags: string[]): Promise<boolean> {
-  const ok: boolean = await submitReviewApi(orderId, rating, content, tags)
+export async function submitReviewRemote(orderId: number, goodsId: number, rating: number, content: string, tags: string[]): Promise<boolean> {
+  const ok: boolean = await submitReviewApi(orderId, goodsId, rating, content, tags)
   if (ok) {
     logInfo('Api', `远程提交评价 orderId=${orderId} 评分=${rating}`)
   }
