@@ -31,8 +31,9 @@ export struct CartPage {
 
   private getStoreIds(): number[] {
     const storeIds: number[] = []
-    for (let i = 0; i < this.cartItems.length; i++) {
-      const storeId: number = this.cartItems[i].storeId
+    const currentCart: CartItem[] = this.getCurrentCartItems()
+    for (let i = 0; i < currentCart.length; i++) {
+      const storeId: number = currentCart[i].storeId
       if (storeIds.indexOf(storeId) < 0) {
         storeIds.push(storeId)
       }
@@ -41,7 +42,18 @@ export struct CartPage {
   }
 
   private getStoreItems(storeId: number): CartItem[] {
-    return this.cartItems.filter((item: CartItem) => item.storeId === storeId)
+    return this.getCurrentCartItems().filter((item: CartItem) => item.storeId === storeId)
+  }
+
+  private getCurrentCartItems(): CartItem[] {
+    const currentCart: CartItem[] | undefined = AppStorage.get<CartItem[]>('cartItems')
+    return currentCart !== undefined && Array.isArray(currentCart) ? currentCart : []
+  }
+
+  private getCurrentQuantity(goodsId: number, storeId: number): number {
+    const item: CartItem | undefined = this.getCurrentCartItems().find((cartItem: CartItem) =>
+      cartItem.goods.id === goodsId && cartItem.storeId === storeId)
+    return item === undefined ? 0 : item.quantity
   }
 
   private getStoreName(storeId: number): string {
@@ -50,11 +62,11 @@ export struct CartPage {
   }
 
   private getTotalCount(): number {
-    return this.cartItems.reduce((total: number, item: CartItem) => total + item.quantity, 0)
+    return this.getCurrentCartItems().reduce((total: number, item: CartItem) => total + item.quantity, 0)
   }
 
   private getTotalPrice(): number {
-    return this.cartItems.reduce((total: number, item: CartItem) => total + item.goods.price * item.quantity, 0)
+    return this.getCurrentCartItems().reduce((total: number, item: CartItem) => total + item.goods.price * item.quantity, 0)
   }
 
   private isSelected(goodsId: number): boolean {
@@ -176,7 +188,7 @@ export struct CartPage {
 
       if (!this.loggedIn) {
         EmptyState({ icon: '🔒', title: '暂无登录', description: '请登录后查看购物车' })
-      } else if (this.cartItems.length === 0) {
+      } else if (this.getCurrentCartItems().length === 0) {
         EmptyState({ icon: '🛒', title: '购物车是空的', description: '去首页挑选喜欢的商品吧' })
       } else {
         Scroll() {
@@ -314,7 +326,7 @@ export struct CartPage {
           .borderRadius(BORDER_RADIUS.CIRCLE)
           .textAlign(TextAlign.Center)
           .onClick(() => { this.changeQuantity(item, -1) })
-        Text(item.quantity.toString())
+        Text(this.getCurrentQuantity(item.goods.id, item.storeId).toString())
           .fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_PRIMARY)
           .width(24)
