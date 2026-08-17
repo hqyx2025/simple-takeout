@@ -18,6 +18,8 @@ export struct CartPage {
   @State selectedGoodsIds: number[] = []
   @State processing: boolean = false
   @State cartRenderVersion: number = 0
+  @State totalCount: number = 0
+  @State totalPrice: number = 0
 
   async aboutToAppear(): Promise<void> {
     logInfo('Page', `进入购物车页面 CartPage，商品种类=${this.cartItems.length}`)
@@ -36,6 +38,14 @@ export struct CartPage {
       return false
     }
     this.cartItems = remoteCart.slice()
+    let nextTotalCount: number = 0
+    let nextTotalPrice: number = 0
+    for (let i = 0; i < remoteCart.length; i++) {
+      nextTotalCount += remoteCart[i].quantity
+      nextTotalPrice += remoteCart[i].goods.price * remoteCart[i].quantity
+    }
+    this.totalCount = nextTotalCount
+    this.totalPrice = nextTotalPrice
     this.cartRenderVersion += 1
     return true
   }
@@ -57,8 +67,7 @@ export struct CartPage {
   }
 
   private getCurrentCartItems(): CartItem[] {
-    const currentCart: CartItem[] | undefined = AppStorage.get<CartItem[]>('cartItems')
-    return currentCart !== undefined && Array.isArray(currentCart) ? currentCart : []
+    return Array.isArray(this.cartItems) ? this.cartItems : []
   }
 
   private getCurrentQuantity(goodsId: number, storeId: number): number {
@@ -73,11 +82,11 @@ export struct CartPage {
   }
 
   private getTotalCount(): number {
-    return this.getCurrentCartItems().reduce((total: number, item: CartItem) => total + item.quantity, 0)
+    return this.totalCount
   }
 
   private getTotalPrice(): number {
-    return this.getCurrentCartItems().reduce((total: number, item: CartItem) => total + item.goods.price * item.quantity, 0)
+    return this.totalPrice
   }
 
   private isSelected(goodsId: number): boolean {
