@@ -40,6 +40,8 @@ export struct AdminOrderPage {
     balance: 0, coupons: [], orders: [], storeIds: []
   }
   @State orders: AdminOrder[] = []
+  // 当前筛选结果：避免 build 阶段依赖 getter 计算属性（ArkUI 对 getter 求值存在时序问题，曾导致渲染崩溃）
+  @State displayOrders: AdminOrder[] = []
   @State currentStatus: number = -1
   // 退款二次确认（资金操作必须确认，防止误点）
   @State refundingOrderId: number = 0
@@ -58,6 +60,26 @@ export struct AdminOrderPage {
   async refresh(): Promise<void> {
     const resp: ApiResponse<AdminOrder[]> = await get<AdminOrder[]>('/api/admin/orders')
     this.orders = resp.code === 200 && resp.data !== null ? resp.data : []
+    this.applyFilter()
+  }
+
+  /** 按当前状态筛选并写入 displayOrders（显式计算，避免渲染期 getter 求值）。 */
+  private applyFilter(): void {
+    if (!Array.isArray(this.orders)) {
+      this.displayOrders = []
+      return
+    }
+    if (this.currentStatus === -1) {
+      this.displayOrders = this.orders
+      return
+    }
+    this.displayOrders = this.orders.filter(o => o !== null && typeof o === 'object' && o.status === this.currentStatus)
+  }
+
+  /** 切换筛选 Tab。 */
+  private onStatusChange(status: number): void {
+    this.currentStatus = status
+    this.applyFilter()
   }
 
   /** 托管资金状态文本：0 托管中 / 1 已结算 / 2 已退款。 */
@@ -79,13 +101,6 @@ export struct AdminOrderPage {
       return COLORS.TEXT_HINT
     }
     return COLORS.WARNING
-  }
-
-  get filteredOrders(): AdminOrder[] {
-    if (this.currentStatus === -1) {
-      return this.orders
-    }
-    return this.orders.filter(o => o.status === this.currentStatus)
   }
 
   /** 管理端取消异常订单并退款（仅未完成订单；已送达走退款审批）。 */
@@ -130,7 +145,7 @@ export struct AdminOrderPage {
               .fontColor(this.currentStatus === item.status ? COLORS.PRIMARY : COLORS.TEXT_SECONDARY)
               .fontWeight(this.currentStatus === item.status ? FontWeight.Bold : FontWeight.Normal)
               .padding({ left: SPACING.MD, right: SPACING.MD, top: SPACING.SM, bottom: SPACING.SM })
-              .onClick(() => { this.currentStatus = item.status })
+              .onClick(() => { this.onStatusChange(item.status) })
           }, (item: OrderTabItem) => item.title)
         }
         .padding({ left: SPACING.LG, right: SPACING.LG })
@@ -143,10 +158,10 @@ export struct AdminOrderPage {
           Text('托管资金：下单即托管，用户确认收货后结算给商户；未完成订单可由平台直接退款')
             .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%')
 
-          if (this.filteredOrders.length === 0) {
+          if (!Array.isArray(this.displayOrders) || this.displayOrders.length === 0) {
             Text('暂无该状态订单').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%').padding(SPACING.MD)
           }
-          ForEach(this.filteredOrders, (order: AdminOrder) => {
+          ForEach(this.displayOrders, (order: AdminOrder) => {
             Row({ space: SPACING.MD }) {
               Column({ space: 4 }) {
                 Text(`${order.storeName}  #${order.orderNo}`).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
@@ -156,7 +171,7 @@ export struct AdminOrderPage {
                   Text(`托管：${this.getEscrowText(order.escrowStatus)}`)
                     .fontSize(FONT_SIZE.SM).fontColor(this.getEscrowColor(order.escrowStatus))
                 }
-                Text(`实付 ¥${order.payAmount.toFixed(2)}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+                Text(`实付 ¥${(order.payAmount ?? 0).toFixed(2)}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
               }.alignItems(HorizontalAlign.Start).layoutWeight(1)
               if (order.status !== 4 && order.status !== 5) {
                 Button('退款').height(34).fontSize(FONT_SIZE.SM)
