@@ -30,6 +30,7 @@ interface ServerStore {
   categoryIds: number[]
   ownerId: number
   status: number
+  recommended: number
 }
 
 interface ServerGoods {
@@ -386,6 +387,15 @@ export async function fetchStores(categoryId?: number): Promise<StoreItem[]> {
     ? `${API_CONFIG.ENDPOINTS['stores']}?categoryId=${categoryId}`
     : API_CONFIG.ENDPOINTS['stores']
   const resp: ApiResponse<ServerStore[]> = await get<ServerStore[]>(url)
+  if (resp.code !== 200 || resp.data === null) {
+    return []
+  }
+  return resp.data.map((s: ServerStore) => toStoreItem(s))
+}
+
+export async function fetchRecommendedStoresApi(maxDistanceKm: number = 2, limit: number = 10): Promise<StoreItem[]> {
+  const resp: ApiResponse<ServerStore[]> = await get<ServerStore[]>(
+    `/api/stores/recommended?maxDistanceKm=${maxDistanceKm}&limit=${limit}`)
   if (resp.code !== 200 || resp.data === null) {
     return []
   }
@@ -895,7 +905,8 @@ function toStoreItem(s: ServerStore): StoreItem {
     notice: s.notice,
     categoryId: s.categoryId,
     categoryIds: s.categoryIds || [],
-    ownerId: s.ownerId
+    ownerId: s.ownerId,
+    recommended: s.recommended || 0
   }
   return store
 }

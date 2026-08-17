@@ -21,6 +21,7 @@ public record Store(
         String categoryIds,
         long ownerId,
         int status,
+        int recommended,
         String createTime
 ) {
     /**
@@ -41,12 +42,13 @@ public record Store(
             int categoryId,
             List<Integer> categoryIds,
             long ownerId,
-            int status
+            int status,
+            int recommended
     ) {
     }
 
     public StoreView toView(List<String> tagsList, List<Integer> categoryIdsList) {
         return new StoreView(id, name, image, rating, monthlySales, deliveryFee, minOrder,
-                deliveryTime, distance, tagsList, notice, categoryId, categoryIdsList, ownerId, status);
+                deliveryTime, distance, tagsList, notice, categoryId, categoryIdsList, ownerId, status, recommended);
     }
 }

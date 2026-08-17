@@ -78,6 +78,15 @@ public class AdminController {
         return ApiResponse.ok();
     }
 
+    @PutMapping("/stores/{id}/recommend")
+    public ApiResponse<Void> updateStoreRecommended(@RequestAttribute("role") int role,
+                                                     @PathVariable long id,
+                                                     @RequestBody StoreRecommendRequest req) {
+        requireAdmin(role);
+        adminService.updateStoreRecommended(id, req.recommended());
+        return ApiResponse.ok();
+    }
+
     @GetMapping("/orders")
     public ApiResponse<List<Order.OrderView>> orders(@RequestAttribute("role") int role) {
         requireAdmin(role);
@@ -224,6 +233,9 @@ public class AdminController {
     }
 
     public record StoreStatusRequest(int status) {
+    }
+
+    public record StoreRecommendRequest(int recommended) {
     }
 
     public record RefundRejectRequest(String rejectReason) {

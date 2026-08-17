@@ -4,7 +4,7 @@
  */
 import { Category, StoreItem, GoodsItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, createEmptyUser } from '../model/Models'
 import { addToCart, updateCartItemQuantity, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncCategoriesFromServer, syncStoreReviewsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
-import { fetchStoreMerchantCategoriesApi } from '../service/ApiService'
+import { fetchRecommendedStoresApi, fetchStoreMerchantCategoriesApi } from '../service/ApiService'
 import { LoginPage } from './LoginPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, formatSales } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
@@ -284,7 +284,8 @@ struct Index {
             this.currentTab = 0
             this.tabsController.changeIndex(0)
           },
-          onNavigateLogin: () => { this.showLogin = true }
+          onNavigateLogin: () => { this.showLogin = true },
+          onStoreClick: (store: StoreItem) => { this.showStoreDetail(store.id) }
         })
       }.tabBar(this.tabBuilder('发现', 1))
 
@@ -844,8 +845,37 @@ struct HomePage {
 struct DiscoverPage {
   @StorageLink('selectedStoreId') selectedStoreId: number = 0
   @StorageLink('selectedStoreName') selectedStoreName: string = ''
+  @StorageLink('isLoggedIn') loggedIn: boolean = false
+  @StorageLink('currentAddress') currentAddress: Address | null = null
+  @State recommendedStores: StoreItem[] = []
+  @State loading: boolean = false
   onBack: () => void = () => {}
   onNavigateLogin: () => void = () => {}
+  onStoreClick: (store: StoreItem) => void = () => {}
+
+  aboutToAppear() {
+    if (this.selectedStoreId <= 0) {
+      this.refreshRecommended()
+    }
+  }
+
+  private async refreshRecommended(): Promise<void> {
+    if (!this.loggedIn) {
+      return
+    }
+    this.loading = true
+    this.recommendedStores = await fetchRecommendedStoresApi(2, 10)
+    this.loading = false
+  }
+
+  private hasLocation(): boolean {
+    if (this.currentAddress === null) {
+      return false
+    }
+    const address: Address = this.currentAddress as Address
+    return address.address.trim() !== '' || address.detail.trim() !== ''
+      || (address.latitude !== undefined && address.longitude !== undefined)
+  }
 
   build() {
     Column() {
@@ -870,20 +900,83 @@ struct DiscoverPage {
         })
       } else {
         Column() {
-          Text('🔍')
-            .fontSize(60).margin({ top: 80 })
-          Text('搜索发现')
-            .fontSize(FONT_SIZE.TITLE).fontWeight(FontWeight.Bold)
-            .fontColor(COLORS.TEXT_HINT).margin({ top: 16 })
-          Text('在首页点击店铺即可查看详情')
-            .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT).margin({ top: 8 })
+          Row() {
+            Text('附近推荐')
+              .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+              .layoutWeight(1)
+            Button('刷新').height(32).fontSize(FONT_SIZE.SM)
+              .enabled(!this.loading).onClick(() => { this.refreshRecommended() })
+          }
+          .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD })
+          if (!this.loggedIn) {
+            Column({ space: SPACING.SM }) {
+              Text('请登录后查看平台推荐商户').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
+              Button('立即登录').height(40).fontSize(FONT_SIZE.MD).onClick(() => { this.onNavigateLogin() })
+            }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+          } else if (!this.hasLocation()) {
+            Column({ space: SPACING.SM }) {
+              Text('请先定位，再查看附近推荐商户').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
+              Button('去定位').height(40).fontSize(FONT_SIZE.MD)
+                .onClick(() => { router.pushUrl({ url: 'pages/LocationPage' }) })
+            }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+          } else if (this.loading) {
+            Column() {
+              Text('正在查询附近推荐商户…').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
+            }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+          } else if (this.recommendedStores.length === 0) {
+            Column() {
+              Text('暂无附近推荐商户').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
+              Text('平台会根据距离和营业状态持续更新推荐').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+                .margin({ top: SPACING.SM })
+            }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+          } else {
+            Scroll() {
+              Column({ space: SPACING.SM }) {
+                ForEach(this.recommendedStores, (store: StoreItem) => {
+                  this.RecommendedStoreCard(store)
+                }, (store: StoreItem) => store.id.toString())
+              }
+              .width('100%').padding(SPACING.LG)
+            }.layoutWeight(1).scrollBar(BarState.Off)
+          }
         }
         .width('100%').layoutWeight(1)
-        .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
       }
     }
     .width('100%').height('100%')
     .backgroundColor(COLORS.BG_PRIMARY)
+  }
+
+  @Builder
+  RecommendedStoreCard(store: StoreItem) {
+    Row({ space: SPACING.MD }) {
+      Column() {
+        Text(store.name.substring(0, 1)).fontSize(28).fontWeight(FontWeight.Bold).fontColor(Color.White)
+      }
+      .width(76).height(76).backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.MD)
+      .justifyContent(FlexAlign.Center)
+      Column({ space: 4 }) {
+        Row() {
+          Text(store.name).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
+            .fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1).maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text('平台推荐').fontSize(FONT_SIZE.XS).fontColor(COLORS.PRIMARY)
+            .backgroundColor(COLORS.TAG_BG).padding({ left: 5, right: 5, top: 2, bottom: 2 })
+            .borderRadius(BORDER_RADIUS.ROUND)
+        }.width('100%')
+        Row({ space: 8 }) {
+          RatingStars({ rating: store.rating, fontSize: FONT_SIZE.SM, showNumber: true })
+          Text(`月售${formatSales(store.monthlySales)}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+          Text(store.distance).fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
+        }
+        Text(`${store.deliveryTime} · 配送¥${store.deliveryFee} · ${store.minOrder}元起送`)
+          .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+        Text(store.notice).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+      }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+    }
+    .width('100%').padding(SPACING.MD).backgroundColor(COLORS.BG_WHITE)
+    .borderRadius(BORDER_RADIUS.LG).onClick(() => { this.onStoreClick(store) })
   }
 }
 

@@ -31,6 +31,7 @@ public class StoreDao {
             rs.getString("category_ids"),
             rs.getLong("owner_id"),
             rs.getInt("status"),
+            rs.getInt("recommended"),
             rs.getString("create_time")
     );
 
@@ -101,6 +102,14 @@ public class StoreDao {
                 MAPPER, categoryId, categoryId);
     }
 
+    /** 平台推荐且距离用户不超过指定范围的营业店铺。 */
+    public List<Store> listRecommended(double maxDistanceKm, int limit) {
+        return jdbc.query("SELECT * FROM stores WHERE status = 1 AND recommended = 1 " +
+                        "AND CAST(REPLACE(LOWER(distance), 'km', '') AS DECIMAL(10,2)) <= ? " +
+                        "ORDER BY CAST(REPLACE(LOWER(distance), 'km', '') AS DECIMAL(10,2)), rating DESC, monthly_sales DESC LIMIT ?",
+                MAPPER, maxDistanceKm, limit);
+    }
+
     public boolean categoryExists(long categoryId) {
         Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM categories WHERE id = ? AND type = 'PLATFORM'",
                 Integer.class, categoryId);
@@ -159,18 +168,18 @@ public class StoreDao {
     }
 
     public long insert(Store s) {
-        jdbc.update("INSERT INTO stores(name, image, rating, monthly_sales, delivery_fee, min_order, delivery_time, distance, tags, notice, category_id, category_ids, owner_id, status, create_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        jdbc.update("INSERT INTO stores(name, image, rating, monthly_sales, delivery_fee, min_order, delivery_time, distance, tags, notice, category_id, category_ids, owner_id, status, recommended, create_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 s.name(), s.image(), s.rating(), s.monthlySales(), s.deliveryFee(), s.minOrder(),
                 s.deliveryTime(), s.distance(), s.tags(), s.notice(), s.categoryId(), s.categoryIds(),
-                s.ownerId(), s.status(), s.createTime());
+                s.ownerId(), s.status(), s.recommended(), s.createTime());
         return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 
     public void update(Store s) {
-        jdbc.update("UPDATE stores SET name=?, image=?, rating=?, monthly_sales=?, delivery_fee=?, min_order=?, delivery_time=?, distance=?, tags=?, notice=?, category_id=?, category_ids=?, status=? WHERE id=?",
+        jdbc.update("UPDATE stores SET name=?, image=?, rating=?, monthly_sales=?, delivery_fee=?, min_order=?, delivery_time=?, distance=?, tags=?, notice=?, category_id=?, category_ids=?, status=?, recommended=? WHERE id=?",
                 s.name(), s.image(), s.rating(), s.monthlySales(), s.deliveryFee(), s.minOrder(),
                 s.deliveryTime(), s.distance(), s.tags(), s.notice(), s.categoryId(), s.categoryIds(),
-                s.status(), s.id());
+                s.status(), s.recommended(), s.id());
     }
 
     public void updateMonthlySales(long storeId, int sales) {
@@ -179,5 +188,9 @@ public class StoreDao {
 
     public void updateStatus(long storeId, int status) {
         jdbc.update("UPDATE stores SET status = ? WHERE id = ?", status, storeId);
+    }
+
+    public void updateRecommended(long storeId, int recommended) {
+        jdbc.update("UPDATE stores SET recommended = ? WHERE id = ?", recommended, storeId);
     }
 }
