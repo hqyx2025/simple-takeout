@@ -23,6 +23,12 @@ export struct CartPage {
     await syncCartRemote()
   }
 
+  async onPageShow(): Promise<void> {
+    if (this.loggedIn) {
+      await syncCartRemote()
+    }
+  }
+
   private getStoreIds(): number[] {
     const storeIds: number[] = []
     for (let i = 0; i < this.cartItems.length; i++) {
@@ -69,7 +75,17 @@ export struct CartPage {
       return
     }
     this.processing = true
-    const nextQuantity: number = item.quantity + delta
+    const synced: boolean = await syncCartRemote()
+    if (!synced) {
+      this.processing = false
+      promptAction.showToast({ message: 'Cart sync failed, please retry', duration: 2200 })
+      return
+    }
+    const currentCart: CartItem[] = AppStorage.get<CartItem[]>('cartItems') || []
+    const currentItem: CartItem | undefined = currentCart.find((cartItem: CartItem) =>
+      cartItem.goods.id === item.goods.id && cartItem.storeId === item.storeId)
+    const currentQuantity: number = currentItem === undefined ? 0 : currentItem.quantity
+    const nextQuantity: number = currentQuantity + delta
     const ok: boolean = await updateCartItemQuantityRemote(item.goods.id, nextQuantity)
     if (!ok) {
       await syncCartRemote()
