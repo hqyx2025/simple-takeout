@@ -54,6 +54,7 @@ export struct StoreDetailPage {
             storeId: this.storeId,
             onNavigateLogin: () => { this.showLogin = true }
           })
+          .layoutWeight(1)
         }
       }
       .width('100%')

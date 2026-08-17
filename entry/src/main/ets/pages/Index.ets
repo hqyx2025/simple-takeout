@@ -1001,9 +1001,11 @@ export struct StoreDetailContent {
   @State cartCount: number = 0
   @State cartTotal: number = 0
   @State isFav: boolean = false
+  @State goodsLoading: boolean = false
   @StorageLink('reviewList') storeReviews: Review[] = []
   @State currentCat: string = '全部'
   @State goodsCats: string[] = ['全部']
+  @State filteredGoodsList: GoodsItem[] = []
   // 店内商户分类（演进项，见大纲 8.3）：优先按商户分类分组，无商户分类时回退平台分类
   @State storeMerchantCats: Category[] = []
   @StorageLink('cartItems') cartItems: CartItem[] = []
@@ -1021,6 +1023,8 @@ export struct StoreDetailContent {
 
   private loadStoreData(): void {
     this.goodsList = getGoodsForStore(this.storeId)
+    this.storeMerchantCats = []
+    this.goodsLoading = false
     const store = getAllStoresList().find(s => s.id === this.storeId)
     if (store === undefined) {
       this.storeName = ''
@@ -1049,6 +1053,7 @@ export struct StoreDetailContent {
     const cats: string[] = this.getGoodsCategoryNames(this.goodsList)
     this.goodsCats = ['全部', ...cats]
     this.currentCat = '全部'
+    this.updateFilteredGoods()
     this.updateCartInfo()
     // 从后端拉取最新商品（真实后端模式）
     this.refreshGoods()
@@ -1060,13 +1065,19 @@ export struct StoreDetailContent {
     if (!this.loggedIn) {
       return
     }
-    await syncGoodsFromServer(this.storeId)
-    this.storeMerchantCats = await fetchStoreMerchantCategoriesApi(this.storeId)
-    const goods: GoodsItem[] = getGoodsForStore(this.storeId)
-    this.goodsList = goods
-    const cats: string[] = this.getGoodsCategoryNames(goods)
-    this.goodsCats = ['全部', ...cats]
-    this.currentCat = '全部'
+    this.goodsLoading = true
+    try {
+      await syncGoodsFromServer(this.storeId)
+      this.storeMerchantCats = await fetchStoreMerchantCategoriesApi(this.storeId)
+      const goods: GoodsItem[] = getGoodsForStore(this.storeId)
+      this.goodsList = goods
+      const cats: string[] = this.getGoodsCategoryNames(goods)
+      this.goodsCats = ['全部', ...cats]
+      this.currentCat = '全部'
+      this.updateFilteredGoods()
+    } finally {
+      this.goodsLoading = false
+    }
   }
 
   private async refreshReviews(): Promise<void> {
@@ -1110,19 +1121,21 @@ export struct StoreDetailContent {
     this.cartTotal = sc.reduce((s, i) => s + i.goods.price * i.quantity, 0)
   }
 
-  // 按当前分类筛选商品，并过滤已下架商品
-  get filteredGoods(): GoodsItem[] {
+  // 按当前分类筛选商品，并显式保存结果，避免 ArkUI 渲染期间计算 getter 时序异常
+  private updateFilteredGoods(): void {
     const onShelfGoods: GoodsItem[] = this.goodsList.filter(g => g.isOnShelf !== false)
     if (this.currentCat === '全部') {
-      return onShelfGoods
+      this.filteredGoodsList = onShelfGoods
+      return
     }
     // 优先按店内商户分类名匹配
     const merchantCat: Category | undefined = this.storeMerchantCats.find((cat: Category) => cat.name === this.currentCat)
     if (merchantCat !== undefined) {
-      return onShelfGoods.filter(g => (g.merchantCategoryId ?? 0) === merchantCat.id)
+      this.filteredGoodsList = onShelfGoods.filter(g => (g.merchantCategoryId ?? 0) === merchantCat.id)
+      return
     }
     // 回退：按平台分类名匹配
-    return onShelfGoods.filter(g => {
+    this.filteredGoodsList = onShelfGoods.filter(g => {
       const category: Category | undefined = this.categoryList.find((cat: Category) => cat.id === g.categoryId)
       return category !== undefined && category.name === this.currentCat
     })
@@ -1208,7 +1221,10 @@ export struct StoreDetailContent {
               .padding({ left: 12, right: 12, top: 4, bottom: 4 })
               .borderRadius(BORDER_RADIUS.ROUND)
               .height(28)
-              .onClick(() => { this.currentCat = catName })
+              .onClick(() => {
+                this.currentCat = catName
+                this.updateFilteredGoods()
+              })
           }, (catName: string) => catName)
         }
         .padding({ left: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
@@ -1217,10 +1233,25 @@ export struct StoreDetailContent {
       .width('100%').backgroundColor(COLORS.BG_WHITE)
 
       // 商品列表
-      Stack({ alignContent: Alignment.Bottom }) {
+      Column() {
         Scroll() {
           Column() {
-            ForEach(this.filteredGoods, (goods: GoodsItem) => {
+            if (this.goodsLoading) {
+              Text('正在加载商品…')
+                .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
+                .width('100%').textAlign(TextAlign.Center)
+                .padding({ top: SPACING.XXL, bottom: SPACING.XXL })
+            } else if (this.filteredGoodsList.length === 0) {
+              Column({ space: SPACING.SM }) {
+                Text('暂无商品')
+                  .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT)
+                Text('当前分类暂时没有可售商品')
+                  .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+              }
+              .width('100%').padding({ top: SPACING.XXL, bottom: SPACING.XXL })
+              .alignItems(HorizontalAlign.Center)
+            } else {
+              ForEach(this.filteredGoodsList, (goods: GoodsItem) => {
               Row({ space: SPACING.MD }) {
                 // 商品图片
                 Column() {
@@ -1267,12 +1298,13 @@ export struct StoreDetailContent {
                 .layoutWeight(1).alignItems(HorizontalAlign.Start)
               }
               .width('100%').padding(SPACING.MD)
-            }, (item: GoodsItem) => item.id.toString())
+              }, (item: GoodsItem) => item.id.toString())
+            }
 
             // 用户评价列表区域
             this.ReviewsSection()
           }
-          .padding({ bottom: 60 })
+          .padding({ bottom: SPACING.XL })
         }
         .scrollBar(BarState.Off)
         .layoutWeight(1)
@@ -1282,7 +1314,7 @@ export struct StoreDetailContent {
       }
       .layoutWeight(1)
     }
-    .width('100%').height('100%')
+    .width('100%').layoutWeight(1)
   }
 
   @Builder
@@ -1318,6 +1350,13 @@ export struct StoreDetailContent {
       && (order.items || []).some((item: CartItem) => item.goods.id === goodsId))
   }
 
+  private hasReviewedGoods(goodsId: number): boolean {
+    const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
+    return orders.some((order: Order) => order.storeId === this.storeId && order.status === 4
+      && (order.escrowStatus ?? 0) === 1 && order.reviewed === 1
+      && (order.items || []).some((item: CartItem) => item.goods.id === goodsId))
+  }
+
   private openGoodsReview(goodsId: number): void {
     const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
     const order: Order | undefined = orders.find((item: Order) => item.storeId === this.storeId
@@ -1344,12 +1383,17 @@ export struct StoreDetailContent {
       } else {
         Text('暂无商品评价').fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).layoutWeight(1)
       }
-      if (this.canReviewGoods(goods.id)) {
-        Button('去评价').height(26).fontSize(FONT_SIZE.XS)
-          .fontColor(Color.White).backgroundColor(COLORS.PRIMARY)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-          .onClick(() => { this.openGoodsReview(goods.id) })
-      }
+      Button(this.hasReviewedGoods(goods.id) ? '已评价' : (this.canReviewGoods(goods.id) ? '去评价' : '评价'))
+        .height(26).fontSize(FONT_SIZE.XS)
+        .fontColor(this.hasReviewedGoods(goods.id) ? COLORS.TEXT_SECONDARY : (this.canReviewGoods(goods.id) ? Color.White : COLORS.TEXT_SECONDARY))
+        .backgroundColor(this.hasReviewedGoods(goods.id) ? COLORS.TEXT_HINT : (this.canReviewGoods(goods.id) ? COLORS.PRIMARY : COLORS.BG_PRIMARY))
+        .enabled(!this.hasReviewedGoods(goods.id))
+        .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+        .onClick(() => {
+          if (!this.hasReviewedGoods(goods.id)) {
+            this.openGoodsReview(goods.id)
+          }
+        })
     }.width('100%')
   }
 
