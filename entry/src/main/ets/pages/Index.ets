@@ -216,7 +216,12 @@ struct Index {
       syncStoresFromServer()
       syncUserOrdersFromServer()
     }
-    const storeId: number = AppStorage.get<number>('currentStoreId') || 0
+    // ProductListPage 返回时优先消费 currentStoreId；若路由切换期间该值被旧页面覆盖，
+    // 使用 pendingStoreDetail + selectedStoreId 兜底，确保点击分类店铺不会只回到首页。
+    const currentStoreId: number = AppStorage.get<number>('currentStoreId') || 0
+    const pendingStoreId: number = AppStorage.get<boolean>('pendingStoreDetail') || false
+      ? (AppStorage.get<number>('selectedStoreId') || 0) : 0
+    const storeId: number = currentStoreId > 0 ? currentStoreId : pendingStoreId
     if (storeId > 0) {
       AppStorage.setOrCreate<boolean>('pendingStoreDetail', false)
       AppStorage.setOrCreate<number>('currentStoreId', 0)

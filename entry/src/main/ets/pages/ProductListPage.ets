@@ -182,6 +182,8 @@ export struct ProductListPage {
     AppStorage.setOrCreate<number>('currentStoreId', store.id)
     AppStorage.setOrCreate<number>('selectedStoreId', store.id)
     AppStorage.setOrCreate<string>('selectedStoreName', store.name)
+    // 标记本次返回必须打开店铺详情，避免返回首页过程中 currentStoreId 被旧页面生命周期覆盖。
+    AppStorage.setOrCreate<boolean>('pendingStoreDetail', true)
   }
 
   @Builder
