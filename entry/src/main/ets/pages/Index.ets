@@ -2005,7 +2005,7 @@ struct ProfileMainPage {
   }
 
   private getCartTitle(): string {
-    return this.cartTitle
+    return '\u8d2d\u7269\u8f66'
   }
 
   @Builder
