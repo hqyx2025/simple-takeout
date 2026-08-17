@@ -259,48 +259,6 @@ export struct CartPage {
             ForEach(this.getStoreIds(), (storeId: number) => {
               this.StoreCard(storeId)
             }, (storeId: number) => `${this.cartRenderVersion}-${storeId}`)
-            if (this.editing) {
-              Row() {
-                Text(`\u5df2\u9009\u62e9 ${this.selectedGoodsIds.length} \u4ef6`)
-                  .fontSize(FONT_SIZE.MD)
-                  .fontColor(COLORS.TEXT_SECONDARY)
-                  .layoutWeight(1)
-                Button('\u5220\u9664\u9009\u4e2d')
-                  .height(40)
-                  .fontSize(FONT_SIZE.MD)
-                  .fontColor(COLORS.TEXT_WHITE)
-                  .backgroundColor(COLORS.ERROR)
-                  .borderRadius(BORDER_RADIUS.ROUND)
-                  .type(ButtonType.Capsule)
-                  .onClick(() => { this.deleteSelected() })
-              }
-              .width('100%')
-              .padding({ left: SPACING.SM, right: SPACING.SM, top: SPACING.SM, bottom: SPACING.SM })
-            } else {
-              Row() {
-                Column({ space: SPACING.XS }) {
-                  Text('\u5408\u8ba1')
-                    .fontSize(FONT_SIZE.MD)
-                    .fontColor(COLORS.TEXT_SECONDARY)
-                  Text(`\u00a5${this.totalPrice.toFixed(2)}`)
-                    .fontSize(FONT_SIZE.XL)
-                    .fontWeight(FontWeight.Bold)
-                    .fontColor(COLORS.PRICE_RED)
-                }
-                .alignItems(HorizontalAlign.Start)
-                .layoutWeight(1)
-                Button('\u53bb\u7ed3\u7b97')
-                  .height(40)
-                  .fontSize(FONT_SIZE.MD)
-                  .fontColor(COLORS.TEXT_WHITE)
-                  .backgroundColor(COLORS.PRIMARY)
-                  .borderRadius(BORDER_RADIUS.ROUND)
-                  .type(ButtonType.Capsule)
-                  .onClick(() => { this.checkoutAll() })
-              }
-              .width('100%')
-              .padding({ left: SPACING.SM, right: SPACING.SM, top: SPACING.SM, bottom: SPACING.SM })
-            }
           }
           .width('100%')
           .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: 96 })
@@ -335,15 +293,19 @@ export struct CartPage {
             }
             .alignItems(HorizontalAlign.Start)
             .layoutWeight(1)
-            Text('请选择店铺结算')
-              .fontSize(FONT_SIZE.SM)
-              .fontColor(COLORS.TEXT_HINT)
+            Button('\u53bb\u7ed3\u7b97')
+              .height(40)
+              .fontSize(FONT_SIZE.MD)
+              .fontColor(COLORS.TEXT_WHITE)
+              .backgroundColor(COLORS.PRIMARY)
+              .borderRadius(BORDER_RADIUS.ROUND)
+              .type(ButtonType.Capsule)
+              .onClick(() => { this.checkoutAll() })
           }
         }
         .width('100%')
         .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
         .backgroundColor(COLORS.BG_WHITE)
-        .visibility(Visibility.None)
       }
     }
     .width('100%')
