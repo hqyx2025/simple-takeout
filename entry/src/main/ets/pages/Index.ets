@@ -236,15 +236,28 @@ struct Index {
     logInfo('Navigation', `${source} switched to store detail storeId=${storeId} tab=${this.currentTab}`)
   }
 
-  // 切换发现Tab并展示指定店铺详情
-  private showStoreDetail(storeId: number): void {
+  // 打开独立店铺详情页，详情不再复用发现Tab
+  private async showStoreDetail(storeId: number, storeName: string = ''): Promise<void> {
     AppStorage.setOrCreate<number>('selectedStoreId', storeId)
-    const store: StoreItem | undefined = getAllStoresList().find(s => s.id === storeId)
-    if (store !== undefined) {
-      AppStorage.setOrCreate<string>('selectedStoreName', store.name)
+    if (storeName !== '') {
+      AppStorage.setOrCreate<string>('selectedStoreName', storeName)
+    } else {
+      const store: StoreItem | undefined = getAllStoresList().find(s => s.id === storeId)
+      if (store !== undefined) {
+        AppStorage.setOrCreate<string>('selectedStoreName', store.name)
+      }
     }
-    this.currentTab = 1
-    this.tabsController.changeIndex(1)
+    if (getAllStoresList().find(s => s.id === storeId) === undefined && isLoggedIn()) {
+      await syncStoresFromServer()
+    }
+    if (storeName === '' && getAllStoresList().find(s => s.id === storeId) !== undefined) {
+      const syncedStore: StoreItem = getAllStoresList().find(s => s.id === storeId) as StoreItem
+      AppStorage.setOrCreate<string>('selectedStoreName', syncedStore.name)
+    }
+    if ((AppStorage.get<string>('selectedStoreName') || '') === '') {
+      AppStorage.setOrCreate<string>('selectedStoreName', '店铺详情')
+    }
+    router.pushUrl({ url: 'pages/StoreDetailPage' })
   }
 
   build() {
@@ -270,7 +283,7 @@ struct Index {
       TabContent() {
         HomePage({
           onStoreClick: (store: StoreItem) => {
-            this.showStoreDetail(store.id)
+            this.showStoreDetail(store.id, store.name)
           },
           onNavigateLogin: () => { this.showLogin = true },
           onNavigateLocationLogin: () => { this.showLocationLoginConfirm = true }
@@ -285,7 +298,7 @@ struct Index {
             this.tabsController.changeIndex(0)
           },
           onNavigateLogin: () => { this.showLogin = true },
-          onStoreClick: (store: StoreItem) => { this.showStoreDetail(store.id) }
+          onStoreClick: (store: StoreItem) => { this.showStoreDetail(store.id, store.name) }
         })
       }.tabBar(this.tabBuilder('发现', 1))
 
@@ -840,11 +853,9 @@ struct HomePage {
   }
 }
 
-// ===================== 发现/店铺详情页 =====================
+// ===================== 发现/附近推荐页 =====================
 @Component
 struct DiscoverPage {
-  @StorageLink('selectedStoreId') selectedStoreId: number = 0
-  @StorageLink('selectedStoreName') selectedStoreName: string = ''
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @StorageLink('currentAddress') currentAddress: Address | null = null
   @State recommendedStores: StoreItem[] = []
@@ -854,9 +865,7 @@ struct DiscoverPage {
   onStoreClick: (store: StoreItem) => void = () => {}
 
   aboutToAppear() {
-    if (this.selectedStoreId <= 0) {
-      this.refreshRecommended()
-    }
+    this.refreshRecommended()
   }
 
   private async refreshRecommended(): Promise<void> {
@@ -884,7 +893,7 @@ struct DiscoverPage {
         Text('‹ 返回')
           .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
           .onClick(() => { this.onBack() })
-        Text(this.selectedStoreName || '发现')
+        Text('发现')
           .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
           .layoutWeight(1).textAlign(TextAlign.Center)
         Text('   ').fontSize(FONT_SIZE.MD) // 占位
@@ -893,13 +902,7 @@ struct DiscoverPage {
       .padding({ left: SPACING.LG, right: SPACING.LG })
       .backgroundColor(COLORS.BG_WHITE)
 
-      if (this.selectedStoreId > 0) {
-        StoreDetailContent({
-          storeId: this.selectedStoreId,
-          onNavigateLogin: this.onNavigateLogin
-        })
-      } else {
-        Column() {
+      Column() {
           Row() {
             Text('附近推荐')
               .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
@@ -939,9 +942,8 @@ struct DiscoverPage {
               .width('100%').padding(SPACING.LG)
             }.layoutWeight(1).scrollBar(BarState.Off)
           }
-        }
-        .width('100%').layoutWeight(1)
       }
+      .width('100%').layoutWeight(1)
     }
     .width('100%').height('100%')
     .backgroundColor(COLORS.BG_PRIMARY)
@@ -982,7 +984,7 @@ struct DiscoverPage {
 
 // ===================== 店铺详情 =====================
 @Component
-struct StoreDetailContent {
+export struct StoreDetailContent {
   // 收藏页/搜索页返回后，父组件会复用详情组件实例；使用 @Prop + @Watch
   // 确保切换店铺时重新加载商品、评分和店铺信息，避免标题与内容错位。
   @Prop @Watch('onStoreIdChange') storeId: number = 0
