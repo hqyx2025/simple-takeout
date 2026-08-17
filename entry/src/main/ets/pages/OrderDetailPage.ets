@@ -6,7 +6,7 @@
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
 import { Order, CartItem, DeliveryStep } from '../model/Models'
-import { cancelOrderRemote, confirmOrderRemote, applyRefundRemote, addToCart, addCartItemRemote, fetchOrderDetailRemote, getLastRemoteErrorMessage, syncCartRemote } from '../service/AppStorageManager'
+import { cancelOrderRemote, confirmOrderRemote, applyRefundRemote, addCartItemRemote, fetchOrderDetailRemote, getLastRemoteErrorMessage, syncCartRemote } from '../service/AppStorageManager'
 import { OrderStatusTimeline } from '../components/OrderStatusTimeline'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { logInfo } from '../service/AppLogger'
@@ -33,7 +33,6 @@ export struct OrderDetailPage {
     let allSucceeded: boolean = true
     for (let i = 0; i < this.order.items.length; i++) {
       const item: CartItem = this.order.items[i]
-      addToCart(item)
       const ok: boolean = await addCartItemRemote(item)
       if (!ok) {
         allSucceeded = false

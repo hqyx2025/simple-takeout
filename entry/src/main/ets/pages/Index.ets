@@ -1013,6 +1013,7 @@ export struct StoreDetailContent {
   @State storeNotice: string = ''
   @State cartCount: number = 0
   @State cartTotal: number = 0
+  private cartOperationQueue: Promise<void> = Promise.resolve()
   @State isFav: boolean = false
   @State goodsLoading: boolean = false
   @StorageLink('reviewList') storeReviews: Review[] = []
@@ -1134,7 +1135,45 @@ export struct StoreDetailContent {
     this.cartTotal = sc.reduce((s, i) => s + i.goods.price * i.quantity, 0)
   }
 
-  private async addGoodsToCart(goods: GoodsItem): Promise<void> {
+  private enqueueCartOperation(operation: () => Promise<void>): void {
+    this.cartOperationQueue = this.cartOperationQueue.then(operation).catch(() => {
+      // Keep later cart clicks usable when one request fails.
+    })
+  }
+
+  private addGoodsToCart(goods: GoodsItem): void {
+    this.enqueueCartOperation(async (): Promise<void> => {
+      const item: CartItem = { goods: goods, quantity: 1, storeId: this.storeId, storeName: this.storeName }
+      const ok: boolean = await addCartItemRemote(item)
+      this.updateCartInfo()
+      if (!ok) {
+        await syncCartRemote()
+        this.updateCartInfo()
+        const message: string = getLastRemoteErrorMessage()
+        promptAction.showToast({ message: message === '' ? 'Cart update failed, please retry' : message, duration: 2200 })
+      }
+    })
+  }
+
+  private changeGoodsQuantity(goods: GoodsItem, delta: number): void {
+    this.enqueueCartOperation(async (): Promise<void> => {
+      const currentCart: CartItem[] = AppStorage.get<CartItem[]>('cartItems') || []
+      const currentItem: CartItem | undefined = currentCart.find((item: CartItem) =>
+        item.goods.id === goods.id && item.storeId === this.storeId)
+      const currentQuantity: number = currentItem === undefined ? 0 : currentItem.quantity
+      const nextQuantity: number = currentQuantity + delta
+      const ok: boolean = await updateCartItemQuantityRemote(goods.id, nextQuantity)
+      this.updateCartInfo()
+      if (!ok) {
+        await syncCartRemote()
+        this.updateCartInfo()
+        const message: string = getLastRemoteErrorMessage()
+        promptAction.showToast({ message: message === '' ? 'Cart update failed, please retry' : message, duration: 2200 })
+      }
+    })
+  }
+
+  private async legacyAddGoodsToCart(goods: GoodsItem): Promise<void> {
     const item: CartItem = { goods: goods, quantity: 1, storeId: this.storeId, storeName: this.storeName }
     addToCart(item)
     this.updateCartInfo()
@@ -1146,7 +1185,7 @@ export struct StoreDetailContent {
     }
   }
 
-  private async changeGoodsQuantity(goods: GoodsItem, quantity: number): Promise<void> {
+  private async legacyChangeGoodsQuantity(goods: GoodsItem, quantity: number): Promise<void> {
     updateCartItemQuantity(goods.id, this.storeId, quantity)
     this.updateCartInfo()
     const ok: boolean = await updateCartItemQuantityRemote(goods.id, quantity)
@@ -1360,7 +1399,7 @@ export struct StoreDetailContent {
         Text('-').width(24).height(24).fontSize(16).fontColor(COLORS.TEXT_WHITE)
           .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.CIRCLE)
           .textAlign(TextAlign.Center).onClick(() => {
-            this.changeGoodsQuantity(goods, this.getQty(goods.id) - 1)
+            this.changeGoodsQuantity(goods, -1)
           })
         Text(this.getQty(goods.id).toString()).width(28).height(24).fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_PRIMARY).textAlign(TextAlign.Center)
