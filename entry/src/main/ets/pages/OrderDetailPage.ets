@@ -6,7 +6,7 @@
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
 import { Order, CartItem, DeliveryStep } from '../model/Models'
-import { cancelOrderRemote, confirmOrderRemote, applyRefundRemote, addToCart, fetchOrderDetailRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
+import { cancelOrderRemote, confirmOrderRemote, applyRefundRemote, addToCart, addCartItemRemote, fetchOrderDetailRemote, getLastRemoteErrorMessage, syncCartRemote } from '../service/AppStorageManager'
 import { OrderStatusTimeline } from '../components/OrderStatusTimeline'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { logInfo } from '../service/AppLogger'
@@ -25,6 +25,27 @@ export struct OrderDetailPage {
   @State riderProgress: number = 0
   @State trackWidth: number = 300
   private riderTimer: number = -1
+
+  private async addAgain(): Promise<void> {
+    if (this.order === null) {
+      return
+    }
+    let allSucceeded: boolean = true
+    for (let i = 0; i < this.order.items.length; i++) {
+      const item: CartItem = this.order.items[i]
+      addToCart(item)
+      const ok: boolean = await addCartItemRemote(item)
+      if (!ok) {
+        allSucceeded = false
+      }
+    }
+    if (!allSucceeded) {
+      await syncCartRemote()
+      promptAction.showToast({ message: '部分商品加入购物车失败，请检查商品状态', duration: 2200 })
+      return
+    }
+    promptAction.showToast({ message: '已加入购物车' })
+  }
 
   async aboutToAppear(): Promise<void> {
     const routerOrderId: number = AppStorage.get<number>('currentOrderId') || 0
@@ -693,11 +714,8 @@ export struct OrderDetailPage {
             .borderColor(COLORS.PRIMARY)
             .onClick(() => {
               if (this.order !== null) {
-                for (let i = 0; i < this.order.items.length; i++) {
-                  addToCart(this.order.items[i])
-                }
-                logInfo('Order', `再来一单 orderId=${this.order.id} 商品数=${this.order.items.length} 已加入购物车`)
-                promptAction.showToast({ message: '已加入购物车' })
+                logInfo('Order', `再来一单 orderId=${this.order.id} 商品数=${this.order.items.length}`)
+                this.addAgain()
               }
             })
           if ((this.order!.escrowStatus ?? 0) === 1 && this.order!.reviewed === 0) {

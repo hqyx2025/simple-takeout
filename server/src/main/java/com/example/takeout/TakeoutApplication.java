@@ -1,5 +1,6 @@
 package com.example.takeout;
 
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
@@ -8,6 +9,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * Spring Boot 3.5 + Java 25 + MySQL
  */
 @SpringBootApplication
+@MapperScan("com.example.takeout.mapper")
 public class TakeoutApplication {
 
     public static void main(String[] args) {

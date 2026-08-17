@@ -36,6 +36,7 @@ public class DataSeeder implements ApplicationRunner {
         ensureGoodsColumns();
         ensureCategoryColumns();
         ensureRefundTable();
+        ensureCartTable();
         ensureReviewGoodsColumn();
         ensureStoreRecommendedColumn();
         // 分类是首页导航的基础数据，即使已有用户数据，也必须单独补齐。
@@ -102,6 +103,21 @@ public class DataSeeder implements ApplicationRunner {
                     "process_time VARCHAR(32) DEFAULT '', reject_reason VARCHAR(255) DEFAULT '', " +
                     "KEY idx_refund_order (order_id), KEY idx_refund_status (status)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
             log.info("已创建退款记录表 refund_records");
+        }
+    }
+
+    private void ensureCartTable() {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() " +
+                        "AND table_name = 'cart_items'", Integer.class);
+        if (count == null || count == 0) {
+            jdbc.execute("CREATE TABLE IF NOT EXISTS cart_items (" +
+                    "id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id BIGINT NOT NULL, goods_id BIGINT NOT NULL, " +
+                    "quantity INT NOT NULL DEFAULT 1, create_time VARCHAR(32) NOT NULL, " +
+                    "update_time VARCHAR(32) NOT NULL, UNIQUE KEY uk_cart_user_goods (user_id, goods_id), " +
+                    "KEY idx_cart_user (user_id), KEY idx_cart_goods (goods_id)) " +
+                    "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            log.info("已创建购物车表 cart_items");
         }
     }
 

@@ -3,7 +3,7 @@
  */
 import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, MerchantStatsData, Category, RefundRecord, createEmptyUser, createDefaultCategories } from '../model/Models'
 import { saveAllData, clearAllData } from './DataPersistence'
-import { apiLogin, apiRegister, updateUserProfileApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi, applyRefundApi } from './ApiService'
+import { apiLogin, apiRegister, updateUserProfileApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi, applyRefundApi, fetchCartApi, addCartItemApi, updateCartItemQuantityApi, deleteCartItemApi, deleteCartItemsApi, clearCartApi } from './ApiService'
 import { getAuthToken, setAuthToken, getLastApiErrorMessage } from './HttpClient'
 import { logInfo, logWarn, logError } from './AppLogger'
 import { GeoPosition } from './LocationService'
@@ -142,6 +142,83 @@ export function clearCart(): void {
   AppStorage.setOrCreate<CartItem[]>('cartItems', [])
   saveAllData()
   logInfo('Cart', '清空购物车')
+}
+
+function setRemoteCart(cart: CartItem[]): void {
+  AppStorage.setOrCreate<CartItem[]>('cartItems', cart)
+  saveAllData()
+}
+
+export async function syncCartRemote(): Promise<boolean> {
+  if (!isLoggedIn()) {
+    return false
+  }
+  const remoteCart: CartItem[] | null = await fetchCartApi()
+  if (remoteCart === null) {
+    logWarn('Api', '同步购物车失败，保留本地购物车')
+    return false
+  }
+  const localCart: CartItem[] = AppStorage.get<CartItem[]>('cartItems') || []
+  // 首次接入后端时迁移已有本地购物车，避免用户升级后购物车商品丢失。
+  if (remoteCart.length === 0 && localCart.length > 0) {
+    for (let i = 0; i < localCart.length; i++) {
+      await addCartItemApi(localCart[i].goods.id, localCart[i].quantity)
+    }
+    const migratedCart: CartItem[] | null = await fetchCartApi()
+    if (migratedCart !== null) {
+      setRemoteCart(migratedCart)
+      logInfo('Api', `迁移本地购物车 ${migratedCart.length} 条`)
+      return true
+    }
+  }
+  setRemoteCart(remoteCart)
+  logInfo('Api', `同步购物车 ${remoteCart.length} 条`)
+  return true
+}
+
+export async function addCartItemRemote(item: CartItem): Promise<boolean> {
+  const remoteCart: CartItem[] | null = await addCartItemApi(item.goods.id, item.quantity)
+  if (remoteCart === null) {
+    return false
+  }
+  setRemoteCart(remoteCart)
+  return true
+}
+
+export async function updateCartItemQuantityRemote(goodsId: number, quantity: number): Promise<boolean> {
+  const remoteCart: CartItem[] | null = await updateCartItemQuantityApi(goodsId, quantity)
+  if (remoteCart === null) {
+    return false
+  }
+  setRemoteCart(remoteCart)
+  return true
+}
+
+export async function deleteCartItemRemote(goodsId: number): Promise<boolean> {
+  const remoteCart: CartItem[] | null = await deleteCartItemApi(goodsId)
+  if (remoteCart === null) {
+    return false
+  }
+  setRemoteCart(remoteCart)
+  return true
+}
+
+export async function deleteCartItemsRemote(goodsIds: number[]): Promise<boolean> {
+  const remoteCart: CartItem[] | null = await deleteCartItemsApi(goodsIds)
+  if (remoteCart === null) {
+    return false
+  }
+  setRemoteCart(remoteCart)
+  return true
+}
+
+export async function clearCartRemote(): Promise<boolean> {
+  const remoteCart: CartItem[] | null = await clearCartApi()
+  if (remoteCart === null) {
+    return false
+  }
+  setRemoteCart(remoteCart)
+  return true
 }
 
 export function getGoodsForStore(storeId: number): GoodsItem[] {
@@ -326,6 +403,7 @@ export async function loginRemote(phone: string, password: string, loginType?: s
     // 登录成功后立即按当前账号同步地址，恢复默认配送地址；不能继续沿用上一个账号的定位缓存。
     if (user.role === UserRole.CUSTOMER) {
       await syncAddressesRemote()
+      await syncCartRemote()
     }
     // 登录态和 Token 必须在登录成功后立即落盘，避免应用重启后回到未登录状态。
     await saveAllData()

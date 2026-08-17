@@ -58,6 +58,15 @@ interface ServerOrderItem {
   image: string
 }
 
+interface ServerCartItem {
+  id: number
+  goodsId: number
+  storeId: number
+  storeName: string
+  quantity: number
+  goods: ServerGoods
+}
+
 interface ServerAddressInfo {
   addressId: number
   name: string
@@ -242,6 +251,15 @@ interface CreateOrderRequest {
   addressId: number
   couponId: number
   remark: string
+}
+
+interface CartItemRequest {
+  goodsId: number
+  quantity: number
+}
+
+interface CartQuantityRequest {
+  quantity: number
 }
 
 interface ReviewRequest {
@@ -432,6 +450,68 @@ export async function searchStoresApi(keyword: string): Promise<StoreItem[]> {
     return []
   }
   return resp.data.map((s: ServerStore) => toStoreItem(s))
+}
+
+// ==================== 购物车（需登录） ====================
+
+function toCartItem(item: ServerCartItem): CartItem {
+  return {
+    goods: toGoodsItem(item.goods),
+    quantity: item.quantity,
+    storeId: item.storeId,
+    storeName: item.storeName
+  }
+}
+
+export async function fetchCartApi(): Promise<CartItem[] | null> {
+  const resp: ApiResponse<ServerCartItem[]> = await get<ServerCartItem[]>('/api/cart')
+  if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
+    return null
+  }
+  return resp.data.map((item: ServerCartItem) => toCartItem(item))
+}
+
+export async function addCartItemApi(goodsId: number, quantity: number): Promise<CartItem[] | null> {
+  const req: CartItemRequest = { goodsId: goodsId, quantity: quantity }
+  const resp: ApiResponse<ServerCartItem[]> = await post<ServerCartItem[]>('/api/cart/items', req)
+  if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
+    return null
+  }
+  return resp.data.map((item: ServerCartItem) => toCartItem(item))
+}
+
+export async function updateCartItemQuantityApi(goodsId: number, quantity: number): Promise<CartItem[] | null> {
+  const req: CartQuantityRequest = { quantity: quantity }
+  const resp: ApiResponse<ServerCartItem[]> = await put<ServerCartItem[]>(`/api/cart/items/${goodsId}`, req)
+  if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
+    return null
+  }
+  return resp.data.map((item: ServerCartItem) => toCartItem(item))
+}
+
+export async function deleteCartItemApi(goodsId: number): Promise<CartItem[] | null> {
+  const resp: ApiResponse<ServerCartItem[]> = await del<ServerCartItem[]>(`/api/cart/items/${goodsId}`)
+  if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
+    return null
+  }
+  return resp.data.map((item: ServerCartItem) => toCartItem(item))
+}
+
+export async function deleteCartItemsApi(goodsIds: number[]): Promise<CartItem[] | null> {
+  const query: string = goodsIds.map((goodsId: number) => `goodsIds=${goodsId}`).join('&')
+  const resp: ApiResponse<ServerCartItem[]> = await del<ServerCartItem[]>(`/api/cart/items?${query}`)
+  if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
+    return null
+  }
+  return resp.data.map((item: ServerCartItem) => toCartItem(item))
+}
+
+export async function clearCartApi(): Promise<CartItem[] | null> {
+  const resp: ApiResponse<ServerCartItem[]> = await del<ServerCartItem[]>('/api/cart')
+  if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
+    return null
+  }
+  return resp.data.map((item: ServerCartItem) => toCartItem(item))
 }
 
 // ==================== 订单（需登录） ====================

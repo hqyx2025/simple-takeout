@@ -149,3 +149,15 @@ CREATE TABLE IF NOT EXISTS refund_records (
     KEY idx_refund_order (order_id),
     KEY idx_refund_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS cart_items (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    goods_id BIGINT NOT NULL,
+    quantity INT NOT NULL DEFAULT 1,
+    create_time VARCHAR(32) NOT NULL,
+    update_time VARCHAR(32) NOT NULL,
+    UNIQUE KEY uk_cart_user_goods (user_id, goods_id),
+    KEY idx_cart_user (user_id),
+    KEY idx_cart_goods (goods_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
