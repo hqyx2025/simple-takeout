@@ -1022,7 +1022,7 @@ export struct StoreDetailContent {
   @State filteredGoodsList: GoodsItem[] = []
   // 店内商户分类（演进项，见大纲 8.3）：优先按商户分类分组，无商户分类时回退平台分类
   @State storeMerchantCats: Category[] = []
-  @StorageLink('cartItems') cartItems: CartItem[] = []
+  @StorageLink('cartItems') @Watch('onCartItemsChange') cartItems: CartItem[] = []
   @StorageLink('categoryList') categoryList: Category[] = []
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   onNavigateLogin: () => void = () => {}
@@ -1033,6 +1033,10 @@ export struct StoreDetailContent {
 
   onStoreIdChange(): void {
     this.loadStoreData()
+  }
+
+  onCartItemsChange(): void {
+    this.updateCartInfo()
   }
 
   private loadStoreData(): void {
@@ -1573,7 +1577,9 @@ export struct StoreDetailContent {
   }
 
   getQty(goodsId: number): number {
-    const item = (this.cartItems || []).find(c => c.goods.id === goodsId && c.storeId === this.storeId)
+    const currentCart: CartItem[] = AppStorage.get<CartItem[]>('cartItems') || []
+    const item: CartItem | undefined = currentCart.find((cartItem: CartItem) =>
+      cartItem.goods.id === goodsId && cartItem.storeId === this.storeId)
     return item ? item.quantity : 0
   }
 }
@@ -1819,10 +1825,12 @@ struct ProfileMainPage {
   private refreshCartTitle(): void {
     const currentCart: CartItem[] = AppStorage.get<CartItem[]>('cartItems') || []
     let count: number = 0
+    const storeIds: number[] = []
     for (let i = 0; i < currentCart.length; i++) {
       const item: CartItem = currentCart[i]
-      if (item !== null && item !== undefined && item.quantity > 0) {
-        count += item.quantity
+      if (item !== null && item !== undefined && item.quantity > 0 && storeIds.indexOf(item.storeId) < 0) {
+        storeIds.push(item.storeId)
+        count += 1
       }
     }
     this.cartTitle = count > 0 ? `购物车 (${count})` : '购物车'
