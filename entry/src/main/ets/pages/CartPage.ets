@@ -216,9 +216,49 @@ export struct CartPage {
       } else {
         Scroll() {
           Column({ space: SPACING.SM }) {
+            Row() {
+              Text(`\u5f53\u524d\u8d2d\u7269\u8f66\u8d2d\u7269\u603b\u6570\u4e3a(${this.totalCount})\u4ef6`)
+                .fontSize(FONT_SIZE.LG)
+                .fontWeight(FontWeight.Bold)
+                .fontColor(COLORS.TEXT_PRIMARY)
+                .width('100%')
+            }
+            .width('100%')
+            .padding({ left: SPACING.SM, right: SPACING.SM, top: SPACING.SM, bottom: SPACING.XS })
             ForEach(this.getStoreIds(), (storeId: number) => {
               this.StoreCard(storeId)
             }, (storeId: number) => `${this.cartRenderVersion}-${storeId}`)
+            if (this.editing) {
+              Row() {
+                Text(`\u5df2\u9009\u62e9 ${this.selectedGoodsIds.length} \u4ef6`)
+                  .fontSize(FONT_SIZE.MD)
+                  .fontColor(COLORS.TEXT_SECONDARY)
+                  .layoutWeight(1)
+                Button('\u5220\u9664\u9009\u4e2d')
+                  .height(40)
+                  .fontSize(FONT_SIZE.MD)
+                  .fontColor(COLORS.TEXT_WHITE)
+                  .backgroundColor(COLORS.ERROR)
+                  .borderRadius(BORDER_RADIUS.ROUND)
+                  .type(ButtonType.Capsule)
+                  .onClick(() => { this.deleteSelected() })
+              }
+              .width('100%')
+              .padding({ left: SPACING.SM, right: SPACING.SM, top: SPACING.SM, bottom: SPACING.SM })
+            } else {
+              Row() {
+                Text('\u5408\u8ba1')
+                  .fontSize(FONT_SIZE.MD)
+                  .fontColor(COLORS.TEXT_SECONDARY)
+                  .layoutWeight(1)
+                Text(`\u00a5${this.totalPrice.toFixed(2)}`)
+                  .fontSize(FONT_SIZE.XL)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor(COLORS.PRICE_RED)
+              }
+              .width('100%')
+              .padding({ left: SPACING.SM, right: SPACING.SM, top: SPACING.SM, bottom: SPACING.SM })
+            }
           }
           .width('100%')
           .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: 96 })
@@ -261,6 +301,7 @@ export struct CartPage {
         .width('100%')
         .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
         .backgroundColor(COLORS.BG_WHITE)
+        .visibility(Visibility.None)
       }
     }
     .width('100%')
