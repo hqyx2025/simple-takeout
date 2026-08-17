@@ -40,6 +40,16 @@ export struct CheckoutPage {
     this.selectedCoupon = AppStorage.get<Coupon | null>('selectedCoupon') ?? null
   }
 
+  onPageShow(): void {
+    // 从地址管理页返回后，立即刷新本次结算使用的地址。
+    this.currentAddress = AppStorage.get<Address>('currentAddress') ?? null
+  }
+
+  private openAddressSelector(): void {
+    AppStorage.setOrCreate<boolean>('addressSelectionMode', true)
+    router.pushUrl({ url: 'pages/AddressListPage' })
+  }
+
   // ============ 金额计算 ============
   private getGoodsTotalPrice(): number {
     let total: number = 0
@@ -271,6 +281,7 @@ export struct CheckoutPage {
     .backgroundColor(COLORS.BG_WHITE)
     .borderRadius(BORDER_RADIUS.LG)
     .alignItems(VerticalAlign.Center)
+    .onClick(() => { this.openAddressSelector() })
   }
 
   @Builder

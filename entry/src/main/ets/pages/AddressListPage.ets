@@ -80,6 +80,11 @@ export struct AddressListPage {
     await syncAddressesRemote()
   }
 
+  aboutToDisappear(): void {
+    // 无论通过选择地址、顶部返回还是系统返回离开，都不能把下一次普通地址管理误判为选择模式。
+    AppStorage.setOrCreate<boolean>('addressSelectionMode', false)
+  }
+
   build() {
     Stack() {
       // 主内容
@@ -197,6 +202,11 @@ export struct AddressListPage {
                   // 选择该地址作为当前配送地址（首页/结算页联动）
                   AppStorage.setOrCreate<Address>('currentAddress', addr)
                   this.onSelectAddress(addr)
+                  const selectionMode: boolean = AppStorage.get<boolean>('addressSelectionMode') || false
+                  if (selectionMode) {
+                    AppStorage.setOrCreate<boolean>('addressSelectionMode', false)
+                    router.back()
+                  }
                 })
               }
             }, (item: Address) => `${this.addressListRevision}-${item.id}-${item.isDefault ? 'default' : 'normal'}`)

@@ -6,6 +6,7 @@ import { saveAllData, clearAllData } from './DataPersistence'
 import { apiLogin, apiRegister, updateUserProfileApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi, applyRefundApi } from './ApiService'
 import { getAuthToken, setAuthToken, getLastApiErrorMessage } from './HttpClient'
 import { logInfo, logWarn, logError } from './AppLogger'
+import { GeoPosition } from './LocationService'
 
 let categoriesSyncInFlight: Promise<void> | null = null
 let storesSyncInFlight: Promise<void> | null = null
@@ -74,6 +75,9 @@ export function logout(): void {
   AppStorage.setOrCreate<boolean>('isLoggedIn', false)
   AppStorage.setOrCreate<User>('user', createEmptyUser())
   AppStorage.setOrCreate<CartItem[]>('cartItems', [])
+  AppStorage.setOrCreate<Address[]>('addressList', [])
+  AppStorage.setOrCreate<Address | null>('currentAddress', null)
+  AppStorage.setOrCreate<GeoPosition | null>('lastLocationPosition', null)
   clearAllData()
   logInfo('Auth', '用户退出登录，已清除登录态与购物车')
 }
@@ -319,6 +323,10 @@ export async function loginRemote(phone: string, password: string, loginType?: s
     AppStorage.setOrCreate<string>('authToken', token)
     AppStorage.setOrCreate<User>('user', user)
     AppStorage.setOrCreate<boolean>('isLoggedIn', true)
+    // 登录成功后立即按当前账号同步地址，恢复默认配送地址；不能继续沿用上一个账号的定位缓存。
+    if (user.role === UserRole.CUSTOMER) {
+      await syncAddressesRemote()
+    }
     // 登录态和 Token 必须在登录成功后立即落盘，避免应用重启后回到未登录状态。
     await saveAllData()
     const roleName: string = user.role === UserRole.ADMIN
@@ -652,6 +660,13 @@ export async function syncAddressesRemote(): Promise<boolean> {
   const addresses: Address[] = deduplicateAddresses(remoteAddresses)
     .filter((address: Address) => address.name !== '当前位置')
   AppStorage.setOrCreate<Address[]>('addressList', addresses)
+  const currentAddress: Address | null = AppStorage.get<Address>('currentAddress') ?? null
+  const selectedAddress: Address | undefined = currentAddress !== null && currentAddress.id > 0
+    ? addresses.find((address: Address) => address.id === currentAddress.id)
+    : undefined
+  const nextAddress: Address | undefined = selectedAddress ?? addresses.find((address: Address) => address.isDefault) ?? addresses[0]
+  AppStorage.setOrCreate<Address | null>('currentAddress', nextAddress === undefined ? null : nextAddress)
+  await saveAllData()
   logInfo('Api', `同步地址 ${remoteAddresses.length} 条，去重后 ${addresses.length} 条`)
   return true
 }

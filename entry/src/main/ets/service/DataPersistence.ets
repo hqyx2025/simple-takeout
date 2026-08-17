@@ -95,6 +95,9 @@ export function normalizeData(key: string, value: Object): Object {
     return empty
   }
   if (key === 'favoriteList' || key === 'couponList' || key === 'addressList') {
+    if (Array.isArray(value)) {
+      return value
+    }
     const empty: Object[] = []
     return empty
   }

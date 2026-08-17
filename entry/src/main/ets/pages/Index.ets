@@ -3,7 +3,7 @@
  * 包含：搜索栏、分类导航、店铺列表、店铺详情、购物车、订单列表、个人中心、底部Tab导航
  */
 import { Category, StoreItem, GoodsItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, createEmptyUser } from '../model/Models'
-import { addToCart, updateCartItemQuantity, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncCategoriesFromServer, syncStoreReviewsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
+import { addToCart, updateCartItemQuantity, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { fetchRecommendedStoresApi, fetchStoreMerchantCategoriesApi } from '../service/ApiService'
 import { LoginPage } from './LoginPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, formatSales } from '../common/Constants'
@@ -214,6 +214,7 @@ struct Index {
     }
     if (isLoggedIn()) {
       // 未登录时不发送受保护请求，避免启动阶段出现无意义的 401。
+      syncAddressesRemote()
       syncCategoriesFromServer()
       syncStoresFromServer()
       syncUserOrdersFromServer()
