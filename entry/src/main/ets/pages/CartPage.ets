@@ -345,7 +345,7 @@ export struct CartPage {
   @Builder
   CartItemRow(item: CartItem) {
     Row({ space: SPACING.MD }) {
-      if (true) {
+      if (this.editing) {
         Text(this.isSelected(item.goods.id) ? '✓' : '○')
           .width(24)
           .height(24)
@@ -408,7 +408,7 @@ export struct CartPage {
           .onClick(() => { this.changeQuantity(item, 1) })
       }
       .alignItems(VerticalAlign.Center)
-      if (this.editing) {
+      if (true) {
         Button('删除')
           .height(30)
           .fontSize(FONT_SIZE.SM)
