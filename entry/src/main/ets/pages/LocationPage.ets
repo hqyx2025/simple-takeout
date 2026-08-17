@@ -8,7 +8,7 @@
  * 5. 与主页双向绑定：进入时回显已保存的定位地址，选择后写回主页配送地址
  */
 import { Address, User } from '../model/Models'
-import { isLoggedIn } from '../service/AppStorageManager'
+import { addAddressRemoteAndGet, isLoggedIn } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { AddressSearchResult, GeoPosition, getCurrentPosition, reverseGeocodePosition, searchAddress } from '../service/LocationService'
 import { EmptyState } from '../components/EmptyState'
@@ -92,14 +92,16 @@ export struct LocationPage {
     this.webBridge.onSearchResult = (jsonStr: string): void => {
       this.onSearchResultFromJs(jsonStr)
     }
-    // 双向绑定：读取主页已有的定位地址（含经纬度），作为地图初始中心回显
+    // 双向绑定：读取主页已有的配送地址；即使后端地址没有经纬度，也要先回显已保存文本。
     const saved: Address | null = AppStorage.get<Address>('currentAddress') ?? null
-    if (saved !== null && saved.latitude !== undefined && saved.longitude !== undefined) {
-      this.savedPosition = { latitude: saved.latitude, longitude: saved.longitude }
-      this.currentPosition = this.savedPosition
+    if (saved !== null) {
       const savedText: string = `${saved.address} ${saved.detail}`.trim()
       this.currentAddressText = savedText
-      logInfo('LocationPage', '回显已保存定位地址')
+      if (saved.latitude !== undefined && saved.longitude !== undefined) {
+        this.savedPosition = { latitude: saved.latitude, longitude: saved.longitude }
+        this.currentPosition = this.savedPosition
+      }
+      logInfo('LocationPage', '回显已保存配送地址')
     }
     // 兼容用户仅完成定位但尚未确认地址的情况，优先回显本次会话最近一次定位结果。
     if (this.savedPosition === null) {
@@ -361,13 +363,21 @@ export struct LocationPage {
   // 保存配送地址后明确提示用户，并由用户确认是否返回首页。
   private async applyAddress(addressText: string, detail: string, pos: GeoPosition): Promise<void> {
     const user: User | undefined = AppStorage.get<User>('user')
+    const name: string = user !== undefined && user !== null ? user.username : ''
+    const phone: string = user !== undefined && user !== null ? user.phone : ''
+    const fullAddress: string = `${addressText} ${detail}`.trim()
+    const persistedAddress: Address | null = await addAddressRemoteAndGet(name, phone, fullAddress, true)
+    if (persistedAddress === null || persistedAddress.id <= 0) {
+      promptAction.showToast({ message: '定位地址保存失败，请稍后重试', duration: 1800 })
+      return
+    }
     const addr: Address = {
-      id: 0,
-      name: user !== undefined && user !== null ? user.username : '',
-      phone: user !== undefined && user !== null ? user.phone : '',
-      address: addressText,
-      detail: detail,
-      isDefault: false,
+      id: persistedAddress.id,
+      name: persistedAddress.name,
+      phone: persistedAddress.phone,
+      address: persistedAddress.address,
+      detail: persistedAddress.detail,
+      isDefault: true,
       tag: '定位',
       latitude: pos.latitude,
       longitude: pos.longitude
@@ -375,7 +385,7 @@ export struct LocationPage {
     AppStorage.setOrCreate<Address>('currentAddress', addr)
     AppStorage.setOrCreate<GeoPosition>('lastLocationPosition', pos)
     await saveAllData()
-    logInfo('LocationPage', `已选择配送地址: ${addressText} ${detail}`)
+    logInfo('LocationPage', `已选择并保存配送地址: ${fullAddress}`)
     this.showSavedDialog = true
   }
 
