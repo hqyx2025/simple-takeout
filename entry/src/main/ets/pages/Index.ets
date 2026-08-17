@@ -99,6 +99,7 @@ class OrderDataSource implements IDataSource {
 @Component
 struct Index {
   @State currentTab: number = 0
+  @State profileRefreshToken: number = 0
   @StorageLink('isLoggedIn') @Watch('onLoginStateChange') loggedIn: boolean = false
   @State showLogin: boolean = true
   @State showLocationLoginConfirm: boolean = false
@@ -194,6 +195,8 @@ struct Index {
   // 从子路由页面（收藏页/搜索页）返回时，处理店铺详情跳转
   onPageShow() {
     logInfo('Page', '首页 Index onPageShow')
+    // 从购物车、结算页等子页面返回时，强制“我的”页重新读取购物车数量，避免 Tabs 子组件保留旧标题。
+    this.profileRefreshToken += 1
     this.consumePendingStoreDetail('onPageShow')
     // 管理端防御：任何情况下 Index 对管理端不可见（防止返回键/异常路由回到主页）
     const pageUser: User | undefined = AppStorage.get<User>('user')
@@ -311,6 +314,7 @@ struct Index {
       // 我的Tab
       TabContent() {
         ProfileMainPage({
+          refreshToken: this.profileRefreshToken,
           onNavigate: (tab: number) => {
             this.currentTab = tab
             this.tabsController.changeIndex(tab)
@@ -323,6 +327,9 @@ struct Index {
     .barBackgroundColor('#FFFFFF')
     .onChange((index: number) => {
       this.currentTab = index
+      if (index === 3) {
+        this.profileRefreshToken += 1
+      }
       logInfo('Page', `首页 Tab 切换 index=${index}`)
     })
     .scrollable(false)
@@ -1728,14 +1735,40 @@ struct OrderListMainPage {
 // ===================== 个人中心 =====================
 @Component
 struct ProfileMainPage {
+  @Prop @Watch('onRefreshTokenChange') refreshToken: number = 0
   @StorageLink('isLoggedIn') loggedIn: boolean = false
-  @StorageLink('cartItems') cartItems: CartItem[] = []
+  @StorageLink('cartItems') @Watch('onCartItemsChange') cartItems: CartItem[] = []
   @StorageLink('user') user: User = {
     id: 0, username: '未登录', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER,
     balance: 0, coupons: [], orders: [], storeIds: []
   }
+  @State cartTitle: string = '购物车'
   onNavigate: (tab: number) => void = () => {}
   onNavigateLogin: () => void = () => {}
+
+  aboutToAppear(): void {
+    this.refreshCartTitle()
+  }
+
+  onRefreshTokenChange(): void {
+    this.refreshCartTitle()
+  }
+
+  onCartItemsChange(): void {
+    this.refreshCartTitle()
+  }
+
+  private refreshCartTitle(): void {
+    const currentCart: CartItem[] = AppStorage.get<CartItem[]>('cartItems') || []
+    let count: number = 0
+    for (let i = 0; i < currentCart.length; i++) {
+      const item: CartItem = currentCart[i]
+      if (item !== null && item !== undefined && item.quantity > 0) {
+        count += item.quantity
+      }
+    }
+    this.cartTitle = count > 0 ? `购物车 (${count})` : '购物车'
+  }
 
   build() {
     Scroll() {
@@ -1905,8 +1938,7 @@ struct ProfileMainPage {
   }
 
   private getCartTitle(): string {
-    const count: number = this.cartItems.reduce((total: number, item: CartItem) => total + item.quantity, 0)
-    return count > 0 ? `购物车 (${count})` : '购物车'
+    return this.cartTitle
   }
 
   @Builder
