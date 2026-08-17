@@ -159,8 +159,9 @@ export async function syncCartRemote(): Promise<boolean> {
     return false
   }
   const localCart: CartItem[] = AppStorage.get<CartItem[]>('cartItems') || []
+  const shouldMigrateLocalCart: boolean = false
   // 首次接入后端时迁移已有本地购物车，避免用户升级后购物车商品丢失。
-  if (remoteCart.length === 0 && localCart.length > 0) {
+  if (shouldMigrateLocalCart && remoteCart.length === 0 && localCart.length > 0) {
     for (let i = 0; i < localCart.length; i++) {
       await addCartItemApi(localCart[i].goods.id, localCart[i].quantity)
     }

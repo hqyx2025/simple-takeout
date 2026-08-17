@@ -1142,21 +1142,18 @@ export struct StoreDetailContent {
   }
 
   private addGoodsToCart(goods: GoodsItem): void {
-    this.enqueueCartOperation(async (): Promise<void> => {
-      const item: CartItem = { goods: goods, quantity: 1, storeId: this.storeId, storeName: this.storeName }
-      const ok: boolean = await addCartItemRemote(item)
-      this.updateCartInfo()
-      if (!ok) {
-        await syncCartRemote()
-        this.updateCartInfo()
-        const message: string = getLastRemoteErrorMessage()
-        promptAction.showToast({ message: message === '' ? 'Cart update failed, please retry' : message, duration: 2200 })
-      }
-    })
+    this.changeGoodsQuantity(goods, 1)
   }
 
   private changeGoodsQuantity(goods: GoodsItem, delta: number): void {
     this.enqueueCartOperation(async (): Promise<void> => {
+      const synced: boolean = await syncCartRemote()
+      if (!synced) {
+        this.updateCartInfo()
+        const message: string = getLastRemoteErrorMessage()
+        promptAction.showToast({ message: message === '' ? 'Cart sync failed, please retry' : message, duration: 2200 })
+        return
+      }
       const currentCart: CartItem[] = AppStorage.get<CartItem[]>('cartItems') || []
       const currentItem: CartItem | undefined = currentCart.find((item: CartItem) =>
         item.goods.id === goods.id && item.storeId === this.storeId)
