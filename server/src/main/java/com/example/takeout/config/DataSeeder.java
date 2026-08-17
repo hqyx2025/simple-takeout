@@ -32,6 +32,7 @@ public class DataSeeder implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         ensureOrderEscrowColumn();
+        ensureUserStatusColumn();
         ensureGoodsColumns();
         ensureCategoryColumns();
         ensureRefundTable();
@@ -57,6 +58,11 @@ public class DataSeeder implements ApplicationRunner {
             jdbc.execute("ALTER TABLE orders ADD COLUMN escrow_status INT NOT NULL DEFAULT 0 AFTER reviewed");
             log.info("订单表已补充托管资金状态字段 escrow_status");
         }
+    }
+
+    /** 存量用户补充账号状态：1 启用，0 停用。 */
+    private void ensureUserStatusColumn() {
+        ensureColumn("users", "status", "INT NOT NULL DEFAULT 1");
     }
 
     /** 存量商品表补充库存/乐观锁/商户分类字段；存量商品默认库存 999（充足），避免旧数据无法下单。 */

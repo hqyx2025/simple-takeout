@@ -9,6 +9,7 @@ import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrder
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { logInfo } from '../service/AppLogger'
+import { adminOrderActionApi } from '../service/ApiService'
 
 interface AdminOrder {
   id: number
@@ -46,6 +47,7 @@ export struct AdminOrderPage {
   // 退款二次确认（资金操作必须确认，防止误点）
   @State refundingOrderId: number = 0
   @State showRefundConfirm: boolean = false
+  @State actioningOrderId: number = 0
 
   aboutToAppear(): void {
     logInfo('Page', '进入管理端订单管理页 AdminOrderPage')
@@ -114,6 +116,18 @@ export struct AdminOrderPage {
     }
   }
 
+  async runOrderAction(orderId: number, action: string, successText: string): Promise<void> {
+    this.actioningOrderId = orderId
+    const ok: boolean = await adminOrderActionApi(orderId, action)
+    this.actioningOrderId = 0
+    if (ok) {
+      promptAction.showToast({ message: successText, duration: 1400 })
+      await this.refresh()
+    } else {
+      promptAction.showToast({ message: '订单操作失败，请刷新后重试', duration: 1600 })
+    }
+  }
+
   build() {
     Column() {
       // 顶部导航栏
@@ -166,14 +180,44 @@ export struct AdminOrderPage {
               Column({ space: 4 }) {
                 Text(`${order.storeName}  #${order.orderNo}`).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
                 Row({ space: SPACING.SM }) {
-                  Text(getOrderStatusText(order.status))
+                  Text(getOrderStatusText(order.status, order.escrowStatus))
                     .fontSize(FONT_SIZE.SM).fontColor(getOrderStatusColor(order.status))
                   Text(`托管：${this.getEscrowText(order.escrowStatus)}`)
                     .fontSize(FONT_SIZE.SM).fontColor(this.getEscrowColor(order.escrowStatus))
                 }
                 Text(`实付 ¥${(order.payAmount ?? 0).toFixed(2)}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
               }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-              if (order.status !== 4 && order.status !== 5) {
+              if (order.status === 1) {
+                Button('接单').height(30).fontSize(FONT_SIZE.XS)
+                  .fontColor(Color.White).backgroundColor(COLORS.PRIMARY)
+                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                  .enabled(this.actioningOrderId !== order.id)
+                  .onClick(() => { this.runOrderAction(order.id, 'accept', '订单已接单') })
+                Button('取消').height(30).fontSize(FONT_SIZE.XS)
+                  .fontColor(COLORS.ERROR).backgroundColor('#FFF0F0')
+                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                  .onClick(() => { this.runOrderAction(order.id, 'cancel', '订单已取消并退款') })
+              } else if (order.status === 2) {
+                Button('出餐').height(30).fontSize(FONT_SIZE.XS)
+                  .fontColor(Color.White).backgroundColor(COLORS.PRIMARY)
+                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                  .enabled(this.actioningOrderId !== order.id)
+                  .onClick(() => { this.runOrderAction(order.id, 'deliver', '订单已进入配送中') })
+                Button('取消').height(30).fontSize(FONT_SIZE.XS)
+                  .fontColor(COLORS.ERROR).backgroundColor('#FFF0F0')
+                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                  .onClick(() => { this.runOrderAction(order.id, 'cancel', '订单已取消并退款') })
+              } else if (order.status === 3) {
+                Button('确认送达').height(30).fontSize(FONT_SIZE.XS)
+                  .fontColor(Color.White).backgroundColor(COLORS.PRIMARY)
+                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                  .enabled(this.actioningOrderId !== order.id)
+                  .onClick(() => { this.runOrderAction(order.id, 'complete', '订单已标记送达') })
+                Button('取消').height(30).fontSize(FONT_SIZE.XS)
+                  .fontColor(COLORS.ERROR).backgroundColor('#FFF0F0')
+                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                  .onClick(() => { this.runOrderAction(order.id, 'cancel', '订单已取消并退款') })
+              } else if (order.status !== 4 && order.status !== 5) {
                 Button('退款').height(34).fontSize(FONT_SIZE.SM)
                   .fontColor(Color.White).backgroundColor(COLORS.ERROR)
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
