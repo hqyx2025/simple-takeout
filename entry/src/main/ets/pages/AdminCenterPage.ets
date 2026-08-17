@@ -1,10 +1,15 @@
-/** 平台管理端：分类、店铺营业状态、托管订单退款与退款审批（演进项，见大纲 9.7）。 */
+/**
+ * 管理端-平台管理入口页
+ * 仅 ADMIN 可进入：四个后台模块入口（分类管理/店铺管理/订单管理/退款审批）+ 数据概览
+ * 各模块为独立页面，避免单页堆叠过长；退出登录后回到登录页
+ */
 import { User, UserRole, Category, RefundRecord } from '../model/Models'
 import { logout } from '../service/AppStorageManager'
-import { ApiResponse, get, post, put } from '../service/HttpClient'
-import { fetchAdminRefundsApi, approveRefundApi, rejectRefundApi } from '../service/ApiService'
+import { ApiResponse, get } from '../service/HttpClient'
+import { fetchAdminRefundsApi } from '../service/ApiService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
+import { logInfo } from '../service/AppLogger'
 
 interface AdminStore {
   id: number
@@ -23,14 +28,23 @@ interface AdminOrder {
   escrowStatus?: number
 }
 
-interface AdminCategoryRequest {
-  name: string
-  icon: string
-  color: string
-}
+/** 入口卡片模型 */
+class AdminEntryItem {
+  icon: string = ''
+  title: string = ''
+  description: string = ''
+  count: number = 0
+  page: string = ''
 
-interface AdminStoreStatusRequest {
-  status: number
+  static create(icon: string, title: string, description: string, count: number, page: string): AdminEntryItem {
+    const item: AdminEntryItem = new AdminEntryItem()
+    item.icon = icon
+    item.title = title
+    item.description = description
+    item.count = count
+    item.page = page
+    return item
+  }
 }
 
 @Entry
@@ -45,20 +59,22 @@ export struct AdminCenterPage {
   @State stores: AdminStore[] = []
   @State orders: AdminOrder[] = []
   @State refunds: RefundRecord[] = []
-  @State categoryName: string = ''
   @State loading: boolean = false
-  // 拒绝退款原因输入
-  @State showRejectDialog: boolean = false
-  @State rejectingRefundId: number = 0
-  @State rejectReason: string = ''
 
   aboutToAppear(): void {
+    logInfo('Page', '进入管理端入口页 AdminCenterPage')
     if (!this.loggedIn || this.user.role !== UserRole.ADMIN) {
       promptAction.showToast({ message: '仅管理端账号可以进入平台管理', duration: 1800 })
       router.replaceUrl({ url: 'pages/Index' })
       return
     }
-    this.refresh()
+  }
+
+  // 从子管理页返回时刷新概览数据（分类/店铺/订单/退款数量保持最新）
+  onPageShow(): void {
+    if (this.loggedIn && this.user.role === UserRole.ADMIN) {
+      this.refresh()
+    }
   }
 
   async refresh(): Promise<void> {
@@ -73,68 +89,20 @@ export struct AdminCenterPage {
     this.loading = false
   }
 
-  async createCategory(): Promise<void> {
-    const name: string = this.categoryName.trim()
-    if (name === '') {
-      promptAction.showToast({ message: '请输入分类名称', duration: 1500 })
-      return
-    }
-    const req: AdminCategoryRequest = { name: name, icon: '🍱', color: '#FF6B35' }
-    const resp: ApiResponse<Category> = await post<Category>('/api/admin/categories', req)
-    if (resp.code === 200) {
-      this.categoryName = ''
-      promptAction.showToast({ message: '分类创建成功', duration: 1500 })
-      await this.refresh()
-    }
+  /** 待审批退款数量（入口卡片徽标）。 */
+  private getPendingRefundCount(): number {
+    return this.refunds.filter(r => r.status === 'PENDING').length
   }
 
-  async toggleStore(store: AdminStore): Promise<void> {
-    const nextStatus: number = store.status === 1 ? 0 : 1
-    const req: AdminStoreStatusRequest = { status: nextStatus }
-    const resp: ApiResponse<void> = await put<void>(`/api/admin/stores/${store.id}/status`, req)
-    if (resp.code === 200) {
-      promptAction.showToast({ message: nextStatus === 1 ? '店铺已恢复营业' : '店铺已暂停营业', duration: 1500 })
-      await this.refresh()
-    }
-  }
-
-  async refund(order: AdminOrder): Promise<void> {
-    const resp: ApiResponse<AdminOrder> = await put<AdminOrder>(`/api/admin/orders/${order.id}/refund`, undefined)
-    if (resp.code === 200) {
-      promptAction.showToast({ message: '订单已退款并关闭', duration: 1500 })
-      await this.refresh()
-    }
-  }
-
-  // ============ 退款审批（演进项，见大纲 9.7） ============
-
-  async doApproveRefund(record: RefundRecord): Promise<void> {
-    const ok: boolean = await approveRefundApi(record.id)
-    if (ok) {
-      promptAction.showToast({ message: `已同意退款 ¥${record.amount.toFixed(2)}，金额退回用户余额`, duration: 1800 })
-      await this.refresh()
-    }
-  }
-
-  async doRejectRefund(): Promise<void> {
-    if (this.rejectReason.trim() === '') {
-      promptAction.showToast({ message: '请填写拒绝原因', duration: 1500 })
-      return
-    }
-    const ok: boolean = await rejectRefundApi(this.rejectingRefundId, this.rejectReason.trim())
-    this.showRejectDialog = false
-    this.rejectReason = ''
-    if (ok) {
-      promptAction.showToast({ message: '已拒绝退款申请，订单恢复为已送达', duration: 1800 })
-      await this.refresh()
-    }
-  }
-
-  private getRefundStatusText(status: string): string {
-    if (status === 'PENDING') { return '待审批' }
-    if (status === 'REFUNDED') { return '已退款' }
-    if (status === 'REJECTED') { return '已拒绝' }
-    return status
+  /** 四个后台模块入口卡片（数据源提取为方法，避免 ForEach 字面量闭包捕获问题）。 */
+  private getAdminEntries(): AdminEntryItem[] {
+    const entries: AdminEntryItem[] = [
+      AdminEntryItem.create('📂', '分类管理', '平台分类的增删改', this.categories.length, 'pages/AdminCategoryPage'),
+      AdminEntryItem.create('🏪', '店铺管理', '查看店铺与营业状态切换', this.stores.length, 'pages/AdminStorePage'),
+      AdminEntryItem.create('📦', '订单管理', '托管订单状态与退款', this.orders.length, 'pages/AdminOrderPage'),
+      AdminEntryItem.create('💰', '退款审批', '处理用户退款申请', this.getPendingRefundCount(), 'pages/AdminRefundPage')
+    ]
+    return entries
   }
 
   build() {
@@ -145,137 +113,80 @@ export struct AdminCenterPage {
           router.replaceUrl({ url: 'pages/Index' })
         })
         Text('平台管理').fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).layoutWeight(1)
-        Button('刷新').height(32).onClick(() => { this.refresh() })
+        Button(this.loading ? '加载中…' : '刷新').height(32).fontSize(FONT_SIZE.SM)
+          .enabled(!this.loading)
+          .onClick(() => { this.refresh() })
       }
       .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 })
       .backgroundColor(COLORS.BG_WHITE)
 
       Scroll() {
         Column({ space: SPACING.MD }) {
-          Text('分类管理').fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).width('100%')
-          Row({ space: SPACING.SM }) {
-            TextInput({ placeholder: '新增分类名称', text: this.categoryName })
-              .layoutWeight(1).height(42).onChange((value: string) => { this.categoryName = value })
-            Button('新增').height(42).onClick(() => { this.createCategory() })
-          }.width('100%')
-          ForEach(this.categories, (category: Category) => {
-            Row() {
-              Text(`${category.icon} ${category.name}`).layoutWeight(1).fontSize(FONT_SIZE.MD)
-              Text(`#${category.id}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
-            }.width('100%').padding(SPACING.MD).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
-          }, (category: Category) => category.id.toString())
-
-          Text('店铺营业状态').fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).width('100%')
-          ForEach(this.stores, (store: AdminStore) => {
-            Row() {
-              Column() {
-                Text(store.name).fontSize(FONT_SIZE.MD)
-                Text(store.status === 1 ? '营业中' : '已暂停').fontSize(FONT_SIZE.SM)
-                  .fontColor(store.status === 1 ? COLORS.SUCCESS : COLORS.ERROR)
-              }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-              Button(store.status === 1 ? '暂停营业' : '恢复营业')
-                .height(34).onClick(() => { this.toggleStore(store) })
-            }.width('100%').padding(SPACING.MD).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
-          }, (store: AdminStore) => store.id.toString())
-
-          Text('托管订单').fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).width('100%')
-          ForEach(this.orders, (order: AdminOrder) => {
-            Row() {
-              Column() {
-                Text(`${order.storeName}  #${order.orderNo}`).fontSize(FONT_SIZE.MD)
-                Text(`¥${order.payAmount.toFixed(2)}  状态 ${order.status}`).fontSize(FONT_SIZE.SM)
-                  .fontColor(COLORS.TEXT_SECONDARY)
-              }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-              if (order.status !== 4 && order.status !== 5) {
-                Button('退款').height(34).onClick(() => { this.refund(order) })
-              }
-            }.width('100%').padding(SPACING.MD).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
-          }, (order: AdminOrder) => order.id.toString())
-
-          Text('退款审批').fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).width('100%')
-          if (this.refunds.length === 0) {
-            Text('暂无退款申请').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%').padding(SPACING.MD)
+          // 数据概览
+          Row() {
+            Column({ space: 4 }) {
+              Text(this.categories.length.toString())
+                .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRIMARY)
+              Text('平台分类').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+            }.layoutWeight(1).alignItems(HorizontalAlign.Center)
+            Column({ space: 4 }) {
+              Text(this.stores.length.toString())
+                .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRIMARY)
+              Text('店铺总数').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+            }.layoutWeight(1).alignItems(HorizontalAlign.Center)
+            Column({ space: 4 }) {
+              Text(this.orders.length.toString())
+                .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRIMARY)
+              Text('订单总数').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+            }.layoutWeight(1).alignItems(HorizontalAlign.Center)
+            Column({ space: 4 }) {
+              Text(this.getPendingRefundCount().toString())
+                .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold)
+                .fontColor(this.getPendingRefundCount() > 0 ? COLORS.ERROR : COLORS.PRIMARY)
+              Text('待审批退款').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+            }.layoutWeight(1).alignItems(HorizontalAlign.Center)
           }
-          ForEach(this.refunds, (record: RefundRecord) => {
-            Column({ space: SPACING.SM }) {
-              Row() {
-                Column({ space: 4 }) {
-                  Text(`退款单 #${record.id}  订单 #${record.orderId}`).fontSize(FONT_SIZE.MD)
-                  Text(`金额 ¥${record.amount.toFixed(2)}  申请时间 ${record.applyTime}`).fontSize(FONT_SIZE.SM)
-                    .fontColor(COLORS.TEXT_SECONDARY)
-                  if (record.reason !== '') {
-                    Text(`原因：${record.reason}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
-                  }
-                  if (record.status === 'REJECTED' && record.rejectReason !== '') {
-                    Text(`拒绝原因：${record.rejectReason}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.ERROR)
-                  }
-                }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-                Text(this.getRefundStatusText(record.status)).fontSize(FONT_SIZE.SM)
-                  .fontColor(record.status === 'REFUNDED' ? COLORS.SUCCESS : record.status === 'REJECTED' ? COLORS.ERROR : COLORS.WARNING)
-              }.width('100%')
-              if (record.status === 'PENDING') {
-                Row({ space: SPACING.SM }) {
-                  Button('同意退款')
-                    .layoutWeight(1).height(34).fontSize(FONT_SIZE.SM)
-                    .fontColor(Color.White).backgroundColor(COLORS.SUCCESS)
-                    .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-                    .onClick(() => { this.doApproveRefund(record) })
-                  Button('拒绝')
-                    .layoutWeight(1).height(34).fontSize(FONT_SIZE.SM)
-                    .fontColor(COLORS.ERROR).backgroundColor('#FFF0F0')
-                    .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-                    .onClick(() => {
-                      this.rejectingRefundId = record.id
-                      this.rejectReason = ''
-                      this.showRejectDialog = true
-                    })
-                }.width('100%')
-              }
-            }
-            .width('100%').padding(SPACING.MD)
-            .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
-          }, (record: RefundRecord) => record.id.toString())
+          .width('100%').padding(SPACING.LG)
+          .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+
+          // 功能入口卡片
+          ForEach(this.getAdminEntries(), (item: AdminEntryItem) => {
+            this.EntryCard(item)
+          }, (item: AdminEntryItem) => item.title)
+
+          Text('管理端仅提供后台运营功能，不包含点餐、定位等用户端能力')
+            .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%').textAlign(TextAlign.Center)
+            .margin({ top: SPACING.MD })
         }
         .width('100%').padding(SPACING.LG)
       }
       .layoutWeight(1).scrollBar(BarState.Off)
-
-      // 拒绝退款原因输入弹窗
-      if (this.showRejectDialog) {
-        Column() {
-          Column({ space: SPACING.MD }) {
-            Text('拒绝退款')
-              .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
-            Text('请填写拒绝原因（必填），拒绝后订单将恢复为已送达状态')
-              .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
-            TextArea({ placeholder: '如：商品已送达且无质量问题', text: this.rejectReason })
-              .width('100%').height(80).fontSize(FONT_SIZE.MD)
-              .borderRadius(BORDER_RADIUS.MD).backgroundColor(COLORS.BG_PRIMARY)
-              .onChange((value: string) => { this.rejectReason = value })
-            Row({ space: SPACING.MD }) {
-              Button('取消')
-                .layoutWeight(1).height(42).fontSize(FONT_SIZE.MD)
-                .fontColor(COLORS.TEXT_SECONDARY).backgroundColor('#F5F5F5')
-                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-                .onClick(() => { this.showRejectDialog = false })
-              Button('确认拒绝')
-                .layoutWeight(1).height(42).fontSize(FONT_SIZE.MD)
-                .fontColor(Color.White).backgroundColor(COLORS.ERROR)
-                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-                .onClick(() => { this.doRejectRefund() })
-            }
-          }
-          .width('90%')
-          .padding(SPACING.XL)
-          .backgroundColor(Color.White)
-          .borderRadius(BORDER_RADIUS.XL)
-        }
-        .width('100%').height('100%')
-        .backgroundColor('rgba(0,0,0,0.5)')
-        .justifyContent(FlexAlign.Center)
-        .alignItems(HorizontalAlign.Center)
-      }
     }
     .width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)
+  }
+
+  /** 入口卡片（参数经方法作用域传递，规避 ArkTS ForEach 闭包捕获限制）。 */
+  @Builder
+  EntryCard(item: AdminEntryItem) {
+    Row({ space: SPACING.MD }) {
+      Text(item.icon).fontSize(32)
+      Column({ space: 4 }) {
+        Row({ space: SPACING.SM }) {
+          Text(item.title).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+          if (item.count > 0) {
+            Text(item.count.toString())
+              .fontSize(FONT_SIZE.XS).fontColor(Color.White)
+              .backgroundColor(item.title === '退款审批' ? COLORS.ERROR : COLORS.PRIMARY)
+              .borderRadius(BORDER_RADIUS.ROUND)
+              .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+          }
+        }
+        Text(item.description).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+      }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+      Text('›').fontSize(FONT_SIZE.XL).fontColor(COLORS.TEXT_HINT)
+    }
+    .width('100%').padding(SPACING.LG)
+    .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+    .onClick(() => { router.pushUrl({ url: item.page }) })
   }
 }
