@@ -102,6 +102,11 @@ export struct CartPage {
   }
 
   private async changeQuantity(item: CartItem, delta: number): Promise<void> {
+    const displayedQuantity: number = this.getCurrentQuantity(item.goods.id, item.storeId)
+    if (delta < 0 && displayedQuantity <= 1) {
+      promptAction.showToast({ message: '\u5546\u54c1\u6570\u91cf\u6700\u5c11\u4e3a1\uff0c\u5982\u9700\u79fb\u9664\u8bf7\u70b9\u51fb\u5220\u9664', duration: 1800 })
+      return
+    }
     if (this.processing) {
       promptAction.showToast({ message: '购物车操作正在处理，请稍候', duration: 1500 })
       return
@@ -145,6 +150,31 @@ export struct CartPage {
     this.processing = false
   }
 
+  private async deleteStore(storeId: number): Promise<void> {
+    const items: CartItem[] = this.getStoreItems(storeId)
+    const ids: number[] = []
+    for (let i = 0; i < items.length; i++) {
+      ids.push(items[i].goods.id)
+    }
+    if (ids.length === 0) {
+      return
+    }
+    if (this.processing) {
+      promptAction.showToast({ message: '\u8d2d\u7269\u8f66\u64cd\u4f5c\u6b63\u5728\u5904\u7406\uff0c\u8bf7\u7a0d\u5019', duration: 1500 })
+      return
+    }
+    this.processing = true
+    const ok: boolean = await deleteCartItemsRemote(ids)
+    await this.refreshFromDatabase()
+    if (ok) {
+      this.selectedGoodsIds = this.selectedGoodsIds.filter((id: number) => ids.indexOf(id) < 0)
+      promptAction.showToast({ message: '\u5df2\u5220\u9664\u8be5\u5e97\u94fa\u7684\u8d2d\u7269\u8f66\u5546\u54c1', duration: 1600 })
+    } else {
+      promptAction.showToast({ message: '\u5220\u9664\u5e97\u94fa\u5546\u54c1\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5', duration: 2200 })
+    }
+    this.processing = false
+  }
+
   private async deleteSelected(): Promise<void> {
     if (this.selectedGoodsIds.length === 0) {
       promptAction.showToast({ message: '请先选择要删除的商品', duration: 1600 })
@@ -168,13 +198,14 @@ export struct CartPage {
     this.processing = false
   }
 
-  private checkoutStore(storeId: number): void {
-    const items: CartItem[] = this.getStoreItems(storeId)
+  private checkoutAll(): void {
+    const items: CartItem[] = this.getCurrentCartItems()
     if (items.length === 0) {
+      promptAction.showToast({ message: '\u8bf7\u5148\u6dfb\u52a0\u5546\u54c1\u540e\u518d\u7ed3\u7b97', duration: 1600 })
       return
     }
-    AppStorage.setOrCreate<number>('checkoutStoreId', storeId)
-    logInfo('Cart', `从购物车进入结算 storeId=${storeId} 商品数=${items.length}`)
+    AppStorage.setOrCreate<number>('checkoutStoreId', 0)
+    logInfo('Cart', `从购物车统一进入结算 商品数=${items.length} 总金额=${this.totalPrice.toFixed(2)}`)
     router.pushUrl({ url: 'pages/CheckoutPage' })
   }
 
@@ -247,14 +278,25 @@ export struct CartPage {
               .padding({ left: SPACING.SM, right: SPACING.SM, top: SPACING.SM, bottom: SPACING.SM })
             } else {
               Row() {
-                Text('\u5408\u8ba1')
+                Column({ space: SPACING.XS }) {
+                  Text('\u5408\u8ba1')
+                    .fontSize(FONT_SIZE.MD)
+                    .fontColor(COLORS.TEXT_SECONDARY)
+                  Text(`\u00a5${this.totalPrice.toFixed(2)}`)
+                    .fontSize(FONT_SIZE.XL)
+                    .fontWeight(FontWeight.Bold)
+                    .fontColor(COLORS.PRICE_RED)
+                }
+                .alignItems(HorizontalAlign.Start)
+                .layoutWeight(1)
+                Button('\u53bb\u7ed3\u7b97')
+                  .height(40)
                   .fontSize(FONT_SIZE.MD)
-                  .fontColor(COLORS.TEXT_SECONDARY)
-                  .layoutWeight(1)
-                Text(`\u00a5${this.totalPrice.toFixed(2)}`)
-                  .fontSize(FONT_SIZE.XL)
-                  .fontWeight(FontWeight.Bold)
-                  .fontColor(COLORS.PRICE_RED)
+                  .fontColor(COLORS.TEXT_WHITE)
+                  .backgroundColor(COLORS.PRIMARY)
+                  .borderRadius(BORDER_RADIUS.ROUND)
+                  .type(ButtonType.Capsule)
+                  .onClick(() => { this.checkoutAll() })
               }
               .width('100%')
               .padding({ left: SPACING.SM, right: SPACING.SM, top: SPACING.SM, bottom: SPACING.SM })
@@ -319,16 +361,14 @@ export struct CartPage {
           .fontWeight(FontWeight.Bold)
           .fontColor(COLORS.TEXT_PRIMARY)
           .layoutWeight(1)
-        if (!this.editing) {
-          Button('去结算')
-            .height(32)
-            .fontSize(FONT_SIZE.SM)
-            .fontColor(COLORS.TEXT_WHITE)
-            .backgroundColor(COLORS.PRIMARY)
-            .borderRadius(BORDER_RADIUS.ROUND)
-            .type(ButtonType.Capsule)
-            .onClick(() => { this.checkoutStore(storeId) })
-        }
+        Button('删除')
+          .height(32)
+          .fontSize(FONT_SIZE.SM)
+          .fontColor(COLORS.ERROR)
+          .backgroundColor('#FFF1F0')
+          .borderRadius(BORDER_RADIUS.ROUND)
+          .type(ButtonType.Capsule)
+          .onClick(() => { this.deleteStore(storeId) })
       }
       ForEach(this.getStoreItems(storeId), (item: CartItem) => {
         this.CartItemRow(item)
