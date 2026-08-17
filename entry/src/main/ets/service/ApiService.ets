@@ -457,7 +457,8 @@ export async function createOrderApi(storeId: number, cartItems: CartItem[], add
     couponId: couponId,
     remark: remark
   }
-  const resp: ApiResponse<ServerOrder> = await post<ServerOrder>(API_CONFIG.ENDPOINTS['orders'], req)
+  // 下单失败由结算页统一提示，避免 HttpClient 与结算页连续弹出两个 Toast 互相覆盖。
+  const resp: ApiResponse<ServerOrder> = await post<ServerOrder>(API_CONFIG.ENDPOINTS['orders'], req, false)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     logWarn('Api', `下单失败：${resp.message}`)
     return null

@@ -29,7 +29,7 @@ function notifyApiError(message: string): void {
   if (text === '') {
     return
   }
-  promptAction.showToast({ message: text, duration: 2200 })
+  promptAction.showToast({ message: text, duration: 3000 })
 }
 
 // 创建axios实例
@@ -108,7 +108,7 @@ function getOperationName(method: string, url: string): string {
 /**
  * 核心请求方法：返回后端 ApiResponse；网络异常时返回 code=500 的错误响应
  */
-async function request<T>(method: string, url: string, data?: Object): Promise<ApiResponse<T>> {
+async function request<T>(method: string, url: string, data?: Object, showErrorToast: boolean = true): Promise<ApiResponse<T>> {
   const operation: string = getOperationName(method, url)
   lastApiErrorMessage = ''
   logInfo('Http', `前端请求后端：${operation}（${method} ${url}）`)
@@ -132,7 +132,9 @@ async function request<T>(method: string, url: string, data?: Object): Promise<A
       logInfo('Http', `后端响应成功：${operation}，状态码=${result.code}，消息=${result.message}`)
     } else {
       lastApiErrorMessage = result.message || ''
-      notifyApiError(lastApiErrorMessage)
+      if (showErrorToast) {
+        notifyApiError(lastApiErrorMessage)
+      }
       logWarn('Http', `后端业务失败：${operation}，状态码=${result.code}，消息=${result.message}`)
       if (result.code === 401) {
         // 后端可能使用 HTTP 200 返回业务状态码 401，同样需要清理登录态。
@@ -147,7 +149,9 @@ async function request<T>(method: string, url: string, data?: Object): Promise<A
     const resp: ApiResponse<T> = axiosErr.response?.data as ApiResponse<T>
     if (resp !== undefined && resp !== null && resp.code !== undefined) {
       lastApiErrorMessage = resp.message || ''
-      notifyApiError(lastApiErrorMessage)
+      if (showErrorToast) {
+        notifyApiError(lastApiErrorMessage)
+      }
       logWarn('Http', `后端业务失败：${operation}，状态码=${resp.code}，消息=${resp.message}`)
       if (resp.code === 401) {
         // 认证失效时立即清理内存态和 UI 登录态，避免“界面已登录但接口全部 401”。
@@ -159,7 +163,9 @@ async function request<T>(method: string, url: string, data?: Object): Promise<A
     }
     logError('Http', `后端请求异常：${operation}，请检查网络和服务端状态`, err)
     lastApiErrorMessage = '网络请求失败，请确认后端服务已启动'
-    notifyApiError(lastApiErrorMessage)
+    if (showErrorToast) {
+      notifyApiError(lastApiErrorMessage)
+    }
     return { code: 500, message: '网络请求失败，请确认后端服务已启动', data: undefined as T }
   }
 }
@@ -170,8 +176,8 @@ export async function get<T>(url: string): Promise<ApiResponse<T>> {
 }
 
 // POST请求
-export async function post<T>(url: string, data?: Object): Promise<ApiResponse<T>> {
-  return request<T>('POST', url, data)
+export async function post<T>(url: string, data?: Object, showErrorToast: boolean = true): Promise<ApiResponse<T>> {
+  return request<T>('POST', url, data, showErrorToast)
 }
 
 // PUT请求

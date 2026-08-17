@@ -139,7 +139,10 @@ export struct CheckoutPage {
     if (serverOrder === null) {
       this.submitting = false
       const errorMessage: string = getLastRemoteErrorMessage()
-      promptAction.showToast({ message: errorMessage === '' ? '下单失败，请检查余额或网络' : errorMessage, duration: 2200 })
+      const failureMessage: string = errorMessage === ''
+        ? '提交订单失败，请检查起送价、账户余额、收货地址或网络连接'
+        : `提交订单失败：${errorMessage}`
+      promptAction.showToast({ message: failureMessage, duration: 3000 })
       return
     }
 
