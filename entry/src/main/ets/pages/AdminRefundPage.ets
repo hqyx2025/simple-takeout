@@ -34,6 +34,10 @@ export struct AdminRefundPage {
   }
 
   async refresh(): Promise<void> {
+    if (this.loading) {
+      promptAction.showToast({ message: '退款数据正在刷新，请稍候', duration: 1200 })
+      return
+    }
     this.loading = true
     this.refunds = await fetchAdminRefundsApi()
     this.loading = false
@@ -44,6 +48,8 @@ export struct AdminRefundPage {
     if (ok) {
       promptAction.showToast({ message: `已同意退款 ¥${record.amount.toFixed(2)}，金额退回用户余额`, duration: 1800 })
       await this.refresh()
+    } else {
+      promptAction.showToast({ message: '退款审批失败，请刷新后重试', duration: 1800 })
     }
   }
 
@@ -58,6 +64,8 @@ export struct AdminRefundPage {
     if (ok) {
       promptAction.showToast({ message: '已拒绝退款申请，订单恢复为已送达', duration: 1800 })
       await this.refresh()
+    } else {
+      promptAction.showToast({ message: '拒绝退款失败，请刷新后重试', duration: 1800 })
     }
   }
 
@@ -86,7 +94,6 @@ export struct AdminRefundPage {
           Text('退款审批')
             .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).layoutWeight(1).textAlign(TextAlign.Center)
           Button(this.loading ? '加载中…' : '刷新').height(32).fontSize(FONT_SIZE.SM)
-            .enabled(!this.loading)
             .onClick(() => { this.refresh() })
         }
         .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 })

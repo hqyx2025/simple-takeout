@@ -6,6 +6,7 @@ import { UserRole } from '../model/Models'
 import { loginRemote, registerRemote, logout, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { logInfo, logWarn } from '../service/AppLogger'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { promptCompat as promptAction } from '../common/UiNavigation'
 
 @Component
 export struct LoginPage {
@@ -154,10 +155,10 @@ export struct LoginPage {
         .borderRadius(BORDER_RADIUS.ROUND)
         .type(ButtonType.Capsule)
         .id('login-submit')
-        .enabled(!this.submitting)
         .margin({ top: SPACING.SM })
         .onClick(async () => {
           if (this.submitting) {
+            promptAction.showToast({ message: '正在处理，请稍候', duration: 1200 })
             return
           }
           this.submitting = true
@@ -228,7 +229,6 @@ export struct LoginPage {
             .borderRadius(BORDER_RADIUS.ROUND)
             .type(ButtonType.Capsule)
             .id('quick-login-user')
-            .enabled(!this.submitting)
             .onClick(() => { this.quickLogin('13800138000', UserRole.CUSTOMER) })
           Button('一键登录商户')
             .layoutWeight(1)
@@ -239,7 +239,6 @@ export struct LoginPage {
             .borderRadius(BORDER_RADIUS.ROUND)
             .type(ButtonType.Capsule)
             .id('quick-login-merchant')
-            .enabled(!this.submitting)
             .onClick(() => { this.quickLogin('13600136000', UserRole.MERCHANT) })
           Button('一键登录管理端')
             .layoutWeight(1)
@@ -250,7 +249,6 @@ export struct LoginPage {
             .borderRadius(BORDER_RADIUS.ROUND)
             .type(ButtonType.Capsule)
             .id('quick-login-admin')
-            .enabled(!this.submitting)
             .onClick(() => { this.quickLogin('13100131000', UserRole.ADMIN) })
         }
         .width('100%')
@@ -285,6 +283,7 @@ export struct LoginPage {
 
   private async quickLogin(phone: string, role: UserRole): Promise<void> {
     if (this.submitting) {
+      promptAction.showToast({ message: '正在处理，请稍候', duration: 1200 })
       return
     }
     this.submitting = true

@@ -30,6 +30,10 @@ export struct AdminProductPage {
   }
 
   private async refresh(): Promise<void> {
+    if (this.loading) {
+      promptAction.showToast({ message: '商品数据正在刷新，请稍候', duration: 1200 })
+      return
+    }
     this.loading = true
     const status: number | undefined = this.statusFilter < 0 ? undefined : this.statusFilter
     this.products = await fetchAdminProductsApi(this.keyword, status)
@@ -42,6 +46,8 @@ export struct AdminProductPage {
     if (ok) {
       promptAction.showToast({ message: next === 1 ? '商品已强制上架' : '商品已强制下架', duration: 1400 })
       await this.refresh()
+    } else {
+      promptAction.showToast({ message: '商品状态更新失败，请刷新后重试', duration: 1800 })
     }
   }
 
@@ -52,6 +58,8 @@ export struct AdminProductPage {
     if (ok) {
       promptAction.showToast({ message: '商品已删除', duration: 1400 })
       await this.refresh()
+    } else {
+      promptAction.showToast({ message: '商品删除失败，请刷新后重试', duration: 1800 })
     }
   }
 
@@ -61,7 +69,7 @@ export struct AdminProductPage {
         Text('返回').fontSize(FONT_SIZE.MD).fontColor(COLORS.PRIMARY).onClick(() => { router.back() })
         Text('商品监管').fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).layoutWeight(1).textAlign(TextAlign.Center)
         Button(this.loading ? '加载中' : '刷新').height(32).fontSize(FONT_SIZE.SM)
-          .enabled(!this.loading).onClick(() => { this.refresh() })
+          .onClick(() => { this.refresh() })
       }.width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 }).backgroundColor(COLORS.BG_WHITE)
 
       Row({ space: SPACING.SM }) {

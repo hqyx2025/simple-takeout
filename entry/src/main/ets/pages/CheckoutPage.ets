@@ -6,7 +6,7 @@
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { CartItem, Order, Address, Coupon, StoreItem } from '../model/Models'
-import { createOrderRemote, updateCartItemQuantity, getAllStoresList, syncCouponsRemote } from '../service/AppStorageManager'
+import { createOrderRemote, updateCartItemQuantity, getAllStoresList, syncCouponsRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { LoadingIndicator } from '../components/LoadingIndicator'
 import { logInfo } from '../service/AppLogger'
 import { calculatePayAmount } from '../service/OrderCalculations'
@@ -106,6 +106,15 @@ export struct CheckoutPage {
   // ============ 提交订单 ============
   private submitOrder(): void {
     if (this.submitting) {
+      promptAction.showToast({ message: '订单正在提交，请稍候', duration: 1500 })
+      return
+    }
+    if (this.storeInfo !== null && this.getGoodsTotalPrice() < this.storeInfo.minOrder) {
+      const shortage: number = this.storeInfo.minOrder - this.getGoodsTotalPrice()
+      promptAction.showToast({
+        message: `未达到${this.storeInfo.name}起送价，还差¥${shortage.toFixed(2)}`,
+        duration: 2200
+      })
       return
     }
     if (this.currentAddress === null) {
@@ -129,7 +138,8 @@ export struct CheckoutPage {
     const serverOrder: Order | null = await createOrderRemote(this.checkoutStoreId, this.storeItems, address.id, couponId, this.remark)
     if (serverOrder === null) {
       this.submitting = false
-      promptAction.showToast({ message: '下单失败，请检查余额或网络' })
+      const errorMessage: string = getLastRemoteErrorMessage()
+      promptAction.showToast({ message: errorMessage === '' ? '下单失败，请检查余额或网络' : errorMessage, duration: 2200 })
       return
     }
 
