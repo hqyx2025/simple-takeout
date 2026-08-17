@@ -345,7 +345,7 @@ export struct CartPage {
   @Builder
   CartItemRow(item: CartItem) {
     Row({ space: SPACING.MD }) {
-      if (this.editing) {
+      if (true) {
         Text(this.isSelected(item.goods.id) ? '✓' : '○')
           .width(24)
           .height(24)
