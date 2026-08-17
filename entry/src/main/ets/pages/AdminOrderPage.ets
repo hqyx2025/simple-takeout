@@ -113,10 +113,16 @@ export struct AdminOrderPage {
       this.refundingOrderId = 0
       promptAction.showToast({ message: '订单已退款并关闭', duration: 1500 })
       await this.refresh()
+    } else {
+      promptAction.showToast({ message: resp.message || '订单退款失败，请刷新后重试', duration: 1800 })
     }
   }
 
   async runOrderAction(orderId: number, action: string, successText: string): Promise<void> {
+    if (this.actioningOrderId === orderId) {
+      promptAction.showToast({ message: '该订单操作正在处理，请稍候', duration: 1200 })
+      return
+    }
     this.actioningOrderId = orderId
     const ok: boolean = await adminOrderActionApi(orderId, action)
     this.actioningOrderId = 0
@@ -191,7 +197,6 @@ export struct AdminOrderPage {
                 Button('接单').height(30).fontSize(FONT_SIZE.XS)
                   .fontColor(Color.White).backgroundColor(COLORS.PRIMARY)
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-                  .enabled(this.actioningOrderId !== order.id)
                   .onClick(() => { this.runOrderAction(order.id, 'accept', '订单已接单') })
                 Button('取消').height(30).fontSize(FONT_SIZE.XS)
                   .fontColor(COLORS.ERROR).backgroundColor('#FFF0F0')
@@ -201,7 +206,6 @@ export struct AdminOrderPage {
                 Button('出餐').height(30).fontSize(FONT_SIZE.XS)
                   .fontColor(Color.White).backgroundColor(COLORS.PRIMARY)
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-                  .enabled(this.actioningOrderId !== order.id)
                   .onClick(() => { this.runOrderAction(order.id, 'deliver', '订单已进入配送中') })
                 Button('取消').height(30).fontSize(FONT_SIZE.XS)
                   .fontColor(COLORS.ERROR).backgroundColor('#FFF0F0')
@@ -211,7 +215,6 @@ export struct AdminOrderPage {
                 Button('确认送达').height(30).fontSize(FONT_SIZE.XS)
                   .fontColor(Color.White).backgroundColor(COLORS.PRIMARY)
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-                  .enabled(this.actioningOrderId !== order.id)
                   .onClick(() => { this.runOrderAction(order.id, 'complete', '订单已标记送达') })
                 Button('取消').height(30).fontSize(FONT_SIZE.XS)
                   .fontColor(COLORS.ERROR).backgroundColor('#FFF0F0')

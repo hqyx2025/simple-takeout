@@ -26,6 +26,10 @@ export struct AdminStatisticsPage {
   }
 
   private async refresh(): Promise<void> {
+    if (this.loading) {
+      promptAction.showToast({ message: '统计数据正在刷新，请稍候', duration: 1200 })
+      return
+    }
     this.loading = true
     this.stats = await fetchAdminStatisticsApi(10)
     this.trend = await fetchAdminOrderTrendApi(7)
@@ -41,7 +45,7 @@ export struct AdminStatisticsPage {
       Row() {
         Text('返回').fontSize(FONT_SIZE.MD).fontColor(COLORS.PRIMARY).onClick(() => { router.back() })
         Text('平台统计').fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).layoutWeight(1).textAlign(TextAlign.Center)
-        Button(this.loading ? '加载中' : '刷新').height(32).fontSize(FONT_SIZE.SM).enabled(!this.loading)
+        Button(this.loading ? '加载中' : '刷新').height(32).fontSize(FONT_SIZE.SM)
           .onClick(() => { this.refresh() })
       }.width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 }).backgroundColor(COLORS.BG_WHITE)
 

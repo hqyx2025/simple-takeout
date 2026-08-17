@@ -79,6 +79,10 @@ export struct AdminCenterPage {
   }
 
   async refresh(): Promise<void> {
+    if (this.loading) {
+      promptAction.showToast({ message: '平台数据正在刷新，请稍候', duration: 1200 })
+      return
+    }
     this.loading = true
     const categoryResp: ApiResponse<Category[]> = await get<Category[]>('/api/admin/categories')
     const storeResp: ApiResponse<AdminStore[]> = await get<AdminStore[]>('/api/admin/stores')
@@ -121,7 +125,6 @@ export struct AdminCenterPage {
         })
         Text('平台管理').fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).layoutWeight(1)
         Button(this.loading ? '加载中…' : '刷新').height(32).fontSize(FONT_SIZE.SM)
-          .enabled(!this.loading)
           .onClick(() => { this.refresh() })
       }
       .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 })

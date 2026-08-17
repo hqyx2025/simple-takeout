@@ -89,6 +89,8 @@ export struct AdminEmployeePage {
     if (ok) {
       await this.refresh()
       promptAction.showToast({ message: nextStatus === 1 ? '员工已启用' : '员工已停用', duration: 1500 })
+    } else {
+      promptAction.showToast({ message: '员工状态更新失败，请刷新后重试', duration: 1800 })
     }
   }
 

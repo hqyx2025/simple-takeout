@@ -192,7 +192,6 @@ export struct CouponCenterPage {
           .backgroundColor(this.isClaimed(coupon) ? COLORS.DIVIDER : COLORS.PRIMARY)
           .borderRadius(BORDER_RADIUS.ROUND)
           .type(ButtonType.Capsule)
-          .enabled(!this.isClaimed(coupon))
           .margin({ right: SPACING.MD })
           .onClick(() => { this.doClaim(coupon) })
       } else if (this.currentTab === 1) {
@@ -235,6 +234,10 @@ export struct CouponCenterPage {
 
   // 领取优惠券
   async doClaim(coupon: Coupon): Promise<void> {
+    if (this.isClaimed(coupon)) {
+      promptAction.showToast({ message: '这张优惠券已经领取过了', duration: 1500 })
+      return
+    }
     // 调用后端领券（真实后端模式）
     const ok: boolean = await claimCouponRemote(coupon.storeId ?? 0, coupon.condition, coupon.minOrder, coupon.amount)
     if (!ok) {

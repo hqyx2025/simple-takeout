@@ -57,6 +57,8 @@ export struct AdminCategoryPage {
       this.newCategoryName = ''
       promptAction.showToast({ message: '分类创建成功', duration: 1500 })
       await this.refresh()
+    } else {
+      promptAction.showToast({ message: resp.message || '分类创建失败，请稍后重试', duration: 1800 })
     }
   }
 
@@ -72,6 +74,8 @@ export struct AdminCategoryPage {
       this.editingCategoryId = 0
       promptAction.showToast({ message: '分类已更新', duration: 1500 })
       await this.refresh()
+    } else {
+      promptAction.showToast({ message: resp.message || '分类更新失败，请稍后重试', duration: 1800 })
     }
   }
 
@@ -82,6 +86,8 @@ export struct AdminCategoryPage {
       this.deletingCategoryId = 0
       promptAction.showToast({ message: '分类已删除', duration: 1500 })
       await this.refresh()
+    } else {
+      promptAction.showToast({ message: resp.message || '分类删除失败，请稍后重试', duration: 1800 })
     }
   }
 

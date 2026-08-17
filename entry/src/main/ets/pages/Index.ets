@@ -873,6 +873,10 @@ struct DiscoverPage {
     if (!this.loggedIn) {
       return
     }
+    if (this.loading) {
+      promptAction.showToast({ message: '推荐店铺正在刷新，请稍候', duration: 1200 })
+      return
+    }
     this.loading = true
     this.recommendedStores = await fetchRecommendedStoresApi(2, 10)
     this.loading = false
@@ -909,7 +913,7 @@ struct DiscoverPage {
               .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
               .layoutWeight(1)
             Button('刷新').height(32).fontSize(FONT_SIZE.SM)
-              .enabled(!this.loading).onClick(() => { this.refreshRecommended() })
+              .onClick(() => { this.refreshRecommended() })
           }
           .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD })
           if (!this.loggedIn) {
@@ -1427,11 +1431,13 @@ export struct StoreDetailContent {
         .height(40).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_WHITE)
         .backgroundColor(this.cartCount > 0 ? COLORS.PRIMARY : '#666666')
         .borderRadius({ topRight: BORDER_RADIUS.LG, bottomRight: BORDER_RADIUS.LG })
-        .width(100).enabled(this.cartCount > 0)
+        .width(100)
         .onClick(() => {
           if (this.cartCount > 0) {
             AppStorage.setOrCreate<number>('checkoutStoreId', this.storeId)
             router.pushUrl({ url: 'pages/CheckoutPage' })
+          } else {
+            promptAction.showToast({ message: '购物车还是空的，请先选择商品', duration: 1600 })
           }
         })
     }

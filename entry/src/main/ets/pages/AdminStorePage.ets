@@ -58,6 +58,8 @@ export struct AdminStorePage {
     if (resp.code === 200) {
       promptAction.showToast({ message: nextStatus === 1 ? '店铺已恢复营业' : '店铺已暂停营业', duration: 1500 })
       await this.refresh()
+    } else {
+      promptAction.showToast({ message: resp.message || '店铺营业状态更新失败，请稍后重试', duration: 1800 })
     }
   }
 
@@ -68,6 +70,8 @@ export struct AdminStorePage {
     if (resp.code === 200) {
       promptAction.showToast({ message: nextRecommended === 1 ? '已推荐到发现页' : '已取消发现页推荐', duration: 1500 })
       await this.refresh()
+    } else {
+      promptAction.showToast({ message: resp.message || '店铺推荐状态更新失败，请稍后重试', duration: 1800 })
     }
   }
 
