@@ -68,6 +68,7 @@ export interface StoreItem {
   categoryId: number
   categoryIds?: number[]
   ownerId: number  // 商户用户ID
+  recommended?: number // 平台是否推荐到发现页：0否 1是
 }
 
 // 购物车商品项

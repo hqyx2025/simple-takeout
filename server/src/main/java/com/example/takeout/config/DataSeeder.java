@@ -37,18 +37,21 @@ public class DataSeeder implements ApplicationRunner {
         ensureCategoryColumns();
         ensureRefundTable();
         ensureReviewGoodsColumn();
+        ensureStoreRecommendedColumn();
         // 分类是首页导航的基础数据，即使已有用户数据，也必须单独补齐。
         ensureCategories();
         Integer userCount = jdbc.queryForObject("SELECT COUNT(*) FROM users", Integer.class);
         if (userCount != null && userCount > 0) {
             ensureAdminUser();
             ensureStoresAndGoods();
-            log.info("用户数据已存在（users={}），已校验分类、店铺和商品数据", userCount);
+            ensureAdditionalStores();
+            log.info("用户数据已存在（users={}），已校验分类、店铺、商品和附近推荐数据", userCount);
             return;
         }
         seed();
         ensureAdminUser();
-        log.info("种子数据初始化完成：8 分类 / 30 店铺 / 900 商品 / 5 账号");
+        ensureAdditionalStores();
+        log.info("种子数据初始化完成：8 分类 / 40 店铺 / 1200 商品 / 5 账号");
     }
 
     private void ensureOrderEscrowColumn() {
@@ -106,6 +109,10 @@ public class DataSeeder implements ApplicationRunner {
         ensureColumn("reviews", "goods_id", "BIGINT NOT NULL DEFAULT 0 AFTER store_id");
     }
 
+    private void ensureStoreRecommendedColumn() {
+        ensureColumn("stores", "recommended", "INT NOT NULL DEFAULT 0 AFTER status");
+    }
+
     private void ensureColumn(String table, String column, String definition) {
         Integer count = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() " +
@@ -150,6 +157,29 @@ public class DataSeeder implements ApplicationRunner {
             seedGoods(storeId, categoryId, 6);
         }
         log.info("商品数据为空，已为 {} 家店铺补齐商品", stores.size());
+    }
+
+    /** 幂等补充 10 家距离较近的店铺，并默认标记为平台推荐，供发现页展示。 */
+    private void ensureAdditionalStores() {
+        long[] merchantIds = ensureMerchantUsers();
+        String[] names = {"光谷牛肉粉", "江汉路炸鸡铺", "东湖烧烤屋", "武昌热干面", "汉口甜品站",
+                "青山砂锅饭", "关山便当", "街角寿司屋", "南湖小龙虾", "珞喻路煲仔饭"};
+        int[] categories = {7, 6, 6, 7, 4, 1, 2, 8, 6, 1};
+        double[] distances = {0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1};
+        for (int i = 0; i < names.length; i++) {
+            Integer exists = jdbc.queryForObject("SELECT COUNT(*) FROM stores WHERE name = ?", Integer.class, names[i]);
+            if (exists != null && exists > 0) {
+                continue;
+            }
+            int categoryId = categories[i];
+            jdbc.update("INSERT INTO stores(name, image, rating, monthly_sales, delivery_fee, min_order, delivery_time, distance, tags, notice, category_id, category_ids, owner_id, status, recommended, create_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    names[i], "", 4.5 + (i % 5) * 0.1, 800 + i * 137,
+                    2 + i % 3, 10 + i % 3 * 5, (18 + i * 2) + "分钟", distances[i] + "km",
+                    "[\"附近推荐\",\"满减\"]", "平台推荐附近好店，欢迎光临" + names[i],
+                    categoryId, "[" + categoryId + "]", merchantIds[i % merchantIds.length], 1, 1, now());
+            long storeId = jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+            seedGoods(storeId, categoryId, 6);
+        }
     }
 
     private long[] ensureMerchantUsers() {

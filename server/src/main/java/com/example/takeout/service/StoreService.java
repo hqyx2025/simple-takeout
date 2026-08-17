@@ -50,6 +50,16 @@ public class StoreService {
         return stores.stream().map(this::toView).toList();
     }
 
+    public List<Store.StoreView> recommendedStores(double maxDistanceKm, int limit) {
+        if (!Double.isFinite(maxDistanceKm) || maxDistanceKm <= 0 || maxDistanceKm > 20) {
+            throw new BizException("查询距离范围必须在 0 到 20 公里之间");
+        }
+        if (limit <= 0 || limit > 50) {
+            throw new BizException("推荐店铺数量必须在 1 到 50 之间");
+        }
+        return storeDao.listRecommended(maxDistanceKm, limit).stream().map(this::toView).toList();
+    }
+
     public Store.StoreView storeDetail(long id) {
         Store store = storeDao.findById(id).orElseThrow(() -> new BizException("店铺不存在"));
         return toView(store);
@@ -82,7 +92,7 @@ public class StoreService {
         Store store = new Store(0, name, "", 4.5, 0, deliveryFee, minOrder,
                 deliveryTime == null || deliveryTime.isBlank() ? "30分钟" : deliveryTime,
                 "1.0km", "[\"新店特惠\"]", notice == null ? "" : notice,
-                categoryId, "[" + categoryId + "]", ownerId, 1, now);
+                categoryId, "[" + categoryId + "]", ownerId, 1, 0, now);
         long id = storeDao.insert(store);
         return storeDetail(id);
     }
@@ -96,7 +106,7 @@ public class StoreService {
                 patch.deliveryTime() == null ? store.deliveryTime() : patch.deliveryTime(),
                 store.distance(), store.tags(), patch.notice() == null ? store.notice() : patch.notice(),
                 store.categoryId(), store.categoryIds(), store.ownerId(),
-                patch.status() < 0 ? store.status() : patch.status(), store.createTime());
+                patch.status() < 0 ? store.status() : patch.status(), store.recommended(), store.createTime());
         storeDao.update(updated);
         return storeDetail(storeId);
     }

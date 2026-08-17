@@ -101,7 +101,7 @@ export struct AdminCenterPage {
   private getAdminEntries(): AdminEntryItem[] {
     const entries: AdminEntryItem[] = [
       AdminEntryItem.create('📂', '分类管理', '平台分类的增删改', this.categories.length, 'pages/AdminCategoryPage'),
-      AdminEntryItem.create('🏪', '店铺管理', '查看店铺与营业状态切换', this.stores.length, 'pages/AdminStorePage'),
+      AdminEntryItem.create('🏪', '店铺管理', '营业状态与发现页推荐', this.stores.length, 'pages/AdminStorePage'),
       AdminEntryItem.create('👥', '员工管理', '商户账号创建、编辑与停用', this.employees, 'pages/AdminEmployeePage'),
       AdminEntryItem.create('🍽️', '商品监管', '搜索商品并强制上下架', 0, 'pages/AdminProductPage'),
       AdminEntryItem.create('🧑‍💼', '用户管理', '查看用户和商户账号状态', 0, 'pages/AdminUserPage'),

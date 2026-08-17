@@ -49,4 +49,15 @@ class AdminControllerSecurityTest {
 
         assertEquals(403, error.getCode());
     }
+
+    @Test
+    void nonAdminCannotChangeStoreRecommendation() {
+        AdminController controller = new AdminController(mock(AdminService.class));
+
+        BizException error = assertThrows(BizException.class,
+                () -> controller.updateStoreRecommended(0, 1,
+                        new AdminController.StoreRecommendRequest(1)));
+
+        assertEquals(403, error.getCode());
+    }
 }

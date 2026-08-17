@@ -54,6 +54,13 @@ public class StoreController {
         return ApiResponse.ok(stores);
     }
 
+    @GetMapping("/stores/recommended")
+    public ApiResponse<List<Store.StoreView>> recommendedStores(
+            @RequestParam(defaultValue = "2") double maxDistanceKm,
+            @RequestParam(defaultValue = "10") int limit) {
+        return ApiResponse.ok(storeService.recommendedStores(maxDistanceKm, limit));
+    }
+
     @GetMapping("/stores/{id}")
     public ApiResponse<Store.StoreView> storeDetail(@PathVariable long id) {
         return ApiResponse.ok(storeService.storeDetail(id));

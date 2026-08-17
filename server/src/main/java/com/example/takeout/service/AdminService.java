@@ -91,6 +91,14 @@ public class AdminService {
         storeDao.updateStatus(storeId, status);
     }
 
+    public void updateStoreRecommended(long storeId, int recommended) {
+        if (recommended != 0 && recommended != 1) {
+            throw new BizException("推荐状态不合法");
+        }
+        storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
+        storeDao.updateRecommended(storeId, recommended);
+    }
+
     public List<Order.OrderView> orders() {
         return orderDao.listAll().stream().map(order -> orderService.orderDetail(order.id())).toList();
     }

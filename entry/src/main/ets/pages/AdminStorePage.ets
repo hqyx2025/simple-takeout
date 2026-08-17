@@ -12,12 +12,17 @@ interface AdminStore {
   id: number
   name: string
   status: number
+  recommended: number
   ownerId: number
   categoryId: number
 }
 
 interface AdminStoreStatusRequest {
   status: number
+}
+
+interface AdminStoreRecommendRequest {
+  recommended: number
 }
 
 @Entry
@@ -56,6 +61,16 @@ export struct AdminStorePage {
     }
   }
 
+  async toggleRecommend(store: AdminStore): Promise<void> {
+    const nextRecommended: number = store.recommended === 1 ? 0 : 1
+    const req: AdminStoreRecommendRequest = { recommended: nextRecommended }
+    const resp: ApiResponse<Object> = await put<Object>(`/api/admin/stores/${store.id}/recommend`, req)
+    if (resp.code === 200) {
+      promptAction.showToast({ message: nextRecommended === 1 ? '已推荐到发现页' : '已取消发现页推荐', duration: 1500 })
+      await this.refresh()
+    }
+  }
+
   build() {
     Column() {
       // 顶部导航栏
@@ -73,7 +88,7 @@ export struct AdminStorePage {
 
       Scroll() {
         Column({ space: SPACING.MD }) {
-          Text('暂停营业的店铺将无法被用户下单，恢复营业后可正常接单')
+          Text('推荐状态决定是否展示在用户发现页；距离超过 2 公里的店铺不会出现在附近推荐中。')
             .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%')
 
           if (this.stores.length === 0) {
@@ -86,12 +101,20 @@ export struct AdminStorePage {
                 Text(store.status === 1 ? '营业中' : '已暂停').fontSize(FONT_SIZE.SM)
                   .fontColor(store.status === 1 ? COLORS.SUCCESS : COLORS.ERROR)
               }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-              Button(store.status === 1 ? '暂停营业' : '恢复营业')
-                .height(34).fontSize(FONT_SIZE.SM)
-                .fontColor(store.status === 1 ? COLORS.WARNING : Color.White)
-                .backgroundColor(store.status === 1 ? '#FFF3E0' : COLORS.SUCCESS)
-                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-                .onClick(() => { this.toggleStore(store) })
+              Column({ space: SPACING.XS }) {
+                Button(store.recommended === 1 ? '取消推荐' : '推荐到发现')
+                  .height(32).fontSize(FONT_SIZE.XS)
+                  .fontColor(store.recommended === 1 ? COLORS.PRIMARY : Color.White)
+                  .backgroundColor(store.recommended === 1 ? COLORS.TAG_BG : COLORS.PRIMARY)
+                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                  .onClick(() => { this.toggleRecommend(store) })
+                Button(store.status === 1 ? '暂停营业' : '恢复营业')
+                  .height(32).fontSize(FONT_SIZE.XS)
+                  .fontColor(store.status === 1 ? COLORS.WARNING : Color.White)
+                  .backgroundColor(store.status === 1 ? '#FFF3E0' : COLORS.SUCCESS)
+                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                  .onClick(() => { this.toggleStore(store) })
+              }
             }
             .width('100%').padding(SPACING.MD)
             .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)

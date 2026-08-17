@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS stores (
     category_ids VARCHAR(128) DEFAULT '[]',
     owner_id BIGINT NOT NULL,
     status INT NOT NULL DEFAULT 1,
+    recommended INT NOT NULL DEFAULT 0,
     create_time VARCHAR(32) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
