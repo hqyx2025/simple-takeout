@@ -149,6 +149,18 @@ function setRemoteCart(cart: CartItem[]): void {
   saveAllData()
 }
 
+export async function refreshCartFromServer(): Promise<CartItem[] | null> {
+  if (!isLoggedIn()) {
+    return null
+  }
+  const remoteCart: CartItem[] | null = await fetchCartApi()
+  if (remoteCart === null) {
+    return null
+  }
+  setRemoteCart(remoteCart)
+  return remoteCart
+}
+
 export async function syncCartRemote(): Promise<boolean> {
   if (!isLoggedIn()) {
     return false

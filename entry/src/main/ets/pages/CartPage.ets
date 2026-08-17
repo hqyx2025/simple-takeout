@@ -5,28 +5,39 @@
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { CartItem } from '../model/Models'
-import { deleteCartItemRemote, deleteCartItemsRemote, syncCartRemote, updateCartItemQuantityRemote } from '../service/AppStorageManager'
+import { deleteCartItemRemote, deleteCartItemsRemote, refreshCartFromServer, updateCartItemQuantityRemote } from '../service/AppStorageManager'
 import { EmptyState } from '../components/EmptyState'
 import { logInfo } from '../service/AppLogger'
 
 @Entry
 @Component
 export struct CartPage {
-  @StorageLink('cartItems') cartItems: CartItem[] = []
+  @State cartItems: CartItem[] = []
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State editing: boolean = false
   @State selectedGoodsIds: number[] = []
   @State processing: boolean = false
+  @State cartRenderVersion: number = 0
 
   async aboutToAppear(): Promise<void> {
     logInfo('Page', `进入购物车页面 CartPage，商品种类=${this.cartItems.length}`)
-    await syncCartRemote()
+    await this.refreshFromDatabase()
   }
 
   async onPageShow(): Promise<void> {
     if (this.loggedIn) {
-      await syncCartRemote()
+      await this.refreshFromDatabase()
     }
+  }
+
+  private async refreshFromDatabase(): Promise<boolean> {
+    const remoteCart: CartItem[] | null = await refreshCartFromServer()
+    if (remoteCart === null) {
+      return false
+    }
+    this.cartItems = remoteCart.slice()
+    this.cartRenderVersion += 1
+    return true
   }
 
   private getStoreIds(): number[] {
@@ -87,20 +98,21 @@ export struct CartPage {
       return
     }
     this.processing = true
-    const synced: boolean = await syncCartRemote()
+    const synced: boolean = await this.refreshFromDatabase()
     if (!synced) {
       this.processing = false
       promptAction.showToast({ message: 'Cart sync failed, please retry', duration: 2200 })
       return
     }
-    const currentCart: CartItem[] = AppStorage.get<CartItem[]>('cartItems') || []
+    const currentCart: CartItem[] = this.getCurrentCartItems()
     const currentItem: CartItem | undefined = currentCart.find((cartItem: CartItem) =>
       cartItem.goods.id === item.goods.id && cartItem.storeId === item.storeId)
     const currentQuantity: number = currentItem === undefined ? 0 : currentItem.quantity
     const nextQuantity: number = currentQuantity + delta
     const ok: boolean = await updateCartItemQuantityRemote(item.goods.id, nextQuantity)
+    await this.refreshFromDatabase()
     if (!ok) {
-      await syncCartRemote()
+      await this.refreshFromDatabase()
       promptAction.showToast({ message: '修改购物车失败，请稍后重试', duration: 2200 })
     }
     this.processing = false
@@ -113,11 +125,12 @@ export struct CartPage {
     }
     this.processing = true
     const ok: boolean = await deleteCartItemRemote(item.goods.id)
+    await this.refreshFromDatabase()
     if (ok) {
       this.selectedGoodsIds = this.selectedGoodsIds.filter((id: number) => id !== item.goods.id)
       promptAction.showToast({ message: '商品已删除', duration: 1500 })
     } else {
-      await syncCartRemote()
+    await this.refreshFromDatabase()
       promptAction.showToast({ message: '删除商品失败，请稍后重试', duration: 2200 })
     }
     this.processing = false
@@ -135,11 +148,12 @@ export struct CartPage {
     this.processing = true
     const ids: number[] = this.selectedGoodsIds.slice()
     const ok: boolean = await deleteCartItemsRemote(ids)
+    await this.refreshFromDatabase()
     if (ok) {
       this.selectedGoodsIds = []
       promptAction.showToast({ message: `已删除 ${ids.length} 件商品`, duration: 1600 })
     } else {
-      await syncCartRemote()
+    await this.refreshFromDatabase()
       promptAction.showToast({ message: '批量删除失败，请稍后重试', duration: 2200 })
     }
     this.processing = false
@@ -195,7 +209,7 @@ export struct CartPage {
           Column({ space: SPACING.SM }) {
             ForEach(this.getStoreIds(), (storeId: number) => {
               this.StoreCard(storeId)
-            }, (storeId: number) => storeId.toString())
+            }, (storeId: number) => `${this.cartRenderVersion}-${storeId}`)
           }
           .width('100%')
           .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: 96 })
@@ -268,7 +282,7 @@ export struct CartPage {
       }
       ForEach(this.getStoreItems(storeId), (item: CartItem) => {
         this.CartItemRow(item)
-      }, (item: CartItem) => `${item.storeId}-${item.goods.id}`)
+      }, (item: CartItem) => `${this.cartRenderVersion}-${item.storeId}-${item.goods.id}`)
     }
     .width('100%')
     .padding(SPACING.MD)
