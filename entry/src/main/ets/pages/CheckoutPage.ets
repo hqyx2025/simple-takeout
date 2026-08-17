@@ -10,6 +10,7 @@ import { createOrderRemote, updateCartItemQuantity, getAllStoresList, syncCoupon
 import { LoadingIndicator } from '../components/LoadingIndicator'
 import { logInfo } from '../service/AppLogger'
 import { calculatePayAmount } from '../service/OrderCalculations'
+import { webview } from '@kit.ArkWeb'
 
 @Entry
 @Component
@@ -23,6 +24,9 @@ export struct CheckoutPage {
   @State remark: string = ''
   @State showCouponDialog: boolean = false
   @State submitting: boolean = false
+  @State showOrderFailureDialog: boolean = false
+  @State orderFailureMessage: string = ''
+  private orderFailureWebController: webview.WebviewController = new webview.WebviewController()
 
   aboutToAppear() {
     logInfo('Page', '进入结算页 CheckoutPage')
@@ -142,7 +146,8 @@ export struct CheckoutPage {
       const failureMessage: string = errorMessage === ''
         ? '提交订单失败，请检查起送价、账户余额、收货地址或网络连接'
         : `提交订单失败：${errorMessage}`
-      promptAction.showToast({ message: failureMessage, duration: 3000 })
+      this.orderFailureMessage = failureMessage
+      this.showOrderFailureDialog = true
       return
     }
 
@@ -208,6 +213,10 @@ export struct CheckoutPage {
         .width('100%')
         .height('100%')
         .backgroundColor('rgba(0,0,0,0.3)')
+      }
+
+      if (this.showOrderFailureDialog) {
+        this.OrderFailureDialog()
       }
     }
     .width('100%')
@@ -526,6 +535,64 @@ export struct CheckoutPage {
     }
     .width('100%')
     .height('100%')
+  }
+
+  @Builder
+  OrderFailureDialog() {
+    Stack() {
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor('rgba(0,0,0,0.55)')
+        .onClick(() => { this.showOrderFailureDialog = false })
+
+      Column({ space: SPACING.MD }) {
+        Text('提交订单失败')
+          .fontSize(FONT_SIZE.XL)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(COLORS.TEXT_PRIMARY)
+
+        Web({ src: $rawfile('order_failure_lottie.html'), controller: this.orderFailureWebController })
+          .width(120)
+          .height(120)
+          .backgroundColor(COLORS.BG_WHITE)
+
+        Text('失败原因')
+          .width('100%')
+          .fontSize(FONT_SIZE.SM)
+          .fontColor(COLORS.TEXT_HINT)
+          .textAlign(TextAlign.Start)
+
+        Scroll() {
+          Text(this.orderFailureMessage)
+            .width('100%')
+            .fontSize(FONT_SIZE.MD)
+            .fontColor(COLORS.TEXT_SECONDARY)
+            .textAlign(TextAlign.Start)
+        }
+        .width('100%')
+        .height(72)
+        .scrollBar(BarState.Off)
+
+        Button('知道了')
+          .width('100%')
+          .height(44)
+          .fontSize(FONT_SIZE.MD)
+          .fontColor(COLORS.TEXT_WHITE)
+          .backgroundColor(COLORS.PRIMARY)
+          .borderRadius(BORDER_RADIUS.ROUND)
+          .type(ButtonType.Capsule)
+          .onClick(() => { this.showOrderFailureDialog = false })
+      }
+      .width('84%')
+      .padding(SPACING.XL)
+      .backgroundColor(COLORS.BG_WHITE)
+      .borderRadius(BORDER_RADIUS.XL)
+      .alignItems(HorizontalAlign.Center)
+    }
+    .width('100%')
+    .height('100%')
+    .alignContent(Alignment.Center)
   }
 
   @Builder
