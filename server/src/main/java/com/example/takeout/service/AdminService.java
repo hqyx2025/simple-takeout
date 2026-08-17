@@ -2,15 +2,21 @@ package com.example.takeout.service;
 
 import com.example.takeout.common.BizException;
 import com.example.takeout.dao.GoodsDao;
+import com.example.takeout.dao.AdminStatsDao;
 import com.example.takeout.dao.OrderDao;
 import com.example.takeout.dao.RefundDao;
 import com.example.takeout.dao.StoreDao;
 import com.example.takeout.dao.UserDao;
 import com.example.takeout.model.Category;
+import com.example.takeout.model.AdminEmployee;
+import com.example.takeout.model.AdminProduct;
+import com.example.takeout.model.AdminStatistics;
+import com.example.takeout.model.AdminUser;
 import com.example.takeout.model.Order;
 import com.example.takeout.model.RefundRecord;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.User;
+import com.example.takeout.security.PasswordUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,15 +32,17 @@ public class AdminService {
     private final GoodsDao goodsDao;
     private final RefundDao refundDao;
     private final OrderService orderService;
+    private final AdminStatsDao adminStatsDao;
 
     public AdminService(StoreDao storeDao, OrderDao orderDao, UserDao userDao, GoodsDao goodsDao,
-                        RefundDao refundDao, OrderService orderService) {
+                        RefundDao refundDao, OrderService orderService, AdminStatsDao adminStatsDao) {
         this.storeDao = storeDao;
         this.orderDao = orderDao;
         this.userDao = userDao;
         this.goodsDao = goodsDao;
         this.refundDao = refundDao;
         this.orderService = orderService;
+        this.adminStatsDao = adminStatsDao;
     }
 
     public List<Category> categories() {
@@ -53,7 +61,7 @@ public class AdminService {
     }
 
     public Category updateCategory(long id, String name, String icon, String color) {
-        storeDao.findCategoryById(id).orElseThrow(() -> new BizException("分类不存在"));
+        requirePlatformCategory(id);
         String normalizedName = normalizeRequired(name, "分类名称不能为空");
         if (storeDao.categoryNameExists(normalizedName, id)) {
             throw new BizException("分类名称已存在");
@@ -64,7 +72,7 @@ public class AdminService {
     }
 
     public void deleteCategory(long id) {
-        storeDao.findCategoryById(id).orElseThrow(() -> new BizException("分类不存在"));
+        requirePlatformCategory(id);
         if (storeDao.countStoresByCategory(id) > 0) {
             throw new BizException("该分类仍有关联店铺，不能删除");
         }
@@ -85,6 +93,122 @@ public class AdminService {
 
     public List<Order.OrderView> orders() {
         return orderDao.listAll().stream().map(order -> orderService.orderDetail(order.id())).toList();
+    }
+
+    public List<AdminEmployee> employees() {
+        return userDao.listEmployees();
+    }
+
+    public List<AdminUser> users(Integer role, Integer status, String keyword) {
+        if (role != null && role != 0 && role != 1) {
+            throw new BizException("用户角色筛选不合法");
+        }
+        if (status != null && status != 0 && status != 1) {
+            throw new BizException("账号状态筛选不合法");
+        }
+        return userDao.listForAdmin(role, status, keyword);
+    }
+
+    public void updateUserStatus(long id, int status) {
+        if (status != 0 && status != 1) {
+            throw new BizException("账号状态不合法");
+        }
+        User user = userDao.findById(id).orElseThrow(() -> new BizException("用户不存在"));
+        if (user.role() == 2) {
+            throw new BizException("管理员账号不能在此处停用");
+        }
+        userDao.updateStatus(id, status);
+    }
+
+    public List<AdminProduct> products(String keyword, Integer status) {
+        if (status != null && status != 0 && status != 1) {
+            throw new BizException("商品状态不合法");
+        }
+        return goodsDao.listForAdmin(keyword, status);
+    }
+
+    public void updateProductStatus(long id, int status) {
+        if (status != 0 && status != 1) {
+            throw new BizException("商品状态不合法");
+        }
+        goodsDao.findById(id).orElseThrow(() -> new BizException("商品不存在"));
+        goodsDao.updateStatus(id, status);
+    }
+
+    public void deleteProduct(long id) {
+        goodsDao.findById(id).orElseThrow(() -> new BizException("商品不存在"));
+        goodsDao.delete(id);
+    }
+
+    public AdminStatistics statistics(int hotLimit) {
+        return adminStatsDao.overview(hotLimit);
+    }
+
+    public List<AdminStatistics.TrendPoint> orderTrend(int days) {
+        return adminStatsDao.orderTrend(days);
+    }
+
+    public AdminEmployee createEmployee(String username, String phone, String password) {
+        String normalizedName = normalizeRequired(username, "员工姓名不能为空");
+        validatePhone(phone);
+        if (password == null || password.length() < 6) {
+            throw new BizException("员工初始密码至少 6 位");
+        }
+        if (userDao.existsByPhone(phone)) {
+            throw new BizException("手机号已注册");
+        }
+        return userDao.insertEmployee(normalizedName, phone, PasswordUtil.hash(password), now());
+    }
+
+    public AdminEmployee updateEmployee(long id, String username, String phone) {
+        userDao.listEmployees().stream().filter(employee -> employee.id() == id).findFirst()
+                .orElseThrow(() -> new BizException("员工不存在"));
+        String normalizedName = normalizeRequired(username, "员工姓名不能为空");
+        validatePhone(phone);
+        if (userDao.existsByPhoneExceptUser(phone, id)) {
+            throw new BizException("手机号已被其他账号使用");
+        }
+        userDao.updateEmployee(id, normalizedName, phone);
+        return userDao.listEmployees().stream().filter(employee -> employee.id() == id).findFirst()
+                .orElseThrow(() -> new BizException("员工更新失败"));
+    }
+
+    public void updateEmployeeStatus(long id, int status) {
+        if (status != 0 && status != 1) {
+            throw new BizException("员工状态不合法");
+        }
+        userDao.listEmployees().stream().filter(employee -> employee.id() == id).findFirst()
+                .orElseThrow(() -> new BizException("员工不存在"));
+        userDao.updateEmployeeStatus(id, status);
+    }
+
+    /** 管理端订单推进：用于平台异常运营处理，状态规则与商户端一致。 */
+    @Transactional
+    public Order.OrderView orderFlow(long orderId, String action) {
+        Order order = orderDao.findById(orderId).orElseThrow(() -> new BizException("订单不存在"));
+        String now = now();
+        switch (action) {
+            case "accept" -> {
+                requireStatus(order, 1);
+                orderDao.updateStatus(orderId, 2, "accept_time", now);
+            }
+            case "deliver" -> {
+                requireStatus(order, 2);
+                orderDao.updateStatus(orderId, 3, "deliver_time", now);
+            }
+            case "complete" -> {
+                requireStatus(order, 3);
+                orderDao.updateStatus(orderId, 4, "complete_time", now);
+            }
+            case "cancel" -> {
+                if (order.status() != 1 && order.status() != 2 && order.status() != 3) {
+                    throw new BizException("当前状态不可取消");
+                }
+                return refundOrder(orderId);
+            }
+            default -> throw new BizException("不支持的订单操作：" + action);
+        }
+        return orderService.orderDetail(orderId);
     }
 
     @Transactional
@@ -156,6 +280,14 @@ public class AdminService {
         return store.toView(List.of(), List.of());
     }
 
+    private Category requirePlatformCategory(long id) {
+        Category category = storeDao.findCategoryById(id).orElseThrow(() -> new BizException("分类不存在"));
+        if (!"PLATFORM".equals(category.type())) {
+            throw new BizException("只能管理平台分类");
+        }
+        return category;
+    }
+
     private String normalizeRequired(String value, String message) {
         if (value == null || value.isBlank()) {
             throw new BizException(message);
@@ -169,5 +301,17 @@ public class AdminService {
 
     private double round2(double value) {
         return Math.round(value * 100.0) / 100.0;
+    }
+
+    private void requireStatus(Order order, int expected) {
+        if (order.status() != expected) {
+            throw new BizException("订单当前状态不支持该操作");
+        }
+    }
+
+    private void validatePhone(String phone) {
+        if (phone == null || !phone.matches("1\\d{10}")) {
+            throw new BizException("手机号格式不正确");
+        }
     }
 }

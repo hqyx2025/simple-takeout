@@ -1,6 +1,6 @@
 /**
  * 管理端-平台管理入口页
- * 仅 ADMIN 可进入：四个后台模块入口（分类管理/店铺管理/订单管理/退款审批）+ 数据概览
+ * 仅 ADMIN 可进入：平台分类/店铺/员工/订单/退款管理 + 数据概览
  * 各模块为独立页面，避免单页堆叠过长；退出登录后回到登录页
  */
 import { User, UserRole, Category, RefundRecord } from '../model/Models'
@@ -59,6 +59,7 @@ export struct AdminCenterPage {
   @State stores: AdminStore[] = []
   @State orders: AdminOrder[] = []
   @State refunds: RefundRecord[] = []
+  @State employees: number = 0
   @State loading: boolean = false
 
   aboutToAppear(): void {
@@ -82,9 +83,11 @@ export struct AdminCenterPage {
     const categoryResp: ApiResponse<Category[]> = await get<Category[]>('/api/admin/categories')
     const storeResp: ApiResponse<AdminStore[]> = await get<AdminStore[]>('/api/admin/stores')
     const orderResp: ApiResponse<AdminOrder[]> = await get<AdminOrder[]>('/api/admin/orders')
+    const employeeResp: ApiResponse<Object[]> = await get<Object[]>('/api/admin/employees')
     this.categories = categoryResp.code === 200 && categoryResp.data !== null ? categoryResp.data : []
     this.stores = storeResp.code === 200 && storeResp.data !== null ? storeResp.data : []
     this.orders = orderResp.code === 200 && orderResp.data !== null ? orderResp.data : []
+    this.employees = employeeResp.code === 200 && employeeResp.data !== null ? employeeResp.data.length : 0
     this.refunds = await fetchAdminRefundsApi()
     this.loading = false
   }
@@ -99,8 +102,12 @@ export struct AdminCenterPage {
     const entries: AdminEntryItem[] = [
       AdminEntryItem.create('📂', '分类管理', '平台分类的增删改', this.categories.length, 'pages/AdminCategoryPage'),
       AdminEntryItem.create('🏪', '店铺管理', '查看店铺与营业状态切换', this.stores.length, 'pages/AdminStorePage'),
+      AdminEntryItem.create('👥', '员工管理', '商户账号创建、编辑与停用', this.employees, 'pages/AdminEmployeePage'),
+      AdminEntryItem.create('🍽️', '商品监管', '搜索商品并强制上下架', 0, 'pages/AdminProductPage'),
+      AdminEntryItem.create('🧑‍💼', '用户管理', '查看用户和商户账号状态', 0, 'pages/AdminUserPage'),
       AdminEntryItem.create('📦', '订单管理', '托管订单状态与退款', this.orders.length, 'pages/AdminOrderPage'),
-      AdminEntryItem.create('💰', '退款审批', '处理用户退款申请', this.getPendingRefundCount(), 'pages/AdminRefundPage')
+      AdminEntryItem.create('💰', '退款审批', '处理用户退款申请', this.getPendingRefundCount(), 'pages/AdminRefundPage'),
+      AdminEntryItem.create('📊', '平台统计', '查看平台订单、成交和热销商品', 0, 'pages/AdminStatisticsPage')
     ]
     return entries
   }

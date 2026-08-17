@@ -7,7 +7,8 @@ import { get, post, put, del, ApiResponse, setAuthToken } from './HttpClient'
 import { API_CONFIG } from '../common/Constants'
 import {
   User, UserRole, StoreItem, GoodsItem, Category, Order, CartItem,
-  Address, Coupon, Review, Favorite, RefundRecord
+  Address, Coupon, Review, Favorite, RefundRecord, AdminEmployee, AdminProduct, AdminUser,
+  AdminStatisticsData, AdminTrendPoint, AdminHotGoods
 } from '../model/Models'
 import { logInfo, logWarn } from './AppLogger'
 
@@ -130,6 +131,76 @@ interface ServerReview {
   createTime: string
 }
 
+interface ServerAdminEmployee {
+  id: number
+  username: string
+  phone: string
+  role: number
+  status: number
+  storeCount: number
+  createTime: string
+}
+
+interface ServerAdminProduct {
+  id: number
+  storeId: number
+  storeName: string
+  name: string
+  description: string
+  price: number
+  originalPrice: number
+  image: string
+  categoryId: number
+  merchantCategoryId: number
+  stock: number
+  sales: number
+  rating: number
+  tag: string
+  status: number
+  createTime: string
+}
+
+interface ServerAdminUser {
+  id: number
+  username: string
+  phone: string
+  role: number
+  status: number
+  balance: number
+  storeCount: number
+  createTime: string
+}
+
+interface ServerAdminHotGoods {
+  goodsId: number
+  goodsName: string
+  storeId: number
+  storeName: string
+  sales: number
+  price: number
+  status: number
+}
+
+interface ServerAdminStatistics {
+  totalUsers: number
+  totalMerchants: number
+  totalStores: number
+  totalGoods: number
+  totalOrders: number
+  totalGmv: number
+  settledAmount: number
+  pendingEscrowAmount: number
+  todayOrders: number
+  todayGmv: number
+  hotGoods: ServerAdminHotGoods[]
+}
+
+interface ServerAdminTrendPoint {
+  date: string
+  orderCount: number
+  gmv: number
+}
+
 interface LoginResult {
   token: string
   user: ServerUser
@@ -224,6 +295,25 @@ interface MerchantGoodsRequest {
 
 interface RefundRequest {
   reason: string
+}
+
+interface AdminEmployeeCreateRequest {
+  username: string
+  phone: string
+  password: string
+}
+
+interface AdminEmployeeProfileRequest {
+  username: string
+  phone: string
+}
+
+interface AdminEmployeeStatusRequest {
+  status: number
+}
+
+interface AdminStatusRequest {
+  status: number
 }
 
 interface MerchantCategoryRequest {
@@ -532,6 +622,156 @@ export async function rejectRefundApi(refundId: number, reason: string): Promise
   const req: RefundRejectRequest = { rejectReason: reason }
   const resp: ApiResponse<RefundRecord> = await post<RefundRecord>(`/api/admin/refunds/${refundId}/reject`, req)
   return resp.code === 200
+}
+
+// ==================== 管理端订单与员工 ====================
+
+export async function adminOrderActionApi(orderId: number, action: string): Promise<boolean> {
+  const resp: ApiResponse<ServerOrder> = await put<ServerOrder>(`/api/admin/orders/${orderId}/${action}`, undefined)
+  return resp.code === 200
+}
+
+export async function fetchAdminEmployeesApi(): Promise<AdminEmployee[]> {
+  const resp: ApiResponse<ServerAdminEmployee[]> = await get<ServerAdminEmployee[]>('/api/admin/employees')
+  if (resp.code !== 200 || resp.data === null) {
+    return []
+  }
+  return resp.data.map((employee: ServerAdminEmployee) => {
+    const result: AdminEmployee = {
+      id: employee.id,
+      username: employee.username,
+      phone: employee.phone,
+      role: employee.role,
+      status: employee.status,
+      storeCount: employee.storeCount,
+      createTime: employee.createTime
+    }
+    return result
+  })
+}
+
+export async function createAdminEmployeeApi(username: string, phone: string, password: string): Promise<boolean> {
+  const req: AdminEmployeeCreateRequest = {
+    username: username,
+    phone: phone,
+    password: password
+  }
+  const resp: ApiResponse<ServerAdminEmployee> = await post<ServerAdminEmployee>('/api/admin/employees', req)
+  return resp.code === 200
+}
+
+export async function updateAdminEmployeeApi(id: number, username: string, phone: string): Promise<boolean> {
+  const req: AdminEmployeeProfileRequest = { username: username, phone: phone }
+  const resp: ApiResponse<ServerAdminEmployee> = await put<ServerAdminEmployee>(`/api/admin/employees/${id}`, req)
+  return resp.code === 200
+}
+
+export async function updateAdminEmployeeStatusApi(id: number, status: number): Promise<boolean> {
+  const req: AdminEmployeeStatusRequest = { status: status }
+  const resp: ApiResponse<Object> = await put<Object>(`/api/admin/employees/${id}/status`, req)
+  return resp.code === 200
+}
+
+// ==================== 平台用户、商品和统计 ====================
+
+export async function fetchAdminUsersApi(role?: number, status?: number, keyword?: string): Promise<AdminUser[]> {
+  const params: string[] = []
+  if (role !== undefined) {
+    params.push(`userRole=${role}`)
+  }
+  if (status !== undefined) {
+    params.push(`status=${status}`)
+  }
+  if (keyword !== undefined && keyword.trim() !== '') {
+    params.push(`keyword=${encodeURIComponent(keyword.trim())}`)
+  }
+  const url: string = params.length > 0 ? `/api/admin/users?${params.join('&')}` : '/api/admin/users'
+  const resp: ApiResponse<ServerAdminUser[]> = await get<ServerAdminUser[]>(url)
+  if (resp.code !== 200 || resp.data === null) {
+    return []
+  }
+  return resp.data.map((item: ServerAdminUser) => {
+    const user: AdminUser = {
+      id: item.id, username: item.username, phone: item.phone, role: item.role,
+      status: item.status, balance: item.balance, storeCount: item.storeCount, createTime: item.createTime
+    }
+    return user
+  })
+}
+
+export async function updateAdminUserStatusApi(id: number, status: number): Promise<boolean> {
+  const req: AdminStatusRequest = { status: status }
+  const resp: ApiResponse<Object> = await put<Object>(`/api/admin/users/${id}/status`, req)
+  return resp.code === 200
+}
+
+export async function fetchAdminProductsApi(keyword?: string, status?: number): Promise<AdminProduct[]> {
+  const params: string[] = []
+  if (keyword !== undefined && keyword.trim() !== '') {
+    params.push(`keyword=${encodeURIComponent(keyword.trim())}`)
+  }
+  if (status !== undefined) {
+    params.push(`status=${status}`)
+  }
+  const url: string = params.length > 0 ? `/api/admin/products?${params.join('&')}` : '/api/admin/products'
+  const resp: ApiResponse<ServerAdminProduct[]> = await get<ServerAdminProduct[]>(url)
+  if (resp.code !== 200 || resp.data === null) {
+    return []
+  }
+  return resp.data.map((item: ServerAdminProduct) => {
+    const product: AdminProduct = {
+      id: item.id, storeId: item.storeId, storeName: item.storeName, name: item.name,
+      description: item.description, price: item.price, originalPrice: item.originalPrice,
+      image: item.image, categoryId: item.categoryId, merchantCategoryId: item.merchantCategoryId,
+      stock: item.stock, sales: item.sales, rating: item.rating, tag: item.tag,
+      status: item.status, createTime: item.createTime
+    }
+    return product
+  })
+}
+
+export async function updateAdminProductStatusApi(id: number, status: number): Promise<boolean> {
+  const req: AdminStatusRequest = { status: status }
+  const resp: ApiResponse<Object> = await put<Object>(`/api/admin/products/${id}/status`, req)
+  return resp.code === 200
+}
+
+export async function deleteAdminProductApi(id: number): Promise<boolean> {
+  const resp: ApiResponse<Object> = await del<Object>(`/api/admin/products/${id}`)
+  return resp.code === 200
+}
+
+export async function fetchAdminStatisticsApi(hotLimit: number = 10): Promise<AdminStatisticsData | null> {
+  const resp: ApiResponse<ServerAdminStatistics> = await get<ServerAdminStatistics>(`/api/admin/statistics/overview?hotLimit=${hotLimit}`)
+  if (resp.code !== 200 || resp.data === null) {
+    return null
+  }
+  const hotGoods: AdminHotGoods[] = (resp.data.hotGoods || []).map((item: ServerAdminHotGoods): AdminHotGoods => {
+    const goods: AdminHotGoods = {
+      goodsId: item.goodsId, goodsName: item.goodsName, storeId: item.storeId,
+      storeName: item.storeName, sales: item.sales, price: item.price, status: item.status
+    }
+    return goods
+  })
+  const result: AdminStatisticsData = {
+    totalUsers: resp.data.totalUsers, totalMerchants: resp.data.totalMerchants,
+    totalStores: resp.data.totalStores, totalGoods: resp.data.totalGoods,
+    totalOrders: resp.data.totalOrders, totalGmv: resp.data.totalGmv,
+    settledAmount: resp.data.settledAmount, pendingEscrowAmount: resp.data.pendingEscrowAmount,
+    todayOrders: resp.data.todayOrders, todayGmv: resp.data.todayGmv, hotGoods: hotGoods
+  }
+  return result
+}
+
+export async function fetchAdminOrderTrendApi(days: number): Promise<AdminTrendPoint[]> {
+  const resp: ApiResponse<ServerAdminTrendPoint[]> = await get<ServerAdminTrendPoint[]>(`/api/admin/statistics/order-trend?days=${days}`)
+  if (resp.code !== 200 || resp.data === null) {
+    return []
+  }
+  return resp.data.map((item: ServerAdminTrendPoint) => {
+    const point: AdminTrendPoint = { date: item.date, orderCount: item.orderCount, gmv: item.gmv }
+    return point
+  })
 }
 
 // ==================== 用户中心（需登录） ====================

@@ -29,4 +29,24 @@ class AdminControllerSecurityTest {
 
         assertEquals(403, error.getCode());
     }
+
+    @Test
+    void nonAdminCannotManageProducts() {
+        AdminController controller = new AdminController(mock(AdminService.class));
+
+        BizException error = assertThrows(BizException.class,
+                () -> controller.products(1, null, null));
+
+        assertEquals(403, error.getCode());
+    }
+
+    @Test
+    void nonAdminCannotReadStatistics() {
+        AdminController controller = new AdminController(mock(AdminService.class));
+
+        BizException error = assertThrows(BizException.class,
+                () -> controller.statistics(0, 10));
+
+        assertEquals(403, error.getCode());
+    }
 }

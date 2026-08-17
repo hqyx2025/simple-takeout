@@ -1,6 +1,7 @@
 package com.example.takeout.dao;
 
 import com.example.takeout.model.Goods;
+import com.example.takeout.model.AdminProduct;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
@@ -47,6 +48,31 @@ public class GoodsDao {
         return jdbc.query("SELECT * FROM goods WHERE store_id = ? ORDER BY id", MAPPER, storeId);
     }
 
+    public List<AdminProduct> listForAdmin(String keyword, Integer status) {
+        StringBuilder sql = new StringBuilder("SELECT g.*, s.name AS store_name FROM goods g " +
+                "JOIN stores s ON s.id = g.store_id WHERE 1 = 1");
+        List<Object> args = new java.util.ArrayList<>();
+        if (keyword != null && !keyword.isBlank()) {
+            sql.append(" AND (g.name LIKE ? OR s.name LIKE ?)");
+            String value = "%" + keyword.trim() + "%";
+            args.add(value);
+            args.add(value);
+        }
+        if (status != null) {
+            sql.append(" AND g.status = ?");
+            args.add(status);
+        }
+        sql.append(" ORDER BY g.id DESC");
+        return jdbc.query(sql.toString(), (rs, i) -> new AdminProduct(
+                rs.getLong("id"), rs.getLong("store_id"), rs.getString("store_name"),
+                rs.getString("name"), rs.getString("description"), rs.getDouble("price"),
+                rs.getDouble("original_price"), rs.getString("image"), rs.getInt("category_id"),
+                rs.getLong("merchant_category_id"), rs.getInt("stock"), rs.getInt("sales"),
+                rs.getDouble("rating"), rs.getString("tag"), rs.getInt("status"),
+                rs.getString("create_time")
+        ), args.toArray());
+    }
+
     public Optional<Goods> findById(long id) {
         return jdbc.query("SELECT * FROM goods WHERE id = ?", MAPPER, id).stream().findFirst();
     }
@@ -67,6 +93,10 @@ public class GoodsDao {
     /** 快速补货/清库存：直接设置库存（不经过乐观锁）。 */
     public void updateStock(long id, int stock) {
         jdbc.update("UPDATE goods SET stock = ? WHERE id = ?", stock, id);
+    }
+
+    public void updateStatus(long id, int status) {
+        jdbc.update("UPDATE goods SET status = ? WHERE id = ?", status, id);
     }
 
     /**

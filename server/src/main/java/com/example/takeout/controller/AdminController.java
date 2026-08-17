@@ -3,6 +3,10 @@ package com.example.takeout.controller;
 import com.example.takeout.common.ApiResponse;
 import com.example.takeout.common.BizException;
 import com.example.takeout.model.Category;
+import com.example.takeout.model.AdminEmployee;
+import com.example.takeout.model.AdminProduct;
+import com.example.takeout.model.AdminStatistics;
+import com.example.takeout.model.AdminUser;
 import com.example.takeout.model.Order;
 import com.example.takeout.model.RefundRecord;
 import com.example.takeout.model.Store;
@@ -86,6 +90,102 @@ public class AdminController {
         return ApiResponse.ok(adminService.refundOrder(id));
     }
 
+    @PutMapping("/orders/{id}/{action}")
+    public ApiResponse<Order.OrderView> orderFlow(@RequestAttribute("role") int role,
+                                                   @PathVariable long id,
+                                                   @PathVariable String action) {
+        requireAdmin(role);
+        return ApiResponse.ok(adminService.orderFlow(id, action));
+    }
+
+    // ============ 员工管理 ============
+
+    @GetMapping("/employees")
+    public ApiResponse<List<AdminEmployee>> employees(@RequestAttribute("role") int role) {
+        requireAdmin(role);
+        return ApiResponse.ok(adminService.employees());
+    }
+
+    @GetMapping("/users")
+    public ApiResponse<List<AdminUser>> users(@RequestAttribute("role") int role,
+                                              @RequestParam(required = false) Integer userRole,
+                                              @RequestParam(required = false) Integer status,
+                                              @RequestParam(required = false) String keyword) {
+        requireAdmin(role);
+        return ApiResponse.ok(adminService.users(userRole, status, keyword));
+    }
+
+    @PutMapping("/users/{id}/status")
+    public ApiResponse<Void> updateUserStatus(@RequestAttribute("role") int role,
+                                              @PathVariable long id,
+                                              @RequestBody UserStatusRequest req) {
+        requireAdmin(role);
+        adminService.updateUserStatus(id, req.status());
+        return ApiResponse.ok();
+    }
+
+    @GetMapping("/products")
+    public ApiResponse<List<AdminProduct>> products(@RequestAttribute("role") int role,
+                                                     @RequestParam(required = false) String keyword,
+                                                     @RequestParam(required = false) Integer status) {
+        requireAdmin(role);
+        return ApiResponse.ok(adminService.products(keyword, status));
+    }
+
+    @PutMapping("/products/{id}/status")
+    public ApiResponse<Void> updateProductStatus(@RequestAttribute("role") int role,
+                                                 @PathVariable long id,
+                                                 @RequestBody ProductStatusRequest req) {
+        requireAdmin(role);
+        adminService.updateProductStatus(id, req.status());
+        return ApiResponse.ok();
+    }
+
+    @DeleteMapping("/products/{id}")
+    public ApiResponse<Void> deleteProduct(@RequestAttribute("role") int role, @PathVariable long id) {
+        requireAdmin(role);
+        adminService.deleteProduct(id);
+        return ApiResponse.ok();
+    }
+
+    @GetMapping("/statistics/overview")
+    public ApiResponse<AdminStatistics> statistics(@RequestAttribute("role") int role,
+                                                   @RequestParam(defaultValue = "10") int hotLimit) {
+        requireAdmin(role);
+        return ApiResponse.ok(adminService.statistics(hotLimit));
+    }
+
+    @GetMapping("/statistics/order-trend")
+    public ApiResponse<List<AdminStatistics.TrendPoint>> orderTrend(@RequestAttribute("role") int role,
+                                                                     @RequestParam(defaultValue = "7") int days) {
+        requireAdmin(role);
+        return ApiResponse.ok(adminService.orderTrend(days));
+    }
+
+    @PostMapping("/employees")
+    public ApiResponse<AdminEmployee> createEmployee(@RequestAttribute("role") int role,
+                                                     @RequestBody EmployeeRequest req) {
+        requireAdmin(role);
+        return ApiResponse.ok(adminService.createEmployee(req.username(), req.phone(), req.password()));
+    }
+
+    @PutMapping("/employees/{id}")
+    public ApiResponse<AdminEmployee> updateEmployee(@RequestAttribute("role") int role,
+                                                     @PathVariable long id,
+                                                     @RequestBody EmployeeProfileRequest req) {
+        requireAdmin(role);
+        return ApiResponse.ok(adminService.updateEmployee(id, req.username(), req.phone()));
+    }
+
+    @PutMapping("/employees/{id}/status")
+    public ApiResponse<Void> updateEmployeeStatus(@RequestAttribute("role") int role,
+                                                  @PathVariable long id,
+                                                  @RequestBody EmployeeStatusRequest req) {
+        requireAdmin(role);
+        adminService.updateEmployeeStatus(id, req.status());
+        return ApiResponse.ok();
+    }
+
     // ============ 退款审批（演进项，见大纲 9.7） ============
 
     @GetMapping("/refunds")
@@ -127,5 +227,20 @@ public class AdminController {
     }
 
     public record RefundRejectRequest(String rejectReason) {
+    }
+
+    public record EmployeeRequest(String username, String phone, String password) {
+    }
+
+    public record EmployeeProfileRequest(String username, String phone) {
+    }
+
+    public record EmployeeStatusRequest(int status) {
+    }
+
+    public record UserStatusRequest(int status) {
+    }
+
+    public record ProductStatusRequest(int status) {
     }
 }

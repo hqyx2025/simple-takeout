@@ -229,3 +229,76 @@ export interface MerchantStatsData {
   totalOrders: number
   totalRevenue: number
 }
+
+// 管理端员工账号
+export interface AdminEmployee {
+  id: number
+  username: string
+  phone: string
+  role: number
+  status: number
+  storeCount: number
+  createTime: string
+}
+
+/** 平台商品监管视图 */
+export interface AdminProduct {
+  id: number
+  storeId: number
+  storeName: string
+  name: string
+  description: string
+  price: number
+  originalPrice: number
+  image: string
+  categoryId: number
+  merchantCategoryId: number
+  stock: number
+  sales: number
+  rating: number
+  tag: string
+  status: number
+  createTime: string
+}
+
+/** 管理端用户/商户账号 */
+export interface AdminUser {
+  id: number
+  username: string
+  phone: string
+  role: number
+  status: number
+  balance: number
+  storeCount: number
+  createTime: string
+}
+
+export interface AdminHotGoods {
+  goodsId: number
+  goodsName: string
+  storeId: number
+  storeName: string
+  sales: number
+  price: number
+  status: number
+}
+
+export interface AdminStatisticsData {
+  totalUsers: number
+  totalMerchants: number
+  totalStores: number
+  totalGoods: number
+  totalOrders: number
+  totalGmv: number
+  settledAmount: number
+  pendingEscrowAmount: number
+  todayOrders: number
+  todayGmv: number
+  hotGoods: AdminHotGoods[]
+}
+
+export interface AdminTrendPoint {
+  date: string
+  orderCount: number
+  gmv: number
+}

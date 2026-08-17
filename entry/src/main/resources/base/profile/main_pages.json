@@ -20,6 +20,10 @@
     "pages/AdminCenterPage",
     "pages/AdminCategoryPage",
     "pages/AdminStorePage",
+    "pages/AdminEmployeePage",
+    "pages/AdminProductPage",
+    "pages/AdminUserPage",
+    "pages/AdminStatisticsPage",
     "pages/AdminOrderPage",
     "pages/AdminRefundPage"
   ]
