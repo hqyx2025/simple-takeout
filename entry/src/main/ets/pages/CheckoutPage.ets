@@ -17,6 +17,7 @@ import { webview } from '@kit.ArkWeb'
 export struct CheckoutPage {
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State checkoutStoreId: number = 0
+  @State checkoutStoreIds: number[] = []
   @State storeItems: CartItem[] = []
   @State storeInfo: StoreItem | null = null
   @State currentAddress: Address | null = null
@@ -37,9 +38,23 @@ export struct CheckoutPage {
     }
     this.checkoutStoreId = AppStorage.get<number>('checkoutStoreId') || 0
     const cart: CartItem[] = AppStorage.get<CartItem[]>('cartItems') || []
-    this.storeItems = cart.filter((c: CartItem) => c.storeId === this.checkoutStoreId)
     const stores: StoreItem[] = getAllStoresList()
-    this.storeInfo = stores.find((s: StoreItem) => s.id === this.checkoutStoreId) || null
+    if (this.checkoutStoreId > 0) {
+      this.storeItems = cart.filter((c: CartItem) => c.storeId === this.checkoutStoreId)
+      this.checkoutStoreIds = [this.checkoutStoreId]
+    } else {
+      this.storeItems = cart.slice()
+      const storeIds: number[] = []
+      for (let i = 0; i < cart.length; i++) {
+        if (storeIds.indexOf(cart[i].storeId) < 0) {
+          storeIds.push(cart[i].storeId)
+        }
+      }
+      this.checkoutStoreIds = storeIds
+    }
+    this.storeInfo = this.checkoutStoreIds.length > 0
+      ? stores.find((s: StoreItem) => s.id === this.checkoutStoreIds[0]) || null
+      : null
     this.currentAddress = AppStorage.get<Address>('currentAddress') ?? null
     this.selectedCoupon = AppStorage.get<Coupon | null>('selectedCoupon') ?? null
   }
@@ -64,10 +79,38 @@ export struct CheckoutPage {
   }
 
   private getDeliveryFee(): number {
-    if (this.storeInfo !== null) {
-      return this.storeInfo.deliveryFee
+    const stores: StoreItem[] = getAllStoresList()
+    let total: number = 0
+    for (let i = 0; i < this.checkoutStoreIds.length; i++) {
+      const store: StoreItem | undefined = stores.find((s: StoreItem) => s.id === this.checkoutStoreIds[i])
+      if (store !== undefined) {
+        total += store.deliveryFee
+      }
     }
-    return 0
+    return total
+  }
+
+  private getStoreGoodsTotalPrice(storeId: number): number {
+    let total: number = 0
+    const items: CartItem[] = this.storeItems.filter((item: CartItem) => item.storeId === storeId)
+    for (let i = 0; i < items.length; i++) {
+      total += items[i].goods.price * items[i].quantity
+    }
+    return total
+  }
+
+  private getStoreItems(storeId: number): CartItem[] {
+    return this.storeItems.filter((item: CartItem) => item.storeId === storeId)
+  }
+
+  private getStoreName(storeId: number): string {
+    const stores: StoreItem[] = getAllStoresList()
+    const store: StoreItem | undefined = stores.find((s: StoreItem) => s.id === storeId)
+    if (store !== undefined) {
+      return store.name
+    }
+    const items: CartItem[] = this.getStoreItems(storeId)
+    return items.length > 0 ? items[0].storeName : '\u5e97\u94fa'
   }
 
   private getDiscountAmount(): number {
@@ -113,13 +156,20 @@ export struct CheckoutPage {
       promptAction.showToast({ message: '订单正在提交，请稍候', duration: 1500 })
       return
     }
-    if (this.storeInfo !== null && this.getGoodsTotalPrice() < this.storeInfo.minOrder) {
-      const shortage: number = this.storeInfo.minOrder - this.getGoodsTotalPrice()
-      promptAction.showToast({
-        message: `未达到${this.storeInfo.name}起送价，还差¥${shortage.toFixed(2)}`,
-        duration: 2200
-      })
-      return
+    const stores: StoreItem[] = getAllStoresList()
+    for (let i = 0; i < this.checkoutStoreIds.length; i++) {
+      const store: StoreItem | undefined = stores.find((s: StoreItem) => s.id === this.checkoutStoreIds[i])
+      if (store !== undefined) {
+        const goodsTotal: number = this.getStoreGoodsTotalPrice(store.id)
+        if (goodsTotal < store.minOrder) {
+          const shortage: number = store.minOrder - goodsTotal
+          promptAction.showToast({
+            message: `未达到${store.name}起送价，还差¥${shortage.toFixed(2)}`,
+            duration: 2200
+          })
+          return
+        }
+      }
     }
     if (this.currentAddress === null) {
       promptAction.showToast({ message: '请先添加收货地址' })
@@ -130,7 +180,7 @@ export struct CheckoutPage {
       return
     }
     this.submitting = true
-    logInfo('Checkout', `开始提交订单 storeId=${this.checkoutStoreId} 商品数=${this.storeItems.length} 应付=${this.getPayAmount()} 优惠=${this.getDiscountAmount()}`)
+    logInfo('Checkout', `开始统一提交订单 店铺数=${this.checkoutStoreIds.length} 商品数=${this.storeItems.length} 应付=${this.getPayAmount()} 优惠=${this.getDiscountAmount()}`)
     // 调用后端下单（余额扣减+优惠券抵扣由服务端完成）
     this.doSubmitOrder()
   }
@@ -138,28 +188,48 @@ export struct CheckoutPage {
   // 调后端创建订单并跳转
   private async doSubmitOrder(): Promise<void> {
     const address: Address = this.currentAddress as Address
-    const couponId: number = this.selectedCoupon !== null ? this.selectedCoupon.id : 0
-    const serverOrder: Order | null = await createOrderRemote(this.checkoutStoreId, this.storeItems, address.id, couponId, this.remark)
-    if (serverOrder === null) {
+    let firstOrder: Order | null = null
+    let couponUsed: boolean = false
+    for (let i = 0; i < this.checkoutStoreIds.length; i++) {
+      const storeId: number = this.checkoutStoreIds[i]
+      const items: CartItem[] = this.getStoreItems(storeId)
+      const groupTotal: number = this.getStoreGoodsTotalPrice(storeId)
+      const couponCanApply: boolean = this.selectedCoupon !== null
+        && !couponUsed
+        && (this.selectedCoupon.storeId === undefined || this.selectedCoupon.storeId === 0 || this.selectedCoupon.storeId === storeId)
+        && groupTotal >= this.selectedCoupon.minOrder
+      const couponId: number = couponCanApply && this.selectedCoupon !== null ? this.selectedCoupon.id : 0
+      const serverOrder: Order | null = await createOrderRemote(storeId, items, address.id, couponId, this.remark)
+      if (serverOrder === null) {
+        this.submitting = false
+        const errorMessage: string = getLastRemoteErrorMessage()
+        const failureMessage: string = errorMessage === ''
+          ? '提交订单失败，请检查起送价、账户余额、收货地址或网络连接'
+          : `提交订单失败：${errorMessage}`
+        this.orderFailureMessage = failureMessage
+        this.showOrderFailureDialog = true
+        return
+      }
+      if (firstOrder === null) {
+        firstOrder = serverOrder
+      }
+      if (couponId > 0) {
+        couponUsed = true
+      }
+      const goodsIdsToClear: number[] = []
+      for (let j = 0; j < items.length; j++) {
+        goodsIdsToClear.push(items[j].goods.id)
+      }
+      const cartCleared: boolean = await deleteCartItemsRemote(goodsIdsToClear)
+      if (!cartCleared) {
+        await syncCartRemote()
+      }
+    }
+    if (firstOrder === null) {
       this.submitting = false
-      const errorMessage: string = getLastRemoteErrorMessage()
-      const failureMessage: string = errorMessage === ''
-        ? '提交订单失败，请检查起送价、账户余额、收货地址或网络连接'
-        : `提交订单失败：${errorMessage}`
-      this.orderFailureMessage = failureMessage
+      this.orderFailureMessage = '购物车没有可结算的商品'
       this.showOrderFailureDialog = true
       return
-    }
-
-    // 清空该店铺的购物车商品
-    const itemsToClear: CartItem[] = this.storeItems.slice()
-    const goodsIdsToClear: number[] = []
-    for (let i = 0; i < itemsToClear.length; i++) {
-      goodsIdsToClear.push(itemsToClear[i].goods.id)
-    }
-    const cartCleared: boolean = await deleteCartItemsRemote(goodsIdsToClear)
-    if (!cartCleared) {
-      await syncCartRemote()
     }
 
     // 后端已处理优惠券状态，重新同步真实优惠券列表
@@ -168,12 +238,12 @@ export struct CheckoutPage {
     }
 
     // 存入 currentOrder 供订单详情页读取
-    AppStorage.setOrCreate<number>('currentOrderId', serverOrder.id)
-    AppStorage.setOrCreate<Order>('currentOrder', serverOrder)
+    AppStorage.setOrCreate<number>('currentOrderId', firstOrder.id)
+    AppStorage.setOrCreate<Order>('currentOrder', firstOrder)
     // 重置已选优惠券
     AppStorage.setOrCreate<Coupon | null>('selectedCoupon', null)
     this.submitting = false
-    promptAction.showToast({ message: '订单提交成功！' })
+    promptAction.showToast({ message: this.checkoutStoreIds.length > 1 ? `已提交${this.checkoutStoreIds.length}笔订单` : '订单提交成功！' })
     router.pushUrl({ url: 'pages/OrderDetailPage' })
   }
 
@@ -317,7 +387,7 @@ export struct CheckoutPage {
       Row() {
         Text('🏪')
           .fontSize(FONT_SIZE.LG)
-        Text(this.storeInfo !== null ? this.storeInfo.name : '')
+        Text(this.checkoutStoreId > 0 && this.storeInfo !== null ? this.storeInfo.name : '\u5168\u90e8\u5e97\u94fa\u5546\u54c1')
           .fontSize(FONT_SIZE.LG)
           .fontWeight(FontWeight.Bold)
           .fontColor(COLORS.TEXT_PRIMARY)
