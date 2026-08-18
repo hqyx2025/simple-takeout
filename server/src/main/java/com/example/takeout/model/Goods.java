@@ -18,6 +18,7 @@ public record Goods(
         int sales,
         double rating,
         String tag,
+        boolean special,
         int status,
         String createTime
 ) {

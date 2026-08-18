@@ -2,12 +2,15 @@ package com.example.takeout.dao;
 
 import com.example.takeout.model.Goods;
 import com.example.takeout.model.AdminProduct;
+import com.example.takeout.model.SpecialGoods;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 
 /**
  * 商品数据访问
@@ -15,7 +18,13 @@ import java.util.Optional;
 @Repository
 public class GoodsDao {
 
-    private static final RowMapper<Goods> MAPPER = (rs, i) -> new Goods(
+    private static final RowMapper<Goods> MAPPER = (rs, i) -> mapGoods(rs);
+
+    private static final RowMapper<SpecialGoods> SPECIAL_MAPPER = (rs, i) -> new SpecialGoods(
+            mapGoods(rs), rs.getString("store_name"), rs.getString("store_distance"));
+
+    private static Goods mapGoods(ResultSet rs) throws SQLException {
+        return new Goods(
             rs.getLong("id"),
             rs.getLong("store_id"),
             rs.getString("name"),
@@ -30,9 +39,11 @@ public class GoodsDao {
             rs.getInt("sales"),
             rs.getDouble("rating"),
             rs.getString("tag"),
+            rs.getBoolean("is_special"),
             rs.getInt("status"),
             rs.getString("create_time")
-    );
+        );
+    }
 
     private final JdbcTemplate jdbc;
 
@@ -46,6 +57,14 @@ public class GoodsDao {
 
     public List<Goods> listByStoreAll(long storeId) {
         return jdbc.query("SELECT * FROM goods WHERE store_id = ? ORDER BY id", MAPPER, storeId);
+    }
+
+    public List<SpecialGoods> listSpecialGoods(int limit) {
+        return jdbc.query("SELECT g.*, s.name AS store_name, s.distance AS store_distance " +
+                        "FROM goods g JOIN stores s ON s.id = g.store_id " +
+                        "WHERE g.status = 1 AND g.is_special = 1 AND g.stock > 0 AND s.status = 1 " +
+                        "ORDER BY g.create_time DESC, g.sales DESC, g.id DESC LIMIT ?",
+                SPECIAL_MAPPER, limit);
     }
 
     public List<AdminProduct> listForAdmin(String keyword, Integer status) {
@@ -78,16 +97,17 @@ public class GoodsDao {
     }
 
     public long insert(Goods g) {
-        jdbc.update("INSERT INTO goods(store_id, name, description, price, original_price, image, category_id, merchant_category_id, stock, version, sales, rating, tag, status, create_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        jdbc.update("INSERT INTO goods(store_id, name, description, price, original_price, image, category_id, merchant_category_id, stock, version, sales, rating, tag, is_special, status, create_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 g.storeId(), g.name(), g.description(), g.price(), g.originalPrice(), g.image(),
-                g.categoryId(), g.merchantCategoryId(), g.stock(), 0, g.sales(), g.rating(), g.tag(), g.status(), g.createTime());
+                g.categoryId(), g.merchantCategoryId(), g.stock(), 0, g.sales(), g.rating(), g.tag(),
+                g.special(), g.status(), g.createTime());
         return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 
     public void update(Goods g) {
-        jdbc.update("UPDATE goods SET name=?, description=?, price=?, original_price=?, image=?, category_id=?, merchant_category_id=?, tag=?, status=?, stock=? WHERE id=?",
+        jdbc.update("UPDATE goods SET name=?, description=?, price=?, original_price=?, image=?, category_id=?, merchant_category_id=?, tag=?, is_special=?, status=?, stock=? WHERE id=?",
                 g.name(), g.description(), g.price(), g.originalPrice(), g.image(),
-                g.categoryId(), g.merchantCategoryId(), g.tag(), g.status(), g.stock(), g.id());
+                g.categoryId(), g.merchantCategoryId(), g.tag(), g.special(), g.status(), g.stock(), g.id());
     }
 
     /** 快速补货/清库存：直接设置库存（不经过乐观锁）。 */

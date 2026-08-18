@@ -69,7 +69,7 @@ class OrderServiceSecurityTest {
     @Test
     void rejectsGoodsFromAnotherStore() {
         Store store = new Store(10, "测试店", "", 4.5, 0, 3, 0, "30分钟", "1km", "[]", "", 1, "[1]", 99, 1, 0, "");
-        Goods goods = new Goods(100, 11, "串店商品", "", 10, 10, "", 1, 0, 999, 0, 0, 4.5, "", 1, "");
+        Goods goods = new Goods(100, 11, "串店商品", "", 10, 10, "", 1, 0, 999, 0, 0, 4.5, "", false, 1, "");
         when(storeDao.findById(10)).thenReturn(Optional.of(store));
         when(addressDao.listByUser(1)).thenReturn(List.of(new Address(20, 1, "张三", "13800138000", "测试地址", 1, "")));
         when(goodsDao.findById(100)).thenReturn(Optional.of(goods));

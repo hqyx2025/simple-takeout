@@ -6,6 +6,7 @@ import com.example.takeout.dao.StoreDao;
 import com.example.takeout.model.Category;
 import com.example.takeout.model.Goods;
 import com.example.takeout.model.Store;
+import com.example.takeout.model.SpecialGoods;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
@@ -70,6 +71,13 @@ public class StoreService {
         return goodsDao.listByStore(storeId);
     }
 
+    public List<SpecialGoods> listSpecialGoods(int limit) {
+        if (limit <= 0 || limit > 50) {
+            throw new BizException("特价团购商品数量必须在 1 到 50 之间");
+        }
+        return goodsDao.listSpecialGoods(limit);
+    }
+
     public List<Store.StoreView> merchantStores(long ownerId) {
         return storeDao.listByOwner(ownerId).stream().map(this::toView).toList();
     }
@@ -120,7 +128,7 @@ public class StoreService {
         Goods goods = new Goods(0, storeId, input.name(), input.description(),
                 input.price(), input.originalPrice(), input.image(), input.categoryId(),
                 input.merchantCategoryId(), input.stock(), 0, 0, 4.5,
-                input.tag() == null ? "" : input.tag(), 1, now);
+                input.tag() == null ? "" : input.tag(), input.special(), 1, now);
         long id = goodsDao.insert(goods);
         return goodsDao.findById(id).orElseThrow(() -> new BizException("商品创建失败"));
     }
@@ -134,7 +142,7 @@ public class StoreService {
         Goods updated = new Goods(goods.id(), goods.storeId(), input.name(), input.description(),
                 input.price(), input.originalPrice(), input.image(), input.categoryId(),
                 input.merchantCategoryId(), input.stock(), goods.version(),
-                goods.sales(), goods.rating(), input.tag() == null ? "" : input.tag(),
+                goods.sales(), goods.rating(), input.tag() == null ? "" : input.tag(), input.special(),
                 input.status() < 0 ? goods.status() : input.status(), goods.createTime());
         goodsDao.update(updated);
         return goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品更新失败"));
@@ -230,6 +238,9 @@ public class StoreService {
         if (input.stock() < 0) {
             throw new BizException("库存不能为负数");
         }
+        if (input.special() && input.originalPrice() <= input.price()) {
+            throw new BizException("特价商品原价必须高于特价价");
+        }
     }
 
     private void validateCategory(int categoryId) {
@@ -280,7 +291,7 @@ public class StoreService {
      */
     public record GoodsInput(String name, String description, double price, double originalPrice,
                              String image, int categoryId, String tag, int status,
-                             long merchantCategoryId, int stock) {
+                             long merchantCategoryId, int stock, boolean special) {
     }
 
     private String normalizeRequired(String value, String message) {

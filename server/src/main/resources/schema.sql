@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS goods (
     sales INT NOT NULL DEFAULT 0,
     rating DECIMAL(3,1) NOT NULL DEFAULT 4.5,
     tag VARCHAR(32) DEFAULT '',
+    is_special INT NOT NULL DEFAULT 0,
     status INT NOT NULL DEFAULT 1,
     create_time VARCHAR(32) NOT NULL,
     KEY idx_goods_store (store_id)

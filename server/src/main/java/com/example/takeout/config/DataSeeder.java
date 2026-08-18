@@ -75,6 +75,12 @@ public class DataSeeder implements ApplicationRunner {
         ensureColumn("goods", "stock", "INT NOT NULL DEFAULT 999");
         ensureColumn("goods", "version", "INT NOT NULL DEFAULT 0");
         ensureColumn("goods", "merchant_category_id", "BIGINT NOT NULL DEFAULT 0");
+        boolean specialColumnAdded = ensureColumn("goods", "is_special", "INT NOT NULL DEFAULT 0");
+        if (specialColumnAdded) {
+            // 将旧版本已有原价折扣商品迁移为特价商品，后续启动不覆盖商户的取消操作。
+            jdbc.update("UPDATE goods SET is_special = 1 WHERE is_special = 0 AND status = 1 " +
+                    "AND original_price > price");
+        }
         Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM goods WHERE stock = 0", Integer.class);
         if (count != null && count > 0) {
             jdbc.update("UPDATE goods SET stock = 999 WHERE stock = 0");
@@ -129,14 +135,16 @@ public class DataSeeder implements ApplicationRunner {
         ensureColumn("stores", "recommended", "INT NOT NULL DEFAULT 0 AFTER status");
     }
 
-    private void ensureColumn(String table, String column, String definition) {
+    private boolean ensureColumn(String table, String column, String definition) {
         Integer count = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() " +
                         "AND table_name = ? AND column_name = ?", Integer.class, table, column);
         if (count == null || count == 0) {
             jdbc.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition);
             log.info("表 {} 已补充字段 {}", table, column);
+            return true;
         }
+        return false;
     }
 
     private void ensureAdminUser() {
@@ -338,22 +346,22 @@ public class DataSeeder implements ApplicationRunner {
         double basePrice = 8 + ThreadLocalRandom.current().nextDouble(30);
         for (int i = 0; i < specialCount; i++) {
             double price = round2(basePrice + i * 3 + ThreadLocalRandom.current().nextDouble(5));
-            jdbc.update("INSERT INTO goods(store_id, name, description, price, original_price, image, category_id, sales, rating, tag, status, create_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            jdbc.update("INSERT INTO goods(store_id, name, description, price, original_price, image, category_id, sales, rating, tag, is_special, status, create_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     storeId, specialGoods[i % specialGoods.length] + (i == 0 ? "(店长推荐)" : ""), descriptions[i % descriptions.length],
                     price, round2(price + 3), "", categoryId,
                     300 + ThreadLocalRandom.current().nextInt(2000),
                     4.3 + ThreadLocalRandom.current().nextDouble(0.7),
-                    i == 0 ? "招牌" : "", 1, now());
+                    i == 0 ? "招牌" : "", i < specialGoods.length ? 1 : 0, 1, now());
         }
         // 程序化补充至 30 个商品
         for (int i = specialCount; i < 30; i++) {
             double price = round2(6 + ThreadLocalRandom.current().nextDouble(40));
-            jdbc.update("INSERT INTO goods(store_id, name, description, price, original_price, image, category_id, sales, rating, tag, status, create_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            jdbc.update("INSERT INTO goods(store_id, name, description, price, original_price, image, category_id, sales, rating, tag, is_special, status, create_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     storeId, "精选菜品" + (i + 1), descriptions[i % descriptions.length],
                     price, 0, "", categoryId,
                     50 + ThreadLocalRandom.current().nextInt(1500),
                     4.0 + ThreadLocalRandom.current().nextDouble(0.8),
-                    "", 1, now());
+                    "", 0, 1, now());
         }
     }
 

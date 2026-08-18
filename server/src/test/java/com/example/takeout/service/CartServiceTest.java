@@ -41,7 +41,7 @@ class CartServiceTest {
         StoreDao storeDao = mock(StoreDao.class);
         CartService service = new CartService(mapper, goodsDao, storeDao);
         Goods goods = new Goods(10L, 20L, "测试商品", "", 10.0, 10.0, "", 1,
-                0L, 10, 0, 0, 4.5, "", 0, "now");
+                0L, 10, 0, 0, 4.5, "", false, 0, "now");
         when(goodsDao.findById(10L)).thenReturn(Optional.of(goods));
 
         BizException exception = assertThrows(BizException.class, () -> service.add(1L, 10L, 1));
