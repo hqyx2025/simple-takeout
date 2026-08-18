@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 
@@ -39,6 +40,10 @@ public class StoreService {
     }
 
     public List<Store.StoreView> listStores(Integer categoryId) {
+        return listStores(categoryId, null, null);
+    }
+
+    public List<Store.StoreView> listStores(Integer categoryId, Double latitude, Double longitude) {
         if (categoryId != null && categoryId < 0) {
             throw new BizException("分类参数不合法");
         }
@@ -48,17 +53,29 @@ public class StoreService {
         List<Store> stores = categoryId == null || categoryId == 0
                 ? storeDao.listAll()
                 : storeDao.listByCategory(categoryId);
-        return stores.stream().map(this::toView).toList();
+        return stores.stream().map(store -> toView(store, latitude, longitude)).toList();
     }
 
     public List<Store.StoreView> recommendedStores(double maxDistanceKm, int limit) {
+        return recommendedStores(maxDistanceKm, limit, null, null);
+    }
+
+    public List<Store.StoreView> recommendedStores(double maxDistanceKm, int limit,
+                                                   Double latitude, Double longitude) {
         if (!Double.isFinite(maxDistanceKm) || maxDistanceKm <= 0 || maxDistanceKm > 20) {
             throw new BizException("查询距离范围必须在 0 到 20 公里之间");
         }
         if (limit <= 0 || limit > 50) {
             throw new BizException("推荐店铺数量必须在 1 到 50 之间");
         }
-        return storeDao.listRecommended(maxDistanceKm, limit).stream().map(this::toView).toList();
+        return storeDao.listRecommended().stream()
+                .map(store -> store.withDistance(latitude, longitude))
+                .filter(store -> parseDistance(store.distance()) <= maxDistanceKm)
+                .sorted(Comparator.comparingDouble((Store store) -> parseDistance(store.distance()))
+                        .thenComparing(Comparator.comparingDouble(Store::rating).reversed()))
+                .limit(limit)
+                .map(this::toView)
+                .toList();
     }
 
     public Store.StoreView storeDetail(long id) {
@@ -72,10 +89,23 @@ public class StoreService {
     }
 
     public List<SpecialGoods> listSpecialGoods(int limit) {
+        return listSpecialGoods(limit, null, null);
+    }
+
+    public List<SpecialGoods> listSpecialGoods(int limit, Double latitude, Double longitude) {
         if (limit <= 0 || limit > 50) {
             throw new BizException("特价团购商品数量必须在 1 到 50 之间");
         }
-        return goodsDao.listSpecialGoods(limit);
+        return goodsDao.listSpecialGoods(limit).stream().map(item -> {
+            Store store = storeDao.findById(item.goods().storeId()).orElse(null);
+            String distance = item.storeDistance();
+            if (store != null) {
+                distance = store.withDistance(latitude, longitude).distance();
+            } else {
+                distance = Store.normalizeDistance(distance);
+            }
+            return new SpecialGoods(item.goods(), item.storeName(), distance);
+        }).toList();
     }
 
     public List<Store.StoreView> merchantStores(long ownerId) {
@@ -88,7 +118,8 @@ public class StoreService {
     }
 
     public Store.StoreView createStore(long ownerId, String name, int categoryId, double deliveryFee,
-                                       double minOrder, String deliveryTime, String notice) {
+                                       double minOrder, String deliveryTime, String notice,
+                                       String address, Double latitude, Double longitude) {
         if (name == null || name.isBlank()) {
             throw new BizException("店铺名称不能为空");
         }
@@ -96,23 +127,34 @@ public class StoreService {
         if (!Double.isFinite(deliveryFee) || deliveryFee < 0 || !Double.isFinite(minOrder) || minOrder < 0) {
             throw new BizException("配送费和起送价必须为非负数字");
         }
+        String normalizedAddress = normalizeRequired(address, "店铺地址不能为空");
+        if (!validCoordinates(latitude, longitude)) {
+            throw new BizException("店铺地址定位失败，请重新选择地址");
+        }
         String now = LocalDateTime.now().format(FMT);
         Store store = new Store(0, name, "", 4.5, 0, deliveryFee, minOrder,
                 deliveryTime == null || deliveryTime.isBlank() ? "30分钟" : deliveryTime,
-                "1.0km", "[\"新店特惠\"]", notice == null ? "" : notice,
-                categoryId, "[" + categoryId + "]", ownerId, 1, 0, now);
+                "0.0km", "[\"新店特惠\"]", notice == null ? "" : notice,
+                normalizedAddress, latitude, longitude, categoryId, "[" + categoryId + "]", ownerId, 1, 0, now);
         long id = storeDao.insert(store);
         return storeDetail(id);
     }
 
     public Store.StoreView updateStore(long ownerId, long storeId, StorePatch patch) {
         Store store = requireOwned(ownerId, storeId);
+        String nextAddress = patch.address() == null ? store.address() : normalizeRequired(patch.address(), "店铺地址不能为空");
+        Double nextLatitude = patch.address() == null ? store.latitude() : patch.latitude();
+        Double nextLongitude = patch.address() == null ? store.longitude() : patch.longitude();
+        if (!nextAddress.isBlank() && !validCoordinates(nextLatitude, nextLongitude)) {
+            throw new BizException("店铺地址定位失败，请重新选择地址");
+        }
         Store updated = new Store(store.id(), patch.name() == null ? store.name() : patch.name(),
                 store.image(), store.rating(), store.monthlySales(),
                 patch.deliveryFee() < 0 ? store.deliveryFee() : patch.deliveryFee(),
                 patch.minOrder() < 0 ? store.minOrder() : patch.minOrder(),
                 patch.deliveryTime() == null ? store.deliveryTime() : patch.deliveryTime(),
                 store.distance(), store.tags(), patch.notice() == null ? store.notice() : patch.notice(),
+                nextAddress, nextLatitude, nextLongitude,
                 store.categoryId(), store.categoryIds(), store.ownerId(),
                 patch.status() < 0 ? store.status() : patch.status(), store.recommended(), store.createTime());
         storeDao.update(updated);
@@ -250,9 +292,31 @@ public class StoreService {
     }
 
     private Store.StoreView toView(Store store) {
+        return toView(store, null, null);
+    }
+
+    private Store.StoreView toView(Store store, Double latitude, Double longitude) {
+        Store displayStore = store.withDistance(latitude, longitude);
         List<String> tags = parseList(store.tags());
         List<Integer> categoryIds = parseIds(store.categoryIds());
-        return store.toView(tags, categoryIds);
+        return displayStore.toView(tags, categoryIds);
+    }
+
+    private double parseDistance(String distance) {
+        if (distance == null || distance.isBlank()) {
+            return Double.MAX_VALUE;
+        }
+        try {
+            return Double.parseDouble(distance.toLowerCase().replace("km", "").trim());
+        } catch (NumberFormatException ignored) {
+            return Double.MAX_VALUE;
+        }
+    }
+
+    private boolean validCoordinates(Double latitude, Double longitude) {
+        return latitude != null && longitude != null
+                && Double.isFinite(latitude) && Double.isFinite(longitude)
+                && latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
     }
 
     private List<String> parseList(String json) {
@@ -283,7 +347,7 @@ public class StoreService {
      * 店铺信息修改项（可选字段）
      */
     public record StorePatch(String name, double deliveryFee, double minOrder, String deliveryTime,
-                             String notice, int status) {
+                             String notice, String address, Double latitude, Double longitude, int status) {
     }
 
     /**

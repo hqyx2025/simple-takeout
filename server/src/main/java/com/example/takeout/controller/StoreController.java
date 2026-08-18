@@ -47,8 +47,10 @@ public class StoreController {
     }
 
     @GetMapping("/stores")
-    public ApiResponse<List<Store.StoreView>> stores(@RequestParam(required = false) Integer categoryId) {
-        List<Store.StoreView> stores = storeService.listStores(categoryId);
+    public ApiResponse<List<Store.StoreView>> stores(@RequestParam(required = false) Integer categoryId,
+                                                     @RequestParam(required = false) Double latitude,
+                                                     @RequestParam(required = false) Double longitude) {
+        List<Store.StoreView> stores = storeService.listStores(categoryId, latitude, longitude);
         log.info("[数据] 店铺查询 categoryId={} 返回 count={} items={}", categoryId,
                 stores.size(), stores.stream().map(s -> s.id() + ":" + s.name() + ":cat=" + s.categoryId())
                         .collect(Collectors.joining(",")));
@@ -58,8 +60,10 @@ public class StoreController {
     @GetMapping("/stores/recommended")
     public ApiResponse<List<Store.StoreView>> recommendedStores(
             @RequestParam(defaultValue = "2") double maxDistanceKm,
-            @RequestParam(defaultValue = "10") int limit) {
-        return ApiResponse.ok(storeService.recommendedStores(maxDistanceKm, limit));
+            @RequestParam(defaultValue = "10") int limit,
+            @RequestParam(required = false) Double latitude,
+            @RequestParam(required = false) Double longitude) {
+        return ApiResponse.ok(storeService.recommendedStores(maxDistanceKm, limit, latitude, longitude));
     }
 
     @GetMapping("/stores/{id}")
@@ -74,8 +78,10 @@ public class StoreController {
 
     @GetMapping("/goods/special")
     public ApiResponse<List<SpecialGoods>> specialGoods(
-            @RequestParam(defaultValue = "10") int limit) {
-        return ApiResponse.ok(storeService.listSpecialGoods(limit));
+            @RequestParam(defaultValue = "10") int limit,
+            @RequestParam(required = false) Double latitude,
+            @RequestParam(required = false) Double longitude) {
+        return ApiResponse.ok(storeService.listSpecialGoods(limit, latitude, longitude));
     }
 
     /** 用户端：店铺详情展示的店内商户分类（与商品 merchantCategoryId 对应）。 */
@@ -105,7 +111,8 @@ public class StoreController {
                                                     @RequestBody CreateStoreRequest req) {
         requireMerchant(role);
         return ApiResponse.ok(storeService.createStore(userId, req.name(), req.categoryId(),
-                req.deliveryFee(), req.minOrder(), req.deliveryTime(), req.notice()));
+                req.deliveryFee(), req.minOrder(), req.deliveryTime(), req.notice(),
+                req.address(), req.latitude(), req.longitude()));
     }
 
     @PutMapping("/merchant/stores/{storeId}")
@@ -189,7 +196,8 @@ public class StoreController {
     }
 
     public record CreateStoreRequest(String name, int categoryId, double deliveryFee,
-                                     double minOrder, String deliveryTime, String notice) {
+                                     double minOrder, String deliveryTime, String notice,
+                                     String address, Double latitude, Double longitude) {
     }
 
     public record StockRequest(int stock) {

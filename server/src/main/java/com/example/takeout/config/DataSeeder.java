@@ -39,6 +39,7 @@ public class DataSeeder implements ApplicationRunner {
         ensureCartTable();
         ensureReviewGoodsColumn();
         ensureStoreRecommendedColumn();
+        ensureStoreLocationColumns();
         // 分类是首页导航的基础数据，即使已有用户数据，也必须单独补齐。
         ensureCategories();
         Integer userCount = jdbc.queryForObject("SELECT COUNT(*) FROM users", Integer.class);
@@ -133,6 +134,13 @@ public class DataSeeder implements ApplicationRunner {
 
     private void ensureStoreRecommendedColumn() {
         ensureColumn("stores", "recommended", "INT NOT NULL DEFAULT 0 AFTER status");
+    }
+
+    /** 存量店铺补充地址与坐标，坐标为空时由客户端继续显示历史距离兜底。 */
+    private void ensureStoreLocationColumns() {
+        ensureColumn("stores", "address", "VARCHAR(512) NOT NULL DEFAULT '' AFTER notice");
+        ensureColumn("stores", "latitude", "DECIMAL(10,7) DEFAULT NULL AFTER address");
+        ensureColumn("stores", "longitude", "DECIMAL(10,7) DEFAULT NULL AFTER latitude");
     }
 
     private boolean ensureColumn(String table, String column, String definition) {

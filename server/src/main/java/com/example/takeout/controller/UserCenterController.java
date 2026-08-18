@@ -111,8 +111,10 @@ public class UserCenterController {
     // ============ 搜索 ============
 
     @GetMapping("/search")
-    public ApiResponse<List<Store.StoreView>> search(@RequestParam String keyword) {
-        return ApiResponse.ok(service.search(keyword));
+    public ApiResponse<List<Store.StoreView>> search(@RequestParam String keyword,
+                                                     @RequestParam(required = false) Double latitude,
+                                                     @RequestParam(required = false) Double longitude) {
+        return ApiResponse.ok(service.search(keyword, latitude, longitude));
     }
 
     public record ClaimCouponRequest(long storeId, String name, double threshold, double amount) {
