@@ -176,6 +176,10 @@ public class UserCenterService {
     // ============ 搜索 ============
 
     public List<Store.StoreView> search(String keyword) {
+        return search(keyword, null, null);
+    }
+
+    public List<Store.StoreView> search(String keyword, Double latitude, Double longitude) {
         if (keyword == null || keyword.isBlank()) {
             return List.of();
         }
@@ -184,7 +188,7 @@ public class UserCenterService {
                 .filter(s -> s.name().toLowerCase(Locale.ROOT).contains(kw)
                         || matchGoods(s.id(), kw)
                         || matchNotice(s.notice(), kw))
-                .map(this::toView)
+                .map(store -> toView(store.withDistance(latitude, longitude)))
                 .toList();
     }
 
