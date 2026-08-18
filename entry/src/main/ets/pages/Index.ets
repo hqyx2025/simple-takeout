@@ -2008,7 +2008,6 @@ struct ProfileMainPage {
               .width('100%')
               .padding({ left: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
             this.ProfileMenuRow('📋', '店铺管理', () => { router.pushUrl({ url: 'pages/MerchantCenterPage' }) })
-            this.ProfileMenuRow('📦', '商品上架', () => { router.pushUrl({ url: 'pages/MerchantCenterPage' }) })
             this.ProfileMenuRow('📊', '订单管理', () => { router.pushUrl({ url: 'pages/MerchantOrdersPage' }) })
             this.ProfileMenuRow('💰', '收入统计', () => { router.pushUrl({ url: 'pages/MerchantStatsPage' }) })
           }
