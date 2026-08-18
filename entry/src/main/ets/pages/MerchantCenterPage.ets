@@ -2,7 +2,7 @@
  * 商户中心页面
  * 商户可查看自己的店铺列表、管理店铺、上架食物
  */
-import { StoreItem, GoodsItem, UserRole, User, Category } from '../model/Models'
+import { StoreItem, GoodsItem, UserRole, User, Category, Address } from '../model/Models'
 import { fetchMerchantStoresApi, fetchMerchantGoodsApi, createMerchantStoreApi, updateMerchantStoreApi,
   updateMerchantGoodsApi, deleteMerchantGoodsApi,
   fetchMerchantCategoriesApi, createMerchantCategoryApi, updateMerchantCategoryApi, deleteMerchantCategoryApi } from '../service/ApiService'
@@ -11,6 +11,19 @@ import { promptCompat as promptAction } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
 import { routerCompat as router } from '../common/UiNavigation'
 import { AddressSearchResult, searchAddress } from '../service/LocationService'
+import { syncAddressesRemote } from '../service/AppStorageManager'
+
+class MerchantAddressOption {
+  id: number = 0
+  value: string = ''
+
+  static create(id: number, value: string): MerchantAddressOption {
+    const option: MerchantAddressOption = new MerchantAddressOption()
+    option.id = id
+    option.value = value
+    return option
+  }
+}
 
 @Entry
 @Component
@@ -25,10 +38,19 @@ export struct MerchantCenterPage {
   @State selectedStoreId: number = 0
   @State selectedStoreGoods: GoodsItem[] = []
   @State storeGoodsCounts: Record<string, number> = {}
+  @StorageLink('addressList') merchantAddresses: Address[] = []
+  @State storeAddressOptions: MerchantAddressOption[] = []
+  @State editStoreAddressOptions: MerchantAddressOption[] = []
+  @State newStoreAddressId: number = 0
+  @State editStoreAddressId: number = 0
+  @State newStoreAddressIndex: number = -1
+  @State editStoreAddressIndex: number = -1
+  @State editStoreAddressFallbackText: string = ''
+  @State editStoreAddressFallbackLatitude: number = 0
+  @State editStoreAddressFallbackLongitude: number = 0
 
   // 新增店铺表单
   @State newStoreName: string = ''
-  @State newStoreAddress: string = ''
   @State newStoreNotice: string = ''
   @State newStoreDeliveryFee: string = '3'
   @State newStoreMinOrder: string = '20'
@@ -43,7 +65,6 @@ export struct MerchantCenterPage {
   // 编辑店铺表单
   @State showEditStore: boolean = false
   @State editStoreName: string = ''
-  @State editStoreAddress: string = ''
   @State editStoreNotice: string = ''
   @State editStoreDeliveryFee: string = ''
   @State editStoreMinOrder: string = ''
@@ -60,10 +81,147 @@ export struct MerchantCenterPage {
     }
     this.refreshStores()
     this.refreshCategories()
+    this.refreshMerchantAddresses()
   }
 
   async refreshCategories() {
     this.merchantCategories = await fetchMerchantCategoriesApi()
+  }
+
+  async refreshMerchantAddresses(): Promise<void> {
+    await syncAddressesRemote()
+    const latestAddresses: Address[] = AppStorage.get<Address[]>('addressList') || []
+    this.merchantAddresses = latestAddresses.slice()
+    this.rebuildStoreAddressOptions()
+    this.applyPendingAddressSelection()
+  }
+
+  private getAddressText(address: Address): string {
+    return `${address.address} ${address.detail}`.trim()
+  }
+
+  private getAddressOptionText(address: Address): string {
+    const addressText: string = this.getAddressText(address)
+    const tag: string = address.tag === undefined ? '' : address.tag.trim()
+    if (tag === '') {
+      return addressText
+    }
+    return `${tag} · ${addressText}`
+  }
+
+  private buildAddressOptions(includeStoreFallback: boolean): MerchantAddressOption[] {
+    const options: MerchantAddressOption[] = []
+    if (includeStoreFallback && this.editStoreAddressFallbackText !== '') {
+      options.push(MerchantAddressOption.create(-1, `当前店铺地址：${this.editStoreAddressFallbackText}`))
+    }
+    for (const address of this.merchantAddresses) {
+      const addressText: string = this.getAddressOptionText(address)
+      if (addressText !== '') {
+        options.push(MerchantAddressOption.create(address.id, addressText))
+      }
+    }
+    options.push(MerchantAddressOption.create(0, '＋ 新增地址'))
+    return options
+  }
+
+  private findOptionIndex(options: MerchantAddressOption[], addressId: number): number {
+    for (let i = 0; i < options.length; i++) {
+      if (options[i].id === addressId) {
+        return i
+      }
+    }
+    return -1
+  }
+
+  private rebuildStoreAddressOptions(): void {
+    this.storeAddressOptions = this.buildAddressOptions(false)
+    this.editStoreAddressOptions = this.buildAddressOptions(true)
+    this.newStoreAddressIndex = this.findOptionIndex(this.storeAddressOptions, this.newStoreAddressId)
+    this.editStoreAddressIndex = this.findOptionIndex(this.editStoreAddressOptions, this.editStoreAddressId)
+  }
+
+  private getPreferredAddressId(): number {
+    const current: Address | null = AppStorage.get<Address>('currentAddress') ?? null
+    if (current !== null && this.merchantAddresses.some((address: Address) => address.id === current.id)) {
+      return current.id
+    }
+    const defaultAddress: Address | undefined = this.merchantAddresses.find((address: Address) => address.isDefault)
+    if (defaultAddress !== undefined) {
+      return defaultAddress.id
+    }
+    return this.merchantAddresses.length > 0 ? this.merchantAddresses[0].id : 0
+  }
+
+  private findMerchantAddress(addressId: number): Address | null {
+    const address: Address | undefined = this.merchantAddresses.find((item: Address) => item.id === addressId)
+    return address === undefined ? null : address
+  }
+
+  private validCoordinates(latitude: number, longitude: number): boolean {
+    return Number.isFinite(latitude) && Number.isFinite(longitude)
+      && latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180
+      && !(latitude === 0 && longitude === 0)
+  }
+
+  private applyPendingAddressSelection(): void {
+    const pending: boolean = AppStorage.get<boolean>('merchantAddressSelectionMode') || false
+    if (!pending) {
+      return
+    }
+    const target: string = AppStorage.get<string>('merchantAddressSelectionTarget') || 'new'
+    const selected: Address | null = AppStorage.get<Address>('currentAddress') ?? null
+    if (selected !== null && this.findMerchantAddress(selected.id) !== null) {
+      if (target === 'edit') {
+        this.editStoreAddressId = selected.id
+        this.editStoreAddressIndex = this.findOptionIndex(this.editStoreAddressOptions, selected.id)
+      } else {
+        this.newStoreAddressId = selected.id
+        this.newStoreAddressIndex = this.findOptionIndex(this.storeAddressOptions, selected.id)
+      }
+    }
+    AppStorage.setOrCreate<boolean>('merchantAddressSelectionMode', false)
+    AppStorage.setOrCreate<string>('merchantAddressSelectionTarget', '')
+    this.rebuildStoreAddressOptions()
+  }
+
+  private openStoreAddressManager(target: string): void {
+    AppStorage.setOrCreate<boolean>('addressSelectionMode', true)
+    AppStorage.setOrCreate<boolean>('merchantAddressSelectionMode', true)
+    AppStorage.setOrCreate<string>('merchantAddressSelectionTarget', target)
+    AppStorage.setOrCreate<boolean>('merchantOpenAddressForm', true)
+    router.pushUrl({ url: 'pages/AddressListPage' })
+  }
+
+  private handleStoreAddressSelect(target: string, index: number): void {
+    const options: MerchantAddressOption[] = target === 'edit'
+      ? this.editStoreAddressOptions : this.storeAddressOptions
+    if (index < 0 || index >= options.length) {
+      promptAction.showToast({ message: '地址选项不可用，请刷新后重试', duration: 1600 })
+      return
+    }
+    const option: MerchantAddressOption = options[index]
+    if (option.id === 0) {
+      this.openStoreAddressManager(target)
+      return
+    }
+    if (target === 'edit') {
+      this.editStoreAddressId = option.id
+      this.editStoreAddressIndex = index
+    } else {
+      this.newStoreAddressId = option.id
+      this.newStoreAddressIndex = index
+    }
+  }
+
+  async openAddStoreForm(): Promise<void> {
+    if (this.merchantAddresses.length === 0) {
+      await this.refreshMerchantAddresses()
+    }
+    this.creatingStore = false
+    this.newStoreAddressId = this.getPreferredAddressId()
+    this.rebuildStoreAddressOptions()
+    this.newStoreAddressIndex = this.findOptionIndex(this.storeAddressOptions, this.newStoreAddressId)
+    this.showAddStore = true
   }
 
   async refreshStores() {
@@ -80,6 +238,7 @@ export struct MerchantCenterPage {
     if (!this.loggedIn || this.user.role !== UserRole.MERCHANT) {
       return
     }
+    await this.refreshMerchantAddresses()
     await this.refreshStores()
     await this.refreshSelectedStoreGoods()
     const feedback: string = AppStorage.get<string>('merchantGoodsFeedback') || ''
@@ -173,10 +332,7 @@ export struct MerchantCenterPage {
           .borderRadius(BORDER_RADIUS.ROUND)
           .type(ButtonType.Capsule)
           .margin({ top: SPACING.LG })
-          .onClick(() => {
-            this.creatingStore = false
-            this.showAddStore = true
-          })
+          .onClick(() => { this.openAddStoreForm() })
 
         // 我的店铺
         Row() {
@@ -274,8 +430,22 @@ export struct MerchantCenterPage {
             Column({ space: SPACING.XS }) {
               Text('店铺地址（必填，用于计算距离）')
                 .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-              TextInput({ placeholder: '请输入店铺详细地址，如：北京市海淀区中关村大街1号', text: this.newStoreAddress })
-                .width('100%').height(44).onChange((v: string) => { this.newStoreAddress = v })
+              if (this.storeAddressOptions.length > 1) {
+                Select(this.storeAddressOptions)
+                  .selected(this.newStoreAddressIndex >= 0 ? this.newStoreAddressIndex : 0)
+                  .value(this.newStoreAddressIndex >= 0
+                    ? this.storeAddressOptions[this.newStoreAddressIndex].value : '请选择商户已保存地址')
+                  .width('100%').height(44)
+                  .onSelect((index: number, value: string) => { this.handleStoreAddressSelect('new', index) })
+              } else {
+                Button('暂无保存地址，去新增地址')
+                  .width('100%').height(44).fontSize(FONT_SIZE.SM)
+                  .fontColor(COLORS.PRIMARY).backgroundColor(COLORS.TAG_BG)
+                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                  .onClick(() => { this.openStoreAddressManager('new') })
+              }
+              Text('地址来自商户已保存地址，需要新地址请点击下拉框中的“新增地址”')
+                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%')
             }
             Column({ space: SPACING.XS }) {
               Text('店铺公告（选填，将展示在店铺详情页）')
@@ -349,8 +519,22 @@ export struct MerchantCenterPage {
             Column({ space: SPACING.XS }) {
               Text('店铺地址（必填，用于计算距离）')
                 .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-              TextInput({ placeholder: '请输入店铺详细地址，如：北京市海淀区中关村大街1号', text: this.editStoreAddress })
-                .width('100%').height(44).onChange((v: string) => { this.editStoreAddress = v })
+              if (this.editStoreAddressOptions.length > 1) {
+                Select(this.editStoreAddressOptions)
+                  .selected(this.editStoreAddressIndex >= 0 ? this.editStoreAddressIndex : 0)
+                  .value(this.editStoreAddressIndex >= 0
+                    ? this.editStoreAddressOptions[this.editStoreAddressIndex].value : '请选择商户已保存地址')
+                  .width('100%').height(44)
+                  .onSelect((index: number, value: string) => { this.handleStoreAddressSelect('edit', index) })
+              } else {
+                Button('暂无保存地址，去新增地址')
+                  .width('100%').height(44).fontSize(FONT_SIZE.SM)
+                  .fontColor(COLORS.PRIMARY).backgroundColor(COLORS.TAG_BG)
+                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                  .onClick(() => { this.openStoreAddressManager('edit') })
+              }
+              Text('地址来自商户已保存地址，需要新地址请点击下拉框中的“新增地址”')
+                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%')
             }
             Column({ space: SPACING.XS }) {
               Text('店铺公告（选填，将展示在店铺详情页）')
@@ -608,31 +792,43 @@ export struct MerchantCenterPage {
       promptAction.showToast({ message: '请输入店铺名称' })
       return
     }
-    const address: string = this.newStoreAddress.trim()
+    const selectedAddress: Address | null = this.findMerchantAddress(this.newStoreAddressId)
+    if (selectedAddress === null) {
+      promptAction.showToast({ message: '请选择一个已保存的店铺地址' })
+      return
+    }
+    const address: string = this.getAddressText(selectedAddress)
     if (address === '') {
-      promptAction.showToast({ message: '请输入店铺地址' })
+      promptAction.showToast({ message: '所选地址内容为空，请先完善地址信息' })
       return
     }
     const fee = Number(this.newStoreDeliveryFee) || 3
     const minOrder = Number(this.newStoreMinOrder) || 20
     this.creatingStore = true
-    const addressResults: AddressSearchResult[] = await searchAddress(address)
-    if (addressResults.length === 0) {
-      this.creatingStore = false
-      promptAction.showToast({ message: '地址无法定位，请补充详细地址后重试', duration: 2200 })
-      return
+    let latitude: number = selectedAddress.latitude ?? 0
+    let longitude: number = selectedAddress.longitude ?? 0
+    if (!this.validCoordinates(latitude, longitude)) {
+      const addressResults: AddressSearchResult[] = await searchAddress(address)
+      if (addressResults.length === 0) {
+        this.creatingStore = false
+        promptAction.showToast({ message: '所选地址无法定位，请到地址管理中补充更详细的地址', duration: 2200 })
+        return
+      }
+      const location: AddressSearchResult = addressResults[0]
+      latitude = location.latitude
+      longitude = location.longitude
     }
-    const location: AddressSearchResult = addressResults[0]
     const created: StoreItem | null = await createMerchantStoreApi(name, 1, fee, minOrder, '30分钟',
-      this.newStoreNotice.trim() || '欢迎光临', address, location.latitude, location.longitude)
+      this.newStoreNotice.trim() || '欢迎光临', address, latitude, longitude)
     if (created === null) {
       this.creatingStore = false
       promptAction.showToast({ message: '创建失败，请检查网络或登录状态' })
       return
     }
     this.newStoreName = ''
-    this.newStoreAddress = ''
     this.newStoreNotice = ''
+    this.newStoreAddressId = 0
+    this.newStoreAddressIndex = -1
     this.showAddStore = false
     await this.refreshStores()
     this.creatingStore = false
@@ -642,10 +838,17 @@ export struct MerchantCenterPage {
   startEditStore(store: StoreItem) {
     this.editingStoreId = store.id
     this.editStoreName = store.name
-    this.editStoreAddress = store.address || ''
     this.editStoreNotice = store.notice
     this.editStoreDeliveryFee = store.deliveryFee.toString()
     this.editStoreMinOrder = store.minOrder.toString()
+    this.editStoreAddressFallbackText = (store.address || '').trim()
+    this.editStoreAddressFallbackLatitude = store.latitude ?? 0
+    this.editStoreAddressFallbackLongitude = store.longitude ?? 0
+    const matchedAddress: Address | undefined = this.merchantAddresses.find((address: Address) =>
+      this.getAddressText(address) === this.editStoreAddressFallbackText)
+    this.editStoreAddressId = matchedAddress !== undefined ? matchedAddress.id : -1
+    this.rebuildStoreAddressOptions()
+    this.editStoreAddressIndex = this.findOptionIndex(this.editStoreAddressOptions, this.editStoreAddressId)
     this.savingStore = false
     this.showEditStore = true
   }
@@ -660,11 +863,6 @@ export struct MerchantCenterPage {
       promptAction.showToast({ message: '店铺名称不能为空' })
       return
     }
-    const address: string = this.editStoreAddress.trim()
-    if (address === '') {
-      promptAction.showToast({ message: '店铺地址不能为空' })
-      return
-    }
     const originalStore = this.myStores.find(s => s.id === this.editingStoreId)
     if (originalStore === undefined || originalStore === null) {
       promptAction.showToast({ message: '店铺信息已变化，请刷新后重试', duration: 1800 })
@@ -673,18 +871,29 @@ export struct MerchantCenterPage {
     const fee = Number(this.editStoreDeliveryFee) || 0
     const minOrder = Number(this.editStoreMinOrder) || 0
     this.savingStore = true
+    const selectedAddress: Address | null = this.findMerchantAddress(this.editStoreAddressId)
+    let address: string = ''
     let latitude: number = 0
     let longitude: number = 0
-    const existingAddress: string = originalStore.address || ''
-    if (existingAddress.trim() === address && originalStore.latitude !== undefined
-      && originalStore.longitude !== undefined) {
-      latitude = originalStore.latitude
-      longitude = originalStore.longitude
-    } else {
+    if (this.editStoreAddressId === -1 && this.editStoreAddressFallbackText !== '') {
+      address = this.editStoreAddressFallbackText
+      latitude = this.editStoreAddressFallbackLatitude
+      longitude = this.editStoreAddressFallbackLongitude
+    } else if (selectedAddress !== null) {
+      address = this.getAddressText(selectedAddress)
+      latitude = selectedAddress.latitude ?? 0
+      longitude = selectedAddress.longitude ?? 0
+    }
+    if (address === '') {
+      this.savingStore = false
+      promptAction.showToast({ message: '请选择一个已保存的店铺地址' })
+      return
+    }
+    if (!this.validCoordinates(latitude, longitude)) {
       const addressResults: AddressSearchResult[] = await searchAddress(address)
       if (addressResults.length === 0) {
         this.savingStore = false
-        promptAction.showToast({ message: '地址无法定位，请补充详细地址后重试', duration: 2200 })
+        promptAction.showToast({ message: '所选地址无法定位，请到地址管理中补充更详细的地址', duration: 2200 })
         return
       }
       const location: AddressSearchResult = addressResults[0]
