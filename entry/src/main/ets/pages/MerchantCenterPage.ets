@@ -4,7 +4,7 @@
  */
 import { StoreItem, GoodsItem, UserRole, User, Category } from '../model/Models'
 import { fetchMerchantStoresApi, fetchMerchantGoodsApi, createMerchantStoreApi, updateMerchantStoreApi,
-  createMerchantGoodsApi, updateMerchantGoodsApi, deleteMerchantGoodsApi,
+  updateMerchantGoodsApi, deleteMerchantGoodsApi,
   fetchMerchantCategoriesApi, createMerchantCategoryApi, updateMerchantCategoryApi, deleteMerchantCategoryApi } from '../service/ApiService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, formatSales } from '../common/Constants'
 import { promptCompat as promptAction } from '../common/UiNavigation'
@@ -21,7 +21,6 @@ export struct MerchantCenterPage {
   }
   @State myStores: StoreItem[] = []
   @State showAddStore: boolean = false
-  @State showAddGoods: boolean = false
   @State selectedStoreId: number = 0
   @State selectedStoreGoods: GoodsItem[] = []
   @State storeGoodsCounts: Record<string, number> = {}
@@ -31,16 +30,6 @@ export struct MerchantCenterPage {
   @State newStoreNotice: string = ''
   @State newStoreDeliveryFee: string = '3'
   @State newStoreMinOrder: string = '20'
-
-  // 新增商品表单
-  @State newGoodsName: string = ''
-  @State newGoodsDesc: string = ''
-  @State newGoodsPrice: string = ''
-  @State newGoodsOriginalPrice: string = ''
-  @State newGoodsCategory: string = '1'
-  @State newGoodsStock: string = '999'
-  @State newGoodsMerchantCategory: string = '0'
-  @State newGoodsSpecial: boolean = false
 
   // 商户分类管理（演进项，见大纲 8.3）
   @State merchantCategories: Category[] = []
@@ -57,17 +46,6 @@ export struct MerchantCenterPage {
   @State editStoreMinOrder: string = ''
   @State editingStoreId: number = 0
 
-  // 编辑商品表单
-  @State showEditGoods: boolean = false
-  @State editingGoodsId: number = 0
-  @State editGoodsName: string = ''
-  @State editGoodsDesc: string = ''
-  @State editGoodsPrice: string = ''
-  @State editGoodsOriginalPrice: string = ''
-  @State editGoodsStock: string = '999'
-  @State editGoodsMerchantCategory: string = '0'
-  @State editGoodsSpecial: boolean = false
-
   aboutToAppear() {
     logInfo('Page', '进入商户中心页 MerchantCenterPage')
     if (!this.loggedIn || this.user.role !== UserRole.MERCHANT) {
@@ -81,21 +59,6 @@ export struct MerchantCenterPage {
 
   async refreshCategories() {
     this.merchantCategories = await fetchMerchantCategoriesApi()
-  }
-
-  // 分类提示文案：展示当前可用商户分类，引导商户填写 ID
-  private getCategoryHint(): string {
-    if (this.merchantCategories.length === 0) {
-      return '暂无店内分类，可在上方“分类管理”中创建'
-    }
-    let hint: string = '店内分类：'
-    for (let i = 0; i < this.merchantCategories.length; i++) {
-      hint += `${this.merchantCategories[i].id}=${this.merchantCategories[i].name}`
-      if (i < this.merchantCategories.length - 1) {
-        hint += ' '
-      }
-    }
-    return hint
   }
 
   async refreshStores() {
@@ -202,7 +165,6 @@ export struct MerchantCenterPage {
           .margin({ top: SPACING.LG })
           .onClick(() => {
             this.showAddStore = true
-            this.showAddGoods = false
           })
 
         // 我的店铺
@@ -263,7 +225,6 @@ export struct MerchantCenterPage {
                 this.selectedStoreId = store.id
                 this.selectedStoreGoods = await fetchMerchantGoodsApi(store.id)
                 this.storeGoodsCounts[store.id.toString()] = this.selectedStoreGoods.length
-                this.showAddGoods = false
                 this.showAddStore = false
               })
             }
@@ -508,160 +469,6 @@ export struct MerchantCenterPage {
           .padding({ left: SPACING.LG, right: SPACING.LG })
           .backgroundColor(COLORS.BG_WHITE)
 
-          // 添加商品表单
-          if (this.showAddGoods) {
-            Column({ space: SPACING.SM }) {
-              Text('添加新商品').fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
-              Text('商品名称与价格为必填项，保存后商品将在用户端上架展示')
-                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
-              Column({ space: SPACING.XS }) {
-                Text('商品名称（必填）')
-                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-                TextInput({ placeholder: '请输入商品名称，如：宫保鸡丁', text: this.newGoodsName })
-                  .width('100%').height(40).onChange((v: string) => { this.newGoodsName = v })
-              }
-              Column({ space: SPACING.XS }) {
-                Text('商品描述（选填）')
-                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-                TextInput({ placeholder: '请输入商品描述，如：招牌菜，微辣', text: this.newGoodsDesc })
-                  .width('100%').height(40).onChange((v: string) => { this.newGoodsDesc = v })
-              }
-              Row({ space: SPACING.SM }) {
-                Column({ space: SPACING.XS }) {
-                  Text('价格（必填）')
-                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-                  TextInput({ placeholder: '如：25.00', text: this.newGoodsPrice })
-                    .layoutWeight(1).height(40).type(InputType.Number)
-                    .onChange((v: string) => { this.newGoodsPrice = v })
-                }
-                .layoutWeight(1)
-                Column({ space: SPACING.XS }) {
-                  Text('库存')
-                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-                  TextInput({ placeholder: '如：999', text: this.newGoodsStock })
-                    .layoutWeight(1).height(40).type(InputType.Number)
-                    .onChange((v: string) => { this.newGoodsStock = v })
-                }
-                .layoutWeight(1)
-              }
-              Column({ space: SPACING.XS }) {
-                Text('原价（特价团购必填）')
-                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-                TextInput({ placeholder: '如：30.00，高于特价价', text: this.newGoodsOriginalPrice })
-                  .width('100%').height(40).type(InputType.Number)
-                  .onChange((v: string) => { this.newGoodsOriginalPrice = v })
-              }
-              Row() {
-                Text('加入特价团购')
-                  .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
-                Toggle({ type: ToggleType.Switch, isOn: this.newGoodsSpecial })
-                  .onChange((isOn: boolean) => { this.newGoodsSpecial = isOn })
-              }
-              .width('100%').justifyContent(FlexAlign.SpaceBetween)
-              Column({ space: SPACING.XS }) {
-                Text('店内分类（0=未分组）')
-                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-                TextInput({ placeholder: '如：1', text: this.newGoodsMerchantCategory })
-                  .width('100%').height(40).type(InputType.Number)
-                  .onChange((v: string) => { this.newGoodsMerchantCategory = v })
-              }
-              Text(this.getCategoryHint())
-                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%')
-              Row({ space: SPACING.SM }) {
-                Button('取消').layoutWeight(1).height(36).fontSize(FONT_SIZE.SM)
-                  .fontColor(COLORS.TEXT_SECONDARY).backgroundColor('#F5F5F5')
-                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-                  .onClick(() => { this.showAddGoods = false })
-                Button('添加').layoutWeight(1).height(36).fontSize(FONT_SIZE.SM)
-                  .fontColor(Color.White).backgroundColor(COLORS.PRIMARY)
-                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-                  .onClick(() => { this.doAddGoods() })
-              }
-            }
-            .width('100%')
-            .padding(SPACING.MD)
-            .margin({ top: SPACING.SM })
-            .backgroundColor('#FFF8F0')
-            .borderRadius(BORDER_RADIUS.LG)
-          }
-
-          // 编辑商品表单
-          if (this.showEditGoods) {
-            Column({ space: SPACING.SM }) {
-              Text('编辑商品').fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
-              Text('商品名称为必填项，保存后用户端将同步更新')
-                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
-              Column({ space: SPACING.XS }) {
-                Text('商品名称（必填）')
-                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-                TextInput({ placeholder: '请输入商品名称，如：宫保鸡丁', text: this.editGoodsName })
-                  .width('100%').height(40).onChange((v: string) => { this.editGoodsName = v })
-              }
-              Column({ space: SPACING.XS }) {
-                Text('商品描述（选填）')
-                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-                TextInput({ placeholder: '请输入商品描述，如：招牌菜，微辣', text: this.editGoodsDesc })
-                  .width('100%').height(40).onChange((v: string) => { this.editGoodsDesc = v })
-              }
-              Column({ space: SPACING.XS }) {
-                Text('价格（必填）')
-                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-                TextInput({ placeholder: '如：25.00', text: this.editGoodsPrice })
-                  .width('100%').height(40).type(InputType.Number)
-                  .onChange((v: string) => { this.editGoodsPrice = v })
-              }
-              Column({ space: SPACING.XS }) {
-                Text('原价（特价团购必填）')
-                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-                TextInput({ placeholder: '如：30.00，高于特价价', text: this.editGoodsOriginalPrice })
-                  .width('100%').height(40).type(InputType.Number)
-                  .onChange((v: string) => { this.editGoodsOriginalPrice = v })
-              }
-              Row() {
-                Text('加入特价团购')
-                  .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
-                Toggle({ type: ToggleType.Switch, isOn: this.editGoodsSpecial })
-                  .onChange((isOn: boolean) => { this.editGoodsSpecial = isOn })
-              }
-              .width('100%').justifyContent(FlexAlign.SpaceBetween)
-              Row({ space: SPACING.SM }) {
-                Column({ space: SPACING.XS }) {
-                  Text('库存')
-                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-                  TextInput({ placeholder: '如：999', text: this.editGoodsStock })
-                    .layoutWeight(1).height(40).type(InputType.Number)
-                    .onChange((v: string) => { this.editGoodsStock = v })
-                }
-                .layoutWeight(1)
-                Column({ space: SPACING.XS }) {
-                  Text('店内分类（0=未分组）')
-                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-                  TextInput({ placeholder: '如：1', text: this.editGoodsMerchantCategory })
-                    .layoutWeight(1).height(40).type(InputType.Number)
-                    .onChange((v: string) => { this.editGoodsMerchantCategory = v })
-                }
-                .layoutWeight(1)
-              }
-              Text(this.getCategoryHint())
-                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%')
-              Row({ space: SPACING.SM }) {
-                Button('取消').layoutWeight(1).height(36).fontSize(FONT_SIZE.SM)
-                  .fontColor(COLORS.TEXT_SECONDARY).backgroundColor('#F5F5F5')
-                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-                  .onClick(() => { this.showEditGoods = false })
-                Button('保存').layoutWeight(1).height(36).fontSize(FONT_SIZE.SM)
-                  .fontColor(Color.White).backgroundColor(COLORS.PRIMARY)
-                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-                  .onClick(() => { this.doEditGoods() })
-              }
-            }
-            .width('100%')
-            .padding(SPACING.MD)
-            .margin({ top: SPACING.SM })
-            .backgroundColor('#FFF8F0')
-            .borderRadius(BORDER_RADIUS.LG)
-          }
-
           // 商品列表
           List({ space: SPACING.SM }) {
             ForEach(this.selectedStoreGoods, (goods: GoodsItem) => {
@@ -768,53 +575,7 @@ export struct MerchantCenterPage {
     this.newStoreName = ''
     this.newStoreNotice = ''
     this.showAddStore = false
-    this.refreshStores()
-  }
-
-  async doAddGoods() {
-    if (this.newGoodsName === '' || this.newGoodsPrice === '') {
-      promptAction.showToast({ message: '请填写商品名称和特价价' })
-      return
-    }
-    const price = Number(this.newGoodsPrice) || 0
-    const originalPrice = Number(this.newGoodsOriginalPrice) || price
-    if (this.newGoodsSpecial && originalPrice <= price) {
-      promptAction.showToast({ message: '特价商品原价必须高于特价价' })
-      return
-    }
-    const categoryId = Number(this.newGoodsCategory) || 1
-    const stock = Number(this.newGoodsStock) >= 0 ? Math.floor(Number(this.newGoodsStock)) : 999
-    const merchantCategoryId = Math.floor(Number(this.newGoodsMerchantCategory) || 0)
-    const goods: GoodsItem = {
-      id: 0,
-      name: this.newGoodsName,
-      description: this.newGoodsDesc || '美味可口',
-      price: price,
-      originalPrice: originalPrice,
-      image: '',
-      categoryId: categoryId,
-      merchantCategoryId: merchantCategoryId,
-      stock: stock,
-      sales: 0,
-      rating: 5.0,
-      tag: this.newGoodsSpecial ? '特价团购' : '新品',
-      isSpecial: this.newGoodsSpecial,
-    }
-    const created: GoodsItem | null = await createMerchantGoodsApi(this.selectedStoreId, goods)
-    if (created === null) {
-      promptAction.showToast({ message: '商品创建失败，请稍后重试' })
-      return
-    }
-    this.newGoodsName = ''
-    this.newGoodsDesc = ''
-    this.newGoodsPrice = ''
-    this.newGoodsOriginalPrice = ''
-    this.newGoodsStock = '999'
-    this.newGoodsMerchantCategory = '0'
-    this.newGoodsSpecial = false
-    this.showAddGoods = false
-    this.selectedStoreGoods = await fetchMerchantGoodsApi(this.selectedStoreId)
-    this.storeGoodsCounts[this.selectedStoreId.toString()] = this.selectedStoreGoods.length
+    await this.refreshStores()
   }
 
   startEditStore(store: StoreItem) {
@@ -842,64 +603,8 @@ export struct MerchantCenterPage {
       promptAction.showToast({ message: '保存失败，请稍后重试' })
       return
     }
-    this.refreshStores()
+    await this.refreshStores()
     this.showEditStore = false
-    promptAction.showToast({ message: '保存成功' })
-  }
-
-  startEditGoods(goods: GoodsItem) {
-    this.editingGoodsId = goods.id
-    this.editGoodsName = goods.name
-    this.editGoodsDesc = goods.description
-    this.editGoodsPrice = goods.price.toString()
-    this.editGoodsOriginalPrice = (goods.originalPrice ?? goods.price).toString()
-    this.editGoodsStock = (goods.stock ?? 999).toString()
-    this.editGoodsMerchantCategory = (goods.merchantCategoryId ?? 0).toString()
-    this.editGoodsSpecial = goods.isSpecial === true
-    this.showAddGoods = false
-    this.showEditGoods = true
-  }
-
-  async doEditGoods() {
-    if (this.editGoodsName === '') {
-      promptAction.showToast({ message: '商品名称不能为空' })
-      return
-    }
-    const originalGoods = this.selectedStoreGoods.find(g => g.id === this.editingGoodsId)
-    if (originalGoods === undefined || originalGoods === null) {
-      return
-    }
-    const price = Number(this.editGoodsPrice) || 0
-    const originalPrice = Number(this.editGoodsOriginalPrice) || price
-    if (this.editGoodsSpecial && originalPrice <= price) {
-      promptAction.showToast({ message: '特价商品原价必须高于特价价' })
-      return
-    }
-    const stock = Number(this.editGoodsStock) >= 0 ? Math.floor(Number(this.editGoodsStock)) : 999
-    const merchantCategoryId = Math.floor(Number(this.editGoodsMerchantCategory) || 0)
-    const updatedGoods: GoodsItem = {
-      id: originalGoods.id,
-      name: this.editGoodsName,
-      description: this.editGoodsDesc || '美味可口',
-      price: price,
-      originalPrice: originalPrice,
-      image: originalGoods.image,
-      categoryId: originalGoods.categoryId,
-      merchantCategoryId: merchantCategoryId,
-      stock: stock,
-      sales: originalGoods.sales,
-      rating: originalGoods.rating,
-      tag: this.editGoodsSpecial ? '特价团购' : (originalGoods.tag === '特价团购' ? '' : originalGoods.tag),
-      isOnShelf: originalGoods.isOnShelf,
-      isSpecial: this.editGoodsSpecial,
-    }
-    const updated: GoodsItem | null = await updateMerchantGoodsApi(updatedGoods, updatedGoods.isOnShelf !== false)
-    if (updated === null) {
-      promptAction.showToast({ message: '保存失败，请稍后重试' })
-      return
-    }
-    this.showEditGoods = false
-    await this.refreshSelectedStoreGoods()
     promptAction.showToast({ message: '保存成功' })
   }
 
