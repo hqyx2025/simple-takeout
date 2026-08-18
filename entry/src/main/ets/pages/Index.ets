@@ -409,7 +409,7 @@ struct HomePage {
   @State searchText: string = ''
   @State currentCategory: number = 0
   @State isRefreshing: boolean = false
-  @StorageLink('currentAddress') currentAddress: Address | null = null
+  @StorageLink('currentAddress') @Watch('onCurrentAddressChange') currentAddress: Address | null = null
   @State isHeaderVisible: boolean = false
   @State showPrivacyDialog: boolean = false
   onStoreClick: (store: StoreItem) => void = () => {}
@@ -422,6 +422,10 @@ struct HomePage {
     } else {
       this.specialGoods = []
     }
+  }
+
+  onCurrentAddressChange(): void {
+    this.refreshHomeData()
   }
 
   // 首页定位栏只展示“市 + 区/县/旗”，完整地址仍保留在 currentAddress 中供结算和配送使用
@@ -486,7 +490,9 @@ struct HomePage {
     this.categories = latestCategories.slice()
     await syncStoresFromServer()
     if (this.loggedIn) {
-      this.specialGoods = await fetchSpecialGoodsApi(10)
+      const latitude: number | undefined = this.currentAddress !== null ? this.currentAddress.latitude : undefined
+      const longitude: number | undefined = this.currentAddress !== null ? this.currentAddress.longitude : undefined
+      this.specialGoods = await fetchSpecialGoodsApi(10, latitude, longitude)
     } else {
       this.specialGoods = []
     }
@@ -498,8 +504,8 @@ struct HomePage {
       return false
     }
     const address: Address = this.currentAddress as Address
-    return address.address.trim() !== '' || address.detail.trim() !== '' ||
-      (address.latitude !== undefined && address.longitude !== undefined)
+    return address.latitude !== undefined && address.longitude !== undefined
+      && Number.isFinite(address.latitude) && Number.isFinite(address.longitude)
   }
 
   private parseStoreDistance(distance: string): number {
@@ -926,7 +932,7 @@ struct HomePage {
 @Component
 struct DiscoverPage {
   @StorageLink('isLoggedIn') loggedIn: boolean = false
-  @StorageLink('currentAddress') currentAddress: Address | null = null
+  @StorageLink('currentAddress') @Watch('onCurrentAddressChange') currentAddress: Address | null = null
   @State recommendedStores: StoreItem[] = []
   @State loading: boolean = false
   onBack: () => void = () => {}
@@ -934,6 +940,10 @@ struct DiscoverPage {
   onStoreClick: (store: StoreItem) => void = () => {}
 
   aboutToAppear() {
+    this.refreshRecommended()
+  }
+
+  onCurrentAddressChange(): void {
     this.refreshRecommended()
   }
 
@@ -946,7 +956,9 @@ struct DiscoverPage {
       return
     }
     this.loading = true
-    this.recommendedStores = await fetchRecommendedStoresApi(2, 10)
+    const latitude: number | undefined = this.currentAddress !== null ? this.currentAddress.latitude : undefined
+    const longitude: number | undefined = this.currentAddress !== null ? this.currentAddress.longitude : undefined
+    this.recommendedStores = await fetchRecommendedStoresApi(2, 10, latitude, longitude)
     this.loading = false
   }
 
@@ -955,8 +967,8 @@ struct DiscoverPage {
       return false
     }
     const address: Address = this.currentAddress as Address
-    return address.address.trim() !== '' || address.detail.trim() !== ''
-      || (address.latitude !== undefined && address.longitude !== undefined)
+    return address.latitude !== undefined && address.longitude !== undefined
+      && Number.isFinite(address.latitude) && Number.isFinite(address.longitude)
   }
 
   build() {

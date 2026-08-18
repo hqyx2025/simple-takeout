@@ -26,6 +26,9 @@ interface ServerStore {
   distance: string
   tags: string[]
   notice: string
+  address?: string
+  latitude?: number
+  longitude?: number
   categoryId: number
   categoryIds: number[]
   ownerId: number
@@ -297,6 +300,9 @@ interface MerchantStoreRequest {
   minOrder: number
   deliveryTime: string
   notice: string
+  address: string
+  latitude: number
+  longitude: number
 }
 
 interface MerchantStorePatch {
@@ -305,6 +311,9 @@ interface MerchantStorePatch {
   minOrder: number
   deliveryTime: string
   notice: string
+  address: string
+  latitude: number
+  longitude: number
   status: number
 }
 
@@ -403,15 +412,25 @@ export async function updateUserProfileApi(username: string, phone: string): Pro
 
 // ==================== 数据拉取（游客可访问） ====================
 
+function appendCoordinates(url: string, latitude?: number, longitude?: number): string {
+  if (latitude === undefined || longitude === undefined
+    || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return url
+  }
+  const separator: string = url.indexOf('?') >= 0 ? '&' : '?'
+  return `${url}${separator}latitude=${latitude}&longitude=${longitude}`
+}
+
 export async function fetchCategories(): Promise<Category[]> {
   const resp: ApiResponse<Category[]> = await get<Category[]>(API_CONFIG.ENDPOINTS['categories'])
   return resp.code === 200 ? (resp.data || []) : []
 }
 
-export async function fetchStores(categoryId?: number): Promise<StoreItem[]> {
-  const url: string = categoryId !== undefined && categoryId > 0
+export async function fetchStores(categoryId?: number, latitude?: number, longitude?: number): Promise<StoreItem[]> {
+  const baseUrl: string = categoryId !== undefined && categoryId > 0
     ? `${API_CONFIG.ENDPOINTS['stores']}?categoryId=${categoryId}`
     : API_CONFIG.ENDPOINTS['stores']
+  const url: string = appendCoordinates(baseUrl, latitude, longitude)
   const resp: ApiResponse<ServerStore[]> = await get<ServerStore[]>(url)
   if (resp.code !== 200 || resp.data === null) {
     return []
@@ -419,9 +438,11 @@ export async function fetchStores(categoryId?: number): Promise<StoreItem[]> {
   return resp.data.map((s: ServerStore) => toStoreItem(s))
 }
 
-export async function fetchRecommendedStoresApi(maxDistanceKm: number = 2, limit: number = 10): Promise<StoreItem[]> {
+export async function fetchRecommendedStoresApi(maxDistanceKm: number = 2, limit: number = 10,
+  latitude?: number, longitude?: number): Promise<StoreItem[]> {
+  const baseUrl: string = `/api/stores/recommended?maxDistanceKm=${maxDistanceKm}&limit=${limit}`
   const resp: ApiResponse<ServerStore[]> = await get<ServerStore[]>(
-    `/api/stores/recommended?maxDistanceKm=${maxDistanceKm}&limit=${limit}`)
+    appendCoordinates(baseUrl, latitude, longitude))
   if (resp.code !== 200 || resp.data === null) {
     return []
   }
@@ -436,8 +457,10 @@ export async function fetchStoreGoods(storeId: number): Promise<GoodsItem[]> {
   return resp.data.map((g: ServerGoods) => toGoodsItem(g))
 }
 
-export async function fetchSpecialGoodsApi(limit: number = 10): Promise<SpecialGoodsItem[]> {
-  const resp: ApiResponse<ServerSpecialGoods[]> = await get<ServerSpecialGoods[]>(`/api/goods/special?limit=${limit}`)
+export async function fetchSpecialGoodsApi(limit: number = 10, latitude?: number, longitude?: number): Promise<SpecialGoodsItem[]> {
+  const baseUrl: string = `/api/goods/special?limit=${limit}`
+  const resp: ApiResponse<ServerSpecialGoods[]> = await get<ServerSpecialGoods[]>(
+    appendCoordinates(baseUrl, latitude, longitude))
   if (resp.code !== 200 || resp.data === null) {
     return []
   }
@@ -467,8 +490,9 @@ export async function fetchGoodsReviews(goodsId: number): Promise<Review[]> {
   return resp.data.map((r: ServerReview) => toReview(r))
 }
 
-export async function searchStoresApi(keyword: string): Promise<StoreItem[]> {
-  const resp: ApiResponse<ServerStore[]> = await get<ServerStore[]>(`${API_CONFIG.ENDPOINTS['search']}?keyword=${encodeURIComponent(keyword)}`)
+export async function searchStoresApi(keyword: string, latitude?: number, longitude?: number): Promise<StoreItem[]> {
+  const baseUrl: string = `${API_CONFIG.ENDPOINTS['search']}?keyword=${encodeURIComponent(keyword)}`
+  const resp: ApiResponse<ServerStore[]> = await get<ServerStore[]>(appendCoordinates(baseUrl, latitude, longitude))
   if (resp.code !== 200 || resp.data === null) {
     return []
   }
@@ -636,20 +660,23 @@ export async function fetchMerchantGoodsApi(storeId: number): Promise<GoodsItem[
 }
 
 export async function createMerchantStoreApi(name: string, categoryId: number, deliveryFee: number,
-  minOrder: number, deliveryTime: string, notice: string): Promise<StoreItem | null> {
+  minOrder: number, deliveryTime: string, notice: string, address: string,
+  latitude: number, longitude: number): Promise<StoreItem | null> {
   const req: MerchantStoreRequest = {
     name: name, categoryId: categoryId, deliveryFee: deliveryFee, minOrder: minOrder,
-    deliveryTime: deliveryTime, notice: notice
+    deliveryTime: deliveryTime, notice: notice, address: address, latitude: latitude, longitude: longitude
   }
   const resp: ApiResponse<ServerStore> = await post<ServerStore>(API_CONFIG.ENDPOINTS['merchantStores'], req)
   return resp.code === 200 && resp.data !== null ? toStoreItem(resp.data) : null
 }
 
 export async function updateMerchantStoreApi(storeId: number, name: string, deliveryFee: number,
-  minOrder: number, deliveryTime: string, notice: string): Promise<StoreItem | null> {
+  minOrder: number, deliveryTime: string, notice: string, address: string,
+  latitude: number, longitude: number): Promise<StoreItem | null> {
   const req: MerchantStorePatch = {
     name: name, deliveryFee: deliveryFee, minOrder: minOrder,
-    deliveryTime: deliveryTime, notice: notice, status: -1
+    deliveryTime: deliveryTime, notice: notice, address: address,
+    latitude: latitude, longitude: longitude, status: -1
   }
   const resp: ApiResponse<ServerStore> = await put<ServerStore>(`/api/merchant/stores/${storeId}`, req)
   return resp.code === 200 && resp.data !== null ? toStoreItem(resp.data) : null
@@ -1008,6 +1035,9 @@ function toStoreItem(s: ServerStore): StoreItem {
     distance: s.distance,
     tags: s.tags || [],
     notice: s.notice,
+    address: s.address || '',
+    latitude: s.latitude,
+    longitude: s.longitude,
     categoryId: s.categoryId,
     categoryIds: s.categoryIds || [],
     ownerId: s.ownerId,

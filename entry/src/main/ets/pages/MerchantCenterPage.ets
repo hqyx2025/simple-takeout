@@ -10,6 +10,7 @@ import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, formatSales } from '../commo
 import { promptCompat as promptAction } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
 import { routerCompat as router } from '../common/UiNavigation'
+import { AddressSearchResult, searchAddress } from '../service/LocationService'
 
 @Entry
 @Component
@@ -27,6 +28,7 @@ export struct MerchantCenterPage {
 
   // 新增店铺表单
   @State newStoreName: string = ''
+  @State newStoreAddress: string = ''
   @State newStoreNotice: string = ''
   @State newStoreDeliveryFee: string = '3'
   @State newStoreMinOrder: string = '20'
@@ -41,6 +43,7 @@ export struct MerchantCenterPage {
   // 编辑店铺表单
   @State showEditStore: boolean = false
   @State editStoreName: string = ''
+  @State editStoreAddress: string = ''
   @State editStoreNotice: string = ''
   @State editStoreDeliveryFee: string = ''
   @State editStoreMinOrder: string = ''
@@ -269,6 +272,12 @@ export struct MerchantCenterPage {
                 .width('100%').height(44).onChange((v: string) => { this.newStoreName = v })
             }
             Column({ space: SPACING.XS }) {
+              Text('店铺地址（必填，用于计算距离）')
+                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+              TextInput({ placeholder: '请输入店铺详细地址，如：北京市海淀区中关村大街1号', text: this.newStoreAddress })
+                .width('100%').height(44).onChange((v: string) => { this.newStoreAddress = v })
+            }
+            Column({ space: SPACING.XS }) {
               Text('店铺公告（选填，将展示在店铺详情页）')
                 .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
               TextInput({ placeholder: '请输入店铺公告，如：新店开业，欢迎光临', text: this.newStoreNotice })
@@ -336,6 +345,12 @@ export struct MerchantCenterPage {
                 .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
               TextInput({ placeholder: '请输入店铺名称，如：老王快餐店', text: this.editStoreName })
                 .width('100%').height(44).onChange((v: string) => { this.editStoreName = v })
+            }
+            Column({ space: SPACING.XS }) {
+              Text('店铺地址（必填，用于计算距离）')
+                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+              TextInput({ placeholder: '请输入店铺详细地址，如：北京市海淀区中关村大街1号', text: this.editStoreAddress })
+                .width('100%').height(44).onChange((v: string) => { this.editStoreAddress = v })
             }
             Column({ space: SPACING.XS }) {
               Text('店铺公告（选填，将展示在店铺详情页）')
@@ -593,16 +608,30 @@ export struct MerchantCenterPage {
       promptAction.showToast({ message: '请输入店铺名称' })
       return
     }
+    const address: string = this.newStoreAddress.trim()
+    if (address === '') {
+      promptAction.showToast({ message: '请输入店铺地址' })
+      return
+    }
     const fee = Number(this.newStoreDeliveryFee) || 3
     const minOrder = Number(this.newStoreMinOrder) || 20
     this.creatingStore = true
-    const created: StoreItem | null = await createMerchantStoreApi(name, 1, fee, minOrder, '30分钟', this.newStoreNotice.trim() || '欢迎光临')
+    const addressResults: AddressSearchResult[] = await searchAddress(address)
+    if (addressResults.length === 0) {
+      this.creatingStore = false
+      promptAction.showToast({ message: '地址无法定位，请补充详细地址后重试', duration: 2200 })
+      return
+    }
+    const location: AddressSearchResult = addressResults[0]
+    const created: StoreItem | null = await createMerchantStoreApi(name, 1, fee, minOrder, '30分钟',
+      this.newStoreNotice.trim() || '欢迎光临', address, location.latitude, location.longitude)
     if (created === null) {
       this.creatingStore = false
       promptAction.showToast({ message: '创建失败，请检查网络或登录状态' })
       return
     }
     this.newStoreName = ''
+    this.newStoreAddress = ''
     this.newStoreNotice = ''
     this.showAddStore = false
     await this.refreshStores()
@@ -613,6 +642,7 @@ export struct MerchantCenterPage {
   startEditStore(store: StoreItem) {
     this.editingStoreId = store.id
     this.editStoreName = store.name
+    this.editStoreAddress = store.address || ''
     this.editStoreNotice = store.notice
     this.editStoreDeliveryFee = store.deliveryFee.toString()
     this.editStoreMinOrder = store.minOrder.toString()
@@ -630,6 +660,11 @@ export struct MerchantCenterPage {
       promptAction.showToast({ message: '店铺名称不能为空' })
       return
     }
+    const address: string = this.editStoreAddress.trim()
+    if (address === '') {
+      promptAction.showToast({ message: '店铺地址不能为空' })
+      return
+    }
     const originalStore = this.myStores.find(s => s.id === this.editingStoreId)
     if (originalStore === undefined || originalStore === null) {
       promptAction.showToast({ message: '店铺信息已变化，请刷新后重试', duration: 1800 })
@@ -638,7 +673,26 @@ export struct MerchantCenterPage {
     const fee = Number(this.editStoreDeliveryFee) || 0
     const minOrder = Number(this.editStoreMinOrder) || 0
     this.savingStore = true
-    const updated: StoreItem | null = await updateMerchantStoreApi(originalStore.id, name, fee, minOrder, originalStore.deliveryTime, this.editStoreNotice.trim() || '欢迎光临')
+    let latitude: number = 0
+    let longitude: number = 0
+    const existingAddress: string = originalStore.address || ''
+    if (existingAddress.trim() === address && originalStore.latitude !== undefined
+      && originalStore.longitude !== undefined) {
+      latitude = originalStore.latitude
+      longitude = originalStore.longitude
+    } else {
+      const addressResults: AddressSearchResult[] = await searchAddress(address)
+      if (addressResults.length === 0) {
+        this.savingStore = false
+        promptAction.showToast({ message: '地址无法定位，请补充详细地址后重试', duration: 2200 })
+        return
+      }
+      const location: AddressSearchResult = addressResults[0]
+      latitude = location.latitude
+      longitude = location.longitude
+    }
+    const updated: StoreItem | null = await updateMerchantStoreApi(originalStore.id, name, fee, minOrder,
+      originalStore.deliveryTime, this.editStoreNotice.trim() || '欢迎光临', address, latitude, longitude)
     if (updated === null) {
       this.savingStore = false
       promptAction.showToast({ message: '保存失败，请稍后重试' })

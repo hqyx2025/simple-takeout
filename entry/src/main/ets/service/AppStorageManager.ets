@@ -488,7 +488,10 @@ export async function syncStoresFromServer(): Promise<void> {
     return
   }
   storesSyncInFlight = (async (): Promise<void> => {
-    const stores: StoreItem[] = await fetchStores()
+    const currentAddress: Address | null = AppStorage.get<Address>('currentAddress') ?? null
+    const latitude: number | undefined = currentAddress !== null ? currentAddress.latitude : undefined
+    const longitude: number | undefined = currentAddress !== null ? currentAddress.longitude : undefined
+    const stores: StoreItem[] = await fetchStores(undefined, latitude, longitude)
     AppStorage.setOrCreate<StoreItem[]>('allStores', stores)
     logInfo('Api', `同步店铺数据 ${stores.length} 家`)
   })()
@@ -709,7 +712,10 @@ export async function syncMerchantStoresRemote(): Promise<void> {
  * 从后端搜索店铺
  */
 export async function searchStoresRemote(keyword: string): Promise<StoreItem[]> {
-  const result: StoreItem[] = await searchStoresApi(keyword)
+  const currentAddress: Address | null = AppStorage.get<Address>('currentAddress') ?? null
+  const latitude: number | undefined = currentAddress !== null ? currentAddress.latitude : undefined
+  const longitude: number | undefined = currentAddress !== null ? currentAddress.longitude : undefined
+  const result: StoreItem[] = await searchStoresApi(keyword, latitude, longitude)
   logInfo('Api', `远程搜索 keyword=${keyword} 结果=${result.length} 条`)
   return result
 }
