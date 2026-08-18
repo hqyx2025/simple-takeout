@@ -78,7 +78,7 @@ export struct ProductListPage {
   private getCandidateStores(): StoreItem[] {
     const stores: StoreItem[] = getAllStoresList()
     if ((this.mode === ProductListMode.NEARBY || this.mode === ProductListMode.ALL ||
-      this.mode === ProductListMode.SPECIAL || this.mode === ProductListMode.RANKING) && !this.hasLocation()) {
+      this.mode === ProductListMode.RANKING) && !this.hasLocation()) {
       return []
     }
 
@@ -86,6 +86,9 @@ export struct ProductListPage {
     // 查看全部取当前定位周边 5km 内的全部店铺。
     const radius: number = this.mode === ProductListMode.NEARBY ? 2.0 : 5.0
     if (this.mode === ProductListMode.CATEGORY && !this.hasLocation()) {
+      return stores
+    }
+    if (this.mode === ProductListMode.SPECIAL) {
       return stores
     }
     return stores.filter((store: StoreItem) => this.parseDistance(store.distance) <= radius)
@@ -114,7 +117,7 @@ export struct ProductListPage {
             return
           }
         }
-        if (currentMode === ProductListMode.SPECIAL && item.tag === undefined && item.sales < 1000) {
+        if (currentMode === ProductListMode.SPECIAL && item.isSpecial !== true) {
           return
         }
         result.push(new ProductListItem(store, item))

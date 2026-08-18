@@ -1019,6 +1019,7 @@ function toStoreItem(s: ServerStore): StoreItem {
 function toGoodsItem(g: ServerGoods): GoodsItem {
   const goods: GoodsItem = {
     id: g.id,
+    storeId: g.storeId,
     name: g.name,
     description: g.description,
     price: g.price,
