@@ -38,6 +38,7 @@ export function createDefaultCategories(): Category[] {
 // stock：库存（0 表示售罄）；merchantCategoryId：商户店内分类（0=未分组）
 export interface GoodsItem {
   id: number
+  storeId?: number
   name: string
   description: string
   price: number

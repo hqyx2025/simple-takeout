@@ -2,9 +2,9 @@
  * 主页面 - 简单外卖App
  * 包含：搜索栏、分类导航、店铺列表、店铺详情、购物车、订单列表、个人中心、底部Tab导航
  */
-import { Category, StoreItem, GoodsItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, createEmptyUser } from '../model/Models'
+import { Category, StoreItem, GoodsItem, SpecialGoodsItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, createEmptyUser } from '../model/Models'
 import { addToCart, addCartItemRemote, updateCartItemQuantity, updateCartItemQuantityRemote, refreshCartFromServer, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCartRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
-import { fetchRecommendedStoresApi, fetchStoreMerchantCategoriesApi } from '../service/ApiService'
+import { fetchRecommendedStoresApi, fetchSpecialGoodsApi, fetchStoreMerchantCategoriesApi } from '../service/ApiService'
 import { LoginPage } from './LoginPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, formatSales } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
@@ -404,8 +404,8 @@ struct Index {
 @Component
 struct HomePage {
   @StorageLink('categoryList') categories: Category[] = []
-  @StorageLink('isLoggedIn') loggedIn: boolean = false
-  @State stores: StoreItem[] = []
+  @StorageLink('isLoggedIn') @Watch('onLoginStateChange') loggedIn: boolean = false
+  @State specialGoods: SpecialGoodsItem[] = []
   @State searchText: string = ''
   @State currentCategory: number = 0
   @State isRefreshing: boolean = false
@@ -415,7 +415,14 @@ struct HomePage {
   onStoreClick: (store: StoreItem) => void = () => {}
   onNavigateLogin: () => void = () => {}
   onNavigateLocationLogin: () => void = () => {}
-  private storeDataSource: StoreDataSource = new StoreDataSource()
+
+  onLoginStateChange(): void {
+    if (this.loggedIn) {
+      this.refreshHomeData()
+    } else {
+      this.specialGoods = []
+    }
+  }
 
   // 首页定位栏只展示“市 + 区/县/旗”，完整地址仍保留在 currentAddress 中供结算和配送使用
   private getCityDistrict(address: string): string {
@@ -462,25 +469,28 @@ struct HomePage {
     this.showPrivacyDialog = !(AppStorage.get<boolean>('privacyConsent') || false)
     const initialCategories: Category[] = AppStorage.get<Category[]>('categoryList') || []
     this.categories = initialCategories.slice()
-    this.stores = this.getNearbyStores()
-    this.storeDataSource.setData(this.stores)
     // 隐私同意前不发起网络请求；同意后由确认回调触发同步
     if (AppStorage.get<boolean>('privacyConsent') || false) {
-      this.refreshStores()
+      this.refreshHomeData()
     }
   }
 
-  // 拉取后端店铺数据并刷新列表
-  private async refreshStores(): Promise<void> {
+  // 首页特价团购直接读取后端商品接口，避免使用本地模拟商品。
+  private async refreshHomeData(): Promise<void> {
     if (!(AppStorage.get<boolean>('privacyConsent') || false)) {
       return
     }
+    this.isRefreshing = true
     await syncCategoriesFromServer()
     const latestCategories: Category[] = AppStorage.get<Category[]>('categoryList') || []
     this.categories = latestCategories.slice()
     await syncStoresFromServer()
-    this.stores = this.getNearbyStores()
-    this.storeDataSource.setData(this.stores)
+    if (this.loggedIn) {
+      this.specialGoods = await fetchSpecialGoodsApi(10)
+    } else {
+      this.specialGoods = []
+    }
+    this.isRefreshing = false
   }
 
   private hasCurrentLocation(): boolean {
@@ -523,7 +533,7 @@ struct HomePage {
   }
 
   private openProductList(mode: string, categoryId: number, title: string): void {
-    const requiresLocation: boolean = mode !== 'category'
+    const requiresLocation: boolean = mode === 'nearby' || mode === 'all'
     if (requiresLocation && !this.loggedIn) {
       this.onNavigateLocationLogin()
       return
@@ -701,9 +711,9 @@ struct HomePage {
           .margin({ top: SPACING.MD })
           .justifyContent(FlexAlign.SpaceAround)
 
-          // 附近好店标题
+          // 特价团购标题
           Row() {
-            Text('附近好店')
+            Text('特价团购')
               .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
             Blank()
             Text('查看全部 >')
@@ -712,31 +722,27 @@ struct HomePage {
           .width('100%')
           .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.SM })
           .onClick(() => {
-            this.openProductList('all', 0, '附近全部商品')
+            this.openProductList('special', 0, '特价团购')
           })
 
-          // 店铺列表
-          if (this.stores.length === 0) {
-            EmptyState({ icon: '🏪', title: this.hasCurrentLocation() ? '暂无附近店铺' : '请先定位', description: this.hasCurrentLocation() ? '暂无符合条件的附近店铺' : '定位后即可查看附近商品' })
+          // 特价商品列表由后端数据库返回
+          if (!this.loggedIn) {
+            EmptyState({ icon: '🔒', title: '登录后查看特价团购', description: '商家上新的特价商品会展示在这里' })
+          } else if (this.isRefreshing && this.specialGoods.length === 0) {
+            EmptyState({ icon: '⏳', title: '正在加载特价商品', description: '请稍候，正在读取最新团购数据' })
+          } else if (this.specialGoods.length === 0) {
+            EmptyState({ icon: '🛍️', title: '暂无特价商品', description: '商家上新特价商品后会展示在这里' })
           } else {
             Refresh({ refreshing: this.isRefreshing }) {
-              List({ space: SPACING.SM }) {
-                LazyForEach(this.storeDataSource, (store: StoreItem) => {
-                  ListItem() {
-                    this.StoreCard(store)
-                  }
-                }, (item: StoreItem) => item.id.toString())
+              Column({ space: SPACING.SM }) {
+                ForEach(this.specialGoods, (item: SpecialGoodsItem) => {
+                  this.SpecialGoodsCard(item)
+                }, (item: SpecialGoodsItem) => `${item.goods.storeId}-${item.goods.id}`)
               }
               .width('100%')
               .padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.LG })
-              .divider({ strokeWidth: 0 })
-              .cachedCount(5)
             }
-            .onRefreshing(() => {
-              this.stores = this.getNearbyStores()
-              this.storeDataSource.setData(this.stores)
-              this.isRefreshing = false
-            })
+            .onRefreshing(() => { this.refreshHomeData() })
           }
           }
           .layoutWeight(1)
@@ -785,7 +791,7 @@ struct HomePage {
                   await loadAllData()
                   await saveAllData()
                   this.showPrivacyDialog = false
-                  await this.refreshStores()
+                  await this.refreshHomeData()
                 })
             }
             .width('100%')
@@ -804,6 +810,60 @@ struct HomePage {
     .width('100%')
     .height('100%')
     .backgroundColor(COLORS.BG_PRIMARY)
+  }
+
+  private openSpecialStore(item: SpecialGoodsItem): void {
+    const storeId: number = item.goods.storeId ?? 0
+    if (storeId <= 0) {
+      promptAction.showToast({ message: '店铺信息暂不可用，请刷新后重试', duration: 1800 })
+      return
+    }
+    AppStorage.setOrCreate<number>('selectedStoreId', storeId)
+    AppStorage.setOrCreate<string>('selectedStoreName', item.storeName)
+    router.pushUrl({ url: 'pages/StoreDetailPage' })
+  }
+
+  @Builder
+  SpecialGoodsCard(item: SpecialGoodsItem) {
+    Row({ space: SPACING.MD }) {
+      Column() {
+        Text(item.goods.name.substring(0, 1))
+          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRIMARY)
+      }
+      .width(82).height(82).backgroundColor('#FFF1EB').borderRadius(BORDER_RADIUS.MD)
+      .justifyContent(FlexAlign.Center)
+
+      Column({ space: 4 }) {
+        Row() {
+          Text(item.goods.name)
+            .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+            .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text('特价')
+            .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_WHITE)
+            .backgroundColor(COLORS.PRICE_RED)
+            .padding({ left: 6, right: 6, top: 2, bottom: 2 }).borderRadius(BORDER_RADIUS.ROUND)
+        }
+        Text(`${item.storeName} · ${item.storeDistance}`)
+          .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
+          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+        Row({ space: SPACING.SM }) {
+          Text(`¥${item.goods.price.toFixed(2)}`)
+            .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRICE_RED)
+          if (item.goods.originalPrice !== undefined && item.goods.originalPrice > item.goods.price) {
+            Text(`¥${item.goods.originalPrice.toFixed(2)}`)
+              .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+              .decoration({ type: TextDecorationType.LineThrough })
+          }
+        }
+        Text(item.goods.description)
+          .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
+      .layoutWeight(1).alignItems(HorizontalAlign.Start)
+    }
+    .width('100%').padding(SPACING.MD).backgroundColor(COLORS.BG_WHITE)
+    .borderRadius(BORDER_RADIUS.LG)
+    .onClick(() => { this.openSpecialStore(item) })
   }
 
   @Builder
