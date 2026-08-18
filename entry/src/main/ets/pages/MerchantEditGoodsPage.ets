@@ -144,7 +144,6 @@ export struct MerchantEditGoodsPage {
       promptAction.showToast({ message: '商品已保存，但刷新数据失败，请返回后重试', duration: 2600 })
       return
     }
-    AppStorage.setOrCreate<boolean>('merchantGoodsNeedsRefresh', true)
     promptAction.showToast({ message: '商品保存成功，列表已刷新', duration: 1800 })
     router.back()
   }
