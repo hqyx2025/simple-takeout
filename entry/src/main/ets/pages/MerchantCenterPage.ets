@@ -46,6 +46,7 @@ export struct MerchantCenterPage {
   @State editStoreMinOrder: string = ''
   @State editingStoreId: number = 0
   @State savingStore: boolean = false
+  @State creatingStore: boolean = false
 
   aboutToAppear() {
     logInfo('Page', '进入商户中心页 MerchantCenterPage')
@@ -170,6 +171,7 @@ export struct MerchantCenterPage {
           .type(ButtonType.Capsule)
           .margin({ top: SPACING.LG })
           .onClick(() => {
+            this.creatingStore = false
             this.showAddStore = true
           })
 
@@ -249,8 +251,15 @@ export struct MerchantCenterPage {
       if (this.showAddStore) {
         Column() {
           Column({ space: SPACING.MD }) {
-            Text('新建店铺')
-              .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+            Row() {
+              Text('新建店铺')
+                .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+                .layoutWeight(1).textAlign(TextAlign.Center)
+              Text('✕')
+                .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT)
+                .onClick(() => { this.showAddStore = false })
+            }
+            .width('100%')
             Text('创建后将自动归入您的名下，店铺名称为必填项')
               .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
             Column({ space: SPACING.XS }) {
@@ -270,7 +279,7 @@ export struct MerchantCenterPage {
                 Text('配送费（元）')
                   .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
                 TextInput({ placeholder: '如：3', text: this.newStoreDeliveryFee })
-                  .layoutWeight(1).height(44).type(InputType.Number)
+                  .width('100%').height(44).type(InputType.Number)
                   .onChange((v: string) => { this.newStoreDeliveryFee = v })
               }
               .layoutWeight(1)
@@ -278,26 +287,26 @@ export struct MerchantCenterPage {
                 Text('起送价（元）')
                   .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
                 TextInput({ placeholder: '如：20', text: this.newStoreMinOrder })
-                  .layoutWeight(1).height(44).type(InputType.Number)
+                  .width('100%').height(44).type(InputType.Number)
                   .onChange((v: string) => { this.newStoreMinOrder = v })
               }
               .layoutWeight(1)
             }
             Row({ space: SPACING.MD }) {
               Button('取消')
-                .layoutWeight(1).height(44).fontSize(FONT_SIZE.MD)
+                .layoutWeight(1).height(42).fontSize(FONT_SIZE.MD)
                 .fontColor(COLORS.TEXT_SECONDARY).backgroundColor('#F5F5F5')
                 .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                 .onClick(() => { this.showAddStore = false })
-              Button('创建')
-                .layoutWeight(1).height(44).fontSize(FONT_SIZE.MD)
+              Button(this.creatingStore ? '创建中...' : '确认创建')
+                .layoutWeight(1).height(42).fontSize(FONT_SIZE.MD)
                 .fontColor(Color.White).backgroundColor(COLORS.PRIMARY)
                 .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                 .onClick(() => { this.doCreateStore() })
             }
           }
-          .width('90%')
-          .padding(SPACING.XL)
+          .width('88%')
+          .padding(SPACING.LG)
           .backgroundColor(Color.White)
           .borderRadius(BORDER_RADIUS.XL)
         }
@@ -575,13 +584,21 @@ export struct MerchantCenterPage {
   }
 
   async doCreateStore() {
-    if (this.newStoreName === '') {
+    if (this.creatingStore) {
+      promptAction.showToast({ message: '店铺正在创建，请稍候', duration: 1400 })
+      return
+    }
+    const name: string = this.newStoreName.trim()
+    if (name === '') {
+      promptAction.showToast({ message: '请输入店铺名称' })
       return
     }
     const fee = Number(this.newStoreDeliveryFee) || 3
     const minOrder = Number(this.newStoreMinOrder) || 20
-    const created: StoreItem | null = await createMerchantStoreApi(this.newStoreName, 1, fee, minOrder, '30分钟', this.newStoreNotice || '欢迎光临')
+    this.creatingStore = true
+    const created: StoreItem | null = await createMerchantStoreApi(name, 1, fee, minOrder, '30分钟', this.newStoreNotice.trim() || '欢迎光临')
     if (created === null) {
+      this.creatingStore = false
       promptAction.showToast({ message: '创建失败，请检查网络或登录状态' })
       return
     }
@@ -589,6 +606,8 @@ export struct MerchantCenterPage {
     this.newStoreNotice = ''
     this.showAddStore = false
     await this.refreshStores()
+    this.creatingStore = false
+    promptAction.showToast({ message: '店铺创建成功，列表已刷新', duration: 1800 })
   }
 
   startEditStore(store: StoreItem) {
