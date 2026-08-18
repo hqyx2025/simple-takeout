@@ -74,6 +74,9 @@ export interface StoreItem {
   distance: string
   tags: string[]
   notice: string
+  address?: string
+  latitude?: number
+  longitude?: number
   categoryId: number
   categoryIds?: number[]
   ownerId: number  // 商户用户ID
