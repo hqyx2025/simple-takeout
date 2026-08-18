@@ -4,6 +4,7 @@ import com.example.takeout.common.ApiResponse;
 import com.example.takeout.model.Category;
 import com.example.takeout.model.Goods;
 import com.example.takeout.model.Store;
+import com.example.takeout.model.SpecialGoods;
 import com.example.takeout.service.StoreService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -69,6 +70,12 @@ public class StoreController {
     @GetMapping("/stores/{id}/goods")
     public ApiResponse<List<Goods>> goods(@PathVariable long id) {
         return ApiResponse.ok(storeService.listGoods(id));
+    }
+
+    @GetMapping("/goods/special")
+    public ApiResponse<List<SpecialGoods>> specialGoods(
+            @RequestParam(defaultValue = "10") int limit) {
+        return ApiResponse.ok(storeService.listSpecialGoods(limit));
     }
 
     /** 用户端：店铺详情展示的店内商户分类（与商品 merchantCategoryId 对应）。 */
