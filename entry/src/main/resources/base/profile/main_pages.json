@@ -19,6 +19,8 @@
     "pages/MerchantOrdersPage",
     "pages/MerchantStatsPage",
     "pages/MerchantCenterPage",
+    "pages/MerchantAddGoodsPage",
+    "pages/MerchantEditGoodsPage",
     "pages/AdminCenterPage",
     "pages/AdminCategoryPage",
     "pages/AdminStorePage",
