@@ -6,7 +6,7 @@
 import { get, post, put, del, ApiResponse, setAuthToken } from './HttpClient'
 import { API_CONFIG } from '../common/Constants'
 import {
-  User, UserRole, StoreItem, GoodsItem, Category, Order, CartItem,
+  User, UserRole, StoreItem, GoodsItem, SpecialGoodsItem, Category, Order, CartItem,
   Address, Coupon, Review, Favorite, RefundRecord, AdminEmployee, AdminProduct, AdminUser,
   AdminStatisticsData, AdminTrendPoint, AdminHotGoods
 } from '../model/Models'
@@ -47,7 +47,14 @@ interface ServerGoods {
   sales: number
   rating: number
   tag: string
+  special: boolean
   status: number
+}
+
+interface ServerSpecialGoods {
+  goods: ServerGoods
+  storeName: string
+  storeDistance: string
 }
 
 interface ServerOrderItem {
@@ -311,6 +318,7 @@ interface MerchantGoodsRequest {
   merchantCategoryId: number
   stock: number
   tag: string
+  special: boolean
   status: number
 }
 
@@ -426,6 +434,21 @@ export async function fetchStoreGoods(storeId: number): Promise<GoodsItem[]> {
     return []
   }
   return resp.data.map((g: ServerGoods) => toGoodsItem(g))
+}
+
+export async function fetchSpecialGoodsApi(limit: number = 10): Promise<SpecialGoodsItem[]> {
+  const resp: ApiResponse<ServerSpecialGoods[]> = await get<ServerSpecialGoods[]>(`/api/goods/special?limit=${limit}`)
+  if (resp.code !== 200 || resp.data === null) {
+    return []
+  }
+  return resp.data.map((item: ServerSpecialGoods): SpecialGoodsItem => {
+    const result: SpecialGoodsItem = {
+      goods: toGoodsItem(item.goods),
+      storeName: item.storeName,
+      storeDistance: item.storeDistance
+    }
+    return result
+  })
 }
 
 export async function fetchStoreReviews(storeId: number): Promise<Review[]> {
@@ -635,9 +658,10 @@ export async function updateMerchantStoreApi(storeId: number, name: string, deli
 function toMerchantGoodsRequest(goods: GoodsItem, status: number): MerchantGoodsRequest {
   const req: MerchantGoodsRequest = {
     name: goods.name, description: goods.description, price: goods.price,
-    originalPrice: goods.originalPrice || goods.price, image: goods.image,
+    originalPrice: goods.originalPrice !== undefined ? goods.originalPrice : goods.price, image: goods.image,
     categoryId: goods.categoryId, tag: goods.tag || '', status: status,
-    merchantCategoryId: goods.merchantCategoryId || 0, stock: goods.stock ?? 999
+    merchantCategoryId: goods.merchantCategoryId || 0, stock: goods.stock ?? 999,
+    special: goods.isSpecial === true
   }
   return req
 }
@@ -1006,6 +1030,7 @@ function toGoodsItem(g: ServerGoods): GoodsItem {
     sales: g.sales,
     rating: g.rating,
     tag: g.tag,
+    isSpecial: g.special === true,
     isOnShelf: g.status === 1
   }
   return goods

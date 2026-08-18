@@ -50,6 +50,14 @@ export interface GoodsItem {
   rating: number
   tag?: string
   isOnShelf?: boolean
+  isSpecial?: boolean
+}
+
+/** 首页特价团购商品，附带店铺信息用于展示和跳转。 */
+export interface SpecialGoodsItem {
+  goods: GoodsItem
+  storeName: string
+  storeDistance: string
 }
 
 // 店铺模型
