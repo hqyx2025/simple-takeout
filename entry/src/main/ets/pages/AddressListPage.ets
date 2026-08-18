@@ -78,6 +78,10 @@ export struct AddressListPage {
     }
     // 等待首次同步完成，避免它在设置默认地址后用旧数据覆盖 UI。
     await syncAddressesRemote()
+    if (AppStorage.get<boolean>('merchantOpenAddressForm') || false) {
+      AppStorage.setOrCreate<boolean>('merchantOpenAddressForm', false)
+      this.openAddForm()
+    }
   }
 
   aboutToDisappear(): void {
@@ -546,17 +550,12 @@ export struct AddressListPage {
       return
     }
 
+    const isNewAddress: boolean = this.editingAddress === null
+    const returnToMerchant: boolean = isNewAddress
+      && (AppStorage.get<boolean>('merchantAddressSelectionMode') || false)
+
     if (this.editingAddress === null) {
       // 新增
-      const addr: Address = {
-        id: 0,
-        name: this.formData.name,
-        phone: this.formData.phone,
-        address: this.formData.address,
-        detail: this.formData.detail,
-        isDefault: this.formData.isDefault,
-        tag: this.formData.tag
-      }
       const ok: boolean = await addAddressRemote(this.formData.name, this.formData.phone,
         this.getFormAddressDetail(), this.formData.isDefault)
       if (!ok) {
@@ -580,6 +579,18 @@ export struct AddressListPage {
       this.applyAddressList(syncedAddresses)
     }
     this.showAddForm = false
+    if (returnToMerchant) {
+      const savedText: string = this.getFormAddressDetail()
+      const selectedAddress: Address | undefined = this.addressList.find((item: Address) =>
+        item.name === name && item.phone === phone && this.getDisplayAddress(item) === savedText)
+      if (selectedAddress !== undefined) {
+        AppStorage.setOrCreate<Address>('currentAddress', selectedAddress)
+        AppStorage.setOrCreate<boolean>('addressSelectionMode', false)
+        promptAction.showToast({ message: '地址已保存，已返回店铺表单', duration: 1400 })
+        router.back()
+        return
+      }
+    }
     promptAction.showToast({ message: this.editingAddress === null ? '地址新增成功' : '地址更新成功', duration: 1200 })
   }
 }
