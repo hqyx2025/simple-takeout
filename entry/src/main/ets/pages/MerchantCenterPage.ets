@@ -45,6 +45,7 @@ export struct MerchantCenterPage {
   @State editStoreDeliveryFee: string = ''
   @State editStoreMinOrder: string = ''
   @State editingStoreId: number = 0
+  @State savingStore: boolean = false
 
   aboutToAppear() {
     logInfo('Page', '进入商户中心页 MerchantCenterPage')
@@ -77,6 +78,11 @@ export struct MerchantCenterPage {
     }
     await this.refreshStores()
     await this.refreshSelectedStoreGoods()
+    const feedback: string = AppStorage.get<string>('merchantGoodsFeedback') || ''
+    if (feedback !== '') {
+      AppStorage.setOrCreate<string>('merchantGoodsFeedback', '')
+      promptAction.showToast({ message: feedback, duration: 1800 })
+    }
   }
 
   private async refreshSelectedStoreGoods(): Promise<void> {
@@ -305,8 +311,15 @@ export struct MerchantCenterPage {
       if (this.showEditStore) {
         Column() {
           Column({ space: SPACING.MD }) {
-            Text('编辑店铺')
-              .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+            Row() {
+              Text('编辑店铺')
+                .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+                .layoutWeight(1).textAlign(TextAlign.Center)
+              Text('✕')
+                .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT)
+                .onClick(() => { this.showEditStore = false })
+            }
+            .width('100%')
             Text('修改后用户端店铺信息将同步更新，店铺名称为必填项')
               .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
             Column({ space: SPACING.XS }) {
@@ -326,7 +339,7 @@ export struct MerchantCenterPage {
                 Text('配送费（元）')
                   .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
                 TextInput({ placeholder: '如：3', text: this.editStoreDeliveryFee })
-                  .layoutWeight(1).height(44).type(InputType.Number)
+                  .width('100%').height(44).type(InputType.Number)
                   .onChange((v: string) => { this.editStoreDeliveryFee = v })
               }
               .layoutWeight(1)
@@ -334,26 +347,26 @@ export struct MerchantCenterPage {
                 Text('起送价（元）')
                   .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
                 TextInput({ placeholder: '如：20', text: this.editStoreMinOrder })
-                  .layoutWeight(1).height(44).type(InputType.Number)
+                  .width('100%').height(44).type(InputType.Number)
                   .onChange((v: string) => { this.editStoreMinOrder = v })
               }
               .layoutWeight(1)
             }
             Row({ space: SPACING.MD }) {
               Button('取消')
-                .layoutWeight(1).height(44).fontSize(FONT_SIZE.MD)
+                .layoutWeight(1).height(42).fontSize(FONT_SIZE.MD)
                 .fontColor(COLORS.TEXT_SECONDARY).backgroundColor('#F5F5F5')
                 .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                 .onClick(() => { this.showEditStore = false })
-              Button('保存')
-                .layoutWeight(1).height(44).fontSize(FONT_SIZE.MD)
+              Button(this.savingStore ? '保存中...' : '确认保存')
+                .layoutWeight(1).height(42).fontSize(FONT_SIZE.MD)
                 .fontColor(Color.White).backgroundColor(COLORS.PRIMARY)
                 .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                 .onClick(() => { this.doEditStore() })
             }
           }
-          .width('90%')
-          .padding(SPACING.XL)
+          .width('88%')
+          .padding(SPACING.LG)
           .backgroundColor(Color.White)
           .borderRadius(BORDER_RADIUS.XL)
         }
@@ -584,26 +597,36 @@ export struct MerchantCenterPage {
     this.editStoreNotice = store.notice
     this.editStoreDeliveryFee = store.deliveryFee.toString()
     this.editStoreMinOrder = store.minOrder.toString()
+    this.savingStore = false
     this.showEditStore = true
   }
 
   async doEditStore() {
-    if (this.editStoreName === '') {
+    if (this.savingStore) {
+      promptAction.showToast({ message: '店铺正在保存，请稍候', duration: 1400 })
+      return
+    }
+    const name: string = this.editStoreName.trim()
+    if (name === '') {
       promptAction.showToast({ message: '店铺名称不能为空' })
       return
     }
     const originalStore = this.myStores.find(s => s.id === this.editingStoreId)
     if (originalStore === undefined || originalStore === null) {
+      promptAction.showToast({ message: '店铺信息已变化，请刷新后重试', duration: 1800 })
       return
     }
     const fee = Number(this.editStoreDeliveryFee) || 0
     const minOrder = Number(this.editStoreMinOrder) || 0
-    const updated: StoreItem | null = await updateMerchantStoreApi(originalStore.id, this.editStoreName, fee, minOrder, originalStore.deliveryTime, this.editStoreNotice || '欢迎光临')
+    this.savingStore = true
+    const updated: StoreItem | null = await updateMerchantStoreApi(originalStore.id, name, fee, minOrder, originalStore.deliveryTime, this.editStoreNotice.trim() || '欢迎光临')
     if (updated === null) {
+      this.savingStore = false
       promptAction.showToast({ message: '保存失败，请稍后重试' })
       return
     }
     await this.refreshStores()
+    this.savingStore = false
     this.showEditStore = false
     promptAction.showToast({ message: '保存成功' })
   }
