@@ -36,9 +36,11 @@ export struct MerchantCenterPage {
   @State newGoodsName: string = ''
   @State newGoodsDesc: string = ''
   @State newGoodsPrice: string = ''
+  @State newGoodsOriginalPrice: string = ''
   @State newGoodsCategory: string = '1'
   @State newGoodsStock: string = '999'
   @State newGoodsMerchantCategory: string = '0'
+  @State newGoodsSpecial: boolean = false
 
   // 商户分类管理（演进项，见大纲 8.3）
   @State merchantCategories: Category[] = []
@@ -61,8 +63,10 @@ export struct MerchantCenterPage {
   @State editGoodsName: string = ''
   @State editGoodsDesc: string = ''
   @State editGoodsPrice: string = ''
+  @State editGoodsOriginalPrice: string = ''
   @State editGoodsStock: string = '999'
   @State editGoodsMerchantCategory: string = '0'
+  @State editGoodsSpecial: boolean = false
 
   aboutToAppear() {
     logInfo('Page', '进入商户中心页 MerchantCenterPage')
@@ -506,6 +510,20 @@ export struct MerchantCenterPage {
                 .layoutWeight(1)
               }
               Column({ space: SPACING.XS }) {
+                Text('原价（特价团购必填）')
+                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                TextInput({ placeholder: '如：30.00，高于特价价', text: this.newGoodsOriginalPrice })
+                  .width('100%').height(40).type(InputType.Number)
+                  .onChange((v: string) => { this.newGoodsOriginalPrice = v })
+              }
+              Row() {
+                Text('加入特价团购')
+                  .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+                Toggle({ type: ToggleType.Switch, isOn: this.newGoodsSpecial })
+                  .onChange((isOn: boolean) => { this.newGoodsSpecial = isOn })
+              }
+              .width('100%').justifyContent(FlexAlign.SpaceBetween)
+              Column({ space: SPACING.XS }) {
                 Text('店内分类（0=未分组）')
                   .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
                 TextInput({ placeholder: '如：1', text: this.newGoodsMerchantCategory })
@@ -557,6 +575,20 @@ export struct MerchantCenterPage {
                   .width('100%').height(40).type(InputType.Number)
                   .onChange((v: string) => { this.editGoodsPrice = v })
               }
+              Column({ space: SPACING.XS }) {
+                Text('原价（特价团购必填）')
+                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                TextInput({ placeholder: '如：30.00，高于特价价', text: this.editGoodsOriginalPrice })
+                  .width('100%').height(40).type(InputType.Number)
+                  .onChange((v: string) => { this.editGoodsOriginalPrice = v })
+              }
+              Row() {
+                Text('加入特价团购')
+                  .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+                Toggle({ type: ToggleType.Switch, isOn: this.editGoodsSpecial })
+                  .onChange((isOn: boolean) => { this.editGoodsSpecial = isOn })
+              }
+              .width('100%').justifyContent(FlexAlign.SpaceBetween)
               Row({ space: SPACING.SM }) {
                 Column({ space: SPACING.XS }) {
                   Text('库存')
@@ -606,6 +638,13 @@ export struct MerchantCenterPage {
                     Text(goods.description)
                       .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
                       .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                    if (goods.isSpecial === true) {
+                      Text('特价团购')
+                        .fontSize(FONT_SIZE.XS).fontColor(COLORS.PRICE_RED)
+                        .backgroundColor('#FFF0F0')
+                        .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+                        .borderRadius(BORDER_RADIUS.ROUND)
+                    }
                   }
                   .layoutWeight(1)
                   .alignItems(HorizontalAlign.Start)
@@ -699,9 +738,15 @@ export struct MerchantCenterPage {
 
   async doAddGoods() {
     if (this.newGoodsName === '' || this.newGoodsPrice === '') {
+      promptAction.showToast({ message: '请填写商品名称和特价价' })
       return
     }
     const price = Number(this.newGoodsPrice) || 0
+    const originalPrice = Number(this.newGoodsOriginalPrice) || price
+    if (this.newGoodsSpecial && originalPrice <= price) {
+      promptAction.showToast({ message: '特价商品原价必须高于特价价' })
+      return
+    }
     const categoryId = Number(this.newGoodsCategory) || 1
     const stock = Number(this.newGoodsStock) >= 0 ? Math.floor(Number(this.newGoodsStock)) : 999
     const merchantCategoryId = Math.floor(Number(this.newGoodsMerchantCategory) || 0)
@@ -710,13 +755,15 @@ export struct MerchantCenterPage {
       name: this.newGoodsName,
       description: this.newGoodsDesc || '美味可口',
       price: price,
+      originalPrice: originalPrice,
       image: '',
       categoryId: categoryId,
       merchantCategoryId: merchantCategoryId,
       stock: stock,
       sales: 0,
       rating: 5.0,
-      tag: '新品',
+      tag: this.newGoodsSpecial ? '特价团购' : '新品',
+      isSpecial: this.newGoodsSpecial,
     }
     const created: GoodsItem | null = await createMerchantGoodsApi(this.selectedStoreId, goods)
     if (created === null) {
@@ -726,8 +773,10 @@ export struct MerchantCenterPage {
     this.newGoodsName = ''
     this.newGoodsDesc = ''
     this.newGoodsPrice = ''
+    this.newGoodsOriginalPrice = ''
     this.newGoodsStock = '999'
     this.newGoodsMerchantCategory = '0'
+    this.newGoodsSpecial = false
     this.showAddGoods = false
     this.selectedStoreGoods = await fetchMerchantGoodsApi(this.selectedStoreId)
     this.storeGoodsCounts[this.selectedStoreId.toString()] = this.selectedStoreGoods.length
@@ -768,8 +817,10 @@ export struct MerchantCenterPage {
     this.editGoodsName = goods.name
     this.editGoodsDesc = goods.description
     this.editGoodsPrice = goods.price.toString()
+    this.editGoodsOriginalPrice = (goods.originalPrice ?? goods.price).toString()
     this.editGoodsStock = (goods.stock ?? 999).toString()
     this.editGoodsMerchantCategory = (goods.merchantCategoryId ?? 0).toString()
+    this.editGoodsSpecial = goods.isSpecial === true
     this.showAddGoods = false
     this.showEditGoods = true
   }
@@ -784,6 +835,11 @@ export struct MerchantCenterPage {
       return
     }
     const price = Number(this.editGoodsPrice) || 0
+    const originalPrice = Number(this.editGoodsOriginalPrice) || price
+    if (this.editGoodsSpecial && originalPrice <= price) {
+      promptAction.showToast({ message: '特价商品原价必须高于特价价' })
+      return
+    }
     const stock = Number(this.editGoodsStock) >= 0 ? Math.floor(Number(this.editGoodsStock)) : 999
     const merchantCategoryId = Math.floor(Number(this.editGoodsMerchantCategory) || 0)
     const updatedGoods: GoodsItem = {
@@ -791,15 +847,16 @@ export struct MerchantCenterPage {
       name: this.editGoodsName,
       description: this.editGoodsDesc || '美味可口',
       price: price,
-      originalPrice: originalGoods.originalPrice,
+      originalPrice: originalPrice,
       image: originalGoods.image,
       categoryId: originalGoods.categoryId,
       merchantCategoryId: merchantCategoryId,
       stock: stock,
       sales: originalGoods.sales,
       rating: originalGoods.rating,
-      tag: originalGoods.tag,
+      tag: this.editGoodsSpecial ? '特价团购' : (originalGoods.tag === '特价团购' ? '' : originalGoods.tag),
       isOnShelf: originalGoods.isOnShelf,
+      isSpecial: this.editGoodsSpecial,
     }
     const updated: GoodsItem | null = await updateMerchantGoodsApi(updatedGoods, updatedGoods.isOnShelf !== false)
     if (updated === null) {
@@ -818,7 +875,7 @@ export struct MerchantCenterPage {
       name: goods.name,
       description: goods.description,
       price: goods.price,
-      originalPrice: goods.originalPrice,
+      originalPrice: goods.originalPrice ?? goods.price,
       image: goods.image,
       categoryId: goods.categoryId,
       merchantCategoryId: goods.merchantCategoryId ?? 0,
@@ -827,6 +884,7 @@ export struct MerchantCenterPage {
       rating: goods.rating,
       tag: goods.tag,
       isOnShelf: onShelf,
+      isSpecial: goods.isSpecial === true,
     }
     const updated: GoodsItem | null = await updateMerchantGoodsApi(updatedGoods, onShelf)
     if (updated === null) {
