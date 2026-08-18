@@ -108,6 +108,41 @@ export struct MerchantCenterPage {
     this.storeGoodsCounts = counts
   }
 
+  async onPageShow(): Promise<void> {
+    if (!this.loggedIn || this.user.role !== UserRole.MERCHANT) {
+      return
+    }
+    await this.refreshStores()
+    await this.refreshSelectedStoreGoods()
+  }
+
+  private async refreshSelectedStoreGoods(): Promise<void> {
+    if (this.selectedStoreId <= 0) {
+      return
+    }
+    this.selectedStoreGoods = await fetchMerchantGoodsApi(this.selectedStoreId)
+    this.storeGoodsCounts[this.selectedStoreId.toString()] = this.selectedStoreGoods.length
+  }
+
+  private openAddGoodsPage(): void {
+    if (this.selectedStoreId <= 0) {
+      promptAction.showToast({ message: '请先选择要管理的店铺', duration: 1800 })
+      return
+    }
+    AppStorage.setOrCreate<number>('merchantGoodsStoreId', this.selectedStoreId)
+    router.pushUrl({ url: 'pages/MerchantAddGoodsPage' })
+  }
+
+  private openEditGoodsPage(goods: GoodsItem): void {
+    if (this.selectedStoreId <= 0 || goods.id <= 0) {
+      promptAction.showToast({ message: '商品信息暂不可用，请刷新后重试', duration: 1800 })
+      return
+    }
+    AppStorage.setOrCreate<number>('merchantGoodsStoreId', this.selectedStoreId)
+    AppStorage.setOrCreate<number>('merchantEditGoodsId', goods.id)
+    router.pushUrl({ url: 'pages/MerchantEditGoodsPage' })
+  }
+
   build() {
     Stack() {
       Column() {
@@ -467,7 +502,7 @@ export struct MerchantCenterPage {
               .height(32).fontSize(FONT_SIZE.SM).fontColor(Color.White)
               .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.ROUND)
               .type(ButtonType.Capsule)
-              .onClick(() => { this.showAddGoods = true; this.showEditGoods = false })
+              .onClick(() => { this.openAddGoodsPage() })
           }
           .width('100%').height(50)
           .padding({ left: SPACING.LG, right: SPACING.LG })
@@ -661,8 +696,8 @@ export struct MerchantCenterPage {
                         .onClick(async () => {
                             const deleted: boolean = await deleteMerchantGoodsApi(goods.id)
                             if (deleted) {
-                              this.selectedStoreGoods = await fetchMerchantGoodsApi(this.selectedStoreId)
-                              this.storeGoodsCounts[this.selectedStoreId.toString()] = this.selectedStoreGoods.length
+                              await this.refreshSelectedStoreGoods()
+                              promptAction.showToast({ message: '商品已删除', duration: 1400 })
                             } else {
                               promptAction.showToast({ message: '删除失败，请稍后重试' })
                             }
@@ -671,7 +706,7 @@ export struct MerchantCenterPage {
                         .height(28).fontSize(FONT_SIZE.XS).fontColor(COLORS.PRIMARY)
                         .backgroundColor(COLORS.TAG_BG).borderRadius(BORDER_RADIUS.ROUND)
                         .type(ButtonType.Capsule)
-                        .onClick(() => { this.startEditGoods(goods) })
+                        .onClick(() => { this.openEditGoodsPage(goods) })
                       if (goods.isOnShelf === false) {
                         Button('上架')
                           .height(28).fontSize(FONT_SIZE.XS).fontColor(COLORS.SUCCESS)
@@ -864,8 +899,7 @@ export struct MerchantCenterPage {
       return
     }
     this.showEditGoods = false
-    this.selectedStoreGoods = await fetchMerchantGoodsApi(this.selectedStoreId)
-    this.storeGoodsCounts[this.selectedStoreId.toString()] = this.selectedStoreGoods.length
+    await this.refreshSelectedStoreGoods()
     promptAction.showToast({ message: '保存成功' })
   }
 
@@ -891,8 +925,7 @@ export struct MerchantCenterPage {
       promptAction.showToast({ message: '上下架操作失败，请稍后重试' })
       return
     }
-    this.selectedStoreGoods = await fetchMerchantGoodsApi(this.selectedStoreId)
-    this.storeGoodsCounts[this.selectedStoreId.toString()] = this.selectedStoreGoods.length
+    await this.refreshSelectedStoreGoods()
     promptAction.showToast({ message: onShelf ? '已上架' : '已下架' })
   }
 
