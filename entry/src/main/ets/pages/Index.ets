@@ -1942,9 +1942,11 @@ struct ProfileMainPage {
   }
 
   private applyUser(nextUser: User): void {
+    const normalizedBalance: number = Number.isFinite(nextUser.balance) ? nextUser.balance : 0
     this.user = nextUser
-    this.balance = Number.isFinite(nextUser.balance) ? nextUser.balance : 0
-    this.updateBalanceDisplay()
+    // 直接使用接口返回值更新显示文本，避免 StorageLink 写入后的即时回读仍是旧快照。
+    this.balanceDisplay = normalizedBalance.toFixed(2)
+    this.balance = normalizedBalance
   }
 
   private updateBalanceDisplay(): void {
