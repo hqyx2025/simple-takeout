@@ -261,6 +261,7 @@ interface CreateOrderRequest {
   addressId: number
   couponId: number
   remark: string
+  checkoutGoodsIds: number[]
 }
 
 interface CartItemRequest {
@@ -566,7 +567,7 @@ export async function clearCartApi(): Promise<CartItem[] | null> {
 /**
  * 创建订单：items 为购物车项，返回服务端订单（已转换）
  */
-export async function createOrderApi(storeId: number, cartItems: CartItem[], addressId: number, couponId: number, remark: string): Promise<Order | null> {
+export async function createOrderApi(storeId: number, cartItems: CartItem[], addressId: number, couponId: number, remark: string, checkoutGoodsIds: number[]): Promise<Order | null> {
   const items: OrderItemRequest[] = cartItems.map((c: CartItem) => {
     const item: OrderItemRequest = {
       goodsId: c.goods.id,
@@ -582,7 +583,8 @@ export async function createOrderApi(storeId: number, cartItems: CartItem[], add
     items: items,
     addressId: addressId,
     couponId: couponId,
-    remark: remark
+    remark: remark,
+    checkoutGoodsIds: checkoutGoodsIds
   }
   // 下单失败由结算页统一提示，避免 HttpClient 与结算页连续弹出两个 Toast 互相覆盖。
   const resp: ApiResponse<ServerOrder> = await post<ServerOrder>(API_CONFIG.ENDPOINTS['orders'], req, false)

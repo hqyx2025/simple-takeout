@@ -99,6 +99,18 @@ export struct CheckoutPage {
     return total
   }
 
+  private getCheckoutMinOrder(): number {
+    const stores: StoreItem[] = getAllStoresList()
+    let minOrder: number = 0
+    for (let i = 0; i < this.checkoutStoreIds.length; i++) {
+      const store: StoreItem | undefined = stores.find((s: StoreItem) => s.id === this.checkoutStoreIds[i])
+      if (store !== undefined && store.minOrder > minOrder) {
+        minOrder = store.minOrder
+      }
+    }
+    return minOrder
+  }
+
   private getStoreItems(storeId: number): CartItem[] {
     return this.storeItems.filter((item: CartItem) => item.storeId === storeId)
   }
@@ -161,20 +173,15 @@ export struct CheckoutPage {
       promptAction.showToast({ message: '订单正在提交，请稍候', duration: 1500 })
       return
     }
-    const stores: StoreItem[] = getAllStoresList()
-    for (let i = 0; i < this.checkoutStoreIds.length; i++) {
-      const store: StoreItem | undefined = stores.find((s: StoreItem) => s.id === this.checkoutStoreIds[i])
-      if (store !== undefined) {
-        const goodsTotal: number = this.getStoreGoodsTotalPrice(store.id)
-        if (goodsTotal < store.minOrder) {
-          const shortage: number = store.minOrder - goodsTotal
-          promptAction.showToast({
-            message: `未达到${store.name}起送价，还差¥${shortage.toFixed(2)}`,
-            duration: 2200
-          })
-          return
-        }
-      }
+    const checkoutTotal: number = this.getGoodsTotalPrice()
+    const checkoutMinOrder: number = this.getCheckoutMinOrder()
+    if (checkoutTotal < checkoutMinOrder) {
+      const shortage: number = checkoutMinOrder - checkoutTotal
+      promptAction.showToast({
+        message: `未达到本次订单起送价，还差¥${shortage.toFixed(2)}`,
+        duration: 2200
+      })
+      return
     }
     if (this.currentAddress === null) {
       promptAction.showToast({ message: '请先添加收货地址' })
@@ -195,6 +202,11 @@ export struct CheckoutPage {
     const address: Address = this.currentAddress as Address
     let firstOrder: Order | null = null
     let couponUsed: boolean = false
+    const checkoutGoodsIds: number[] = []
+    for (let i = 0; i < this.storeItems.length; i++) {
+      checkoutGoodsIds.push(this.storeItems[i].goods.id)
+    }
+    const successfulGoodsIds: number[] = []
     for (let i = 0; i < this.checkoutStoreIds.length; i++) {
       const storeId: number = this.checkoutStoreIds[i]
       const items: CartItem[] = this.getStoreItems(storeId)
@@ -204,8 +216,14 @@ export struct CheckoutPage {
         && (this.selectedCoupon.storeId === undefined || this.selectedCoupon.storeId === 0 || this.selectedCoupon.storeId === storeId)
         && groupTotal >= this.selectedCoupon.minOrder
       const couponId: number = couponCanApply && this.selectedCoupon !== null ? this.selectedCoupon.id : 0
-      const serverOrder: Order | null = await createOrderRemote(storeId, items, address.id, couponId, this.remark)
+      const serverOrder: Order | null = await createOrderRemote(storeId, items, address.id, couponId, this.remark, checkoutGoodsIds)
       if (serverOrder === null) {
+        if (successfulGoodsIds.length > 0) {
+          const successfulCartCleared: boolean = await deleteCartItemsRemote(successfulGoodsIds)
+          if (!successfulCartCleared) {
+            await syncCartRemote()
+          }
+        }
         this.submitting = false
         const errorMessage: string = getLastRemoteErrorMessage()
         const failureMessage: string = errorMessage === ''
@@ -221,13 +239,8 @@ export struct CheckoutPage {
       if (couponId > 0) {
         couponUsed = true
       }
-      const goodsIdsToClear: number[] = []
       for (let j = 0; j < items.length; j++) {
-        goodsIdsToClear.push(items[j].goods.id)
-      }
-      const cartCleared: boolean = await deleteCartItemsRemote(goodsIdsToClear)
-      if (!cartCleared) {
-        await syncCartRemote()
+        successfulGoodsIds.push(items[j].goods.id)
       }
     }
     if (firstOrder === null) {
@@ -235,6 +248,11 @@ export struct CheckoutPage {
       this.orderFailureMessage = '购物车没有可结算的商品'
       this.showOrderFailureDialog = true
       return
+    }
+
+    const cartCleared: boolean = await deleteCartItemsRemote(checkoutGoodsIds)
+    if (!cartCleared) {
+      await syncCartRemote()
     }
 
     // 后端已处理优惠券状态，重新同步真实优惠券列表

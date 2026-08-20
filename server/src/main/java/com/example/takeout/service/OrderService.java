@@ -9,7 +9,9 @@ import com.example.takeout.dao.RefundDao;
 import com.example.takeout.dao.ReviewDao;
 import com.example.takeout.dao.StoreDao;
 import com.example.takeout.dao.UserDao;
+import com.example.takeout.mapper.CartItemMapper;
 import com.example.takeout.model.Address;
+import com.example.takeout.model.CartItemEntity;
 import com.example.takeout.model.Coupon;
 import com.example.takeout.model.Goods;
 import com.example.takeout.model.Order;
@@ -19,6 +21,7 @@ import com.example.takeout.model.Store;
 import com.example.takeout.model.User;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,7 +30,9 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -48,10 +53,19 @@ public class OrderService {
     private final UserDao userDao;
     private final RefundDao refundDao;
     private final ObjectMapper objectMapper;
+    private final CartItemMapper cartItemMapper;
 
     public OrderService(OrderDao orderDao, StoreDao storeDao, GoodsDao goodsDao, AddressDao addressDao,
                         CouponDao couponDao, ReviewDao reviewDao, UserDao userDao, RefundDao refundDao,
                         ObjectMapper objectMapper) {
+        this(orderDao, storeDao, goodsDao, addressDao, couponDao, reviewDao, userDao, refundDao,
+                objectMapper, null);
+    }
+
+    @Autowired
+    public OrderService(OrderDao orderDao, StoreDao storeDao, GoodsDao goodsDao, AddressDao addressDao,
+                        CouponDao couponDao, ReviewDao reviewDao, UserDao userDao, RefundDao refundDao,
+                        ObjectMapper objectMapper, CartItemMapper cartItemMapper) {
         this.orderDao = orderDao;
         this.storeDao = storeDao;
         this.goodsDao = goodsDao;
@@ -61,12 +75,21 @@ public class OrderService {
         this.userDao = userDao;
         this.refundDao = refundDao;
         this.objectMapper = objectMapper;
+        this.cartItemMapper = cartItemMapper;
     }
 
     /** 创建订单：从用户余额扣款后进入平台托管，状态=1 待接单。 */
     @Transactional
     public Order.OrderView createOrder(long userId, long storeId, List<Order.OrderItem> items,
                                        long addressId, long couponId, String remark) {
+        return createOrder(userId, storeId, items, addressId, couponId, remark, List.of());
+    }
+
+    /** 创建订单时按本次结算选择的全部购物车商品计算总起送价。 */
+    @Transactional
+    public Order.OrderView createOrder(long userId, long storeId, List<Order.OrderItem> items,
+                                       long addressId, long couponId, String remark,
+                                       List<Long> checkoutGoodsIds) {
         if (items == null || items.isEmpty()) {
             throw new BizException("订单商品不能为空");
         }
@@ -101,7 +124,8 @@ public class OrderService {
             normalizedItems.add(new Order.OrderItem(goods.id(), goods.name(), goods.price(), item.quantity(), goods.image()));
         }
         goodsAmount = round2(goodsAmount);
-        if (goodsAmount < store.minOrder()) {
+        double checkoutGoodsAmount = resolveCheckoutGoodsAmount(userId, checkoutGoodsIds, goodsAmount);
+        if (checkoutGoodsAmount < store.minOrder()) {
             throw new BizException("未达到店铺起送价（满" + (long) store.minOrder() + "元起送）");
         }
         double discount = 0;
@@ -153,6 +177,33 @@ public class OrderService {
         long id = orderDao.insert(order);
         storeDao.updateMonthlySales(storeId, 1);
         return orderDetail(id);
+    }
+
+    private double resolveCheckoutGoodsAmount(long userId, List<Long> checkoutGoodsIds, double currentStoreAmount) {
+        if (checkoutGoodsIds == null || checkoutGoodsIds.isEmpty() || cartItemMapper == null) {
+            return currentStoreAmount;
+        }
+        Set<Long> selectedIds = new HashSet<>(checkoutGoodsIds);
+        if (selectedIds.size() != checkoutGoodsIds.size()) {
+            throw new BizException("结算商品重复，请刷新购物车后重试");
+        }
+        List<CartItemEntity> cartItems = cartItemMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CartItemEntity>()
+                        .eq(CartItemEntity::getUserId, userId)
+                        .in(CartItemEntity::getGoodsId, selectedIds));
+        if (cartItems.size() != selectedIds.size()) {
+            throw new BizException("购物车商品已变化，请刷新后重试");
+        }
+        double total = 0;
+        for (CartItemEntity cartItem : cartItems) {
+            Goods goods = goodsDao.findById(cartItem.getGoodsId())
+                    .orElseThrow(() -> new BizException("购物车商品已不存在，请刷新后重试"));
+            if (cartItem.getQuantity() == null || cartItem.getQuantity() <= 0) {
+                throw new BizException("购物车商品数量无效，请刷新后重试");
+            }
+            total += goods.price() * cartItem.getQuantity();
+        }
+        return round2(total);
     }
 
     public List<Order.OrderView> userOrders(long userId) {
