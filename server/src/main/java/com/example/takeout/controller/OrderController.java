@@ -36,7 +36,7 @@ public class OrderController {
     public ApiResponse<Order.OrderView> createOrder(@RequestAttribute("userId") long userId,
                                                     @RequestBody CreateOrderRequest req) {
         return ApiResponse.ok(orderService.createOrder(userId, req.storeId(), req.items(),
-                req.addressId(), req.couponId(), req.remark()));
+                req.addressId(), req.couponId(), req.remark(), req.checkoutGoodsIds()));
     }
 
     @GetMapping("/orders")
@@ -102,7 +102,7 @@ public class OrderController {
     }
 
     public record CreateOrderRequest(long storeId, List<Order.OrderItem> items, long addressId,
-                                     long couponId, String remark) {
+                                     long couponId, String remark, List<Long> checkoutGoodsIds) {
     }
 
     public record ReviewRequest(long goodsId, int rating, String content, List<String> tags) {

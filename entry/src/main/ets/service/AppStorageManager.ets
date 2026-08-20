@@ -565,8 +565,8 @@ export async function syncMerchantOrdersFromServer(): Promise<void> {
 /**
  * 远程下单：成功返回服务端订单；失败返回 null
  */
-export async function createOrderRemote(storeId: number, cartItems: CartItem[], addressId: number, couponId: number, remark: string): Promise<Order | null> {
-  const order: Order | null = await createOrderApi(storeId, cartItems, addressId, couponId, remark)
+export async function createOrderRemote(storeId: number, cartItems: CartItem[], addressId: number, couponId: number, remark: string, checkoutGoodsIds: number[]): Promise<Order | null> {
+  const order: Order | null = await createOrderApi(storeId, cartItems, addressId, couponId, remark, checkoutGoodsIds)
   if (order !== null) {
     const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
     orders.unshift(order)
