@@ -432,7 +432,9 @@ export async function rechargeBalanceApi(amount: number): Promise<User | undefin
     logWarn('Api', `测试充值失败：${resp.message}`)
     return undefined
   }
-  return toUser(resp.data)
+  const user: User = toUser(resp.data)
+  logInfo('Api', `充值接口返回余额=${user.balance.toFixed(2)}`)
+  return user
 }
 
 // ==================== 数据拉取（游客可访问） ====================
