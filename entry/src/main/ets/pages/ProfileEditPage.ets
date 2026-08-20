@@ -62,15 +62,21 @@ export struct ProfileEditPage {
       return
     }
     this.saving = true
-    const updated: User | undefined = await updateUserProfileRemote(name, this.phone)
-    this.saving = false
-    if (updated === undefined) {
-      promptAction.showToast({ message: '保存失败，请检查网络或手机号是否已使用' })
-      return
+    try {
+      const updated: User | undefined = await updateUserProfileRemote(name, this.phone)
+      if (updated === undefined) {
+        promptAction.showToast({ message: '保存失败，请检查网络或手机号是否已使用' })
+        return
+      }
+      logInfo('Profile', `保存个人信息 昵称=${name} 手机号=${this.phone}`)
+      promptAction.showToast({ message: '保存成功' })
+      // 此页面由“我的”页面进入，保存成功后返回上一页并触发首页 onPageShow 刷新资料。
+      router.back()
+    } catch (_) {
+      promptAction.showToast({ message: '保存失败，请稍后重试' })
+    } finally {
+      this.saving = false
     }
-    logInfo('Profile', `保存个人信息 昵称=${name} 手机号=${this.phone}`)
-    promptAction.showToast({ message: '保存成功' })
-    router.back()
   }
 
   build() {
@@ -203,6 +209,7 @@ export struct ProfileEditPage {
         Text(this.getRoleText())
           .fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_PRIMARY)
+          .padding({ left: SPACING.LG })
           .layoutWeight(1)
       }
       .width('100%')
