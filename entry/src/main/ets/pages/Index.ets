@@ -100,7 +100,6 @@ class OrderDataSource implements IDataSource {
 struct Index {
   @State currentTab: number = 0
   @State profileRefreshToken: number = 0
-  @State profileBalance: number = 0
   @StorageLink('isLoggedIn') @Watch('onLoginStateChange') loggedIn: boolean = false
   @State showLogin: boolean = true
   @State showLocationLoginConfirm: boolean = false
@@ -114,25 +113,11 @@ struct Index {
     // 登录态恢复后同步当前用户与账号库数据（保证不同账号余额等数据独立正确）
     this.loggedIn = isLoggedIn()
     this.showLogin = !this.loggedIn
-    const currentUser: User | undefined = AppStorage.get<User>('user')
-    this.profileBalance = currentUser !== undefined && currentUser !== null ? currentUser.balance : 0
     // 数据格式保险：校验 AppStorage 关键数据，异常（非数组/非对象）时重置，防止渲染崩溃
     this.sanitizeAppData()
     // 管理端守卫：已登录的管理端不渲染主页，直接跳转平台管理页
     this.guardAdminRole()
     this.consumePendingStoreDetail('aboutToAppear')
-  }
-
-  // 管理端守卫：登录态为 ADMIN 时立即替换到平台管理页，并阻止主页内容渲染
-  private async refreshProfileUser(): Promise<void> {
-    if (!this.loggedIn) {
-      return
-    }
-    const latestUser: User | undefined = await syncCurrentUserFromServer()
-    if (latestUser !== undefined) {
-      this.profileBalance = latestUser.balance
-      this.profileRefreshToken += 1
-    }
   }
 
   private guardAdminRole(): void {
@@ -330,8 +315,6 @@ struct Index {
       TabContent() {
         ProfileMainPage({
           refreshToken: this.profileRefreshToken,
-          balance: this.profileBalance,
-          onBalanceChanged: (balance: number) => { this.profileBalance = balance },
           onNavigate: (tab: number) => {
             this.currentTab = tab
             this.tabsController.changeIndex(tab)
@@ -346,7 +329,6 @@ struct Index {
       this.currentTab = index
       if (index === 3) {
         this.profileRefreshToken += 1
-        this.refreshProfileUser()
       }
       logInfo('Page', `首页 Tab 切换 index=${index}`)
     })
@@ -1893,61 +1875,63 @@ struct ProfileMainPage {
   @State rechargeAmount: string = ''
   @State recharging: boolean = false
   @Prop @Watch('onRefreshTokenChange') refreshToken: number = 0
-  @Prop @Watch('onBalancePropChange') balance: number = 0
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @StorageLink('cartItems') @Watch('onCartItemsChange') cartItems: CartItem[] = []
-  @StorageLink('user') @Watch('onUserChange') user: User = {
+  @State user: User = {
     id: 0, username: '未登录', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER,
     balance: 0, coupons: [], orders: [], storeIds: []
   }
   @State cartTitle: string = '购物车'
-  @State displayedBalance: number = 0
+  @State balance: number = 0
   onNavigate: (tab: number) => void = () => {}
   onNavigateLogin: () => void = () => {}
-  onBalanceChanged: (balance: number) => void = () => {}
 
-  aboutToAppear(): void {
+  async aboutToAppear(): Promise<void> {
     this.refreshCartTitle()
-    this.refreshDisplayedBalance()
-    this.displayedBalance = this.balance
-    this.refreshUserFromServer()
+    this.loadLocalUser()
+    await this.refreshFromDatabase()
   }
 
-  onRefreshTokenChange(): void {
+  async onRefreshTokenChange(): Promise<void> {
     this.refreshCartTitle()
-    this.refreshDisplayedBalance()
-    this.refreshUserFromServer()
+    this.loadLocalUser()
+    await this.refreshFromDatabase()
   }
 
   onCartItemsChange(): void {
     this.refreshCartTitle()
   }
 
-  onUserChange(): void {
-    this.refreshDisplayedBalance()
-  }
-
-  onBalancePropChange(): void {
-    this.displayedBalance = this.balance
-  }
-
-  private refreshDisplayedBalance(): void {
+  private loadLocalUser(): void {
     const currentUser: User | undefined = AppStorage.get<User>('user')
-    this.displayedBalance = currentUser !== undefined && currentUser !== null
-      ? currentUser.balance
-      : this.user.balance
-  }
-
-  private async refreshUserFromServer(): Promise<void> {
-    if (!this.loggedIn) {
+    if (currentUser === undefined || currentUser === null || currentUser.id <= 0) {
+      this.user = createEmptyUser()
+      this.balance = 0
       return
     }
-    const latestUser: User | undefined = await syncCurrentUserFromServer()
-    if (latestUser !== undefined) {
-      this.user = latestUser
-      this.displayedBalance = latestUser.balance
-      this.onBalanceChanged(latestUser.balance)
+    this.applyUser(currentUser)
+  }
+
+  async onPageShow(): Promise<void> {
+    this.loadLocalUser()
+    await this.refreshFromDatabase()
+  }
+
+  private async refreshFromDatabase(): Promise<boolean> {
+    if (!isLoggedIn()) {
+      return false
     }
+    const latestUser: User | undefined = await syncCurrentUserFromServer()
+    if (latestUser === undefined) {
+      return false
+    }
+    this.applyUser(latestUser)
+    return true
+  }
+
+  private applyUser(nextUser: User): void {
+    this.user = nextUser
+    this.balance = Number.isFinite(nextUser.balance) ? nextUser.balance : 0
   }
 
   private openRechargeDialog(): void {
@@ -1980,15 +1964,12 @@ struct ProfileMainPage {
     this.showRechargeDialog = false
     this.rechargeAmount = ''
     const confirmedUser: User = updatedUser as User
-    this.user = confirmedUser
-    this.displayedBalance = confirmedUser.balance
+    this.applyUser(confirmedUser)
     const latestUser: User | undefined = await syncCurrentUserFromServer()
     if (latestUser !== undefined) {
-      this.user = latestUser
-      this.displayedBalance = latestUser.balance
-      this.onBalanceChanged(latestUser.balance)
+      this.applyUser(latestUser)
     }
-    promptAction.showToast({ message: `\u5145\u503c\u6210\u529f\uff0c\u5f53\u524d\u4f59\u989d ¥${confirmedUser.balance.toFixed(2)}`, duration: 2000 })
+    promptAction.showToast({ message: `\u5145\u503c\u6210\u529f\uff0c\u5f53\u524d\u4f59\u989d ¥${this.balance.toFixed(2)}`, duration: 2000 })
   }
 
   private refreshCartTitle(): void {
@@ -2058,7 +2039,7 @@ struct ProfileMainPage {
 
         // 资产区域
         Row() {
-          this.AssetItem(this.displayedBalance.toFixed(2), '余额', () => { this.openRechargeDialog() })
+          this.AssetItem(this.balance.toFixed(2), '余额', () => { this.openRechargeDialog() })
           this.AssetItem((this.user.coupons || []).filter(c => !c.used).length.toString(), '优惠券', () => { router.pushUrl({ url: 'pages/CouponCenterPage' }) })
           this.AssetItem((this.user.orders || []).length.toString(), '订单', () => {
             AppStorage.setOrCreate<number>('orderFilterStatus', -1)
