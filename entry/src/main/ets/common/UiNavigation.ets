@@ -1,8 +1,21 @@
 /**
  * API 24 UI 导航与提示适配层。
  * 通过当前 UIContext 调用新路由/提示 API，避免继续依赖已废弃的全局 router/promptAction。
+ * UIContext.getCallingScopeUIContext() 在 await 后可能无法取得调用作用域，因此缓存首次获取到的上下文，
+ * 确保异步请求完成后的返回、跳转和 Toast 仍然使用同一个页面上下文。
  */
 import { UIContext } from '@kit.ArkUI'
+
+let cachedUiContext: UIContext | undefined = undefined
+
+function resolveUiContext(): UIContext | undefined {
+  const callingContext: UIContext | undefined = UIContext.getCallingScopeUIContext()
+  if (callingContext !== undefined) {
+    cachedUiContext = callingContext
+    return callingContext
+  }
+  return cachedUiContext
+}
 
 export interface RouterOptionsCompat {
   url: string
@@ -14,7 +27,7 @@ export interface ToastOptionsCompat {
 }
 
 export function navigate(url: string): void {
-  const context: UIContext | undefined = UIContext.getCallingScopeUIContext()
+  const context: UIContext | undefined = resolveUiContext()
   if (context !== undefined) {
     try {
       context.getRouter().pushUrl({ url })
@@ -25,7 +38,7 @@ export function navigate(url: string): void {
 }
 
 export function goBack(): void {
-  const context: UIContext | undefined = UIContext.getCallingScopeUIContext()
+  const context: UIContext | undefined = resolveUiContext()
   if (context !== undefined) {
     try {
       context.getRouter().back()
@@ -36,7 +49,7 @@ export function goBack(): void {
 }
 
 export function showToast(message: string, duration?: number): void {
-  const context: UIContext | undefined = UIContext.getCallingScopeUIContext()
+  const context: UIContext | undefined = resolveUiContext()
   if (context !== undefined) {
     const options: ToastOptionsCompat = duration === undefined
       ? { message }
@@ -55,7 +68,7 @@ class RouterCompat {
   }
 
   replaceUrl(options: RouterOptionsCompat): void {
-    const context: UIContext | undefined = UIContext.getCallingScopeUIContext()
+    const context: UIContext | undefined = resolveUiContext()
     if (context !== undefined) {
       try {
         context.getRouter().replaceUrl({ url: options.url })
