@@ -3,7 +3,7 @@
  * 包含：搜索栏、分类导航、店铺列表、店铺详情、购物车、订单列表、个人中心、底部Tab导航
  */
 import { Category, StoreItem, GoodsItem, SpecialGoodsItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, createEmptyUser } from '../model/Models'
-import { addToCart, addCartItemRemote, updateCartItemQuantity, updateCartItemQuantityRemote, refreshCartFromServer, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCartRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, getLastRemoteErrorMessage, rechargeBalanceRemote } from '../service/AppStorageManager'
+import { addToCart, addCartItemRemote, updateCartItemQuantity, updateCartItemQuantityRemote, refreshCartFromServer, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCartRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, getLastRemoteErrorMessage, rechargeBalanceRemote, syncCurrentUserFromServer } from '../service/AppStorageManager'
 import { fetchRecommendedStoresApi, fetchSpecialGoodsApi, fetchStoreMerchantCategoriesApi } from '../service/ApiService'
 import { LoginPage } from './LoginPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, formatSales } from '../common/Constants'
@@ -121,6 +121,16 @@ struct Index {
   }
 
   // 管理端守卫：登录态为 ADMIN 时立即替换到平台管理页，并阻止主页内容渲染
+  private async refreshProfileUser(): Promise<void> {
+    if (!this.loggedIn) {
+      return
+    }
+    const latestUser: User | undefined = await syncCurrentUserFromServer()
+    if (latestUser !== undefined) {
+      this.profileRefreshToken += 1
+    }
+  }
+
   private guardAdminRole(): void {
     if (!this.loggedIn) {
       return
@@ -330,6 +340,7 @@ struct Index {
       this.currentTab = index
       if (index === 3) {
         this.profileRefreshToken += 1
+        this.refreshProfileUser()
       }
       logInfo('Page', `首页 Tab 切换 index=${index}`)
     })
@@ -1890,11 +1901,13 @@ struct ProfileMainPage {
   aboutToAppear(): void {
     this.refreshCartTitle()
     this.refreshDisplayedBalance()
+    this.refreshUserFromServer()
   }
 
   onRefreshTokenChange(): void {
     this.refreshCartTitle()
     this.refreshDisplayedBalance()
+    this.refreshUserFromServer()
   }
 
   onCartItemsChange(): void {
@@ -1910,6 +1923,17 @@ struct ProfileMainPage {
     this.displayedBalance = currentUser !== undefined && currentUser !== null
       ? currentUser.balance
       : this.user.balance
+  }
+
+  private async refreshUserFromServer(): Promise<void> {
+    if (!this.loggedIn) {
+      return
+    }
+    const latestUser: User | undefined = await syncCurrentUserFromServer()
+    if (latestUser !== undefined) {
+      this.user = latestUser
+      this.displayedBalance = latestUser.balance
+    }
   }
 
   private openRechargeDialog(): void {
@@ -1944,6 +1968,11 @@ struct ProfileMainPage {
     const confirmedUser: User = updatedUser as User
     this.user = confirmedUser
     this.displayedBalance = confirmedUser.balance
+    const latestUser: User | undefined = await syncCurrentUserFromServer()
+    if (latestUser !== undefined) {
+      this.user = latestUser
+      this.displayedBalance = latestUser.balance
+    }
     promptAction.showToast({ message: `\u5145\u503c\u6210\u529f\uff0c\u5f53\u524d\u4f59\u989d ¥${confirmedUser.balance.toFixed(2)}`, duration: 2000 })
   }
 
