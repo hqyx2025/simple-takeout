@@ -183,11 +183,13 @@ struct Index {
     const user: Object = AppStorage.get<Object>('user') as Object
     if (user !== undefined && user !== null && (typeof user !== 'object' || Array.isArray(user))) {
       AppStorage.setOrCreate<User>('user', createEmptyUser())
+      AppStorage.setOrCreate<number>('userBalance', 0)
     }
     // 未登录时强制重置为“未登录”用户，避免残留旧默认账号昵称（如美食家小张）
     const loggedInFlag: boolean = AppStorage.get<boolean>('isLoggedIn') || false
     if (!loggedInFlag) {
       AppStorage.setOrCreate<User>('user', createEmptyUser())
+      AppStorage.setOrCreate<number>('userBalance', 0)
     }
   }
 
@@ -1882,8 +1884,10 @@ struct ProfileMainPage {
     balance: 0, coupons: [], orders: [], storeIds: []
   }
   @State cartTitle: string = '购物车'
-  @State balance: number = 0
+  // 余额绑定独立的 AppStorage 字段，登录、充值和下拉同步都会更新到这里。
+  @StorageLink('userBalance') balance: number = 0
   @State isRefreshing: boolean = false
+  @State refreshStatus: string = '余额数据来自数据库'
   onNavigate: (tab: number) => void = () => {}
   onNavigateLogin: () => void = () => {}
 
@@ -1939,17 +1943,29 @@ struct ProfileMainPage {
     if (this.isRefreshing) {
       return
     }
+    if (!isLoggedIn()) {
+      this.refreshStatus = '请先登录后同步余额'
+      promptAction.showToast({ message: '请先登录后再刷新余额', duration: 1800 })
+      return
+    }
     this.isRefreshing = true
-    let synced: boolean = false
+    this.refreshStatus = '正在从数据库同步余额…'
     try {
-      synced = await this.refreshFromDatabase()
+      const synced: boolean = await this.refreshFromDatabase()
+      if (synced) {
+        const now: Date = new Date()
+        const hour: string = now.getHours().toString().padStart(2, '0')
+        const minute: string = now.getMinutes().toString().padStart(2, '0')
+        const second: string = now.getSeconds().toString().padStart(2, '0')
+        this.refreshStatus = `已同步数据库 ${hour}:${minute}:${second}`
+        promptAction.showToast({ message: '余额已按数据库最新数据同步', duration: 1800 })
+      } else {
+        const remoteError: string = getLastRemoteErrorMessage()
+        this.refreshStatus = remoteError === '' ? '数据库同步失败，请重试' : `同步失败：${remoteError}`
+        promptAction.showToast({ message: this.refreshStatus, duration: 2400 })
+      }
     } finally {
       this.isRefreshing = false
-    }
-    if (synced) {
-      promptAction.showToast({ message: '\u6570\u636e\u5df2\u4ece\u6570\u636e\u5e93\u540c\u6b65', duration: 1500 })
-    } else if (!isLoggedIn()) {
-      promptAction.showToast({ message: '\u8bf7\u5148\u767b\u5f55\u540e\u518d\u5237\u65b0', duration: 1800 })
     }
   }
 
@@ -2070,6 +2086,20 @@ struct ProfileMainPage {
         .margin({ top: SPACING.SM })
         .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
 
+        Row() {
+          Text(this.refreshStatus)
+            .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).layoutWeight(1)
+          Button(this.isRefreshing ? '\u540c\u6b65\u4e2d\u2026' : '\u7acb\u5373\u5237\u65b0')
+            .height(34).fontSize(FONT_SIZE.SM)
+            .fontColor(COLORS.PRIMARY).backgroundColor('#FFF3E8')
+            .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+            .enabled(!this.isRefreshing)
+            .onClick(() => { this.refreshProfileData() })
+        }
+        .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
+        .margin({ top: SPACING.SM })
+        .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+
         // 订单快捷入口
         Row() {
           this.ProfileOrderEntry('⏳', '待付款', 0)
@@ -2159,6 +2189,8 @@ struct ProfileMainPage {
       .backgroundColor(COLORS.BG_PRIMARY)
       }
       .onRefreshing(() => { this.refreshProfileData() })
+      .refreshOffset(48)
+      .pullToRefresh(true)
       .width('100%').height('100%')
 
       if (this.showRechargeDialog) {
