@@ -416,7 +416,8 @@ export async function updateUserProfileApi(username: string, phone: string): Pro
 }
 
 export async function fetchCurrentUserApi(): Promise<User | undefined> {
-  const resp: ApiResponse<ServerUser> = await get<ServerUser>('/api/auth/me')
+  // /auth/me 是账户余额的权威来源，增加时间戳避免 GET 缓存返回旧余额。
+  const resp: ApiResponse<ServerUser> = await get<ServerUser>(`/api/auth/me?refreshAt=${Date.now()}`)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     logWarn('Api', `获取当前用户失败：${resp.message}`)
     return undefined
