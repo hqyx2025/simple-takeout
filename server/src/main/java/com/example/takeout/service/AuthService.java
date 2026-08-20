@@ -6,6 +6,7 @@ import com.example.takeout.model.User;
 import com.example.takeout.security.JwtUtil;
 import com.example.takeout.security.PasswordUtil;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -102,6 +103,21 @@ public class AuthService {
         }
         userDao.updateProfile(userId, username.trim(), phone);
         return profile(userId);
+    }
+
+    /** 测试充值：金额写入用户余额，返回数据库中的最新用户信息。 */
+    @Transactional
+    public User recharge(long userId, double amount) {
+        if (!Double.isFinite(amount) || amount < 0.01 || amount > 10000) {
+            throw new BizException("Recharge amount must be between 0.01 and 10000");
+        }
+        userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
+        userDao.addBalance(userId, round2(amount));
+        return profile(userId);
+    }
+
+    private double round2(double value) {
+        return Math.round(value * 100.0) / 100.0;
     }
 
     public record LoginResult(String token, User user) {

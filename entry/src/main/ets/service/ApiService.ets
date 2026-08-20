@@ -247,6 +247,10 @@ interface ProfileUpdateRequest {
   phone: string
 }
 
+interface RechargeRequest {
+  amount: number
+}
+
 interface OrderItemRequest {
   goodsId: number
   goodsName: string
@@ -406,6 +410,16 @@ export async function updateUserProfileApi(username: string, phone: string): Pro
   const resp: ApiResponse<ServerUser> = await put<ServerUser>('/api/auth/me', req)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     logWarn('Api', `更新个人资料失败：${resp.message}`)
+    return undefined
+  }
+  return toUser(resp.data)
+}
+
+export async function rechargeBalanceApi(amount: number): Promise<User | undefined> {
+  const req: RechargeRequest = { amount: amount }
+  const resp: ApiResponse<ServerUser> = await post<ServerUser>(API_CONFIG.ENDPOINTS['recharge'], req)
+  if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
+    logWarn('Api', `测试充值失败：${resp.message}`)
     return undefined
   }
   return toUser(resp.data)

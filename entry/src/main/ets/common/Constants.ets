@@ -130,6 +130,7 @@ export class API_CONFIG {
     'search': '/api/search',
     'login': '/api/auth/login',
     'register': '/api/auth/register',
+    'recharge': '/api/auth/recharge',
     'orders': '/api/orders',
     'merchantOrders': '/api/merchant/orders',
     'merchantStats': '/api/merchant/stats',

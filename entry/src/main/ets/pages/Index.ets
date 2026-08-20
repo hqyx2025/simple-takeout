@@ -3,7 +3,7 @@
  * 包含：搜索栏、分类导航、店铺列表、店铺详情、购物车、订单列表、个人中心、底部Tab导航
  */
 import { Category, StoreItem, GoodsItem, SpecialGoodsItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, createEmptyUser } from '../model/Models'
-import { addToCart, addCartItemRemote, updateCartItemQuantity, updateCartItemQuantityRemote, refreshCartFromServer, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCartRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
+import { addToCart, addCartItemRemote, updateCartItemQuantity, updateCartItemQuantityRemote, refreshCartFromServer, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCartRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, getLastRemoteErrorMessage, rechargeBalanceRemote } from '../service/AppStorageManager'
 import { fetchRecommendedStoresApi, fetchSpecialGoodsApi, fetchStoreMerchantCategoriesApi } from '../service/ApiService'
 import { LoginPage } from './LoginPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, formatSales } from '../common/Constants'
@@ -1872,6 +1872,9 @@ struct OrderListMainPage {
 // ===================== 个人中心 =====================
 @Component
 struct ProfileMainPage {
+  @State showRechargeDialog: boolean = false
+  @State rechargeAmount: string = ''
+  @State recharging: boolean = false
   @Prop @Watch('onRefreshTokenChange') refreshToken: number = 0
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @StorageLink('cartItems') @Watch('onCartItemsChange') cartItems: CartItem[] = []
@@ -1895,6 +1898,39 @@ struct ProfileMainPage {
     this.refreshCartTitle()
   }
 
+  private openRechargeDialog(): void {
+    if (!this.loggedIn) {
+      promptAction.showToast({ message: 'Please login before recharge', duration: 1500 })
+      this.onNavigateLogin()
+      return
+    }
+    this.rechargeAmount = ''
+    this.showRechargeDialog = true
+  }
+
+  private async submitRecharge(): Promise<void> {
+    if (this.recharging) {
+      promptAction.showToast({ message: 'Recharge is processing', duration: 1500 })
+      return
+    }
+    const amount: number = Number.parseFloat(this.rechargeAmount.trim())
+    if (!Number.isFinite(amount) || amount < 0.01 || amount > 10000) {
+      promptAction.showToast({ message: 'Enter an amount from 0.01 to 10000', duration: 1800 })
+      return
+    }
+    this.recharging = true
+    const updatedUser: User | undefined = await rechargeBalanceRemote(amount)
+    this.recharging = false
+    if (updatedUser === undefined) {
+      promptAction.showToast({ message: 'Recharge failed, please try again', duration: 2200 })
+      return
+    }
+    this.showRechargeDialog = false
+    this.rechargeAmount = ''
+    const confirmedUser: User = updatedUser as User
+    promptAction.showToast({ message: `Recharge succeeded, balance ¥${confirmedUser.balance.toFixed(2)}`, duration: 2000 })
+  }
+
   private refreshCartTitle(): void {
     const currentCart: CartItem[] = AppStorage.get<CartItem[]>('cartItems') || []
     let count: number = 0
@@ -1910,7 +1946,8 @@ struct ProfileMainPage {
   }
 
   build() {
-    Scroll() {
+    Stack() {
+      Scroll() {
       Column() {
         // 头部用户信息
         Column() {
@@ -1961,7 +1998,7 @@ struct ProfileMainPage {
 
         // 资产区域
         Row() {
-          this.AssetItem(this.user.balance.toFixed(2), '余额', () => {})
+          this.AssetItem(this.user.balance.toFixed(2), '余额', () => { this.openRechargeDialog() })
           this.AssetItem((this.user.coupons || []).filter(c => !c.used).length.toString(), '优惠券', () => { router.pushUrl({ url: 'pages/CouponCenterPage' }) })
           this.AssetItem((this.user.orders || []).length.toString(), '订单', () => {
             AppStorage.setOrCreate<number>('orderFilterStatus', -1)
@@ -2011,7 +2048,15 @@ struct ProfileMainPage {
         .margin({ top: SPACING.SM })
         .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
 
-        // 商户入口（仅商户角色显示）
+        // 测试工具入口
+        Column() {
+          this.ProfileMenuRow('💳', '测试充值余额', () => { this.openRechargeDialog() })
+        }
+        .width('100%')
+        .padding({ top: SPACING.SM })
+        .margin({ top: SPACING.SM })
+        .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+
         if (this.loggedIn && this.user.role === UserRole.MERCHANT) {
           Column() {
             Text('🏪 商户管理入口')
@@ -2050,7 +2095,50 @@ struct ProfileMainPage {
     }
     .scrollBar(BarState.Off)
     .width('100%').height('100%')
-    .backgroundColor(COLORS.BG_PRIMARY)
+      .backgroundColor(COLORS.BG_PRIMARY)
+
+      if (this.showRechargeDialog) {
+        this.RechargeDialog()
+      }
+    }
+    .width('100%').height('100%')
+  }
+
+  @Builder
+  RechargeDialog() {
+    Column() {
+      Column({ space: SPACING.MD }) {
+        Text('Test recharge balance')
+          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold)
+          .fontColor(COLORS.TEXT_PRIMARY)
+        Text('The amount is saved to the database for development testing')
+          .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+          .width('100%')
+        Text('Recharge amount (required)')
+          .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+          .width('100%')
+        TextInput({ placeholder: 'Enter amount, for example: 100', text: this.rechargeAmount })
+          .width('100%').height(44).type(InputType.Number)
+          .fontSize(FONT_SIZE.MD).backgroundColor(COLORS.BG_PRIMARY)
+          .borderRadius(BORDER_RADIUS.SM)
+          .onChange((value: string) => { this.rechargeAmount = value })
+        Row({ space: SPACING.SM }) {
+          Button('Cancel')
+            .layoutWeight(1).height(42)
+            .backgroundColor(COLORS.BG_PRIMARY).fontColor(COLORS.TEXT_SECONDARY)
+            .onClick(() => { this.showRechargeDialog = false })
+          Button(this.recharging ? 'Recharging...' : 'Confirm recharge')
+            .layoutWeight(1).height(42)
+            .backgroundColor(COLORS.PRIMARY).fontColor(Color.White)
+            .onClick(() => { this.submitRecharge() })
+        }.width('100%')
+      }
+      .width('86%').padding(SPACING.XL)
+      .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+    }
+    .width('100%').height('100%')
+    .backgroundColor('rgba(0,0,0,0.35)')
+    .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
   }
 
   @Builder

@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class AuthServiceSecurityTest {
@@ -87,5 +88,30 @@ class AuthServiceSecurityTest {
                 () -> new AuthService(userDao, jwtUtil).updateProfile(1, "新昵称", "13900139000"));
 
         assertEquals("该手机号已被其他账号使用", error.getMessage());
+    }
+    @Test
+    void rechargeAddsBalanceAndReturnsFreshUser() {
+        UserDao userDao = mock(UserDao.class);
+        JwtUtil jwtUtil = mock(JwtUtil.class);
+        User before = new User(1, "鐢ㄦ埛", "", "13800138000", "", 0, 20.0, "now");
+        User after = new User(1, "鐢ㄦ埛", "", "13800138000", "", 0, 25.0, "now");
+        when(userDao.findById(1)).thenReturn(java.util.Optional.of(before), java.util.Optional.of(after));
+
+        User result = new AuthService(userDao, jwtUtil).recharge(1, 5.0);
+
+        verify(userDao).addBalance(1, 5.0);
+        assertEquals(25.0, result.balance());
+    }
+
+    @Test
+    void rechargeRejectsInvalidAmount() {
+        UserDao userDao = mock(UserDao.class);
+        JwtUtil jwtUtil = mock(JwtUtil.class);
+
+        com.example.takeout.common.BizException error = assertThrows(
+                com.example.takeout.common.BizException.class,
+                () -> new AuthService(userDao, jwtUtil).recharge(1, 0));
+
+        assertEquals("Recharge amount must be between 0.01 and 10000", error.getMessage());
     }
 }
