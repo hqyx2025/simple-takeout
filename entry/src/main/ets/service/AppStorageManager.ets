@@ -3,7 +3,7 @@
  */
 import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, MerchantStatsData, Category, RefundRecord, createEmptyUser, createDefaultCategories } from '../model/Models'
 import { saveAllData, clearAllData } from './DataPersistence'
-import { apiLogin, apiRegister, updateUserProfileApi, rechargeBalanceApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi, applyRefundApi, fetchCartApi, addCartItemApi, updateCartItemQuantityApi, deleteCartItemApi, deleteCartItemsApi, clearCartApi } from './ApiService'
+import { apiLogin, apiRegister, updateUserProfileApi, fetchCurrentUserApi, rechargeBalanceApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi, applyRefundApi, fetchCartApi, addCartItemApi, updateCartItemQuantityApi, deleteCartItemApi, deleteCartItemsApi, clearCartApi } from './ApiService'
 import { getAuthToken, setAuthToken, getLastApiErrorMessage } from './HttpClient'
 import { logInfo, logWarn, logError } from './AppLogger'
 import { GeoPosition } from './LocationService'
@@ -401,6 +401,15 @@ export async function updateUserProfileRemote(username: string, phone: string): 
 
 export async function rechargeBalanceRemote(amount: number): Promise<User | undefined> {
   const user: User | undefined = await rechargeBalanceApi(amount)
+  if (user !== undefined) {
+    AppStorage.setOrCreate<User>('user', user)
+    await saveAllData()
+  }
+  return user
+}
+
+export async function syncCurrentUserFromServer(): Promise<User | undefined> {
+  const user: User | undefined = await fetchCurrentUserApi()
   if (user !== undefined) {
     AppStorage.setOrCreate<User>('user', user)
     await saveAllData()

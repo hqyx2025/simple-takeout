@@ -415,6 +415,15 @@ export async function updateUserProfileApi(username: string, phone: string): Pro
   return toUser(resp.data)
 }
 
+export async function fetchCurrentUserApi(): Promise<User | undefined> {
+  const resp: ApiResponse<ServerUser> = await get<ServerUser>('/api/auth/me')
+  if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
+    logWarn('Api', `获取当前用户失败：${resp.message}`)
+    return undefined
+  }
+  return toUser(resp.data)
+}
+
 export async function rechargeBalanceApi(amount: number): Promise<User | undefined> {
   const req: RechargeRequest = { amount: amount }
   const resp: ApiResponse<ServerUser> = await post<ServerUser>(API_CONFIG.ENDPOINTS['recharge'], req)
