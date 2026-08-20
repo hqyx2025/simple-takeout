@@ -1884,8 +1884,10 @@ struct ProfileMainPage {
     balance: 0, coupons: [], orders: [], storeIds: []
   }
   @State cartTitle: string = '购物车'
+  // 资产卡片使用页面自身的可观察文本，避免 Builder 继续复用充值前的余额快照。
+  @State balanceDisplay: string = '0.00'
   // 余额绑定独立的 AppStorage 字段，登录、充值和下拉同步都会更新到这里。
-  @StorageLink('userBalance') balance: number = 0
+  @StorageLink('userBalance') @Watch('onBalanceChange') balance: number = 0
   @State isRefreshing: boolean = false
   @State refreshStatus: string = '余额数据来自数据库'
   onNavigate: (tab: number) => void = () => {}
@@ -1907,11 +1909,16 @@ struct ProfileMainPage {
     this.refreshCartTitle()
   }
 
+  onBalanceChange(): void {
+    this.updateBalanceDisplay()
+  }
+
   private loadLocalUser(): void {
     const currentUser: User | undefined = AppStorage.get<User>('user')
     if (currentUser === undefined || currentUser === null || currentUser.id <= 0) {
       this.user = createEmptyUser()
       this.balance = 0
+      this.balanceDisplay = '0.00'
       return
     }
     this.applyUser(currentUser)
@@ -1937,6 +1944,12 @@ struct ProfileMainPage {
   private applyUser(nextUser: User): void {
     this.user = nextUser
     this.balance = Number.isFinite(nextUser.balance) ? nextUser.balance : 0
+    this.updateBalanceDisplay()
+  }
+
+  private updateBalanceDisplay(): void {
+    const normalizedBalance: number = Number.isFinite(this.balance) ? this.balance : 0
+    this.balanceDisplay = normalizedBalance.toFixed(2)
   }
 
   private async refreshProfileData(): Promise<void> {
@@ -2075,7 +2088,7 @@ struct ProfileMainPage {
 
         // 资产区域
         Row() {
-          this.AssetItem(this.balance.toFixed(2), '余额', () => { this.openRechargeDialog() })
+          this.AssetItem(this.balanceDisplay, '余额', () => { this.openRechargeDialog() })
           this.AssetItem((this.user.coupons || []).filter(c => !c.used).length.toString(), '优惠券', () => { router.pushUrl({ url: 'pages/CouponCenterPage' }) })
           this.AssetItem((this.user.orders || []).length.toString(), '订单', () => {
             AppStorage.setOrCreate<number>('orderFilterStatus', -1)
