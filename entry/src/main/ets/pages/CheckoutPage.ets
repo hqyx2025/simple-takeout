@@ -113,6 +113,11 @@ export struct CheckoutPage {
     return items.length > 0 ? items[0].storeName : '\u5e97\u94fa'
   }
 
+  private getCartItemStoreName(item: CartItem): string {
+    const itemStoreName: string = item.storeName.trim()
+    return itemStoreName !== '' ? itemStoreName : this.getStoreName(item.storeId)
+  }
+
   private getDiscountAmount(): number {
     if (this.selectedCoupon !== null) {
       return this.selectedCoupon.amount
@@ -399,9 +404,20 @@ export struct CheckoutPage {
 
       ForEach(this.storeItems, (item: CartItem) => {
         Row() {
-          Text(item.goods.name)
-            .fontSize(FONT_SIZE.MD)
-            .fontColor(COLORS.TEXT_PRIMARY)
+          Column({ space: 2 }) {
+            Text(this.getCartItemStoreName(item))
+              .fontSize(FONT_SIZE.XS)
+              .fontColor(COLORS.PRIMARY)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .width('100%')
+            Text(item.goods.name)
+              .fontSize(FONT_SIZE.MD)
+              .fontColor(COLORS.TEXT_PRIMARY)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .width('100%')
+          }
             .layoutWeight(1)
           Text(`x${item.quantity}`)
             .fontSize(FONT_SIZE.MD)
