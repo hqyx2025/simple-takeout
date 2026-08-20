@@ -1886,8 +1886,8 @@ struct ProfileMainPage {
   @State cartTitle: string = '购物车'
   // 资产卡片使用页面自身的可观察文本，避免 Builder 继续复用充值前的余额快照。
   @State balanceDisplay: string = '0.00'
-  // 余额绑定独立的 AppStorage 字段，登录、充值和下拉同步都会更新到这里。
-  @StorageLink('userBalance') @Watch('onBalanceChange') balance: number = 0
+  // 余额显示只由当前页面的接口结果驱动，避免 StorageLink 旧快照回调覆盖新余额。
+  @State balance: number = 0
   @State isRefreshing: boolean = false
   @State refreshStatus: string = '余额数据来自数据库'
   onNavigate: (tab: number) => void = () => {}
@@ -1907,10 +1907,6 @@ struct ProfileMainPage {
 
   onCartItemsChange(): void {
     this.refreshCartTitle()
-  }
-
-  onBalanceChange(): void {
-    this.updateBalanceDisplay()
   }
 
   private loadLocalUser(): void {
@@ -1947,11 +1943,6 @@ struct ProfileMainPage {
     // 直接使用接口返回值更新显示文本，避免 StorageLink 写入后的即时回读仍是旧快照。
     this.balanceDisplay = normalizedBalance.toFixed(2)
     this.balance = normalizedBalance
-  }
-
-  private updateBalanceDisplay(): void {
-    const normalizedBalance: number = Number.isFinite(this.balance) ? this.balance : 0
-    this.balanceDisplay = normalizedBalance.toFixed(2)
   }
 
   private async refreshProfileData(): Promise<void> {
@@ -2015,7 +2006,7 @@ struct ProfileMainPage {
     this.rechargeAmount = ''
     const confirmedUser: User = updatedUser as User
     this.applyUser(confirmedUser)
-    promptAction.showToast({ message: `\u5145\u503c\u6210\u529f\uff0c\u5f53\u524d\u4f59\u989d ¥${this.balance.toFixed(2)}`, duration: 2000 })
+    promptAction.showToast({ message: `\u5145\u503c\u6210\u529f\uff0c\u5f53\u524d\u4f59\u989d ¥${confirmedUser.balance.toFixed(2)}`, duration: 2000 })
   }
 
   private refreshCartTitle(): void {
