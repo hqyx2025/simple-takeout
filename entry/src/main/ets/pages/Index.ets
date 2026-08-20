@@ -2013,10 +2013,6 @@ struct ProfileMainPage {
     this.rechargeAmount = ''
     const confirmedUser: User = updatedUser as User
     this.applyUser(confirmedUser)
-    const latestUser: User | undefined = await syncCurrentUserFromServer()
-    if (latestUser !== undefined) {
-      this.applyUser(latestUser)
-    }
     promptAction.showToast({ message: `\u5145\u503c\u6210\u529f\uff0c\u5f53\u524d\u4f59\u989d ¥${this.balance.toFixed(2)}`, duration: 2000 })
   }
 
