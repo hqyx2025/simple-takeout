@@ -143,11 +143,16 @@ export async function loadAllData(): Promise<void> {
         logInfo('Persistence', `恢复数据 key=${key} 无持久化记录，使用默认值`)
       }
     }
+    const restoredUser: User | undefined = AppStorage.get<User>('user')
+    const restoredBalance: number = restoredUser !== undefined && restoredUser !== null
+      && Number.isFinite(restoredUser.balance) ? restoredUser.balance : 0
+    AppStorage.setOrCreate<number>('userBalance', restoredBalance)
     const restoredToken: string = AppStorage.get<string>('authToken') || ''
     const restoredLoggedIn: boolean = AppStorage.get<boolean>('isLoggedIn') || false
     if (restoredLoggedIn && restoredToken === '') {
       AppStorage.setOrCreate<boolean>('isLoggedIn', false)
       AppStorage.setOrCreate<User>('user', createEmptyUser())
+      AppStorage.setOrCreate<number>('userBalance', 0)
     }
     AppStorage.setOrCreate<boolean>('_persistenceReady', true)
     logInfo('Persistence', '持久化数据全部加载完成')

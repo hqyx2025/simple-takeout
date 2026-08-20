@@ -11,6 +11,13 @@ import { GeoPosition } from './LocationService'
 let categoriesSyncInFlight: Promise<void> | null = null
 let storesSyncInFlight: Promise<void> | null = null
 
+// 用户对象用于资料展示，余额单独维护为可观察字段，避免页面只保留登录时的余额副本。
+function setStoredUser(user: User): void {
+  const normalizedBalance: number = Number.isFinite(user.balance) ? user.balance : 0
+  AppStorage.setOrCreate<User>('user', user)
+  AppStorage.setOrCreate<number>('userBalance', normalizedBalance)
+}
+
 // 初始化全局数据
 export function initAppStorage() {
   const existingCategories: Category[] | undefined = AppStorage.get<Category[]>('categoryList')
@@ -25,7 +32,10 @@ export function initAppStorage() {
     AppStorage.setOrCreate<boolean>('isLoggedIn', false)
   }
   if (!AppStorage.has('user')) {
-    AppStorage.setOrCreate<User>('user', createEmptyUser())
+    setStoredUser(createEmptyUser())
+  } else if (!AppStorage.has('userBalance')) {
+    const existingUser: User | undefined = AppStorage.get<User>('user')
+    setStoredUser(existingUser === undefined || existingUser === null ? createEmptyUser() : existingUser)
   }
   if (!AppStorage.has('cartItems')) {
     AppStorage.setOrCreate<CartItem[]>('cartItems', [])
@@ -73,7 +83,7 @@ export function logout(): void {
   setAuthToken('')
   AppStorage.setOrCreate<string>('authToken', '')
   AppStorage.setOrCreate<boolean>('isLoggedIn', false)
-  AppStorage.setOrCreate<User>('user', createEmptyUser())
+  setStoredUser(createEmptyUser())
   AppStorage.setOrCreate<CartItem[]>('cartItems', [])
   AppStorage.setOrCreate<Address[]>('addressList', [])
   AppStorage.setOrCreate<Address | null>('currentAddress', null)
@@ -393,7 +403,7 @@ export async function updateUserProfileRemote(username: string, phone: string): 
     logWarn('Api', '远程更新个人资料失败')
     return undefined
   }
-  AppStorage.setOrCreate<User>('user', user)
+  setStoredUser(user)
   await saveAllData()
   logInfo('Api', `远程更新个人资料成功 userId=${user.id}`)
   return user
@@ -402,7 +412,7 @@ export async function updateUserProfileRemote(username: string, phone: string): 
 export async function rechargeBalanceRemote(amount: number): Promise<User | undefined> {
   const user: User | undefined = await rechargeBalanceApi(amount)
   if (user !== undefined) {
-    AppStorage.setOrCreate<User>('user', user)
+    setStoredUser(user)
     await saveAllData()
   }
   return user
@@ -411,7 +421,7 @@ export async function rechargeBalanceRemote(amount: number): Promise<User | unde
 export async function syncCurrentUserFromServer(): Promise<User | undefined> {
   const user: User | undefined = await fetchCurrentUserApi()
   if (user !== undefined) {
-    AppStorage.setOrCreate<User>('user', user)
+    setStoredUser(user)
     await saveAllData()
   }
   return user
@@ -429,7 +439,7 @@ export async function loginRemote(phone: string, password: string, loginType?: s
   if (user !== null) {
     const token: string = getAuthToken()
     AppStorage.setOrCreate<string>('authToken', token)
-    AppStorage.setOrCreate<User>('user', user)
+    setStoredUser(user)
     AppStorage.setOrCreate<boolean>('isLoggedIn', true)
     // 登录成功后立即按当前账号同步地址，恢复默认配送地址；不能继续沿用上一个账号的定位缓存。
     if (user.role === UserRole.CUSTOMER) {
@@ -546,7 +556,7 @@ export async function syncUserOrdersFromServer(): Promise<void> {
   const user: User | undefined = AppStorage.get<User>('user')
   if (user !== undefined && user !== null) {
     user.orders = orders
-    AppStorage.setOrCreate('user', user)
+    setStoredUser(user)
   }
   await saveAllData()
   logInfo('Api', `同步用户订单 ${orders.length} 条`)
@@ -592,7 +602,7 @@ export async function createOrderRemote(storeId: number, cartItems: CartItem[], 
     const user: User | undefined = AppStorage.get<User>('user')
     if (user !== undefined && user !== null) {
       user.orders = orders
-      AppStorage.setOrCreate('user', user)
+      setStoredUser(user)
     }
     saveAllData()
     logInfo('Api', `远程下单成功 orderId=${order.id}`)
