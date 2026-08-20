@@ -39,6 +39,10 @@ let httpClient: AxiosInstance | null = null
 function buildHeaders(): AxiosRequestHeaders {
   const headers: AxiosRequestHeaders = new AxiosHeaders() as AxiosRequestHeaders
   headers.set('Content-Type', 'application/json')
+  // 余额等账户数据必须每次从数据库读取，避免设备/代理层复用旧 GET 响应。
+  headers.set('Cache-Control', 'no-cache, no-store, max-age=0')
+  headers.set('Pragma', 'no-cache')
+  headers.set('Expires', '0')
   if (authToken !== '') {
     headers.set('Authorization', `Bearer ${authToken}`)
   }

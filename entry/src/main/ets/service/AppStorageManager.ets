@@ -10,6 +10,8 @@ import { GeoPosition } from './LocationService'
 
 let categoriesSyncInFlight: Promise<void> | null = null
 let storesSyncInFlight: Promise<void> | null = null
+// 页面进入、Tab 切换和手动刷新可能同时触发同步；只允许最后一次请求覆盖本地状态。
+let currentUserSyncVersion: number = 0
 
 // 用户对象用于资料展示，余额单独维护为可观察字段，避免页面只保留登录时的余额副本。
 function setStoredUser(user: User): void {
@@ -80,6 +82,7 @@ export function initAppStorage() {
 
 // ============ 登录/登出 ============
 export function logout(): void {
+  currentUserSyncVersion += 1
   setAuthToken('')
   AppStorage.setOrCreate<string>('authToken', '')
   AppStorage.setOrCreate<boolean>('isLoggedIn', false)
@@ -419,11 +422,19 @@ export async function rechargeBalanceRemote(amount: number): Promise<User | unde
 }
 
 export async function syncCurrentUserFromServer(): Promise<User | undefined> {
+  const requestVersion: number = currentUserSyncVersion + 1
+  currentUserSyncVersion = requestVersion
   const user: User | undefined = await fetchCurrentUserApi()
-  if (user !== undefined) {
-    setStoredUser(user)
-    await saveAllData()
+  // 丢弃较早请求的返回值，避免旧余额覆盖手动刷新拿到的新余额。
+  if (requestVersion !== currentUserSyncVersion) {
+    logWarn('Api', '忽略过期的当前用户同步结果')
+    return undefined
   }
+  if (user === undefined) {
+    return undefined
+  }
+  setStoredUser(user)
+  await saveAllData()
   return user
 }
 
