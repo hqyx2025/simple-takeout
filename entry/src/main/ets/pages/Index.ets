@@ -2077,7 +2077,8 @@ struct ProfileMainPage {
 
         // 资产区域
         Row() {
-          this.AssetItem(this.balanceDisplay, '余额', () => { this.openRechargeDialog() })
+          // 余额直接在 Builder 内读取页面状态，避免普通 Builder 参数保留充值前的快照。
+          this.BalanceAssetItem()
           this.AssetItem((this.user.coupons || []).filter(c => !c.used).length.toString(), '优惠券', () => { router.pushUrl({ url: 'pages/CouponCenterPage' }) })
           this.AssetItem((this.user.orders || []).length.toString(), '订单', () => {
             AppStorage.setOrCreate<number>('orderFilterStatus', -1)
@@ -2237,6 +2238,17 @@ struct ProfileMainPage {
     .width('100%').height('100%')
     .backgroundColor('rgba(0,0,0,0.35)')
     .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+  }
+
+  @Builder
+  BalanceAssetItem() {
+    Column({ space: 4 }) {
+      Text(this.balanceDisplay)
+        .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRIMARY)
+      Text('余额').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+    }
+    .layoutWeight(1).alignItems(HorizontalAlign.Center)
+    .onClick(() => { this.openRechargeDialog() })
   }
 
   @Builder
