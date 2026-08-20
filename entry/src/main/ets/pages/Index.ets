@@ -1900,7 +1900,7 @@ struct ProfileMainPage {
 
   private openRechargeDialog(): void {
     if (!this.loggedIn) {
-      promptAction.showToast({ message: 'Please login before recharge', duration: 1500 })
+      promptAction.showToast({ message: '\u8bf7\u5148\u767b\u5f55\u540e\u518d\u5145\u503c', duration: 1500 })
       this.onNavigateLogin()
       return
     }
@@ -1910,25 +1910,25 @@ struct ProfileMainPage {
 
   private async submitRecharge(): Promise<void> {
     if (this.recharging) {
-      promptAction.showToast({ message: 'Recharge is processing', duration: 1500 })
+      promptAction.showToast({ message: '\u5145\u503c\u6b63\u5728\u5904\u7406\uff0c\u8bf7\u7a0d\u5019', duration: 1500 })
       return
     }
     const amount: number = Number.parseFloat(this.rechargeAmount.trim())
     if (!Number.isFinite(amount) || amount < 0.01 || amount > 10000) {
-      promptAction.showToast({ message: 'Enter an amount from 0.01 to 10000', duration: 1800 })
+      promptAction.showToast({ message: '\u8bf7\u8f93\u5165 0.01\uff5e10000 \u5143\u7684\u5145\u503c\u91d1\u989d', duration: 1800 })
       return
     }
     this.recharging = true
     const updatedUser: User | undefined = await rechargeBalanceRemote(amount)
     this.recharging = false
     if (updatedUser === undefined) {
-      promptAction.showToast({ message: 'Recharge failed, please try again', duration: 2200 })
+      promptAction.showToast({ message: '\u5145\u503c\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5', duration: 2200 })
       return
     }
     this.showRechargeDialog = false
     this.rechargeAmount = ''
     const confirmedUser: User = updatedUser as User
-    promptAction.showToast({ message: `Recharge succeeded, balance ¥${confirmedUser.balance.toFixed(2)}`, duration: 2000 })
+    promptAction.showToast({ message: `\u5145\u503c\u6210\u529f\uff0c\u5f53\u524d\u4f59\u989d ¥${confirmedUser.balance.toFixed(2)}`, duration: 2000 })
   }
 
   private refreshCartTitle(): void {
@@ -2108,26 +2108,26 @@ struct ProfileMainPage {
   RechargeDialog() {
     Column() {
       Column({ space: SPACING.MD }) {
-        Text('Test recharge balance')
+        Text('\u6d4b\u8bd5\u5145\u503c\u4f59\u989d')
           .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold)
           .fontColor(COLORS.TEXT_PRIMARY)
-        Text('The amount is saved to the database for development testing')
+        Text('\u5145\u503c\u91d1\u989d\u4f1a\u76f4\u63a5\u5199\u5165\u6570\u636e\u5e93\uff0c\u4ec5\u7528\u4e8e\u5f00\u53d1\u6d4b\u8bd5')
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
           .width('100%')
-        Text('Recharge amount (required)')
+        Text('\u5145\u503c\u91d1\u989d\uff08\u5fc5\u586b\uff09')
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
           .width('100%')
-        TextInput({ placeholder: 'Enter amount, for example: 100', text: this.rechargeAmount })
+        TextInput({ placeholder: '\u8bf7\u8f93\u5165\u91d1\u989d\uff0c\u5982\uff1a100', text: this.rechargeAmount })
           .width('100%').height(44).type(InputType.Number)
           .fontSize(FONT_SIZE.MD).backgroundColor(COLORS.BG_PRIMARY)
           .borderRadius(BORDER_RADIUS.SM)
           .onChange((value: string) => { this.rechargeAmount = value })
         Row({ space: SPACING.SM }) {
-          Button('Cancel')
+          Button('\u53d6\u6d88')
             .layoutWeight(1).height(42)
             .backgroundColor(COLORS.BG_PRIMARY).fontColor(COLORS.TEXT_SECONDARY)
             .onClick(() => { this.showRechargeDialog = false })
-          Button(this.recharging ? 'Recharging...' : 'Confirm recharge')
+          Button(this.recharging ? '\u5145\u503c\u4e2d\u2026' : '\u786e\u8ba4\u5145\u503c')
             .layoutWeight(1).height(42)
             .backgroundColor(COLORS.PRIMARY).fontColor(Color.White)
             .onClick(() => { this.submitRecharge() })

@@ -112,6 +112,6 @@ class AuthServiceSecurityTest {
                 com.example.takeout.common.BizException.class,
                 () -> new AuthService(userDao, jwtUtil).recharge(1, 0));
 
-        assertEquals("Recharge amount must be between 0.01 and 10000", error.getMessage());
+        assertEquals("\u5145\u503c\u91d1\u989d\u9700\u5728 0.01 \u81f3 10000 \u5143\u4e4b\u95f4", error.getMessage());
     }
 }
