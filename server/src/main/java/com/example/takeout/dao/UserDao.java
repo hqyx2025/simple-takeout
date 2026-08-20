@@ -125,6 +125,10 @@ public class UserDao {
         jdbc.update("UPDATE users SET balance = ? WHERE id = ?", balance, userId);
     }
 
+    public void addBalance(long userId, double amount) {
+        jdbc.update("UPDATE users SET balance = ROUND(balance + ?, 2) WHERE id = ?", amount, userId);
+    }
+
     public void updateProfile(long userId, String username, String phone) {
         jdbc.update("UPDATE users SET username = ?, phone = ? WHERE id = ?", username, phone, userId);
     }

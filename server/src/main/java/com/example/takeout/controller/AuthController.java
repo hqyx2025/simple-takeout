@@ -45,6 +45,12 @@ public class AuthController {
         return ApiResponse.ok(authService.updateProfile(userId, req.username(), req.phone()));
     }
 
+    @PostMapping("/recharge")
+    public ApiResponse<User> recharge(@RequestAttribute("userId") long userId,
+                                      @RequestBody RechargeRequest req) {
+        return ApiResponse.ok(authService.recharge(userId, req.amount()));
+    }
+
     public record RegisterRequest(String username, String phone, String password, int role) {
     }
 
@@ -52,5 +58,8 @@ public class AuthController {
     }
 
     public record ProfileUpdateRequest(String username, String phone) {
+    }
+
+    public record RechargeRequest(double amount) {
     }
 }
