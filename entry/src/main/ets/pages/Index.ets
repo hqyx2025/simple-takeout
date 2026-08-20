@@ -1878,24 +1878,38 @@ struct ProfileMainPage {
   @Prop @Watch('onRefreshTokenChange') refreshToken: number = 0
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @StorageLink('cartItems') @Watch('onCartItemsChange') cartItems: CartItem[] = []
-  @StorageLink('user') user: User = {
+  @StorageLink('user') @Watch('onUserChange') user: User = {
     id: 0, username: '未登录', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER,
     balance: 0, coupons: [], orders: [], storeIds: []
   }
   @State cartTitle: string = '购物车'
+  @State displayedBalance: number = 0
   onNavigate: (tab: number) => void = () => {}
   onNavigateLogin: () => void = () => {}
 
   aboutToAppear(): void {
     this.refreshCartTitle()
+    this.refreshDisplayedBalance()
   }
 
   onRefreshTokenChange(): void {
     this.refreshCartTitle()
+    this.refreshDisplayedBalance()
   }
 
   onCartItemsChange(): void {
     this.refreshCartTitle()
+  }
+
+  onUserChange(): void {
+    this.refreshDisplayedBalance()
+  }
+
+  private refreshDisplayedBalance(): void {
+    const currentUser: User | undefined = AppStorage.get<User>('user')
+    this.displayedBalance = currentUser !== undefined && currentUser !== null
+      ? currentUser.balance
+      : this.user.balance
   }
 
   private openRechargeDialog(): void {
@@ -1928,6 +1942,8 @@ struct ProfileMainPage {
     this.showRechargeDialog = false
     this.rechargeAmount = ''
     const confirmedUser: User = updatedUser as User
+    this.user = confirmedUser
+    this.displayedBalance = confirmedUser.balance
     promptAction.showToast({ message: `\u5145\u503c\u6210\u529f\uff0c\u5f53\u524d\u4f59\u989d ¥${confirmedUser.balance.toFixed(2)}`, duration: 2000 })
   }
 
@@ -1998,7 +2014,7 @@ struct ProfileMainPage {
 
         // 资产区域
         Row() {
-          this.AssetItem(this.user.balance.toFixed(2), '余额', () => { this.openRechargeDialog() })
+          this.AssetItem(this.displayedBalance.toFixed(2), '余额', () => { this.openRechargeDialog() })
           this.AssetItem((this.user.coupons || []).filter(c => !c.used).length.toString(), '优惠券', () => { router.pushUrl({ url: 'pages/CouponCenterPage' }) })
           this.AssetItem((this.user.orders || []).length.toString(), '订单', () => {
             AppStorage.setOrCreate<number>('orderFilterStatus', -1)
