@@ -100,6 +100,7 @@ class OrderDataSource implements IDataSource {
 struct Index {
   @State currentTab: number = 0
   @State profileRefreshToken: number = 0
+  @State profileBalance: number = 0
   @StorageLink('isLoggedIn') @Watch('onLoginStateChange') loggedIn: boolean = false
   @State showLogin: boolean = true
   @State showLocationLoginConfirm: boolean = false
@@ -113,6 +114,8 @@ struct Index {
     // 登录态恢复后同步当前用户与账号库数据（保证不同账号余额等数据独立正确）
     this.loggedIn = isLoggedIn()
     this.showLogin = !this.loggedIn
+    const currentUser: User | undefined = AppStorage.get<User>('user')
+    this.profileBalance = currentUser !== undefined && currentUser !== null ? currentUser.balance : 0
     // 数据格式保险：校验 AppStorage 关键数据，异常（非数组/非对象）时重置，防止渲染崩溃
     this.sanitizeAppData()
     // 管理端守卫：已登录的管理端不渲染主页，直接跳转平台管理页
@@ -127,6 +130,7 @@ struct Index {
     }
     const latestUser: User | undefined = await syncCurrentUserFromServer()
     if (latestUser !== undefined) {
+      this.profileBalance = latestUser.balance
       this.profileRefreshToken += 1
     }
   }
@@ -326,6 +330,8 @@ struct Index {
       TabContent() {
         ProfileMainPage({
           refreshToken: this.profileRefreshToken,
+          balance: this.profileBalance,
+          onBalanceChanged: (balance: number) => { this.profileBalance = balance },
           onNavigate: (tab: number) => {
             this.currentTab = tab
             this.tabsController.changeIndex(tab)
@@ -1887,6 +1893,7 @@ struct ProfileMainPage {
   @State rechargeAmount: string = ''
   @State recharging: boolean = false
   @Prop @Watch('onRefreshTokenChange') refreshToken: number = 0
+  @Prop @Watch('onBalancePropChange') balance: number = 0
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @StorageLink('cartItems') @Watch('onCartItemsChange') cartItems: CartItem[] = []
   @StorageLink('user') @Watch('onUserChange') user: User = {
@@ -1897,10 +1904,12 @@ struct ProfileMainPage {
   @State displayedBalance: number = 0
   onNavigate: (tab: number) => void = () => {}
   onNavigateLogin: () => void = () => {}
+  onBalanceChanged: (balance: number) => void = () => {}
 
   aboutToAppear(): void {
     this.refreshCartTitle()
     this.refreshDisplayedBalance()
+    this.displayedBalance = this.balance
     this.refreshUserFromServer()
   }
 
@@ -1918,6 +1927,10 @@ struct ProfileMainPage {
     this.refreshDisplayedBalance()
   }
 
+  onBalancePropChange(): void {
+    this.displayedBalance = this.balance
+  }
+
   private refreshDisplayedBalance(): void {
     const currentUser: User | undefined = AppStorage.get<User>('user')
     this.displayedBalance = currentUser !== undefined && currentUser !== null
@@ -1933,6 +1946,7 @@ struct ProfileMainPage {
     if (latestUser !== undefined) {
       this.user = latestUser
       this.displayedBalance = latestUser.balance
+      this.onBalanceChanged(latestUser.balance)
     }
   }
 
@@ -1972,6 +1986,7 @@ struct ProfileMainPage {
     if (latestUser !== undefined) {
       this.user = latestUser
       this.displayedBalance = latestUser.balance
+      this.onBalanceChanged(latestUser.balance)
     }
     promptAction.showToast({ message: `\u5145\u503c\u6210\u529f\uff0c\u5f53\u524d\u4f59\u989d ¥${confirmedUser.balance.toFixed(2)}`, duration: 2000 })
   }
