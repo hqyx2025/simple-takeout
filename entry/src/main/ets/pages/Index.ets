@@ -1883,6 +1883,7 @@ struct ProfileMainPage {
   }
   @State cartTitle: string = '购物车'
   @State balance: number = 0
+  @State isRefreshing: boolean = false
   onNavigate: (tab: number) => void = () => {}
   onNavigateLogin: () => void = () => {}
 
@@ -1932,6 +1933,24 @@ struct ProfileMainPage {
   private applyUser(nextUser: User): void {
     this.user = nextUser
     this.balance = Number.isFinite(nextUser.balance) ? nextUser.balance : 0
+  }
+
+  private async refreshProfileData(): Promise<void> {
+    if (this.isRefreshing) {
+      return
+    }
+    this.isRefreshing = true
+    let synced: boolean = false
+    try {
+      synced = await this.refreshFromDatabase()
+    } finally {
+      this.isRefreshing = false
+    }
+    if (synced) {
+      promptAction.showToast({ message: '\u6570\u636e\u5df2\u4ece\u6570\u636e\u5e93\u540c\u6b65', duration: 1500 })
+    } else if (!isLoggedIn()) {
+      promptAction.showToast({ message: '\u8bf7\u5148\u767b\u5f55\u540e\u518d\u5237\u65b0', duration: 1800 })
+    }
   }
 
   private openRechargeDialog(): void {
@@ -1988,6 +2007,7 @@ struct ProfileMainPage {
 
   build() {
     Stack() {
+      Refresh({ refreshing: this.isRefreshing }) {
       Scroll() {
       Column() {
         // 头部用户信息
@@ -2137,6 +2157,9 @@ struct ProfileMainPage {
     .scrollBar(BarState.Off)
     .width('100%').height('100%')
       .backgroundColor(COLORS.BG_PRIMARY)
+      }
+      .onRefreshing(() => { this.refreshProfileData() })
+      .width('100%').height('100%')
 
       if (this.showRechargeDialog) {
         this.RechargeDialog()
