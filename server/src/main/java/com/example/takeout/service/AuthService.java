@@ -109,7 +109,7 @@ public class AuthService {
     @Transactional
     public User recharge(long userId, double amount) {
         if (!Double.isFinite(amount) || amount < 0.01 || amount > 10000) {
-            throw new BizException("Recharge amount must be between 0.01 and 10000");
+            throw new BizException("\u5145\u503c\u91d1\u989d\u9700\u5728 0.01 \u81f3 10000 \u5143\u4e4b\u95f4");
         }
         userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
         userDao.addBalance(userId, round2(amount));
