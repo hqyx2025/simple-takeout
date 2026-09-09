@@ -1,1 +1,8 @@
-尚未完成的质量项：真机 UI 自动化、AppAnalyzer、Release 签名和 HTTPS 联调，目前分别受设备、工具 CLI、证书和 HTTPS 密钥缺失影响。
+尚未完成的质量项：
+
+1. 真机 UI 自动化：依赖真实 HarmonyOS 设备与 UiTest 环境，当前仅完成 ohosTest 流程测试代码，未在真机稳定跑通。
+2. AppAnalyzer：依赖 DevEco Studio 工具 CLI，当前未在命令行稳定触发。
+3. Release 签名：仅提供 signing/release-signing.template.json5 模板，缺少开发者证书/Profile（.p12/.cer/.p7b），需在用户华为开发者账号下生成后配置才可打包正式版。
+4. HTTPS 联调：provides application-https.yml，但缺少正式域名与证书密钥，未实际联调。
+
+业务功能层面（用户端 / 商户端 / 管理端 / 订单状态机 / 资金托管 / 搜索 / 优惠券 / 购物车 / 地址 / 地图 / 评价 / 退款审批 / 统计）已实现并通过端到端回归验证；以上质项因依赖外部设备、证书与密钥，仍待外部资源到位后补齐。对外口径请勿宣称已上架。
