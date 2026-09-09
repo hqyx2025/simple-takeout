@@ -484,6 +484,15 @@ export async function fetchStoreGoods(storeId: number): Promise<GoodsItem[]> {
   return resp.data.map((g: ServerGoods) => toGoodsItem(g))
 }
 
+/** 店铺详情：获取权威店铺信息（rating/notice/deliveryFee/minOrder 等），避免依赖列表缓存导致数据陈旧。 */
+export async function fetchStoreDetailApi(storeId: number): Promise<StoreItem | null> {
+  const resp: ApiResponse<ServerStore> = await get<ServerStore>(`/api/stores/${storeId}`)
+  if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
+    return null
+  }
+  return toStoreItem(resp.data)
+}
+
 export async function fetchSpecialGoodsApi(limit: number = 10, latitude?: number, longitude?: number): Promise<SpecialGoodsItem[]> {
   const baseUrl: string = `/api/goods/special?limit=${limit}`
   const resp: ApiResponse<ServerSpecialGoods[]> = await get<ServerSpecialGoods[]>(

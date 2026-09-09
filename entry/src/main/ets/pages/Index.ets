@@ -4,7 +4,7 @@
  */
 import { Category, StoreItem, GoodsItem, SpecialGoodsItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, createEmptyUser } from '../model/Models'
 import { addToCart, addCartItemRemote, updateCartItemQuantity, updateCartItemQuantityRemote, refreshCartFromServer, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCartRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, getLastRemoteErrorMessage, rechargeBalanceRemote, syncCurrentUserFromServer } from '../service/AppStorageManager'
-import { fetchRecommendedStoresApi, fetchSpecialGoodsApi, fetchStoreMerchantCategoriesApi } from '../service/ApiService'
+import { fetchRecommendedStoresApi, fetchSpecialGoodsApi, fetchStoreMerchantCategoriesApi, fetchStoreDetailApi } from '../service/ApiService'
 import { LoginPage } from './LoginPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, formatSales } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
@@ -1149,6 +1149,26 @@ export struct StoreDetailContent {
     // 从后端拉取最新商品（真实后端模式）
     this.refreshGoods()
     this.refreshReviews()
+    this.refreshStoreInfo()
+  }
+
+  // 拉取后端权威店铺信息（评分/公告/配送费/起送价/营业时间），避免依赖列表缓存导致数据陈旧
+  private async refreshStoreInfo(): Promise<void> {
+    if (!this.loggedIn || this.storeId <= 0) {
+      return
+    }
+    const store: StoreItem | null = await fetchStoreDetailApi(this.storeId)
+    if (store !== null && store !== undefined) {
+      this.storeName = store.name
+      this.storeRating = store.rating
+      this.storeMonthlySales = store.monthlySales
+      this.storeDeliveryFee = store.deliveryFee
+      this.storeDeliveryTime = store.deliveryTime
+      this.storeDistance = store.distance
+      this.storeMinOrder = store.minOrder
+      this.storeTags = store.tags
+      this.storeNotice = store.notice
+    }
   }
 
   // 拉取后端店铺商品并刷新

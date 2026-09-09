@@ -337,12 +337,16 @@ export function getMerchantTodayStats(merchantId: number): MerchantStatsData {
 
 export function getMerchantWeekStats(merchantId: number): MerchantStatsData {
   const orders: Order[] = getMerchantOrders(merchantId)
+  // 本周口径与后端 /api/merchant/stats 对齐：周一为一周起点，而非滚动 7 天。
   const now = new Date()
-  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+  const day = now.getDay() // 0=周日
+  const diffToMonday = day === 0 ? 6 : day - 1
+  const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMonday)
+  const weekStartTime: number = weekStart.getTime()
 
   const weekOrders = orders.filter(o => {
     const orderTime: number = Date.parse(o.createTime.replace(/-/g, '/'))
-    return !Number.isNaN(orderTime) && orderTime >= weekAgo.getTime()
+    return !Number.isNaN(orderTime) && orderTime >= weekStartTime
   })
   const completedOrders = weekOrders.filter(o => o.status === 4 && (o.escrowStatus ?? 0) === 1)
   const revenue = completedOrders.reduce((sum, o) => sum + o.payAmount, 0)
