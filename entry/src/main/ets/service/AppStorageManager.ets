@@ -561,6 +561,12 @@ export async function syncGoodsFromServer(storeId: number): Promise<void> {
  * 从后端拉取当前用户订单并写入 orderList
  */
 export async function syncUserOrdersFromServer(): Promise<void> {
+  // 该状态仅属于用户端（CUSTOMER）；商户/管理员不调用，避免用本人购买单覆盖其店铺订单列表。
+  const syncUser: User | undefined = AppStorage.get<User>('user')
+  if (syncUser === undefined || syncUser === null || syncUser.role !== UserRole.CUSTOMER) {
+    logInfo('Api', '非用户角色，跳过用户订单同步')
+    return
+  }
   const orders: Order[] | null = await fetchUserOrdersApi()
   if (orders === null) {
     logWarn('Api', '同步用户订单失败，保留当前订单列表')
@@ -599,6 +605,12 @@ export async function fetchOrderDetailRemote(orderId: number): Promise<Order | n
  * 从后端拉取商户订单并写入 orderList（商户端 onShow 调用）
  */
 export async function syncMerchantOrdersFromServer(): Promise<void> {
+  // 该状态仅属于商户端（MERCHANT）；用户/管理员不调用，避免与用户订单列表互相覆盖。
+  const syncUser: User | undefined = AppStorage.get<User>('user')
+  if (syncUser === undefined || syncUser === null || syncUser.role !== UserRole.MERCHANT) {
+    logInfo('Api', '非商户角色，跳过商户订单同步')
+    return
+  }
   const orders: Order[] = await fetchMerchantOrdersApi()
   AppStorage.setOrCreate<Order[]>('orderList', orders)
   logInfo('Api', `同步商户订单 ${orders.length} 条`)
