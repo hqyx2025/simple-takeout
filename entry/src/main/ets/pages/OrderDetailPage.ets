@@ -188,16 +188,24 @@ export struct OrderDetailPage {
 
               // 订单信息卡片
               this.OrderInfoCard()
-
-              // 底部操作按钮
-              this.ActionButtons()
             }
             .width('100%')
-            .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.XL })
+            .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.LG })
           }
           .layoutWeight(1)
           .scrollBar(BarState.Off)
           .backgroundColor(COLORS.BG_PRIMARY)
+
+          // 底部操作栏：固定于页面底部，不随内容滚动，避免操作按钮被长内容遮挡
+          if (this.order!.status >= 1 && this.order!.status <= 4) {
+            Column() {
+              Divider().color(COLORS.DIVIDER)
+              this.ActionButtons()
+            }
+            .width('100%')
+            .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.MD })
+            .backgroundColor(COLORS.BG_WHITE)
+          }
         }
       }
       .width('100%')
@@ -332,7 +340,7 @@ export struct OrderDetailPage {
             .height(44)
             .fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.TEXT_SECONDARY)
-            .backgroundColor('#F5F5F5')
+            .backgroundColor(COLORS.BG_PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
             .type(ButtonType.Capsule)
             .onClick(() => { this.showRefundDialog = false })
@@ -440,7 +448,7 @@ export struct OrderDetailPage {
     }
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor('#FFF8F3')
+    .backgroundColor(COLORS.WARM_BG)
     .borderRadius(BORDER_RADIUS.LG)
   }
 
@@ -665,7 +673,7 @@ export struct OrderDetailPage {
             .height(44)
             .fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.TEXT_SECONDARY)
-            .backgroundColor('#F5F5F5')
+            .backgroundColor(COLORS.BG_PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
             .type(ButtonType.Capsule)
             .onClick(() => { this.showCancelDialog = true })

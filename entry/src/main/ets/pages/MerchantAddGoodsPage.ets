@@ -132,7 +132,7 @@ export struct MerchantAddGoodsPage {
             .onClick(() => { this.selectCategory(category.id) })
         }, (category: Category) => category.id.toString())
       }
-      .padding({ left: 2, right: SPACING.LG })
+      .padding({ left: SPACING.XS, right: SPACING.LG })
     }
     .width('100%')
     .height(44)
@@ -157,7 +157,7 @@ export struct MerchantAddGoodsPage {
     Column({ space: SPACING.XS }) {
       this.FieldLabel(label, true)
       TextInput({ placeholder: placeholder, text: value })
-        .width('100%').height(46).type(InputType.Number)
+        .width('100%').height(44).type(InputType.Number)
         .onChange((next: string) => { onChange(next) })
     }
     .layoutWeight(1)
@@ -172,7 +172,7 @@ export struct MerchantAddGoodsPage {
         Text('添加商品')
           .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold)
           .fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1).textAlign(TextAlign.Center)
-        Text(' ').width(42)
+        Text(' ').width(28)
       }
       .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG })
       .backgroundColor(COLORS.BG_WHITE).alignItems(VerticalAlign.Center)
@@ -186,19 +186,19 @@ export struct MerchantAddGoodsPage {
               .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
           }
           .width('100%').padding(SPACING.MD)
-          .backgroundColor('#FFF7ED').borderRadius(BORDER_RADIUS.MD)
+          .backgroundColor(COLORS.TAG_BG).borderRadius(BORDER_RADIUS.MD)
 
           Column({ space: SPACING.MD }) {
             Column({ space: SPACING.XS }) {
               this.FieldLabel('商品名称', true)
               TextInput({ placeholder: '如：宫保鸡丁', text: this.goodsName })
-                .width('100%').height(46)
+                .width('100%').height(44)
                 .onChange((value: string) => { this.goodsName = value })
             }
             Column({ space: SPACING.XS }) {
               this.FieldLabel('商品描述', false)
               TextInput({ placeholder: '如：招牌菜，微辣', text: this.goodsDescription })
-                .width('100%').height(46)
+                .width('100%').height(44)
                 .onChange((value: string) => { this.goodsDescription = value })
             }
             Row({ space: SPACING.MD }) {
@@ -208,7 +208,7 @@ export struct MerchantAddGoodsPage {
             Column({ space: SPACING.XS }) {
               this.FieldLabel('原价', false)
               TextInput({ placeholder: '特价时填写，如：30.00', text: this.originalPrice })
-                .width('100%').height(46).type(InputType.Number)
+                .width('100%').height(44).type(InputType.Number)
                 .onChange((value: string) => { this.originalPrice = value })
             }
             Row() {
@@ -240,7 +240,7 @@ export struct MerchantAddGoodsPage {
           .onClick(() => { router.back() })
         Button(this.saving ? '保存中...' : '确认添加')
           .layoutWeight(1).height(46).fontSize(FONT_SIZE.MD)
-          .fontColor(Color.White).backgroundColor(COLORS.PRIMARY)
+          .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
           .onClick(() => { this.confirmAdd() })
       }

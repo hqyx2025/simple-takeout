@@ -2,6 +2,7 @@
 import { AdminEmployee, User, UserRole } from '../model/Models'
 import { createAdminEmployeeApi, fetchAdminEmployeesApi, updateAdminEmployeeApi, updateAdminEmployeeStatusApi } from '../service/ApiService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { StatusBadge } from '../components/StatusBadge'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
 
@@ -102,7 +103,7 @@ export struct AdminEmployeePage {
         Text('员工管理').fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold)
           .layoutWeight(1).textAlign(TextAlign.Center)
         Button('新增员工').height(32).fontSize(FONT_SIZE.SM)
-          .fontColor(Color.White).backgroundColor(COLORS.PRIMARY)
+          .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
           .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.openCreate() })
       }
       .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 })
@@ -120,7 +121,7 @@ export struct AdminEmployeePage {
             this.EmployeeRow(employee)
           }, (employee: AdminEmployee) => employee.id.toString())
         }
-        .width('100%').padding(SPACING.LG)
+        .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
       }
       .layoutWeight(1).scrollBar(BarState.Off)
 
@@ -143,15 +144,17 @@ export struct AdminEmployeePage {
                 .onChange((value: string) => { this.formPassword = value })
             }
             Row({ space: SPACING.SM }) {
-              Button('取消').layoutWeight(1).height(38).onClick(() => { this.closeForm() })
-              Button('保存').layoutWeight(1).height(38).fontColor(Color.White)
-                .backgroundColor(COLORS.PRIMARY).onClick(() => { this.saveEmployee() })
+              Button('取消').layoutWeight(1).height(38)
+                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.closeForm() })
+              Button('保存').layoutWeight(1).height(38).fontColor(COLORS.TEXT_WHITE)
+                .backgroundColor(COLORS.PRIMARY)
+                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.saveEmployee() })
             }.width('100%')
           }
           .width('90%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE)
           .borderRadius(BORDER_RADIUS.LG)
         }
-        .width('100%').height('100%').backgroundColor('rgba(0,0,0,0.35)')
+        .width('100%').height('100%').backgroundColor(COLORS.OVERLAY)
         .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
       }
     }
@@ -161,13 +164,12 @@ export struct AdminEmployeePage {
   @Builder
   EmployeeRow(employee: AdminEmployee) {
     Row({ space: SPACING.MD }) {
-      Column({ space: 4 }) {
+      Column({ space: SPACING.XS }) {
         Text(employee.username).fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold)
           .fontColor(COLORS.TEXT_PRIMARY)
         Text(`${employee.phone} · 店铺 ${employee.storeCount} 家`)
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
-        Text(employee.status === 1 ? '启用中' : '已停用')
-          .fontSize(FONT_SIZE.XS).fontColor(employee.status === 1 ? COLORS.SUCCESS : COLORS.ERROR)
+        StatusBadge({ text: employee.status === 1 ? '启用中' : '已停用', mode: employee.status === 1 ? 'success' : 'gray' })
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       Row({ space: SPACING.XS }) {
         Button('编辑').height(30).fontSize(FONT_SIZE.XS).onClick(() => { this.openEdit(employee) })

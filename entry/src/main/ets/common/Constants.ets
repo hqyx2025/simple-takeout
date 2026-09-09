@@ -24,6 +24,12 @@ export class COLORS {
   static readonly PRICE_RED: string = '#FF3B30'
   static readonly TAB_ACTIVE: string = '#FF6B35'
   static readonly TAB_INACTIVE: string = '#999999'
+  // 通用浅底色 / 遮罩 / 状态浅底色（新增，统一原来散落各处的硬编码色）
+  static readonly WARM_BG: string = '#FFF3E8'
+  static readonly OVERLAY: string = 'rgba(0,0,0,0.5)'
+  static readonly ERROR_LIGHT: string = '#FFF0F0'
+  static readonly SUCCESS_LIGHT: string = '#E8F5E9'
+  static readonly WARNING_LIGHT: string = '#FFF7E6'
 }
 
 // 间距

@@ -2,6 +2,7 @@
 import { AdminProduct, User, UserRole } from '../model/Models'
 import { deleteAdminProductApi, fetchAdminProductsApi, updateAdminProductStatusApi } from '../service/ApiService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { StatusBadge } from '../components/StatusBadge'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 
@@ -80,11 +81,14 @@ export struct AdminProductPage {
 
       Row({ space: SPACING.MD }) {
         Button('全部').fontSize(FONT_SIZE.SM).backgroundColor(this.statusFilter === -1 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
-          .fontColor(this.statusFilter === -1 ? Color.White : COLORS.TEXT_SECONDARY).onClick(() => { this.statusFilter = -1; this.refresh() })
+          .fontColor(this.statusFilter === -1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = -1; this.refresh() })
         Button('上架').fontSize(FONT_SIZE.SM).backgroundColor(this.statusFilter === 1 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
-          .fontColor(this.statusFilter === 1 ? Color.White : COLORS.TEXT_SECONDARY).onClick(() => { this.statusFilter = 1; this.refresh() })
+          .fontColor(this.statusFilter === 1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 1; this.refresh() })
         Button('下架').fontSize(FONT_SIZE.SM).backgroundColor(this.statusFilter === 0 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
-          .fontColor(this.statusFilter === 0 ? Color.White : COLORS.TEXT_SECONDARY).onClick(() => { this.statusFilter = 0; this.refresh() })
+          .fontColor(this.statusFilter === 0 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 0; this.refresh() })
       }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
 
       Scroll() {
@@ -94,7 +98,7 @@ export struct AdminProductPage {
           }
           ForEach(this.products, (product: AdminProduct) => { this.ProductRow(product) },
             (product: AdminProduct) => product.id.toString())
-        }.width('100%').padding(SPACING.LG)
+        }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
       }.layoutWeight(1).scrollBar(BarState.Off)
 
       if (this.showDeleteConfirm) {
@@ -110,12 +114,11 @@ export struct AdminProductPage {
   @Builder
   ProductRow(product: AdminProduct) {
     Row({ space: SPACING.MD }) {
-      Column({ space: 4 }) {
+      Column({ space: SPACING.XS }) {
         Text(product.name).fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
         Text(`${product.storeName}  ¥${product.price.toFixed(2)}  月销${product.sales}`)
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
-        Text(product.status === 1 ? '上架中' : '已下架').fontSize(FONT_SIZE.XS)
-          .fontColor(product.status === 1 ? COLORS.SUCCESS : COLORS.ERROR)
+        StatusBadge({ text: product.status === 1 ? '上架中' : '已下架', mode: product.status === 1 ? 'success' : 'gray' })
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       Row({ space: SPACING.XS }) {
         Button(product.status === 1 ? '强制下架' : '强制上架').height(30).fontSize(FONT_SIZE.XS)

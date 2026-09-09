@@ -58,16 +58,17 @@ export struct SettingsPage {
             .fontColor(COLORS.TEXT_PRIMARY)
             .onClick(() => { this.onBack() })
           Text('设置')
-            .fontSize(FONT_SIZE.LG)
+            .fontSize(FONT_SIZE.XL)
             .fontWeight(FontWeight.Bold)
             .fontColor(COLORS.TEXT_PRIMARY)
             .layoutWeight(1)
             .textAlign(TextAlign.Center)
-          Text('   ')
-            .fontSize(FONT_SIZE.MD) // 占位，保持标题居中
+          Text(' ')
+            .fontSize(FONT_SIZE.MD)
+            .width(28) // 占位，保持标题居中
         }
         .width('100%')
-        .height(44)
+        .height(56)
         .padding({ left: SPACING.LG, right: SPACING.LG })
         .backgroundColor(COLORS.BG_WHITE)
 
@@ -107,7 +108,7 @@ export struct SettingsPage {
           Column()
             .width('100%')
             .height('100%')
-            .backgroundColor('rgba(0,0,0,0.5)')
+            .backgroundColor(COLORS.OVERLAY)
             .onClick(() => { this.showAbout = false })
 
           Column({ space: SPACING.MD }) {

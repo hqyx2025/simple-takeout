@@ -155,8 +155,8 @@ export struct ReviewPage {
     Column() {
       // 导航栏
       Row() {
-        Text('‹')
-          .fontSize(28)
+        Text('‹ 返回')
+          .fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_PRIMARY)
           .onClick(() => { router.back() })
         Text('订单评价')
@@ -166,7 +166,7 @@ export struct ReviewPage {
           .layoutWeight(1)
           .textAlign(TextAlign.Center)
         Text(' ')
-          .fontSize(28)
+          .fontSize(FONT_SIZE.MD)
           .width(28)
       }
       .width('100%')
@@ -178,8 +178,8 @@ export struct ReviewPage {
       if (!this.loggedIn) {
         Column() {
           Text('🔒').fontSize(60).margin({ top: 100 })
-          Text('暂无登录').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: 16 })
-          Text('请登录后查看和提交评价').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT).margin({ top: 8 })
+          Text('暂无登录').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.LG })
+          Text('请登录后查看和提交评价').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.SM })
         }
         .width('100%')
         .layoutWeight(1)
@@ -188,7 +188,7 @@ export struct ReviewPage {
       } else if (this.order === null) {
         Column() {
           Text('📦').fontSize(60).margin({ top: 100 })
-          Text('订单不存在').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: 16 })
+          Text('订单不存在').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.LG })
         }
         .width('100%')
         .layoutWeight(1)

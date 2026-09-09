@@ -134,22 +134,22 @@ export struct AdminCenterPage {
         Column({ space: SPACING.MD }) {
           // 数据概览
           Row() {
-            Column({ space: 4 }) {
+            Column({ space: SPACING.XS }) {
               Text(this.categories.length.toString())
                 .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRIMARY)
               Text('平台分类').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
             }.layoutWeight(1).alignItems(HorizontalAlign.Center)
-            Column({ space: 4 }) {
+            Column({ space: SPACING.XS }) {
               Text(this.stores.length.toString())
                 .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRIMARY)
               Text('店铺总数').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
             }.layoutWeight(1).alignItems(HorizontalAlign.Center)
-            Column({ space: 4 }) {
+            Column({ space: SPACING.XS }) {
               Text(this.orders.length.toString())
                 .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRIMARY)
               Text('订单总数').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
             }.layoutWeight(1).alignItems(HorizontalAlign.Center)
-            Column({ space: 4 }) {
+            Column({ space: SPACING.XS }) {
               Text(this.getPendingRefundCount().toString())
                 .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold)
                 .fontColor(this.getPendingRefundCount() > 0 ? COLORS.ERROR : COLORS.PRIMARY)
@@ -168,7 +168,7 @@ export struct AdminCenterPage {
             .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%').textAlign(TextAlign.Center)
             .margin({ top: SPACING.MD })
         }
-        .width('100%').padding(SPACING.LG)
+        .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
       }
       .layoutWeight(1).scrollBar(BarState.Off)
     }
@@ -180,15 +180,15 @@ export struct AdminCenterPage {
   EntryCard(item: AdminEntryItem) {
     Row({ space: SPACING.MD }) {
       Text(item.icon).fontSize(32)
-      Column({ space: 4 }) {
+      Column({ space: SPACING.XS }) {
         Row({ space: SPACING.SM }) {
           Text(item.title).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
           if (item.count > 0) {
             Text(item.count.toString())
-              .fontSize(FONT_SIZE.XS).fontColor(Color.White)
+              .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_WHITE)
               .backgroundColor(item.title === '退款审批' ? COLORS.ERROR : COLORS.PRIMARY)
               .borderRadius(BORDER_RADIUS.ROUND)
-              .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+              .padding({ left: SPACING.SM, right: SPACING.SM, top: SPACING.XS, bottom: SPACING.XS })
           }
         }
         Text(item.description).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)

@@ -13,16 +13,16 @@ export struct PrivacyPolicyPage {
           .fontColor(COLORS.TEXT_PRIMARY)
           .onClick(() => { router.back() })
         Text('隐私政策')
-          .fontSize(FONT_SIZE.LG)
+          .fontSize(FONT_SIZE.XL)
           .fontWeight(FontWeight.Bold)
           .fontColor(COLORS.TEXT_PRIMARY)
           .layoutWeight(1)
           .textAlign(TextAlign.Center)
-        Text('   ').fontSize(FONT_SIZE.MD)
+        Text(' ').fontSize(FONT_SIZE.MD).width(28)
       }
       .width('100%')
-      .height(44)
-      .padding({ left: SPACING.LG, right: SPACING.LG })
+      .height(56)
+      .padding({ left: SPACING.LG, right: SPACING.LG, top: 26 })
       .backgroundColor(COLORS.BG_WHITE)
 
       Scroll() {

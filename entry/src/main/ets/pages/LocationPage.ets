@@ -394,8 +394,8 @@ export struct LocationPage {
       Column() {
       // 顶部导航栏
       Row() {
-        Text('‹')
-          .fontSize(FONT_SIZE.XXL)
+        Text('‹ 返回')
+          .fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_PRIMARY)
           .onClick(() => { router.back() })
         Text('选择位置')
@@ -404,9 +404,9 @@ export struct LocationPage {
           .fontColor(COLORS.TEXT_PRIMARY)
           .layoutWeight(1)
           .textAlign(TextAlign.Center)
-        Text('‹')
-          .fontSize(FONT_SIZE.XXL)
-          .fontColor(Color.Transparent)
+        Text(' ')
+          .fontSize(FONT_SIZE.MD)
+          .width(28)
       }
       .width('100%')
       .height(56)
@@ -527,7 +527,7 @@ export struct LocationPage {
               Button(this.isSearching ? '搜索中…' : '搜索')
                 .height(40)
                 .fontSize(FONT_SIZE.MD)
-                .fontColor(Color.White)
+                .fontColor(COLORS.TEXT_WHITE)
                 .backgroundColor(COLORS.PRIMARY)
                 .borderRadius(BORDER_RADIUS.ROUND)
                 .type(ButtonType.Capsule)
@@ -587,7 +587,7 @@ export struct LocationPage {
                     }
                     .width('100%')
                     .padding(SPACING.MD)
-                    .backgroundColor(this.selectedPlace === place ? '#FFF3E0' : COLORS.BG_WHITE)
+                    .backgroundColor(this.selectedPlace === place ? COLORS.TAG_BG : COLORS.BG_WHITE)
                     .borderRadius(BORDER_RADIUS.MD)
                     .onClick(() => { this.selectPlace(place) })
                   }
@@ -627,8 +627,8 @@ export struct LocationPage {
           .height(48)
           .fontSize(FONT_SIZE.LG)
           .fontWeight(FontWeight.Bold)
-          .fontColor(Color.White)
-          .backgroundColor(this.currentPosition !== null ? COLORS.PRIMARY : COLORS.TEXT_HINT)
+          .fontColor(this.currentPosition !== null ? COLORS.TEXT_WHITE : COLORS.TEXT_HINT)
+          .backgroundColor(this.currentPosition !== null ? COLORS.PRIMARY : COLORS.DIVIDER)
           .borderRadius(BORDER_RADIUS.ROUND)
           .type(ButtonType.Capsule)
           .id('location-confirm')

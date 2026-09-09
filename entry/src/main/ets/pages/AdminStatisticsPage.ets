@@ -55,16 +55,16 @@ export struct AdminStatisticsPage {
             Text('暂无统计数据，请稍后刷新').width('100%').padding(SPACING.LG).fontColor(COLORS.TEXT_HINT)
           } else {
             Row({ space: SPACING.SM }) {
-              this.Metric('用户', this.stats.totalUsers.toString())
-              this.Metric('商户', this.stats.totalMerchants.toString())
-              this.Metric('店铺', this.stats.totalStores.toString())
-              this.Metric('商品', this.stats.totalGoods.toString())
+              this.Metric('用户', this.stats.totalUsers.toString(), false)
+              this.Metric('商户', this.stats.totalMerchants.toString(), false)
+              this.Metric('店铺', this.stats.totalStores.toString(), false)
+              this.Metric('商品', this.stats.totalGoods.toString(), false)
             }.width('100%')
             Row({ space: SPACING.SM }) {
-              this.Metric('订单', this.stats.totalOrders.toString())
-              this.Metric('累计成交', `¥${this.valueOrZero(this.stats.totalGmv)}`)
-              this.Metric('已结算', `¥${this.valueOrZero(this.stats.settledAmount)}`)
-              this.Metric('待结算', `¥${this.valueOrZero(this.stats.pendingEscrowAmount)}`)
+              this.Metric('订单', this.stats.totalOrders.toString(), false)
+              this.Metric('累计成交', `¥${this.valueOrZero(this.stats.totalGmv)}`, true)
+              this.Metric('已结算', `¥${this.valueOrZero(this.stats.settledAmount)}`, false)
+              this.Metric('待结算', `¥${this.valueOrZero(this.stats.pendingEscrowAmount)}`, false)
             }.width('100%')
             Row({ space: SPACING.MD }) {
               Text(`今日订单：${this.stats.todayOrders}`).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
@@ -79,15 +79,16 @@ export struct AdminStatisticsPage {
               this.HotGoodsRow(item.goodsName, item.storeName, item.sales, item.price, item.status)
             }, (item: AdminHotGoods) => item.goodsId.toString())
           }
-        }.width('100%').padding(SPACING.LG)
+        }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
       }.layoutWeight(1).scrollBar(BarState.Off)
     }.width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)
   }
 
   @Builder
-  Metric(title: string, value: string) {
-    Column({ space: 4 }) {
-      Text(value).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.PRIMARY)
+  Metric(title: string, value: string, highlight: boolean) {
+    Column({ space: SPACING.XS }) {
+      Text(value).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
+        .fontColor(highlight ? COLORS.PRIMARY : COLORS.TEXT_PRIMARY)
       Text(title).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
     }.layoutWeight(1).padding({ top: SPACING.MD, bottom: SPACING.MD }).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
   }
@@ -95,7 +96,7 @@ export struct AdminStatisticsPage {
   @Builder
   HotGoodsRow(name: string, storeName: string, sales: number, price: number, status: number) {
     Row({ space: SPACING.MD }) {
-      Column({ space: 4 }) {
+      Column({ space: SPACING.XS }) {
         Text(name).fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold)
         Text(`${storeName}  ¥${price.toFixed(2)}  销量${sales}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)

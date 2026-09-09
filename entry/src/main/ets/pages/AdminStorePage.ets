@@ -5,6 +5,7 @@
 import { User, UserRole } from '../model/Models'
 import { ApiResponse, get, put } from '../service/HttpClient'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { StatusBadge } from '../components/StatusBadge'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
 
@@ -100,22 +101,21 @@ export struct AdminStorePage {
           }
           ForEach(this.stores, (store: AdminStore) => {
             Row({ space: SPACING.MD }) {
-              Column({ space: 4 }) {
+              Column({ space: SPACING.XS }) {
                 Text(store.name).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
-                Text(store.status === 1 ? '营业中' : '已暂停').fontSize(FONT_SIZE.SM)
-                  .fontColor(store.status === 1 ? COLORS.SUCCESS : COLORS.ERROR)
+                StatusBadge({ text: store.status === 1 ? '营业中' : '已暂停', mode: store.status === 1 ? 'success' : 'gray' })
               }.alignItems(HorizontalAlign.Start).layoutWeight(1)
               Column({ space: SPACING.XS }) {
                 Button(store.recommended === 1 ? '取消推荐' : '推荐到发现')
                   .height(32).fontSize(FONT_SIZE.XS)
-                  .fontColor(store.recommended === 1 ? COLORS.PRIMARY : Color.White)
+                  .fontColor(store.recommended === 1 ? COLORS.PRIMARY : COLORS.TEXT_WHITE)
                   .backgroundColor(store.recommended === 1 ? COLORS.TAG_BG : COLORS.PRIMARY)
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                   .onClick(() => { this.toggleRecommend(store) })
                 Button(store.status === 1 ? '暂停营业' : '恢复营业')
                   .height(32).fontSize(FONT_SIZE.XS)
-                  .fontColor(store.status === 1 ? COLORS.WARNING : Color.White)
-                  .backgroundColor(store.status === 1 ? '#FFF3E0' : COLORS.SUCCESS)
+                  .fontColor(store.status === 1 ? COLORS.WARNING : COLORS.TEXT_WHITE)
+                  .backgroundColor(store.status === 1 ? COLORS.TAG_BG : COLORS.SUCCESS)
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                   .onClick(() => { this.toggleStore(store) })
               }
@@ -124,7 +124,7 @@ export struct AdminStorePage {
             .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
           }, (store: AdminStore) => store.id.toString())
         }
-        .width('100%').padding(SPACING.LG)
+        .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
       }
       .layoutWeight(1).scrollBar(BarState.Off)
     }

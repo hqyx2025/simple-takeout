@@ -68,7 +68,7 @@ export struct SearchPage {
   build() {
     Column() {
       // 顶部导航栏：返回 + 搜索框 + 搜索按钮
-      Row({ space: 4 }) {
+      Row({ space: SPACING.XS }) {
         Text('‹')
           .fontSize(24)
           .fontColor(COLORS.TEXT_PRIMARY)
@@ -76,7 +76,7 @@ export struct SearchPage {
         TextInput({ placeholder: '搜索美食、店铺', text: this.searchText })
           .layoutWeight(1)
           .height(36)
-          .backgroundColor('#F0F0F0')
+          .backgroundColor(COLORS.BG_PRIMARY)
           .borderRadius(BORDER_RADIUS.ROUND)
           .onChange((value: string) => { this.searchText = value })
         Text('搜索')
@@ -96,7 +96,9 @@ export struct SearchPage {
             this.EmptyLoginResult()
           } else if (!this.hasSearched) {
             // 未搜索时显示：热门搜索 + 历史搜索
-            this.HotSearchSection()
+            if (this.hotWords.length > 0) {
+              this.HotSearchSection()
+            }
             this.HistorySection()
           } else {
             // 搜索结果
@@ -239,7 +241,7 @@ export struct SearchPage {
         Text(store.name.substring(0, 1))
           .fontSize(FONT_SIZE.TITLE)
           .fontWeight(FontWeight.Bold)
-          .fontColor(Color.White)
+          .fontColor(COLORS.TEXT_WHITE)
       }
       .width(80)
       .height(80)
@@ -247,7 +249,7 @@ export struct SearchPage {
       .borderRadius(BORDER_RADIUS.MD)
       .justifyContent(FlexAlign.Center)
 
-      Column({ space: 4 }) {
+      Column({ space: SPACING.XS }) {
         Text(store.name)
           .fontSize(FONT_SIZE.LG)
           .fontWeight(FontWeight.Bold)
@@ -255,7 +257,7 @@ export struct SearchPage {
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-        Row({ space: 8 }) {
+        Row({ space: SPACING.SM }) {
           Text(`${store.rating}分`)
             .fontSize(FONT_SIZE.SM)
             .fontColor(COLORS.PRIMARY)
@@ -271,7 +273,7 @@ export struct SearchPage {
             .fontColor(COLORS.TEXT_SECONDARY)
         }
 
-        Row({ space: 4 }) {
+        Row({ space: SPACING.XS }) {
           Text(`配送¥${store.deliveryFee}`)
             .fontSize(FONT_SIZE.SM)
             .fontColor(COLORS.TEXT_SECONDARY)

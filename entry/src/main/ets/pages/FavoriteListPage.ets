@@ -67,8 +67,8 @@ export struct FavoriteListPage {
     Column() {
       // 顶部导航栏
       Row() {
-        Text('‹')
-          .fontSize(FONT_SIZE.XXL)
+        Text('‹ 返回')
+          .fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_PRIMARY)
           .onClick(() => { router.back() })
         Text('我的收藏')
@@ -78,9 +78,9 @@ export struct FavoriteListPage {
           .layoutWeight(1)
           .textAlign(TextAlign.Center)
         // 占位以保持标题居中
-        Text('‹')
-          .fontSize(FONT_SIZE.XXL)
-          .fontColor(Color.Transparent)
+        Text(' ')
+          .fontSize(FONT_SIZE.MD)
+          .width(28)
       }
       .width('100%')
       .height(56)
@@ -103,7 +103,7 @@ export struct FavoriteListPage {
         }
         .width('100%')
         .layoutWeight(1)
-        .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM })
+        .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.XXL })
         .cachedCount(5)
         .divider({ strokeWidth: 0 })
         .backgroundColor(COLORS.BG_PRIMARY)

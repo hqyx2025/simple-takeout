@@ -197,7 +197,7 @@ export struct ProductListPage {
         .fontSize(FONT_SIZE.XL)
         .fontWeight(FontWeight.Bold)
         .fontColor(COLORS.PRIMARY)
-        .backgroundColor('#FFF1EB')
+        .backgroundColor(COLORS.WARM_BG)
         .borderRadius(BORDER_RADIUS.MD)
         .textAlign(TextAlign.Center)
       Column({ space: 4 }) {
@@ -230,8 +230,8 @@ export struct ProductListPage {
   build() {
     Column() {
       Row() {
-        Text('‹')
-          .fontSize(FONT_SIZE.XXL)
+        Text('‹ 返回')
+          .fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_PRIMARY)
           .onClick(() => { router.back() })
         Column({ space: 2 }) {
@@ -247,11 +247,12 @@ export struct ProductListPage {
         }
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Center)
-        Text('')
-          .fontSize(FONT_SIZE.XXL)
+        Text(' ')
+          .fontSize(FONT_SIZE.MD)
+          .width(28)
       }
       .width('100%')
-      .height(64)
+      .height(56)
       .padding({ left: SPACING.LG, right: SPACING.LG })
       .backgroundColor(COLORS.BG_WHITE)
 
@@ -271,7 +272,7 @@ export struct ProductListPage {
           }
           .width('100%')
           .layoutWeight(1)
-          .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.LG })
+          .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.XXL })
           .divider({ strokeWidth: 0 })
         }
       } else if (!this.hasLocation()) {
@@ -281,7 +282,7 @@ export struct ProductListPage {
             .height(44)
             .padding({ left: SPACING.XL, right: SPACING.XL })
             .fontSize(FONT_SIZE.MD)
-            .fontColor(Color.White)
+            .fontColor(COLORS.TEXT_WHITE)
             .backgroundColor(COLORS.PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
             .type(ButtonType.Capsule)
@@ -348,7 +349,7 @@ export struct ProductListPage {
         }
         .width('100%')
         .layoutWeight(1)
-        .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.LG })
+        .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.XXL })
         .divider({ strokeWidth: 0 })
       }
     }

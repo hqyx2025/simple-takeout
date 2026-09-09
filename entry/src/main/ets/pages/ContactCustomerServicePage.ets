@@ -39,8 +39,8 @@ export struct ContactCustomerServicePage {
   build() {
     Column() {
       Row() {
-        Text('\u2039')
-          .fontSize(FONT_SIZE.BIG_TITLE)
+        Text('\u2039 \u8fd4\u56de')
+          .fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_PRIMARY)
           .onClick(() => { router.back() })
         Text('\u8054\u7cfb\u5ba2\u670d')
@@ -50,8 +50,8 @@ export struct ContactCustomerServicePage {
           .layoutWeight(1)
           .textAlign(TextAlign.Center)
         Text(' ')
-          .fontSize(FONT_SIZE.BIG_TITLE)
-          .width(FONT_SIZE.BIG_TITLE)
+          .fontSize(FONT_SIZE.MD)
+          .width(28)
       }
       .width('100%')
       .height(56)

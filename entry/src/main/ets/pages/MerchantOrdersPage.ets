@@ -100,8 +100,8 @@ export struct MerchantOrdersPage {
     Column() {
       // 顶部导航栏：标题 + 返回按钮
       Row() {
-        Text('‹')
-          .fontSize(28)
+        Text('‹ 返回')
+          .fontSize(FONT_SIZE.BIG_TITLE)
           .fontColor(COLORS.TEXT_PRIMARY)
           .onClick(() => { router.back() })
         Text('订单管理')
@@ -144,7 +144,7 @@ export struct MerchantOrdersPage {
       // 订单列表 / 空状态
       if (this.getFilteredOrders().length === 0) {
         Column() {
-          Text('📭').fontSize(60).margin({ top: 100 })
+          Text('📭').fontSize(32).margin({ top: 40 })
           Text('暂无订单')
             .fontSize(FONT_SIZE.LG)
             .fontColor(COLORS.TEXT_HINT)

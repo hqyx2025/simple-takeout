@@ -2,6 +2,7 @@
 import { AdminUser, User, UserRole } from '../model/Models'
 import { fetchAdminUsersApi, updateAdminUserStatusApi } from '../service/ApiService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { StatusBadge } from '../components/StatusBadge'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 
 @Entry
@@ -65,11 +66,14 @@ export struct AdminUserPage {
 
       Row({ space: SPACING.MD }) {
         Button('全部').fontSize(FONT_SIZE.SM).backgroundColor(this.roleFilter === -1 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
-          .fontColor(this.roleFilter === -1 ? Color.White : COLORS.TEXT_SECONDARY).onClick(() => { this.roleFilter = -1; this.refresh() })
+          .fontColor(this.roleFilter === -1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.roleFilter = -1; this.refresh() })
         Button('用户').fontSize(FONT_SIZE.SM).backgroundColor(this.roleFilter === 0 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
-          .fontColor(this.roleFilter === 0 ? Color.White : COLORS.TEXT_SECONDARY).onClick(() => { this.roleFilter = 0; this.refresh() })
+          .fontColor(this.roleFilter === 0 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.roleFilter = 0; this.refresh() })
         Button('商户').fontSize(FONT_SIZE.SM).backgroundColor(this.roleFilter === 1 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
-          .fontColor(this.roleFilter === 1 ? Color.White : COLORS.TEXT_SECONDARY).onClick(() => { this.roleFilter = 1; this.refresh() })
+          .fontColor(this.roleFilter === 1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.roleFilter = 1; this.refresh() })
       }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
 
       Scroll() {
@@ -78,7 +82,7 @@ export struct AdminUserPage {
             Text('暂无账号数据').width('100%').padding(SPACING.LG).fontColor(COLORS.TEXT_HINT)
           }
           ForEach(this.users, (item: AdminUser) => { this.UserRow(item) }, (item: AdminUser) => item.id.toString())
-        }.width('100%').padding(SPACING.LG)
+        }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
       }.layoutWeight(1).scrollBar(BarState.Off)
     }.width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)
   }
@@ -86,12 +90,11 @@ export struct AdminUserPage {
   @Builder
   UserRow(item: AdminUser) {
     Row({ space: SPACING.MD }) {
-      Column({ space: 4 }) {
+      Column({ space: SPACING.XS }) {
         Text(item.username).fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
         Text(`${item.phone}  ${item.role === 1 ? '商户' : '普通用户'}${item.role === 1 ? `  店铺${item.storeCount}家` : ''}`)
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
-        Text(item.status === 1 ? '正常' : '已停用').fontSize(FONT_SIZE.XS)
-          .fontColor(item.status === 1 ? COLORS.SUCCESS : COLORS.ERROR)
+        StatusBadge({ text: item.status === 1 ? '正常' : '已停用', mode: item.status === 1 ? 'success' : 'gray' })
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       Button(item.status === 1 ? '停用' : '启用').height(30).fontSize(FONT_SIZE.XS)
         .fontColor(item.status === 1 ? COLORS.ERROR : COLORS.SUCCESS)

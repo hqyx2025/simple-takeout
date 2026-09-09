@@ -5,6 +5,7 @@
 import { User, UserRole, RefundRecord } from '../model/Models'
 import { fetchAdminRefundsApi, approveRefundApi, rejectRefundApi } from '../service/ApiService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { StatusBadge } from '../components/StatusBadge'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
 
@@ -110,7 +111,7 @@ export struct AdminRefundPage {
             ForEach(this.refunds, (record: RefundRecord) => {
               Column({ space: SPACING.SM }) {
                 Row() {
-                  Column({ space: 4 }) {
+                  Column({ space: SPACING.XS }) {
                     Text(`退款单 #${record.id}  订单 #${record.orderId}`).fontSize(FONT_SIZE.MD)
                       .fontColor(COLORS.TEXT_PRIMARY)
                     Text(`金额 ¥${record.amount.toFixed(2)}  申请时间 ${record.applyTime}`).fontSize(FONT_SIZE.SM)
@@ -122,20 +123,18 @@ export struct AdminRefundPage {
                       Text(`拒绝原因：${record.rejectReason}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.ERROR)
                     }
                   }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-                  Text(this.getRefundStatusText(record.status)).fontSize(FONT_SIZE.SM)
-                    .fontColor(record.status === 'REFUNDED' ? COLORS.SUCCESS
-                      : record.status === 'REJECTED' ? COLORS.ERROR : COLORS.WARNING)
+                  StatusBadge({ text: this.getRefundStatusText(record.status), mode: record.status === 'REFUNDED' ? 'success' : record.status === 'REJECTED' ? 'error' : 'warning' })
                 }.width('100%')
                 if (record.status === 'PENDING') {
                   Row({ space: SPACING.SM }) {
                     Button('同意退款')
                       .layoutWeight(1).height(34).fontSize(FONT_SIZE.SM)
-                      .fontColor(Color.White).backgroundColor(COLORS.SUCCESS)
+                      .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.SUCCESS)
                       .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                       .onClick(() => { this.doApproveRefund(record) })
                     Button('拒绝')
                       .layoutWeight(1).height(34).fontSize(FONT_SIZE.SM)
-                      .fontColor(COLORS.ERROR).backgroundColor('#FFF0F0')
+                      .fontColor(COLORS.ERROR).backgroundColor(COLORS.ERROR_LIGHT)
                       .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                       .onClick(() => {
                         this.rejectingRefundId = record.id
@@ -149,7 +148,7 @@ export struct AdminRefundPage {
               .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
             }, (record: RefundRecord) => record.id.toString())
           }
-          .width('100%').padding(SPACING.LG)
+          .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
         }
         .layoutWeight(1).scrollBar(BarState.Off)
       }
@@ -170,23 +169,23 @@ export struct AdminRefundPage {
             Row({ space: SPACING.MD }) {
               Button('取消')
                 .layoutWeight(1).height(42).fontSize(FONT_SIZE.MD)
-                .fontColor(COLORS.TEXT_SECONDARY).backgroundColor('#F5F5F5')
+                .fontColor(COLORS.TEXT_SECONDARY).backgroundColor(COLORS.BG_PRIMARY)
                 .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                 .onClick(() => { this.showRejectDialog = false })
               Button('确认拒绝')
                 .layoutWeight(1).height(42).fontSize(FONT_SIZE.MD)
-                .fontColor(Color.White).backgroundColor(COLORS.ERROR)
+                .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.ERROR)
                 .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                 .onClick(() => { this.doRejectRefund() })
             }
           }
           .width('90%')
           .padding(SPACING.XL)
-          .backgroundColor(Color.White)
+          .backgroundColor(COLORS.BG_WHITE)
           .borderRadius(BORDER_RADIUS.XL)
         }
         .width('100%').height('100%')
-        .backgroundColor('rgba(0,0,0,0.5)')
+        .backgroundColor(COLORS.OVERLAY)
         .justifyContent(FlexAlign.Center)
         .alignItems(HorizontalAlign.Center)
       }

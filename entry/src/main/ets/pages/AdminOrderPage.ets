@@ -164,6 +164,9 @@ export struct AdminOrderPage {
               .fontSize(FONT_SIZE.MD)
               .fontColor(this.currentStatus === item.status ? COLORS.PRIMARY : COLORS.TEXT_SECONDARY)
               .fontWeight(this.currentStatus === item.status ? FontWeight.Bold : FontWeight.Normal)
+              .backgroundColor(this.currentStatus === item.status ? COLORS.TAG_BG : Color.Transparent)
+              .borderRadius(BORDER_RADIUS.ROUND)
+              .border({ width: this.currentStatus === item.status ? 2 : 0, color: COLORS.PRIMARY })
               .padding({ left: SPACING.MD, right: SPACING.MD, top: SPACING.SM, bottom: SPACING.SM })
               .onClick(() => { this.onStatusChange(item.status) })
           }, (item: OrderTabItem) => item.title)
@@ -183,7 +186,7 @@ export struct AdminOrderPage {
           }
           ForEach(this.displayOrders, (order: AdminOrder) => {
             Row({ space: SPACING.MD }) {
-              Column({ space: 4 }) {
+              Column({ space: SPACING.XS }) {
                 Text(`${order.storeName}  #${order.orderNo}`).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
                 Row({ space: SPACING.SM }) {
                   Text(getOrderStatusText(order.status, order.escrowStatus))
@@ -195,34 +198,34 @@ export struct AdminOrderPage {
               }.alignItems(HorizontalAlign.Start).layoutWeight(1)
               if (order.status === 1) {
                 Button('接单').height(30).fontSize(FONT_SIZE.XS)
-                  .fontColor(Color.White).backgroundColor(COLORS.PRIMARY)
+                  .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                   .onClick(() => { this.runOrderAction(order.id, 'accept', '订单已接单') })
                 Button('取消').height(30).fontSize(FONT_SIZE.XS)
-                  .fontColor(COLORS.ERROR).backgroundColor('#FFF0F0')
+                  .fontColor(COLORS.ERROR).backgroundColor(COLORS.ERROR_LIGHT)
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                   .onClick(() => { this.runOrderAction(order.id, 'cancel', '订单已取消并退款') })
               } else if (order.status === 2) {
                 Button('出餐').height(30).fontSize(FONT_SIZE.XS)
-                  .fontColor(Color.White).backgroundColor(COLORS.PRIMARY)
+                  .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                   .onClick(() => { this.runOrderAction(order.id, 'deliver', '订单已进入配送中') })
                 Button('取消').height(30).fontSize(FONT_SIZE.XS)
-                  .fontColor(COLORS.ERROR).backgroundColor('#FFF0F0')
+                  .fontColor(COLORS.ERROR).backgroundColor(COLORS.ERROR_LIGHT)
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                   .onClick(() => { this.runOrderAction(order.id, 'cancel', '订单已取消并退款') })
               } else if (order.status === 3) {
                 Button('确认送达').height(30).fontSize(FONT_SIZE.XS)
-                  .fontColor(Color.White).backgroundColor(COLORS.PRIMARY)
+                  .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                   .onClick(() => { this.runOrderAction(order.id, 'complete', '订单已标记送达') })
                 Button('取消').height(30).fontSize(FONT_SIZE.XS)
-                  .fontColor(COLORS.ERROR).backgroundColor('#FFF0F0')
+                  .fontColor(COLORS.ERROR).backgroundColor(COLORS.ERROR_LIGHT)
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                   .onClick(() => { this.runOrderAction(order.id, 'cancel', '订单已取消并退款') })
               } else if (order.status !== 4 && order.status !== 5) {
                 Button('退款').height(34).fontSize(FONT_SIZE.SM)
-                  .fontColor(Color.White).backgroundColor(COLORS.ERROR)
+                  .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.ERROR)
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                   .onClick(() => {
                     this.refundingOrderId = order.id
@@ -234,7 +237,7 @@ export struct AdminOrderPage {
             .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
           }, (order: AdminOrder) => order.id.toString())
         }
-        .width('100%').padding(SPACING.LG)
+        .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
       }
       .layoutWeight(1).scrollBar(BarState.Off)
 

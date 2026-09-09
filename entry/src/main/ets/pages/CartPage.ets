@@ -327,7 +327,7 @@ export struct CartPage {
           .height(32)
           .fontSize(FONT_SIZE.SM)
           .fontColor(COLORS.ERROR)
-          .backgroundColor('#FFF1F0')
+          .backgroundColor(COLORS.ERROR_LIGHT)
           .borderRadius(BORDER_RADIUS.ROUND)
           .type(ButtonType.Capsule)
           .onClick(() => { this.deleteStore(storeId) })
@@ -408,16 +408,14 @@ export struct CartPage {
           .onClick(() => { this.changeQuantity(item, 1) })
       }
       .alignItems(VerticalAlign.Center)
-      if (true) {
-        Button('删除')
-          .height(30)
-          .fontSize(FONT_SIZE.SM)
-          .fontColor(COLORS.ERROR)
-          .backgroundColor('#FFF1F0')
-          .borderRadius(BORDER_RADIUS.ROUND)
-          .type(ButtonType.Capsule)
-          .onClick(() => { this.deleteOne(item) })
-      }
+      Button('删除')
+        .height(30)
+        .fontSize(FONT_SIZE.SM)
+        .fontColor(COLORS.ERROR)
+        .backgroundColor(COLORS.ERROR_LIGHT)
+        .borderRadius(BORDER_RADIUS.ROUND)
+        .type(ButtonType.Capsule)
+        .onClick(() => { this.deleteOne(item) })
     }
     .width('100%')
     .padding({ top: SPACING.XS, bottom: SPACING.XS })

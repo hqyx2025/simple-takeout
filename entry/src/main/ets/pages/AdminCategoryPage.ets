@@ -51,7 +51,7 @@ export struct AdminCategoryPage {
       promptAction.showToast({ message: '请输入分类名称', duration: 1500 })
       return
     }
-    const req: AdminCategoryRequest = { name: name, icon: '🍱', color: '#FF6B35' }
+    const req: AdminCategoryRequest = { name: name, icon: '🍱', color: COLORS.PRIMARY }
     const resp: ApiResponse<Category> = await post<Category>('/api/admin/categories', req)
     if (resp.code === 200) {
       this.newCategoryName = ''
@@ -131,12 +131,12 @@ export struct AdminCategoryPage {
                   TextInput({ placeholder: '分类名称', text: this.editCategoryName })
                     .layoutWeight(1).height(36).onChange((value: string) => { this.editCategoryName = value })
                   Button('保存')
-                    .height(30).fontSize(FONT_SIZE.XS).fontColor(Color.White).backgroundColor(COLORS.SUCCESS)
+                    .height(30).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.SUCCESS)
                     .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                     .onClick(() => { this.saveCategory(category) })
                   Button('取消')
                     .height(30).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY)
-                    .backgroundColor('#F5F5F5').borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                    .backgroundColor(COLORS.BG_PRIMARY).borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                     .onClick(() => { this.editingCategoryId = 0 })
                 } else {
                   Column({ space: 2 }) {
@@ -146,12 +146,14 @@ export struct AdminCategoryPage {
                   .layoutWeight(1).alignItems(HorizontalAlign.Start)
                   Text('编辑')
                     .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
+                    .padding({ left: SPACING.SM, right: SPACING.SM, top: SPACING.XS, bottom: SPACING.XS })
                     .onClick(() => {
                       this.editingCategoryId = category.id
                       this.editCategoryName = category.name
                     })
                   Text('删除')
                     .fontSize(FONT_SIZE.SM).fontColor(COLORS.ERROR)
+                    .padding({ left: SPACING.SM, right: SPACING.SM, top: SPACING.XS, bottom: SPACING.XS })
                     .onClick(() => {
                       this.deletingCategoryId = category.id
                       this.showDeleteConfirm = true
@@ -162,7 +164,7 @@ export struct AdminCategoryPage {
               .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
             }, (category: Category) => category.id.toString())
           }
-          .width('100%').padding(SPACING.LG)
+          .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
         }
         .layoutWeight(1).scrollBar(BarState.Off)
       }

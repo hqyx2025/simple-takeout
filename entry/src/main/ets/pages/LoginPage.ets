@@ -20,9 +20,10 @@ export struct LoginPage {
   onLoginSuccess: () => void = () => {}
 
   build() {
+    Scroll() {
     Column() {
       // 顶部Logo区域
-      Column({ space: 8 }) {
+      Column({ space: SPACING.SM }) {
         Text('🍜')
           .fontSize(60)
         Text('简单外卖')
@@ -84,21 +85,21 @@ export struct LoginPage {
             .fontSize(FONT_SIZE.SM)
             .fontColor(this.selectedRole === UserRole.CUSTOMER ? COLORS.PRIMARY : COLORS.TEXT_HINT)
             .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-            .backgroundColor(this.selectedRole === UserRole.CUSTOMER ? COLORS.TAG_BG : '#F5F5F5')
+            .backgroundColor(this.selectedRole === UserRole.CUSTOMER ? COLORS.TAG_BG : COLORS.BG_PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
             .onClick(() => { this.selectedRole = UserRole.CUSTOMER })
           Text('🏪 商户管理')
             .fontSize(FONT_SIZE.SM)
             .fontColor(this.selectedRole === UserRole.MERCHANT ? COLORS.PRIMARY : COLORS.TEXT_HINT)
             .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-            .backgroundColor(this.selectedRole === UserRole.MERCHANT ? COLORS.TAG_BG : '#F5F5F5')
+            .backgroundColor(this.selectedRole === UserRole.MERCHANT ? COLORS.TAG_BG : COLORS.BG_PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
             .onClick(() => { this.selectedRole = UserRole.MERCHANT })
           Text('🛠 管理端')
             .fontSize(FONT_SIZE.SM)
             .fontColor(this.selectedRole === UserRole.ADMIN ? COLORS.PRIMARY : COLORS.TEXT_HINT)
             .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-            .backgroundColor(this.selectedRole === UserRole.ADMIN ? COLORS.TAG_BG : '#F5F5F5')
+            .backgroundColor(this.selectedRole === UserRole.ADMIN ? COLORS.TAG_BG : COLORS.BG_PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
             .onClick(() => { this.selectedRole = UserRole.ADMIN })
         }
@@ -225,7 +226,7 @@ export struct LoginPage {
             .height(40)
             .fontSize(FONT_SIZE.SM)
             .fontColor(COLORS.PRIMARY)
-            .backgroundColor('#FFF8F0')
+            .backgroundColor(COLORS.WARM_BG)
             .borderRadius(BORDER_RADIUS.ROUND)
             .type(ButtonType.Capsule)
             .id('quick-login-user')
@@ -235,7 +236,7 @@ export struct LoginPage {
             .height(40)
             .fontSize(FONT_SIZE.SM)
             .fontColor(COLORS.PRIMARY)
-            .backgroundColor('#FFF8F0')
+            .backgroundColor(COLORS.WARM_BG)
             .borderRadius(BORDER_RADIUS.ROUND)
             .type(ButtonType.Capsule)
             .id('quick-login-merchant')
@@ -245,7 +246,7 @@ export struct LoginPage {
             .height(40)
             .fontSize(FONT_SIZE.SM)
             .fontColor(COLORS.PRIMARY)
-            .backgroundColor('#FFF8F0')
+            .backgroundColor(COLORS.WARM_BG)
             .borderRadius(BORDER_RADIUS.ROUND)
             .type(ButtonType.Capsule)
             .id('quick-login-admin')
@@ -256,7 +257,7 @@ export struct LoginPage {
       }
 
       // 切换登录/注册
-      Row({ space: 4 }) {
+      Row({ space: SPACING.XS }) {
         Text(this.isLoginMode ? '还没有账号？' : '已有账号？')
           .fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_HINT)
@@ -276,8 +277,12 @@ export struct LoginPage {
       .margin({ top: SPACING.LG })
     }
     .width('100%')
-    .height('100%')
     .padding({ left: SPACING.XL, right: SPACING.XL })
+    .backgroundColor(COLORS.BG_WHITE)
+    }
+    .scrollBar(BarState.Off)
+    .width('100%')
+    .height('100%')
     .backgroundColor(COLORS.BG_WHITE)
   }
 

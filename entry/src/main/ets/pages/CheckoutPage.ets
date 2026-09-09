@@ -167,6 +167,13 @@ export struct CheckoutPage {
     this.showCouponDialog = false
   }
 
+  private couponRowBg(coupon: Coupon | null): string {
+    if (coupon !== null) {
+      return this.selectedCoupon !== null && this.selectedCoupon.id === coupon.id ? COLORS.TAG_BG : COLORS.BG_PRIMARY
+    }
+    return this.selectedCoupon === null ? COLORS.TAG_BG : COLORS.BG_PRIMARY
+  }
+
   // ============ 提交订单 ============
   private submitOrder(): void {
     if (this.submitting) {
@@ -324,8 +331,8 @@ export struct CheckoutPage {
   @Builder
   NavBar() {
     Row() {
-      Text('‹')
-        .fontSize(28)
+      Text('‹ 返回')
+        .fontSize(FONT_SIZE.MD)
         .fontColor(COLORS.TEXT_PRIMARY)
         .onClick(() => { router.back() })
       Text('确认订单')
@@ -335,7 +342,7 @@ export struct CheckoutPage {
         .layoutWeight(1)
         .textAlign(TextAlign.Center)
       Text(' ')
-        .fontSize(28)
+        .fontSize(FONT_SIZE.MD)
         .width(28)
     }
     .width('100%')
@@ -757,7 +764,7 @@ export struct CheckoutPage {
     }
     .width('100%')
     .padding(SPACING.MD)
-    .backgroundColor(COLORS.BG_PRIMARY)
+    .backgroundColor(this.couponRowBg(coupon))
     .borderRadius(BORDER_RADIUS.MD)
     .alignItems(VerticalAlign.Center)
     .onClick(() => { this.selectCoupon(coupon) })

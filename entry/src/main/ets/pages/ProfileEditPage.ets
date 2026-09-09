@@ -108,8 +108,8 @@ export struct ProfileEditPage {
   @Builder
   NavBar() {
     Row() {
-      Text('‹')
-        .fontSize(FONT_SIZE.BIG_TITLE)
+      Text('‹ 返回')
+        .fontSize(FONT_SIZE.MD)
         .fontColor(COLORS.TEXT_PRIMARY)
         .onClick(() => { router.back() })
       Text('编辑个人信息')
@@ -119,7 +119,7 @@ export struct ProfileEditPage {
         .layoutWeight(1)
         .textAlign(TextAlign.Center)
       Text(' ')
-        .fontSize(FONT_SIZE.BIG_TITLE)
+        .fontSize(FONT_SIZE.MD)
         .width(28)
     }
     .width('100%')

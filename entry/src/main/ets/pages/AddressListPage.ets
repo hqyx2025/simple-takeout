@@ -151,7 +151,7 @@ export struct AddressListPage {
                     if (addr.isDefault) {
                       Text('默认')
                         .fontSize(FONT_SIZE.XS)
-                        .fontColor(Color.White)
+                        .fontColor(COLORS.TEXT_WHITE)
                         .backgroundColor(COLORS.PRIMARY)
                         .padding({ left: SPACING.SM, right: SPACING.SM, top: 2, bottom: 2 })
                         .borderRadius(BORDER_RADIUS.SM)
@@ -226,7 +226,7 @@ export struct AddressListPage {
           .width('90%')
           .height(48)
           .fontSize(FONT_SIZE.LG)
-          .fontColor(Color.White)
+          .fontColor(COLORS.TEXT_WHITE)
           .backgroundColor(COLORS.PRIMARY)
           .borderRadius(BORDER_RADIUS.ROUND)
           .type(ButtonType.Capsule)
@@ -329,7 +329,7 @@ export struct AddressListPage {
                 .layoutWeight(1)
                 .height(44)
                 .fontSize(FONT_SIZE.MD)
-                .fontColor(Color.White)
+                .fontColor(COLORS.TEXT_WHITE)
                 .backgroundColor(COLORS.PRIMARY)
                 .borderRadius(BORDER_RADIUS.ROUND)
                 .type(ButtonType.Capsule)
@@ -339,12 +339,12 @@ export struct AddressListPage {
           }
           .width('90%')
           .padding(SPACING.XL)
-          .backgroundColor(Color.White)
+          .backgroundColor(COLORS.BG_WHITE)
           .borderRadius(BORDER_RADIUS.XL)
         }
         .width('100%')
         .height('100%')
-        .backgroundColor('rgba(0,0,0,0.5)')
+        .backgroundColor(COLORS.OVERLAY)
         .justifyContent(FlexAlign.Center)
         .alignItems(HorizontalAlign.Center)
       }

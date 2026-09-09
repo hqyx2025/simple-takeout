@@ -116,8 +116,8 @@ export struct MerchantStatsPage {
   @Builder
   NavBar() {
     Row() {
-      Text('‹')
-        .fontSize(FONT_SIZE.BIG_TITLE)
+      Text('‹ 返回')
+        .fontSize(FONT_SIZE.MD)
         .fontColor(COLORS.TEXT_PRIMARY)
         .onClick(() => { router.back() })
       Text('收入统计')
@@ -132,7 +132,7 @@ export struct MerchantStatsPage {
     }
     .width('100%')
     .height(56)
-    .padding({ left: SPACING.LG, right: SPACING.LG })
+    .padding({ left: SPACING.LG, right: SPACING.LG, top: 26 })
     .backgroundColor(COLORS.BG_WHITE)
     .alignItems(VerticalAlign.Center)
   }
