@@ -23,9 +23,16 @@
 ## 3. 构建与运行
 
 - 后端启动：先设 `JAVA_HOME` 指向 JDK 25.0.2，再 `mvn -f server/pom.xml spring-boot:run`（端口 9000，**非 8080**）
-- 前端构建：`DEVECO_SDK_HOME` 指向 DevEco SDK 后执行 `hvigorw.bat assembleHap --mode module -p product=default --no-daemon`
-- 后端测试：`mvn -f server/pom.xml test`（17 个测试，覆盖越权/幂等/状态机）
-- **注意**：PowerShell 5.x 不支持 `&&`，连续命令必须分开执行
+- 前端构建（本机工具链在 `C:\Program Files\Huawei\DevEco Studio`）：
+  ```powershell
+  $env:DEVECO_SDK_HOME="C:\Program Files\Huawei\DevEco Studio\sdk"
+  & "C:\Program Files\Huawei\DevEco Studio\tools\node\node.exe" "C:\Program Files\Huawei\DevEco Studio\tools\hvigor\bin\hvigorw.js" `
+    --mode module -p module=entry@default -p product=default -p requiredDeviceType=phone assembleHap --analyze=normal --parallel --incremental --daemon
+  ```
+  构建日志：`.hvigor/outputs/build-logs/build.log`；判断成功要看日志里的 `BUILD SUCCESSFUL` 并确认 `entry/build/default/outputs/default/*.hap` 时间戳已更新（流水线里 `Select-String` 会吞掉退出码，别只看 `$LASTEXITCODE`）
+- 后端测试：`mvn -f server/pom.xml test`（**50 个测试**，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格）
+- Release 打包与上架体检：`scripts/enable-release-signing.ps1`（接入发布证书）→ `scripts/build-release.ps1`（签名包）→ `scripts/release-check.ps1 [-Build]`（上架体检，输出 `md/上架体检报告.md`）；详见 `md/上架体检与Release签名.md`
+- **注意**：PowerShell 5.x 不支持 `&&`，连续命令必须分开执行；`git commit` 不支持 heredoc，长提交信息先写文件再 `git commit -F <file>`
 - 模拟器访问宿主机后端：`http://10.0.2.2:9000`
 
 ## 4. 环境配置
@@ -34,14 +41,19 @@
 - **JWT**：`TAKEOUT_JWT_SECRET` 环境变量，`expire-hours: 72`；无刷新令牌（每 72 小时重新登录的体验取舍已接受）
 - **日志**：按天分文件 `app-YYYY-MM-DD.log`，单文件 2MB 轮转压缩归档（zip）；同时输出控制台 + `filesDir/log/app.log`；密码/JWT/手机号完整值禁止入日志
 - **高德 Key**（双 Key 概念）：`AMAP_CONFIG.MAP_JS_KEY`（Web端 JS API 类型，`a0373d4b39b6524b7f80e825339e7a28`，需同步修改 `resources/rawfile/amap_map.html` 中 AMAP_KEY）；2021 年后 Key 需配置安全密钥 jscode
+- **订单支付时限**：`takeout.order.pay-timeout-minutes`（环境变量 `TAKEOUT_PAY_TIMEOUT_MINUTES`，默认 15 分钟）；超时扫描间隔 `takeout.order.timeout-scan-ms`（默认 60 秒，启动 30 秒后首扫）
+- **评价图片存储**：`takeout.upload.dir`（环境变量 `TAKEOUT_UPLOAD_DIR`，默认工作目录下 `uploads/`），按天分目录，通过 `/uploads/**` 静态访问（该路径**不需要 JWT**，图片本身是公开资源）；单张 ≤5MB，仅 jpg/png/webp/gif；`server/uploads/` 已在 .gitignore 中忽略
 
 ## 5. 核心业务口径（改代码前必读）
 
-- **订单状态机（双轨制）**：数字状态（1 待接单 / 2 制作中 / 3 配送中 / 4 已送达待确认 / 5 已取消；0 待付款、6 退款中为预留）是**唯一权威**；大纲第 6 章字符串状态机（PENDING_ACCEPT 等）是**目标演进状态机**，仅规划参考
+- **订单状态机（双轨制）**：数字状态（**0 待付款** / 1 待接单 / 2 制作中 / 3 配送中 / 4 已送达待确认 / 5 已取消；6 退款中）是**唯一权威**；大纲第 6 章字符串状态机（PENDING_ACCEPT 等）是**目标演进状态机**，仅规划参考
 - **托管资金 escrow_status**：0 托管中 / 1 已结算 / 2 已退款；确认收货不改变 status（保持 4），只改 escrow 0→1 并给商户加余额；**前端状态文案必须按 status + escrow 联合判断**（status=4 且 escrow=0 显示"已送达，待确认收货"，escrow=1 显示"已完成"）
-- **支付**：现状为"余额支付下单即扣款"（下单接口直接扣余额、订单 status=1），无待支付状态；第三方支付/回调/超时任务为演进项
-- **取消订单**：status 1/2/3 均可直接取消、**即时退款**（escrow 0→2 条件更新防重复 → 退用户余额 → status=5），无需商家确认；退款审批流程仅用于已送达订单（status=4 且 escrow=0 且未评价可申请 → status=6 → 管理端同意 escrow=2 或拒绝回退 status=4）
-- **金额口径**：满减券门槛按**商品总价**判断（非实付）；月销量为"累计下单数"（取消不回滚）；金额统一两位小数
+- **支付（待付款模型，已落地）**：`POST /api/orders` 只**占用库存/秒杀名额/优惠券**并落库为 status=0，不扣余额；`POST /api/orders/{id}/pay` 扣余额并条件更新 0→1（`WHERE status=0` 防重复支付，失败回滚余额）；`payDeadline` = create_time + `takeout.order.pay-timeout-minutes`（默认 15 分钟，前端据此倒计时）；`OrderTimeoutJob` 每分钟扫描超时待付款订单自动取消并回滚。**商户列表不展示 status=0 订单**（尚未支付不进入商户待处理队列）
+- **取消订单**：status 0 直接取消（未扣款，只释放库存/秒杀名额/优惠券，escrow 保持 0）；status 1/2/3 直接取消、**即时退款**（escrow 0→2 条件更新防重复 → 退用户余额 → status=5），无需商家确认；退款审批流程仅用于已送达订单（status=4 且 escrow=0 且未评价可申请 → status=6 → 管理端同意 escrow=2 或拒绝回退 status=4）。已支付订单取消**不退优惠券**，仅待付款取消释放优惠券（`orders.coupon_id` 记录所用券）
+- **多规格 SKU**：`goods_specs` 每个规格独立价格与库存；菜品的 `price`/`stock` 是**规格最低价/库存合计**（由规格聚合回写，保证列表、起送价、筛选口径一致）；购物车按 `(user_id, goods_id, spec_id)` 唯一；下单必须带 `specId`（无规格菜品传 0 且不接受非 0），订单 items JSON 快照 `specName` 保证历史可读；扣库存需**同时扣 goods 与规格库存**，取消时同步回滚
+- **限时秒杀**：`seckills` 表按时间窗口 + 名额（quota/sold）控制；**仅对无规格菜品生效**（规格价与秒杀价语义冲突）；下单时后端自动套用秒杀价并占用名额（`sold + n <= quota` 条件更新），占不到名额自动回退原价，取消/超时取消归还名额
+- **凑单**：`GET /api/stores/{id}/bundle?amount=X` 返回还差多少元起送（gap）与店内最低价菜品推荐；起送价判断仍以服务端下单校验为权威
+- **金额口径**：满减券门槛按**商品总价**判断（非实付）；月销量为"累计下单数"（取消不回滚，含待付款）；金额统一两位小数
 - **幂等**：退款/结算必须条件更新（`WHERE escrow_status=0`），防重复打款/退款；库存扣减用乐观锁（`WHERE stock>=? AND status=1`），取消/退款时 escrow 更新成功后才回滚库存
 - **测试账号**：用户 13800138000 / 商户 13600136000 / 管理端 13100131000，密码均 123456；注册用户送 20 元余额
 - **接口约定**：除 `/api/auth/login`、`/api/auth/register` 外全部接口需 JWT（含浏览类）；401 时前端清登录态回登录页
@@ -49,8 +61,10 @@
 ## 6. 数据库现状（差异以 22.8 节清单为准）
 
 - 实际表名（复数）：`users` `stores` `goods` `orders` `coupons` `reviews` `favorites` `addresses` `categories` `refund_records` `cart_items`
-- 关键现状：goods 有 `stock/version/merchant_category_id`（演进项已落地）；orders 的 items/address 为 **JSON 快照**（无独立明细表）；categories 有 `type`（PLATFORM/MERCHANT）+ `merchant_id`；reviews **无 order_id/reply**（防重靠 orders.reviewed）
-- 演进项（未落地，勿实现）：banner/announcement 表、order_item/payment_record/user_coupon/order_status_log 表、address 经纬度、商户配送半径、逻辑删除字段
+- 演进项已落地的表：`riders`（骑手档案）、`banners`、`announcements`、**`goods_specs`（多规格 SKU：goods_id/name/price/stock/version/sort/status）**、**`seckills`（限时秒杀：goods_id/store_id/price/quota/sold/start_time/end_time/status）**
+- 新增列：`cart_items.spec_id`（唯一键 `uk_cart_user_goods_spec(user_id, goods_id, spec_id)`，老库的 `uk_cart_user_goods` 由 SchemaMigration 自动替换）、`orders.coupon_id`（待付款取消时释放优惠券）
+- 关键现状：goods 有 `stock/version/merchant_category_id`（演进项已落地）；orders 的 items/address 为 **JSON 快照**（无独立明细表，items 内含 `specId/specName/seckillId`）；categories 有 `type`（PLATFORM/MERCHANT）+ `merchant_id`；reviews 已有 `order_id/images/reply/reply_time`（按 `(order_id, goods_id)` 防重）
+- 演进项（未落地，勿实现）：order_item/payment_record/user_coupon/order_status_log 表、address 经纬度、商户配送半径、逻辑删除字段
 
 ## 7. 开发规范（ArkTS 严格模式）
 
@@ -60,6 +74,10 @@
 - 表单弹窗：每个输入字段加标签（必填/选填）+ 业务示例 placeholder（如"请输入店铺名称，如：老王快餐店"）；顶部说明操作影响
 - **渲染禁用 getter 计算属性**：ArkUI 对 getter 求值存在时序问题，会引发渲染崩溃（TypeError: Cannot read property length of undefined）；列表筛选结果应显式存入 `@State` 数组 + 内联 `Array.isArray` 防御
 - ForEach 的 item 参数不能用于**嵌套闭包**（onClick 内引用会编译失败），需提取 @Builder 方法传参
+- **`@CustomDialog` 必须声明 `controller?: CustomDialogController` 成员**（API 26 强校验，否则报 `10905211`）；弹窗数据用闭包（`() => this.state`）读取，避免构造参数被提前求值拿到旧值
+- **可选属性窄化陷阱**：`arr[i].optProp !== undefined ? arr[i].optProp : 0` 在数组元素/嵌套对象上**不会窄化**，报 `number | undefined is not assignable`；统一改用 `??` 或先取到局部变量
+- `import` 语句必须集中在文件顶部，混在声明之后虽合法但易被误改
+- 所有 `.ps1` 脚本必须带 **UTF-8 BOM**（否则 PowerShell 5.1 按 ANSI 解析中文导致语法错误）
 - 遵循 `.agents/skills/specs/` 文档作为功能开发与验收依据
 
 ## 8. 经验教训（陷阱清单）
@@ -79,6 +97,12 @@
 - 当前没有适配本工程 ArkTS 的原生 Lottie ohpm 包；需要动画弹窗时使用 `lottie-web` 在 `rawfile` Web 页面中播放，外层使用 ArkUI 自定义 Dialog，并保留无网络时的静态降级图标。
 - Tabs 内长期复用的子组件不能只依赖一次构建时的派生文本；购物车数量、订单数量等状态返回页面或切换 Tab 时要通过 `@Watch` 和显式刷新触发器重新读取 `AppStorage`，避免显示旧计数。
 - 购物车服务已按明确授权使用 MyBatis-Plus：`cart_items` 只保存用户、商品和数量，接口按 JWT 用户隔离；其余既有业务 DAO 暂时继续使用 JdbcTemplate，避免无关迁移。
+- **禁止用 PowerShell 的 `Get-Content`/`Set-Content` 读写仓库里的 UTF-8 源码**：PS 5.1 默认按 ANSI 解码、`Set-Content` 又按 ANSI 回写，会把中文注释整段打乱（本项目已踩过，恢复靠 `git checkout`）。改文件一律用编辑工具；确需脚本处理时用 `[System.IO.File]::ReadAllText/WriteAllText` 并显式指定 UTF-8。
+- **判断构建结果不要只看退出码**：`hvigor | Select-String` 这类管道会让 `$LASTEXITCODE` 失真，必须同时确认日志里的 `BUILD SUCCESSFUL` 与产物时间戳。
+- 多规格下单/加购必须带 `specId`，否则后端返回 400「请先选择规格」；前端购物车的 +/− 走的是 `specId=0` 语义，多规格菜品因此改为「选规格」按钮而非 +/−（避免必然失败的操作路径）。
+- 待付款模型下"下单成功"≠"支付成功"：结算页下单后必须引导到订单详情完成支付，任何"下单即完成"的旧文案/旧判断都要同步更新。
+- DevEco 的 Code Linter / AppAnalyzer 目前**没有可用的命令行入口**（`plugins/codelinter/index.js` 脱离 IDE 运行会报 `configuration file ... is in use` 并写出 `undefined` 日志文件），上架前需在 IDE 内执行；仓库用 `scripts/release-check.ps1` 提供可复现的静态门禁作为补充。
+- 图片上传用 `@ohos.net.http` 的 `multiFormDataList`（把 picker 拿到的 URI 经 `fileIo` 读成 ArrayBuffer 再提交），不要依赖 axios 的 FormData 传本地文件；系统图库选择器（`photoAccessHelper.PhotoViewPicker`）**不需要申请媒体权限**。
 
 ## 9. 提交规范
 
