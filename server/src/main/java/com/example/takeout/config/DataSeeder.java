@@ -47,12 +47,14 @@ public class DataSeeder implements ApplicationRunner {
             ensureAdminUser();
             ensureStoresAndGoods();
             ensureAdditionalStores();
+            ensureMarketingData();
             log.info("用户数据已存在（users={}），已校验分类、店铺、商品和附近推荐数据", userCount);
             return;
         }
         seed();
         ensureAdminUser();
         ensureAdditionalStores();
+        ensureMarketingData();
         log.info("种子数据初始化完成：8 分类 / 40 店铺 / 1200 商品 / 5 账号");
     }
 
@@ -409,5 +411,76 @@ public class DataSeeder implements ApplicationRunner {
 
     private static double round2(double v) {
         return Math.round(v * 100.0) / 100.0;
+    }
+
+    // ============ 多规格 SKU / 限时秒杀演示数据 ============
+
+    /**
+     * 多规格与秒杀演示数据：仅在为空时补齐，不覆盖商户后续在商户端的维护结果。
+     */
+    private void ensureMarketingData() {
+        seedDemoSpecs();
+        seedDemoSeckills();
+    }
+
+    /** 为 3 个招牌商品补「标准份/大份/双人份」规格，用于演示多规格点单。 */
+    private void seedDemoSpecs() {
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM goods_specs", Integer.class);
+        if (count != null && count > 0) {
+            return;
+        }
+        List<java.util.Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT id, price FROM goods WHERE status = 1 AND is_special = 1 ORDER BY id LIMIT 3");
+        for (java.util.Map<String, Object> row : rows) {
+            long goodsId = ((Number) row.get("id")).longValue();
+            double price = ((Number) row.get("price")).doubleValue();
+            insertSpec(goodsId, "标准份", price, 200, 0);
+            insertSpec(goodsId, "大份", round2(price + 3), 120, 1);
+            insertSpec(goodsId, "双人份", round2(price + 8), 60, 2);
+            syncGoodsFromSpecs(goodsId);
+        }
+        log.info("已为 {} 个招牌商品补充多规格 SKU 演示数据", rows.size());
+    }
+
+    private void insertSpec(long goodsId, String name, double price, int stock, int sort) {
+        jdbc.update("INSERT INTO goods_specs(goods_id, name, price, stock, version, sort, status, create_time) " +
+                "VALUES(?,?,?,?,0,?,1,?)", goodsId, name, price, stock, sort, now());
+    }
+
+    /** 多规格菜品的菜品价与库存按规格聚合回写（与 StoreService 口径一致）。 */
+    private void syncGoodsFromSpecs(long goodsId) {
+        Double minPrice = jdbc.queryForObject(
+                "SELECT MIN(price) FROM goods_specs WHERE goods_id = ? AND status = 1", Double.class, goodsId);
+        Integer stock = jdbc.queryForObject(
+                "SELECT COALESCE(SUM(stock), 0) FROM goods_specs WHERE goods_id = ? AND status = 1",
+                Integer.class, goodsId);
+        if (minPrice != null && stock != null) {
+            jdbc.update("UPDATE goods SET price = ?, stock = ? WHERE id = ?", minPrice, stock, goodsId);
+        }
+    }
+
+    /** 为热销单品（无规格）创建限时秒杀，用于演示首页秒杀专区与秒杀价下单。 */
+    private void seedDemoSeckills() {
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM seckills", Integer.class);
+        if (count != null && count > 0) {
+            return;
+        }
+        List<java.util.Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT g.id, g.store_id, g.price FROM goods g JOIN stores s ON s.id = g.store_id " +
+                        "WHERE g.status = 1 AND s.status = 1 AND g.price > 6 " +
+                        "AND NOT EXISTS (SELECT 1 FROM goods_specs sp WHERE sp.goods_id = g.id AND sp.status = 1) " +
+                        "ORDER BY g.sales DESC LIMIT 4");
+        LocalDateTime start = LocalDateTime.now().minusMinutes(5);
+        LocalDateTime end = LocalDateTime.now().plusHours(6);
+        for (java.util.Map<String, Object> row : rows) {
+            long goodsId = ((Number) row.get("id")).longValue();
+            long storeId = ((Number) row.get("store_id")).longValue();
+            double price = round2(((Number) row.get("price")).doubleValue() * 0.6);
+            jdbc.update("INSERT INTO seckills(goods_id, store_id, price, quota, sold, start_time, end_time, status, create_time) " +
+                            "VALUES(?,?,?,?,?,?,?,1,?)",
+                    goodsId, storeId, price, 50, ThreadLocalRandom.current().nextInt(10, 30),
+                    start.format(FMT), end.format(FMT), now());
+        }
+        log.info("已创建 {} 个限时秒杀演示活动", rows.size());
     }
 }

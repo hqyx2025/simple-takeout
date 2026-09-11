@@ -3,6 +3,8 @@ package com.example.takeout.controller;
 import com.example.takeout.common.ApiResponse;
 import com.example.takeout.model.Category;
 import com.example.takeout.model.Goods;
+import com.example.takeout.model.GoodsSpec;
+import com.example.takeout.model.Seckill;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.SpecialGoods;
 import com.example.takeout.service.StoreService;
@@ -84,6 +86,42 @@ public class StoreController {
         return ApiResponse.ok(storeService.listSpecialGoods(limit, latitude, longitude));
     }
 
+    // ============ 营销：榜单 / 限时秒杀 / 凑单 ============
+
+    /** 店铺榜。 */
+    @GetMapping("/rankings/stores")
+    public ApiResponse<List<Store.StoreView>> rankStores(
+            @RequestParam(defaultValue = "10") int limit,
+            @RequestParam(required = false) Double latitude,
+            @RequestParam(required = false) Double longitude) {
+        return ApiResponse.ok(storeService.rankStores(limit, latitude, longitude));
+    }
+
+    /** 菜品榜（热销榜）。 */
+    @GetMapping("/rankings/goods")
+    public ApiResponse<List<SpecialGoods>> rankGoods(
+            @RequestParam(defaultValue = "10") int limit,
+            @RequestParam(required = false) Double latitude,
+            @RequestParam(required = false) Double longitude) {
+        return ApiResponse.ok(storeService.rankGoods(limit, latitude, longitude));
+    }
+
+    /** 首页限时秒杀。 */
+    @GetMapping("/seckills")
+    public ApiResponse<List<Seckill.SeckillView>> seckills(
+            @RequestParam(defaultValue = "6") int limit,
+            @RequestParam(required = false) Double latitude,
+            @RequestParam(required = false) Double longitude) {
+        return ApiResponse.ok(storeService.listSeckills(limit, latitude, longitude));
+    }
+
+    /** 凑单提示：还差多少钱起送 + 店内可凑单菜品。 */
+    @GetMapping("/stores/{id}/bundle")
+    public ApiResponse<StoreService.BundleView> bundle(@PathVariable long id,
+                                                       @RequestParam(defaultValue = "0") double amount) {
+        return ApiResponse.ok(storeService.bundle(id, amount));
+    }
+
     /** 用户端：店铺详情展示的店内商户分类（与商品 merchantCategoryId 对应）。 */
     @GetMapping("/stores/{id}/categories")
     public ApiResponse<List<Category>> storeMerchantCategories(@PathVariable long id) {
@@ -160,6 +198,26 @@ public class StoreController {
         return ApiResponse.ok(storeService.updateStock(userId, goodsId, req.stock()));
     }
 
+    // ============ 多规格 SKU ============
+
+    @GetMapping("/merchant/goods/{goodsId}/specs")
+    public ApiResponse<List<GoodsSpec>> goodsSpecs(@RequestAttribute("userId") long userId,
+                                                   @RequestAttribute("role") int role,
+                                                   @PathVariable long goodsId) {
+        requireMerchant(role);
+        return ApiResponse.ok(storeService.listSpecs(userId, goodsId));
+    }
+
+    @PutMapping("/merchant/goods/{goodsId}/specs")
+    public ApiResponse<Goods> updateGoodsSpecs(@RequestAttribute("userId") long userId,
+                                               @RequestAttribute("role") int role,
+                                               @PathVariable long goodsId,
+                                               @RequestBody GoodsSpecsRequest req) {
+        requireMerchant(role);
+        return ApiResponse.ok(storeService.updateSpecs(userId, goodsId,
+                req.specs() == null ? List.of() : req.specs()));
+    }
+
     // ============ 商户分类（演进项，见大纲 8.3） ============
 
     @GetMapping("/merchant/categories")
@@ -204,6 +262,10 @@ public class StoreController {
     }
 
     public record MerchantCategoryRequest(String name, int sort) {
+    }
+
+    /** 多规格整体覆盖提交（id=0 表示新增规格）。 */
+    public record GoodsSpecsRequest(List<StoreService.SpecInput> specs) {
     }
 
     private void requireMerchant(int role) {

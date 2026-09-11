@@ -34,20 +34,22 @@ public class CartController {
     @PostMapping("/items")
     public ApiResponse<List<CartItemView>> add(@RequestAttribute("userId") long userId,
                                                @RequestBody CartItemRequest req) {
-        return ApiResponse.ok(service.add(userId, req.goodsId(), req.quantity()));
+        return ApiResponse.ok(service.add(userId, req.goodsId(), req.specId(), req.quantity()));
     }
 
     @PutMapping("/items/{goodsId}")
     public ApiResponse<List<CartItemView>> setQuantity(@RequestAttribute("userId") long userId,
                                                        @PathVariable long goodsId,
+                                                       @RequestParam(defaultValue = "0") long specId,
                                                        @RequestBody QuantityRequest req) {
-        return ApiResponse.ok(service.setQuantity(userId, goodsId, req.quantity()));
+        return ApiResponse.ok(service.setQuantity(userId, goodsId, specId, req.quantity()));
     }
 
     @DeleteMapping("/items/{goodsId}")
     public ApiResponse<List<CartItemView>> deleteOne(@RequestAttribute("userId") long userId,
-                                                     @PathVariable long goodsId) {
-        return ApiResponse.ok(service.deleteOne(userId, goodsId));
+                                                     @PathVariable long goodsId,
+                                                     @RequestParam(defaultValue = "0") long specId) {
+        return ApiResponse.ok(service.deleteOne(userId, goodsId, specId));
     }
 
     @DeleteMapping("/items")
@@ -61,7 +63,7 @@ public class CartController {
         return ApiResponse.ok(service.clear(userId));
     }
 
-    public record CartItemRequest(long goodsId, int quantity) {
+    public record CartItemRequest(long goodsId, long specId, int quantity) {
     }
 
     public record QuantityRequest(int quantity) {

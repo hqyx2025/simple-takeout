@@ -35,7 +35,8 @@ public class OrderDao {
             rs.getString("accept_time"),
             rs.getString("deliver_time"),
             rs.getString("complete_time"),
-            rs.getString("expect_time")
+            rs.getString("expect_time"),
+            rs.getLong("coupon_id")
     );
 
     private final JdbcTemplate jdbc;
@@ -45,10 +46,11 @@ public class OrderDao {
     }
 
     public long insert(Order o) {
-        jdbc.update("INSERT INTO orders(order_no, user_id, store_id, store_name, status, items, address, goods_amount, delivery_fee, discount, pay_amount, remark, reviewed, escrow_status, create_time, pay_time, accept_time, deliver_time, complete_time, expect_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        jdbc.update("INSERT INTO orders(order_no, user_id, store_id, store_name, status, items, address, goods_amount, delivery_fee, discount, coupon_id, pay_amount, remark, reviewed, escrow_status, create_time, pay_time, accept_time, deliver_time, complete_time, expect_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 o.orderNo(), o.userId(), o.storeId(), o.storeName(), o.status(), o.items(), o.address(),
-                o.goodsAmount(), o.deliveryFee(), o.discount(), o.payAmount(), o.remark(), o.reviewed(),
-                0, o.createTime(), o.payTime(), o.acceptTime(), o.deliverTime(), o.completeTime(), o.expectTime());
+                o.goodsAmount(), o.deliveryFee(), o.discount(), o.couponId(), o.payAmount(), o.remark(),
+                o.reviewed(), 0, o.createTime(), o.payTime(), o.acceptTime(), o.deliverTime(),
+                o.completeTime(), o.expectTime());
         return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 
@@ -75,6 +77,25 @@ public class OrderDao {
     /** 仅更新订单状态，不写时间字段（退款申请/审批回退使用）。 */
     public void updateStatusOnly(long id, int status) {
         jdbc.update("UPDATE orders SET status = ? WHERE id = ?", status, id);
+    }
+
+    // ============ 待付款支付模型 ============
+
+    /** 支付成功：0 待付款 → 1 待接单（条件更新，防重复支付）。 */
+    public boolean markPaid(long id, String payTime) {
+        return jdbc.update("UPDATE orders SET status = 1, pay_time = ? WHERE id = ? AND status = 0",
+                payTime, id) == 1;
+    }
+
+    /** 待付款超时订单（create_time 早于 deadline，deadline 为 yyyy-MM-dd HH:mm:ss 字符串）。 */
+    public List<Order> listExpiredPending(String deadline) {
+        return jdbc.query("SELECT * FROM orders WHERE status = 0 AND create_time < ? ORDER BY id", MAPPER, deadline);
+    }
+
+    /** 取消待付款订单：0 → 5（条件更新，防止与用户手动支付/取消并发冲突）。 */
+    public boolean cancelPending(long id, String now) {
+        return jdbc.update("UPDATE orders SET status = 5, complete_time = ? WHERE id = ? AND status = 0",
+                now, id) == 1;
     }
 
     public void markReviewed(long id) {

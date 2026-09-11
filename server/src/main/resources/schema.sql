@@ -57,18 +57,35 @@ CREATE TABLE IF NOT EXISTS goods (
     KEY idx_goods_store (store_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 菜品多规格 SKU（演进项已落地）：同一菜品可有大份/小份等规格，各自独立价格与库存。
+-- goods.price/goods.stock 始终保存「启用规格的最低价 / 库存合计」，保证列表与筛选口径一致。
+CREATE TABLE IF NOT EXISTS goods_specs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    goods_id BIGINT NOT NULL,
+    name VARCHAR(64) NOT NULL,
+    price DECIMAL(10,2) NOT NULL DEFAULT 0,
+    stock INT NOT NULL DEFAULT 999,
+    version INT NOT NULL DEFAULT 0,
+    sort INT NOT NULL DEFAULT 0,
+    status INT NOT NULL DEFAULT 1,
+    create_time VARCHAR(32) NOT NULL,
+    KEY idx_specs_goods (goods_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS orders (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     order_no VARCHAR(32) NOT NULL UNIQUE,
     user_id BIGINT NOT NULL,
     store_id BIGINT NOT NULL,
     store_name VARCHAR(128) NOT NULL,
-    status INT NOT NULL DEFAULT 1,
+    -- 0 待付款（15 分钟未支付自动取消） 1 待接单 2 制作中 3 配送中 4 已送达 5 已取消 6 退款中
+    status INT NOT NULL DEFAULT 0,
     items TEXT NOT NULL,
     address TEXT NOT NULL,
     goods_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
     delivery_fee DECIMAL(10,2) NOT NULL DEFAULT 0,
     discount DECIMAL(10,2) NOT NULL DEFAULT 0,
+    coupon_id BIGINT NOT NULL DEFAULT 0,
     pay_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
     remark VARCHAR(255) DEFAULT '',
     reviewed INT NOT NULL DEFAULT 0,
@@ -168,10 +185,12 @@ CREATE TABLE IF NOT EXISTS cart_items (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT NOT NULL,
     goods_id BIGINT NOT NULL,
+    -- 多规格：0 表示无规格菜品，>0 指向 goods_specs.id
+    spec_id BIGINT NOT NULL DEFAULT 0,
     quantity INT NOT NULL DEFAULT 1,
     create_time VARCHAR(32) NOT NULL,
     update_time VARCHAR(32) NOT NULL,
-    UNIQUE KEY uk_cart_user_goods (user_id, goods_id),
+    UNIQUE KEY uk_cart_user_goods_spec (user_id, goods_id, spec_id),
     KEY idx_cart_user (user_id),
     KEY idx_cart_goods (goods_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -212,4 +231,20 @@ CREATE TABLE IF NOT EXISTS announcements (
     content VARCHAR(1024) NOT NULL DEFAULT '',
     status INT NOT NULL DEFAULT 1,
     create_time VARCHAR(32) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 限时秒杀（营销类演进项）：时间窗口内下单自动按秒杀价结算，quota 控制秒杀名额。
+CREATE TABLE IF NOT EXISTS seckills (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    goods_id BIGINT NOT NULL,
+    store_id BIGINT NOT NULL,
+    price DECIMAL(10,2) NOT NULL DEFAULT 0,
+    quota INT NOT NULL DEFAULT 0,
+    sold INT NOT NULL DEFAULT 0,
+    start_time VARCHAR(32) NOT NULL,
+    end_time VARCHAR(32) NOT NULL,
+    status INT NOT NULL DEFAULT 1,
+    create_time VARCHAR(32) NOT NULL,
+    KEY idx_seckill_goods (goods_id),
+    KEY idx_seckill_window (status, start_time, end_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

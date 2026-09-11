@@ -31,6 +31,33 @@ public class SchemaMigration implements ApplicationRunner {
         addColumnIfMissing("orders", "ready_time", "VARCHAR(32) DEFAULT ''");
         // 预约送达时间（空=立即送达）
         addColumnIfMissing("orders", "expect_time", "VARCHAR(32) DEFAULT ''");
+        // 待付款支付模型：订单与所用优惠券解绑时需要用 coupon_id 释放优惠券
+        addColumnIfMissing("orders", "coupon_id", "BIGINT NOT NULL DEFAULT 0");
+        // 多规格 SKU：购物车按 (用户,菜品,规格) 唯一
+        addColumnIfMissing("cart_items", "spec_id", "BIGINT NOT NULL DEFAULT 0");
+        rebuildCartUniqueKey();
+    }
+
+    /**
+     * 老库的 uk_cart_user_goods(user_id, goods_id) 不允许同一菜品加入两个规格，
+     * 这里幂等地替换为 uk_cart_user_goods_spec(user_id, goods_id, spec_id)。
+     */
+    private void rebuildCartUniqueKey() {
+        if (indexExists("cart_items", "uk_cart_user_goods_spec")) {
+            return;
+        }
+        if (indexExists("cart_items", "uk_cart_user_goods")) {
+            jdbc.execute("ALTER TABLE cart_items DROP INDEX uk_cart_user_goods");
+        }
+        jdbc.execute("ALTER TABLE cart_items ADD UNIQUE KEY uk_cart_user_goods_spec (user_id, goods_id, spec_id)");
+    }
+
+    private boolean indexExists(String table, String indexName) {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.STATISTICS " +
+                        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?",
+                Integer.class, table, indexName);
+        return count != null && count > 0;
     }
 
     private void addColumnIfMissing(String table, String column, String definition) {

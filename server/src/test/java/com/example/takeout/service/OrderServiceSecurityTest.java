@@ -4,11 +4,15 @@ import com.example.takeout.common.BizException;
 import com.example.takeout.dao.AddressDao;
 import com.example.takeout.dao.CouponDao;
 import com.example.takeout.dao.GoodsDao;
+import com.example.takeout.dao.GoodsSpecDao;
 import com.example.takeout.dao.OrderDao;
 import com.example.takeout.dao.RefundDao;
 import com.example.takeout.dao.ReviewDao;
+import com.example.takeout.dao.RiderDao;
+import com.example.takeout.dao.SeckillDao;
 import com.example.takeout.dao.StoreDao;
 import com.example.takeout.dao.UserDao;
+import com.example.takeout.mapper.CartItemMapper;
 import com.example.takeout.model.Address;
 import com.example.takeout.model.Goods;
 import com.example.takeout.model.Order;
@@ -38,7 +42,8 @@ class OrderServiceSecurityTest {
     private final UserDao userDao = mock(UserDao.class);
     private final RefundDao refundDao = mock(RefundDao.class);
     private final OrderService service = new OrderService(orderDao, storeDao, goodsDao, addressDao,
-            couponDao, reviewDao, userDao, refundDao, new ObjectMapper());
+            couponDao, reviewDao, userDao, refundDao, new ObjectMapper(), mock(CartItemMapper.class),
+            mock(RiderDao.class), mock(GoodsSpecDao.class), mock(SeckillDao.class));
 
     @Test
     void rejectsNonPositiveQuantity() {
@@ -56,7 +61,7 @@ class OrderServiceSecurityTest {
     @Test
     void rejectsOrderDetailBelongingToAnotherUser() {
         Order order = new Order(7, "NO7", 2, 10, "测试店", 1, "[]", "{}", 10, 3, 0, 13,
-                "", 0, 0, "", "", "", "", "", "");
+                "", 0, 0, "", "", "", "", "", "", 0);
         Store store = new Store(10, "测试店", "", 4.5, 0, 3, 0, "30分钟", "1km", "[]", "", 1, "[1]", 99, 1, 0, "");
         when(orderDao.findById(7)).thenReturn(Optional.of(order));
         when(storeDao.findById(10)).thenReturn(Optional.of(store));
@@ -86,7 +91,7 @@ class OrderServiceSecurityTest {
         Order order = new Order(8, "NO8", 1, 10, "测试店铺", 4, "[]",
                 "{\"addressId\":20,\"name\":\"张三\",\"phone\":\"13800138000\",\"detail\":\"宿舍\"}",
                 20, 0, 0, 20, "", 0, 0, "2026-08-16 10:00:00", "2026-08-16 10:00:00", "", "",
-                "2026-08-16 10:10:00", "");
+                "2026-08-16 10:10:00", "", 0);
         Store store = new Store(10, "测试店铺", "", 4.5, 0, 0, 0, "30分钟", "1km", "[]", "", 1, "[1]", 2, 1, 0, "");
         User merchant = new User(2, "商户", "", "13600136000", "", 1, 50, "now");
         when(orderDao.findById(8)).thenReturn(Optional.of(order));
@@ -177,7 +182,7 @@ class OrderServiceSecurityTest {
         return new Order(id, "NO" + id, 1, 10, "测试店铺", 4, items,
                 "{}", 12.5, 0, 0, 12.5, "", reviewed, escrowStatus,
                 "2026-08-16 10:00:00", "2026-08-16 10:00:00", "", "",
-                "2026-08-16 10:10:00", "");
+                "2026-08-16 10:10:00", "", 0);
     }
 
     private User testUser() {

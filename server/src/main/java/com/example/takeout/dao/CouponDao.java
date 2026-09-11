@@ -55,4 +55,13 @@ public class CouponDao {
     public int expireOutdated(String now) {
         return jdbc.update("UPDATE coupons SET status = 2 WHERE status = 0 AND expire_time <> '' AND expire_time < ?", now);
     }
+
+    /**
+     * 释放优惠券（待付款订单取消/超时未支付时调用）：已核销且未过期的券退回未使用。
+     * 条件更新保证只释放一次。
+     */
+    public boolean release(long id, String now) {
+        return jdbc.update("UPDATE coupons SET status = 0 WHERE id = ? AND status = 1 " +
+                "AND (expire_time = '' OR expire_time >= ?)", id, now) == 1;
+    }
 }

@@ -2,18 +2,23 @@ package com.example.takeout.dao;
 
 import com.example.takeout.model.Goods;
 import com.example.takeout.model.AdminProduct;
+import com.example.takeout.model.GoodsSpec;
 import com.example.takeout.model.SpecialGoods;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
 /**
  * 商品数据访问
+ * 多规格：所有对外返回的 Goods 都会附带启用中的规格列表（specs）。
  */
 @Repository
 public class GoodsDao {
@@ -46,25 +51,74 @@ public class GoodsDao {
     }
 
     private final JdbcTemplate jdbc;
+    private final GoodsSpecDao specDao;
 
-    public GoodsDao(JdbcTemplate jdbc) {
+    public GoodsDao(JdbcTemplate jdbc, GoodsSpecDao specDao) {
         this.jdbc = jdbc;
+        this.specDao = specDao;
+    }
+
+    /** 批量补齐规格（一次 IN 查询，避免 N+1）。 */
+    public List<Goods> attachSpecs(List<Goods> goods) {
+        if (goods.isEmpty()) {
+            return goods;
+        }
+        Map<Long, List<GoodsSpec>> grouped = groupSpecs(goods.stream().map(Goods::id).toList());
+        return goods.stream()
+                .map(item -> item.withSpecs(grouped.getOrDefault(item.id(), List.of())))
+                .toList();
+    }
+
+    private List<SpecialGoods> attachSpecsToSpecial(List<SpecialGoods> items) {
+        if (items.isEmpty()) {
+            return items;
+        }
+        Map<Long, List<GoodsSpec>> grouped = groupSpecs(items.stream().map(item -> item.goods().id()).toList());
+        return items.stream()
+                .map(item -> new SpecialGoods(
+                        item.goods().withSpecs(grouped.getOrDefault(item.goods().id(), List.of())),
+                        item.storeName(), item.storeDistance()))
+                .toList();
+    }
+
+    private Map<Long, List<GoodsSpec>> groupSpecs(List<Long> goodsIds) {
+        Map<Long, List<GoodsSpec>> grouped = new HashMap<>();
+        for (GoodsSpec spec : specDao.listByGoodsIds(goodsIds)) {
+            grouped.computeIfAbsent(spec.goodsId(), key -> new ArrayList<>()).add(spec);
+        }
+        return grouped;
     }
 
     public List<Goods> listByStore(long storeId) {
-        return jdbc.query("SELECT * FROM goods WHERE store_id = ? AND status = 1 ORDER BY sales DESC", MAPPER, storeId);
+        return attachSpecs(jdbc.query("SELECT * FROM goods WHERE store_id = ? AND status = 1 ORDER BY sales DESC",
+                MAPPER, storeId));
     }
 
     public List<Goods> listByStoreAll(long storeId) {
-        return jdbc.query("SELECT * FROM goods WHERE store_id = ? ORDER BY id", MAPPER, storeId);
+        return attachSpecs(jdbc.query("SELECT * FROM goods WHERE store_id = ? ORDER BY id", MAPPER, storeId));
     }
 
     public List<SpecialGoods> listSpecialGoods(int limit) {
-        return jdbc.query("SELECT g.*, s.name AS store_name, s.distance AS store_distance " +
+        return attachSpecsToSpecial(jdbc.query("SELECT g.*, s.name AS store_name, s.distance AS store_distance " +
                         "FROM goods g JOIN stores s ON s.id = g.store_id " +
                         "WHERE g.status = 1 AND g.is_special = 1 AND g.stock > 0 AND s.status = 1 " +
                         "ORDER BY g.create_time DESC, g.sales DESC, g.id DESC LIMIT ?",
-                SPECIAL_MAPPER, limit);
+                SPECIAL_MAPPER, limit));
+    }
+
+    /** 热销菜品榜：跨店铺按累计销量排序（仅上架菜品与营业店铺）。 */
+    public List<SpecialGoods> listTopGoods(int limit) {
+        return attachSpecsToSpecial(jdbc.query("SELECT g.*, s.name AS store_name, s.distance AS store_distance " +
+                        "FROM goods g JOIN stores s ON s.id = g.store_id " +
+                        "WHERE g.status = 1 AND s.status = 1 " +
+                        "ORDER BY g.sales DESC, g.rating DESC, g.id DESC LIMIT ?",
+                SPECIAL_MAPPER, limit));
+    }
+
+    /** 凑单推荐：店铺内可下单的最低价格菜品（价格升序）。 */
+    public List<Goods> listCheapest(long storeId, int limit) {
+        return attachSpecs(jdbc.query("SELECT * FROM goods WHERE store_id = ? AND status = 1 AND stock > 0 " +
+                "ORDER BY price, id LIMIT ?", MAPPER, storeId, limit));
     }
 
     public List<AdminProduct> listForAdmin(String keyword, Integer status) {
@@ -93,7 +147,7 @@ public class GoodsDao {
     }
 
     public Optional<Goods> findById(long id) {
-        return jdbc.query("SELECT * FROM goods WHERE id = ?", MAPPER, id).stream().findFirst();
+        return attachSpecs(jdbc.query("SELECT * FROM goods WHERE id = ?", MAPPER, id)).stream().findFirst();
     }
 
     public long insert(Goods g) {
@@ -113,6 +167,11 @@ public class GoodsDao {
     /** 快速补货/清库存：直接设置库存（不经过乐观锁）。 */
     public void updateStock(long id, int stock) {
         jdbc.update("UPDATE goods SET stock = ? WHERE id = ?", stock, id);
+    }
+
+    /** 多规格菜品：价格/库存由规格聚合回写，保证列表、起送价与库存口径一致。 */
+    public void syncFromSpecs(long goodsId, double price, int stock) {
+        jdbc.update("UPDATE goods SET price = ?, stock = ? WHERE id = ?", price, stock, goodsId);
     }
 
     public void updateStatus(long id, int status) {

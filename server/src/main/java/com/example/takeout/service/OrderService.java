@@ -4,10 +4,12 @@ import com.example.takeout.common.BizException;
 import com.example.takeout.dao.AddressDao;
 import com.example.takeout.dao.CouponDao;
 import com.example.takeout.dao.GoodsDao;
+import com.example.takeout.dao.GoodsSpecDao;
 import com.example.takeout.dao.OrderDao;
 import com.example.takeout.dao.RefundDao;
 import com.example.takeout.dao.ReviewDao;
 import com.example.takeout.dao.RiderDao;
+import com.example.takeout.dao.SeckillDao;
 import com.example.takeout.dao.StoreDao;
 import com.example.takeout.dao.UserDao;
 import com.example.takeout.mapper.CartItemMapper;
@@ -15,15 +17,18 @@ import com.example.takeout.model.Address;
 import com.example.takeout.model.CartItemEntity;
 import com.example.takeout.model.Coupon;
 import com.example.takeout.model.Goods;
+import com.example.takeout.model.GoodsSpec;
 import com.example.takeout.model.Order;
 import com.example.takeout.model.RefundRecord;
 import com.example.takeout.model.Review;
 import com.example.takeout.model.Rider;
+import com.example.takeout.model.Seckill;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.User;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -57,18 +62,17 @@ public class OrderService {
     private final ObjectMapper objectMapper;
     private final CartItemMapper cartItemMapper;
     private final RiderDao riderDao;
+    private final GoodsSpecDao specDao;
+    private final SeckillDao seckillDao;
+
+    /** 待付款订单的支付时限（分钟），超时由定时任务自动取消。 */
+    @Value("${takeout.order.pay-timeout-minutes:15}")
+    private int payTimeoutMinutes = 15;
 
     public OrderService(OrderDao orderDao, StoreDao storeDao, GoodsDao goodsDao, AddressDao addressDao,
                         CouponDao couponDao, ReviewDao reviewDao, UserDao userDao, RefundDao refundDao,
-                        ObjectMapper objectMapper) {
-        this(orderDao, storeDao, goodsDao, addressDao, couponDao, reviewDao, userDao, refundDao,
-                objectMapper, null, null);
-    }
-
-    @Autowired
-    public OrderService(OrderDao orderDao, StoreDao storeDao, GoodsDao goodsDao, AddressDao addressDao,
-                        CouponDao couponDao, ReviewDao reviewDao, UserDao userDao, RefundDao refundDao,
-                        ObjectMapper objectMapper, CartItemMapper cartItemMapper, RiderDao riderDao) {
+                        ObjectMapper objectMapper, CartItemMapper cartItemMapper, RiderDao riderDao,
+                        GoodsSpecDao specDao, SeckillDao seckillDao) {
         this.orderDao = orderDao;
         this.storeDao = storeDao;
         this.goodsDao = goodsDao;
@@ -80,6 +84,8 @@ public class OrderService {
         this.objectMapper = objectMapper;
         this.cartItemMapper = cartItemMapper;
         this.riderDao = riderDao;
+        this.specDao = specDao;
+        this.seckillDao = seckillDao;
     }
 
     /** 创建订单：从用户余额扣款后进入平台托管，状态=1 待接单。 */
@@ -114,9 +120,11 @@ public class OrderService {
                 .findFirst()
                 .orElseThrow(() -> new BizException("收货地址不存在"));
 
-        // 金额计算：商品总价 + 配送费 - 优惠
+        // 金额计算：商品总价 + 配送费 - 优惠（多规格取规格价，生效中的秒杀自动套用秒杀价）
+        String now = LocalDateTime.now().format(FMT);
         double goodsAmount = 0;
         List<Order.OrderItem> normalizedItems = new ArrayList<>();
+        List<StockHold> holds = new ArrayList<>();
         for (Order.OrderItem item : items) {
             if (item == null || item.quantity() <= 0) {
                 throw new BizException("商品数量必须大于 0");
@@ -129,11 +137,25 @@ public class OrderService {
             if (goods.status() != 1) {
                 throw new BizException("商品已下架：" + goods.name());
             }
-            if (goods.stock() < item.quantity()) {
-                throw new BizException("「" + goods.name() + "」库存不足，仅剩 " + goods.stock() + " 件");
+            GoodsSpec spec = resolveSpec(goods, item.specId());
+            int available = spec == null ? goods.stock() : spec.stock();
+            if (available < item.quantity()) {
+                throw new BizException("「" + goods.name() + "」库存不足，仅剩 " + available + " 件");
             }
-            goodsAmount += goods.price() * item.quantity();
-            normalizedItems.add(new Order.OrderItem(goods.id(), goods.name(), goods.price(), item.quantity(), goods.image()));
+            double unitPrice = spec == null ? goods.price() : spec.price();
+            long seckillId = 0;
+            if (spec == null) {
+                // 限时秒杀：仅在时间窗口内且仍有名额时才按秒杀价结算，占不到名额则回退原价
+                Seckill seckill = seckillDao.findActiveByGoods(goods.id(), now).orElse(null);
+                if (seckill != null && seckillDao.deductQuota(seckill.id(), item.quantity(), now)) {
+                    unitPrice = seckill.price();
+                    seckillId = seckill.id();
+                }
+            }
+            goodsAmount += unitPrice * item.quantity();
+            normalizedItems.add(new Order.OrderItem(goods.id(), goods.name(), unitPrice, item.quantity(),
+                    goods.image(), spec == null ? 0 : spec.id(), spec == null ? "" : spec.name(), seckillId));
+            holds.add(new StockHold(goods.id(), spec == null ? 0 : spec.id(), item.quantity(), seckillId));
         }
         goodsAmount = round2(goodsAmount);
         double checkoutGoodsAmount = resolveCheckoutGoodsAmount(userId, checkoutGoodsIds, goodsAmount);
@@ -164,36 +186,94 @@ public class OrderService {
             throw new BizException("优惠金额不能超过订单金额");
         }
 
-        // 余额支付并进入平台托管；商户在用户确认收货前不能收到这笔钱。
-        User user = userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
-        if (user.balance() < payAmount) {
-            throw new BizException("余额不足，请先充值");
-        }
-        userDao.updateBalance(userId, round2(user.balance() - payAmount));
+        // 待付款支付模型：下单只占用库存与优惠券，不扣余额；支付成功后才扣款并流转到待接单。
         if (appliedCoupon != null) {
-            // 条件核销：并发下同一张券只能被一单使用，失败则回滚整单（余额/库存一并回滚）
+            // 条件核销：并发下同一张券只能被一单使用，失败则回滚整单（库存/秒杀名额一并回滚）
             if (!couponDao.markUsed(appliedCoupon.id())) {
                 throw new BizException("优惠券已被使用，请重新选择");
             }
         }
         // 扣减库存（乐观锁条件更新，防超卖）；任一失败整体回滚事务
-        for (Order.OrderItem normalized : normalizedItems) {
+        for (int i = 0; i < normalizedItems.size(); i++) {
+            Order.OrderItem normalized = normalizedItems.get(i);
+            StockHold hold = holds.get(i);
             if (!goodsDao.deductStock(normalized.goodsId(), normalized.quantity())) {
                 throw new BizException("「" + normalized.goodsName() + "」库存不足，请减少数量或联系商家");
             }
+            if (hold.specId() > 0 && !specDao.deductStock(hold.specId(), normalized.quantity())) {
+                throw new BizException("「" + normalized.goodsName() + "」所选规格库存不足，请重新选择");
+            }
         }
 
-        String now = LocalDateTime.now().format(FMT);
         String orderNo = genOrderNo();
         String normalizedExpect = normalizeExpectTime(expectTime);
-        Order order = new Order(0, orderNo, userId, storeId, store.name(), 1,
+        Order order = new Order(0, orderNo, userId, storeId, store.name(), 0,
                 toJson(normalizedItems), toJson(new Order.AddressInfo(address.id(), address.name(), address.phone(), address.detail())),
                 goodsAmount, store.deliveryFee(), discount, payAmount,
-                remark == null ? "" : remark, 0, 0, now, now, "", "", "", normalizedExpect);
+                remark == null ? "" : remark, 0, 0, now, "", "", "", "", normalizedExpect,
+                appliedCoupon == null ? 0 : appliedCoupon.id());
         long id = orderDao.insert(order);
         storeDao.updateMonthlySales(storeId, 1);
         return orderDetail(id);
     }
+
+    /** 下单时占用的库存 / 秒杀名额，取消或超时取消时按此回滚。 */
+    private record StockHold(long goodsId, long specId, int quantity, long seckillId) {
+    }
+
+    /**
+     * 支付待付款订单：扣除用户余额并流转到待接单（1）。
+     * 条件更新失败说明订单已被取消/已支付，抛异常回滚余额扣减。
+     */
+    @Transactional
+    public Order.OrderView payOrder(long userId, long orderId) {
+        Order order = requireOrder(orderId);
+        if (order.userId() != userId) {
+            throw new BizException(403, "无权操作该订单");
+        }
+        if (order.status() != 0) {
+            throw new BizException(order.status() == 5 ? "订单已取消，无法支付" : "订单已支付，请勿重复支付");
+        }
+        User user = userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
+        if (user.balance() < order.payAmount()) {
+            throw new BizException("余额不足，请先充值");
+        }
+        String now = LocalDateTime.now().format(FMT);
+        if (!orderDao.markPaid(orderId, now)) {
+            throw new BizException("订单状态已变化，请刷新后重试");
+        }
+        userDao.updateBalance(userId, round2(user.balance() - order.payAmount()));
+        return orderDetail(orderId);
+    }
+
+    /**
+     * 待付款订单超时自动取消（定时任务入口）：超过支付时限仍未支付的订单一律取消，
+     * 回滚库存、秒杀名额并释放优惠券。
+     */
+    @Transactional
+    public int cancelExpiredPendingOrders() {
+        String deadline = LocalDateTime.now().minusMinutes(Math.max(payTimeoutMinutes, 1)).format(FMT);
+        int cancelled = 0;
+        for (Order order : orderDao.listExpiredPending(deadline)) {
+            if (cancelPending(order, "超时未支付，订单已自动取消")) {
+                cancelled++;
+            }
+        }
+        return cancelled;
+    }
+
+    /** 取消待付款订单：条件更新 0→5，成功后才回滚库存/名额并释放优惠券（同一事务）。 */
+    private boolean cancelPending(Order order, String reason) {
+        if (!orderDao.cancelPending(order.id(), LocalDateTime.now().format(FMT))) {
+            return false;
+        }
+        rollbackStock(order);
+        if (order.couponId() > 0) {
+            couponDao.release(order.couponId(), LocalDateTime.now().format(FMT));
+        }
+        return true;
+    }
+
 
     private double resolveCheckoutGoodsAmount(long userId, List<Long> checkoutGoodsIds, double currentStoreAmount) {
         if (checkoutGoodsIds == null || checkoutGoodsIds.isEmpty() || cartItemMapper == null) {
@@ -217,9 +297,22 @@ public class OrderService {
             if (cartItem.getQuantity() == null || cartItem.getQuantity() <= 0) {
                 throw new BizException("购物车商品数量无效，请刷新后重试");
             }
-            total += goods.price() * cartItem.getQuantity();
+            total += unitPriceOf(goods, cartItem.getSpecId() == null ? 0 : cartItem.getSpecId())
+                    * cartItem.getQuantity();
         }
         return round2(total);
+    }
+
+    /** 购物车行单价：多规格取规格价，无规格取菜品价。 */
+    private double unitPriceOf(Goods goods, long specId) {
+        if (specId <= 0) {
+            return goods.price();
+        }
+        return goods.specs().stream()
+                .filter(item -> item.id() == specId)
+                .findFirst()
+                .map(GoodsSpec::price)
+                .orElseThrow(() -> new BizException("购物车商品规格已下架，请刷新后重试"));
     }
 
     public List<Order.OrderView> userOrders(long userId) {
@@ -263,8 +356,15 @@ public class OrderService {
         if (order.userId() != userId) {
             throw new BizException(403, "无权操作该订单");
         }
-        if (order.status() != 1 && order.status() != 2 && order.status() != 3) {
+        if (order.status() != 0 && order.status() != 1 && order.status() != 2 && order.status() != 3) {
             throw new BizException("当前状态不可取消");
+        }
+        // 待付款订单：尚未扣款，直接释放库存/秒杀名额与优惠券（escrow 保持未托管）
+        if (order.status() == 0) {
+            if (!cancelPending(order, "用户取消待付款订单")) {
+                throw new BizException("订单状态已变化，请刷新后重试");
+            }
+            return orderDetail(orderId);
         }
         // 仅在托管状态下退款，条件更新避免重复退回余额。
         if (!orderDao.refundEscrow(orderId)) {
@@ -308,11 +408,36 @@ public class OrderService {
         return refundDao.findById(id).orElseThrow(() -> new BizException("退款申请失败"));
     }
 
-    /** 回滚订单商品库存（取消/退款时调用，必须处于 escrow 条件更新成功后的同一事务内）。 */
+    /** 回滚订单商品库存与秒杀名额（取消/退款时调用，必须在条件更新成功后的同一事务内）。 */
     private void rollbackStock(Order order) {
         for (Order.OrderItem item : parseItems(order.items())) {
             goodsDao.restoreStock(item.goodsId(), item.quantity());
+            if (item.specId() > 0) {
+                specDao.restoreStock(item.specId(), item.quantity());
+            }
+            if (item.seckillId() > 0) {
+                seckillDao.restoreQuota(item.seckillId(), item.quantity());
+            }
         }
+    }
+
+    /**
+     * 校验并解析下单所用规格：多规格菜品必须带 specId，无规格菜品不得带 specId。
+     */
+    private GoodsSpec resolveSpec(Goods goods, long specId) {
+        if (goods.multiSpec()) {
+            if (specId <= 0) {
+                throw new BizException("「" + goods.name() + "」请先选择规格");
+            }
+            return goods.specs().stream()
+                    .filter(item -> item.id() == specId)
+                    .findFirst()
+                    .orElseThrow(() -> new BizException("「" + goods.name() + "」所选规格已下架，请重新选择"));
+        }
+        if (specId > 0) {
+            throw new BizException("「" + goods.name() + "」不支持规格选择");
+        }
+        return null;
     }
 
     public Order.OrderView merchantFlow(long ownerId, long orderId, String action) {
@@ -572,7 +697,21 @@ public class OrderService {
     private Order.OrderView toView(Order order) {
         List<Order.OrderItem> items = parseItems(order.items());
         Order.AddressInfo address = parseAddress(order.address());
-        return order.toView(items, address, "", "");
+        return order.toView(items, address, payDeadline(order), "", "");
+    }
+
+    /** 待付款订单的支付截止时间（前端倒计时用）；非待付款返回空串。 */
+    private String payDeadline(Order order) {
+        if (order.status() != 0) {
+            return "";
+        }
+        try {
+            return LocalDateTime.parse(order.createTime(), FMT)
+                    .plusMinutes(Math.max(payTimeoutMinutes, 1))
+                    .format(FMT);
+        } catch (DateTimeParseException e) {
+            return "";
+        }
     }
 
     /** 订单详情视图：附带骑手姓名/电话（未分配骑手时为空）。 */
@@ -591,7 +730,7 @@ public class OrderService {
                 }
             }
         }
-        return order.toView(items, address, riderName, riderPhone);
+        return order.toView(items, address, payDeadline(order), riderName, riderPhone);
     }
 
     private List<Order.OrderItem> parseItems(String json) {

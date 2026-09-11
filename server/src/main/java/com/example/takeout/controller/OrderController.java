@@ -56,6 +56,12 @@ public class OrderController {
         return ApiResponse.ok(orderService.cancelOrder(userId, id));
     }
 
+    /** 支付待付款订单：扣余额并流转到待接单（余额支付模型）。 */
+    @PostMapping("/orders/{id}/pay")
+    public ApiResponse<Order.OrderView> pay(@RequestAttribute("userId") long userId, @PathVariable long id) {
+        return ApiResponse.ok(orderService.payOrder(userId, id));
+    }
+
     @PutMapping("/orders/{id}/confirm")
     public ApiResponse<Order.OrderView> confirm(@RequestAttribute("userId") long userId, @PathVariable long id) {
         return ApiResponse.ok(orderService.confirmOrder(userId, id));

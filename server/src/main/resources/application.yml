@@ -14,6 +14,11 @@ spring:
     init:
       mode: always
       schema-locations: classpath:schema.sql
+  servlet:
+    multipart:
+      # 图文评价图片上传上限（单张 5MB）
+      max-file-size: 5MB
+      max-request-size: 6MB
   jackson:
     date-format: yyyy-MM-dd HH:mm:ssz
     time-zone: GMT+8
@@ -24,3 +29,12 @@ takeout:
     # HS256 密钥（生产环境请通过环境变量注入）
     secret: ${TAKEOUT_JWT_SECRET:simple-takeout-jwt-secret-key-please-change-2026}
     expire-hours: 72
+  order:
+    # 待付款支付时限（分钟）：超时由 OrderTimeoutJob 自动取消并回滚库存/优惠券
+    pay-timeout-minutes: ${TAKEOUT_PAY_TIMEOUT_MINUTES:15}
+    # 超时扫描间隔与首次延迟（毫秒）
+    timeout-scan-ms: 60000
+    timeout-scan-initial-ms: 30000
+  upload:
+    # 评价图片本地存储目录（相对启动工作目录）；通过 /uploads/** 对外访问
+    dir: ${TAKEOUT_UPLOAD_DIR:uploads}

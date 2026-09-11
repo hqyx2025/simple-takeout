@@ -5,7 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 
 /**
- * 用户购物车持久化实体。商品详情仍以 goods 表为准，购物车只保存用户、商品和数量。
+ * 用户购物车持久化实体。商品详情仍以 goods 表为准，购物车只保存用户、商品（规格）和数量。
  */
 @TableName("cart_items")
 public class CartItemEntity {
@@ -14,6 +14,8 @@ public class CartItemEntity {
     private Long id;
     private Long userId;
     private Long goodsId;
+    /** 多规格菜品所选规格；0=无规格菜品。 */
+    private Long specId;
     private Integer quantity;
     private String createTime;
     private String updateTime;
@@ -40,6 +42,14 @@ public class CartItemEntity {
 
     public void setGoodsId(Long goodsId) {
         this.goodsId = goodsId;
+    }
+
+    public Long getSpecId() {
+        return specId;
+    }
+
+    public void setSpecId(Long specId) {
+        this.specId = specId;
     }
 
     public Integer getQuantity() {

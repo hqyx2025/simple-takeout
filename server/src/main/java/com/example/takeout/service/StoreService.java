@@ -2,9 +2,13 @@ package com.example.takeout.service;
 
 import com.example.takeout.common.BizException;
 import com.example.takeout.dao.GoodsDao;
+import com.example.takeout.dao.GoodsSpecDao;
+import com.example.takeout.dao.SeckillDao;
 import com.example.takeout.dao.StoreDao;
 import com.example.takeout.model.Category;
 import com.example.takeout.model.Goods;
+import com.example.takeout.model.GoodsSpec;
+import com.example.takeout.model.Seckill;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.SpecialGoods;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -14,11 +18,12 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 /**
- * 店铺与商品服务：浏览、商户管理
+ * 店铺与商品服务：浏览、商户管理（含多规格 SKU 维护）
  */
 @Service
 public class StoreService {
@@ -27,11 +32,16 @@ public class StoreService {
 
     private final StoreDao storeDao;
     private final GoodsDao goodsDao;
+    private final GoodsSpecDao specDao;
+    private final SeckillDao seckillDao;
     private final ObjectMapper objectMapper;
 
-    public StoreService(StoreDao storeDao, GoodsDao goodsDao, ObjectMapper objectMapper) {
+    public StoreService(StoreDao storeDao, GoodsDao goodsDao, GoodsSpecDao specDao, SeckillDao seckillDao,
+                        ObjectMapper objectMapper) {
         this.storeDao = storeDao;
         this.goodsDao = goodsDao;
+        this.specDao = specDao;
+        this.seckillDao = seckillDao;
         this.objectMapper = objectMapper;
     }
 
@@ -96,16 +106,89 @@ public class StoreService {
         if (limit <= 0 || limit > 50) {
             throw new BizException("特价团购商品数量必须在 1 到 50 之间");
         }
-        return goodsDao.listSpecialGoods(limit).stream().map(item -> {
+        return withDistance(goodsDao.listSpecialGoods(limit), latitude, longitude);
+    }
+
+    // ============ 营销：榜单 / 限时秒杀 / 凑单 ============
+
+    /** 店铺榜：按累计月销量与评分排序（仅营业店铺）。 */
+    public List<Store.StoreView> rankStores(int limit, Double latitude, Double longitude) {
+        requireRankLimit(limit);
+        return storeDao.listAll().stream()
+                .filter(store -> store.status() == 1)
+                .sorted(Comparator.comparingInt(Store::monthlySales).reversed()
+                        .thenComparing(Comparator.comparingDouble(Store::rating).reversed()))
+                .limit(limit)
+                .map(store -> toView(store, latitude, longitude))
+                .toList();
+    }
+
+    /** 菜品榜（热销榜）：跨店铺按累计销量排序。 */
+    public List<SpecialGoods> rankGoods(int limit, Double latitude, Double longitude) {
+        requireRankLimit(limit);
+        return withDistance(goodsDao.listTopGoods(limit), latitude, longitude);
+    }
+
+    /** 首页秒杀专区：进行中且仍有名额的秒杀。 */
+    public List<Seckill.SeckillView> listSeckills(int limit, Double latitude, Double longitude) {
+        if (limit <= 0 || limit > 50) {
+            throw new BizException("秒杀商品数量必须在 1 到 50 之间");
+        }
+        String now = LocalDateTime.now().format(FMT);
+        return seckillDao.listActiveViews(limit, now).stream()
+                .map(view -> new Seckill.SeckillView(view.id(), view.goodsId(), view.goodsName(), view.image(),
+                        view.originalPrice(), view.price(), view.quota(), view.sold(), view.startTime(),
+                        view.endTime(), view.storeId(), view.storeName(),
+                        normalizeDistance(view.storeId(), view.storeDistance(), latitude, longitude),
+                        view.remainSeconds()))
+                .toList();
+    }
+
+    /**
+     * 凑单提示：返回还差多少元起送，以及店内最便宜的几款菜品。
+     * amount 为用户当前已选商品金额；已足起送价时 gap=0 且不返回推荐。
+     */
+    public BundleView bundle(long storeId, double amount) {
+        if (!Double.isFinite(amount) || amount < 0) {
+            throw new BizException("金额参数不合法");
+        }
+        Store store = storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
+        double gap = round2(Math.max(store.minOrder() - amount, 0));
+        List<Goods> suggestions = gap <= 0 ? List.of() : goodsDao.listCheapest(storeId, 4);
+        return new BundleView(store.id(), store.name(), store.minOrder(), round2(amount), gap, suggestions);
+    }
+
+    private void requireRankLimit(int limit) {
+        if (limit <= 0 || limit > 50) {
+            throw new BizException("榜单数量必须在 1 到 50 之间");
+        }
+    }
+
+    private List<SpecialGoods> withDistance(List<SpecialGoods> items, Double latitude, Double longitude) {
+        return items.stream().map(item -> {
             Store store = storeDao.findById(item.goods().storeId()).orElse(null);
-            String distance = item.storeDistance();
-            if (store != null) {
-                distance = store.withDistance(latitude, longitude).distance();
-            } else {
-                distance = Store.normalizeDistance(distance);
-            }
+            String distance = store != null
+                    ? store.withDistance(latitude, longitude).distance()
+                    : Store.normalizeDistance(item.storeDistance());
             return new SpecialGoods(item.goods(), item.storeName(), distance);
         }).toList();
+    }
+
+    private String normalizeDistance(long storeId, String fallback, Double latitude, Double longitude) {
+        if (latitude == null || longitude == null) {
+            return Store.normalizeDistance(fallback);
+        }
+        return storeDao.findById(storeId).map(store -> store.withDistance(latitude, longitude).distance())
+                .orElseGet(() -> Store.normalizeDistance(fallback));
+    }
+
+    private double round2(double value) {
+        return Math.round(value * 100.0) / 100.0;
+    }
+
+    /** 凑单视图：gap>0 时给出可凑单的店内菜品。 */
+    public record BundleView(long storeId, String storeName, double minOrder, double amount,
+                             double gap, List<Goods> suggestions) {
     }
 
     public List<Store.StoreView> merchantStores(long ownerId) {
@@ -172,31 +255,109 @@ public class StoreService {
                 input.merchantCategoryId(), input.stock(), 0, 0, 4.5,
                 input.tag() == null ? "" : input.tag(), input.special(), 1, now);
         long id = goodsDao.insert(goods);
+        applySpecs(id, input.specs());
         return goodsDao.findById(id).orElseThrow(() -> new BizException("商品创建失败"));
     }
 
     public Goods updateGoods(long ownerId, long goodsId, GoodsInput input) {
         Goods goods = goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品不存在"));
         requireOwned(ownerId, goods.storeId());
-        validateGoodsInput(input);
+        // 有规格时价格/库存由规格聚合，允许传入的 price/stock 缺省
+        validateGoodsInput(input, input.specs() != null && !input.specs().isEmpty());
         validateCategory(input.categoryId());
         validateMerchantCategory(ownerId, input.merchantCategoryId());
+        if (input.specs() != null) {
+            applySpecs(goodsId, input.specs());
+        }
+        List<GoodsSpec> specs = specDao.listByGoods(goodsId);
         Goods updated = new Goods(goods.id(), goods.storeId(), input.name(), input.description(),
-                input.price(), input.originalPrice(), input.image(), input.categoryId(),
-                input.merchantCategoryId(), input.stock(), goods.version(),
-                goods.sales(), goods.rating(), input.tag() == null ? "" : input.tag(), input.special(),
-                input.status() < 0 ? goods.status() : input.status(), goods.createTime());
+                specs.isEmpty() ? input.price() : minSpecPrice(specs),
+                input.originalPrice(), input.image(), input.categoryId(),
+                input.merchantCategoryId(), specs.isEmpty() ? input.stock() : sumSpecStock(specs),
+                goods.version(), goods.sales(), goods.rating(), input.tag() == null ? "" : input.tag(),
+                input.special(), input.status() < 0 ? goods.status() : input.status(), goods.createTime());
         goodsDao.update(updated);
         return goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品更新失败"));
     }
 
-    /** 快速补货/清库存（演进项，见大纲 8.4）。 */
+    // ============ 多规格 SKU ============
+
+    /** 商户侧查看菜品规格。 */
+    public List<GoodsSpec> listSpecs(long ownerId, long goodsId) {
+        Goods goods = goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品不存在"));
+        requireOwned(ownerId, goods.storeId());
+        return specDao.listByGoods(goodsId);
+    }
+
+    /** 整体覆盖菜品规格（保留已有规格 id，新增的插入，未提交的删除）。 */
+    public Goods updateSpecs(long ownerId, long goodsId, List<SpecInput> specs) {
+        Goods goods = goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品不存在"));
+        requireOwned(ownerId, goods.storeId());
+        applySpecs(goodsId, specs == null ? List.of() : specs);
+        return goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品更新失败"));
+    }
+
+    private void applySpecs(long goodsId, List<SpecInput> inputs) {
+        List<SpecInput> list = inputs == null ? List.of() : inputs;
+        Set<String> names = new HashSet<>();
+        for (SpecInput input : list) {
+            if (input == null || input.name() == null || input.name().isBlank()) {
+                throw new BizException("规格名称不能为空");
+            }
+            if (!Double.isFinite(input.price()) || input.price() <= 0) {
+                throw new BizException("规格「" + input.name() + "」价格必须为正数");
+            }
+            if (input.stock() < 0) {
+                throw new BizException("规格「" + input.name() + "」库存不能为负数");
+            }
+            if (!names.add(input.name().trim())) {
+                throw new BizException("规格名称重复：" + input.name());
+            }
+        }
+        List<GoodsSpec> existing = specDao.listByGoods(goodsId);
+        Set<Long> kept = new HashSet<>();
+        for (int i = 0; i < list.size(); i++) {
+            SpecInput input = list.get(i);
+            String name = input.name().trim();
+            boolean isExisting = input.id() > 0 && existing.stream().anyMatch(spec -> spec.id() == input.id());
+            if (isExisting) {
+                specDao.update(input.id(), name, input.price(), input.stock(), i);
+                kept.add(input.id());
+            } else {
+                kept.add(specDao.insert(goodsId, name, input.price(), input.stock(), i));
+            }
+        }
+        specDao.deleteByIds(existing.stream().map(GoodsSpec::id).filter(id -> !kept.contains(id)).toList());
+        syncGoodsFromSpecs(goodsId);
+    }
+
+    /** 把规格的最低价/库存合计回写到菜品，保证列表与起送价口径一致。 */
+    private void syncGoodsFromSpecs(long goodsId) {
+        List<GoodsSpec> specs = specDao.listByGoods(goodsId);
+        if (specs.isEmpty()) {
+            return;
+        }
+        goodsDao.syncFromSpecs(goodsId, minSpecPrice(specs), sumSpecStock(specs));
+    }
+
+    private double minSpecPrice(List<GoodsSpec> specs) {
+        return specs.stream().mapToDouble(GoodsSpec::price).min().orElse(0);
+    }
+
+    private int sumSpecStock(List<GoodsSpec> specs) {
+        return specs.stream().mapToInt(GoodsSpec::stock).sum();
+    }
+
+    /** 快速补货/清库存（演进项，见大纲 8.4）。多规格菜品库存由规格聚合，须在规格里调整。 */
     public Goods updateStock(long ownerId, long goodsId, int stock) {
         if (stock < 0) {
             throw new BizException("库存不能为负数");
         }
         Goods goods = goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品不存在"));
         requireOwned(ownerId, goods.storeId());
+        if (goods.multiSpec()) {
+            throw new BizException("多规格菜品请分别调整各规格库存");
+        }
         goodsDao.updateStock(goodsId, stock);
         return goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品更新失败"));
     }
@@ -267,20 +428,32 @@ public class StoreService {
     }
 
     private void validateGoodsInput(GoodsInput input) {
+        validateGoodsInput(input, false);
+    }
+
+    private void validateGoodsInput(GoodsInput input, boolean multiSpec) {
         if (input == null || input.name() == null || input.name().isBlank()) {
             throw new BizException("商品名称不能为空");
         }
-        if (!Double.isFinite(input.price()) || input.price() <= 0
-                || !Double.isFinite(input.originalPrice()) || input.originalPrice() < 0) {
+        double price = input.price();
+        if (multiSpec) {
+            // 多规格菜品的价格/库存由规格聚合，允许提交 0（后续由规格回写覆盖）
+            if (!Double.isFinite(price) || price < 0) {
+                throw new BizException("商品价格必须为正数");
+            }
+        } else if (!Double.isFinite(price) || price <= 0) {
+            throw new BizException("商品价格必须为正数");
+        }
+        if (!Double.isFinite(input.originalPrice()) || input.originalPrice() < 0) {
             throw new BizException("商品价格必须为正数");
         }
         if (input.status() != 0 && input.status() != 1) {
             throw new BizException("商品状态不合法");
         }
-        if (input.stock() < 0) {
+        if (!multiSpec && input.stock() < 0) {
             throw new BizException("库存不能为负数");
         }
-        if (input.special() && input.originalPrice() <= input.price()) {
+        if (input.special() && input.originalPrice() <= price) {
             throw new BizException("特价商品原价必须高于特价价");
         }
     }
@@ -351,11 +524,17 @@ public class StoreService {
     }
 
     /**
-     * 商品创建/编辑项（merchantCategoryId=商户分类，0=未分组；stock=库存）
+     * 商品创建/编辑项（merchantCategoryId=商户分类，0=未分组；stock=库存；
+     * specs=多规格列表，null 表示本次不修改规格，空数组表示清空规格）
      */
     public record GoodsInput(String name, String description, double price, double originalPrice,
                              String image, int categoryId, String tag, int status,
-                             long merchantCategoryId, int stock, boolean special) {
+                             long merchantCategoryId, int stock, boolean special,
+                             List<SpecInput> specs) {
+    }
+
+    /** 规格提交项（id=0 表示新增）。 */
+    public record SpecInput(long id, String name, double price, int stock) {
     }
 
     private String normalizeRequired(String value, String message) {

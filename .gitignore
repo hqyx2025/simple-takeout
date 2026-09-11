@@ -12,6 +12,10 @@
 /.clang-tidy
 **/.test
 /.appanalyzer
+# 评价图片本地上传目录（运行时产物）
+/server/uploads/
+# 本地构建/验证日志
+/build_check.log
 /signing/**/*.p12
 /signing/**/*.cer
 /signing/**/*.p7b
