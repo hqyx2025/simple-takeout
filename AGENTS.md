@@ -113,6 +113,10 @@
 - **清数据后首次进定位页会弹系统定位权限框并遮住应用**（UiTest 报 `window is covered`，什么都找不到）：host 侧预授权 `atm perm -g -i <accessTokenId> -p ohos.permission.LOCATION`（`bm dump -n <bundle>` 取 accessTokenId），`APPROXIMATELY_LOCATION` 同理。
 - 设备实测脚本：`scripts/device-uitest.ps1`（构建→安装→拉起→跑某个用例类→判定；`-GuestClean` 清数据、`-GrantLocation` 预授权）、`scripts/device-checkout-regression.ps1`（结算负路径/待付款回归，带 host 侧数字核对）、`scripts/ui-dump.ps1`（结构化解析 `dumpLayout` 产物，替代跨节点正则）。每个用例类的前置状态不同，**一次只跑一个类**。
 - **PS 5.1 下 `$ErrorActionPreference='Stop'` 会让构建"莫名失败"**：hvigor 往 stderr 写进度，原生命令写 stderr 即被当成 terminating error；设备脚本里用 `Continue`，成功与否另行判断。另：判断产物是否最新要按**各模块自己的源码时间**比对，主模块 `UP-TO-DATE` 时 HAP 时间戳不会更新。
+- **角色映射必须覆盖全部四种角色**：`ApiService.toUser()` 曾只映射 `2→ADMIN / 1→MERCHANT`，其余一律落到 `CUSTOMER`，于是骑手(role=3)登录后被当成普通用户，登录页的角色校验 `user.role !== 期望角色` 立即 `logout()` —— 表现为「骑手端完全进不去」（日志：`远程登录成功 ... role=用户` 紧跟 `用户退出登录`）。新增角色时务必同步 `Models.ets` 的 `UserRole`、`toUser()` 映射与登录日志角色名。
+- **ArkUI 列表重绘：原地改对象 + 稳定 ForEach key = 界面不刷新**。商户订单页 `syncMerchantOrdersFromServer()` 是原地修改同一批 Order，`this.allOrders = getMerchantOrders(...)` 只换数组容器，ForEach key 又是 `order.id` → ArkUI 按 key 复用旧列表项，点「接单」后界面仍显示「待接单」。修复套路与购物车 `cartRenderVersion` 一致：加 `@State renderVersion`，在数据刷新后自增并拼进 ForEach key（`${renderVersion}-${order.id}`）。
+- **`findComponents` 未命中同样返回 `null`（不是空数组）**，直接 `.length` 会抛 `Cannot read property length of null`；长页面里的目标节点即使能被 `findComponent` 找到，也可能在屏幕外且 `getBounds()` 返回整屏 `[0,117][1320,2232]`，拿它算中心点点击等于点空 —— 用 `UiTestHelper.scrollUntilVisible`（先直接查一次，未命中再滚回顶部逐屏下滑，只接受边界明显小于整屏的节点）。
+- **设备实测脚本集合**：`scripts/device-uitest.ps1`（通用单类运行器：`-Class X -GuestClean -GrantLocation -Build`）、`device-checkout-regression.ps1`（结算负路径 + 待付款订单）、`device-review-regression.ps1`（图文评价上传/渲染/预览）、`device-merchant-regression.ps1`（商户订单流转 + 收入统计）、`device-role-regression.ps1`（骑手抢单/取餐/送达 + 管理端冒烟）、`ui-dump.ps1`（结构化解析 dumpLayout）。
 
 ## 9. 提交规范
 
