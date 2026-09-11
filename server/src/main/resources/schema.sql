@@ -78,8 +78,12 @@ CREATE TABLE IF NOT EXISTS orders (
     accept_time VARCHAR(32) DEFAULT '',
     deliver_time VARCHAR(32) DEFAULT '',
     complete_time VARCHAR(32) DEFAULT '',
+    rider_id BIGINT NOT NULL DEFAULT 0,
+    ready_time VARCHAR(32) DEFAULT '',
+    expect_time VARCHAR(32) DEFAULT '',
     KEY idx_orders_user (user_id),
-    KEY idx_orders_store (store_id)
+    KEY idx_orders_store (store_id),
+    KEY idx_orders_rider (rider_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS coupons (
@@ -98,6 +102,7 @@ CREATE TABLE IF NOT EXISTS coupons (
 
 CREATE TABLE IF NOT EXISTS reviews (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT NOT NULL DEFAULT 0,
     store_id BIGINT NOT NULL,
     goods_id BIGINT NOT NULL DEFAULT 0,
     user_id BIGINT NOT NULL,
@@ -105,9 +110,14 @@ CREATE TABLE IF NOT EXISTS reviews (
     rating INT NOT NULL DEFAULT 5,
     content VARCHAR(512) DEFAULT '',
     tags TEXT,
+    images TEXT,
+    anonymous INT NOT NULL DEFAULT 0,
+    reply VARCHAR(512) DEFAULT '',
+    reply_time VARCHAR(32) DEFAULT '',
     create_time VARCHAR(32) NOT NULL,
     KEY idx_reviews_store (store_id),
-    KEY idx_reviews_goods (goods_id)
+    KEY idx_reviews_goods (goods_id),
+    KEY idx_reviews_order (order_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS favorites (
@@ -164,4 +174,42 @@ CREATE TABLE IF NOT EXISTS cart_items (
     UNIQUE KEY uk_cart_user_goods (user_id, goods_id),
     KEY idx_cart_user (user_id),
     KEY idx_cart_goods (goods_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 骑手档案（四端改造：用户/商户/平台/骑手）。users.role=3 为骑手账号。
+CREATE TABLE IF NOT EXISTS riders (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    name VARCHAR(64) NOT NULL DEFAULT '',
+    phone VARCHAR(20) NOT NULL DEFAULT '',
+    online INT NOT NULL DEFAULT 0,
+    total_orders INT NOT NULL DEFAULT 0,
+    total_income DECIMAL(10,2) NOT NULL DEFAULT 0,
+    status INT NOT NULL DEFAULT 1,
+    create_time VARCHAR(32) NOT NULL,
+    UNIQUE KEY uk_riders_user (user_id),
+    KEY idx_riders_online (online)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 首页轮播 Banner（演进项已落地：内容管理）
+CREATE TABLE IF NOT EXISTS banners (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(64) NOT NULL DEFAULT '',
+    subtitle VARCHAR(128) DEFAULT '',
+    image VARCHAR(255) DEFAULT '',
+    color VARCHAR(16) DEFAULT '#FF6B35',
+    link_type VARCHAR(16) DEFAULT 'NONE',
+    link_value VARCHAR(128) DEFAULT '',
+    sort INT NOT NULL DEFAULT 0,
+    status INT NOT NULL DEFAULT 1,
+    create_time VARCHAR(32) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 平台公告
+CREATE TABLE IF NOT EXISTS announcements (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(128) NOT NULL DEFAULT '',
+    content VARCHAR(1024) NOT NULL DEFAULT '',
+    status INT NOT NULL DEFAULT 1,
+    create_time VARCHAR(32) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

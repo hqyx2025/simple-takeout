@@ -56,7 +56,7 @@ class AuthServiceSecurityTest {
                 com.example.takeout.common.BizException.class,
                 () -> new AuthService(userDao, jwtUtil).login("13800138000", "123456", "UNKNOWN"));
 
-        assertEquals("登录端类型不合法，仅支持 USER、MERCHANT、ADMIN", error.getMessage());
+        assertEquals("登录端类型不合法，仅支持 USER、MERCHANT、ADMIN、RIDER", error.getMessage());
     }
 
     @Test

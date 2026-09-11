@@ -2,8 +2,8 @@
  * 主页面 - 简单外卖App
  * 包含：搜索栏、分类导航、店铺列表、店铺详情、购物车、订单列表、个人中心、底部Tab导航
  */
-import { Category, StoreItem, GoodsItem, SpecialGoodsItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, createEmptyUser } from '../model/Models'
-import { addToCart, addCartItemRemote, updateCartItemQuantity, updateCartItemQuantityRemote, refreshCartFromServer, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCartRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, getLastRemoteErrorMessage, rechargeBalanceRemote, syncCurrentUserFromServer } from '../service/AppStorageManager'
+import { Category, StoreItem, GoodsItem, SpecialGoodsItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, Banner, Announcement, createEmptyUser } from '../model/Models'
+import { addToCart, addCartItemRemote, updateCartItemQuantity, updateCartItemQuantityRemote, refreshCartFromServer, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCartRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncBannersRemote, syncAnnouncementsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, getLastRemoteErrorMessage, rechargeBalanceRemote, syncCurrentUserFromServer } from '../service/AppStorageManager'
 import { fetchRecommendedStoresApi, fetchSpecialGoodsApi, fetchStoreMerchantCategoriesApi, fetchStoreDetailApi } from '../service/ApiService'
 import { LoginPage } from './LoginPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, formatSales } from '../common/Constants'
@@ -129,6 +129,10 @@ struct Index {
       this.adminRedirecting = true
       router.replaceUrl({ url: 'pages/AdminCenterPage' })
     }
+    if (currentUser !== undefined && currentUser.role === UserRole.RIDER) {
+      this.adminRedirecting = true
+      router.replaceUrl({ url: 'pages/RiderCenterPage' })
+    }
   }
 
   onLoginStateChange(): void {
@@ -149,6 +153,11 @@ struct Index {
       if (currentUser !== undefined && currentUser.role === UserRole.ADMIN) {
         this.adminRedirecting = true
         router.replaceUrl({ url: 'pages/AdminCenterPage' })
+        return
+      }
+      if (currentUser !== undefined && currentUser.role === UserRole.RIDER) {
+        this.adminRedirecting = true
+        router.replaceUrl({ url: 'pages/RiderCenterPage' })
         return
       }
       // 后端业务接口统一要求 JWT，登录成功后再拉取首页真实数据。
@@ -199,11 +208,16 @@ struct Index {
     // 从购物车、结算页等子页面返回时，强制“我的”页重新读取购物车数量，避免 Tabs 子组件保留旧标题。
     this.profileRefreshToken += 1
     this.consumePendingStoreDetail('onPageShow')
-    // 管理端防御：任何情况下 Index 对管理端不可见（防止返回键/异常路由回到主页）
+    // 管理端/骑手防御：任何情况下 Index 对管理端、骑手不可见（防止返回键/异常路由回到主页）
     const pageUser: User | undefined = AppStorage.get<User>('user')
     if (this.loggedIn && pageUser !== undefined && pageUser.role === UserRole.ADMIN) {
       this.adminRedirecting = true
       router.replaceUrl({ url: 'pages/AdminCenterPage' })
+      return
+    }
+    if (this.loggedIn && pageUser !== undefined && pageUser.role === UserRole.RIDER) {
+      this.adminRedirecting = true
+      router.replaceUrl({ url: 'pages/RiderCenterPage' })
       return
     }
     if (AppStorage.get<boolean>('pendingLocationAfterLogin') || false) {
@@ -353,6 +367,10 @@ struct Index {
               router.replaceUrl({ url: 'pages/AdminCenterPage' })
               return
             }
+            if (currentUser !== undefined && currentUser.role === UserRole.RIDER) {
+              router.replaceUrl({ url: 'pages/RiderCenterPage' })
+              return
+            }
             const shouldLocate: boolean = AppStorage.get<boolean>('pendingLocationAfterLogin') || false
             AppStorage.setOrCreate<boolean>('pendingLocationAfterLogin', false)
             if (shouldLocate) {
@@ -407,6 +425,8 @@ struct HomePage {
   @StorageLink('categoryList') categories: Category[] = []
   @StorageLink('isLoggedIn') @Watch('onLoginStateChange') loggedIn: boolean = false
   @State specialGoods: SpecialGoodsItem[] = []
+  @State banners: Banner[] = []
+  @State announcements: Announcement[] = []
   @State searchText: string = ''
   @State currentCategory: number = 0
   @State isRefreshing: boolean = false
@@ -490,6 +510,8 @@ struct HomePage {
     const latestCategories: Category[] = AppStorage.get<Category[]>('categoryList') || []
     this.categories = latestCategories.slice()
     await syncStoresFromServer()
+    this.banners = await syncBannersRemote()
+    this.announcements = await syncAnnouncementsRemote()
     if (this.loggedIn) {
       const latitude: number | undefined = this.currentAddress !== null ? this.currentAddress.latitude : undefined
       const longitude: number | undefined = this.currentAddress !== null ? this.currentAddress.longitude : undefined
@@ -658,25 +680,49 @@ struct HomePage {
           .margin({ top: SPACING.SM })
           .borderRadius({ topLeft: BORDER_RADIUS.LG, topRight: BORDER_RADIUS.LG })
 
-          // Banner
+          // Banner（服务端内容管理数据，为空时回退到默认轮播）
           Swiper() {
-            Text('新人专享 满20减15')
-              .width('100%').height(120).fontSize(FONT_SIZE.XL)
-              .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
-              .borderRadius(BORDER_RADIUS.MD).textAlign(TextAlign.Center)
-            Text('限时秒杀 全场8折')
-              .width('100%').height(120).fontSize(FONT_SIZE.XL)
-              .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRICE_RED)
-              .borderRadius(BORDER_RADIUS.MD).textAlign(TextAlign.Center)
-            Text('邀请好友 领大额红包')
-              .width('100%').height(120).fontSize(FONT_SIZE.XL)
-              .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.SUCCESS)
-              .borderRadius(BORDER_RADIUS.MD).textAlign(TextAlign.Center)
+            if (this.banners.length === 0) {
+              Text('新人专享 满20减15')
+                .width('100%').height(120).fontSize(FONT_SIZE.XL)
+                .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
+                .borderRadius(BORDER_RADIUS.MD).textAlign(TextAlign.Center)
+              Text('限时秒杀 全场8折')
+                .width('100%').height(120).fontSize(FONT_SIZE.XL)
+                .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRICE_RED)
+                .borderRadius(BORDER_RADIUS.MD).textAlign(TextAlign.Center)
+            } else {
+              ForEach(this.banners, (banner: Banner) => {
+                Column({ space: SPACING.XS }) {
+                  Text(banner.title)
+                    .fontSize(FONT_SIZE.XL).fontColor(COLORS.TEXT_WHITE).fontWeight(FontWeight.Bold)
+                  if (banner.subtitle !== '') {
+                    Text(banner.subtitle).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_WHITE)
+                  }
+                }
+                .width('100%').height(120)
+                .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+                .backgroundColor(banner.color)
+                .borderRadius(BORDER_RADIUS.MD)
+              }, (banner: Banner) => banner.id.toString())
+            }
           }
           .indicator(true).autoPlay(true).interval(3000).loop(true)
           .width('100%')
           .padding({ left: SPACING.LG, right: SPACING.LG })
           .margin({ top: SPACING.SM })
+
+          // 平台公告
+          if (this.announcements.length > 0) {
+            Row({ space: SPACING.SM }) {
+              Text('📢').fontSize(FONT_SIZE.MD)
+              Text(this.announcements[0].title)
+                .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+                .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            }
+            .width('100%')
+            .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.XS })
+          }
 
           // 快捷入口
           Row({ space: SPACING.XL }) {
@@ -1621,7 +1667,7 @@ export struct StoreDetailContent {
         ForEach(this.storeReviews.slice(0, 3), (review: Review) => {
           Column({ space: SPACING.XS }) {
             Row({ space: SPACING.SM }) {
-              Text(review.username)
+              Text(review.anonymous === 1 ? '匿名用户' : review.username)
                 .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY).fontWeight(FontWeight.Bold)
               Text(this.getStars(review.rating))
                 .fontSize(FONT_SIZE.SM).fontColor(COLORS.WARNING)
@@ -1649,6 +1695,20 @@ export struct StoreDetailContent {
             Text(review.createTime)
               .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
               .width('100%')
+            if (review.reply !== '') {
+              Column({ space: SPACING.XS }) {
+                Text('商家回复')
+                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.PRIMARY).fontWeight(FontWeight.Bold)
+                  .width('100%')
+                Text(review.reply)
+                  .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+                  .width('100%')
+              }
+              .width('100%')
+              .padding(SPACING.MD)
+              .backgroundColor(COLORS.BG_PRIMARY)
+              .borderRadius(BORDER_RADIUS.SM)
+            }
           }
           .width('100%')
           .padding(SPACING.MD)

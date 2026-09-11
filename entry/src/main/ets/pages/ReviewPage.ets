@@ -19,6 +19,7 @@ export struct ReviewPage {
   @State selectedTags: string[] = []
   @State submitting: boolean = false
   @State selectedGoodsId: number = 0
+  @State anonymous: boolean = false
   orderId: number = 0
 
   // 评价标签列表（来自 Constants.REVIEW_TAGS）
@@ -129,6 +130,10 @@ export struct ReviewPage {
       rating: this.rating,
       content: this.content,
       tags: this.selectedTags,
+      images: [],
+      anonymous: this.anonymous ? 1 : 0,
+      reply: '',
+      replyTime: '',
       createTime: this.formatCurrentTime()
     }
     // 调用后端提交评价（真实后端模式）
@@ -137,7 +142,7 @@ export struct ReviewPage {
 
   // 远程提交评价
   private async submitRemote(review: Review): Promise<void> {
-    const ok: boolean = await submitReviewRemote(review.orderId, review.goodsId, review.rating, review.content, review.tags)
+    const ok: boolean = await submitReviewRemote(review.orderId, review.goodsId, review.rating, review.content, review.tags, review.images, review.anonymous)
     if (ok) {
       await syncStoreReviewsRemote(review.storeId)
       await syncUserOrdersFromServer()
@@ -208,6 +213,9 @@ export struct ReviewPage {
 
             // 标签选择卡片
             this.TagsCard()
+
+            // 匿名评价开关
+            this.AnonymousCard()
 
             // 文字评价卡片
             this.ContentCard()
@@ -352,6 +360,27 @@ export struct ReviewPage {
         }, (tag: string) => tag)
       }
       .width('100%')
+    }
+    .width('100%')
+    .padding(SPACING.LG)
+    .backgroundColor(COLORS.BG_WHITE)
+    .borderRadius(BORDER_RADIUS.LG)
+  }
+
+  @Builder
+  AnonymousCard() {
+    Row() {
+      Text('匿名评价')
+        .fontSize(FONT_SIZE.LG)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(COLORS.TEXT_PRIMARY)
+        .layoutWeight(1)
+      Text('开启后其他人将看不到你的昵称')
+        .fontSize(FONT_SIZE.SM)
+        .fontColor(COLORS.TEXT_HINT)
+        .margin({ right: SPACING.SM })
+      Toggle({ type: ToggleType.Switch, isOn: this.anonymous })
+        .onChange((isOn: boolean) => { this.anonymous = isOn })
     }
     .width('100%')
     .padding(SPACING.LG)

@@ -111,7 +111,9 @@ export struct AdminCenterPage {
       AdminEntryItem.create('🧑‍💼', '用户管理', '查看用户和商户账号状态', 0, 'pages/AdminUserPage'),
       AdminEntryItem.create('📦', '订单管理', '托管订单状态与退款', this.orders.length, 'pages/AdminOrderPage'),
       AdminEntryItem.create('💰', '退款审批', '处理用户退款申请', this.getPendingRefundCount(), 'pages/AdminRefundPage'),
-      AdminEntryItem.create('📊', '平台统计', '查看平台订单、成交和热销商品', 0, 'pages/AdminStatisticsPage')
+      AdminEntryItem.create('📊', '平台统计', '查看平台订单、成交和热销商品', 0, 'pages/AdminStatisticsPage'),
+      AdminEntryItem.create('🛵', '骑手管理', '骑手列表与启用停用', 0, 'pages/AdminRiderPage'),
+      AdminEntryItem.create('🎨', '内容管理', '首页轮播与平台公告', 0, 'pages/AdminContentPage')
     ]
     return entries
   }

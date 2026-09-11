@@ -527,6 +527,22 @@ export struct OrderDetailPage {
           .margin({ left: SPACING.SM })
       }
       .width('100%')
+
+      // 配送骑手（配送中及之后由后端返回）
+      if (this.order!.riderName !== undefined && this.order!.riderName !== '') {
+        Row() {
+          Text('🛵 配送骑手')
+            .fontSize(FONT_SIZE.MD)
+            .fontColor(COLORS.TEXT_SECONDARY)
+          Text(`${this.order!.riderName} ${this.order!.riderPhone}`)
+            .fontSize(FONT_SIZE.MD)
+            .fontColor(COLORS.PRIMARY)
+            .fontWeight(FontWeight.Bold)
+            .layoutWeight(1)
+            .margin({ left: SPACING.SM })
+        }
+        .width('100%')
+      }
     }
     .width('100%')
     .padding(SPACING.LG)

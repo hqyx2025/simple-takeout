@@ -7,7 +7,7 @@ import { get, post, put, del, ApiResponse, setAuthToken } from './HttpClient'
 import { API_CONFIG } from '../common/Constants'
 import {
   User, UserRole, StoreItem, GoodsItem, SpecialGoodsItem, Category, Order, CartItem,
-  Address, Coupon, Review, Favorite, RefundRecord, AdminEmployee, AdminProduct, AdminUser,
+  Address, Coupon, Review, Rider, Banner, Announcement, Favorite, RefundRecord, AdminEmployee, AdminProduct, AdminUser,
   AdminStatisticsData, AdminTrendPoint, AdminHotGoods
 } from '../model/Models'
 import { logInfo, logWarn } from './AppLogger'
@@ -105,6 +105,9 @@ interface ServerOrder {
   acceptTime: string
   deliverTime: string
   completeTime: string
+  expectTime: string
+  riderName: string
+  riderPhone: string
 }
 
 interface ServerUser {
@@ -142,6 +145,7 @@ interface ServerAddress {
 
 interface ServerReview {
   id: number
+  orderId: number
   storeId: number
   goodsId: number
   userId: number
@@ -149,6 +153,43 @@ interface ServerReview {
   rating: number
   content: string
   tags: string[]
+  images: string[]
+  anonymous: number
+  reply: string
+  replyTime: string
+  createTime: string
+}
+
+interface ServerRider {
+  id: number
+  userId: number
+  name: string
+  phone: string
+  online: number
+  totalOrders: number
+  totalIncome: number
+  status: number
+  createTime: string
+}
+
+interface ServerBanner {
+  id: number
+  title: string
+  subtitle: string
+  image: string
+  color: string
+  linkType: string
+  linkValue: string
+  sort: number
+  status: number
+  createTime: string
+}
+
+interface ServerAnnouncement {
+  id: number
+  title: string
+  content: string
+  status: number
   createTime: string
 }
 
@@ -266,6 +307,7 @@ interface CreateOrderRequest {
   couponId: number
   remark: string
   checkoutGoodsIds: number[]
+  expectTime: string
 }
 
 interface CartItemRequest {
@@ -282,6 +324,31 @@ interface ReviewRequest {
   rating: number
   content: string
   tags: string[]
+  images: string[]
+  anonymous: number
+}
+
+interface ReplyRequest {
+  reply: string
+}
+
+interface RiderStatusRequest {
+  online: number
+}
+
+interface BannerRequest {
+  title: string
+  subtitle: string
+  image: string
+  color: string
+  linkType: string
+  linkValue: string
+  sort: number
+}
+
+interface AnnouncementRequest {
+  title: string
+  content: string
 }
 
 interface AddressRequest {
@@ -526,6 +593,158 @@ export async function fetchGoodsReviews(goodsId: number): Promise<Review[]> {
   return resp.data.map((r: ServerReview) => toReview(r))
 }
 
+export async function fetchMerchantReviewsApi(): Promise<Review[]> {
+  const resp: ApiResponse<ServerReview[]> = await get<ServerReview[]>('/api/merchant/reviews')
+  if (resp.code !== 200 || resp.data === null) {
+    return []
+  }
+  return resp.data.map((r: ServerReview) => toReview(r))
+}
+
+export async function replyReviewApi(reviewId: number, reply: string): Promise<boolean> {
+  const req: ReplyRequest = { reply: reply }
+  const resp: ApiResponse<ServerReview> = await put<ServerReview>(`/api/merchant/reviews/${reviewId}/reply`, req)
+  return resp.code === 200
+}
+
+// ==================== 骑手端（role=3） ====================
+
+export async function fetchRiderProfileApi(): Promise<Rider | null> {
+  const resp: ApiResponse<ServerRider> = await get<ServerRider>('/api/rider/profile')
+  if (resp.code !== 200 || resp.data === null) {
+    return null
+  }
+  return toRider(resp.data)
+}
+
+export async function setRiderStatusApi(online: number): Promise<Rider | null> {
+  const req: RiderStatusRequest = { online: online }
+  const resp: ApiResponse<ServerRider> = await put<ServerRider>('/api/rider/status', req)
+  if (resp.code !== 200 || resp.data === null) {
+    return null
+  }
+  return toRider(resp.data)
+}
+
+export async function fetchRiderPoolApi(): Promise<Order[]> {
+  const resp: ApiResponse<ServerOrder[]> = await get<ServerOrder[]>('/api/rider/orders/pool')
+  if (resp.code !== 200 || resp.data === null) {
+    return []
+  }
+  return resp.data.map((o: ServerOrder) => toOrder(o))
+}
+
+export async function fetchRiderOrdersApi(): Promise<Order[]> {
+  const resp: ApiResponse<ServerOrder[]> = await get<ServerOrder[]>('/api/rider/orders')
+  if (resp.code !== 200 || resp.data === null) {
+    return []
+  }
+  return resp.data.map((o: ServerOrder) => toOrder(o))
+}
+
+export async function grabOrderApi(orderId: number): Promise<boolean> {
+  const resp: ApiResponse<ServerOrder> = await post<ServerOrder>(`/api/rider/orders/${orderId}/grab`, undefined)
+  return resp.code === 200
+}
+
+export async function pickupOrderApi(orderId: number): Promise<boolean> {
+  const resp: ApiResponse<ServerOrder> = await put<ServerOrder>(`/api/rider/orders/${orderId}/pickup`, undefined)
+  return resp.code === 200
+}
+
+export async function deliverOrderApi(orderId: number): Promise<boolean> {
+  const resp: ApiResponse<ServerOrder> = await put<ServerOrder>(`/api/rider/orders/${orderId}/deliver`, undefined)
+  return resp.code === 200
+}
+
+// ==================== 内容管理（Banner / 公告） ====================
+
+export async function fetchBannersApi(): Promise<Banner[]> {
+  const resp: ApiResponse<ServerBanner[]> = await get<ServerBanner[]>('/api/banners')
+  if (resp.code !== 200 || resp.data === null) {
+    return []
+  }
+  return resp.data.map((b: ServerBanner) => toBanner(b))
+}
+
+export async function fetchAnnouncementsApi(): Promise<Announcement[]> {
+  const resp: ApiResponse<ServerAnnouncement[]> = await get<ServerAnnouncement[]>('/api/announcements')
+  if (resp.code !== 200 || resp.data === null) {
+    return []
+  }
+  return resp.data.map((a: ServerAnnouncement) => toAnnouncement(a))
+}
+
+// ==================== 管理端：骑手管理 / 内容管理 ====================
+
+export async function fetchAdminRidersApi(): Promise<Rider[]> {
+  const resp: ApiResponse<ServerRider[]> = await get<ServerRider[]>('/api/admin/riders')
+  if (resp.code !== 200 || resp.data === null) {
+    return []
+  }
+  return resp.data.map((r: ServerRider) => toRider(r))
+}
+
+export async function updateRiderStatusApi(riderId: number, status: number): Promise<boolean> {
+  const req: AdminStatusRequest = { status: status }
+  const resp: ApiResponse<ServerRider> = await put<ServerRider>(`/api/admin/riders/${riderId}/status`, req)
+  return resp.code === 200
+}
+
+export async function fetchAdminBannersApi(): Promise<Banner[]> {
+  const resp: ApiResponse<ServerBanner[]> = await get<ServerBanner[]>('/api/admin/banners')
+  if (resp.code !== 200 || resp.data === null) {
+    return []
+  }
+  return resp.data.map((b: ServerBanner) => toBanner(b))
+}
+
+export async function createBannerApi(title: string, subtitle: string, image: string, color: string,
+                                      linkType: string, linkValue: string, sort: number): Promise<boolean> {
+  const req: BannerRequest = {
+    title: title, subtitle: subtitle, image: image, color: color,
+    linkType: linkType, linkValue: linkValue, sort: sort
+  }
+  const resp: ApiResponse<ServerBanner> = await post<ServerBanner>('/api/admin/banners', req)
+  return resp.code === 200
+}
+
+export async function updateBannerStatusApi(bannerId: number, status: number): Promise<boolean> {
+  const req: AdminStatusRequest = { status: status }
+  const resp: ApiResponse<ServerBanner> = await put<ServerBanner>(`/api/admin/banners/${bannerId}/status`, req)
+  return resp.code === 200
+}
+
+export async function deleteBannerApi(bannerId: number): Promise<boolean> {
+  const resp: ApiResponse<Object> = await del<Object>(`/api/admin/banners/${bannerId}`)
+  return resp.code === 200
+}
+
+export async function fetchAdminAnnouncementsApi(): Promise<Announcement[]> {
+  const resp: ApiResponse<ServerAnnouncement[]> = await get<ServerAnnouncement[]>('/api/admin/announcements')
+  if (resp.code !== 200 || resp.data === null) {
+    return []
+  }
+  return resp.data.map((a: ServerAnnouncement) => toAnnouncement(a))
+}
+
+export async function createAnnouncementApi(title: string, content: string): Promise<boolean> {
+  const req: AnnouncementRequest = { title: title, content: content }
+  const resp: ApiResponse<ServerAnnouncement> = await post<ServerAnnouncement>('/api/admin/announcements', req)
+  return resp.code === 200
+}
+
+export async function updateAnnouncementStatusApi(announcementId: number, status: number): Promise<boolean> {
+  const req: AdminStatusRequest = { status: status }
+  const resp: ApiResponse<ServerAnnouncement> = await put<ServerAnnouncement>(`/api/admin/announcements/${announcementId}/status`, req)
+  return resp.code === 200
+}
+
+export async function deleteAnnouncementApi(announcementId: number): Promise<boolean> {
+  const resp: ApiResponse<Object> = await del<Object>(`/api/admin/announcements/${announcementId}`)
+  return resp.code === 200
+}
+
 export async function searchStoresApi(keyword: string, latitude?: number, longitude?: number): Promise<StoreItem[]> {
   const baseUrl: string = `${API_CONFIG.ENDPOINTS['search']}?keyword=${encodeURIComponent(keyword)}`
   const resp: ApiResponse<ServerStore[]> = await get<ServerStore[]>(appendCoordinates(baseUrl, latitude, longitude))
@@ -602,7 +821,7 @@ export async function clearCartApi(): Promise<CartItem[] | null> {
 /**
  * 创建订单：items 为购物车项，返回服务端订单（已转换）
  */
-export async function createOrderApi(storeId: number, cartItems: CartItem[], addressId: number, couponId: number, remark: string, checkoutGoodsIds: number[]): Promise<Order | null> {
+export async function createOrderApi(storeId: number, cartItems: CartItem[], addressId: number, couponId: number, remark: string, checkoutGoodsIds: number[], expectTime: string): Promise<Order | null> {
   const items: OrderItemRequest[] = cartItems.map((c: CartItem) => {
     const item: OrderItemRequest = {
       goodsId: c.goods.id,
@@ -619,7 +838,8 @@ export async function createOrderApi(storeId: number, cartItems: CartItem[], add
     addressId: addressId,
     couponId: couponId,
     remark: remark,
-    checkoutGoodsIds: checkoutGoodsIds
+    checkoutGoodsIds: checkoutGoodsIds,
+    expectTime: expectTime
   }
   // 下单失败由结算页统一提示，避免 HttpClient 与结算页连续弹出两个 Toast 互相覆盖。
   const resp: ApiResponse<ServerOrder> = await post<ServerOrder>(API_CONFIG.ENDPOINTS['orders'], req, false)
@@ -656,8 +876,8 @@ export async function confirmOrderApi(orderId: number): Promise<boolean> {
   return resp.code === 200
 }
 
-export async function submitReviewApi(orderId: number, goodsId: number, rating: number, content: string, tags: string[]): Promise<boolean> {
-  const req: ReviewRequest = { goodsId: goodsId, rating: rating, content: content, tags: tags }
+export async function submitReviewApi(orderId: number, goodsId: number, rating: number, content: string, tags: string[], images: string[], anonymous: number): Promise<boolean> {
+  const req: ReviewRequest = { goodsId: goodsId, rating: rating, content: content, tags: tags, images: images, anonymous: anonymous }
   const resp: ApiResponse<ServerReview> = await post<ServerReview>(`/api/orders/${orderId}/review`, req)
   return resp.code === 200
 }
@@ -1149,6 +1369,9 @@ function toOrder(o: ServerOrder): Order {
     payTime: o.payTime,
     deliverTime: o.deliverTime,
     completeTime: o.completeTime,
+    expectTime: o.expectTime || '',
+    riderName: o.riderName || '',
+    riderPhone: o.riderPhone || '',
     address: addr,
     remark: o.remark
   }
@@ -1186,7 +1409,7 @@ function toAddress(a: ServerAddress): Address {
 function toReview(r: ServerReview): Review {
   const review: Review = {
     id: r.id,
-    orderId: 0,
+    orderId: r.orderId || 0,
     storeId: r.storeId,
     goodsId: r.goodsId || 0,
     userId: r.userId,
@@ -1194,7 +1417,53 @@ function toReview(r: ServerReview): Review {
     rating: r.rating,
     content: r.content,
     tags: r.tags || [],
+    images: r.images || [],
+    anonymous: r.anonymous || 0,
+    reply: r.reply || '',
+    replyTime: r.replyTime || '',
     createTime: r.createTime
   }
   return review
+}
+
+function toRider(r: ServerRider): Rider {
+  const rider: Rider = {
+    id: r.id,
+    userId: r.userId,
+    name: r.name,
+    phone: r.phone,
+    online: r.online,
+    totalOrders: r.totalOrders,
+    totalIncome: r.totalIncome,
+    status: r.status,
+    createTime: r.createTime
+  }
+  return rider
+}
+
+function toBanner(b: ServerBanner): Banner {
+  const banner: Banner = {
+    id: b.id,
+    title: b.title,
+    subtitle: b.subtitle || '',
+    image: b.image || '',
+    color: b.color || '#FF6B35',
+    linkType: b.linkType || 'NONE',
+    linkValue: b.linkValue || '',
+    sort: b.sort || 0,
+    status: b.status,
+    createTime: b.createTime
+  }
+  return banner
+}
+
+function toAnnouncement(a: ServerAnnouncement): Announcement {
+  const announcement: Announcement = {
+    id: a.id,
+    title: a.title,
+    content: a.content,
+    status: a.status,
+    createTime: a.createTime
+  }
+  return announcement
 }

@@ -23,6 +23,8 @@ export struct CheckoutPage {
   @State currentAddress: Address | null = null
   @State selectedCoupon: Coupon | null = null
   @State remark: string = ''
+  @State selectedDelivery: number = 0
+  private deliveryOptions: string[] = ['立即送达', '1小时后', '2小时后']
   @State showCouponDialog: boolean = false
   @State submitting: boolean = false
   @State showOrderFailureDialog: boolean = false
@@ -223,7 +225,7 @@ export struct CheckoutPage {
         && (this.selectedCoupon.storeId === undefined || this.selectedCoupon.storeId === 0 || this.selectedCoupon.storeId === storeId)
         && groupTotal >= this.selectedCoupon.minOrder
       const couponId: number = couponCanApply && this.selectedCoupon !== null ? this.selectedCoupon.id : 0
-      const serverOrder: Order | null = await createOrderRemote(storeId, items, address.id, couponId, this.remark, checkoutGoodsIds)
+      const serverOrder: Order | null = await createOrderRemote(storeId, items, address.id, couponId, this.remark, checkoutGoodsIds, this.getExpectTime())
       if (serverOrder === null) {
         if (successfulGoodsIds.length > 0) {
           const successfulCartCleared: boolean = await deleteCartItemsRemote(successfulGoodsIds)
@@ -290,6 +292,7 @@ export struct CheckoutPage {
               this.AddressCard()
               this.StoreAndItemsCard()
               this.CouponCard()
+              this.DeliveryTimeCard()
               this.AmountDetailCard()
               this.RemarkCard()
             }
@@ -536,6 +539,47 @@ export struct CheckoutPage {
     .padding(SPACING.LG)
     .backgroundColor(COLORS.BG_WHITE)
     .borderRadius(BORDER_RADIUS.LG)
+  }
+
+  @Builder
+  DeliveryTimeCard() {
+    Column({ space: SPACING.SM }) {
+      Text('送达时间')
+        .fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+        .width('100%')
+      Row({ space: SPACING.SM }) {
+        ForEach(this.deliveryOptions, (label: string, index: number) => {
+          this.DeliveryOption(index, label)
+        }, (label: string) => label)
+      }
+      .width('100%')
+    }
+    .width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+  }
+
+  @Builder
+  DeliveryOption(index: number, label: string) {
+    Text(label)
+      .fontSize(FONT_SIZE.SM)
+      .fontColor(this.selectedDelivery === index ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
+      .backgroundColor(this.selectedDelivery === index ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+      .padding({ left: SPACING.MD, right: SPACING.MD, top: SPACING.XS, bottom: SPACING.XS })
+      .borderRadius(BORDER_RADIUS.ROUND)
+      .onClick(() => { this.selectedDelivery = index })
+  }
+
+  private getExpectTime(): string {
+    if (this.selectedDelivery === 0) {
+      return ''
+    }
+    const target: Date = new Date(Date.now() + this.selectedDelivery * 3600 * 1000)
+    const y: number = target.getFullYear()
+    const m: string = String(target.getMonth() + 1).padStart(2, '0')
+    const d: string = String(target.getDate()).padStart(2, '0')
+    const h: string = String(target.getHours()).padStart(2, '0')
+    const min: string = String(target.getMinutes()).padStart(2, '0')
+    const s: string = String(target.getSeconds()).padStart(2, '0')
+    return `${y}-${m}-${d} ${h}:${min}:${s}`
   }
 
   @Builder

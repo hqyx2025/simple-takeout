@@ -21,6 +21,10 @@
     "pages/MerchantCenterPage",
     "pages/MerchantAddGoodsPage",
     "pages/MerchantEditGoodsPage",
+    "pages/MerchantReviewsPage",
+    "pages/RiderCenterPage",
+    "pages/RiderOrderPoolPage",
+    "pages/RiderOrdersPage",
     "pages/AdminCenterPage",
     "pages/AdminCategoryPage",
     "pages/AdminStorePage",
@@ -29,6 +33,8 @@
     "pages/AdminUserPage",
     "pages/AdminStatisticsPage",
     "pages/AdminOrderPage",
-    "pages/AdminRefundPage"
+    "pages/AdminRefundPage",
+    "pages/AdminRiderPage",
+    "pages/AdminContentPage"
   ]
 }

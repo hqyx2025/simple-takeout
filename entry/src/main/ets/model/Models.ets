@@ -6,7 +6,8 @@
 export enum UserRole {
   CUSTOMER = 0,    // 普通用户（点餐）
   MERCHANT = 1,    // 商户（管理自己的店铺、商品和订单）
-  ADMIN = 2        // 管理端（管理平台分类、店铺和托管订单）
+  ADMIN = 2,       // 管理端（管理平台分类、店铺和托管订单）
+  RIDER = 3        // 骑手（接单、取餐、送达）
 }
 
 // 分类模型（type：PLATFORM 平台分类 / MERCHANT 商户分类，商户分类带 merchantId/sort）
@@ -138,6 +139,11 @@ export interface Order {
   deliverTime?: string
   completeTime?: string
   cancelTime?: string
+  /** 预约送达时间（空=立即送达） */
+  expectTime?: string
+  /** 配送骑手姓名/电话（配送中及之后返回） */
+  riderName?: string
+  riderPhone?: string
   address: Address
   remark: string
 }
@@ -194,6 +200,46 @@ export interface Review {
   rating: number        // 1-5星
   content: string
   tags: string[]        // 评价标签
+  images: string[]      // 评价图片（URL 列表，上传功能为演进项）
+  anonymous: number     // 0 实名 / 1 匿名
+  reply: string         // 商家回复
+  replyTime: string     // 回复时间
+  createTime: string
+}
+
+// 骑手档案（四端改造：role=3 对应的骑手业务资料）
+export interface Rider {
+  id: number
+  userId: number
+  name: string
+  phone: string
+  online: number       // 0 离线 / 1 在线
+  totalOrders: number  // 累计完成配送单量
+  totalIncome: number  // 累计配送收入
+  status: number
+  createTime: string
+}
+
+// 首页轮播 Banner（内容管理）
+export interface Banner {
+  id: number
+  title: string
+  subtitle: string
+  image: string
+  color: string
+  linkType: string
+  linkValue: string
+  sort: number
+  status: number
+  createTime: string
+}
+
+// 平台公告（内容管理）
+export interface Announcement {
+  id: number
+  title: string
+  content: string
+  status: number
   createTime: string
 }
 

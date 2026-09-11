@@ -108,6 +108,24 @@ public class UserCenterController {
         return ApiResponse.ok(service.goodsReviews(id));
     }
 
+    // ============ 商户评价管理 ============
+
+    @GetMapping("/merchant/reviews")
+    public ApiResponse<List<Review.ReviewView>> merchantReviews(@RequestAttribute("userId") long userId,
+                                                                @RequestAttribute("role") int role) {
+        requireMerchant(role);
+        return ApiResponse.ok(service.merchantReviews(userId));
+    }
+
+    @PutMapping("/merchant/reviews/{id}/reply")
+    public ApiResponse<Review.ReviewView> replyReview(@RequestAttribute("userId") long userId,
+                                                      @RequestAttribute("role") int role,
+                                                      @PathVariable long id,
+                                                      @RequestBody ReplyRequest req) {
+        requireMerchant(role);
+        return ApiResponse.ok(service.replyReview(userId, id, req.reply()));
+    }
+
     // ============ 搜索 ============
 
     @GetMapping("/search")
@@ -121,5 +139,14 @@ public class UserCenterController {
     }
 
     public record AddressRequest(String name, String phone, String detail, int isDefault) {
+    }
+
+    public record ReplyRequest(String reply) {
+    }
+
+    private void requireMerchant(int role) {
+        if (role != 1) {
+            throw new com.example.takeout.common.BizException(403, "仅商户可以执行该操作");
+        }
     }
 }

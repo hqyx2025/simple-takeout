@@ -28,7 +28,7 @@ public class AuthService {
     }
 
     /**
-     * 注册（role：0=用户 1=商户）
+     * 注册（role：0=用户 1=商户 3=骑手）
      */
     public User register(String username, String phone, String password, int role) {
         if (username == null || username.isBlank()) {
@@ -40,7 +40,7 @@ public class AuthService {
         if (password == null || password.length() < 6) {
             throw new BizException("密码长度至少 6 位");
         }
-        if (role != 0 && role != 1) {
+        if (role != 0 && role != 1 && role != 3) {
             throw new BizException("角色不合法");
         }
         if (userDao.existsByPhone(phone)) {
@@ -83,7 +83,8 @@ public class AuthService {
             case "USER", "CUSTOMER" -> 0;
             case "MERCHANT" -> 1;
             case "ADMIN" -> 2;
-            default -> throw new BizException("登录端类型不合法，仅支持 USER、MERCHANT、ADMIN");
+            case "RIDER" -> 3;
+            default -> throw new BizException("登录端类型不合法，仅支持 USER、MERCHANT、ADMIN、RIDER");
         };
     }
 

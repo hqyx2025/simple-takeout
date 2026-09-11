@@ -119,6 +119,11 @@ public class GoodsDao {
         jdbc.update("UPDATE goods SET status = ? WHERE id = ?", status, id);
     }
 
+    /** 评价后重算商品平均评分（保留一位小数）。 */
+    public void updateRating(long goodsId, double rating) {
+        jdbc.update("UPDATE goods SET rating = ? WHERE id = ?", rating, goodsId);
+    }
+
     /**
      * 扣减库存（乐观锁条件更新，防超卖）：
      * 更新行数为 0 表示库存不足/已下架，由调用方抛业务异常。

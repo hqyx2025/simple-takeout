@@ -36,7 +36,7 @@ public class OrderController {
     public ApiResponse<Order.OrderView> createOrder(@RequestAttribute("userId") long userId,
                                                     @RequestBody CreateOrderRequest req) {
         return ApiResponse.ok(orderService.createOrder(userId, req.storeId(), req.items(),
-                req.addressId(), req.couponId(), req.remark(), req.checkoutGoodsIds()));
+                req.addressId(), req.couponId(), req.remark(), req.checkoutGoodsIds(), req.expectTime()));
     }
 
     @GetMapping("/orders")
@@ -64,7 +64,8 @@ public class OrderController {
     @PostMapping("/orders/{id}/review")
     public ApiResponse<Review> review(@RequestAttribute("userId") long userId, @PathVariable long id,
                                       @RequestBody ReviewRequest req) {
-        return ApiResponse.ok(orderService.reviewOrder(userId, id, req.goodsId(), req.rating(), req.content(), req.tags()));
+        return ApiResponse.ok(orderService.reviewOrder(userId, id, req.goodsId(), req.rating(), req.content(),
+                req.tags(), req.images(), req.anonymous()));
     }
 
     @PostMapping("/orders/{id}/refund")
@@ -102,10 +103,12 @@ public class OrderController {
     }
 
     public record CreateOrderRequest(long storeId, List<Order.OrderItem> items, long addressId,
-                                     long couponId, String remark, List<Long> checkoutGoodsIds) {
+                                     long couponId, String remark, List<Long> checkoutGoodsIds,
+                                     String expectTime) {
     }
 
-    public record ReviewRequest(long goodsId, int rating, String content, List<String> tags) {
+    public record ReviewRequest(long goodsId, int rating, String content, List<String> tags,
+                                List<String> images, int anonymous) {
     }
 
     public record RefundRequest(String reason) {

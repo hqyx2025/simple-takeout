@@ -194,4 +194,9 @@ public class StoreDao {
     public void updateRecommended(long storeId, int recommended) {
         jdbc.update("UPDATE stores SET recommended = ? WHERE id = ?", recommended, storeId);
     }
+
+    /** 评价后重算店铺平均评分（保留一位小数）。 */
+    public void updateRating(long storeId, double rating) {
+        jdbc.update("UPDATE stores SET rating = ? WHERE id = ?", rating, storeId);
+    }
 }

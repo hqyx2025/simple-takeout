@@ -43,7 +43,16 @@ public class CouponDao {
         return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 
-    public void markUsed(long id) {
-        jdbc.update("UPDATE coupons SET status = 1 WHERE id = ?", id);
+    /**
+     * 核销优惠券（条件更新，防并发重复核销）：
+     * 返回 false 表示该券已被核销/不可用，由调用方抛业务异常并回滚整单。
+     */
+    public boolean markUsed(long id) {
+        return jdbc.update("UPDATE coupons SET status = 1 WHERE id = ? AND status = 0", id) == 1;
+    }
+
+    /** 过期券清理：把已过期的未使用券标记为已失效（status=2）。 */
+    public int expireOutdated(String now) {
+        return jdbc.update("UPDATE coupons SET status = 2 WHERE status = 0 AND expire_time <> '' AND expire_time < ?", now);
     }
 }

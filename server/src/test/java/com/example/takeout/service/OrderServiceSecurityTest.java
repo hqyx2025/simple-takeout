@@ -56,7 +56,7 @@ class OrderServiceSecurityTest {
     @Test
     void rejectsOrderDetailBelongingToAnotherUser() {
         Order order = new Order(7, "NO7", 2, 10, "测试店", 1, "[]", "{}", 10, 3, 0, 13,
-                "", 0, 0, "", "", "", "", "");
+                "", 0, 0, "", "", "", "", "", "");
         Store store = new Store(10, "测试店", "", 4.5, 0, 3, 0, "30分钟", "1km", "[]", "", 1, "[1]", 99, 1, 0, "");
         when(orderDao.findById(7)).thenReturn(Optional.of(order));
         when(storeDao.findById(10)).thenReturn(Optional.of(store));
@@ -86,7 +86,7 @@ class OrderServiceSecurityTest {
         Order order = new Order(8, "NO8", 1, 10, "测试店铺", 4, "[]",
                 "{\"addressId\":20,\"name\":\"张三\",\"phone\":\"13800138000\",\"detail\":\"宿舍\"}",
                 20, 0, 0, 20, "", 0, 0, "2026-08-16 10:00:00", "2026-08-16 10:00:00", "", "",
-                "2026-08-16 10:10:00");
+                "2026-08-16 10:10:00", "");
         Store store = new Store(10, "测试店铺", "", 4.5, 0, 0, 0, "30分钟", "1km", "[]", "", 1, "[1]", 2, 1, 0, "");
         User merchant = new User(2, "商户", "", "13600136000", "", 1, 50, "now");
         when(orderDao.findById(8)).thenReturn(Optional.of(order));
@@ -113,8 +113,9 @@ class OrderServiceSecurityTest {
         assertEquals("评价商品不在该订单中", error.getMessage());
         verify(reviewDao, org.mockito.Mockito.never()).insert(
                 org.mockito.Mockito.anyLong(), org.mockito.Mockito.anyLong(), org.mockito.Mockito.anyLong(),
-                org.mockito.Mockito.anyString(), org.mockito.Mockito.anyInt(), org.mockito.Mockito.anyString(),
-                org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString());
+                org.mockito.Mockito.anyLong(), org.mockito.Mockito.anyString(), org.mockito.Mockito.anyInt(),
+                org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString(),
+                org.mockito.Mockito.anyInt(), org.mockito.Mockito.anyString());
         verify(orderDao, org.mockito.Mockito.never()).markReviewed(9);
     }
 
@@ -132,28 +133,38 @@ class OrderServiceSecurityTest {
 
     @Test
     void rejectsDuplicateOrderReview() {
-        Order order = completedOrder(11, 100, 1, 1);
+        Order order = completedOrder(11, 100, 1, 0);
         when(orderDao.findById(11)).thenReturn(Optional.of(order));
+        when(userDao.findById(1)).thenReturn(Optional.of(testUser()));
+        when(reviewDao.existsByOrderGoods(11, 100)).thenReturn(true);
 
         BizException error = assertThrows(BizException.class,
                 () -> service.reviewOrder(1, 11, 100, 5, "不错", List.of()));
 
-        assertEquals("该订单已评价", error.getMessage());
-        verify(userDao, org.mockito.Mockito.never()).findById(1);
+        assertEquals("该商品已评价", error.getMessage());
+        verify(reviewDao, org.mockito.Mockito.never()).insert(
+                org.mockito.Mockito.anyLong(), org.mockito.Mockito.anyLong(), org.mockito.Mockito.anyLong(),
+                org.mockito.Mockito.anyLong(), org.mockito.Mockito.anyString(), org.mockito.Mockito.anyInt(),
+                org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString(),
+                org.mockito.Mockito.anyInt(), org.mockito.Mockito.anyString());
     }
 
     @Test
     void savesReviewAgainstSelectedOrderGoods() {
         Order order = completedOrder(12, 100, 1, 0);
-        Review saved = new Review(88, 10, 100, 1, "测试用户", 5, "不错", "[]", "2026-08-16 11:00:00");
+        Review saved = new Review(88, 12, 10, 100, 1, "测试用户", 5, "不错", "[]", "[]", 0, "", "",
+                "2026-08-16 11:00:00");
         when(orderDao.findById(12)).thenReturn(Optional.of(order));
         when(userDao.findById(1)).thenReturn(Optional.of(testUser()));
-        when(reviewDao.insert(org.mockito.ArgumentMatchers.eq(10L), org.mockito.ArgumentMatchers.eq(100L),
-                org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.eq("测试用户"),
-                org.mockito.ArgumentMatchers.eq(5), org.mockito.ArgumentMatchers.eq("不错"),
-                org.mockito.ArgumentMatchers.eq("[]"), org.mockito.ArgumentMatchers.anyString()))
+        when(reviewDao.insert(org.mockito.ArgumentMatchers.eq(12L), org.mockito.ArgumentMatchers.eq(10L),
+                org.mockito.ArgumentMatchers.eq(100L), org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.eq("测试用户"), org.mockito.ArgumentMatchers.eq(5),
+                org.mockito.ArgumentMatchers.eq("不错"), org.mockito.ArgumentMatchers.eq("[]"),
+                org.mockito.ArgumentMatchers.eq("[]"), org.mockito.ArgumentMatchers.eq(0),
+                org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn(88L);
-        when(reviewDao.listByStore(10)).thenReturn(List.of(saved));
+        when(reviewDao.countByOrder(12)).thenReturn(1L);
+        when(reviewDao.findById(88)).thenReturn(Optional.of(saved));
 
         Review result = service.reviewOrder(1, 12, 100, 5, "不错", List.of());
 
@@ -166,7 +177,7 @@ class OrderServiceSecurityTest {
         return new Order(id, "NO" + id, 1, 10, "测试店铺", 4, items,
                 "{}", 12.5, 0, 0, 12.5, "", reviewed, escrowStatus,
                 "2026-08-16 10:00:00", "2026-08-16 10:00:00", "", "",
-                "2026-08-16 10:10:00");
+                "2026-08-16 10:10:00", "");
     }
 
     private User testUser() {

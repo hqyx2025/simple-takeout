@@ -26,7 +26,8 @@ public record Order(
         String payTime,
         String acceptTime,
         String deliverTime,
-        String completeTime
+        String completeTime,
+        String expectTime
 ) {
     /**
      * 订单商品项（对应客户端 CartItem 结构）
@@ -74,13 +75,16 @@ public record Order(
             String payTime,
             String acceptTime,
             String deliverTime,
-            String completeTime
+            String completeTime,
+            String expectTime,
+            String riderName,
+            String riderPhone
     ) {
     }
 
-    public OrderView toView(List<OrderItem> itemList, AddressInfo addr) {
+    public OrderView toView(List<OrderItem> itemList, AddressInfo addr, String riderName, String riderPhone) {
         return new OrderView(id, orderNo, userId, storeId, storeName, status, itemList, addr,
                 goodsAmount, deliveryFee, discount, payAmount, remark, reviewed, escrowStatus,
-                createTime, payTime, acceptTime, deliverTime, completeTime);
+                createTime, payTime, acceptTime, deliverTime, completeTime, expectTime, riderName, riderPhone);
     }
 }

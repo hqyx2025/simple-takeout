@@ -7,6 +7,7 @@ import com.example.takeout.dao.GoodsDao;
 import com.example.takeout.dao.OrderDao;
 import com.example.takeout.dao.RefundDao;
 import com.example.takeout.dao.ReviewDao;
+import com.example.takeout.dao.RiderDao;
 import com.example.takeout.dao.StoreDao;
 import com.example.takeout.dao.UserDao;
 import com.example.takeout.mapper.CartItemMapper;
@@ -17,6 +18,7 @@ import com.example.takeout.model.Goods;
 import com.example.takeout.model.Order;
 import com.example.takeout.model.RefundRecord;
 import com.example.takeout.model.Review;
+import com.example.takeout.model.Rider;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.User;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -54,18 +56,19 @@ public class OrderService {
     private final RefundDao refundDao;
     private final ObjectMapper objectMapper;
     private final CartItemMapper cartItemMapper;
+    private final RiderDao riderDao;
 
     public OrderService(OrderDao orderDao, StoreDao storeDao, GoodsDao goodsDao, AddressDao addressDao,
                         CouponDao couponDao, ReviewDao reviewDao, UserDao userDao, RefundDao refundDao,
                         ObjectMapper objectMapper) {
         this(orderDao, storeDao, goodsDao, addressDao, couponDao, reviewDao, userDao, refundDao,
-                objectMapper, null);
+                objectMapper, null, null);
     }
 
     @Autowired
     public OrderService(OrderDao orderDao, StoreDao storeDao, GoodsDao goodsDao, AddressDao addressDao,
                         CouponDao couponDao, ReviewDao reviewDao, UserDao userDao, RefundDao refundDao,
-                        ObjectMapper objectMapper, CartItemMapper cartItemMapper) {
+                        ObjectMapper objectMapper, CartItemMapper cartItemMapper, RiderDao riderDao) {
         this.orderDao = orderDao;
         this.storeDao = storeDao;
         this.goodsDao = goodsDao;
@@ -76,20 +79,29 @@ public class OrderService {
         this.refundDao = refundDao;
         this.objectMapper = objectMapper;
         this.cartItemMapper = cartItemMapper;
+        this.riderDao = riderDao;
     }
 
     /** 创建订单：从用户余额扣款后进入平台托管，状态=1 待接单。 */
     @Transactional
     public Order.OrderView createOrder(long userId, long storeId, List<Order.OrderItem> items,
                                        long addressId, long couponId, String remark) {
-        return createOrder(userId, storeId, items, addressId, couponId, remark, List.of());
+        return createOrder(userId, storeId, items, addressId, couponId, remark, List.of(), "");
     }
 
-    /** 创建订单时按本次结算选择的全部购物车商品计算总起送价。 */
+    /** 创建订单（兼容旧签名，立即送达）。 */
     @Transactional
     public Order.OrderView createOrder(long userId, long storeId, List<Order.OrderItem> items,
                                        long addressId, long couponId, String remark,
                                        List<Long> checkoutGoodsIds) {
+        return createOrder(userId, storeId, items, addressId, couponId, remark, checkoutGoodsIds, "");
+    }
+
+    /** 创建订单：支持预约送达时间（expectTime 为空或“立即送达”表示立即配送）。 */
+    @Transactional
+    public Order.OrderView createOrder(long userId, long storeId, List<Order.OrderItem> items,
+                                       long addressId, long couponId, String remark,
+                                       List<Long> checkoutGoodsIds, String expectTime) {
         if (items == null || items.isEmpty()) {
             throw new BizException("订单商品不能为空");
         }
@@ -159,7 +171,10 @@ public class OrderService {
         }
         userDao.updateBalance(userId, round2(user.balance() - payAmount));
         if (appliedCoupon != null) {
-            couponDao.markUsed(appliedCoupon.id());
+            // 条件核销：并发下同一张券只能被一单使用，失败则回滚整单（余额/库存一并回滚）
+            if (!couponDao.markUsed(appliedCoupon.id())) {
+                throw new BizException("优惠券已被使用，请重新选择");
+            }
         }
         // 扣减库存（乐观锁条件更新，防超卖）；任一失败整体回滚事务
         for (Order.OrderItem normalized : normalizedItems) {
@@ -170,10 +185,11 @@ public class OrderService {
 
         String now = LocalDateTime.now().format(FMT);
         String orderNo = genOrderNo();
+        String normalizedExpect = normalizeExpectTime(expectTime);
         Order order = new Order(0, orderNo, userId, storeId, store.name(), 1,
                 toJson(normalizedItems), toJson(new Order.AddressInfo(address.id(), address.name(), address.phone(), address.detail())),
                 goodsAmount, store.deliveryFee(), discount, payAmount,
-                remark == null ? "" : remark, 0, 0, now, now, "", "", "");
+                remark == null ? "" : remark, 0, 0, now, now, "", "", "", normalizedExpect);
         long id = orderDao.insert(order);
         storeDao.updateMonthlySales(storeId, 1);
         return orderDetail(id);
@@ -228,7 +244,7 @@ public class OrderService {
 
     public Order.OrderView orderDetail(long id) {
         Order order = orderDao.findById(id).orElseThrow(() -> new BizException("订单不存在"));
-        return toView(order);
+        return toViewWithRider(order);
     }
 
     public Order.OrderView orderDetail(long requesterId, int role, long id) {
@@ -236,7 +252,7 @@ public class OrderService {
         if (order.userId() != requesterId && (role != 1 || !isStoreOwner(requesterId, order.storeId()))) {
             throw new BizException(403, "无权查看该订单");
         }
-        return toView(order);
+        return toViewWithRider(order);
     }
 
     // ============ 状态流转 ============
@@ -311,17 +327,66 @@ public class OrderService {
                 requireStatus(order, 1);
                 orderDao.updateStatus(orderId, 2, "accept_time", now);
             }
-            case "deliver" -> {         // 出餐配送：2 → 3
+            case "ready" -> {           // 出餐完成：写 ready_time，进入骑手待取餐池（数字状态仍为 2）
                 requireStatus(order, 2);
+                if (!orderDao.markReady(orderId, now)) {
+                    throw new BizException("该订单已出餐，请勿重复操作");
+                }
+            }
+            case "deliver" -> {         // 出餐配送：2 → 3（仅未分配骑手的订单，避免与骑手流程冲突）
+                requireStatus(order, 2);
+                requireNoRider(orderId);
                 orderDao.updateStatus(orderId, 3, "deliver_time", now);
             }
-            case "complete" -> {        // 确认送达：3 → 4
+            case "complete" -> {        // 确认送达：3 → 4（仅未分配骑手的订单）
                 requireStatus(order, 3);
+                requireNoRider(orderId);
                 orderDao.updateStatus(orderId, 4, "complete_time", now);
             }
             default -> throw new BizException("不支持的操作：" + action);
         }
         return orderDetail(orderId);
+    }
+
+    // ============ 四端改造：骑手配送 ============
+
+    /** 待取餐池：已出餐且尚未分配骑手。 */
+    public List<Order.OrderView> riderPool() {
+        return orderDao.listRiderPool().stream().map(this::toView).toList();
+    }
+
+    /** 骑手抢单：条件更新，防并发重复抢单。 */
+    @Transactional
+    public Order.OrderView riderGrab(long riderId, long orderId) {
+        if (!orderDao.tryAssignRider(orderId, riderId)) {
+            throw new BizException("手慢了，该订单已被其他骑手接走");
+        }
+        return orderDetail(orderId);
+    }
+
+    /** 骑手取餐：2 → 3（仅本人接单的订单）。 */
+    @Transactional
+    public Order.OrderView riderPickup(long riderId, long orderId) {
+        String now = LocalDateTime.now().format(FMT);
+        if (!orderDao.riderPickup(orderId, riderId, now)) {
+            throw new BizException("无法取餐：请确认已接单且商家已出餐");
+        }
+        return orderDetail(orderId);
+    }
+
+    /** 骑手送达：3 → 4（仅本人配送的订单）。 */
+    @Transactional
+    public Order.OrderView riderDeliver(long riderId, long orderId) {
+        String now = LocalDateTime.now().format(FMT);
+        if (!orderDao.riderDeliver(orderId, riderId, now)) {
+            throw new BizException("无法送达：请确认已取餐且由你配送");
+        }
+        return orderDetail(orderId);
+    }
+
+    /** 骑手的配送单列表。 */
+    public List<Order.OrderView> riderOrders(long riderId) {
+        return orderDao.listByRider(riderId).stream().map(this::toView).toList();
     }
 
     @Transactional
@@ -343,16 +408,26 @@ public class OrderService {
     }
 
     /**
-     * 评价已完成订单
+     * 评价已完成订单（兼容旧签名，默认评价订单内第一个商品）
      */
     @Transactional
     public Review reviewOrder(long userId, long orderId, int rating, String content, List<String> tags) {
-        return reviewOrder(userId, orderId, 0, rating, content, tags);
+        return reviewOrder(userId, orderId, 0, rating, content, tags, List.of(), 0);
     }
 
-    /** 评价已完成订单中的一个具体商品。一个订单仍保持一次评价幂等口径。 */
+    /** 评价已完成订单中的一个具体商品（兼容旧签名，无图、非匿名）。 */
     @Transactional
     public Review reviewOrder(long userId, long orderId, long goodsId, int rating, String content, List<String> tags) {
+        return reviewOrder(userId, orderId, goodsId, rating, content, tags, List.of(), 0);
+    }
+
+    /**
+     * 按菜品评价：一个订单内的每个商品可分别评价，评价后重算店铺/商品评分；
+     * 订单内全部商品评价完才将 orders.reviewed 置 1。
+     */
+    @Transactional
+    public Review reviewOrder(long userId, long orderId, long goodsId, int rating, String content,
+                              List<String> tags, List<String> images, int anonymous) {
         Order order = requireOrder(orderId);
         if (order.userId() != userId) {
             throw new BizException(403, "无权评价该订单");
@@ -360,31 +435,36 @@ public class OrderService {
         if (order.status() != 4 || order.escrowStatus() != 1) {
             throw new BizException("确认收货并结算后才能评价商品");
         }
-        if (order.reviewed() == 1) {
-            throw new BizException("该订单已评价");
-        }
-        User user = userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
         if (rating < 1 || rating > 5) {
             throw new BizException("评分范围 1-5");
         }
+        User user = userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
         List<Order.OrderItem> orderItems = parseItems(order.items());
         long targetGoodsId = goodsId;
         if (targetGoodsId <= 0 && !orderItems.isEmpty()) {
             targetGoodsId = orderItems.get(0).goodsId();
         }
         final long selectedGoodsId = targetGoodsId;
-        Order.OrderItem targetItem = orderItems.stream()
+        orderItems.stream()
                 .filter(item -> item.goodsId() == selectedGoodsId)
                 .findFirst()
                 .orElseThrow(() -> new BizException("评价商品不在该订单中"));
+        if (reviewDao.existsByOrderGoods(orderId, selectedGoodsId)) {
+            throw new BizException("该商品已评价");
+        }
         String now = LocalDateTime.now().format(FMT);
-        long reviewId = reviewDao.insert(order.storeId(), targetItem.goodsId(), userId, user.username(),
-                rating, content == null ? "" : content, toJson(tags == null ? List.of() : tags), now);
-        orderDao.markReviewed(orderId);
-        return reviewDao.listByStore(order.storeId()).stream()
-                .filter(r -> r.id() == reviewId)
-                .findFirst()
-                .orElseThrow(() -> new BizException("评价失败"));
+        long reviewId = reviewDao.insert(orderId, order.storeId(), selectedGoodsId, userId, user.username(),
+                rating, content == null ? "" : content, toJson(tags == null ? List.of() : tags),
+                toJson(images == null ? List.of() : images), anonymous == 0 ? 0 : 1, now);
+        // 评价后重算店铺与商品平均评分
+        storeDao.updateRating(order.storeId(), round1(reviewDao.avgRating(order.storeId())));
+        goodsDao.updateRating(selectedGoodsId, round1(reviewDao.avgGoodsRating(selectedGoodsId)));
+        // 订单内全部商品评价完才标记整单已评价
+        long distinctGoods = orderItems.stream().map(Order.OrderItem::goodsId).distinct().count();
+        if (reviewDao.countByOrder(orderId) >= distinctGoods) {
+            orderDao.markReviewed(orderId);
+        }
+        return reviewDao.findById(reviewId).orElseThrow(() -> new BizException("评价失败"));
     }
 
     // ============ 商户统计 ============
@@ -462,10 +542,56 @@ public class OrderService {
         }
     }
 
+    /** 四端改造：订单一旦分配骑手，配送与送达只能由骑手完成，商户不得再操作。 */
+    private void requireNoRider(long orderId) {
+        if (orderDao.findRiderId(orderId) > 0) {
+            throw new BizException("该订单已由骑手配送，商户无需操作");
+        }
+    }
+
+    /**
+     * 预约送达时间归一化：空 / “立即送达” → 立即配送（空串）；
+     * 否则必须是合法且晚于当前时间的 yyyy-MM-dd HH:mm:ss。
+     */
+    private String normalizeExpectTime(String expectTime) {
+        if (expectTime == null || expectTime.isBlank() || "立即送达".equals(expectTime.trim())) {
+            return "";
+        }
+        String value = expectTime.trim();
+        try {
+            LocalDateTime target = LocalDateTime.parse(value, FMT);
+            if (target.isBefore(LocalDateTime.now())) {
+                throw new BizException("预约送达时间必须晚于当前时间");
+            }
+            return value;
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new BizException("预约送达时间格式不正确");
+        }
+    }
+
     private Order.OrderView toView(Order order) {
         List<Order.OrderItem> items = parseItems(order.items());
         Order.AddressInfo address = parseAddress(order.address());
-        return order.toView(items, address);
+        return order.toView(items, address, "", "");
+    }
+
+    /** 订单详情视图：附带骑手姓名/电话（未分配骑手时为空）。 */
+    private Order.OrderView toViewWithRider(Order order) {
+        List<Order.OrderItem> items = parseItems(order.items());
+        Order.AddressInfo address = parseAddress(order.address());
+        String riderName = "";
+        String riderPhone = "";
+        if (riderDao != null) {
+            long riderId = orderDao.findRiderId(order.id());
+            if (riderId > 0) {
+                Rider rider = riderDao.findById(riderId).orElse(null);
+                if (rider != null) {
+                    riderName = rider.name();
+                    riderPhone = rider.phone();
+                }
+            }
+        }
+        return order.toView(items, address, riderName, riderPhone);
     }
 
     private List<Order.OrderItem> parseItems(String json) {
@@ -500,5 +626,9 @@ public class OrderService {
 
     private static double round2(double v) {
         return Math.round(v * 100.0) / 100.0;
+    }
+
+    private static double round1(double v) {
+        return Math.round(v * 10.0) / 10.0;
     }
 }

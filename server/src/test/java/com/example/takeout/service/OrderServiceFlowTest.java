@@ -76,7 +76,7 @@ class OrderServiceFlowTest {
         String items = "[{\"goodsId\":100,\"goodsName\":\"测试商品\",\"price\":10.0,\"quantity\":1,\"image\":\"\"}]";
         String address = "{\"addressId\":20,\"name\":\"张三\",\"phone\":\"13800138000\",\"detail\":\"测试地址\"}";
         Order saved = new Order(13, "NO13", USER_ID, STORE_ID, "测试店", 1, items, address, 10, 3, 0, 13,
-                "", 0, 0, "2026-08-16 10:00:00", "2026-08-16 10:00:00", "", "", "");
+                "", 0, 0, "2026-08-16 10:00:00", "2026-08-16 10:00:00", "", "", "", "");
         when(orderDao.findById(13)).thenReturn(Optional.of(saved));
 
         Order.OrderView view = service.createOrder(USER_ID, STORE_ID,
@@ -90,6 +90,51 @@ class OrderServiceFlowTest {
         verify(storeDao).updateMonthlySales(STORE_ID, 1);
         verify(orderDao).insert(org.mockito.ArgumentMatchers.argThat(o ->
                 o.status() == 1 && o.escrowStatus() == 0 && o.payAmount() == 13.0));
+    }
+
+    @Test
+    void savesFutureExpectTimeForScheduledDelivery() {
+        stubCommon(10, 0, 3);
+        String future = java.time.LocalDateTime.now().plusHours(2)
+                .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        when(orderDao.insert(org.mockito.ArgumentMatchers.any(Order.class))).thenReturn(13L);
+        String items = "[{\"goodsId\":100,\"goodsName\":\"测试商品\",\"price\":10.0,\"quantity\":1,\"image\":\"\"}]";
+        String address = "{\"addressId\":20,\"name\":\"张三\",\"phone\":\"13800138000\",\"detail\":\"测试地址\"}";
+        Order saved = new Order(13, "NO13", USER_ID, STORE_ID, "测试店", 1, items, address, 10, 3, 0, 13,
+                "", 0, 0, "2026-08-16 10:00:00", "2026-08-16 10:00:00", "", "", "", future);
+        when(orderDao.findById(13)).thenReturn(Optional.of(saved));
+
+        Order.OrderView view = service.createOrder(USER_ID, STORE_ID,
+                List.of(new Order.OrderItem(GOODS_ID, "测试商品", 10, 1, "")), ADDRESS_ID, 0, "", List.of(), future);
+
+        assertEquals(future, view.expectTime());
+        verify(orderDao).insert(org.mockito.ArgumentMatchers.argThat(o -> future.equals(o.expectTime())));
+    }
+
+    @Test
+    void rejectsPastExpectTime() {
+        stubCommon(10, 0, 3);
+
+        com.example.takeout.common.BizException error = assertThrows(
+                com.example.takeout.common.BizException.class,
+                () -> service.createOrder(USER_ID, STORE_ID,
+                        List.of(new Order.OrderItem(GOODS_ID, "测试商品", 10, 1, "")), ADDRESS_ID, 0, "",
+                        List.of(), "2020-01-01 10:00:00"));
+
+        assertEquals("预约送达时间必须晚于当前时间", error.getMessage());
+    }
+
+    @Test
+    void rejectsMalformedExpectTime() {
+        stubCommon(10, 0, 3);
+
+        com.example.takeout.common.BizException error = assertThrows(
+                com.example.takeout.common.BizException.class,
+                () -> service.createOrder(USER_ID, STORE_ID,
+                        List.of(new Order.OrderItem(GOODS_ID, "测试商品", 10, 1, "")), ADDRESS_ID, 0, "",
+                        List.of(), "明天下午3点"));
+
+        assertEquals("预约送达时间格式不正确", error.getMessage());
     }
 
     @Test
@@ -138,7 +183,7 @@ class OrderServiceFlowTest {
         String items = "[{\"goodsId\":100,\"goodsName\":\"测试商品\",\"price\":10.0,\"quantity\":1,\"image\":\"\"}]";
         String address = "{\"addressId\":20,\"name\":\"张三\",\"phone\":\"13800138000\",\"detail\":\"测试地址\"}";
         Order order = new Order(7, "NO7", USER_ID, STORE_ID, "测试店", 1, items, address, 10, 3, 0, 13,
-                "", 0, 0, "2026-08-16 10:00:00", "2026-08-16 10:00:00", "", "", "");
+                "", 0, 0, "2026-08-16 10:00:00", "2026-08-16 10:00:00", "", "", "", "");
         when(orderDao.findById(7)).thenReturn(Optional.of(order));
         when(orderDao.refundEscrow(7)).thenReturn(true, false);
         when(userDao.findById(USER_ID)).thenReturn(Optional.of(user(37)));

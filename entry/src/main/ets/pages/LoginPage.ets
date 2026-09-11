@@ -45,7 +45,7 @@ export struct LoginPage {
           .width('100%')
         Row({ space: SPACING.MD }) {
           Button('我是用户')
-            .width('45%')
+            .layoutWeight(1)
             .height(44)
             .fontSize(FONT_SIZE.MD)
             .fontColor(this.selectedRole === UserRole.CUSTOMER ? Color.White : COLORS.PRIMARY)
@@ -57,7 +57,7 @@ export struct LoginPage {
             .onClick(() => { this.selectedRole = UserRole.CUSTOMER })
 
           Button('我是商户')
-            .width('45%')
+            .layoutWeight(1)
             .height(44)
             .fontSize(FONT_SIZE.MD)
             .fontColor(this.selectedRole === UserRole.MERCHANT ? Color.White : COLORS.PRIMARY)
@@ -67,6 +67,18 @@ export struct LoginPage {
             .borderWidth(this.selectedRole === UserRole.MERCHANT ? 0 : 1)
             .borderColor(COLORS.PRIMARY)
             .onClick(() => { this.selectedRole = UserRole.MERCHANT })
+
+          Button('我是骑手')
+            .layoutWeight(1)
+            .height(44)
+            .fontSize(FONT_SIZE.MD)
+            .fontColor(this.selectedRole === UserRole.RIDER ? Color.White : COLORS.PRIMARY)
+            .backgroundColor(this.selectedRole === UserRole.RIDER ? COLORS.PRIMARY : Color.Transparent)
+            .borderRadius(BORDER_RADIUS.ROUND)
+            .type(ButtonType.Capsule)
+            .borderWidth(this.selectedRole === UserRole.RIDER ? 0 : 1)
+            .borderColor(COLORS.PRIMARY)
+            .onClick(() => { this.selectedRole = UserRole.RIDER })
         }
         .width('100%')
         .justifyContent(FlexAlign.Center)
@@ -80,7 +92,7 @@ export struct LoginPage {
           .fontColor(COLORS.TEXT_HINT)
           .width('100%')
           .margin({ bottom: 4 })
-        Row({ space: SPACING.SM }) {
+        Flex({ wrap: FlexWrap.Wrap }) {
           Text('👤 用户点餐')
             .fontSize(FONT_SIZE.SM)
             .fontColor(this.selectedRole === UserRole.CUSTOMER ? COLORS.PRIMARY : COLORS.TEXT_HINT)
@@ -102,6 +114,14 @@ export struct LoginPage {
             .backgroundColor(this.selectedRole === UserRole.ADMIN ? COLORS.TAG_BG : COLORS.BG_PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
             .onClick(() => { this.selectedRole = UserRole.ADMIN })
+          Text('🛵 骑手配送')
+            .fontSize(FONT_SIZE.SM)
+            .fontColor(this.selectedRole === UserRole.RIDER ? COLORS.PRIMARY : COLORS.TEXT_HINT)
+            .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+            .backgroundColor(this.selectedRole === UserRole.RIDER ? COLORS.TAG_BG : COLORS.BG_PRIMARY)
+            .borderRadius(BORDER_RADIUS.ROUND)
+            .margin({ top: SPACING.XS })
+            .onClick(() => { this.selectedRole = UserRole.RIDER })
         }
         .width('100%')
         .margin({ bottom: SPACING.LG })
@@ -314,6 +334,7 @@ export struct LoginPage {
   private loginTypeName(): string {
     return this.selectedRole === UserRole.ADMIN
       ? 'ADMIN'
-      : this.selectedRole === UserRole.MERCHANT ? 'MERCHANT' : 'USER'
+      : this.selectedRole === UserRole.MERCHANT ? 'MERCHANT'
+      : this.selectedRole === UserRole.RIDER ? 'RIDER' : 'USER'
   }
 }

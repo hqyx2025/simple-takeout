@@ -51,6 +51,8 @@ public class UserCenterService {
     // ============ 优惠券 ============
 
     public List<Coupon> listCoupons(long userId) {
+        // 惰性过期：查询前先把过期未使用的券置为失效，保证列表状态与实际可用性一致
+        couponDao.expireOutdated(LocalDateTime.now().format(FMT));
         return couponDao.listByUser(userId);
     }
 
@@ -173,6 +175,31 @@ public class UserCenterService {
         return reviewDao.listByGoods(goodsId).stream().map(this::toReviewView).toList();
     }
 
+    // ============ 商户评价管理 ============
+
+    /** 商户查看自己名下店铺收到的评价。 */
+    public List<Review.ReviewView> merchantReviews(long merchantId) {
+        List<Long> storeIds = storeDao.listByOwner(merchantId).stream().map(Store::id).toList();
+        if (storeIds.isEmpty()) {
+            return List.of();
+        }
+        return reviewDao.listByStores(storeIds).stream().map(this::toReviewView).toList();
+    }
+
+    /** 商户回复评价（仅本店评价）。 */
+    public Review.ReviewView replyReview(long merchantId, long reviewId, String reply) {
+        Review review = reviewDao.findById(reviewId).orElseThrow(() -> new BizException("评价不存在"));
+        Store store = storeDao.findById(review.storeId()).orElseThrow(() -> new BizException("店铺不存在"));
+        if (store.ownerId() != merchantId) {
+            throw new BizException(403, "无权回复该评价");
+        }
+        if (reply == null || reply.isBlank()) {
+            throw new BizException("回复内容不能为空");
+        }
+        reviewDao.reply(reviewId, reply.trim(), LocalDateTime.now().format(FMT));
+        return toReviewView(reviewDao.findById(reviewId).orElseThrow(() -> new BizException("回复失败")));
+    }
+
     // ============ 搜索 ============
 
     public List<Store.StoreView> search(String keyword) {
@@ -210,7 +237,7 @@ public class UserCenterService {
     }
 
     private Review.ReviewView toReviewView(Review review) {
-        return review.toView(parseList(review.tags()));
+        return review.toView(parseList(review.tags()), parseList(review.images()));
     }
 
     private List<String> parseList(String json) {

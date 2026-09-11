@@ -1,9 +1,9 @@
 /**
  * 全局状态管理 - 使用AppStorage管理应用级状态
  */
-import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, MerchantStatsData, Category, RefundRecord, createEmptyUser, createDefaultCategories } from '../model/Models'
+import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, Rider, Banner, Announcement, MerchantStatsData, Category, RefundRecord, createEmptyUser, createDefaultCategories } from '../model/Models'
 import { saveAllData, clearAllData } from './DataPersistence'
-import { apiLogin, apiRegister, updateUserProfileApi, fetchCurrentUserApi, rechargeBalanceApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi, applyRefundApi, fetchCartApi, addCartItemApi, updateCartItemQuantityApi, deleteCartItemApi, deleteCartItemsApi, clearCartApi } from './ApiService'
+import { apiLogin, apiRegister, updateUserProfileApi, fetchCurrentUserApi, rechargeBalanceApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi, fetchMerchantReviewsApi, replyReviewApi, fetchRiderProfileApi, setRiderStatusApi, fetchRiderPoolApi, fetchRiderOrdersApi, grabOrderApi, pickupOrderApi, deliverOrderApi, fetchBannersApi, fetchAnnouncementsApi, fetchAdminRidersApi, updateRiderStatusApi, fetchAdminBannersApi, createBannerApi, updateBannerStatusApi, deleteBannerApi, fetchAdminAnnouncementsApi, createAnnouncementApi, updateAnnouncementStatusApi, deleteAnnouncementApi, applyRefundApi, fetchCartApi, addCartItemApi, updateCartItemQuantityApi, deleteCartItemApi, deleteCartItemsApi, clearCartApi } from './ApiService'
 import { getAuthToken, setAuthToken, getLastApiErrorMessage } from './HttpClient'
 import { logInfo, logWarn, logError } from './AppLogger'
 import { GeoPosition } from './LocationService'
@@ -625,8 +625,8 @@ export async function syncMerchantOrdersFromServer(): Promise<void> {
 /**
  * 远程下单：成功返回服务端订单；失败返回 null
  */
-export async function createOrderRemote(storeId: number, cartItems: CartItem[], addressId: number, couponId: number, remark: string, checkoutGoodsIds: number[]): Promise<Order | null> {
-  const order: Order | null = await createOrderApi(storeId, cartItems, addressId, couponId, remark, checkoutGoodsIds)
+export async function createOrderRemote(storeId: number, cartItems: CartItem[], addressId: number, couponId: number, remark: string, checkoutGoodsIds: number[], expectTime: string): Promise<Order | null> {
+  const order: Order | null = await createOrderApi(storeId, cartItems, addressId, couponId, remark, checkoutGoodsIds, expectTime)
   if (order !== null) {
     const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
     orders.unshift(order)
@@ -783,8 +783,8 @@ export async function searchStoresRemote(keyword: string): Promise<StoreItem[]> 
 /**
  * 远程提交订单评价
  */
-export async function submitReviewRemote(orderId: number, goodsId: number, rating: number, content: string, tags: string[]): Promise<boolean> {
-  const ok: boolean = await submitReviewApi(orderId, goodsId, rating, content, tags)
+export async function submitReviewRemote(orderId: number, goodsId: number, rating: number, content: string, tags: string[], images: string[], anonymous: number): Promise<boolean> {
+  const ok: boolean = await submitReviewApi(orderId, goodsId, rating, content, tags, images, anonymous)
   if (ok) {
     logInfo('Api', `远程提交评价 orderId=${orderId} 评分=${rating}`)
   }
@@ -798,6 +798,105 @@ export async function syncStoreReviewsRemote(storeId: number): Promise<void> {
   const reviews: Review[] = await fetchStoreReviews(storeId)
   AppStorage.setOrCreate<Review[]>('reviewList', reviews)
   logInfo('Api', `同步店铺评价 storeId=${storeId} ${reviews.length} 条`)
+}
+
+/**
+ * 商户端：拉取本店收到的评价
+ */
+export async function syncMerchantReviewsRemote(): Promise<Review[]> {
+  const reviews: Review[] = await fetchMerchantReviewsApi()
+  logInfo('Api', `同步商户评价 ${reviews.length} 条`)
+  return reviews
+}
+
+/**
+ * 商户端：回复评价
+ */
+export async function replyReviewRemote(reviewId: number, reply: string): Promise<boolean> {
+  return await replyReviewApi(reviewId, reply)
+}
+
+// ============ 骑手端（四端改造） ============
+
+export async function fetchRiderProfileRemote(): Promise<Rider | null> {
+  return await fetchRiderProfileApi()
+}
+
+export async function setRiderStatusRemote(online: number): Promise<Rider | null> {
+  return await setRiderStatusApi(online)
+}
+
+export async function syncRiderPoolRemote(): Promise<Order[]> {
+  return await fetchRiderPoolApi()
+}
+
+export async function syncRiderOrdersRemote(): Promise<Order[]> {
+  return await fetchRiderOrdersApi()
+}
+
+export async function grabOrderRemote(orderId: number): Promise<boolean> {
+  return await grabOrderApi(orderId)
+}
+
+export async function pickupOrderRemote(orderId: number): Promise<boolean> {
+  return await pickupOrderApi(orderId)
+}
+
+export async function deliverOrderRemote(orderId: number): Promise<boolean> {
+  return await deliverOrderApi(orderId)
+}
+
+// ============ 内容管理（Banner / 公告） ============
+
+export async function syncBannersRemote(): Promise<Banner[]> {
+  return await fetchBannersApi()
+}
+
+export async function syncAnnouncementsRemote(): Promise<Announcement[]> {
+  return await fetchAnnouncementsApi()
+}
+
+// ============ 管理端：骑手管理 / 内容管理 ============
+
+export async function syncAdminRidersRemote(): Promise<Rider[]> {
+  return await fetchAdminRidersApi()
+}
+
+export async function updateRiderStatusRemote(riderId: number, status: number): Promise<boolean> {
+  return await updateRiderStatusApi(riderId, status)
+}
+
+export async function syncAdminBannersRemote(): Promise<Banner[]> {
+  return await fetchAdminBannersApi()
+}
+
+export async function createBannerRemote(title: string, subtitle: string, image: string, color: string,
+                                         linkType: string, linkValue: string, sort: number): Promise<boolean> {
+  return await createBannerApi(title, subtitle, image, color, linkType, linkValue, sort)
+}
+
+export async function updateBannerStatusRemote(bannerId: number, status: number): Promise<boolean> {
+  return await updateBannerStatusApi(bannerId, status)
+}
+
+export async function deleteBannerRemote(bannerId: number): Promise<boolean> {
+  return await deleteBannerApi(bannerId)
+}
+
+export async function syncAdminAnnouncementsRemote(): Promise<Announcement[]> {
+  return await fetchAdminAnnouncementsApi()
+}
+
+export async function createAnnouncementRemote(title: string, content: string): Promise<boolean> {
+  return await createAnnouncementApi(title, content)
+}
+
+export async function updateAnnouncementStatusRemote(announcementId: number, status: number): Promise<boolean> {
+  return await updateAnnouncementStatusApi(announcementId, status)
+}
+
+export async function deleteAnnouncementRemote(announcementId: number): Promise<boolean> {
+  return await deleteAnnouncementApi(announcementId)
 }
 
 /**
