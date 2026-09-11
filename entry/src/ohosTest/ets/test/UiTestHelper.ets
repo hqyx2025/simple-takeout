@@ -226,6 +226,20 @@ export async function scrollUntilVisible(driver: Driver, id: string, maxScrolls:
   return null
 }
 
+/**
+ * 滚动到可见后再点击（长页面里的入口专用，例如「我的」页底部的商户管理入口）。
+ * 先 scrollUntilVisible，再用组件自身 bounds 的中心点点击；失败时退回普通 clickByIdOrText。
+ */
+export async function scrollAndClick(driver: Driver, id: string, text: string): Promise<boolean> {
+  const found = await scrollUntilVisible(driver, id)
+  if (found !== null && found !== undefined) {
+    if (await clickComponentCenter(driver, found, id)) {
+      return true
+    }
+  }
+  return await clickByIdOrText(driver, id, text)
+}
+
 /** 等待任一组件出现（用于「同意弹窗可能出现也可能不出现」这类分支）。 */
 export async function waitAny(driver: Driver, ids: string[], timeoutMs: number): Promise<Component | null> {
   const deadline: number = timeoutMs

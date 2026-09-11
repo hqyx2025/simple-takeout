@@ -27,6 +27,10 @@ export struct MerchantOrdersPage {
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State currentStatus: number = -1
   @State allOrders: Order[] = []
+  // 列表重建触发器：syncMerchantOrdersFromServer 是**原地修改**同一批 Order 对象，
+  // 只重新赋值数组时 ArkUI 按 id 复用旧列表项、不会重绘，于是「点了接单界面仍显示待接单」
+  // （设备实测确认）。把它拼进 ForEach key，强制重建（与购物车 cartRenderVersion 同一套路）。
+  @State renderVersion: number = 0
   @State merchantId: number = 0
   private statusTabs: OrderStatusTab[] = [
     OrderStatusTab.create(-1, '全部'),
@@ -53,6 +57,7 @@ export struct MerchantOrdersPage {
     await syncMerchantOrdersFromServer()
     if (this.merchantId > 0) {
       this.allOrders = getMerchantOrders(this.merchantId)
+      this.renderVersion += 1
     }
   }
 
@@ -103,6 +108,7 @@ export struct MerchantOrdersPage {
         Text('‹ 返回')
           .fontSize(FONT_SIZE.BIG_TITLE)
           .fontColor(COLORS.TEXT_PRIMARY)
+          .id('merchant-orders-back')
           .onClick(() => { router.back() })
         Text('订单管理')
           .fontSize(FONT_SIZE.XL)
@@ -160,7 +166,7 @@ export struct MerchantOrdersPage {
             ListItem() {
               this.OrderCard(order)
             }
-          }, (order: Order) => order.id.toString())
+          }, (order: Order) => `${this.renderVersion}-${order.id}`)
         }
         .width('100%')
         .layoutWeight(1)
@@ -189,6 +195,7 @@ export struct MerchantOrdersPage {
         Text(getOrderStatusText(order.status, order.escrowStatus ?? 0))
           .fontSize(FONT_SIZE.MD)
           .fontColor(getOrderStatusColor(order.status, order.escrowStatus ?? 0))
+          .id(`merchant-order-status-${order.id}`)
       }
       .width('100%')
 
@@ -244,6 +251,7 @@ export struct MerchantOrdersPage {
     .padding(SPACING.LG)
     .backgroundColor(COLORS.BG_WHITE)
     .borderRadius(BORDER_RADIUS.LG)
+    .id(`merchant-order-card-${order.id}`)
   }
 
   @Builder
@@ -257,6 +265,7 @@ export struct MerchantOrdersPage {
         .backgroundColor(COLORS.PRIMARY)
         .borderRadius(BORDER_RADIUS.ROUND)
         .type(ButtonType.Capsule)
+        .id(`merchant-action-${order.id}`)
         .onClick(() => { this.handleAccept(order) })
     } else if (order.status === 2) {
       // 制作中：出餐按钮（2→3）
@@ -267,6 +276,7 @@ export struct MerchantOrdersPage {
         .backgroundColor(COLORS.PRIMARY)
         .borderRadius(BORDER_RADIUS.ROUND)
         .type(ButtonType.Capsule)
+        .id(`merchant-action-${order.id}`)
         .onClick(() => { this.handleStartDelivery(order) })
     } else if (order.status === 3) {
       // 配送中：确认送达按钮（3→4）
@@ -277,6 +287,7 @@ export struct MerchantOrdersPage {
         .backgroundColor(COLORS.PRIMARY)
         .borderRadius(BORDER_RADIUS.ROUND)
         .type(ButtonType.Capsule)
+        .id(`merchant-action-${order.id}`)
         .onClick(() => { this.handleComplete(order) })
     } else if (order.status === 4) {
       // 已送达待确认收货 / 已结算完成（与大纲 6.4 口径一致）

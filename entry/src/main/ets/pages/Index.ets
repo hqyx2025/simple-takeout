@@ -2535,9 +2535,9 @@ struct ProfileMainPage {
               .fontColor(COLORS.PRIMARY)
               .width('100%')
               .padding({ left: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
-            this.ProfileMenuRow('📋', '店铺管理', () => { router.pushUrl({ url: 'pages/MerchantCenterPage' }) })
-            this.ProfileMenuRow('📊', '订单管理', () => { router.pushUrl({ url: 'pages/MerchantOrdersPage' }) })
-            this.ProfileMenuRow('💰', '收入统计', () => { router.pushUrl({ url: 'pages/MerchantStatsPage' }) })
+            this.ProfileMenuRow('📋', '店铺管理', () => { router.pushUrl({ url: 'pages/MerchantCenterPage' }) }, 'profile-merchant-center')
+            this.ProfileMenuRow('📊', '订单管理', () => { router.pushUrl({ url: 'pages/MerchantOrdersPage' }) }, 'profile-merchant-orders')
+            this.ProfileMenuRow('💰', '收入统计', () => { router.pushUrl({ url: 'pages/MerchantStatsPage' }) }, 'profile-merchant-stats')
           }
           .width('100%')
           .padding({ top: SPACING.SM })

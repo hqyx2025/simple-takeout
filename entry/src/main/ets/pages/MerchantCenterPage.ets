@@ -344,6 +344,7 @@ export struct MerchantCenterPage {
           Text('评价管理')
             .fontSize(FONT_SIZE.SM)
             .fontColor(COLORS.PRIMARY)
+            .id('merchant-reviews-entry')
             .onClick(() => { router.pushUrl({ url: 'pages/MerchantReviewsPage' }) })
           Text('分类管理')
             .fontSize(FONT_SIZE.SM)

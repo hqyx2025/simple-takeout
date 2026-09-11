@@ -5,6 +5,7 @@ import checkoutGuardTest from './CheckoutGuard.test';
 import checkoutFlowTest from './CheckoutFlow.test';
 import searchFlowTest from './SearchFlow.test';
 import reviewFlowTest from './ReviewFlow.test';
+import merchantFlowTest from './MerchantFlow.test';
 import probeTest from './Probe.test';
 import importProbeTest from './ImportProbe.test';
 
@@ -16,6 +17,7 @@ export default function testsuite() {
   checkoutFlowTest();
   searchFlowTest();
   reviewFlowTest();
+  merchantFlowTest();
   probeTest();
   importProbeTest();
 }

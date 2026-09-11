@@ -150,6 +150,7 @@ export struct MerchantStatsPage {
         .fontWeight(FontWeight.Bold)
         .fontColor(COLORS.TEXT_WHITE)
         .width('100%')
+        .id('stats-today-revenue')
 
       Row() {
         Column({ space: SPACING.XS }) {
@@ -157,6 +158,7 @@ export struct MerchantStatsPage {
             .fontSize(FONT_SIZE.XL)
             .fontWeight(FontWeight.Bold)
             .fontColor(COLORS.TEXT_WHITE)
+            .id('stats-today-orders')
           Text('今日订单')
             .fontSize(FONT_SIZE.SM)
             .fontColor(COLORS.TEXT_WHITE)
@@ -169,6 +171,7 @@ export struct MerchantStatsPage {
             .fontSize(FONT_SIZE.XL)
             .fontWeight(FontWeight.Bold)
             .fontColor(COLORS.TEXT_WHITE)
+            .id('stats-completed-orders')
           Text('已完成订单')
             .fontSize(FONT_SIZE.SM)
             .fontColor(COLORS.TEXT_WHITE)
