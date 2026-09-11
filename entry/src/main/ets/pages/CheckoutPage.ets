@@ -366,6 +366,7 @@ export struct CheckoutPage {
       Text('‹ 返回')
         .fontSize(FONT_SIZE.MD)
         .fontColor(COLORS.TEXT_PRIMARY)
+        .id('checkout-back')
         .onClick(() => { router.back() })
       Text('确认订单')
         .fontSize(FONT_SIZE.XL)
@@ -657,6 +658,8 @@ export struct CheckoutPage {
           .fontColor(COLORS.PRICE_RED)
           .fontWeight(FontWeight.Bold)
           .margin({ left: SPACING.XS })
+          // 设备端 UiTest 用：断言结算实付金额（组件匹配器比坐标点击可靠）
+          .id('checkout-pay-amount')
       }
       .layoutWeight(1)
 

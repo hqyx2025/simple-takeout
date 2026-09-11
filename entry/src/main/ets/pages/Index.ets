@@ -419,6 +419,7 @@ struct Index {
     .height('100%')
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
+    .id(`tab-${targetIndex}`)
     .onClick(() => {
       this.currentTab = targetIndex
       this.tabsController.changeIndex(targetIndex)
@@ -700,6 +701,7 @@ struct HomePage {
               .width(16)
               .height(16)
           }
+          .id('home-location-entry')
           .onClick(() => {
             if (!this.loggedIn) {
               this.onNavigateLocationLogin()
@@ -729,6 +731,7 @@ struct HomePage {
           .backgroundColor(COLORS.BG_PRIMARY)
           .borderRadius(BORDER_RADIUS.ROUND)
           .layoutWeight(1)
+          .id('home-search-entry')
           .onClick(() => { router.pushUrl({ url: 'pages/SearchPage' }) })
         }
         .width('100%')
@@ -2501,7 +2504,7 @@ struct ProfileMainPage {
               return
             }
             router.pushUrl({ url: 'pages/CartPage' })
-          })
+          }, 'profile-cart-entry')
           this.ProfileMenuRow('❤️', '我的收藏', () => { router.pushUrl({ url: 'pages/FavoriteListPage' }) })
           this.ProfileMenuRow('📞', '联系客服', () => { router.pushUrl({ url: 'pages/ContactCustomerServicePage' }) })
           this.ProfileMenuRow('⚙️', '设置', () => { router.pushUrl({ url: 'pages/SettingsPage' }) })
@@ -2647,7 +2650,7 @@ struct ProfileMainPage {
   }
 
   @Builder
-  ProfileMenuRow(icon: string, title: string, action: () => void) {
+  ProfileMenuRow(icon: string, title: string, action: () => void, rowId: string = '') {
     Row({ space: SPACING.MD }) {
       Text(icon).fontSize(18)
       Text(title).fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
@@ -2655,6 +2658,7 @@ struct ProfileMainPage {
     }
     .width('100%').height(52)
     .padding({ left: SPACING.LG, right: SPACING.LG })
+    .id(rowId)
     .onClick(() => { action() })
   }
 }

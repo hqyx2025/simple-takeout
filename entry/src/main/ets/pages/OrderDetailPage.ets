@@ -472,6 +472,8 @@ export struct OrderDetailPage {
           .fontSize(FONT_SIZE.BIG_TITLE)
           .fontWeight(FontWeight.Bold)
           .fontColor(getOrderStatusColor(this.order!.status, this.order!.escrowStatus ?? 0))
+          // 设备端 UiTest 用：断言订单状态文案（待付款/已取消/已完成…）
+          .id('order-detail-status')
         if (this.order!.status === 3) {
           Text(this.getEstimatedTime())
             .fontSize(FONT_SIZE.SM)
@@ -821,6 +823,7 @@ export struct OrderDetailPage {
             .borderRadius(BORDER_RADIUS.ROUND)
             .type(ButtonType.Capsule)
             .enabled(!this.paying)
+            .id('order-cancel')
             .onClick(() => { this.showCancelDialog = true })
 
           Button(this.paying ? '支付中…' : `立即支付 ¥${this.order!.payAmount.toFixed(2)}`)
@@ -832,6 +835,7 @@ export struct OrderDetailPage {
             .borderRadius(BORDER_RADIUS.ROUND)
             .type(ButtonType.Capsule)
             .enabled(!this.paying)
+            .id('order-pay')
             .onClick(() => { this.payNow() })
         }
 

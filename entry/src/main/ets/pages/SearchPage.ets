@@ -77,16 +77,19 @@ export struct SearchPage {
           .width(40)
           .height(40)
           .textAlign(TextAlign.Center)
+          .id('search-back')
           .onClick(() => { this.onBack() })
         TextInput({ placeholder: '搜索美食、店铺', text: this.searchText })
           .layoutWeight(1)
           .height(36)
           .backgroundColor(COLORS.BG_PRIMARY)
           .borderRadius(BORDER_RADIUS.ROUND)
+          .id('search-input')
           .onChange((value: string) => { this.searchText = value })
         Text('搜索')
           .fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.PRIMARY)
+          .id('search-submit')
           .onClick(() => { this.doSearch() })
       }
       .width('100%')
@@ -117,6 +120,7 @@ export struct SearchPage {
                   }
                 }, (item: StoreItem) => item.id.toString())
               }
+              .id('search-result-list')
               .width('100%')
               .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.LG })
               .scrollBar(BarState.Off)
@@ -223,6 +227,7 @@ export struct SearchPage {
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
     .margin({ top: 80 })
+    .id('search-empty')
   }
 
   @Builder

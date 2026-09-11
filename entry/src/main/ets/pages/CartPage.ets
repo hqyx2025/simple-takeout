@@ -395,6 +395,7 @@ export struct CartPage {
               .backgroundColor(COLORS.PRIMARY)
               .borderRadius(BORDER_RADIUS.ROUND)
               .type(ButtonType.Capsule)
+              .id('cart-checkout')
               .onClick(() => { this.checkoutAll() })
           }
         }
@@ -499,12 +500,14 @@ export struct CartPage {
           .backgroundColor(COLORS.BG_PRIMARY)
           .borderRadius(BORDER_RADIUS.CIRCLE)
           .textAlign(TextAlign.Center)
+          .id(`cart-minus-${item.goods.id}-${item.specId ?? 0}`)
           .onClick(() => { this.changeQuantity(item, -1) })
         Text(this.getRowQuantity(item).toString())
           .fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_PRIMARY)
           .width(24)
           .textAlign(TextAlign.Center)
+          .id(`cart-qty-${item.goods.id}-${item.specId ?? 0}`)
         Text('+')
           .width(30)
           .height(30)
@@ -513,6 +516,7 @@ export struct CartPage {
           .backgroundColor(COLORS.PRIMARY)
           .borderRadius(BORDER_RADIUS.CIRCLE)
           .textAlign(TextAlign.Center)
+          .id(`cart-plus-${item.goods.id}-${item.specId ?? 0}`)
           .onClick(() => { this.changeQuantity(item, 1) })
       }
       .alignItems(VerticalAlign.Center)
@@ -539,6 +543,7 @@ export struct CartPage {
           .fontColor(COLORS.PRICE_RED)
           .fontWeight(FontWeight.Bold)
           .layoutWeight(1)
+          .id('cart-bundle-gap')
         Text('去凑单 ›')
           .fontSize(FONT_SIZE.SM)
           .fontColor(COLORS.PRIMARY)

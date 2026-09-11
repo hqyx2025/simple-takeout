@@ -106,6 +106,13 @@
 - **隐私同意状态必须单一权威且单向升级**：`setPrivacyConsent()` 只改内存变量、不落盘，而 `loadAllData()` 又会用持久化值无条件覆盖 `AppStorage['privacyConsent']`——两者叠加会出「同意后立刻被改回 false」的静默故障（首页数据全空、冷启动不回登录态）。规则：同意时先 `savePrivacyConsent(true)` 落盘、再 `loadAllData()`；`loadAllData()` 里同意状态只允许 `true` 覆盖 `false`，永不反向。
 - **同意/引导类覆盖层不要放在 `layoutWeight(1)` 滚动区的兄弟位置**：在 `Column` 里它会被分配 0 高度而"静默不渲染"（门禁生效、提示看不到）。这类全屏流程改用**独立路由页**（见 `pages/ConsentPage.ets`），或在根节点用 `Stack` 承载。
 - 设备实测链路见 `md/设备实测指南.md`：模拟器不校验发布签名，`scripts/device-test.ps1` + `uitest dumpLayout/uiInput` 可在无窗口环境下驱动并校验 UI；`hilog | grep TakeoutApp` 读应用自身日志（注意 hilog 缓冲会滚动，先 `hilog -r` 清空再复现）。
+- **设备端 UiTest 必须自己拉起被测应用**：`aa test` 会把 ohosTest 模板生成的 TestAbility 页（`testability/pages/Index`，只有 "Hello World"）拉到前台**盖住应用**，此时驱动只能看到测试页。用例里要先 `AbilityDelegator.startAbility(EntryAbility)`（见 `entry/src/ohosTest/ets/test/UiTestHelper.ets` 的 `launchAppUnderTest`），否则一切查找都会失败。
+- **`driver.findComponent` 未命中返回 `null`（不是 `undefined`）**：`expect(comp !== undefined).assertTrue()` 在未命中时恒真 → 用例空跑还报 Pass（历史 LoginFlow/LocationFlow/CheckoutGuard 就是这样空跑的）。统一用 `isFound()` / `requireComponent()`（后者同时收窄类型，否则 `.click()` 报 `'x' is possibly 'null'` 编译不过）。
+- **UiTest 里不要复用 Component 句柄**：父级 ForEach key 带版本号（如购物车 `cartRenderVersion`）时，一次点击触发重建就让旧句柄失效，报 `... does not exist on current UI! (NoCandidates)`；用 `clickByIdOrText()` 每次点击前重新查找并重试。
+- **不要靠「按返回」给用例复位导航栈**：在隐私同意页/登录页上按返回会把应用直接退到桌面，后续断言全部找不到控件；正确做法是 host 侧 `aa force-stop` + `aa start`（进程重启后页面栈从 `pages/Index` 重来）。
+- **清数据后首次进定位页会弹系统定位权限框并遮住应用**（UiTest 报 `window is covered`，什么都找不到）：host 侧预授权 `atm perm -g -i <accessTokenId> -p ohos.permission.LOCATION`（`bm dump -n <bundle>` 取 accessTokenId），`APPROXIMATELY_LOCATION` 同理。
+- 设备实测脚本：`scripts/device-uitest.ps1`（构建→安装→拉起→跑某个用例类→判定；`-GuestClean` 清数据、`-GrantLocation` 预授权）、`scripts/device-checkout-regression.ps1`（结算负路径/待付款回归，带 host 侧数字核对）、`scripts/ui-dump.ps1`（结构化解析 `dumpLayout` 产物，替代跨节点正则）。每个用例类的前置状态不同，**一次只跑一个类**。
+- **PS 5.1 下 `$ErrorActionPreference='Stop'` 会让构建"莫名失败"**：hvigor 往 stderr 写进度，原生命令写 stderr 即被当成 terminating error；设备脚本里用 `Continue`，成功与否另行判断。另：判断产物是否最新要按**各模块自己的源码时间**比对，主模块 `UP-TO-DATE` 时 HAP 时间戳不会更新。
 
 ## 9. 提交规范
 

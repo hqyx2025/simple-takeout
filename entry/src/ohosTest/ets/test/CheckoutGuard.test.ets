@@ -1,13 +1,33 @@
+/**
+ * 结算页入口契约守卫（设备端 UiTest）。
+ *
+ * 前置（由 scripts/device-checkout-regression.ps1 布置）：购物车至少有一行商品。
+ * 用例自己走「我的 → 购物车 → 去结算」，断言结算页确实给出了提交按钮。
+ *
+ * 说明：端到端的下单链路（起送价拦截、待付款订单、库存/余额/请求次数核对）在
+ * CheckoutFlow 里；这里只守「结算页能进得去、提交按钮在」这条最小契约，
+ * 用组件匹配器驱动，不再依赖会失真的 `!== undefined` 断言。
+ */
 import { Driver, ON } from '@kit.TestKit'
 import { describe, it, expect } from '@ohos/hypium'
+import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText } from './UiTestHelper'
 
 export default function checkoutGuardTest() {
   describe('CheckoutGuard', () => {
-    // 在真机执行前置条件：已进入结算页并准备好至少一个可结算商品。
-    it('checkout page exposes submit action for end-to-end validation', 0, async () => {
+    it('CheckoutGuard_cart_entry_reaches_checkout_page', 0, async () => {
       const driver: Driver = Driver.create()
-      const submit = await driver.findComponent(ON.id('checkout-submit'))
-      expect(submit !== undefined).assertTrue()
+      await launchAppUnderTest(driver)
+
+      expect(await clickByIdOrText(driver, 'tab-3', '我的')).assertTrue()
+      await driver.delayMs(1500)
+      expect(await clickByIdOrText(driver, 'profile-cart-entry', '购物车 (1)')).assertTrue()
+      await driver.delayMs(2500)
+      expect(await clickByIdOrText(driver, 'cart-checkout', '去结算')).assertTrue()
+      await driver.delayMs(2500)
+
+      const submit = requireComponent(
+        await driver.waitForComponent(ON.id('checkout-submit'), 10000), 'checkout-submit')
+      expect(isFound(submit)).assertTrue()
     })
   })
 }

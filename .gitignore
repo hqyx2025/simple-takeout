@@ -28,4 +28,10 @@
 # 设备实测本地产物（截图 / 界面元素树）
 /device-screenshot.jpeg
 /.ui-layout.json
+/.ui-layout-probe.json
 /.emu_start.log
+/*.jpeg
+/layout.json
+/current-layout.json
+/my-layout.json
+/current-screen.jpeg
