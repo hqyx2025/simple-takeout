@@ -217,6 +217,9 @@ export struct CheckoutPage {
     }
     // 已下单成功的购物车行（按菜品+规格精确清理，避免连带删除未结算的其他规格）
     const successfulRows: CartItem[] = []
+    // 服务端活动价（如限时秒杀）可能低于本地预估，累计差额用于明确告知用户
+    let activitySaved: number = 0
+    const stores: StoreItem[] = getAllStoresList()
     for (let i = 0; i < this.checkoutStoreIds.length; i++) {
       const storeId: number = this.checkoutStoreIds[i]
       const items: CartItem[] = this.getStoreItems(storeId)
@@ -239,6 +242,14 @@ export struct CheckoutPage {
         this.orderFailureMessage = failureMessage
         this.showOrderFailureDialog = true
         return
+      }
+      // 成交金额以服务端为准（秒杀等在服务端生效），差额主动提示，避免用户以为结算页金额算错
+      const matchedStore: StoreItem[] = stores.filter((store: StoreItem) => store.id === storeId)
+      const deliveryFee: number = matchedStore.length > 0 ? matchedStore[0].deliveryFee : 0
+      const couponAmount: number = couponId > 0 && this.selectedCoupon !== null ? this.selectedCoupon.amount : 0
+      const expectedPay: number = Math.round((groupTotal + deliveryFee - couponAmount) * 100) / 100
+      if (serverOrder.payAmount < expectedPay - 0.01) {
+        activitySaved += expectedPay - serverOrder.payAmount
       }
       if (firstOrder === null) {
         firstOrder = serverOrder
@@ -272,10 +283,12 @@ export struct CheckoutPage {
     this.submitting = false
     const submittedCount: number = this.checkoutStoreIds.length
     promptAction.showToast({
-      message: submittedCount > 1
-        ? `已提交${submittedCount}笔订单，请分别完成支付`
-        : '订单提交成功，请在 15 分钟内完成支付',
-      duration: 2500
+      message: activitySaved > 0.01
+        ? `订单提交成功，已按活动价结算，比预估少付 ¥${activitySaved.toFixed(2)}，请在 15 分钟内完成支付`
+        : (submittedCount > 1
+          ? `已提交${submittedCount}笔订单，请分别完成支付`
+          : '订单提交成功，请在 15 分钟内完成支付'),
+      duration: 3000
     })
     router.pushUrl({ url: 'pages/OrderDetailPage' })
   }

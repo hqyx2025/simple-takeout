@@ -36,6 +36,7 @@
     "pages/AdminRefundPage",
     "pages/AdminRiderPage",
     "pages/AdminContentPage",
-    "pages/RankingPage"
+    "pages/RankingPage",
+    "pages/ReviewImagePage"
   ]
 }

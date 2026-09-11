@@ -206,8 +206,10 @@ export async function del<T>(url: string): Promise<ApiResponse<T>> {
 export async function uploadFile(url: string, fileUri: string, showErrorToast: boolean = true): Promise<UploadResult | null> {
   lastApiErrorMessage = ''
   let file: fileIo.File | null = null
+  // 请求对象在 finally 中统一 destroy，避免上传失败/异常时连接资源泄漏
+  let httpRequest: http.HttpRequest | null = null
   try {
-    const httpRequest: http.HttpRequest = http.createHttp()
+    httpRequest = http.createHttp()
     file = fileIo.openSync(fileUri, fileIo.OpenMode.READ_ONLY)
     const stat: fileIo.Stat = fileIo.statSync(file.fd)
     const buffer: ArrayBuffer = new ArrayBuffer(stat.size)
@@ -234,7 +236,6 @@ export async function uploadFile(url: string, fileUri: string, showErrorToast: b
     }
     logInfo('Http', `前端请求后端：上传评价图片（POST ${url}）`)
     const response: http.HttpResponse = await httpRequest.request(url, options)
-    httpRequest.destroy()
     const body: string = typeof response.result === 'string' ? response.result as string : ''
     if (response.responseCode !== 200 || body === '') {
       lastApiErrorMessage = '图片上传失败，请稍后重试'
@@ -266,6 +267,13 @@ export async function uploadFile(url: string, fileUri: string, showErrorToast: b
         fileIo.closeSync(file)
       } catch (closeErr) {
         logWarn('Http', '关闭上传文件失败')
+      }
+    }
+    if (httpRequest !== null) {
+      try {
+        httpRequest.destroy()
+      } catch (destroyErr) {
+        logWarn('Http', '释放上传请求对象失败')
       }
     }
   }

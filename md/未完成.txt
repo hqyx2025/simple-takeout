@@ -1,30 +1,27 @@
-尚未完成的质量项（均依赖外部资源，非代码缺失）：
+尚未完成的质量项：
 
-1. Release 签名：`build-profile.json5` 的 `signingConfigs` 仍为空，仓库只提供接入脚本
-   （`scripts/enable-release-signing.ps1`）与模板。发布证书 `.p12/.cer/.p7b` 必须在用户
-   华为开发者账号下申请（AGC 上传 CSR 后签发），拿到材料后一条命令即可接入并打包。
-2. 正式 HTTPS 域名：`API_CONFIG.USE_HTTPS=false`、`RELEASE_BASE_URL` 仍为示例域名
-   `https://api.example.com`，需备案域名与证书到位后切换；`server/application-https.yml` 已提供。
-3. AppAnalyzer / Code Linter 上架前体检：仅有 DevEco Studio IDE 入口，命令行插件
-   （`plugins/codelinter/index.js`）脱离 IDE 运行会报 “configuration file ... is in use” 并中止，
-   需在 IDE 内执行（Code → Inspect Code / Tools → AppAnalyzer）。仓库改用
-   `scripts/release-check.ps1` 提供可复现的静态门禁（当前 0 ERROR）。
-4. 真机 / 模拟器端到端回归：当前环境未连接任何 HarmonyOS 设备（`hdc list targets` 为空），
+1. 真机 / 模拟器端到端回归：当前环境未连接任何 HarmonyOS 设备（`hdc list targets` 为空），
    本轮功能只完成到「后端接口实测 + 前端编译通过」，UI 交互链路（选规格弹窗、支付倒计时、
-   图库选图上传、榜单/秒杀卡片）尚未在设备上人工过一遍。
+   图库选图上传、榜单/秒杀卡片、凑单提示）尚未在设备上人工过一遍。
+2. AppAnalyzer / Code Linter 上架前体检：只有 DevEco Studio IDE 入口，命令行插件
+   （`plugins/codelinter/index.js`）脱离 IDE 运行会报 “configuration file ... is in use” 并中止，
+   需在 IDE 内执行（Code → Inspect Code / Tools → AppAnalyzer）。
 
-已完成（本轮）：
+已移出本轮范围（不做，也不再作为待办）：
 
-- 多规格 SKU：`goods_specs` 表 + 规格独立价格/库存、购物车按 (菜品,规格) 唯一、下单规格快照、
-  商户端规格维护、前端选规格弹窗。
-- 待付款支付模型与超时自动取消：下单只占库存/优惠券进入 status=0，`POST /api/orders/{id}/pay`
-  扣款转待接单，`OrderTimeoutJob` 每分钟扫描并自动取消超过 15 分钟的待付款订单（回滚库存/
-  秒杀名额/优惠券）；前端支付倒计时、立即支付、取消订单闭环。
-- 榜单 / 限时秒杀 / 凑单：`GET /api/rankings/stores|goods`、`GET /api/seckills`、
-  `GET /api/stores/{id}/bundle`；首页秒杀专区 + 榜单页 + 购物车凑单提示。
-- 图文评价图片上传：`POST /api/upload`（本地存储 + `/uploads/**` 静态访问）+ 评价页系统图库
-  选图、上传、预览与删除。
-- Release 签名/上架体检工具链：`scripts/enable-release-signing.ps1`、`scripts/build-release.ps1`、
-  `scripts/release-check.ps1`（可产出 `md/上架体检报告.md`），Release 模式构建已验证通过。
+- Release 发布证书申请与签名打包、AGC 上架材料（软著/备案/隐私政策网址/截图）。
+- 正式 HTTPS 域名与证书联调（`API_CONFIG.USE_HTTPS` 仍为 false，`RELEASE_BASE_URL` 仍为示例域名）。
+  说明：`scripts/enable-release-signing.ps1`、`scripts/build-release.ps1`、`scripts/release-check.ps1`
+  与 `md/上架体检与Release签名.md` 作为**可选工具**保留在仓库，需要时随时可用，但不属于当前交付要求。
 
-对外口径：功能已闭环、Release 可编译，但**尚未签署发布证书、尚未上架**，请勿宣称已上架。
+已完成（业务功能层，均为端到端闭环）：
+
+- 多规格 SKU：规格独立价格/库存、购物车按 (菜品,规格) 唯一、下单规格快照、商户端规格维护、前端选规格弹窗。
+- 待付款支付模型与超时自动取消：下单占库存/优惠券进入 status=0，支付接口扣款转待接单，
+  定时任务每分钟扫描并自动取消超过 15 分钟的待付款订单（回滚库存/秒杀名额/优惠券）；
+  前端支付倒计时、立即支付、取消订单闭环。
+- 榜单 / 限时秒杀 / 凑单：店铺榜与菜品榜、秒杀专区（秒杀价下单自动生效）、购物车凑单提示。
+- 图文评价图片上传：上传接口 + 静态访问 + 评价页系统图库选图、预览与删除。
+
+验证口径：后端 `mvn test` 50 个测试通过；真实 MySQL 联调实测通过；前端 debug 与 Release 模式均
+`BUILD SUCCESSFUL`。

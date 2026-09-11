@@ -42,6 +42,9 @@ export struct CartPage {
   @State totalPrice: number = 0
   // 凑单提示（未达起送价的店铺）
   @State bundleHints: BundleHint[] = []
+  // 上次凑单查询对应的「店铺+金额」签名，避免数量微调时重复请求
+  private bundleHintSignature: string = ''
+  private bundleFetching: boolean = false
 
   async aboutToAppear(): Promise<void> {
     logInfo('Page', `进入购物车页面 CartPage，商品种类=${this.cartItems.length}`)
@@ -76,15 +79,26 @@ export struct CartPage {
   /** 凑单提示：对未达起送价的店铺查询还差多少元并给出可凑单菜品。 */
   private async refreshBundleHints(): Promise<void> {
     const storeIds: number[] = this.getStoreIds()
-    const hints: BundleHint[] = []
-    for (let i = 0; i < storeIds.length && i < 3; i++) {
-      const storeId: number = storeIds[i]
-      const info: BundleInfo | null = await fetchBundleRemote(storeId, this.getStoreTotal(storeId))
-      if (info !== null && info.gap > 0) {
-        hints.push(BundleHint.create(info))
-      }
+    // 数量增减会让 refreshFromDatabase 被连续调用多次，这里按「店铺+金额」签名去重，避免重复请求凑单接口
+    const signature: string = storeIds.map((storeId: number) => `${storeId}:${this.getStoreTotal(storeId)}`).join('|')
+    if (signature === this.bundleHintSignature || this.bundleFetching) {
+      return
     }
-    this.bundleHints = hints
+    this.bundleFetching = true
+    const hints: BundleHint[] = []
+    try {
+      for (let i = 0; i < storeIds.length && i < 3; i++) {
+        const storeId: number = storeIds[i]
+        const info: BundleInfo | null = await fetchBundleRemote(storeId, this.getStoreTotal(storeId))
+        if (info !== null && info.gap > 0) {
+          hints.push(BundleHint.create(info))
+        }
+      }
+      this.bundleHints = hints
+      this.bundleHintSignature = signature
+    } finally {
+      this.bundleFetching = false
+    }
   }
 
   /** 某店铺已选商品金额（按行实际单价计算）。 */

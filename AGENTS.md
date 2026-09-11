@@ -31,7 +31,7 @@
   ```
   构建日志：`.hvigor/outputs/build-logs/build.log`；判断成功要看日志里的 `BUILD SUCCESSFUL` 并确认 `entry/build/default/outputs/default/*.hap` 时间戳已更新（流水线里 `Select-String` 会吞掉退出码，别只看 `$LASTEXITCODE`）
 - 后端测试：`mvn -f server/pom.xml test`（**50 个测试**，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格）
-- Release 打包与上架体检：`scripts/enable-release-signing.ps1`（接入发布证书）→ `scripts/build-release.ps1`（签名包）→ `scripts/release-check.ps1 [-Build]`（上架体检，输出 `md/上架体检报告.md`）；详见 `md/上架体检与Release签名.md`
+- Release 打包（**当前范围外，可选工具**）：`scripts/enable-release-signing.ps1`（接入发布证书）→ `scripts/build-release.ps1`（签名包）→ `scripts/release-check.ps1 [-Build]`（上架体检，输出 `md/上架体检报告.md`，该报告为生成物不入库）；详见 `md/上架体检与Release签名.md`。日常开发只需 debug 构建，不必碰这一套。
 - **注意**：PowerShell 5.x 不支持 `&&`，连续命令必须分开执行；`git commit` 不支持 heredoc，长提交信息先写文件再 `git commit -F <file>`
 - 模拟器访问宿主机后端：`http://10.0.2.2:9000`
 

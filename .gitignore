@@ -23,3 +23,5 @@
 /signing/**/secrets*
 # 本地签名接入文件（含密码，由 scripts/enable-release-signing.ps1 生成）
 /signing/release-signing.json5
+# 上架体检报告为生成物，不入库
+/md/上架体检报告.md

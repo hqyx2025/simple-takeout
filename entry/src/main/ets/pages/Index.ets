@@ -1289,6 +1289,8 @@ export struct StoreDetailContent {
   onNavigateLogin: () => void = () => {}
   // 多规格菜品：由页面层打开选规格弹窗（弹窗需要 CustomDialogController，只能挂在页面组件上）
   onSelectSpecGoods: (goods: GoodsItem) => void = () => {}
+  // 本店进行中的秒杀（商品卡片标出秒杀价）
+  @State storeSeckills: SeckillItem[] = []
 
   aboutToAppear() {
     this.loadStoreData()
@@ -1340,6 +1342,37 @@ export struct StoreDetailContent {
     this.refreshGoods()
     this.refreshReviews()
     this.refreshStoreInfo()
+    this.refreshStoreSeckills()
+  }
+
+  // 本店进行中的限时秒杀：用于在商品卡片上标出秒杀价（下单时后端会自动按秒杀价结算）
+  private async refreshStoreSeckills(): Promise<void> {
+    if (!this.loggedIn || this.storeId <= 0) {
+      this.storeSeckills = []
+      return
+    }
+    const list: SeckillItem[] = await fetchSeckillsRemote(50)
+    this.storeSeckills = list.filter((item: SeckillItem) => item.storeId === this.storeId)
+  }
+
+  /** 菜品当前秒杀价（无秒杀返回 0）。 */
+  private getSeckillPrice(goodsId: number): number {
+    const matched: SeckillItem[] = this.storeSeckills.filter((item: SeckillItem) => item.goodsId === goodsId)
+    return matched.length > 0 ? matched[0].price : 0
+  }
+
+  /** 卡片展示价：限时秒杀优先，其次规格最低价/菜品价。 */
+  private getDisplayPrice(goods: GoodsItem): number {
+    const seckillPrice: number = this.getSeckillPrice(goods.id)
+    return seckillPrice > 0 ? seckillPrice : this.getMinSpecPrice(goods)
+  }
+
+  /** 卡片划线原价：秒杀时划掉菜品原价，否则划掉商品原价。 */
+  private getStruckPrice(goods: GoodsItem): number {
+    if (this.getSeckillPrice(goods.id) > 0) {
+      return goods.price
+    }
+    return goods.originalPrice ?? 0
   }
 
   // 拉取后端权威店铺信息（评分/公告/配送费/起送价/营业时间），避免依赖列表缓存导致数据陈旧
@@ -1677,6 +1710,14 @@ export struct StoreDetailContent {
                         .padding({ left: SPACING.XS, right: SPACING.XS, top: 1, bottom: 1 })
                         .borderRadius(BORDER_RADIUS.SM)
                     }
+                    // 限时秒杀：下单时后端自动按秒杀价结算
+                    if (this.getSeckillPrice(goods.id) > 0) {
+                      Text('⚡限时秒杀')
+                        .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_WHITE)
+                        .backgroundColor(COLORS.PRICE_RED)
+                        .padding({ left: SPACING.XS, right: SPACING.XS, top: 1, bottom: 1 })
+                        .borderRadius(BORDER_RADIUS.SM)
+                    }
                   }
                   Text(goods.description)
                     .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
@@ -1688,8 +1729,8 @@ export struct StoreDetailContent {
                   }
                   Row() {
                     this.GoodsPriceArea(goods)
-                    if (goods.originalPrice) {
-                      Text(`¥${goods.originalPrice}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+                    if (this.getStruckPrice(goods) > 0 && this.getStruckPrice(goods) > this.getDisplayPrice(goods)) {
+                      Text(`¥${this.getStruckPrice(goods)}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
                         .decoration({ type: TextDecorationType.LineThrough }).margin({ left: 4 })
                     }
                     Blank()
@@ -1718,14 +1759,14 @@ export struct StoreDetailContent {
     .width('100%').layoutWeight(1)
   }
 
-  // 商品卡片价格：多规格菜品显示「¥最低规格价 起」
+  // 商品卡片价格：限时秒杀价优先，多规格菜品显示「¥最低规格价 起」
   @Builder
   GoodsPriceArea(goods: GoodsItem) {
     Row({ space: 2 }) {
       Text('¥').fontSize(FONT_SIZE.SM).fontColor(COLORS.PRICE_RED).fontWeight(FontWeight.Bold)
-      Text(this.getMinSpecPrice(goods).toString())
+      Text(this.getDisplayPrice(goods).toString())
         .fontSize(FONT_SIZE.XL).fontColor(COLORS.PRICE_RED).fontWeight(FontWeight.Bold)
-      if (this.hasSpecs(goods)) {
+      if (this.hasSpecs(goods) && this.getSeckillPrice(goods.id) <= 0) {
         Text('起').fontSize(FONT_SIZE.SM).fontColor(COLORS.PRICE_RED)
       }
     }
@@ -1890,6 +1931,20 @@ export struct StoreDetailContent {
             Text(review.content)
               .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
               .width('100%')
+            // 图文评价：用户上传的图片（点击可全屏查看）
+            if (this.hasReviewImages(review)) {
+              Row({ space: SPACING.XS }) {
+                ForEach(review.images.slice(0, 3), (imageUrl: string, index: number) => {
+                  Image(imageUrl)
+                    .width(72)
+                    .height(72)
+                    .borderRadius(BORDER_RADIUS.SM)
+                    .objectFit(ImageFit.Cover)
+                    .onClick(() => { this.previewReviewImage(imageUrl) })
+                }, (imageUrl: string, index: number) => `${index}_${imageUrl}`)
+              }
+              .width('100%')
+            }
             if (review.goodsId > 0) {
               Text(`评价商品：${this.getGoodsName(review.goodsId)}`)
                 .fontSize(FONT_SIZE.XS).fontColor(COLORS.PRIMARY).width('100%')
@@ -1933,6 +1988,22 @@ export struct StoreDetailContent {
     }
     .width('100%')
     .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.LG })
+  }
+
+  /** 该评价是否带图（历史评价可能没有 images 字段）。 */
+  private hasReviewImages(review: Review): boolean {
+    const images: string[] = review.images
+    return Array.isArray(images) && images.length > 0
+  }
+
+  /** 点击评价图片：进入全屏预览页。 */
+  private previewReviewImage(imageUrl: string): void {
+    if (imageUrl === '') {
+      promptAction.showToast({ message: '图片地址为空，无法预览', duration: 2000 })
+      return
+    }
+    AppStorage.setOrCreate<string>('reviewPreviewUrl', imageUrl)
+    router.pushUrl({ url: 'pages/ReviewImagePage' })
   }
 
   private getGoodsName(goodsId: number): string {

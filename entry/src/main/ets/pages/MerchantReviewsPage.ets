@@ -141,6 +141,23 @@ export struct MerchantReviewsPage {
         .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
         .width('100%')
 
+      // 图文评价：展示用户上传的图片，便于商户核对出品与配送问题
+      if (Array.isArray(review.images) && review.images.length > 0) {
+        Row({ space: SPACING.XS }) {
+          ForEach(review.images.slice(0, 3), (imageUrl: string, index: number) => {
+            Image(imageUrl)
+              .width(72).height(72)
+              .borderRadius(BORDER_RADIUS.SM)
+              .objectFit(ImageFit.Cover)
+              .onClick(() => {
+                AppStorage.setOrCreate<string>('reviewPreviewUrl', imageUrl)
+                router.pushUrl({ url: 'pages/ReviewImagePage' })
+              })
+          }, (imageUrl: string, index: number) => `${index}_${imageUrl}`)
+        }
+        .width('100%')
+      }
+
       if (review.tags.length > 0) {
         Flex({ wrap: FlexWrap.Wrap }) {
           ForEach(review.tags, (tag: string) => {
