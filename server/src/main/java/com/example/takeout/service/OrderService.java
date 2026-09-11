@@ -321,6 +321,7 @@ public class OrderService {
 
     /**
      * 商户订单：仅可见自己店铺的订单
+     * 待付款（status=0）订单尚未支付，不计入商户待处理列表（超时由定时任务自动取消）
      */
     public List<Order.OrderView> merchantOrders(long ownerId) {
         List<Store> stores = storeDao.listByOwner(ownerId);
@@ -330,6 +331,7 @@ public class OrderService {
         }
         return storeIds.stream()
                 .flatMap(sid -> orderDao.listByStore(sid).stream())
+                .filter(order -> order.status() != 0)
                 .sorted((a, b) -> Long.compare(b.id(), a.id()))
                 .map(this::toView)
                 .toList();

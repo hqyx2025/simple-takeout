@@ -319,6 +319,19 @@ class OrderServiceFlowTest {
     }
 
     @Test
+    void merchantOrdersHideUnpaidOrders() {
+        when(storeDao.listByOwner(USER_ID)).thenReturn(List.of(openStore(0, 3)));
+        Order pending = storedOrder(21, 0, ITEMS, "");
+        Order paid = storedOrder(22, 1, ITEMS, "");
+        when(orderDao.listByStore(STORE_ID)).thenReturn(List.of(pending, paid));
+
+        List<Order.OrderView> visible = service.merchantOrders(USER_ID);
+
+        assertEquals(1, visible.size(), "待付款订单不应出现在商户待处理列表");
+        assertEquals(22, visible.get(0).id());
+    }
+
+    @Test
     void rejectOrderWhenGoodsStockNotEnough() {
         stubCommon(10, 0, 3);
         when(goodsDao.deductStock(GOODS_ID, 1)).thenReturn(false);
