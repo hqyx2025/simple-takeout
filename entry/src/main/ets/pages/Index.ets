@@ -714,13 +714,15 @@ struct HomePage {
             Image($r('app.media.search_icon'))
               .width(20)
               .height(20)
-            TextInput({ placeholder: '搜索美食、店铺', text: '' })
+            // 首页搜索栏是「假输入框」：点击整行跳转搜索页。
+            // 不能用 TextInput——它会吞掉点击事件（聚焦自身而不冒泡到 Row 的 onClick），
+            // 导致首页搜索框点了没有任何反应（设备实测确认的缺陷）。
+            Text('搜索美食、店铺')
               .fontSize(FONT_SIZE.MD)
-              .backgroundColor(Color.Transparent)
-              .placeholderColor(COLORS.TEXT_HINT)
+              .fontColor(COLORS.TEXT_HINT)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
               .layoutWeight(1)
-              .height(32)
-              .onChange((value: string) => { this.searchText = value })
           }
           .padding({ left: SPACING.MD, right: SPACING.MD })
           .height(32)
