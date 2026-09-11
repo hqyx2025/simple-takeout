@@ -143,7 +143,11 @@ export class API_CONFIG {
     'merchantStores': '/api/merchant/stores',
     'coupons': '/api/coupons',
     'favorites': '/api/favorites',
-    'addresses': '/api/addresses'
+    'addresses': '/api/addresses',
+    'upload': '/api/upload',
+    'seckills': '/api/seckills',
+    'rankStores': '/api/rankings/stores',
+    'rankGoods': '/api/rankings/goods'
   }
 }
 

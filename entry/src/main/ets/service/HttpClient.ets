@@ -4,7 +4,10 @@
  * 所有业务数据经由本层获取，认证使用 JWT Bearer Token
  */
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError, AxiosHeaders, AxiosRequestHeaders } from '@ohos/axios'
+import http from '@ohos.net.http'
+import fileIo from '@ohos.file.fs'
 import { API_CONFIG } from '../common/Constants'
+import { UploadResult } from '../model/Models'
 import { logInfo, logWarn, logError } from './AppLogger'
 import { promptCompat as promptAction } from '../common/UiNavigation'
 
@@ -192,4 +195,99 @@ export async function put<T>(url: string, data?: Object): Promise<ApiResponse<T>
 // DELETE请求
 export async function del<T>(url: string): Promise<ApiResponse<T>> {
   return request<T>('DELETE', url)
+}
+
+/**
+ * 图片上传（multipart/form-data）。
+ * axios 的 FormData 在本工程 ArkTS 环境下对本地文件 URI 支持不稳定，因此改用
+ * @ohos.net.http 的 multiFormDataList 直接提交文件二进制，保证真机/模拟器一致。
+ * 注意：file.picker 返回的 URI 为 file://datashare://... ，需用 fileIo 读成 ArrayBuffer 后上传。
+ */
+export async function uploadFile(url: string, fileUri: string, showErrorToast: boolean = true): Promise<UploadResult | null> {
+  lastApiErrorMessage = ''
+  let file: fileIo.File | null = null
+  try {
+    const httpRequest: http.HttpRequest = http.createHttp()
+    file = fileIo.openSync(fileUri, fileIo.OpenMode.READ_ONLY)
+    const stat: fileIo.Stat = fileIo.statSync(file.fd)
+    const buffer: ArrayBuffer = new ArrayBuffer(stat.size)
+    fileIo.readSync(file.fd, buffer)
+
+    const fileName: string = buildFileName(fileUri)
+    const formData: http.MultiFormData = {
+      name: 'file',
+      contentType: buildContentType(fileName),
+      remoteFileName: fileName,
+      data: buffer
+    }
+    const header: Record<string, string> = {
+      'Content-Type': 'multipart/form-data',
+      'Authorization': `Bearer ${authToken}`
+    }
+    const options: http.HttpRequestOptions = {
+      method: http.RequestMethod.POST,
+      header: header,
+      multiFormDataList: [formData],
+      expectDataType: http.HttpDataType.STRING,
+      connectTimeout: API_CONFIG.TIMEOUT,
+      readTimeout: API_CONFIG.TIMEOUT
+    }
+    logInfo('Http', `前端请求后端：上传评价图片（POST ${url}）`)
+    const response: http.HttpResponse = await httpRequest.request(url, options)
+    httpRequest.destroy()
+    const body: string = typeof response.result === 'string' ? response.result as string : ''
+    if (response.responseCode !== 200 || body === '') {
+      lastApiErrorMessage = '图片上传失败，请稍后重试'
+      if (showErrorToast) {
+        notifyApiError(lastApiErrorMessage)
+      }
+      return null
+    }
+    const parsed: ApiResponse<UploadResult> = JSON.parse(body) as ApiResponse<UploadResult>
+    if (parsed.code !== 200 || parsed.data === undefined || parsed.data === null) {
+      lastApiErrorMessage = parsed.message !== undefined && parsed.message !== '' ? parsed.message : '图片上传失败'
+      if (showErrorToast) {
+        notifyApiError(lastApiErrorMessage)
+      }
+      return null
+    }
+    logInfo('Http', `后端响应成功：上传评价图片，地址=${parsed.data.url}`)
+    return parsed.data
+  } catch (err) {
+    logError('Http', '后端请求异常：上传评价图片，请检查网络和服务端状态', err)
+    lastApiErrorMessage = '图片上传失败，请确认后端服务已启动'
+    if (showErrorToast) {
+      notifyApiError(lastApiErrorMessage)
+    }
+    return null
+  } finally {
+    if (file !== null) {
+      try {
+        fileIo.closeSync(file)
+      } catch (closeErr) {
+        logWarn('Http', '关闭上传文件失败')
+      }
+    }
+  }
+}
+
+/** 从 URI 中取文件名（无扩展名时按 jpg 处理）。 */
+function buildFileName(uri: string): string {
+  const index: number = uri.lastIndexOf('/')
+  const name: string = index >= 0 ? uri.substring(index + 1) : uri
+  return name.indexOf('.') >= 0 ? name : `${name}.jpg`
+}
+
+function buildContentType(fileName: string): string {
+  const lower: string = fileName.toLowerCase()
+  if (lower.endsWith('.png')) {
+    return 'image/png'
+  }
+  if (lower.endsWith('.webp')) {
+    return 'image/webp'
+  }
+  if (lower.endsWith('.gif')) {
+    return 'image/gif'
+  }
+  return 'image/jpeg'
 }

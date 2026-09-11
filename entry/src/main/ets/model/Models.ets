@@ -35,8 +35,20 @@ export function createDefaultCategories(): Category[] {
   ]
 }
 
+// 菜品规格（多规格 SKU）：同一菜品下每个规格独立定价与库存
+export interface GoodsSpec {
+  id: number
+  goodsId: number
+  name: string
+  price: number
+  stock: number
+  sort?: number
+  status?: number
+}
+
 // 商品模型
 // stock：库存（0 表示售罄）；merchantCategoryId：商户店内分类（0=未分组）
+// specs：多规格列表；非空时 price=规格最低价、stock=规格库存合计，下单必须带 specId
 export interface GoodsItem {
   id: number
   storeId?: number
@@ -53,6 +65,7 @@ export interface GoodsItem {
   tag?: string
   isOnShelf?: boolean
   isSpecial?: boolean
+  specs?: GoodsSpec[]
 }
 
 /** 首页特价团购商品，附带店铺信息用于展示和跳转。 */
@@ -84,12 +97,17 @@ export interface StoreItem {
   recommended?: number // 平台是否推荐到发现页：0否 1是
 }
 
-// 购物车商品项
+// 购物车/订单商品项
+// 多规格：specId/specName 记录所选规格；price 为该行实际结算单价（规格价优先）
 export interface CartItem {
   goods: GoodsItem
   quantity: number
   storeId: number
   storeName: string
+  specId?: number
+  specName?: string
+  price?: number
+  stock?: number
 }
 
 // 地址模型
@@ -141,6 +159,11 @@ export interface Order {
   cancelTime?: string
   /** 预约送达时间（空=立即送达） */
   expectTime?: string
+  /** 待付款订单的支付截止时间（非待付款为空串），前端据此倒计时 */
+  payDeadline?: string
+  /** 下单使用的优惠券 ID（0=未使用），待付款取消时由后端自动退回 */
+  couponId?: number
+  orderNo?: string
   /** 配送骑手姓名/电话（配送中及之后返回） */
   riderName?: string
   riderPhone?: string
@@ -251,6 +274,41 @@ export interface Favorite {
   storeName: string
   storeImage: string
   createTime: string
+}
+
+// 限时秒杀（首页秒杀专区）
+export interface SeckillItem {
+  id: number
+  goodsId: number
+  goodsName: string
+  image: string
+  originalPrice: number
+  price: number
+  quota: number
+  sold: number
+  startTime: string
+  endTime: string
+  storeId: number
+  storeName: string
+  storeDistance: string
+  /** 距结束剩余秒数（服务端计算） */
+  remainSeconds: number
+}
+
+// 凑单提示：还差多少元起送 + 店内可凑单菜品
+export interface BundleInfo {
+  storeId: number
+  storeName: string
+  minOrder: number
+  amount: number
+  gap: number
+  suggestions: GoodsItem[]
+}
+
+// 图片上传结果（相对地址，前端用 API_CONFIG.BASE_URL 拼接展示）
+export interface UploadResult {
+  url: string
+  size: number
 }
 
 // 退款记录（用户申请退款 + 管理端审批）

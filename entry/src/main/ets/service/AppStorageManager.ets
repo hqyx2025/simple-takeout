@@ -1,12 +1,13 @@
 /**
  * 全局状态管理 - 使用AppStorage管理应用级状态
  */
-import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, Rider, Banner, Announcement, MerchantStatsData, Category, RefundRecord, createEmptyUser, createDefaultCategories } from '../model/Models'
+import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, Rider, Banner, Announcement, MerchantStatsData, Category, RefundRecord, GoodsSpec, SeckillItem, SpecialGoodsItem, BundleInfo, UploadResult, createEmptyUser, createDefaultCategories } from '../model/Models'
 import { saveAllData, clearAllData } from './DataPersistence'
-import { apiLogin, apiRegister, updateUserProfileApi, fetchCurrentUserApi, rechargeBalanceApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi, fetchMerchantReviewsApi, replyReviewApi, fetchRiderProfileApi, setRiderStatusApi, fetchRiderPoolApi, fetchRiderOrdersApi, grabOrderApi, pickupOrderApi, deliverOrderApi, fetchBannersApi, fetchAnnouncementsApi, fetchAdminRidersApi, updateRiderStatusApi, fetchAdminBannersApi, createBannerApi, updateBannerStatusApi, deleteBannerApi, fetchAdminAnnouncementsApi, createAnnouncementApi, updateAnnouncementStatusApi, deleteAnnouncementApi, applyRefundApi, fetchCartApi, addCartItemApi, updateCartItemQuantityApi, deleteCartItemApi, deleteCartItemsApi, clearCartApi } from './ApiService'
+import { apiLogin, apiRegister, updateUserProfileApi, fetchCurrentUserApi, rechargeBalanceApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, payOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi, fetchMerchantReviewsApi, replyReviewApi, fetchRiderProfileApi, setRiderStatusApi, fetchRiderPoolApi, fetchRiderOrdersApi, grabOrderApi, pickupOrderApi, deliverOrderApi, fetchBannersApi, fetchAnnouncementsApi, fetchAdminRidersApi, updateRiderStatusApi, fetchAdminBannersApi, createBannerApi, updateBannerStatusApi, deleteBannerApi, fetchAdminAnnouncementsApi, createAnnouncementApi, updateAnnouncementStatusApi, deleteAnnouncementApi, applyRefundApi, fetchCartApi, addCartItemApi, updateCartItemQuantityApi, deleteCartItemApi, deleteCartItemsApi, clearCartApi, uploadImageApi, fetchSeckillsApi, fetchRankStoresApi, fetchRankGoodsApi, fetchBundleApi, updateMerchantGoodsSpecsApi } from './ApiService'
 import { getAuthToken, setAuthToken, getLastApiErrorMessage } from './HttpClient'
 import { logInfo, logWarn, logError } from './AppLogger'
 import { GeoPosition } from './LocationService'
+import { API_CONFIG } from '../common/Constants'
 
 let categoriesSyncInFlight: Promise<void> | null = null
 let storesSyncInFlight: Promise<void> | null = null
@@ -188,7 +189,8 @@ export async function syncCartRemote(): Promise<boolean> {
   // 首次接入后端时迁移已有本地购物车，避免用户升级后购物车商品丢失。
   if (shouldMigrateLocalCart && remoteCart.length === 0 && localCart.length > 0) {
     for (let i = 0; i < localCart.length; i++) {
-      await addCartItemApi(localCart[i].goods.id, localCart[i].quantity)
+      const localItem: CartItem = localCart[i]
+      await addCartItemApi(localItem.goods.id, localItem.specId ?? 0, localItem.quantity)
     }
     const migratedCart: CartItem[] | null = await fetchCartApi()
     if (migratedCart !== null) {
@@ -203,7 +205,8 @@ export async function syncCartRemote(): Promise<boolean> {
 }
 
 export async function addCartItemRemote(item: CartItem): Promise<boolean> {
-  const remoteCart: CartItem[] | null = await addCartItemApi(item.goods.id, item.quantity)
+  const remoteCart: CartItem[] | null = await addCartItemApi(item.goods.id,
+    item.specId ?? 0, item.quantity)
   if (remoteCart === null) {
     return false
   }
@@ -211,8 +214,8 @@ export async function addCartItemRemote(item: CartItem): Promise<boolean> {
   return true
 }
 
-export async function updateCartItemQuantityRemote(goodsId: number, quantity: number): Promise<boolean> {
-  const remoteCart: CartItem[] | null = await updateCartItemQuantityApi(goodsId, quantity)
+export async function updateCartItemQuantityRemote(goodsId: number, quantity: number, specId: number = 0): Promise<boolean> {
+  const remoteCart: CartItem[] | null = await updateCartItemQuantityApi(goodsId, specId, quantity)
   if (remoteCart === null) {
     return false
   }
@@ -220,8 +223,8 @@ export async function updateCartItemQuantityRemote(goodsId: number, quantity: nu
   return true
 }
 
-export async function deleteCartItemRemote(goodsId: number): Promise<boolean> {
-  const remoteCart: CartItem[] | null = await deleteCartItemApi(goodsId)
+export async function deleteCartItemRemote(goodsId: number, specId: number = 0): Promise<boolean> {
+  const remoteCart: CartItem[] | null = await deleteCartItemApi(goodsId, specId)
   if (remoteCart === null) {
     return false
   }
@@ -652,6 +655,67 @@ export async function cancelOrderRemote(orderId: number): Promise<boolean> {
     logInfo('Api', `远程取消订单 orderId=${orderId}`)
   }
   return ok
+}
+
+/**
+ * 支付待付款订单：扣余额并流转到待接单，同时刷新订单与账户余额
+ */
+export async function payOrderRemote(orderId: number): Promise<Order | null> {
+  const order: Order | null = await payOrderApi(orderId)
+  if (order !== null) {
+    await syncUserOrdersFromServer()
+    await syncCurrentUserFromServer()
+    logInfo('Api', `支付订单成功 orderId=${orderId} 状态=${order.status}`)
+  }
+  return order
+}
+
+/**
+ * 图文评价图片上传：返回可访问的完整地址（失败返回空串）
+ * 关闭网络层自动 Toast，由调用页面统一提示一次，避免多张失败时提示互相覆盖。
+ */
+export async function uploadReviewImageRemote(fileUri: string): Promise<string> {
+  const result: UploadResult | null = await uploadImageApi(fileUri, false)
+  if (result === null || result.url === '') {
+    return ''
+  }
+  return API_CONFIG.BASE_URL + result.url
+}
+
+/** 首页限时秒杀专区数据 */
+export async function fetchSeckillsRemote(limit: number = 6): Promise<SeckillItem[]> {
+  return await fetchSeckillsApi(limit, getCurrentLatitude(), getCurrentLongitude())
+}
+
+/** 榜单：店铺榜 */
+export async function fetchRankStoresRemote(limit: number = 10): Promise<StoreItem[]> {
+  return await fetchRankStoresApi(limit, getCurrentLatitude(), getCurrentLongitude())
+}
+
+/** 榜单：菜品热销榜 */
+export async function fetchRankGoodsRemote(limit: number = 10): Promise<SpecialGoodsItem[]> {
+  return await fetchRankGoodsApi(limit, getCurrentLatitude(), getCurrentLongitude())
+}
+
+/** 凑单提示（还差多少元起送 + 店内可凑单菜品） */
+export async function fetchBundleRemote(storeId: number, amount: number): Promise<BundleInfo | null> {
+  return await fetchBundleApi(storeId, amount)
+}
+
+/** 商户维护菜品多规格（整体覆盖，空数组表示清空规格） */
+export async function updateGoodsSpecsRemote(goodsId: number, specs: GoodsSpec[]): Promise<GoodsItem | null> {
+  return await updateMerchantGoodsSpecsApi(goodsId, specs)
+}
+
+/** 当前收货地址的经纬度（未定位时返回 undefined，由后端按店铺自带距离展示） */
+function getCurrentLatitude(): number | undefined {
+  const currentAddress: Address | null = AppStorage.get<Address>('currentAddress') || null
+  return currentAddress !== null && currentAddress.latitude !== undefined ? currentAddress.latitude : undefined
+}
+
+function getCurrentLongitude(): number | undefined {
+  const currentAddress: Address | null = AppStorage.get<Address>('currentAddress') || null
+  return currentAddress !== null && currentAddress.longitude !== undefined ? currentAddress.longitude : undefined
 }
 
 /**

@@ -1,8 +1,29 @@
 /** 商户新增商品页：表单确认后才写入数据库，并在返回前重新读取商品数据。 */
-import { Category, GoodsItem, User, UserRole } from '../model/Models'
+import { Category, GoodsItem, GoodsSpec, User, UserRole } from '../model/Models'
 import { createMerchantGoodsApi, fetchMerchantCategoriesApi, fetchMerchantGoodsApi } from '../service/ApiService'
+import { getLastRemoteErrorMessage, updateGoodsSpecsRemote } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
+
+/** 多规格最多行数（超出时提示，不静默丢弃） */
+const MAX_SPEC_ROWS: number = 5
+
+/** 规格编辑行：输入用字符串保存，提交时再转换为数字（id=0 表示新增规格） */
+class SpecRow {
+  key: string = ''
+  id: number = 0
+  name: string = ''
+  price: string = ''
+  stock: string = ''
+
+  constructor(key: string, id: number, name: string, price: string, stock: string) {
+    this.key = key
+    this.id = id
+    this.name = name
+    this.price = price
+    this.stock = stock
+  }
+}
 
 @Entry
 @Component
@@ -21,7 +42,11 @@ export struct MerchantAddGoodsPage {
   @State stock: string = '99'
   @State categoryId: number = 0
   @State isSpecial: boolean = false
-  @State saving: boolean = false
+  @State multiSpecEnabled: boolean = false
+  @State specRows: SpecRow[] = []
+  @State specStockTotal: number = 0
+  @State submitting: boolean = false
+  private nextSpecKey: number = 1
 
   async aboutToAppear(): Promise<void> {
     if (!this.loggedIn || this.user.role !== UserRole.MERCHANT) {
@@ -52,9 +77,145 @@ export struct MerchantAddGoodsPage {
     return Number.isFinite(parsed) && Number.isInteger(parsed) ? parsed : -1
   }
 
+  /** 接口失败时优先展示后端/网络层给出的具体原因 */
+  private failureReason(fallback: string): string {
+    const reason: string = getLastRemoteErrorMessage().trim()
+    return reason !== '' ? reason : fallback
+  }
+
+  // ============ 多规格 ============
+
+  private toggleSpecs(enabled: boolean): void {
+    this.multiSpecEnabled = enabled
+    if (enabled) {
+      if (this.specRows.length === 0) {
+        this.addSpecRow()
+      }
+      return
+    }
+    if (this.specRows.length > 0) {
+      this.specRows = []
+      this.refreshSpecStockTotal()
+      promptAction.showToast({ message: '已关闭多规格，商品将按统一的单价与库存售卖', duration: 2400 })
+    }
+  }
+
+  private addSpecRow(): void {
+    if (this.specRows.length >= MAX_SPEC_ROWS) {
+      promptAction.showToast({ message: `最多只能配置 ${MAX_SPEC_ROWS} 条规格`, duration: 2000 })
+      return
+    }
+    const rows: SpecRow[] = this.specRows.slice()
+    rows.push(new SpecRow(`spec-${this.nextSpecKey}`, 0, '', '', ''))
+    this.nextSpecKey += 1
+    this.specRows = rows
+    this.refreshSpecStockTotal()
+  }
+
+  private removeSpecRow(index: number): void {
+    const target: SpecRow | undefined = this.specRows[index]
+    if (target === undefined) {
+      return
+    }
+    const rows: SpecRow[] = this.specRows.filter((row: SpecRow) => row.key !== target.key)
+    this.specRows = rows
+    this.refreshSpecStockTotal()
+    if (rows.length === 0) {
+      promptAction.showToast({ message: '规格已清空，提交后该商品没有规格', duration: 2000 })
+    }
+  }
+
+  private computeSpecStockTotal(): number {
+    let total: number = 0
+    this.specRows.forEach((row: SpecRow) => {
+      const stock: number = this.parseStock(row.stock)
+      if (stock > 0) {
+        total += stock
+      }
+    })
+    return total
+  }
+
+  private refreshSpecStockTotal(): void {
+    this.specStockTotal = this.computeSpecStockTotal()
+  }
+
+  // 规格行输入统一按行号写回，避免在 @Builder 内部修改参数对象
+  private setSpecName(index: number, value: string): void {
+    const row: SpecRow | undefined = this.specRows[index]
+    if (row !== undefined) {
+      row.name = value
+    }
+  }
+
+  private setSpecPrice(index: number, value: string): void {
+    const row: SpecRow | undefined = this.specRows[index]
+    if (row !== undefined) {
+      row.price = value
+    }
+  }
+
+  private setSpecStock(index: number, value: string): void {
+    const row: SpecRow | undefined = this.specRows[index]
+    if (row !== undefined) {
+      row.stock = value
+      this.refreshSpecStockTotal()
+    }
+  }
+
+  /** 多规格时库存字段的说明文案（无规格时返回空串，不显示提示） */
+  private specStockHint(): string {
+    if (!this.multiSpecEnabled || this.specRows.length === 0) {
+      return ''
+    }
+    return `库存由各规格合计（${this.specStockTotal} 份）`
+  }
+
+  /** 校验规格行，返回第一条错误提示；空串表示全部合法 */
+  private validateSpecRows(): string {
+    const rows: SpecRow[] = this.specRows
+    for (let i = 0; i < rows.length; i++) {
+      const row: SpecRow = rows[i]
+      const name: string = row.name.trim()
+      if (name === '') {
+        return `第 ${i + 1} 行的规格名称为空，请填写，如：大份`
+      }
+      const price: number = this.parsePrice(row.price)
+      if (row.price.trim() === '' || price <= 0 || price > 9999.99) {
+        return `第 ${i + 1} 行「${name}」的价格必须为 0.01-9999.99 元`
+      }
+      const stock: number = this.parseStock(row.stock)
+      if (row.stock.trim() === '' || stock < 0 || stock > 9999) {
+        return `第 ${i + 1} 行「${name}」的库存必须是 0-9999 的整数（0 表示售罄）`
+      }
+      for (let j = 0; j < i; j++) {
+        if (rows[j].name.trim() === name) {
+          return `第 ${i + 1} 行与第 ${j + 1} 行的规格名称重复：${name}`
+        }
+      }
+    }
+    return ''
+  }
+
+  /** 把规格行转换为接口参数（goodsId 在商品创建成功后才可知） */
+  private buildSpecs(goodsId: number): GoodsSpec[] {
+    const specs: GoodsSpec[] = []
+    this.specRows.forEach((row: SpecRow) => {
+      const spec: GoodsSpec = {
+        id: row.id,
+        goodsId: goodsId,
+        name: row.name.trim(),
+        price: this.parsePrice(row.price),
+        stock: this.parseStock(row.stock)
+      }
+      specs.push(spec)
+    })
+    return specs
+  }
+
   private async confirmAdd(): Promise<void> {
-    if (this.saving) {
-      promptAction.showToast({ message: '商品正在保存，请稍候', duration: 1400 })
+    if (this.submitting) {
+      promptAction.showToast({ message: '提交中，请稍候', duration: 1400 })
       return
     }
     const name: string = this.goodsName.trim()
@@ -77,6 +238,14 @@ export struct MerchantAddGoodsPage {
       promptAction.showToast({ message: '特价商品原价必须高于特价价' })
       return
     }
+    // 规格行校验放在提交前，明确指出第几行有问题，避免后端报错后用户无从下手
+    if (this.multiSpecEnabled && this.specRows.length > 0) {
+      const specError: string = this.validateSpecRows()
+      if (specError !== '') {
+        promptAction.showToast({ message: specError, duration: 2800 })
+        return
+      }
+    }
     const goods: GoodsItem = {
       id: 0,
       name: name,
@@ -93,16 +262,30 @@ export struct MerchantAddGoodsPage {
       isOnShelf: true,
       isSpecial: this.isSpecial
     }
-    this.saving = true
+    this.submitting = true
+    promptAction.showToast({ message: '提交中...', duration: 1200 })
     const created: GoodsItem | null = await createMerchantGoodsApi(this.storeId, goods)
     if (created === null) {
-      this.saving = false
-      promptAction.showToast({ message: '商品添加失败，请检查网络后重试', duration: 2200 })
+      this.submitting = false
+      promptAction.showToast({ message: `商品添加失败：${this.failureReason('请检查网络后重试')}`, duration: 2800 })
       return
+    }
+    // 规格需在拿到商品 id 后整体覆盖提交；创建成功但规格失败时商品不会丢失，提示到编辑页重试
+    if (this.multiSpecEnabled && this.specRows.length > 0) {
+      const specs: GoodsSpec[] = this.buildSpecs(created.id)
+      const specSaved: GoodsItem | null = await updateGoodsSpecsRemote(created.id, specs)
+      if (specSaved === null) {
+        this.submitting = false
+        promptAction.showToast({
+          message: `商品已创建，但规格保存失败，请到编辑页重试：${this.failureReason('请检查网络')}`,
+          duration: 3200
+        })
+        return
+      }
     }
     // 确认接口成功后再读一次数据库，避免返回列表使用旧数据。
     const latestGoods: GoodsItem[] = await fetchMerchantGoodsApi(this.storeId)
-    this.saving = false
+    this.submitting = false
     if (latestGoods.find((item: GoodsItem) => item.id === created.id) === undefined) {
       promptAction.showToast({ message: '商品已保存，但刷新数据失败，请返回后重试', duration: 2600 })
       return
@@ -153,14 +336,96 @@ export struct MerchantAddGoodsPage {
   }
 
   @Builder
-  NumberField(label: string, placeholder: string, value: string, onChange: (value: string) => void) {
+  NumberField(label: string, placeholder: string, value: string, hint: string, onChange: (value: string) => void) {
     Column({ space: SPACING.XS }) {
       this.FieldLabel(label, true)
       TextInput({ placeholder: placeholder, text: value })
         .width('100%').height(44).type(InputType.Number)
         .onChange((next: string) => { onChange(next) })
+      if (hint !== '') {
+        Text(hint)
+          .fontSize(FONT_SIZE.XS).fontColor(COLORS.PRIMARY)
+      }
     }
     .layoutWeight(1)
+  }
+
+  /** 规格编辑行：规格名 + 价格 + 库存 + 行尾删除按钮 */
+  @Builder
+  SpecRowEditor(row: SpecRow, index: number) {
+    Row({ space: SPACING.XS }) {
+      Column() {
+        Text((index + 1).toString())
+          .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY)
+      }
+      .width(18).height(40)
+      .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+
+      TextInput({ placeholder: '如：大份/加辣', text: row.name })
+        .layoutWeight(1).height(40).fontSize(FONT_SIZE.SM)
+        .onChange((value: string) => { this.setSpecName(index, value) })
+
+      TextInput({ placeholder: '价格', text: row.price })
+        .width(62).height(40).fontSize(FONT_SIZE.SM).type(InputType.Number)
+        .onChange((value: string) => { this.setSpecPrice(index, value) })
+
+      TextInput({ placeholder: '库存', text: row.stock })
+        .width(62).height(40).fontSize(FONT_SIZE.SM).type(InputType.Number)
+        .onChange((value: string) => { this.setSpecStock(index, value) })
+
+      Column() {
+        Text('✕')
+          .fontSize(FONT_SIZE.SM).fontColor(COLORS.ERROR)
+      }
+      .width(30).height(40)
+      .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+      .backgroundColor(COLORS.ERROR_LIGHT).borderRadius(BORDER_RADIUS.SM)
+      .onClick(() => { this.removeSpecRow(index) })
+    }
+    .width('100%')
+    .padding(SPACING.SM)
+    .backgroundColor(COLORS.BG_PRIMARY)
+    .borderRadius(BORDER_RADIUS.MD)
+    .alignItems(VerticalAlign.Center)
+  }
+
+  @Builder
+  SpecSection() {
+    Column({ space: SPACING.SM }) {
+      Row() {
+        Column({ space: SPACING.XS }) {
+          Text('多规格')
+            .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
+          Text('如：大份/小份、加辣')
+            .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+        }
+        .layoutWeight(1).alignItems(HorizontalAlign.Start)
+        Toggle({ type: ToggleType.Switch, isOn: this.multiSpecEnabled })
+          .onChange((value: boolean) => { this.toggleSpecs(value) })
+      }
+      .width('100%').alignItems(VerticalAlign.Center)
+
+      Text('配置规格后，菜品价格与库存分别按规格单独计算（菜品价取规格最低价、库存为规格合计）；多规格菜品下单时必须选择规格。')
+        .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%')
+
+      if (this.multiSpecEnabled) {
+        if (this.specRows.length === 0) {
+          Text('暂无规格行，点击下方「＋ 添加规格」新增')
+            .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%')
+        }
+        ForEach(this.specRows, (row: SpecRow, index: number) => {
+          this.SpecRowEditor(row, index)
+        }, (row: SpecRow, index: number) => `${row.key}-${index}`)
+        Button(`＋ 添加规格（${this.specRows.length}/${MAX_SPEC_ROWS}）`)
+          .width('100%').height(40).fontSize(FONT_SIZE.SM)
+          .fontColor(COLORS.PRIMARY).backgroundColor(COLORS.TAG_BG)
+          .borderRadius(BORDER_RADIUS.MD)
+          .onClick(() => { this.addSpecRow() })
+        Text('规格名称不可重复；价格为 0.01-9999.99 元，库存为 0-9999 的整数（0 表示售罄）。')
+          .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%')
+      }
+    }
+    .width('100%')
   }
 
   build() {
@@ -202,8 +467,8 @@ export struct MerchantAddGoodsPage {
                 .onChange((value: string) => { this.goodsDescription = value })
             }
             Row({ space: SPACING.MD }) {
-              this.NumberField('特价价', '如：25.00', this.price, (value: string) => { this.price = value })
-              this.NumberField('库存', '0-9999', this.stock, (value: string) => { this.stock = value })
+              this.NumberField('特价价', '如：25.00', this.price, '', (value: string) => { this.price = value })
+              this.NumberField('库存', '0-9999', this.stock, this.specStockHint(), (value: string) => { this.stock = value })
             }
             Column({ space: SPACING.XS }) {
               this.FieldLabel('原价', false)
@@ -226,6 +491,12 @@ export struct MerchantAddGoodsPage {
           }
           .width('100%').padding(SPACING.LG)
           .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+
+          Column() {
+            this.SpecSection()
+          }
+          .width('100%').padding(SPACING.LG)
+          .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
         }
         .width('100%')
         .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.XL })
@@ -238,7 +509,7 @@ export struct MerchantAddGoodsPage {
           .fontColor(COLORS.TEXT_SECONDARY).backgroundColor(COLORS.BG_PRIMARY)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
           .onClick(() => { router.back() })
-        Button(this.saving ? '保存中...' : '确认添加')
+        Button(this.submitting ? '提交中...' : '确认添加')
           .layoutWeight(1).height(46).fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)

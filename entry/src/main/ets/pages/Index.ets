@@ -2,8 +2,8 @@
  * 主页面 - 简单外卖App
  * 包含：搜索栏、分类导航、店铺列表、店铺详情、购物车、订单列表、个人中心、底部Tab导航
  */
-import { Category, StoreItem, GoodsItem, SpecialGoodsItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, Banner, Announcement, createEmptyUser } from '../model/Models'
-import { addToCart, addCartItemRemote, updateCartItemQuantity, updateCartItemQuantityRemote, refreshCartFromServer, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCartRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncBannersRemote, syncAnnouncementsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, getLastRemoteErrorMessage, rechargeBalanceRemote, syncCurrentUserFromServer } from '../service/AppStorageManager'
+import { Category, StoreItem, GoodsItem, GoodsSpec, SpecialGoodsItem, SeckillItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, Banner, Announcement, createEmptyUser } from '../model/Models'
+import { addToCart, addCartItemRemote, updateCartItemQuantity, updateCartItemQuantityRemote, refreshCartFromServer, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCartRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncBannersRemote, syncAnnouncementsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, cancelOrderRemote, payOrderRemote, fetchSeckillsRemote, getLastRemoteErrorMessage, rechargeBalanceRemote, syncCurrentUserFromServer } from '../service/AppStorageManager'
 import { fetchRecommendedStoresApi, fetchSpecialGoodsApi, fetchStoreMerchantCategoriesApi, fetchStoreDetailApi } from '../service/ApiService'
 import { LoginPage } from './LoginPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, formatSales } from '../common/Constants'
@@ -427,6 +427,11 @@ struct HomePage {
   @State specialGoods: SpecialGoodsItem[] = []
   @State banners: Banner[] = []
   @State announcements: Announcement[] = []
+  // 限时秒杀（服务端时间窗口内且有剩余名额的秒杀）
+  @State seckills: SeckillItem[] = []
+  // 秒杀倒计时秒表：每秒 +1，与实际剩余时间相减得到实时剩余（避免每个卡片各自起定时器）
+  @State seckillTick: number = 0
+  private seckillTimer: number = -1
   @State searchText: string = ''
   @State currentCategory: number = 0
   @State isRefreshing: boolean = false
@@ -494,10 +499,16 @@ struct HomePage {
     this.showPrivacyDialog = !(AppStorage.get<boolean>('privacyConsent') || false)
     const initialCategories: Category[] = AppStorage.get<Category[]>('categoryList') || []
     this.categories = initialCategories.slice()
+    // 秒杀倒计时：单个 1 秒定时器驱动全页秒杀卡片，避免每张卡片各起一个定时器
+    this.startSeckillTicker()
     // 隐私同意前不发起网络请求；同意后由确认回调触发同步
     if (AppStorage.get<boolean>('privacyConsent') || false) {
       this.refreshHomeData()
     }
+  }
+
+  aboutToDisappear() {
+    this.stopSeckillTicker()
   }
 
   // 首页特价团购直接读取后端商品接口，避免使用本地模拟商品。
@@ -516,10 +527,67 @@ struct HomePage {
       const latitude: number | undefined = this.currentAddress !== null ? this.currentAddress.latitude : undefined
       const longitude: number | undefined = this.currentAddress !== null ? this.currentAddress.longitude : undefined
       this.specialGoods = await fetchSpecialGoodsApi(10, latitude, longitude)
+      this.seckills = await fetchSeckillsRemote(6)
     } else {
       this.specialGoods = []
+      this.seckills = []
     }
     this.isRefreshing = false
+  }
+
+  // ============ 限时秒杀 ============
+
+  private startSeckillTicker(): void {
+    if (this.seckillTimer >= 0) {
+      return
+    }
+    this.seckillTick = 0
+    this.seckillTimer = setInterval(() => {
+      this.seckillTick += 1
+    }, 1000)
+  }
+
+  private stopSeckillTicker(): void {
+    if (this.seckillTimer >= 0) {
+      clearInterval(this.seckillTimer)
+      this.seckillTimer = -1
+    }
+  }
+
+  /** 秒杀剩余秒数（服务端下发的 remainSeconds 减去本地秒表）。 */
+  private seckillRemainSeconds(item: SeckillItem): number {
+    return Math.max(item.remainSeconds - this.seckillTick, 0)
+  }
+
+  /** 秒杀倒计时文案：HH:mm:ss。 */
+  private seckillCountdown(item: SeckillItem): string {
+    const total: number = this.seckillRemainSeconds(item)
+    const hour: number = Math.floor(total / 3600)
+    const minute: number = Math.floor((total % 3600) / 60)
+    const second: number = total % 60
+    const hh: string = hour < 10 ? `0${hour}` : `${hour}`
+    const mm: string = minute < 10 ? `0${minute}` : `${minute}`
+    const ss: string = second < 10 ? `0${second}` : `${second}`
+    return `${hh}:${mm}:${ss}`
+  }
+
+  /** 秒杀进度百分比（已抢名额 / 总名额）。 */
+  private seckillSoldPercent(item: SeckillItem): number {
+    if (item.quota <= 0) {
+      return 0
+    }
+    return Math.min(Math.round(item.sold * 100 / item.quota), 100)
+  }
+
+  /** 点击秒杀商品：进入所属店铺详情继续选购（秒杀价由后端下单时自动套用）。 */
+  private openSeckillStore(item: SeckillItem): void {
+    if (item.storeId <= 0) {
+      promptAction.showToast({ message: '秒杀商品所属店铺信息缺失', duration: 2500 })
+      return
+    }
+    AppStorage.setOrCreate<number>('selectedStoreId', item.storeId)
+    AppStorage.setOrCreate<string>('selectedStoreName', item.storeName)
+    router.pushUrl({ url: 'pages/StoreDetailPage' })
   }
 
   private hasCurrentLocation(): boolean {
@@ -748,7 +816,8 @@ struct HomePage {
                 } else if (item.title === '领券中心') {
                   router.pushUrl({ url: 'pages/CouponCenterPage' })
                 } else if (item.title === '排行榜') {
-                  this.openProductList('ranking', 0, '排行榜商品')
+                  // 榜单：店铺榜 / 菜品热销榜（服务端按月销量与评分排序）
+                  router.pushUrl({ url: 'pages/RankingPage' })
                 } else {
                   this.openProductList('special', 0, `${item.title}商品`)
                 }
@@ -759,6 +828,31 @@ struct HomePage {
           .padding({ left: SPACING.XL, right: SPACING.XL })
           .margin({ top: SPACING.MD })
           .justifyContent(FlexAlign.SpaceAround)
+
+          // 限时秒杀：服务端时间窗口内的活动，倒计时结束或名额售罄后自动从列表消失
+          if (this.seckills.length > 0) {
+            Row() {
+              Text('⚡ 限时秒杀')
+                .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRICE_RED)
+              Blank()
+              Text('秒杀价下单自动生效')
+                .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+            }
+            .width('100%')
+            .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.SM })
+
+            Scroll() {
+              Row({ space: SPACING.SM }) {
+                ForEach(this.seckills, (item: SeckillItem) => {
+                  this.SeckillCard(item)
+                }, (item: SeckillItem) => `seckill-${item.id}`)
+              }
+              .padding({ left: SPACING.LG, right: SPACING.LG })
+            }
+            .scrollable(ScrollDirection.Horizontal)
+            .scrollBar(BarState.Off)
+            .width('100%')
+          }
 
           // 特价团购标题
           Row() {
@@ -870,6 +964,58 @@ struct HomePage {
     AppStorage.setOrCreate<number>('selectedStoreId', storeId)
     AppStorage.setOrCreate<string>('selectedStoreName', item.storeName)
     router.pushUrl({ url: 'pages/StoreDetailPage' })
+  }
+
+  @Builder
+  SeckillCard(item: SeckillItem) {
+    Column({ space: SPACING.XS }) {
+      Text(item.goodsName)
+        .fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+        .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+        .width('100%')
+
+      Row({ space: SPACING.XS }) {
+        Text(`¥${item.price.toFixed(2)}`)
+          .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.PRICE_RED)
+        if (item.originalPrice > item.price) {
+          Text(`¥${item.originalPrice.toFixed(2)}`)
+            .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+            .decoration({ type: TextDecorationType.LineThrough })
+        }
+      }
+      .width('100%')
+
+      // 抢购进度：已抢名额 / 总名额
+      Row() {
+        Text(`已抢 ${item.sold}/${item.quota}`)
+          .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+        Blank()
+        Text(`${this.seckillSoldPercent(item)}%`)
+          .fontSize(FONT_SIZE.XS).fontColor(COLORS.PRICE_RED)
+      }
+      .width('100%')
+
+      // 倒计时：单个页面级定时器驱动，归零后提示用户刷新（后端已结束的活动不再返回）
+      Text(this.seckillRemainSeconds(item) > 0
+        ? `距结束 ${this.seckillCountdown(item)}`
+        : '本场已结束')
+        .fontSize(FONT_SIZE.XS)
+        .fontColor(COLORS.TEXT_WHITE)
+        .backgroundColor(COLORS.PRICE_RED)
+        .padding({ left: SPACING.XS, right: SPACING.XS, top: 1, bottom: 1 })
+        .borderRadius(BORDER_RADIUS.SM)
+
+      Text(item.storeName)
+        .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+        .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+        .width('100%')
+    }
+    .width(140)
+    .padding(SPACING.MD)
+    .backgroundColor(COLORS.BG_WHITE)
+    .borderRadius(BORDER_RADIUS.LG)
+    .alignItems(HorizontalAlign.Start)
+    .onClick(() => { this.openSeckillStore(item) })
   }
 
   @Builder
@@ -1141,6 +1287,8 @@ export struct StoreDetailContent {
   @StorageLink('categoryList') categoryList: Category[] = []
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   onNavigateLogin: () => void = () => {}
+  // 多规格菜品：由页面层打开选规格弹窗（弹窗需要 CustomDialogController，只能挂在页面组件上）
+  onSelectSpecGoods: (goods: GoodsItem) => void = () => {}
 
   aboutToAppear() {
     this.loadStoreData()
@@ -1271,7 +1419,11 @@ export struct StoreDetailContent {
     this.cartItems = AppStorage.get<CartItem[]>('cartItems') || []
     const sc = (this.cartItems || []).filter(c => c.storeId === this.storeId)
     this.cartCount = sc.reduce((s, i) => s + i.quantity, 0)
-    this.cartTotal = sc.reduce((s, i) => s + i.goods.price * i.quantity, 0)
+    // 多规格购物车行以规格价结算（CartItem.price），无规格商品回退商品价
+    this.cartTotal = sc.reduce((s: number, i: CartItem) => {
+      const unitPrice: number = i.price ?? i.goods.price
+      return s + unitPrice * i.quantity
+    }, 0)
   }
 
   private enqueueCartOperation(operation: () => Promise<void>): void {
@@ -1281,7 +1433,40 @@ export struct StoreDetailContent {
   }
 
   private addGoodsToCart(goods: GoodsItem): void {
+    const specs: GoodsSpec[] = goods.specs ?? []
+    if (specs.length > 0) {
+      // 多规格菜品必须选规格后加购，直接加购会被后端拒绝（400「请先选择规格」）
+      this.onSelectSpecGoods(goods)
+      return
+    }
     this.changeGoodsQuantity(goods, 1)
+  }
+
+  // 该菜品是否是多规格菜品（specs 非空）
+  private hasSpecs(goods: GoodsItem): boolean {
+    const specs: GoodsSpec[] = goods.specs ?? []
+    return specs.length > 0
+  }
+
+  // 规格数量，用于商品卡片上的「N 种规格」标签
+  private getSpecCount(goods: GoodsItem): number {
+    const specs: GoodsSpec[] = goods.specs ?? []
+    return specs.length
+  }
+
+  // 规格最低价（后端 price 即为最低规格价，这里按 specs 再取一次最小值做兜底）
+  private getMinSpecPrice(goods: GoodsItem): number {
+    const specs: GoodsSpec[] = goods.specs ?? []
+    if (specs.length === 0) {
+      return goods.price
+    }
+    let minPrice: number = specs[0].price
+    specs.forEach((spec: GoodsSpec) => {
+      if (spec.price < minPrice) {
+        minPrice = spec.price
+      }
+    })
+    return minPrice
   }
 
   private changeGoodsQuantity(goods: GoodsItem, delta: number): void {
@@ -1485,6 +1670,13 @@ export struct StoreDetailContent {
                         .borderWidth(1).borderColor(COLORS.PRICE_RED)
                         .padding({ left: 2, right: 2, top: 1, bottom: 1 }).borderRadius(BORDER_RADIUS.SM)
                     }
+                    if (this.getSpecCount(goods) > 1) {
+                      Text(`${this.getSpecCount(goods)} 种规格`)
+                        .fontSize(FONT_SIZE.XS).fontColor(COLORS.TAG_TEXT)
+                        .backgroundColor(COLORS.TAG_BG)
+                        .padding({ left: SPACING.XS, right: SPACING.XS, top: 1, bottom: 1 })
+                        .borderRadius(BORDER_RADIUS.SM)
+                    }
                   }
                   Text(goods.description)
                     .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
@@ -1495,10 +1687,7 @@ export struct StoreDetailContent {
                     Text(`好评${goods.rating}%`).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
                   }
                   Row() {
-                    Row({ space: 2 }) {
-                      Text('¥').fontSize(FONT_SIZE.SM).fontColor(COLORS.PRICE_RED).fontWeight(FontWeight.Bold)
-                      Text(goods.price.toString()).fontSize(FONT_SIZE.XL).fontColor(COLORS.PRICE_RED).fontWeight(FontWeight.Bold)
-                    }
+                    this.GoodsPriceArea(goods)
                     if (goods.originalPrice) {
                       Text(`¥${goods.originalPrice}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
                         .decoration({ type: TextDecorationType.LineThrough }).margin({ left: 4 })
@@ -1529,23 +1718,48 @@ export struct StoreDetailContent {
     .width('100%').layoutWeight(1)
   }
 
+  // 商品卡片价格：多规格菜品显示「¥最低规格价 起」
+  @Builder
+  GoodsPriceArea(goods: GoodsItem) {
+    Row({ space: 2 }) {
+      Text('¥').fontSize(FONT_SIZE.SM).fontColor(COLORS.PRICE_RED).fontWeight(FontWeight.Bold)
+      Text(this.getMinSpecPrice(goods).toString())
+        .fontSize(FONT_SIZE.XL).fontColor(COLORS.PRICE_RED).fontWeight(FontWeight.Bold)
+      if (this.hasSpecs(goods)) {
+        Text('起').fontSize(FONT_SIZE.SM).fontColor(COLORS.PRICE_RED)
+      }
+    }
+  }
+
   @Builder
   AddMinusButton(goods: GoodsItem) {
     Row({ space: 0 }) {
-      if (this.getQty(goods.id) > 0) {
-        Text('-').width(24).height(24).fontSize(16).fontColor(COLORS.TEXT_WHITE)
+      if (this.hasSpecs(goods)) {
+        // 多规格菜品：规格价与规格库存各不相同，统一走选规格弹窗（后端要求 specId）
+        Text('选规格')
+          .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_WHITE)
+          .backgroundColor(COLORS.PRIMARY)
+          .borderRadius(BORDER_RADIUS.ROUND)
+          .padding({ left: SPACING.SM, right: SPACING.SM, top: SPACING.XS, bottom: SPACING.XS })
+          .onClick(() => {
+            this.addGoodsToCart(goods)
+          })
+      } else {
+        if (this.getQty(goods.id) > 0) {
+          Text('-').width(24).height(24).fontSize(16).fontColor(COLORS.TEXT_WHITE)
+            .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.CIRCLE)
+            .textAlign(TextAlign.Center).onClick(() => {
+              this.changeGoodsQuantity(goods, -1)
+            })
+          Text(this.getQty(goods.id).toString()).width(28).height(24).fontSize(FONT_SIZE.MD)
+            .fontColor(COLORS.TEXT_PRIMARY).textAlign(TextAlign.Center)
+        }
+        Text('+').width(24).height(24).fontSize(16).fontColor(COLORS.TEXT_WHITE)
           .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.CIRCLE)
           .textAlign(TextAlign.Center).onClick(() => {
-            this.changeGoodsQuantity(goods, -1)
+            this.addGoodsToCart(goods)
           })
-        Text(this.getQty(goods.id).toString()).width(28).height(24).fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.TEXT_PRIMARY).textAlign(TextAlign.Center)
       }
-      Text('+').width(24).height(24).fontSize(16).fontColor(COLORS.TEXT_WHITE)
-        .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.CIRCLE)
-        .textAlign(TextAlign.Center).onClick(() => {
-          this.addGoodsToCart(goods)
-        })
     }
   }
 
@@ -1892,6 +2106,32 @@ struct OrderListMainPage {
     console.info(`[OrderList] orderList type=${typeof this.orderList} isArray=${Array.isArray(this.orderList)} len=${Array.isArray(this.orderList) ? (this.orderList as Order[]).length : -1} currentStatus=${this.currentStatus}`)
   }
 
+  /** 支付待付款订单：扣余额并流转到待接单（余额支付模型）。 */
+  private async payPendingOrder(order: Order): Promise<void> {
+    const paid: Order | null = await payOrderRemote(order.id)
+    this.orderList = AppStorage.get<Order[]>('orderList') || []
+    this.refreshDataSource()
+    if (paid === null) {
+      const errorMessage: string = getLastRemoteErrorMessage()
+      promptAction.showToast({ message: errorMessage === '' ? '支付失败，请稍后重试' : errorMessage, duration: 3000 })
+      return
+    }
+    promptAction.showToast({ message: `支付成功，已支付 ¥${paid.payAmount.toFixed(2)}`, duration: 2500 })
+  }
+
+  /** 取消待付款订单：尚未扣款，仅释放库存与优惠券。 */
+  private async cancelPendingOrder(order: Order): Promise<void> {
+    const ok: boolean = await cancelOrderRemote(order.id)
+    this.orderList = AppStorage.get<Order[]>('orderList') || []
+    this.refreshDataSource()
+    if (ok) {
+      promptAction.showToast({ message: '订单已取消，库存与优惠券已释放', duration: 2400 })
+    } else {
+      const errorMessage: string = getLastRemoteErrorMessage()
+      promptAction.showToast({ message: errorMessage === '' ? '取消订单失败，请稍后重试' : errorMessage, duration: 3000 })
+    }
+  }
+
   @Builder
   OrderCard(order: Order) {
     Column({ space: SPACING.SM }) {
@@ -1903,17 +2143,28 @@ struct OrderListMainPage {
       }
       ForEach(order.items || [], (item: CartItem) => {
         Row() {
-          Text(item.goods.name).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_SECONDARY).layoutWeight(1)
+          // 多规格：订单行附带下单时锁定的规格快照
+          Text((item.specName ?? '') !== '' ? `${item.goods.name}（${item.specName}）` : item.goods.name)
+            .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_SECONDARY).layoutWeight(1)
           Text(`x${item.quantity}`).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
         }.width('100%')
-      }, (item: CartItem) => `${item.goods.id}`)
+      }, (item: CartItem) => `${item.goods.id}_${item.specId ?? 0}`)
       Row() {
         Text(`共${(order.items || []).reduce((s, i) => s + i.quantity, 0)}件 实付`)
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
         Text(`¥${order.payAmount.toFixed(2)}`)
           .fontSize(FONT_SIZE.LG).fontColor(COLORS.PRICE_RED).fontWeight(FontWeight.Bold)
         Blank()
-        if (order.status === 4 && (order.escrowStatus ?? 0) === 0) {
+        if (order.status === 0) {
+          // 待付款：可取消（释放库存与优惠券）或立即支付
+          Button('取消订单').height(32).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+            .backgroundColor(COLORS.BG_PRIMARY).borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+            .margin({ right: SPACING.SM })
+            .onClick(() => { this.cancelPendingOrder(order) })
+          Button('立即支付').height(32).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_WHITE)
+            .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+            .onClick(() => { this.payPendingOrder(order) })
+        } else if (order.status === 4 && (order.escrowStatus ?? 0) === 0) {
           Button('确认收货并结算').height(32).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_WHITE)
             .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
             .onClick(async () => {

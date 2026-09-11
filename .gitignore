@@ -21,3 +21,5 @@
 /signing/**/*.p7b
 /signing/**/*.csr
 /signing/**/secrets*
+# 本地签名接入文件（含密码，由 scripts/enable-release-signing.ps1 生成）
+/signing/release-signing.json5

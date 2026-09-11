@@ -6,7 +6,7 @@
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { CartItem, Order, Address, Coupon, StoreItem } from '../model/Models'
-import { createOrderRemote, deleteCartItemsRemote, syncCartRemote, getAllStoresList, syncCouponsRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
+import { createOrderRemote, deleteCartItemRemote, syncCartRemote, getAllStoresList, syncCouponsRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { LoadingIndicator } from '../components/LoadingIndicator'
 import { logInfo } from '../service/AppLogger'
 import { calculatePayAmount } from '../service/OrderCalculations'
@@ -215,7 +215,8 @@ export struct CheckoutPage {
     for (let i = 0; i < this.storeItems.length; i++) {
       checkoutGoodsIds.push(this.storeItems[i].goods.id)
     }
-    const successfulGoodsIds: number[] = []
+    // 已下单成功的购物车行（按菜品+规格精确清理，避免连带删除未结算的其他规格）
+    const successfulRows: CartItem[] = []
     for (let i = 0; i < this.checkoutStoreIds.length; i++) {
       const storeId: number = this.checkoutStoreIds[i]
       const items: CartItem[] = this.getStoreItems(storeId)
@@ -227,11 +228,8 @@ export struct CheckoutPage {
       const couponId: number = couponCanApply && this.selectedCoupon !== null ? this.selectedCoupon.id : 0
       const serverOrder: Order | null = await createOrderRemote(storeId, items, address.id, couponId, this.remark, checkoutGoodsIds, this.getExpectTime())
       if (serverOrder === null) {
-        if (successfulGoodsIds.length > 0) {
-          const successfulCartCleared: boolean = await deleteCartItemsRemote(successfulGoodsIds)
-          if (!successfulCartCleared) {
-            await syncCartRemote()
-          }
+        if (successfulRows.length > 0) {
+          await this.removeCartRows(successfulRows)
         }
         this.submitting = false
         const errorMessage: string = getLastRemoteErrorMessage()
@@ -249,7 +247,7 @@ export struct CheckoutPage {
         couponUsed = true
       }
       for (let j = 0; j < items.length; j++) {
-        successfulGoodsIds.push(items[j].goods.id)
+        successfulRows.push(items[j])
       }
     }
     if (firstOrder === null) {
@@ -259,10 +257,7 @@ export struct CheckoutPage {
       return
     }
 
-    const cartCleared: boolean = await deleteCartItemsRemote(checkoutGoodsIds)
-    if (!cartCleared) {
-      await syncCartRemote()
-    }
+    await this.removeCartRows(successfulRows)
 
     // 后端已处理优惠券状态，重新同步真实优惠券列表
     if (this.selectedCoupon !== null) {
@@ -275,8 +270,29 @@ export struct CheckoutPage {
     // 重置已选优惠券
     AppStorage.setOrCreate<Coupon | null>('selectedCoupon', null)
     this.submitting = false
-    promptAction.showToast({ message: this.checkoutStoreIds.length > 1 ? `已提交${this.checkoutStoreIds.length}笔订单` : '订单提交成功！' })
+    const submittedCount: number = this.checkoutStoreIds.length
+    promptAction.showToast({
+      message: submittedCount > 1
+        ? `已提交${submittedCount}笔订单，请分别完成支付`
+        : '订单提交成功，请在 15 分钟内完成支付',
+      duration: 2500
+    })
     router.pushUrl({ url: 'pages/OrderDetailPage' })
+  }
+
+  /** 下单成功后按 (菜品, 规格) 精确清理购物车行。 */
+  private async removeCartRows(rows: CartItem[]): Promise<void> {
+    let allCleared: boolean = true
+    for (let i = 0; i < rows.length; i++) {
+      const row: CartItem = rows[i]
+      const ok: boolean = await deleteCartItemRemote(row.goods.id, row.specId ?? 0)
+      if (!ok) {
+        allCleared = false
+      }
+    }
+    if (!allCleared) {
+      await syncCartRemote()
+    }
   }
 
   build() {
@@ -445,19 +461,28 @@ export struct CheckoutPage {
               .maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
               .width('100%')
+            // 多规格：结算页展示所选规格，避免同菜品多规格被误认为重复行
+            if ((item.specName ?? '') !== '') {
+              Text(`规格：${item.specName}`)
+                .fontSize(FONT_SIZE.XS)
+                .fontColor(COLORS.TEXT_HINT)
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .width('100%')
+            }
           }
             .layoutWeight(1)
           Text(`x${item.quantity}`)
             .fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.TEXT_SECONDARY)
             .margin({ right: SPACING.MD })
-          Text(`¥${(item.goods.price * item.quantity).toFixed(2)}`)
+          Text(`¥${((item.price ?? item.goods.price) * item.quantity).toFixed(2)}`)
             .fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.TEXT_PRIMARY)
         }
         .width('100%')
         .padding({ top: SPACING.XS, bottom: SPACING.XS })
-      }, (item: CartItem) => `${item.goods.id}`)
+      }, (item: CartItem) => `${item.goods.id}_${item.specId ?? 0}`)
     }
     .width('100%')
     .padding(SPACING.LG)

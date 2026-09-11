@@ -3,12 +3,12 @@
  * 负责：调用后端 REST API（HttpClient）+ 后端 JSON 与客户端 Models 之间的双向转换
  * 所有页面/服务层通过本模块访问真实后端数据
  */
-import { get, post, put, del, ApiResponse, setAuthToken } from './HttpClient'
+import { get, post, put, del, uploadFile, ApiResponse, setAuthToken } from './HttpClient'
 import { API_CONFIG } from '../common/Constants'
 import {
   User, UserRole, StoreItem, GoodsItem, SpecialGoodsItem, Category, Order, CartItem,
   Address, Coupon, Review, Rider, Banner, Announcement, Favorite, RefundRecord, AdminEmployee, AdminProduct, AdminUser,
-  AdminStatisticsData, AdminTrendPoint, AdminHotGoods
+  AdminStatisticsData, AdminTrendPoint, AdminHotGoods, SeckillItem, BundleInfo, UploadResult, GoodsSpec
 } from '../model/Models'
 import { logInfo, logWarn } from './AppLogger'
 
@@ -36,6 +36,16 @@ interface ServerStore {
   recommended: number
 }
 
+interface ServerGoodsSpec {
+  id: number
+  goodsId: number
+  name: string
+  price: number
+  stock: number
+  sort: number
+  status: number
+}
+
 interface ServerGoods {
   id: number
   storeId: number
@@ -52,6 +62,7 @@ interface ServerGoods {
   tag: string
   special: boolean
   status: number
+  specs?: ServerGoodsSpec[]
 }
 
 interface ServerSpecialGoods {
@@ -66,6 +77,8 @@ interface ServerOrderItem {
   price: number
   quantity: number
   image: string
+  specId?: number
+  specName?: string
 }
 
 interface ServerCartItem {
@@ -73,8 +86,43 @@ interface ServerCartItem {
   goodsId: number
   storeId: number
   storeName: string
+  specId?: number
+  specName?: string
+  price?: number
+  stock?: number
   quantity: number
   goods: ServerGoods
+}
+
+interface ServerSeckill {
+  id: number
+  goodsId: number
+  goodsName: string
+  image: string
+  originalPrice: number
+  price: number
+  quota: number
+  sold: number
+  startTime: string
+  endTime: string
+  storeId: number
+  storeName: string
+  storeDistance: string
+  remainSeconds: number
+}
+
+interface ServerBundle {
+  storeId: number
+  storeName: string
+  minOrder: number
+  amount: number
+  gap: number
+  suggestions: ServerGoods[]
+}
+
+interface ServerUploadResult {
+  url: string
+  size: number
 }
 
 interface ServerAddressInfo {
@@ -108,6 +156,8 @@ interface ServerOrder {
   expectTime: string
   riderName: string
   riderPhone: string
+  couponId?: number
+  payDeadline?: string
 }
 
 interface ServerUser {
@@ -298,6 +348,8 @@ interface OrderItemRequest {
   price: number
   quantity: number
   image: string
+  specId: number
+  specName: string
 }
 
 interface CreateOrderRequest {
@@ -312,6 +364,7 @@ interface CreateOrderRequest {
 
 interface CartItemRequest {
   goodsId: number
+  specId: number
   quantity: number
 }
 
@@ -401,6 +454,20 @@ interface MerchantGoodsRequest {
   tag: string
   special: boolean
   status: number
+  /** 多规格：非空时后端按规格聚合价格与库存；省略表示本次不修改规格 */
+  specs?: SpecInputRequest[]
+}
+
+/** 商户提交的规格项（id=0 表示新增） */
+interface SpecInputRequest {
+  id: number
+  name: string
+  price: number
+  stock: number
+}
+
+interface GoodsSpecsRequest {
+  specs: SpecInputRequest[]
 }
 
 interface RefundRequest {
@@ -585,6 +652,88 @@ export async function fetchStoreReviews(storeId: number): Promise<Review[]> {
   return resp.data.map((r: ServerReview) => toReview(r))
 }
 
+// ==================== 营销：榜单 / 限时秒杀 / 凑单 ====================
+
+/** 店铺榜（按月销量与评分）。 */
+export async function fetchRankStoresApi(limit: number = 10, latitude?: number, longitude?: number): Promise<StoreItem[]> {
+  const resp: ApiResponse<ServerStore[]> = await get<ServerStore[]>(
+    appendCoordinates(`/api/rankings/stores?limit=${limit}`, latitude, longitude))
+  if (resp.code !== 200 || resp.data === null) {
+    return []
+  }
+  return resp.data.map((s: ServerStore) => toStoreItem(s))
+}
+
+/** 菜品榜（热销榜）。 */
+export async function fetchRankGoodsApi(limit: number = 10, latitude?: number, longitude?: number): Promise<SpecialGoodsItem[]> {
+  const resp: ApiResponse<ServerSpecialGoods[]> = await get<ServerSpecialGoods[]>(
+    appendCoordinates(`/api/rankings/goods?limit=${limit}`, latitude, longitude))
+  if (resp.code !== 200 || resp.data === null) {
+    return []
+  }
+  return resp.data.map((item: ServerSpecialGoods): SpecialGoodsItem => {
+    const result: SpecialGoodsItem = {
+      goods: toGoodsItem(item.goods),
+      storeName: item.storeName,
+      storeDistance: item.storeDistance
+    }
+    return result
+  })
+}
+
+/** 首页限时秒杀（时间窗口内且仍有名额）。 */
+export async function fetchSeckillsApi(limit: number = 6, latitude?: number, longitude?: number): Promise<SeckillItem[]> {
+  const resp: ApiResponse<ServerSeckill[]> = await get<ServerSeckill[]>(
+    appendCoordinates(`/api/seckills?limit=${limit}`, latitude, longitude))
+  if (resp.code !== 200 || resp.data === null) {
+    return []
+  }
+  return resp.data.map((s: ServerSeckill): SeckillItem => {
+    const item: SeckillItem = {
+      id: s.id,
+      goodsId: s.goodsId,
+      goodsName: s.goodsName,
+      image: s.image,
+      originalPrice: s.originalPrice,
+      price: s.price,
+      quota: s.quota,
+      sold: s.sold,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      storeId: s.storeId,
+      storeName: s.storeName,
+      storeDistance: s.storeDistance,
+      remainSeconds: s.remainSeconds
+    }
+    return item
+  })
+}
+
+/** 凑单提示：还差多少元起送 + 店内可凑单菜品。 */
+export async function fetchBundleApi(storeId: number, amount: number): Promise<BundleInfo | null> {
+  const resp: ApiResponse<ServerBundle> = await get<ServerBundle>(`/api/stores/${storeId}/bundle?amount=${amount}`)
+  if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
+    return null
+  }
+  const data: ServerBundle = resp.data
+  const bundle: BundleInfo = {
+    storeId: data.storeId,
+    storeName: data.storeName,
+    minOrder: data.minOrder,
+    amount: data.amount,
+    gap: data.gap,
+    suggestions: (data.suggestions || []).map((g: ServerGoods) => toGoodsItem(g))
+  }
+  return bundle
+}
+
+/** 图文评价图片上传：返回相对地址（需拼接 API_CONFIG.BASE_URL 展示）。 */
+export async function uploadImageApi(fileUri: string, showErrorToast: boolean = true): Promise<UploadResult | null> {
+  const url: string = API_CONFIG.BASE_URL + API_CONFIG.ENDPOINTS['upload']
+  const result: UploadResult | null = await uploadFile(url, fileUri, showErrorToast)
+  return result
+}
+
 export async function fetchGoodsReviews(goodsId: number): Promise<Review[]> {
   const resp: ApiResponse<ServerReview[]> = await get<ServerReview[]>(`/api/goods/${goodsId}/reviews`)
   if (resp.code !== 200 || resp.data === null) {
@@ -757,11 +906,16 @@ export async function searchStoresApi(keyword: string, latitude?: number, longit
 // ==================== 购物车（需登录） ====================
 
 function toCartItem(item: ServerCartItem): CartItem {
+  const goods: GoodsItem = toGoodsItem(item.goods)
   return {
-    goods: toGoodsItem(item.goods),
+    goods: goods,
     quantity: item.quantity,
     storeId: item.storeId,
-    storeName: item.storeName
+    storeName: item.storeName,
+    specId: item.specId ?? 0,
+    specName: item.specName ?? '',
+    price: item.price ?? goods.price,
+    stock: item.stock ?? goods.stock
   }
 }
 
@@ -773,8 +927,9 @@ export async function fetchCartApi(): Promise<CartItem[] | null> {
   return resp.data.map((item: ServerCartItem) => toCartItem(item))
 }
 
-export async function addCartItemApi(goodsId: number, quantity: number): Promise<CartItem[] | null> {
-  const req: CartItemRequest = { goodsId: goodsId, quantity: quantity }
+/** 加入购物车：多规格菜品必须传 specId（无规格传 0）。 */
+export async function addCartItemApi(goodsId: number, specId: number, quantity: number): Promise<CartItem[] | null> {
+  const req: CartItemRequest = { goodsId: goodsId, specId: specId, quantity: quantity }
   const resp: ApiResponse<ServerCartItem[]> = await post<ServerCartItem[]>('/api/cart/items', req)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     return null
@@ -782,17 +937,17 @@ export async function addCartItemApi(goodsId: number, quantity: number): Promise
   return resp.data.map((item: ServerCartItem) => toCartItem(item))
 }
 
-export async function updateCartItemQuantityApi(goodsId: number, quantity: number): Promise<CartItem[] | null> {
+export async function updateCartItemQuantityApi(goodsId: number, specId: number, quantity: number): Promise<CartItem[] | null> {
   const req: CartQuantityRequest = { quantity: quantity }
-  const resp: ApiResponse<ServerCartItem[]> = await put<ServerCartItem[]>(`/api/cart/items/${goodsId}`, req)
+  const resp: ApiResponse<ServerCartItem[]> = await put<ServerCartItem[]>(`/api/cart/items/${goodsId}?specId=${specId}`, req)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     return null
   }
   return resp.data.map((item: ServerCartItem) => toCartItem(item))
 }
 
-export async function deleteCartItemApi(goodsId: number): Promise<CartItem[] | null> {
-  const resp: ApiResponse<ServerCartItem[]> = await del<ServerCartItem[]>(`/api/cart/items/${goodsId}`)
+export async function deleteCartItemApi(goodsId: number, specId: number): Promise<CartItem[] | null> {
+  const resp: ApiResponse<ServerCartItem[]> = await del<ServerCartItem[]>(`/api/cart/items/${goodsId}?specId=${specId}`)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     return null
   }
@@ -826,9 +981,11 @@ export async function createOrderApi(storeId: number, cartItems: CartItem[], add
     const item: OrderItemRequest = {
       goodsId: c.goods.id,
       goodsName: c.goods.name,
-      price: c.goods.price,
+      price: c.price ?? c.goods.price,
       quantity: c.quantity,
-      image: c.goods.image
+      image: c.goods.image,
+      specId: c.specId ?? 0,
+      specName: c.specName ?? ''
     }
     return item
   })
@@ -869,6 +1026,15 @@ export async function fetchOrderDetailApi(orderId: number): Promise<Order | null
 export async function cancelOrderApi(orderId: number): Promise<boolean> {
   const resp: ApiResponse<ServerOrder> = await put<ServerOrder>(`/api/orders/${orderId}/cancel`, undefined)
   return resp.code === 200
+}
+
+/** 支付待付款订单：扣余额并流转到待接单（余额支付模型）。 */
+export async function payOrderApi(orderId: number): Promise<Order | null> {
+  const resp: ApiResponse<ServerOrder> = await post<ServerOrder>(`/api/orders/${orderId}/pay`)
+  if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
+    return null
+  }
+  return toOrder(resp.data)
 }
 
 export async function confirmOrderApi(orderId: number): Promise<boolean> {
@@ -947,7 +1113,25 @@ function toMerchantGoodsRequest(goods: GoodsItem, status: number): MerchantGoods
     merchantCategoryId: goods.merchantCategoryId || 0, stock: goods.stock ?? 999,
     special: goods.isSpecial === true
   }
+  // 多规格：仅在有规格时随商品一起提交；清空规格走专用接口，避免误删商户已维护的规格
+  if (goods.specs !== undefined && goods.specs.length > 0) {
+    req.specs = toSpecInputs(goods.specs)
+  }
   return req
+}
+
+function toSpecInputs(specs: GoodsSpec[]): SpecInputRequest[] {
+  return specs.map((s: GoodsSpec): SpecInputRequest => {
+    const input: SpecInputRequest = { id: s.id, name: s.name, price: s.price, stock: s.stock }
+    return input
+  })
+}
+
+/** 商户整体覆盖菜品规格（含清空：传空数组即可）。 */
+export async function updateMerchantGoodsSpecsApi(goodsId: number, specs: GoodsSpec[]): Promise<GoodsItem | null> {
+  const req: GoodsSpecsRequest = { specs: toSpecInputs(specs) }
+  const resp: ApiResponse<ServerGoods> = await put<ServerGoods>(`/api/merchant/goods/${goodsId}/specs`, req)
+  return resp.code === 200 && resp.data !== null ? toGoodsItem(resp.data) : null
 }
 
 export async function createMerchantGoodsApi(storeId: number, goods: GoodsItem): Promise<GoodsItem | null> {
@@ -1319,7 +1503,19 @@ function toGoodsItem(g: ServerGoods): GoodsItem {
     rating: g.rating,
     tag: g.tag,
     isSpecial: g.special === true,
-    isOnShelf: g.status === 1
+    isOnShelf: g.status === 1,
+    specs: (g.specs || []).map((s: ServerGoodsSpec): GoodsSpec => {
+      const spec: GoodsSpec = {
+        id: s.id,
+        goodsId: s.goodsId,
+        name: s.name,
+        price: s.price,
+        stock: s.stock,
+        sort: s.sort,
+        status: s.status
+      }
+      return spec
+    })
   }
   return goods
 }
@@ -1340,7 +1536,10 @@ function toOrder(o: ServerOrder): Order {
       goods: goods,
       quantity: it.quantity,
       storeId: o.storeId,
-      storeName: o.storeName
+      storeName: o.storeName,
+      specId: it.specId ?? 0,
+      specName: it.specName ?? '',
+      price: it.price
     }
     return cart
   })
@@ -1370,6 +1569,9 @@ function toOrder(o: ServerOrder): Order {
     deliverTime: o.deliverTime,
     completeTime: o.completeTime,
     expectTime: o.expectTime || '',
+    payDeadline: o.payDeadline || '',
+    couponId: o.couponId ?? 0,
+    orderNo: o.orderNo || '',
     riderName: o.riderName || '',
     riderPhone: o.riderPhone || '',
     address: addr,
