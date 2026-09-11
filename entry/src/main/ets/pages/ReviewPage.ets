@@ -318,6 +318,7 @@ export struct ReviewPage {
         Text('‹ 返回')
           .fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_PRIMARY)
+          .id('review-back')
           .onClick(() => { router.back() })
         Text('订单评价')
           .fontSize(FONT_SIZE.XL)
@@ -395,6 +396,7 @@ export struct ReviewPage {
             .backgroundColor(COLORS.PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
             .type(ButtonType.Capsule)
+            .id('review-submit')
             .onClick(() => { this.submitReview() })
         }
         .width('100%')
@@ -478,6 +480,7 @@ export struct ReviewPage {
             .fontSize(FONT_SIZE.BIG_TITLE)
             .fontColor(star <= this.rating ? COLORS.PRIMARY : COLORS.DIVIDER)
             .padding({ left: SPACING.XS, right: SPACING.XS })
+            .id(`review-star-${star}`)
             .onClick(() => { this.rating = star })
         }, (star: number) => star.toString())
       }
@@ -506,7 +509,7 @@ export struct ReviewPage {
         .width('100%')
 
       Flex({ wrap: FlexWrap.Wrap }) {
-        ForEach(this.tagList, (tag: string) => {
+        ForEach(this.tagList, (tag: string, index: number) => {
           Text(tag)
             .fontSize(FONT_SIZE.MD)
             .padding({ left: SPACING.MD, right: SPACING.MD, top: SPACING.SM, bottom: SPACING.SM })
@@ -514,6 +517,7 @@ export struct ReviewPage {
             .borderRadius(BORDER_RADIUS.ROUND)
             .backgroundColor(this.isTagSelected(tag) ? COLORS.PRIMARY : COLORS.TAG_BG)
             .fontColor(this.isTagSelected(tag) ? COLORS.TEXT_WHITE : COLORS.TAG_TEXT)
+            .id(`review-tag-${index}`)
             .onClick(() => { this.toggleTag(tag) })
         }, (tag: string) => tag)
       }
@@ -570,6 +574,7 @@ export struct ReviewPage {
         .borderRadius(BORDER_RADIUS.MD)
         .backgroundColor(COLORS.BG_PRIMARY)
         .padding(SPACING.MD)
+        .id('review-content')
         .onChange((value: string) => {
           this.content = value
         })
@@ -593,6 +598,7 @@ export struct ReviewPage {
         Text(`${this.images.length}/${MAX_REVIEW_IMAGES}`)
           .fontSize(FONT_SIZE.SM)
           .fontColor(COLORS.TEXT_HINT)
+          .id('review-image-count')
       }
       .width('100%')
       .alignItems(VerticalAlign.Center)
@@ -617,6 +623,7 @@ export struct ReviewPage {
         .fontSize(FONT_SIZE.SM)
         .fontColor(COLORS.TEXT_HINT)
         .width('100%')
+        .id('review-image-hint')
     }
     .width('100%')
     .padding(SPACING.LG)
@@ -644,11 +651,13 @@ export struct ReviewPage {
         .backgroundColor(COLORS.OVERLAY)
         .borderRadius(BORDER_RADIUS.CIRCLE)
         .margin({ top: SPACING.XS, right: SPACING.XS })
+        .id(`review-image-remove-${index}`)
         .onClick(() => { this.removeImage(index) })
     }
     .width(IMAGE_TILE_WIDTH)
     .aspectRatio(1)
     .margin({ right: SPACING.SM, bottom: SPACING.SM })
+    .id(`review-image-${index}`)
   }
 
   /** 上传中的占位格子（文案只依赖入参，避免复用时的脏状态）。 */
@@ -692,6 +701,7 @@ export struct ReviewPage {
     .borderWidth(1)
     .borderColor(COLORS.DIVIDER)
     .margin({ right: SPACING.SM, bottom: SPACING.SM })
+    .id('review-add-image')
     .onClick(() => { this.pickAndUploadImages() })
   }
 }

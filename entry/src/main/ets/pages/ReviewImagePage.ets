@@ -36,6 +36,7 @@ export struct ReviewImagePage {
           .width('100%')
           .height('100%')
           .objectFit(ImageFit.Contain)
+          .id('review-image-preview')
       }
 
       Text('点击任意位置返回')
@@ -46,6 +47,7 @@ export struct ReviewImagePage {
     }
     .width('100%')
     .height('100%')
+    .id('review-image-page')
     .onClick(() => { this.close() })
   }
 }

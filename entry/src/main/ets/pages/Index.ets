@@ -1914,6 +1914,7 @@ export struct StoreDetailContent {
                     .height(72)
                     .borderRadius(BORDER_RADIUS.SM)
                     .objectFit(ImageFit.Cover)
+                    .id(`store-review-image-${index}`)
                     .onClick(() => { this.previewReviewImage(imageUrl) })
                 }, (imageUrl: string, index: number) => `${index}_${imageUrl}`)
               }
@@ -1972,6 +1973,8 @@ export struct StoreDetailContent {
 
   /** 点击评价图片：进入全屏预览页。 */
   private previewReviewImage(imageUrl: string): void {
+    // 注意：日志里不要写「地址=」，AppLogger 的脱敏规则会把「地址=xxx」整段替换成 [REDACTED_ADDRESS]
+    logInfo('Review', `点击评价图片，进入预览页（有图片=${imageUrl !== ''}）`)
     if (imageUrl === '') {
       promptAction.showToast({ message: '图片地址为空，无法预览', duration: 2000 })
       return
@@ -2097,6 +2100,7 @@ struct OrderListMainPage {
               .fontColor(this.currentStatus === item.status ? COLORS.PRIMARY : COLORS.TEXT_SECONDARY)
               .fontWeight(this.currentStatus === item.status ? FontWeight.Bold : FontWeight.Normal)
               .padding({ left: SPACING.MD, right: SPACING.MD, top: SPACING.SM, bottom: SPACING.SM })
+              .id(`order-filter-${item.status}`)
               .onClick(() => { this.currentStatus = item.status })
           }, (item: OrderTabItem) => item.title)
         }
@@ -2234,6 +2238,7 @@ struct OrderListMainPage {
     }
     .width('100%').padding(SPACING.MD)
     .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+    .id(`order-card-${order.id}`)
     .onClick(() => {
       AppStorage.setOrCreate<Order>('currentOrder', order)
       AppStorage.setOrCreate<number>('currentOrderId', order.id)

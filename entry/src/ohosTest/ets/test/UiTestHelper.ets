@@ -15,7 +15,7 @@
  *   `[Probe] id=tab-3 found=false / Text component count=5`，同时并发 dumpLayout 拿到的页面是
  *   `testability/pages/Index` + `Hello World`。
  */
-import { Driver, ON, Component, abilityDelegatorRegistry } from '@kit.TestKit'
+import { Driver, ON, Component, Point, abilityDelegatorRegistry } from '@kit.TestKit'
 import { Want } from '@kit.AbilityKit'
 import { expect } from '@ohos/hypium'
 
@@ -57,6 +57,8 @@ export async function findByIdOrText(driver: Driver, id: string, text: string): 
  */
 export function requireComponent(component: Component | null | undefined, label: string): Component {
   if (component === null || component === undefined) {
+    // 先落一条日志再断言：hypium 的失败信息不带 label，只有这行 hilog 能告诉你是哪个组件没找到
+    console.info('[UiTest] MISSING component: ' + label)
     expect(false).assertTrue()
     throw new Error('UiTest component not found: ' + label)
   }
@@ -87,6 +89,141 @@ export async function clickByIdOrText(driver: Driver, id: string, text: string, 
     await driver.delayMs(1200)
   }
   return false
+}
+
+/**
+ * 查找可能位于滚动区**屏幕外**的组件：先直接找，找不到就在各个 Scroll 里 scrollSearch。
+ *
+ * 为什么需要：UiTest 的组件树只包含**当前可见**的节点。评价页的「图片评价」卡片在 Scroll 底部，
+ * 直接 findComponent 恒返回 null（已实测：review-content / review-add-image 都找不到，
+ * 而同一个页面上固定的「提交评价」按钮能找到），滚动后才能拿到。
+ */
+export async function scrollToIdOrText(driver: Driver, id: string, text: string): Promise<Component | null> {
+  const direct = await findByIdOrText(driver, id, text)
+  if (isFound(direct)) {
+    return direct
+  }
+  const containers: Component[] = []
+  // findComponents 未命中同样返回 null（不是空数组），直接 .length 会抛 Cannot read property length of null
+  const scrolls = await driver.findComponents(ON.type('Scroll'))
+  if (scrolls !== null && scrolls !== undefined) {
+    for (let i = 0; i < scrolls.length; i++) {
+      containers.push(scrolls[i])
+    }
+  }
+  const lists = await driver.findComponents(ON.type('List'))
+  if (lists !== null && lists !== undefined) {
+    for (let i = 0; i < lists.length; i++) {
+      containers.push(lists[i])
+    }
+  }
+  console.info('[UiTest] scrollSearch for ' + id + ' across ' + containers.length + ' scrollable container(s)')
+  for (let i = 0; i < containers.length; i++) {
+    try {
+      const found = await containers[i].scrollSearch(ON.id(id))
+      if (isFound(found)) {
+        return found
+      }
+    } catch (err) {
+      console.info('[UiTest] scrollSearch failed on container[' + i + ']: ' + (err as Error).message)
+    }
+  }
+  return null
+}
+
+/**
+ * 点击组件几何中心（坐标从组件自身的 bounds 算出来，不是手写坐标）。
+ *
+ * 用途：某些嵌套在滚动/列表里的节点，Component.click() 会点不中（例如店铺详情评价区的 72×72
+ * 缩略图），改用 driver.click(x, y) 更稳；失败时回退到 Component.click()。
+ */
+export async function clickComponentCenter(driver: Driver, component: Component, label: string): Promise<boolean> {
+  try {
+    const rect = await component.getBounds()
+    const x: number = Math.floor((rect.left + rect.right) / 2)
+    const y: number = Math.floor((rect.top + rect.bottom) / 2)
+    console.info('[UiTest] click center of ' + label + ' at (' + x + ',' + y + ')')
+    await driver.click(x, y)
+    return true
+  } catch (err) {
+    console.info('[UiTest] center click failed for ' + label + ': ' + (err as Error).message + ' -> fallback to component.click()')
+    try {
+      await component.click()
+      return true
+    } catch (err2) {
+      console.info('[UiTest] component.click also failed for ' + label + ': ' + (err2 as Error).message)
+      return false
+    }
+  }
+}
+
+/**
+ * 诊断用：打印坐标 (x,y) 处所有可点击组件（id/文本/边界）。
+ *
+ * 用于「节点找到了、点击却没反应」这类问题——能看出该坐标上到底压着谁，
+ * 比反复猜「是不是点击没生效」靠谱得多。
+ */
+export async function logComponentsAt(driver: Driver, x: number, y: number): Promise<void> {
+  const found = await driver.findComponents(ON.clickable(true))
+  if (found === null || found === undefined) {
+    console.info('[UiTest] no clickable components found at all')
+    return
+  }
+  console.info('[UiTest] clickable components total=' + found.length + ', probing (' + x + ',' + y + ')')
+  for (let i = 0; i < found.length; i++) {
+    try {
+      const rect = await found[i].getBounds()
+      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+        const id: string = await found[i].getId()
+        const text: string = await found[i].getText()
+        console.info('[UiTest] at(' + x + ',' + y + ') candidate id=' + id + ' text=' + text +
+          ' bounds=[' + rect.left + ',' + rect.top + '][' + rect.right + ',' + rect.bottom + ']')
+      }
+    } catch (err) {
+      // 单个节点取属性失败不影响整体诊断
+    }
+  }
+}
+
+/**
+ * 滚动直到目标**真正可见**（边界小于整屏），返回其句柄。
+ *
+ * 为什么不能只 findComponent：长页面（店铺详情：店铺信息 → 公告 → 商品列表 → 用户评价）里，
+ * 评价图片远在屏幕外，但驱动**仍会返回一个节点**，其 getBounds() 是全屏 [0,117][1320,2232] ——
+ * 拿它算出来的中心点去点击，自然什么都不会发生（已实测：点完没有任何 app 日志）。
+ * 这里用 fling 手势逐屏上滑，并且只接受「边界明显小于整屏」的节点。
+ */
+export async function scrollUntilVisible(driver: Driver, id: string, maxScrolls: number = 8): Promise<Component | null> {
+  const size = await driver.getDisplaySize()
+  for (let step = 0; step <= maxScrolls; step++) {
+    const found = await driver.findComponent(ON.id(id))
+    if (found !== null && found !== undefined) {
+      try {
+        const rect = await found.getBounds()
+        const sane: boolean = (rect.right - rect.left) < size.x && (rect.bottom - rect.top) < size.y
+        console.info('[UiTest] scrollUntilVisible ' + id + ' step=' + step + ' bounds=[' + rect.left + ',' + rect.top +
+          '][' + rect.right + ',' + rect.bottom + '] sane=' + sane)
+        if (sane) {
+          return found
+        }
+      } catch (err) {
+        console.info('[UiTest] getBounds failed for ' + id + ': ' + (err as Error).message)
+      }
+    }
+    if (step === maxScrolls) {
+      break
+    }
+    const from: Point = { x: Math.floor(size.x / 2), y: Math.floor(size.y * 0.78) }
+    const to: Point = { x: Math.floor(size.x / 2), y: Math.floor(size.y * 0.32) }
+    try {
+      await driver.fling(from, to, 40, 3000)
+    } catch (err) {
+      console.info('[UiTest] fling failed: ' + (err as Error).message)
+    }
+    await driver.delayMs(1500)
+  }
+  console.info('[UiTest] scrollUntilVisible failed for ' + id)
+  return null
 }
 
 /** 等待任一组件出现（用于「同意弹窗可能出现也可能不出现」这类分支）。 */

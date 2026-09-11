@@ -321,6 +321,7 @@ export struct SearchPage {
     .padding(SPACING.MD)
     .backgroundColor(COLORS.BG_WHITE)
     .borderRadius(BORDER_RADIUS.LG)
+    .id(`search-store-${store.id}`)
     .onClick(() => { this.onStoreClick(store) })
   }
 }

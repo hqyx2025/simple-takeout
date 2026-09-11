@@ -228,6 +228,11 @@ export struct OrderDetailPage {
           Text('‹')
             .fontSize(28)
             .fontColor(COLORS.TEXT_PRIMARY)
+            // 与搜索页返回键同一个可用性问题：只有字形大小、没有触控区域，实际可点面积低于 40×40 基线
+            .width(40)
+            .height(40)
+            .textAlign(TextAlign.Center)
+            .id('order-detail-back')
             .onClick(() => { router.back() })
           Text('订单详情')
             .fontSize(FONT_SIZE.XL)
@@ -237,7 +242,7 @@ export struct OrderDetailPage {
             .textAlign(TextAlign.Center)
           Text(' ')
             .fontSize(28)
-            .width(28)
+            .width(40)
         }
         .width('100%')
         .height(56)
@@ -907,6 +912,7 @@ export struct OrderDetailPage {
               .backgroundColor(COLORS.PRIMARY)
               .borderRadius(BORDER_RADIUS.ROUND)
               .type(ButtonType.Capsule)
+              .id('order-review-entry')
               .onClick(() => {
                 if (this.order !== null && this.order.items.length > 0) {
                   AppStorage.setOrCreate<number>('currentOrderId', this.order.id)
