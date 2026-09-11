@@ -195,6 +195,34 @@ export async function logComponentsAt(driver: Driver, x: number, y: number): Pro
  */
 export async function scrollUntilVisible(driver: Driver, id: string, maxScrolls: number = 8): Promise<Component | null> {
   const size = await driver.getDisplaySize()
+  const midX: number = Math.floor(size.x / 2)
+  const nearTop: number = Math.floor(size.y * 0.32)
+  const nearBottom: number = Math.floor(size.y * 0.78)
+  const up: Point = { x: midX, y: nearBottom }
+  const down: Point = { x: midX, y: nearTop }
+  // 1) 先直接找一次：绝大多数调用目标已经在屏幕上，避免每次都白做「滚回顶部」的开销
+  const direct = await driver.findComponent(ON.id(id))
+  if (direct !== null && direct !== undefined) {
+    try {
+      const rect = await direct.getBounds()
+      const sane: boolean = (rect.right - rect.left) < size.x && (rect.bottom - rect.top) < size.y
+      if (sane) {
+        return direct
+      }
+    } catch (err) {
+      console.info('[UiTest] getBounds failed for ' + id + ': ' + (err as Error).message)
+    }
+  }
+  // 2) 找不到就先滚回顶部：否则上一次查找把页面留在底部时，位于上方的目标永远找不到
+  //    （管理端平台管理页 10 个入口，前面断言过的入口在下面就会踩这个坑）。
+  for (let i = 0; i < 3; i++) {
+    try {
+      await driver.fling(down, up, 40, 3000)
+    } catch (err) {
+      console.info('[UiTest] reset fling failed: ' + (err as Error).message)
+    }
+    await driver.delayMs(700)
+  }
   for (let step = 0; step <= maxScrolls; step++) {
     const found = await driver.findComponent(ON.id(id))
     if (found !== null && found !== undefined) {
@@ -213,14 +241,12 @@ export async function scrollUntilVisible(driver: Driver, id: string, maxScrolls:
     if (step === maxScrolls) {
       break
     }
-    const from: Point = { x: Math.floor(size.x / 2), y: Math.floor(size.y * 0.78) }
-    const to: Point = { x: Math.floor(size.x / 2), y: Math.floor(size.y * 0.32) }
     try {
-      await driver.fling(from, to, 40, 3000)
+      await driver.fling(up, down, 40, 3000)
     } catch (err) {
       console.info('[UiTest] fling failed: ' + (err as Error).message)
     }
-    await driver.delayMs(1500)
+    await driver.delayMs(1200)
   }
   console.info('[UiTest] scrollUntilVisible failed for ' + id)
   return null

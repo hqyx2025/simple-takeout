@@ -106,9 +106,11 @@ export struct RiderOrderPoolPage {
           .height(36).fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+          .id(`rider-grab-${order.id}`)
           .onClick(() => { this.grab(order) })
       }.width('100%')
     }
     .width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+    .id(`rider-pool-card-${order.id}`)
   }
 }

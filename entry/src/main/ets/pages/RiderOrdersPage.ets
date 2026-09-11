@@ -120,16 +120,19 @@ export struct RiderOrdersPage {
             .height(36).fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+            .id(`rider-pickup-${order.id}`)
             .onClick(() => { this.pickup(order) })
         } else if (order.status === 3) {
           Button('送达')
             .height(36).fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.SUCCESS)
             .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+            .id(`rider-deliver-${order.id}`)
             .onClick(() => { this.deliver(order) })
         }
       }.width('100%')
     }
     .width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+    .id(`rider-order-card-${order.id}`)
   }
 }

@@ -6,6 +6,8 @@ import checkoutFlowTest from './CheckoutFlow.test';
 import searchFlowTest from './SearchFlow.test';
 import reviewFlowTest from './ReviewFlow.test';
 import merchantFlowTest from './MerchantFlow.test';
+import riderFlowTest from './RiderFlow.test';
+import adminFlowTest from './AdminFlow.test';
 import probeTest from './Probe.test';
 import importProbeTest from './ImportProbe.test';
 
@@ -18,6 +20,8 @@ export default function testsuite() {
   searchFlowTest();
   reviewFlowTest();
   merchantFlowTest();
+  riderFlowTest();
+  adminFlowTest();
   probeTest();
   importProbeTest();
 }

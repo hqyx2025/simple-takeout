@@ -199,6 +199,7 @@ export struct AdminCenterPage {
     }
     .width('100%').padding(SPACING.LG)
     .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+    .id('admin-entry-' + item.page.replace('pages/', ''))
     .onClick(() => { router.pushUrl({ url: item.page }) })
   }
 }

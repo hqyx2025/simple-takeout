@@ -473,7 +473,8 @@ export async function loginRemote(phone: string, password: string, loginType?: s
     await saveAllData()
     const roleName: string = user.role === UserRole.ADMIN
       ? '管理端'
-      : user.role === UserRole.MERCHANT ? '商户' : '用户'
+      : user.role === UserRole.MERCHANT ? '商户'
+      : user.role === UserRole.RIDER ? '骑手' : '用户'
     logInfo('Api', `远程登录成功 userId=${user.id} role=${roleName}`)
     return user
   }

@@ -1454,7 +1454,12 @@ function toUser(u: ServerUser): User {
     avatar: u.avatar,
     phone: u.phone,
     password: '',
-    role: u.role === 2 ? UserRole.ADMIN : u.role === 1 ? UserRole.MERCHANT : UserRole.CUSTOMER,
+    // 角色映射必须覆盖骑手（role=3）：漏掉时骑手会被当成普通用户，
+    // 登录页的角色校验（user.role !== 期望角色）随即 logout()，骑手端完全进不去。
+    role: u.role === 2 ? UserRole.ADMIN
+      : u.role === 1 ? UserRole.MERCHANT
+      : u.role === 3 ? UserRole.RIDER
+      : UserRole.CUSTOMER,
     balance: u.balance,
     coupons: [],
     orders: [],

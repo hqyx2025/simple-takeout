@@ -85,6 +85,7 @@ export struct RiderCenterPage {
                   .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
                   .layoutWeight(1)
                 Toggle({ type: ToggleType.Switch, isOn: this.rider!.online === 1 })
+                  .id('rider-online-toggle')
                   .onChange(() => { this.toggleOnline() })
               }
               .width('100%')
@@ -92,6 +93,7 @@ export struct RiderCenterPage {
               Text(this.rider!.online === 1 ? '● 在线，可抢单' : '● 离线')
                 .fontSize(FONT_SIZE.SM)
                 .fontColor(this.rider!.online === 1 ? COLORS.SUCCESS : COLORS.TEXT_HINT)
+                .id('rider-online-status')
             }
             .width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
 
@@ -115,12 +117,14 @@ export struct RiderCenterPage {
               .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
               .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
               .margin({ top: SPACING.MD })
+              .id('rider-pool-entry')
               .onClick(() => { router.pushUrl({ url: 'pages/RiderOrderPoolPage' }) })
 
             Button('我的配送单')
               .width('100%').height(48).fontSize(FONT_SIZE.LG)
               .fontColor(COLORS.PRIMARY).backgroundColor(COLORS.TAG_BG)
               .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+              .id('rider-orders-entry')
               .onClick(() => { router.pushUrl({ url: 'pages/RiderOrdersPage' }) })
           }
           .width('100%').padding(SPACING.LG)
