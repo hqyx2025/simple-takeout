@@ -11,7 +11,8 @@ import { EmptyState } from '../components/EmptyState'
 import { RatingStars } from '../components/RatingStars'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
-import { initLogger, logInfo, setPrivacyConsent } from '../service/AppLogger'
+import { initLogger, logInfo, logError, setPrivacyConsent } from '../service/AppLogger'
+import { savePrivacyConsent } from '../service/DataPersistence'
 import { loadAllData, saveAllData } from '../service/DataPersistence'
 
 // 定义快捷入口和订单Tab的数据类型，解决 arkts-no-untyped-obj-literals 错误
@@ -110,6 +111,12 @@ struct Index {
   aboutToAppear() {
     // 初始化全局数据
     initAppStorage()
+    // 未同意隐私政策：先进入独立同意页，避免首页数据被门禁静默挡住（历史上弹窗覆盖层从不渲染）
+    if (!(AppStorage.get<boolean>('privacyConsent') || false)) {
+      logInfo('Page', '未同意隐私政策，跳转隐私政策同意页')
+      router.replaceUrl({ url: 'pages/ConsentPage' })
+      return
+    }
     // 登录态恢复后同步当前用户与账号库数据（保证不同账号余额等数据独立正确）
     this.loggedIn = isLoggedIn()
     this.showLogin = !this.loggedIn
@@ -437,7 +444,7 @@ struct HomePage {
   @State isRefreshing: boolean = false
   @StorageLink('currentAddress') @Watch('onCurrentAddressChange') currentAddress: Address | null = null
   @State isHeaderVisible: boolean = false
-  @State showPrivacyDialog: boolean = false
+  // 隐私政策同意改由独立页面 pages/ConsentPage 承载（见该文件注释），首页不再内嵌同意弹窗
   onStoreClick: (store: StoreItem) => void = () => {}
   onNavigateLogin: () => void = () => {}
   onNavigateLocationLogin: () => void = () => {}
@@ -496,14 +503,15 @@ struct HomePage {
 
   aboutToAppear() {
     this.isHeaderVisible = true
-    this.showPrivacyDialog = !(AppStorage.get<boolean>('privacyConsent') || false)
     const initialCategories: Category[] = AppStorage.get<Category[]>('categoryList') || []
     this.categories = initialCategories.slice()
     // 秒杀倒计时：单个 1 秒定时器驱动全页秒杀卡片，避免每张卡片各起一个定时器
     this.startSeckillTicker()
-    // 隐私同意前不发起网络请求；同意后由确认回调触发同步
+    // 隐私同意前不发起网络请求（未同意时 Index 会先跳转 ConsentPage，正常不会走到这里）
     if (AppStorage.get<boolean>('privacyConsent') || false) {
       this.refreshHomeData()
+    } else {
+      logInfo('Home', '隐私政策未同意，等待用户确认后再加载首页数据')
     }
   }
 
@@ -514,25 +522,39 @@ struct HomePage {
   // 首页特价团购直接读取后端商品接口，避免使用本地模拟商品。
   private async refreshHomeData(): Promise<void> {
     if (!(AppStorage.get<boolean>('privacyConsent') || false)) {
+      logInfo('Home', '未同意隐私政策，跳过首页数据加载')
       return
     }
     this.isRefreshing = true
-    await syncCategoriesFromServer()
-    const latestCategories: Category[] = AppStorage.get<Category[]>('categoryList') || []
-    this.categories = latestCategories.slice()
-    await syncStoresFromServer()
-    this.banners = await syncBannersRemote()
-    this.announcements = await syncAnnouncementsRemote()
-    if (this.loggedIn) {
-      const latitude: number | undefined = this.currentAddress !== null ? this.currentAddress.latitude : undefined
-      const longitude: number | undefined = this.currentAddress !== null ? this.currentAddress.longitude : undefined
-      this.specialGoods = await fetchSpecialGoodsApi(10, latitude, longitude)
-      this.seckills = await fetchSeckillsRemote(6)
-    } else {
-      this.specialGoods = []
-      this.seckills = []
+    // 首页数据依赖多个接口，任一失败都不能中断后续步骤（否则秒杀/特价会整块消失），
+    // 因此逐步打点并整体捕获异常，异常时保留已有数据并明确记录原因。
+    try {
+      logInfo('Home', '首页数据加载[1/5] 分类')
+      await syncCategoriesFromServer()
+      const latestCategories: Category[] = AppStorage.get<Category[]>('categoryList') || []
+      this.categories = latestCategories.slice()
+      logInfo('Home', '首页数据加载[2/5] 店铺')
+      await syncStoresFromServer()
+      logInfo('Home', '首页数据加载[3/5] 轮播')
+      this.banners = await syncBannersRemote()
+      logInfo('Home', '首页数据加载[4/5] 公告')
+      this.announcements = await syncAnnouncementsRemote()
+      logInfo('Home', '首页数据加载[5/5] 特价与秒杀')
+      if (this.loggedIn) {
+        const latitude: number | undefined = this.currentAddress !== null ? this.currentAddress.latitude : undefined
+        const longitude: number | undefined = this.currentAddress !== null ? this.currentAddress.longitude : undefined
+        this.specialGoods = await fetchSpecialGoodsApi(10, latitude, longitude)
+        this.seckills = await fetchSeckillsRemote(6)
+      } else {
+        this.specialGoods = []
+        this.seckills = []
+      }
+      logInfo('Home', `首页数据加载完成：轮播=${this.banners.length} 公告=${this.announcements.length} 特价=${this.specialGoods.length} 秒杀=${this.seckills.length}`)
+    } catch (err) {
+      logError('Home', '首页数据加载失败（已保留部分数据）', err as Object)
+    } finally {
+      this.isRefreshing = false
     }
-    this.isRefreshing = false
   }
 
   // ============ 限时秒杀 ============
@@ -647,6 +669,9 @@ struct HomePage {
   }
 
   build() {
+    // 根节点必须用 Stack 承载隐私弹窗这类覆盖层：
+    // 弹窗若作为 Column 中 layoutWeight(1) 滚动区的兄弟节点，会被分配 0 高度而整块不渲染（历史 bug）。
+    Stack() {
     Column() {
       // 顶部地址栏 + 搜索
       Column({ space: SPACING.SM }) {
@@ -890,69 +915,13 @@ struct HomePage {
           }
           .layoutWeight(1)
         }
-
-      if (this.showPrivacyDialog) {
-        Stack() {
-          Column()
-            .width('100%')
-            .height('100%')
-            .backgroundColor(COLORS.OVERLAY)
-          Column({ space: SPACING.MD }) {
-            Text('隐私政策提示')
-              .fontSize(FONT_SIZE.XL)
-              .fontWeight(FontWeight.Bold)
-              .fontColor(COLORS.TEXT_PRIMARY)
-            Text('为了提供登录、定位、配送和订单服务，我们需要按照隐私政策处理必要信息。请阅读并同意后继续使用。')
-              .fontSize(FONT_SIZE.MD)
-              .fontColor(COLORS.TEXT_SECONDARY)
-              .textAlign(TextAlign.Center)
-            Text('查看《隐私政策》')
-              .fontSize(FONT_SIZE.MD)
-              .fontColor(COLORS.PRIMARY)
-              .onClick(() => { router.pushUrl({ url: 'pages/PrivacyPolicyPage' }) })
-            Row({ space: SPACING.MD }) {
-              Button('暂不同意')
-                .layoutWeight(1)
-                .height(44)
-                .backgroundColor(COLORS.BG_PRIMARY)
-                .fontColor(COLORS.TEXT_SECONDARY)
-                .borderRadius(BORDER_RADIUS.ROUND)
-                .type(ButtonType.Capsule)
-                .onClick(() => { promptAction.showToast({ message: '请先同意隐私政策后继续使用' }) })
-              Button('同意并继续')
-                .id('privacy-accept')
-                .layoutWeight(1)
-                .height(44)
-                .backgroundColor(COLORS.PRIMARY)
-                .fontColor(COLORS.TEXT_WHITE)
-                .borderRadius(BORDER_RADIUS.ROUND)
-                .type(ButtonType.Capsule)
-                .onClick(async () => {
-                  setPrivacyConsent(true)
-                  AppStorage.setOrCreate<boolean>('privacyConsent', true)
-                  initLogger()
-                  await loadAllData()
-                  await saveAllData()
-                  this.showPrivacyDialog = false
-                  await this.refreshHomeData()
-                })
-            }
-            .width('100%')
-          }
-          .width('82%')
-          .padding(SPACING.XL)
-          .backgroundColor(COLORS.BG_WHITE)
-          .borderRadius(BORDER_RADIUS.XL)
-          .alignItems(HorizontalAlign.Center)
-        }
-        .width('100%')
-        .height('100%')
-        .alignContent(Alignment.Center)
-      }
     }
     .width('100%')
     .height('100%')
     .backgroundColor(COLORS.BG_PRIMARY)
+    }
+    .width('100%')
+    .height('100%')
   }
 
   private openSpecialStore(item: SpecialGoodsItem): void {

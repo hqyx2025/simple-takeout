@@ -103,6 +103,9 @@
 - 待付款模型下"下单成功"≠"支付成功"：结算页下单后必须引导到订单详情完成支付，任何"下单即完成"的旧文案/旧判断都要同步更新。
 - DevEco 的 Code Linter / AppAnalyzer 目前**没有可用的命令行入口**（`plugins/codelinter/index.js` 脱离 IDE 运行会报 `configuration file ... is in use` 并写出 `undefined` 日志文件），上架前需在 IDE 内执行；仓库用 `scripts/release-check.ps1` 提供可复现的静态门禁作为补充。
 - 图片上传用 `@ohos.net.http` 的 `multiFormDataList`（把 picker 拿到的 URI 经 `fileIo` 读成 ArrayBuffer 再提交），不要依赖 axios 的 FormData 传本地文件；系统图库选择器（`photoAccessHelper.PhotoViewPicker`）**不需要申请媒体权限**。
+- **隐私同意状态必须单一权威且单向升级**：`setPrivacyConsent()` 只改内存变量、不落盘，而 `loadAllData()` 又会用持久化值无条件覆盖 `AppStorage['privacyConsent']`——两者叠加会出「同意后立刻被改回 false」的静默故障（首页数据全空、冷启动不回登录态）。规则：同意时先 `savePrivacyConsent(true)` 落盘、再 `loadAllData()`；`loadAllData()` 里同意状态只允许 `true` 覆盖 `false`，永不反向。
+- **同意/引导类覆盖层不要放在 `layoutWeight(1)` 滚动区的兄弟位置**：在 `Column` 里它会被分配 0 高度而"静默不渲染"（门禁生效、提示看不到）。这类全屏流程改用**独立路由页**（见 `pages/ConsentPage.ets`），或在根节点用 `Stack` 承载。
+- 设备实测链路见 `md/设备实测指南.md`：模拟器不校验发布签名，`scripts/device-test.ps1` + `uitest dumpLayout/uiInput` 可在无窗口环境下驱动并校验 UI；`hilog | grep TakeoutApp` 读应用自身日志（注意 hilog 缓冲会滚动，先 `hilog -r` 清空再复现）。
 
 ## 9. 提交规范
 

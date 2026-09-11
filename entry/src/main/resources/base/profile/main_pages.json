@@ -37,6 +37,7 @@
     "pages/AdminRiderPage",
     "pages/AdminContentPage",
     "pages/RankingPage",
-    "pages/ReviewImagePage"
+    "pages/ReviewImagePage",
+    "pages/ConsentPage"
   ]
 }

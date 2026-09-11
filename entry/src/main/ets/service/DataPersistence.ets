@@ -112,7 +112,8 @@ export async function loadAllData(): Promise<void> {
   try {
     const prefs: preferences.Preferences = await getPrefs()
     const consentJson: string = await prefs.get('privacyConsent', '') as string
-    const consented: boolean = consentJson === 'true'
+    // 同意状态只允许单向升级：本次运行中已同意（内存为 true）时，绝不能被持久化里的空值/旧值覆盖回 false
+    const consented: boolean = consentJson === 'true' || AppStorage.get<boolean>('privacyConsent') === true
     AppStorage.setOrCreate<boolean>('privacyConsent', consented)
     // 未同意隐私政策前不恢复用户、订单、地址和 Token 等敏感数据。
     if (!consented) {
@@ -181,6 +182,21 @@ export async function saveAllData(): Promise<void> {
     logInfo('Persistence', '数据保存完成（全部 key）')
   } catch (err) {
     logError('Persistence', '保存持久化数据失败', err)
+  }
+}
+
+/**
+ * 单独持久化隐私政策同意状态。
+ * 必须在 loadAllData() 之前调用：loadAllData 会依据该标记决定是否恢复用户/令牌等敏感数据。
+ */
+export async function savePrivacyConsent(granted: boolean): Promise<void> {
+  try {
+    const prefs: preferences.Preferences = await getPrefs()
+    await prefs.put('privacyConsent', granted ? 'true' : 'false')
+    await prefs.flush()
+    logInfo('Persistence', `隐私政策同意状态已保存：${granted}`)
+  } catch (err) {
+    logError('Persistence', '保存隐私政策同意状态失败', err)
   }
 }
 
