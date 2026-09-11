@@ -25,3 +25,7 @@
 /signing/release-signing.json5
 # 上架体检报告为生成物，不入库
 /md/上架体检报告.md
+# 设备实测本地产物（截图 / 界面元素树）
+/device-screenshot.jpeg
+/.ui-layout.json
+/.emu_start.log
