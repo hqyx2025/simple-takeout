@@ -72,6 +72,11 @@ export struct SearchPage {
         Text('‹')
           .fontSize(24)
           .fontColor(COLORS.TEXT_PRIMARY)
+          // 补足触控区域：原实现无宽高，可点面积仅约 20×30px（低于 40×40 的可用性基线），
+          // 真机/模拟器上很难点中，表现为"返回按钮点了没反应"。
+          .width(40)
+          .height(40)
+          .textAlign(TextAlign.Center)
           .onClick(() => { this.onBack() })
         TextInput({ placeholder: '搜索美食、店铺', text: this.searchText })
           .layoutWeight(1)
