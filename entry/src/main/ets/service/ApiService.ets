@@ -529,7 +529,7 @@ export async function apiLogin(phone: string, password: string, loginType?: stri
  * 注册：成功返回用户，失败返回 null
  */
 export async function apiRegister(username: string, phone: string, password: string, role: UserRole): Promise<User | null> {
-  const req: RegisterRequest = { username: username, phone: phone, password: password, role: role === UserRole.MERCHANT ? 1 : 0 }
+  const req: RegisterRequest = { username: username, phone: phone, password: password, role: toServerRole(role) }
   const resp: ApiResponse<ServerUser> = await post<ServerUser>(API_CONFIG.ENDPOINTS['register'], req)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     logWarn('Api', `注册失败：${resp.message}`)
@@ -1446,6 +1446,19 @@ export async function setDefaultAddressApi(addressId: number): Promise<boolean> 
 }
 
 // ==================== 模型转换 ====================
+
+/**
+ * 前端角色 → 服务端角色码（0=用户 1=商户 2=管理端 3=骑手）。
+ * 与 toUser() 必须成对覆盖全部四种角色：只用「是商户吗」二分会让骑手注册成 role=0，
+ * 注册虽然返回成功，但注册后的自动登录带 loginType=RIDER，服务端按角色校验直接 403，
+ * 表现为「骑手注册成功却始终进不去骑手端」。
+ */
+function toServerRole(role: UserRole): number {
+  return role === UserRole.MERCHANT ? 1
+    : role === UserRole.ADMIN ? 2
+    : role === UserRole.RIDER ? 3
+    : 0
+}
 
 function toUser(u: ServerUser): User {
   const user: User = {

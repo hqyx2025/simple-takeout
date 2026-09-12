@@ -198,7 +198,8 @@ export struct LoginPage {
           }
           const roleName: string = this.selectedRole === UserRole.ADMIN
             ? '管理端'
-            : this.selectedRole === UserRole.MERCHANT ? '商户' : '用户'
+            : this.selectedRole === UserRole.MERCHANT ? '商户'
+            : this.selectedRole === UserRole.RIDER ? '骑手' : '用户'
           logInfo('Auth', `用户点击${this.isLoginMode ? '登录' : '注册'} phone=${this.phone} role=${roleName}`)
 
           if (this.isLoginMode) {
@@ -207,7 +208,8 @@ export struct LoginPage {
               if (user.role !== this.selectedRole) {
                 this.errorMsg = this.selectedRole === UserRole.ADMIN
                   ? '该账号不是管理端账号'
-                  : this.selectedRole === UserRole.MERCHANT ? '该账号不是商户账号' : '该账号不是用户账号'
+                  : this.selectedRole === UserRole.MERCHANT ? '该账号不是商户账号'
+                  : this.selectedRole === UserRole.RIDER ? '该账号不是骑手账号' : '该账号不是用户账号'
                 logout()
                 logWarn('Auth', `登录角色不匹配 phone=${this.phone} 期望角色=${this.selectedRole}`)
                 this.submitting = false
@@ -336,7 +338,8 @@ export struct LoginPage {
       const remoteMessage: string = getLastRemoteErrorMessage()
       this.errorMsg = remoteMessage !== '' ? remoteMessage : role === UserRole.ADMIN
         ? '管理端快捷登录失败，请确认账号可用'
-        : role === UserRole.MERCHANT ? '商户快捷登录失败，请确认账号可用' : '用户快捷登录失败，请确认账号可用'
+        : role === UserRole.MERCHANT ? '商户快捷登录失败，请确认账号可用'
+        : role === UserRole.RIDER ? '骑手快捷登录失败，请确认账号可用' : '用户快捷登录失败，请确认账号可用'
     }
     this.submitting = false
   }
