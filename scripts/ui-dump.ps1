@@ -10,7 +10,7 @@
 
   Usage:
     $hdc shell uitest dumpLayout -p /data/local/tmp/layout.json
-    $hdc file recv /data/local/tmp/layout.json .ui-layout.json
+    $hdc file recv /data/local/tmp/layout.json TemporaryCacheStorage/agent-ui-layout.json
     powershell -ExecutionPolicy Bypass -File scripts/ui-dump.ps1
     powershell -ExecutionPolicy Bypass -File scripts/ui-dump.ps1 -Match 'jiehsuan'
 
@@ -18,7 +18,7 @@
 #>
 param(
   # Layout JSON produced by `uitest dumpLayout` (pulled from the device).
-  [string]$Path = '.ui-layout.json',
+  [string]$Path = 'TemporaryCacheStorage/agent-ui-layout.json',
   # Optional case-insensitive substring filter applied to text and id.
   [string]$Match = ''
 )

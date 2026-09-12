@@ -123,3 +123,14 @@
 - 提交信息格式 `<type>(<scope>): <描述>`，如 `feat(merchant):`、`fix(order):`、`docs:`
 - 任务完成后主动 commit + push 到 Gitee（https://gitee.com/pengzhiqiang87/simple-takeout.git，master 分支）
 - 只改文档时不得修改业务代码/数据库脚本/配置文件，且不自动提交
+
+## 10. 项目约束（AI/agent 工作约定）
+
+- **临时文件统一放 `TemporaryCacheStorage/`（仓库根目录），该目录不上传 git（已在 `.gitignore` 中忽略）**。
+  - **强制**：当 agent 需要产生并使用临时文件时，必须放在这个文件夹里，**禁止**再把临时产物写到仓库根目录或其他业务目录（不产生"根目录一堆 `layout.json` / `*.jpeg`"的脏工作区）。
+  - 适用范围：设备实测截图与界面元素树（`uitest dumpLayout` 产物）、构建/运行捕获日志、临时校验脚本、一次性数据导出、给临时脚本或测试用的 mocks/fixtures、agent 会话交接文档等**衍生产物**。
+  - **不适用**（保持原位，不要往这里塞）：业务源码与配置、`server/uploads/`（评价图片运行时上传目录）、`.hvigor/` 等构建缓存与依赖目录（`node_modules`/`oh_modules`/`.m2-repository`/`.npm-cache` 等由工具自行管理）、需要入库的文档（`md/`、`AGENTS.md`）与交付物。
+  - **命名**：用「谁产出 + 是什么」的可读前缀 `agent-<用途>[-<日期>].<ext>`（如 `agent-ui-layout.json`、`agent-device-screenshot.jpeg`、`agent-e2e-flow.ps1`），便于判断能否整目录删除；多份同类产物再加日期或序号区分。
+  - **可删除性**：该目录内的一切都应可随时整体删除而不影响构建与运行；脚本若依赖它，须像 `scripts/device-test.ps1` 那样**按需自动重建目录**，不能假设它已存在。
+  - **入库检查**：`git add -A` 前用 `git status --porcelain` 复核，确认没有临时产物被暂存（该目录整体被忽略，若出现说明被别处的 `!` 反向规则命中）。
+  - **迁移历史产物**：以后发现散落在根目录的临时产物，直接移入该目录并同步修改引用它的脚本/文档，不要留在原处。

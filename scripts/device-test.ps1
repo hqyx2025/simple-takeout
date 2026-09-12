@@ -35,8 +35,11 @@ $hdc = 'C:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony\toolchains
 $emulatorExe = 'C:\Program Files\Huawei\DevEco Studio\tools\emulator\Emulator.exe'
 $node = 'C:\Program Files\Huawei\DevEco Studio\tools\node\node.exe'
 $hvigor = 'C:\Program Files\Huawei\DevEco Studio\tools\hvigor\bin\hvigorw.js'
-$shotPath = Join-Path $root 'device-screenshot.jpeg'
-$layoutHost = Join-Path $root '.ui-layout.json'
+# 临时产物统一放 TemporaryCacheStorage（不入库，详见 AGENTS.md「项目约束」）
+$tempDir = Join-Path $root 'TemporaryCacheStorage'
+if (-not (Test-Path $tempDir)) { New-Item -ItemType Directory -Force -Path $tempDir | Out-Null }
+$shotPath = Join-Path $tempDir 'agent-device-screenshot.jpeg'
+$layoutHost = Join-Path $tempDir 'agent-ui-layout.json'
 
 function Get-Targets {
   return ((& $hdc list targets 2>&1 | Out-String).Trim())
