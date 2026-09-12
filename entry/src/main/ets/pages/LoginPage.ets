@@ -16,6 +16,7 @@ export struct LoginPage {
   @State password: string = ''
   @State username: string = ''
   @State errorMsg: string = ''
+  @State tipMsg: string = ''
   @State submitting: boolean = false
   onLoginSuccess: () => void = () => {}
 
@@ -157,6 +158,15 @@ export struct LoginPage {
         .id('login-password')
         .onChange((value: string) => { this.password = value })
 
+      // 成功提示（注册成功后需自行登录）
+      if (this.tipMsg) {
+        Text(this.tipMsg)
+          .fontSize(FONT_SIZE.SM)
+          .fontColor(COLORS.SUCCESS)
+          .width('100%')
+          .margin({ bottom: SPACING.SM })
+      }
+
       // 错误提示
       if (this.errorMsg) {
         Text(this.errorMsg)
@@ -184,6 +194,7 @@ export struct LoginPage {
           }
           this.submitting = true
           this.errorMsg = ''
+          this.tipMsg = ''
           if (this.phone === '' || this.password === '') {
             logWarn('Auth', '登录/注册提交失败：手机号或密码为空')
             this.errorMsg = '请输入手机号和密码'
@@ -224,18 +235,20 @@ export struct LoginPage {
           } else {
             const newUser = await registerRemote(this.username, this.phone, this.password, this.selectedRole)
             if (newUser !== undefined) {
-              const loginUser = await loginRemote(this.phone, this.password, this.loginTypeName())
-              if (loginUser !== undefined) {
-                this.onLoginSuccess()
-              } else {
-                const remoteMessage: string = getLastRemoteErrorMessage()
-                this.errorMsg = remoteMessage === '' ? '注册成功，但自动登录失败，请手动登录' : remoteMessage
-              }
-            } else {
-              const remoteMessage: string = getLastRemoteErrorMessage()
-              this.errorMsg = remoteMessage === '' ? '该手机号已注册' : remoteMessage
-              logWarn('Auth', `注册失败：手机号已存在 phone=${this.phone}`)
+              // 注册成功不自动登录：切回登录态并清空密码，由用户自己再输入一遍完成登录。
+              // 手机号保留便于对照，selectedRole 保持注册时选择的角色，登录才能带上正确的 loginType。
+              this.isLoginMode = true
+              this.password = ''
+              this.username = ''
+              this.tipMsg = '注册成功，请使用该密码登录'
+              promptAction.showToast({ message: '注册成功，请登录', duration: 2000 })
+              logInfo('Auth', `注册成功，转入登录态等待手动登录 userId=${newUser.id} role=${newUser.role}`)
+              this.submitting = false
+              return
             }
+            const remoteMessage: string = getLastRemoteErrorMessage()
+            this.errorMsg = remoteMessage === '' ? '该手机号已注册' : remoteMessage
+            logWarn('Auth', `注册失败：手机号已存在 phone=${this.phone}`)
             this.submitting = false
           }
         })
@@ -303,6 +316,7 @@ export struct LoginPage {
               this.selectedRole = UserRole.CUSTOMER
             }
             this.errorMsg = ''
+            this.tipMsg = ''
             logInfo('Auth', `切换${this.isLoginMode ? '登录' : '注册'}模式`)
           })
       }
