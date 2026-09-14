@@ -8,6 +8,7 @@ import { API_CONFIG } from '../common/Constants'
 import {
   User, UserRole, StoreItem, GoodsItem, SpecialGoodsItem, Category, Order, CartItem,
   Address, Coupon, Review, Rider, Banner, Announcement, Favorite, RefundRecord, AdminEmployee, AdminProduct, AdminUser,
+  BankCard,
   AdminStatisticsData, AdminTrendPoint, AdminHotGoods, SeckillItem, BundleInfo, UploadResult, GoodsSpec
 } from '../model/Models'
 import { logInfo, logWarn } from './AppLogger'
@@ -191,6 +192,16 @@ interface ServerAddress {
   phone: string
   detail: string
   isDefault: number
+}
+
+/** 钱包银行卡：cardNoMasked 已是掩码卡号（服务端只存后四位，不下发完整卡号）。 */
+interface ServerBankCard {
+  id: number
+  bankName: string
+  cardType: string
+  cardNoMasked: string
+  isDefault: number
+  createTime: string
 }
 
 interface ServerReview {
@@ -1412,6 +1423,26 @@ export async function fetchAddressesApi(): Promise<Address[]> {
     return []
   }
   return resp.data.map((a: ServerAddress) => toAddress(a))
+}
+
+// ==================== 钱包：已绑定银行卡（只读） ====================
+
+export async function fetchBankCardsApi(): Promise<BankCard[]> {
+  const resp: ApiResponse<ServerBankCard[]> = await get<ServerBankCard[]>('/api/wallet/bank-cards')
+  if (resp.code !== 200 || resp.data === null) {
+    return []
+  }
+  return resp.data.map((c: ServerBankCard) => {
+    const card: BankCard = {
+      id: c.id,
+      bankName: c.bankName,
+      cardType: c.cardType,
+      cardNoMasked: c.cardNoMasked,
+      isDefault: c.isDefault === 1,
+      createTime: c.createTime
+    }
+    return card
+  })
 }
 
 export async function addAddressApi(name: string, phone: string, detail: string, isDefault: boolean): Promise<boolean> {

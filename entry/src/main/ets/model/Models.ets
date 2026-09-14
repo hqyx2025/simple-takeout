@@ -123,6 +123,16 @@ export interface Address {
   longitude?: number
 }
 
+// 已绑定银行卡（钱包页展示；卡号由服务端掩码后下发，客户端拿不到完整卡号）
+export interface BankCard {
+  id: number
+  bankName: string
+  cardType: string
+  cardNoMasked: string
+  isDefault: boolean
+  createTime: string
+}
+
 // 优惠券模型
 export interface Coupon {
   id: number

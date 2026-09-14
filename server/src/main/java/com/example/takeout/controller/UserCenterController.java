@@ -2,6 +2,7 @@ package com.example.takeout.controller;
 
 import com.example.takeout.common.ApiResponse;
 import com.example.takeout.model.Address;
+import com.example.takeout.model.BankCard;
 import com.example.takeout.model.Coupon;
 import com.example.takeout.model.Review;
 import com.example.takeout.model.Store;
@@ -94,6 +95,14 @@ public class UserCenterController {
     public ApiResponse<Void> setDefault(@RequestAttribute("userId") long userId, @PathVariable long id) {
         service.setDefaultAddress(userId, id);
         return ApiResponse.ok();
+    }
+
+    // ============ 钱包（已绑定银行卡） ============
+
+    /** 钱包页展示的已绑定银行卡；余额走 /auth/me，保持单一权威口径。 */
+    @GetMapping("/wallet/bank-cards")
+    public ApiResponse<List<BankCard>> bankCards(@RequestAttribute("userId") long userId) {
+        return ApiResponse.ok(service.listBankCards(userId));
     }
 
     // ============ 评价浏览 ============

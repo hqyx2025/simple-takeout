@@ -2,12 +2,14 @@ package com.example.takeout.service;
 
 import com.example.takeout.common.BizException;
 import com.example.takeout.dao.AddressDao;
+import com.example.takeout.dao.BankCardDao;
 import com.example.takeout.dao.CouponDao;
 import com.example.takeout.dao.FavoriteDao;
 import com.example.takeout.dao.GoodsDao;
 import com.example.takeout.dao.ReviewDao;
 import com.example.takeout.dao.StoreDao;
 import com.example.takeout.model.Address;
+import com.example.takeout.model.BankCard;
 import com.example.takeout.model.Coupon;
 import com.example.takeout.model.Goods;
 import com.example.takeout.model.Review;
@@ -35,17 +37,31 @@ public class UserCenterService {
     private final ReviewDao reviewDao;
     private final StoreDao storeDao;
     private final GoodsDao goodsDao;
+    private final BankCardDao bankCardDao;
     private final ObjectMapper objectMapper;
 
     public UserCenterService(CouponDao couponDao, FavoriteDao favoriteDao, AddressDao addressDao,
-                             ReviewDao reviewDao, StoreDao storeDao, GoodsDao goodsDao, ObjectMapper objectMapper) {
+                             ReviewDao reviewDao, StoreDao storeDao, GoodsDao goodsDao,
+                             BankCardDao bankCardDao, ObjectMapper objectMapper) {
         this.couponDao = couponDao;
         this.favoriteDao = favoriteDao;
         this.addressDao = addressDao;
         this.reviewDao = reviewDao;
         this.storeDao = storeDao;
         this.goodsDao = goodsDao;
+        this.bankCardDao = bankCardDao;
         this.objectMapper = objectMapper;
+    }
+
+    // ============ 钱包（余额 + 已绑定银行卡） ============
+
+    /**
+     * 当前用户已绑定的银行卡（只读展示）。
+     * 余额不在这里返回：余额的权威来源是 users.balance，统一走 /auth/me，
+     * 避免同一份数据出现两个口径。
+     */
+    public List<BankCard> listBankCards(long userId) {
+        return bankCardDao.listByUser(userId);
     }
 
     // ============ 优惠券 ============

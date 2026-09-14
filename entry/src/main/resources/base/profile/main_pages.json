@@ -11,6 +11,7 @@
     "pages/FavoriteListPage",
     "pages/ReviewPage",
     "pages/ProfileEditPage",
+    "pages/BalancePage",
     "pages/SettingsPage",
     "pages/PrivacyPolicyPage",
     "pages/ContactCustomerServicePage",

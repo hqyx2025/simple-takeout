@@ -4,6 +4,8 @@ import locationFlowTest from './LocationFlow.test';
 import checkoutGuardTest from './CheckoutGuard.test';
 import checkoutFlowTest from './CheckoutFlow.test';
 import storeDetailCartTest from './StoreDetailCart.test';
+import storeCategoryFilterTest from './StoreCategoryFilter.test';
+import balancePageTest from './BalancePage.test';
 import searchFlowTest from './SearchFlow.test';
 import reviewFlowTest from './ReviewFlow.test';
 import merchantFlowTest from './MerchantFlow.test';
@@ -19,6 +21,8 @@ export default function testsuite() {
   checkoutGuardTest();
   checkoutFlowTest();
   storeDetailCartTest();
+  storeCategoryFilterTest();
+  balancePageTest();
   searchFlowTest();
   reviewFlowTest();
   merchantFlowTest();

@@ -1631,6 +1631,7 @@ export struct StoreDetailContent {
               .padding({ left: 12, right: 12, top: 4, bottom: 4 })
               .borderRadius(BORDER_RADIUS.ROUND)
               .height(28)
+              .id(`goods-cat-${catName}`)
               .onClick(() => {
                 this.currentCat = catName
                 this.updateFilteredGoods()
@@ -1661,6 +1662,12 @@ export struct StoreDetailContent {
               .width('100%').padding({ top: SPACING.XXL, bottom: SPACING.XXL })
               .alignItems(HorizontalAlign.Center)
             } else {
+              // 当前分类命中的商品数：id 里带数量，供设备端用例断言「切分类确实换了列表」
+              Text(`共 ${this.filteredGoodsList.length} 件商品`)
+                .id(`goods-count-${this.filteredGoodsList.length}`)
+                .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+                .width('100%')
+                .padding({ top: SPACING.SM, bottom: SPACING.SM })
               ForEach(this.filteredGoodsList, (goods: GoodsItem) => {
               Row({ space: SPACING.MD }) {
                 // 商品图片
@@ -2475,19 +2482,18 @@ struct ProfileMainPage {
         .margin({ top: SPACING.SM })
         .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
 
-        Row() {
-          Text(this.refreshStatus)
-            .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).layoutWeight(1)
-          Button(this.isRefreshing ? '\u540c\u6b65\u4e2d\u2026' : '\u7acb\u5373\u5237\u65b0')
-            .height(34).fontSize(FONT_SIZE.SM)
-            .fontColor(COLORS.PRIMARY).backgroundColor(COLORS.WARM_BG)
-            .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-            .enabled(!this.isRefreshing)
-            .onClick(() => { this.refreshProfileData() })
-        }
-        .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
-        .margin({ top: SPACING.SM })
-        .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+        // Row() {
+        //   Button(this.isRefreshing ? '\u540c\u6b65\u4e2d\u2026' : '\u7acb\u5373\u5237\u65b0')
+        //     .height(34).fontSize(FONT_SIZE.SM)
+        //     .fontColor(COLORS.PRIMARY).backgroundColor(COLORS.WARM_BG)
+        //     .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+        //     .enabled(!this.isRefreshing)
+        //     .onClick(() => { this.refreshProfileData() })
+        // }
+        // .width('100%').justifyContent(FlexAlign.End)
+        // .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
+        // .margin({ top: SPACING.SM })
+        // .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
 
         // 订单快捷入口
         Row() {
@@ -2634,7 +2640,17 @@ struct ProfileMainPage {
       Text('余额').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
     }
     .layoutWeight(1).alignItems(HorizontalAlign.Center)
-    .onClick(() => { this.openRechargeDialog() })
+    .onClick(() => { this.openBalancePage() })
+  }
+
+  /** 余额点击进钱包页（余额 + 已绑定银行卡）；未登录先引导登录。 */
+  private openBalancePage(): void {
+    if (!this.loggedIn) {
+      promptAction.showToast({ message: '请先登录后查看钱包', duration: 1500 })
+      this.onNavigateLogin()
+      return
+    }
+    router.pushUrl({ url: 'pages/BalancePage' })
   }
 
   @Builder

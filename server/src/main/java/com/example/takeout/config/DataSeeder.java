@@ -37,6 +37,7 @@ public class DataSeeder implements ApplicationRunner {
         ensureCategoryColumns();
         ensureRefundTable();
         ensureCartTable();
+        ensureBankCardTable();
         ensureReviewGoodsColumn();
         ensureStoreRecommendedColumn();
         ensureStoreLocationColumns();
@@ -46,8 +47,10 @@ public class DataSeeder implements ApplicationRunner {
         if (userCount != null && userCount > 0) {
             ensureAdminUser();
             ensureRiderUser();
+            ensureBankCards();
             ensureStoresAndGoods();
             ensureAdditionalStores();
+            ensureStoreMerchantCategories();
             ensureMarketingData();
             log.info("用户数据已存在（users={}），已校验分类、店铺、商品和附近推荐数据", userCount);
             return;
@@ -55,7 +58,9 @@ public class DataSeeder implements ApplicationRunner {
         seed();
         ensureAdminUser();
         ensureRiderUser();
+        ensureBankCards();
         ensureAdditionalStores();
+        ensureStoreMerchantCategories();
         ensureMarketingData();
         log.info("种子数据初始化完成：8 分类 / 40 店铺 / 1200 商品 / 6 账号（含骑手）");
     }
@@ -196,6 +201,127 @@ public class DataSeeder implements ApplicationRunner {
                             "status, create_time) VALUES(?,?,?,0,0,0,1,?)",
                     userId, name, phone, now());
             log.info("已补充骑手档案 user_id={}", userId);
+        }
+    }
+
+    /**
+     * 补齐「店内分类」并把商品归入分类（幂等，存量库也会补）。
+     *
+     * 背景：店铺详情页顶部的分类芯片走的是美团式的店内分组
+     * （categories.type='MERCHANT' + goods.merchant_category_id），这条链路
+     * 后端（StoreController/StoreDao.listMerchantCategories）与前端
+     * （fetchStoreMerchantCategoriesApi + getGoodsCategoryNames）早已就绪，
+     * 但种子数据从未创建过任何 MERCHANT 分类，1200 个商品的
+     * merchant_category_id 全为 0 —— 结果芯片只剩「全部 + 该店唯一的平台分类」
+     * 两个，而两者返回的商品列表完全相同，用户点分类看起来「点了没反应」。
+     *
+     * 幂等策略：只要该商户已有任意 MERCHANT 分类就整体跳过，不覆盖商户在
+     * 后台自己配好的分组。分类按商户（owner_id）维度存放，与该商户名下
+     * 多家店铺共用一套分类名，这正是 listMerchantCategories 的既有口径。
+     */
+    private void ensureStoreMerchantCategories() {
+        List<java.util.Map<String, Object>> owners = jdbc.queryForList(
+                "SELECT DISTINCT owner_id FROM stores WHERE owner_id > 0");
+        int backfilled = 0;
+        int grouped = 0;
+        for (java.util.Map<String, Object> owner : owners) {
+            long ownerId = ((Number) owner.get("owner_id")).longValue();
+            // 该商户名下还有未分组商品吗？（与「有没有分类」是两件事：
+            // 商户可能自己建过分类但商品没挂上去，只按分类存在与否判断会漏掉）
+            Integer ungrouped = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM goods g JOIN stores s ON s.id = g.store_id " +
+                            "WHERE s.owner_id = ? AND g.merchant_category_id = 0",
+                    Integer.class, ownerId);
+            if (ungrouped == null || ungrouped == 0) {
+                continue;
+            }
+            List<Long> existingIds = jdbc.query(
+                    "SELECT id FROM categories WHERE type = 'MERCHANT' AND merchant_id = ? ORDER BY sort, id",
+                    (rs, i) -> rs.getLong("id"), ownerId);
+            // 分类不足 4 个时补建，凑够 4 个分组；已有的自定义分类保留并参与分组
+            List<Long> categoryIds = new java.util.ArrayList<>(existingIds);
+            String[] defaults = {"招牌热销", "人气主食", "特色小吃", "解腻饮品"};
+            int sort = existingIds.size();
+            for (int i = categoryIds.size(); i < 4; i++) {
+                String name = defaults[i];
+                jdbc.update("INSERT INTO categories(name, icon, color, type, merchant_id, sort, status) " +
+                        "VALUES(?,'','','MERCHANT',?,?,1)", name, ownerId, ++sort);
+                categoryIds.add(jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
+            }
+            // 招牌商品统一归第一个分类；其余按 id 取模轮转落到后面几个分类，
+            // 保证每个芯片都非空、且同一店铺内各分类的商品集合互不相同。
+            // 只更新 merchant_category_id = 0 的行，绝不覆盖商户已有的分组。
+            jdbc.update("UPDATE goods g JOIN stores s ON s.id = g.store_id " +
+                            "SET g.merchant_category_id = ? " +
+                            "WHERE s.owner_id = ? AND g.is_special = 1 AND g.merchant_category_id = 0",
+                    categoryIds.get(0), ownerId);
+            if (categoryIds.size() > 1) {
+                int span = categoryIds.size() - 1;
+                StringBuilder sql = new StringBuilder(
+                        "UPDATE goods g JOIN stores s ON s.id = g.store_id SET g.merchant_category_id = CASE g.id % ")
+                        .append(span).append(" ");
+                for (int i = 1; i < categoryIds.size(); i++) {
+                    sql.append("WHEN ").append(i - 1).append(" THEN ").append(categoryIds.get(i)).append(" ");
+                }
+                sql.append("END WHERE s.owner_id = ? AND g.is_special = 0 AND g.merchant_category_id = 0");
+                jdbc.update(sql.toString(), ownerId);
+            }
+            grouped++;
+            if (existingIds.size() < 4) {
+                backfilled++;
+            }
+        }
+        if (grouped > 0) {
+            log.info("已为 {} 个商户补齐店内分类（其中 {} 个新建分类），并完成 {} 个商户的商品分组",
+                    grouped, backfilled, grouped);
+        }
+    }
+
+    /** 钱包银行卡表（演进项：余额页展示已绑定银行卡）。只存卡号后四位，不存完整卡号。 */
+    private void ensureBankCardTable() {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() " +
+                        "AND table_name = 'bank_cards'", Integer.class);
+        if (count == null || count == 0) {
+            jdbc.execute("CREATE TABLE IF NOT EXISTS bank_cards (" +
+                    "id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id BIGINT NOT NULL, " +
+                    "bank_name VARCHAR(64) NOT NULL, card_type VARCHAR(32) NOT NULL DEFAULT '储蓄卡', " +
+                    "card_no_last4 VARCHAR(4) NOT NULL, is_default INT NOT NULL DEFAULT 0, " +
+                    "status INT NOT NULL DEFAULT 1, create_time VARCHAR(32) NOT NULL, " +
+                    "KEY idx_bank_card_user (user_id)) " +
+                    "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            log.info("已创建钱包银行卡表 bank_cards");
+        }
+    }
+
+    /**
+     * 给用户端测试账号各绑一张卡（幂等：已有卡就跳过，不覆盖用户数据）。
+     * 只写后四位，卡号是演示数据，不对应任何真实账户。
+     */
+    private void ensureBankCards() {
+        String[][] seeds = {
+                {"13800138000", "招商银行", "储蓄卡", "6688"},
+                {"13900139000", "工商银行", "信用卡", "8899"},
+        };
+        int created = 0;
+        for (String[] seed : seeds) {
+            Long userId = jdbc.query("SELECT id FROM users WHERE phone = ?",
+                    (rs, i) -> rs.getLong("id"), seed[0]).stream().findFirst().orElse(null);
+            if (userId == null) {
+                continue;
+            }
+            Integer existing = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM bank_cards WHERE user_id = ?", Integer.class, userId);
+            if (existing != null && existing > 0) {
+                continue;
+            }
+            jdbc.update("INSERT INTO bank_cards(user_id, bank_name, card_type, card_no_last4, " +
+                            "is_default, status, create_time) VALUES(?,?,?,?,1,1,?)",
+                    userId, seed[1], seed[2], seed[3], now());
+            created++;
+        }
+        if (created > 0) {
+            log.info("已为 {} 个用户补充钱包银行卡", created);
         }
     }
 
