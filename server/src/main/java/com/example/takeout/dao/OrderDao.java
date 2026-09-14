@@ -110,9 +110,14 @@ public class OrderDao {
                 payTime, id) == 1;
     }
 
-    /** 待付款超时订单（create_time 早于 deadline，deadline 为 yyyy-MM-dd HH:mm:ss 字符串）。 */
+    /**
+     * 待付款超时订单（create_time 早于 deadline，deadline 为 yyyy-MM-dd HH:mm:ss 字符串）。
+     * ponytail: 单轮固定上限 500 条，避免极端积压时一次把全表待付款订单读进内存；
+     * 剩余订单等下一轮扫描处理（取消是条件更新，天然幂等）。量级远超此值再改 id 游标分页。
+     */
     public List<Order> listExpiredPending(String deadline) {
-        return jdbc.query("SELECT * FROM orders WHERE status = 0 AND create_time < ? ORDER BY id", MAPPER, deadline);
+        return jdbc.query("SELECT * FROM orders WHERE status = 0 AND create_time < ? ORDER BY id LIMIT 500",
+                MAPPER, deadline);
     }
 
     /** 取消待付款订单：0 → 5（条件更新，防止与用户手动支付/取消并发冲突）。 */

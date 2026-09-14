@@ -250,21 +250,20 @@ public class StoreService {
     public Store.StoreView createStore(long ownerId, String name, int categoryId, double deliveryFee,
                                        double minOrder, String deliveryTime, String notice,
                                        String address, Double latitude, Double longitude) {
-        if (name == null || name.isBlank()) {
-            throw new BizException("店铺名称不能为空");
-        }
+        String safeName = requireMaxLength(normalizeRequired(name, "店铺名称不能为空"), 128, "店铺名称");
         validateCategory(categoryId);
         if (!Double.isFinite(deliveryFee) || deliveryFee < 0 || !Double.isFinite(minOrder) || minOrder < 0) {
             throw new BizException("配送费和起送价必须为非负数字");
         }
-        String normalizedAddress = normalizeRequired(address, "店铺地址不能为空");
+        String normalizedAddress = requireMaxLength(normalizeRequired(address, "店铺地址不能为空"), 512, "店铺地址");
         if (!validCoordinates(latitude, longitude)) {
             throw new BizException("店铺地址定位失败，请重新选择地址");
         }
         String now = LocalDateTime.now().format(FMT);
-        Store store = new Store(0, name, "", 4.5, 0, deliveryFee, minOrder,
-                deliveryTime == null || deliveryTime.isBlank() ? "30分钟" : deliveryTime,
-                "0.0km", "[\"新店特惠\"]", notice == null ? "" : notice,
+        Store store = new Store(0, safeName, "", 4.5, 0, deliveryFee, minOrder,
+                deliveryTime == null || deliveryTime.isBlank() ? "30分钟"
+                        : requireMaxLength(deliveryTime, 32, "配送时间"),
+                "0.0km", "[\"新店特惠\"]", requireMaxLength(notice, 512, "店铺公告"),
                 normalizedAddress, latitude, longitude, categoryId, "[" + categoryId + "]", ownerId, 1, 0, now);
         long id = storeDao.insert(store);
         invalidateStoreAndGoodsCache();
@@ -278,18 +277,24 @@ public class StoreService {
         if (!Double.isFinite(patch.deliveryFee()) || !Double.isFinite(patch.minOrder())) {
             throw new BizException("配送费和起送价必须为有效数字");
         }
-        String nextAddress = patch.address() == null ? store.address() : normalizeRequired(patch.address(), "店铺地址不能为空");
+        String nextAddress = patch.address() == null ? store.address()
+                : requireMaxLength(normalizeRequired(patch.address(), "店铺地址不能为空"), 512, "店铺地址");
+        String nextName = requireMaxLength(patch.name() == null ? store.name() : patch.name(), 128, "店铺名称");
+        String nextNotice = requireMaxLength(patch.notice() == null ? store.notice() : patch.notice(),
+                512, "店铺公告");
+        String nextDeliveryTime = requireMaxLength(
+                patch.deliveryTime() == null ? store.deliveryTime() : patch.deliveryTime(), 32, "配送时间");
         Double nextLatitude = patch.address() == null ? store.latitude() : patch.latitude();
         Double nextLongitude = patch.address() == null ? store.longitude() : patch.longitude();
         if (!nextAddress.isBlank() && !validCoordinates(nextLatitude, nextLongitude)) {
             throw new BizException("店铺地址定位失败，请重新选择地址");
         }
-        Store updated = new Store(store.id(), patch.name() == null ? store.name() : patch.name(),
+        Store updated = new Store(store.id(), nextName,
                 store.image(), store.rating(), store.monthlySales(),
                 patch.deliveryFee() < 0 ? store.deliveryFee() : patch.deliveryFee(),
                 patch.minOrder() < 0 ? store.minOrder() : patch.minOrder(),
-                patch.deliveryTime() == null ? store.deliveryTime() : patch.deliveryTime(),
-                store.distance(), store.tags(), patch.notice() == null ? store.notice() : patch.notice(),
+                nextDeliveryTime,
+                store.distance(), store.tags(), nextNotice,
                 nextAddress, nextLatitude, nextLongitude,
                 store.categoryId(), store.categoryIds(), store.ownerId(),
                 patch.status() < 0 ? store.status() : patch.status(), store.recommended(), store.createTime());
@@ -436,7 +441,7 @@ public class StoreService {
     }
 
     public Category createMerchantCategory(long ownerId, String name, int sort) {
-        String normalized = normalizeRequired(name, "分类名称不能为空");
+        String normalized = requireMaxLength(normalizeRequired(name, "分类名称不能为空"), 32, "分类名称");
         if (storeDao.merchantCategoryNameExists(ownerId, normalized, 0)) {
             throw new BizException("分类名称已存在");
         }
@@ -447,7 +452,7 @@ public class StoreService {
 
     public Category updateMerchantCategory(long ownerId, long categoryId, String name, int sort) {
         requireMerchantCategoryOwned(ownerId, categoryId);
-        String normalized = normalizeRequired(name, "分类名称不能为空");
+        String normalized = requireMaxLength(normalizeRequired(name, "分类名称不能为空"), 32, "分类名称");
         if (storeDao.merchantCategoryNameExists(ownerId, normalized, categoryId)) {
             throw new BizException("分类名称已存在");
         }
@@ -499,6 +504,19 @@ public class StoreService {
     private void validateGoodsInput(GoodsInput input, boolean multiSpec) {
         if (input == null || input.name() == null || input.name().isBlank()) {
             throw new BizException("商品名称不能为空");
+        }
+        // 列宽：goods.name 128 / description 512 / tag 32 / image 255 / goods_specs.name 64，
+        // 超长会因列宽溢出变成 500
+        requireMaxLength(input.name(), 128, "商品名称");
+        requireMaxLength(input.description(), 512, "商品描述");
+        requireMaxLength(input.image(), 255, "商品图片地址");
+        requireMaxLength(input.tag(), 32, "商品标签");
+        if (input.specs() != null) {
+            for (SpecInput spec : input.specs()) {
+                if (spec != null) {
+                    requireMaxLength(spec.name(), 64, "规格名称");
+                }
+            }
         }
         double price = input.price();
         if (multiSpec) {
@@ -607,5 +625,14 @@ public class StoreService {
             throw new BizException(message);
         }
         return value.trim();
+    }
+
+    /** 列宽上限校验：超长会在写库时抛 500，这里提前给出可读的 400 提示。 */
+    private static String requireMaxLength(String value, int maxLength, String field) {
+        String safe = value == null ? "" : value.trim();
+        if (safe.length() > maxLength) {
+            throw new BizException(field + "最多 " + maxLength + " 个字符");
+        }
+        return safe;
     }
 }

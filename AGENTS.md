@@ -33,7 +33,7 @@
     --mode module -p module=entry@default -p product=default -p requiredDeviceType=phone assembleHap --analyze=normal --parallel --incremental --daemon
   ```
   构建日志：`.hvigor/outputs/build-logs/build.log`；判断成功要看日志里的 `BUILD SUCCESSFUL` 并确认 `entry/build/default/outputs/default/*.hap` 时间戳已更新（流水线里 `Select-String` 会吞掉退出码，别只看 `$LASTEXITCODE`）
-- 后端测试：`mvn -f server/pom.xml test`（**76 个测试**，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格/资金与状态并发边界，以及缓存穿透/击穿/雪崩防护与领域事件 Outbox 语义）
+- 后端测试：`mvn -f server/pom.xml test`（**82 个测试**，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格/资金与状态并发边界/文本列宽边界，以及缓存穿透/击穿/雪崩防护与领域事件 Outbox 语义）
 - 一键容器化环境：`docker compose up -d --build`（app + MySQL 8.4 + Redis 7，含健康检查与启动依赖顺序）；只起基础设施（本机用 Maven 跑后端）用 `docker compose up -d mysql redis`。注意 compose 的 MySQL 映射到宿主 **3307**（避开本机 MySQL84 的 3306）
 - 后端测试与运行都要求 `JAVA_HOME` 指向 **JDK 25**；`server/Dockerfile` 的构建阶段也必须是 JDK 25，否则 `maven.compiler.release=25` 直接编译失败
 - Release 打包（**当前范围外，可选工具**）：`scripts/enable-release-signing.ps1`（接入发布证书）→ `scripts/build-release.ps1`（签名包）→ `scripts/release-check.ps1 [-Build]`（上架体检，输出 `md/上架体检报告.md`，该报告为生成物不入库）；详见 `md/上架体检与Release签名.md`。日常开发只需 debug 构建，不必碰这一套。
@@ -187,6 +187,8 @@
 - **状态流转一律条件更新**：`updateStatusFrom(from,to)` / `merchantDeliver` / `merchantComplete` / `markRefunding`，rowcount=0 必须抛错整单回滚，不得先查后改。
 - **骑手单量与收入写在 `OrderService.riderDeliver` 事务内**（`RiderService.recordDelivered` 已删除），且骑手 `status != 1` 时禁止抢单/取餐/送达。
 - **事件去重键在处理成功后才写**：先写会让"处理失败但未 ACK"的事件在重读时被自己的键判成重复而永久丢弃。
+- **文本列宽在服务层就挡**：所有用户可输入的文本（商品/店铺/分类/Banner/公告/备注/评价/退款原因/地址）都要在写库前按 `schema.sql` 的列宽给出可读提示，不要让 MySQL 列宽溢出变成 500。已覆盖：用户名 64、店铺名 128、店铺公告/地址 512、配送时间 32、商品名 128、商品描述 512、商品图片 255、商品标签 32、规格名 64、分类名 32、Banner 标题 64/副标题 128/图 255/跳转参数 128、公告标题 128/内容 1024、订单备注 255、评价内容 512、退款原因 255、地址姓名 64/详情 255。
+- **超时扫描单轮限量 500 条**（`OrderDao.listExpiredPending`）：极端积压时不把全部待付款订单读进内存，剩余等下一轮（取消是条件更新，幂等）。
 
 **已知待办**（本次未处理，按需再定）：
 
@@ -202,6 +204,8 @@
 - 骑手为自助注册即开通（`role=3` 自动建档 status=1，无需平台审核）。
 - `MerchantStatsPage` 无法区分"同步失败"与"真的没有订单"（都是 ¥0.00 / 0 单）。
 - `normalizeOrderList` 无条件丢弃持久化订单（订单只以服务端为准，属有意设计但未注释说明）。
+- 前端兜底口径不统一：`CheckoutPage` 里 `selectedCoupon.amount.toFixed(2)` 与 `BalancePage` 的 `this.balance = user.balance` 都未做 `?? 0` / `Number.isFinite` 归一（同项目 `AppStorageManager`、`Index` 已有 `Number.isFinite(user.balance) ? ... : 0` 的写法），响应缺字段时会显示 `¥NaN` 或渲染失败。
+- `AppStorageManager.syncCategoriesFromServer` 对服务端 `name/icon/color` 直接 `.trim()` 无 `?? ''` 兜底，字段为 NULL 时该次同步静默失败（调用处未 await 也未 try/catch），首页分类停留在默认 8 个图标。
 
 # Ponytail, lazy senior dev mode
 
