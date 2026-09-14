@@ -45,6 +45,7 @@ public class DataSeeder implements ApplicationRunner {
         Integer userCount = jdbc.queryForObject("SELECT COUNT(*) FROM users", Integer.class);
         if (userCount != null && userCount > 0) {
             ensureAdminUser();
+            ensureRiderUser();
             ensureStoresAndGoods();
             ensureAdditionalStores();
             ensureMarketingData();
@@ -53,9 +54,10 @@ public class DataSeeder implements ApplicationRunner {
         }
         seed();
         ensureAdminUser();
+        ensureRiderUser();
         ensureAdditionalStores();
         ensureMarketingData();
-        log.info("种子数据初始化完成：8 分类 / 40 店铺 / 1200 商品 / 5 账号");
+        log.info("种子数据初始化完成：8 分类 / 40 店铺 / 1200 商品 / 6 账号（含骑手）");
     }
 
     private void ensureOrderEscrowColumn() {
@@ -165,6 +167,35 @@ public class DataSeeder implements ApplicationRunner {
                             "VALUES(?,?,?,?,?,?,?)",
                     "平台管理员", "", "13100131000", PasswordUtil.hash("123456"), 2, 0.0, now());
             log.info("已补充管理端测试账号 phone=13100131000");
+        }
+    }
+
+    /**
+     * 骑手测试账号（四端改造）：role=3。
+     * 与管理端账号同理，即使已有用户数据也要补齐，否则骑手端无法登录
+     * （登录页的角色校验会因 role 不匹配直接退回登录页）。
+     * 同时把骑手档案一并建好，管理端「骑手管理」列表开箱即有数据——
+     * 否则要等骑手首次登录时由 RiderService.profile() 惰性建档。
+     */
+    private void ensureRiderUser() {
+        String phone = "13300133000";
+        String name = "骑手小李";
+        Long userId = jdbc.query("SELECT id FROM users WHERE phone = ?",
+                (rs, i) -> rs.getLong("id"), phone).stream().findFirst().orElse(null);
+        if (userId == null) {
+            jdbc.update("INSERT INTO users(username, avatar, phone, password, role, balance, create_time) " +
+                            "VALUES(?,?,?,?,?,?,?)",
+                    name, "", phone, PasswordUtil.hash("123456"), 3, 0.0, now());
+            userId = jdbc.queryForObject("SELECT id FROM users WHERE phone = ?", Long.class, phone);
+            log.info("已补充骑手端测试账号 phone={}", phone);
+        }
+        Integer profileCount = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM riders WHERE user_id = ?", Integer.class, userId);
+        if (profileCount == null || profileCount == 0) {
+            jdbc.update("INSERT INTO riders(user_id, name, phone, online, total_orders, total_income, " +
+                            "status, create_time) VALUES(?,?,?,0,0,0,1,?)",
+                    userId, name, phone, now());
+            log.info("已补充骑手档案 user_id={}", userId);
         }
     }
 

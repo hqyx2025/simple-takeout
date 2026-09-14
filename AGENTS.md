@@ -5,7 +5,7 @@
 ## 1. 项目概述
 
 - **定位**：HarmonyOS NEXT 外卖 App（毕业设计，对标美团外卖），单 HAP 工程
-- **双业务闭环**：用户端（搜索→下单→评价）与商户端（接单→出餐→统计）
+- **四端闭环**：用户端（搜索→下单→评价）/ 商户端（接单→出餐→统计）/ 骑手端（抢单→取餐→送达）/ 平台管理端（审核→内容→统计）
 - **目录结构**：`server/` 后端模块（Spring Boot）+ `entry/` 前端模块（HarmonyOS ArkTS）
 - **核心文档**：`md/重构大纲提示词.md` 是唯一权威设计文档（26 章），含"现状/演进"标注；第 17 节约束：**以仓库现状为准、禁止推倒重来、冲突先列后改**
 - **管理端独立后台**：ADMIN 登录后直接进入平台管理页（AdminCenterPage + 分类/店铺/订单/退款审批四个独立页面），任何情况下不展示主页/定位/购物车等 C 端功能
@@ -14,7 +14,7 @@
 
 | 层 | 技术 | 关键点 |
 | --- | --- | --- |
-| 前端 | HarmonyOS NEXT ArkTS（严格模式）+ ArkUI | SDK 6.1.1(24)，无第三方 UI 依赖，AppStorage + Preferences 持久化 |
+| 前端 | HarmonyOS NEXT ArkTS（严格模式）+ ArkUI | SDK **API 26**（`compatibleSdkVersion` / `modelVersion` 均为 `26.0.0`，**不是** 6.1.1/API 24），无第三方 UI 库（仅 `@ohos/axios`），AppStorage + Preferences 持久化 |
 | 后端 | Spring Boot 3.5.4 + Java 25 | JWT 认证（`Authorization: Bearer`）、JdbcTemplate（**非 MyBatis-Plus**）、Lombok |
 | 数据库 | MySQL 8.4（本机服务名 MySQL84） | 库名 `takeout`，`createDatabaseIfNotExist=true` 自动建库，schema.sql 启动自动执行 |
 | 缓存 | **Redis 7（已落地）** | 热点浏览数据缓存（`HotDataCacheService`），防穿透/击穿/雪崩；Redis 故障自动回源数据库 |
@@ -62,7 +62,7 @@
 - **凑单**：`GET /api/stores/{id}/bundle?amount=X` 返回还差多少元起送（gap）与店内最低价菜品推荐；起送价判断仍以服务端下单校验为权威
 - **金额口径**：满减券门槛按**商品总价**判断（非实付）；月销量为"累计下单数"（取消不回滚，含待付款）；金额统一两位小数
 - **幂等**：退款/结算必须条件更新（`WHERE escrow_status=0`），防重复打款/退款；库存扣减用乐观锁（`WHERE stock>=? AND status=1`），取消/退款时 escrow 更新成功后才回滚库存
-- **测试账号**：用户 13800138000 / 商户 13600136000 / 管理端 13100131000，密码均 123456；注册用户送 20 元余额
+- **测试账号**（密码均 `123456`）：用户 `13800138000`（送 20 元）/ `13900139000`（15 元）、商户 `13600136000` / `13700137000` / `13500135000`、管理端 `13100131000`、**骑手 `13300133000`**（role=3）。骑手账号与 `riders` 档案由 `DataSeeder.ensureRiderUser()` 幂等补齐（全新库与已有数据的库都会补），骑手端开箱可用，无需手工 `UPDATE users SET role = 3`。
 - **接口约定**：除 `/api/auth/login`、`/api/auth/register` 外全部接口需 JWT（含浏览类）；401 时前端清登录态回登录页
 
 ## 6. 数据库现状（差异以 22.8 节清单为准）
