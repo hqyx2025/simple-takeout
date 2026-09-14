@@ -3,6 +3,7 @@ import loginFlowTest from './LoginFlow.test';
 import locationFlowTest from './LocationFlow.test';
 import checkoutGuardTest from './CheckoutGuard.test';
 import checkoutFlowTest from './CheckoutFlow.test';
+import storeDetailCartTest from './StoreDetailCart.test';
 import searchFlowTest from './SearchFlow.test';
 import reviewFlowTest from './ReviewFlow.test';
 import merchantFlowTest from './MerchantFlow.test';
@@ -17,6 +18,7 @@ export default function testsuite() {
   locationFlowTest();
   checkoutGuardTest();
   checkoutFlowTest();
+  storeDetailCartTest();
   searchFlowTest();
   reviewFlowTest();
   merchantFlowTest();

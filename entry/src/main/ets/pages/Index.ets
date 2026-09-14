@@ -1248,6 +1248,10 @@ export struct StoreDetailContent {
   @State storeNotice: string = ''
   @State cartCount: number = 0
   @State cartTotal: number = 0
+  // 商品行的「- 数量 +」取值依赖购物车，而 ForEach 的 key 用的是稳定的 goods.id：
+  // ArkUI 按 key 复用列表项，键不变就不重建，于是点「+」后数字不更新/不显示。
+  // 把本版本号拼进 ForEach key 强制重建（与购物车 cartRenderVersion 同一套路）。
+  @State goodsRenderVersion: number = 0
   private cartOperationQueue: Promise<void> = Promise.resolve()
   @State isFav: boolean = false
   @State goodsLoading: boolean = false
@@ -1431,6 +1435,8 @@ export struct StoreDetailContent {
       const unitPrice: number = i.price ?? i.goods.price
       return s + unitPrice * i.quantity
     }, 0)
+    // 购物车已变化：递增渲染版本，让商品行的数量控件重建
+    this.goodsRenderVersion += 1
   }
 
   private enqueueCartOperation(operation: () => Promise<void>): void {
@@ -1714,7 +1720,7 @@ export struct StoreDetailContent {
                 .layoutWeight(1).alignItems(HorizontalAlign.Start)
               }
               .width('100%').padding(SPACING.MD)
-              }, (item: GoodsItem) => item.id.toString())
+              }, (item: GoodsItem) => `${this.goodsRenderVersion}-${item.id}`)
             }
 
             // 用户评价列表区域
@@ -1761,15 +1767,16 @@ export struct StoreDetailContent {
           })
       } else {
         if (this.getQty(goods.id) > 0) {
-          Text('-').width(24).height(24).fontSize(16).fontColor(COLORS.TEXT_WHITE)
+          Text('-').id(`goods-minus-${goods.id}`).width(24).height(24).fontSize(16).fontColor(COLORS.TEXT_WHITE)
             .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.CIRCLE)
             .textAlign(TextAlign.Center).onClick(() => {
               this.changeGoodsQuantity(goods, -1)
             })
-          Text(this.getQty(goods.id).toString()).width(28).height(24).fontSize(FONT_SIZE.MD)
+          Text(this.getQty(goods.id).toString()).id(`goods-qty-${goods.id}`)
+            .width(28).height(24).fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.TEXT_PRIMARY).textAlign(TextAlign.Center)
         }
-        Text('+').width(24).height(24).fontSize(16).fontColor(COLORS.TEXT_WHITE)
+        Text('+').id(`goods-plus-${goods.id}`).width(24).height(24).fontSize(16).fontColor(COLORS.TEXT_WHITE)
           .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.CIRCLE)
           .textAlign(TextAlign.Center).onClick(() => {
             this.addGoodsToCart(goods)
@@ -1989,7 +1996,9 @@ export struct StoreDetailContent {
   }
 
   getQty(goodsId: number): number {
-    const currentCart: CartItem[] = AppStorage.get<CartItem[]>('cartItems') || []
+    // 必须读被观察的 this.cartItems，而不是 AppStorage.get：
+    // 后者绕过状态观察，行内不会建立依赖，数量变化时该行不会刷新。
+    const currentCart: CartItem[] = this.cartItems || []
     const item: CartItem | undefined = currentCart.find((cartItem: CartItem) =>
       cartItem.goods.id === goodsId && cartItem.storeId === this.storeId)
     return item ? item.quantity : 0
