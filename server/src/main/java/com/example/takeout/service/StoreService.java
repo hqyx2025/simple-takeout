@@ -273,6 +273,11 @@ public class StoreService {
 
     public Store.StoreView updateStore(long ownerId, long storeId, StorePatch patch) {
         Store store = requireOwned(ownerId, storeId);
+        // 与创建店铺同口径的有限性校验：NaN 会让所有比较恒为 false，使起送价校验被完全绕过；
+        // 1e400 这类字面量会被解析成 Infinity，使该店永远达不到起送价。负数仍按「不修改」处理。
+        if (!Double.isFinite(patch.deliveryFee()) || !Double.isFinite(patch.minOrder())) {
+            throw new BizException("配送费和起送价必须为有效数字");
+        }
         String nextAddress = patch.address() == null ? store.address() : normalizeRequired(patch.address(), "店铺地址不能为空");
         Double nextLatitude = patch.address() == null ? store.latitude() : patch.latitude();
         Double nextLongitude = patch.address() == null ? store.longitude() : patch.longitude();

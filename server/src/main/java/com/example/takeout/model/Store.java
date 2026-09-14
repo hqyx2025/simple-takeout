@@ -76,7 +76,10 @@ public record Store(
         double value = Math.pow(Math.sin(latitudeDelta / 2), 2)
                 + Math.cos(firstLatitudeRad) * Math.cos(secondLatitudeRad)
                 * Math.pow(Math.sin(longitudeDelta / 2), 2);
-        return 6371.0 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+        // 浮点误差在近对跖点会让 value 略大于 1 → sqrt(1-value) 得到 NaN → 距离渲染成「NaNkm」，
+        // 且 NaN 参与距离筛选比较恒为 false，该店会被静默过滤，故先夹到 [0,1]
+        double safe = Math.min(1.0, Math.max(0.0, value));
+        return 6371.0 * 2 * Math.atan2(Math.sqrt(safe), Math.sqrt(1 - safe));
     }
 
     private static String formatDistance(double distanceKm) {

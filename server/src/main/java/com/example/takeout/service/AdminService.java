@@ -221,15 +221,15 @@ public class AdminService {
         switch (action) {
             case "accept" -> {
                 requireStatus(order, 1);
-                orderDao.updateStatus(orderId, 2, "accept_time", now);
+                requireStatusUpdated(orderDao.updateStatusFrom(orderId, 1, 2, "accept_time", now));
             }
             case "deliver" -> {
                 requireStatus(order, 2);
-                orderDao.updateStatus(orderId, 3, "deliver_time", now);
+                requireStatusUpdated(orderDao.updateStatusFrom(orderId, 2, 3, "deliver_time", now));
             }
             case "complete" -> {
                 requireStatus(order, 3);
-                orderDao.updateStatus(orderId, 4, "complete_time", now);
+                requireStatusUpdated(orderDao.updateStatusFrom(orderId, 3, 4, "complete_time", now));
             }
             case "cancel" -> {
                 if (order.status() != 1 && order.status() != 2 && order.status() != 3) {
@@ -245,20 +245,21 @@ public class AdminService {
     @Transactional
     public Order.OrderView refundOrder(long orderId) {
         Order order = orderDao.findById(orderId).orElseThrow(() -> new BizException("订单不存在"));
-        if (order.status() == 4) {
-            throw new BizException("已送达订单不能直接退款，请走退款审批流程");
+        // 只有「已扣款且尚未送达」的订单才存在可退的托管资金：待付款(0)、待付款取消(5) 的
+        // escrow 同样是 0，若只看 escrow 就会对从未扣款的订单退款，凭空给用户加钱。
+        if (order.status() != 1 && order.status() != 2 && order.status() != 3) {
+            throw new BizException("当前状态不可直接退款（已送达请走退款审批，未支付无需退款）");
         }
         if (!orderDao.refundEscrow(orderId)) {
             throw new BizException("订单资金已处理，不能重复退款");
         }
-        // escrow 条件更新成功才回滚库存（同一事务内，防重复回滚）
-        Order.OrderView view = orderService.orderDetail(orderId);
-        for (Order.OrderItem item : view.items()) {
-            goodsDao.restoreStock(item.goodsId(), item.quantity());
+        if (!orderDao.updateStatusFrom(orderId, order.status(), 5, "complete_time", now())) {
+            throw new BizException("订单状态已变化，请刷新后重试");
         }
-        User user = userDao.findById(order.userId()).orElseThrow(() -> new BizException("用户不存在"));
-        userDao.updateBalance(user.id(), round2(user.balance() + order.payAmount()));
-        orderDao.updateStatus(orderId, 5, "complete_time", now());
+        // escrow 条件更新成功才回滚库存（同一事务内，防重复回滚）；
+        // 复用 OrderService 的回滚：goods 库存、规格库存、秒杀名额三者缺一不可
+        orderService.rollbackStock(order);
+        userDao.addBalance(order.userId(), order.payAmount());
         // 已回滚库存，用户端展示需重新读取真实余量
         invalidateStoreAndGoodsCache();
         return orderService.orderDetail(orderId);
@@ -282,12 +283,9 @@ public class AdminService {
         if (!orderDao.refundEscrow(order.id())) {
             throw new BizException("订单资金已处理，不能重复退款");
         }
-        User user = userDao.findById(order.userId()).orElseThrow(() -> new BizException("用户不存在"));
-        userDao.updateBalance(user.id(), round2(user.balance() + order.payAmount()));
-        Order.OrderView view = orderService.orderDetail(order.id());
-        for (Order.OrderItem item : view.items()) {
-            goodsDao.restoreStock(item.goodsId(), item.quantity());
-        }
+        userDao.addBalance(order.userId(), order.payAmount());
+        // 复用统一回滚：goods 库存 + 规格库存 + 秒杀名额，避免规格库存与秒杀名额泄漏
+        orderService.rollbackStock(order);
         refundDao.updateStatus(refundId, "REFUNDED", now(), "");
         // 同意退款已回滚库存，失效相关展示缓存
         invalidateStoreAndGoodsCache();
@@ -302,7 +300,8 @@ public class AdminService {
     public RefundRecord rejectRefund(long refundId, String rejectReason) {
         RefundRecord record = requirePending(refundId);
         refundDao.updateStatus(refundId, "REJECTED", now(), rejectReason == null ? "" : rejectReason);
-        orderDao.updateStatusOnly(record.orderId(), 4);
+        // 订单回退到已送达：仅当仍处于退款中(6) 时回退，已是 4 则按幂等处理（退款记录才是审批事实）
+        orderDao.updateStatusOnlyFrom(record.orderId(), 6, 4);
         return refundDao.findById(refundId).orElseThrow(() -> new BizException("退款处理失败"));
     }
 
@@ -344,6 +343,13 @@ public class AdminService {
     private void requireStatus(Order order, int expected) {
         if (order.status() != expected) {
             throw new BizException("订单当前状态不支持该操作");
+        }
+    }
+
+    /** 条件状态更新失败 = 期间已被其它操作改变（用户取消/骑手接单），必须回滚整单。 */
+    private void requireStatusUpdated(boolean updated) {
+        if (!updated) {
+            throw new BizException("订单状态已变化，请刷新后重试");
         }
     }
 

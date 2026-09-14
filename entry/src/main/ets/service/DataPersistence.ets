@@ -5,7 +5,7 @@
  */
 import preferences from '@ohos.data.preferences'
 import common from '@ohos.app.ability.common'
-import { User, Order, createEmptyUser } from '../model/Models'
+import { User, Order, Address, createEmptyUser } from '../model/Models'
 import { logInfo, logWarn, logError } from './AppLogger'
 import { setAuthToken } from './HttpClient'
 
@@ -76,6 +76,49 @@ function normalizeOrderList(value: Object): Object {
   return emptyOrders
 }
 
+/**
+ * 地址逐字段归一：旧版本持久化的地址可能缺 address/detail，
+ * 而渲染路径直接 `currentAddress.address.trim()`（Index.getDisplayAddress）→ 冷启动白屏。
+ */
+function normalizeAddress(value: Object): Address {
+  const address: Address = value as Address
+  if (typeof address.id !== 'number') {
+    address.id = 0
+  }
+  if (typeof address.name !== 'string') {
+    address.name = ''
+  }
+  if (typeof address.phone !== 'string') {
+    address.phone = ''
+  }
+  if (typeof address.address !== 'string') {
+    address.address = ''
+  }
+  if (typeof address.detail !== 'string') {
+    address.detail = ''
+  }
+  if (typeof address.isDefault !== 'boolean') {
+    address.isDefault = false
+  }
+  return address
+}
+
+function normalizeAddressList(value: Object): Object {
+  if (!Array.isArray(value)) {
+    const empty: Address[] = []
+    return empty
+  }
+  const result: Address[] = []
+  for (let i = 0; i < value.length; i++) {
+    const item: Object = value[i] as Object
+    if (item === null || typeof item !== 'object') {
+      continue
+    }
+    result.push(normalizeAddress(item))
+  }
+  return result
+}
+
 // 归一化入口：按 key 处理对应数据
 export function normalizeData(key: string, value: Object): Object {
   if (key === 'authToken') {
@@ -94,12 +137,22 @@ export function normalizeData(key: string, value: Object): Object {
     const empty: Object[] = []
     return empty
   }
-  if (key === 'favoriteList' || key === 'couponList' || key === 'addressList') {
+  if (key === 'favoriteList' || key === 'couponList') {
     if (Array.isArray(value)) {
       return value
     }
     const empty: Object[] = []
     return empty
+  }
+  if (key === 'addressList') {
+    return normalizeAddressList(value)
+  }
+  if (key === 'currentAddress') {
+    // 兼容持久化的 null（未定位）：保持 null，界面按「未定位」展示
+    if (value === null || typeof value !== 'object') {
+      return value
+    }
+    return normalizeAddress(value)
   }
   return value
 }
@@ -207,6 +260,11 @@ export async function clearAllData(): Promise<void> {
   try {
     const prefs: preferences.Preferences = await getPrefs()
     for (let i = 0; i < PERSISTENCE_KEYS.length; i++) {
+      // 隐私同意状态单一权威且单向升级：登出不得清除已同意状态，
+      // 否则退出登录后冷启动会重新被判为未同意、又被赶回同意页
+      if (PERSISTENCE_KEYS[i] === 'privacyConsent') {
+        continue
+      }
       await prefs.delete(PERSISTENCE_KEYS[i])
     }
     await prefs.flush()

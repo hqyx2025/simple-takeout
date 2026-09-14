@@ -175,6 +175,10 @@ public class UserCenterService {
                 || detail == null || detail.isBlank()) {
             throw new BizException("姓名、手机号和地址不能为空且格式正确");
         }
+        // 列宽上限（addresses.name 64 / detail 255）：超长会在写库时抛 500，这里提前给出可读提示
+        if (name.length() > 64 || detail.length() > 255) {
+            throw new BizException("联系姓名最多 64 字，详细地址最多 255 字");
+        }
         if (isDefault != 0 && isDefault != 1) {
             throw new BizException("默认地址标记不合法");
         }

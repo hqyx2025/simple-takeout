@@ -114,7 +114,7 @@ class OrderServiceFlowTest {
         assertEquals("", view.payTime(), "待付款订单支付时间为空");
         assertEquals(13.0, view.payAmount(), 0.001);
         assertFalse(view.payDeadline().isEmpty(), "待付款订单返回支付截止时间");
-        verify(userDao, never()).updateBalance(anyLong(), anyDouble());
+        verify(userDao, never()).deductBalance(anyLong(), anyDouble());
         verify(goodsDao).deductStock(GOODS_ID, 1);
         verify(storeDao).updateMonthlySales(STORE_ID, 1);
         verify(orderDao).insert(org.mockito.ArgumentMatchers.argThat(o ->
@@ -127,10 +127,12 @@ class OrderServiceFlowTest {
         when(orderDao.findById(13)).thenReturn(Optional.of(pending));
         when(userDao.findById(USER_ID)).thenReturn(Optional.of(user(50)));
         when(orderDao.markPaid(eq(13L), anyString())).thenReturn(true);
+        when(userDao.deductBalance(USER_ID, 13.0)).thenReturn(true);
 
         service.payOrder(USER_ID, 13);
 
-        verify(userDao).updateBalance(eq(USER_ID), eq(37.0));
+        // 条件扣款（余额不足会返回 false），不再用「读余额→减→整值写回」
+        verify(userDao).deductBalance(eq(USER_ID), eq(13.0));
         verify(orderDao).markPaid(eq(13L), anyString());
     }
 
@@ -141,7 +143,21 @@ class OrderServiceFlowTest {
         BizException error = assertThrows(BizException.class, () -> service.payOrder(USER_ID, 13));
 
         assertEquals("订单已取消，无法支付", error.getMessage());
-        verify(userDao, never()).updateBalance(anyLong(), anyDouble());
+        verify(userDao, never()).deductBalance(anyLong(), anyDouble());
+    }
+
+    @Test
+    void rejectsPayWhenConcurrentOrderTookTheBalance() {
+        when(orderDao.findById(13)).thenReturn(Optional.of(storedOrder(13, 0, ITEMS, "")));
+        when(userDao.findById(USER_ID)).thenReturn(Optional.of(user(50)));
+        when(orderDao.markPaid(eq(13L), anyString())).thenReturn(true);
+        // 并发支付另一笔订单已抢先扣完余额：条件扣款失败必须整体回滚（订单状态一并回滚）
+        when(userDao.deductBalance(USER_ID, 13.0)).thenReturn(false);
+
+        BizException error = assertThrows(BizException.class, () -> service.payOrder(USER_ID, 13));
+
+        assertEquals("余额不足，请先充值", error.getMessage());
+        verify(userDao).deductBalance(USER_ID, 13.0);
     }
 
     @Test
@@ -163,7 +179,8 @@ class OrderServiceFlowTest {
         service.cancelOrder(USER_ID, 13);
 
         verify(orderDao, never()).refundEscrow(anyLong());
-        verify(userDao, never()).updateBalance(anyLong(), anyDouble());
+        verify(userDao, never()).deductBalance(anyLong(), anyDouble());
+        verify(userDao, never()).addBalance(anyLong(), anyDouble());
         verify(goodsDao).restoreStock(GOODS_ID, 1);
         verify(orderDao).cancelPending(eq(13L), anyString());
     }
@@ -307,17 +324,34 @@ class OrderServiceFlowTest {
         Order order = storedOrder(7, 1, ITEMS, "");
         when(orderDao.findById(7)).thenReturn(Optional.of(order));
         when(orderDao.refundEscrow(7)).thenReturn(true, false);
+        when(orderDao.updateStatusFrom(eq(7L), eq(1), eq(5), eq("complete_time"), anyString())).thenReturn(true);
         when(userDao.findById(USER_ID)).thenReturn(Optional.of(user(37)));
 
         service.cancelOrder(USER_ID, 7);
 
         verify(orderDao).refundEscrow(7);
         verify(goodsDao).restoreStock(GOODS_ID, 1);
-        verify(userDao).updateBalance(eq(USER_ID), eq(50.0));
-        verify(orderDao).updateStatus(eq(7L), eq(5), eq("complete_time"), anyString());
+        // 退款用原子自增，避免与并发退款互相覆盖
+        verify(userDao).addBalance(eq(USER_ID), eq(13.0));
+        verify(orderDao).updateStatusFrom(eq(7L), eq(1), eq(5), eq("complete_time"), anyString());
 
         BizException error = assertThrows(BizException.class, () -> service.cancelOrder(USER_ID, 7));
         assertEquals("订单资金已处理，不能重复退款", error.getMessage());
+    }
+
+    @Test
+    void cancelRollsBackWhenOrderWasAdvancedConcurrently() {
+        Order order = storedOrder(7, 1, ITEMS, "");
+        when(orderDao.findById(7)).thenReturn(Optional.of(order));
+        when(orderDao.refundEscrow(7)).thenReturn(true);
+        // 期间骑手/商户已把订单推进到已送达：条件状态更新失败 → 必须抛异常回滚退款
+        when(orderDao.updateStatusFrom(eq(7L), eq(1), eq(5), eq("complete_time"), anyString())).thenReturn(false);
+
+        BizException error = assertThrows(BizException.class, () -> service.cancelOrder(USER_ID, 7));
+
+        assertEquals("订单状态已变化，请刷新后重试", error.getMessage());
+        verify(goodsDao, never()).restoreStock(anyLong(), anyInt());
+        verify(userDao, never()).addBalance(anyLong(), anyDouble());
     }
 
     @Test

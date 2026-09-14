@@ -87,18 +87,20 @@ public class RiderController {
                                                 @PathVariable long id) {
         requireRider(role);
         Rider rider = requireOnlineRider(userId);
-        Order.OrderView view = orderService.riderDeliver(rider.id(), id);
-        // 送达后累加骑手单量与配送收入
-        riderService.recordDelivered(rider.id(), view.deliveryFee());
-        return ApiResponse.ok(view);
+        // 单量与配送收入已由 OrderService.riderDeliver 在同一事务内累加，
+        // 此处不得再累加一次（否则重复计单），也不要放在事务外（失败即永久少账）
+        return ApiResponse.ok(orderService.riderDeliver(rider.id(), id));
     }
 
     public record RiderStatusRequest(int online) {
     }
 
-    /** 抢单/取餐/送达前必须在线，避免离线接单造成配送中断。 */
+    /** 抢单/取餐/送达前必须在线且未被平台停用，避免离线/停用账号接单造成配送中断。 */
     private Rider requireOnlineRider(long userId) {
         Rider rider = riderService.profile(userId);
+        if (rider.status() != 1) {
+            throw new BizException(403, "骑手账号已停用，请联系平台管理员");
+        }
         if (rider.online() != 1) {
             throw new BizException("请先上线后再接单");
         }

@@ -75,7 +75,8 @@ export struct CheckoutPage {
   private getGoodsTotalPrice(): number {
     let total: number = 0
     for (let i = 0; i < this.storeItems.length; i++) {
-      total += this.storeItems[i].goods.price * this.storeItems[i].quantity
+      // 多规格菜品必须用行单价（规格价），goods.price 是规格最低价，用它算会少算金额
+      total += (this.storeItems[i].price ?? this.storeItems[i].goods.price) * this.storeItems[i].quantity
     }
     return total
   }
@@ -96,7 +97,7 @@ export struct CheckoutPage {
     let total: number = 0
     const items: CartItem[] = this.storeItems.filter((item: CartItem) => item.storeId === storeId)
     for (let i = 0; i < items.length; i++) {
-      total += items[i].goods.price * items[i].quantity
+      total += (items[i].price ?? items[i].goods.price) * items[i].quantity
     }
     return total
   }

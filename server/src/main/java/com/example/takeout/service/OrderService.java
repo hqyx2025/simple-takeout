@@ -176,7 +176,7 @@ public class OrderService {
             holds.add(new StockHold(goods.id(), spec == null ? 0 : spec.id(), item.quantity(), seckillId));
         }
         goodsAmount = round2(goodsAmount);
-        double checkoutGoodsAmount = resolveCheckoutGoodsAmount(userId, checkoutGoodsIds, goodsAmount);
+        double checkoutGoodsAmount = resolveCheckoutGoodsAmount(userId, storeId, checkoutGoodsIds, goodsAmount);
         if (checkoutGoodsAmount < store.minOrder()) {
             throw new BizException("未达到店铺起送价（满" + (long) store.minOrder() + "元起送）");
         }
@@ -228,7 +228,7 @@ public class OrderService {
         Order order = new Order(0, orderNo, userId, storeId, store.name(), 0,
                 toJson(normalizedItems), toJson(new Order.AddressInfo(address.id(), address.name(), address.phone(), address.detail())),
                 goodsAmount, store.deliveryFee(), discount, payAmount,
-                remark == null ? "" : remark, 0, 0, now, "", "", "", "", normalizedExpect,
+                remark == null ? "" : requireMaxLength(remark, 255, "订单备注"), 0, 0, now, "", "", "", "", normalizedExpect,
                 appliedCoupon == null ? 0 : appliedCoupon.id());
         long id = orderDao.insert(order);
         storeDao.updateMonthlySales(storeId, 1);
@@ -265,7 +265,10 @@ public class OrderService {
         if (!orderDao.markPaid(orderId, now)) {
             throw new BizException("订单状态已变化，请刷新后重试");
         }
-        userDao.updateBalance(userId, round2(user.balance() - order.payAmount()));
+        // 原子条件扣款：余额不足（并发支付两单时抢不到余额）即抛异常回滚订单状态，绝不写负余额
+        if (!userDao.deductBalance(userId, order.payAmount())) {
+            throw new BizException("余额不足，请先充值");
+        }
         // 支付成功后才发出事件：条件更新失败会抛异常回滚，不会产生「假支付」事件
         eventPublisher.publish(DomainEventPublisher.ORDER_PAID, orderId,
                 Map.of("userId", userId, "payAmount", order.payAmount()));
@@ -303,21 +306,18 @@ public class OrderService {
     }
 
 
-    private double resolveCheckoutGoodsAmount(long userId, List<Long> checkoutGoodsIds, double currentStoreAmount) {
+    private double resolveCheckoutGoodsAmount(long userId, long storeId, List<Long> checkoutGoodsIds, double currentStoreAmount) {
         if (checkoutGoodsIds == null || checkoutGoodsIds.isEmpty() || cartItemMapper == null) {
             return currentStoreAmount;
         }
+        // 结算选择以「菜品」为粒度上报，而购物车行按 (菜品, 规格) 唯一：
+        // 同一菜品选了多个规格时会上报重复的 goodsId，必须先去重再比对，否则永远撞「结算商品重复」。
         Set<Long> selectedIds = new HashSet<>(checkoutGoodsIds);
-        if (selectedIds.size() != checkoutGoodsIds.size()) {
-            throw new BizException("结算商品重复，请刷新购物车后重试");
-        }
         List<CartItemEntity> cartItems = cartItemMapper.selectList(
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CartItemEntity>()
                         .eq(CartItemEntity::getUserId, userId)
                         .in(CartItemEntity::getGoodsId, selectedIds));
-        if (cartItems.size() != selectedIds.size()) {
-            throw new BizException("购物车商品已变化，请刷新后重试");
-        }
+        Set<Long> foundIds = new HashSet<>();
         double total = 0;
         for (CartItemEntity cartItem : cartItems) {
             Goods goods = goodsDao.findById(cartItem.getGoodsId())
@@ -325,8 +325,16 @@ public class OrderService {
             if (cartItem.getQuantity() == null || cartItem.getQuantity() <= 0) {
                 throw new BizException("购物车商品数量无效，请刷新后重试");
             }
+            foundIds.add(cartItem.getGoodsId());
+            // 跨店结算时上报的是全部店铺的菜品，起送价只能按本店菜品计算，否则会被别店金额凑够门槛
+            if (goods.storeId() != storeId) {
+                continue;
+            }
             total += unitPriceOf(goods, cartItem.getSpecId() == null ? 0 : cartItem.getSpecId())
                     * cartItem.getQuantity();
+        }
+        if (!foundIds.containsAll(selectedIds)) {
+            throw new BizException("购物车商品已变化，请刷新后重试");
         }
         return round2(total);
     }
@@ -400,11 +408,14 @@ public class OrderService {
         if (!orderDao.refundEscrow(orderId)) {
             throw new BizException("订单资金已处理，不能重复退款");
         }
+        // 状态必须仍停留在取消时读到的状态：若期间已被骑手/商户推进到已送达，
+        // 条件更新失败即抛异常回滚本事务的退款，避免「餐已送达还全额退款」。
+        if (!orderDao.updateStatusFrom(orderId, order.status(), 5, "complete_time", LocalDateTime.now().format(FMT))) {
+            throw new BizException("订单状态已变化，请刷新后重试");
+        }
         // escrow 条件更新成功才回滚库存（同一事务内，防重复回滚）
         rollbackStock(order);
-        User user = userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
-        userDao.updateBalance(userId, round2(user.balance() + order.payAmount()));
-        orderDao.updateStatus(orderId, 5, "complete_time", LocalDateTime.now().format(FMT));
+        userDao.addBalance(userId, order.payAmount());
         eventPublisher.publish(DomainEventPublisher.ORDER_CANCELLED, orderId,
                 Map.of("userId", userId, "reason", "用户取消已支付订单，已即时退款"));
         return orderDetail(orderId);
@@ -432,16 +443,21 @@ public class OrderService {
         if (refundDao.existsPending(orderId)) {
             throw new BizException("该订单已有进行中的退款申请，请等待审核");
         }
+        // 条件流转 4→6（同时要求 escrow=0）：与「确认收货」并发时只有一方能成功，
+        // 成功后才插入申请记录，重复点击/网络重放不会产生第二条 PENDING。
+        if (!orderDao.markRefunding(orderId)) {
+            throw new BizException("订单资金已处理或状态已变化，请刷新后重试");
+        }
         Store store = storeDao.findById(order.storeId()).orElseThrow(() -> new BizException("店铺不存在"));
         String now = LocalDateTime.now().format(FMT);
+        String safeReason = requireMaxLength(reason == null ? "" : reason, 255, "退款原因");
         long id = refundDao.insert(orderId, userId, store.ownerId(),
-                reason == null ? "" : reason, order.payAmount(), now);
-        orderDao.updateStatusOnly(orderId, 6);
+                safeReason, order.payAmount(), now);
         return refundDao.findById(id).orElseThrow(() -> new BizException("退款申请失败"));
     }
 
     /** 回滚订单商品库存与秒杀名额（取消/退款时调用，必须在条件更新成功后的同一事务内）。 */
-    private void rollbackStock(Order order) {
+    void rollbackStock(Order order) {
         for (Order.OrderItem item : parseItems(order.items())) {
             goodsDao.restoreStock(item.goodsId(), item.quantity());
             if (item.specId() > 0) {
@@ -484,7 +500,7 @@ public class OrderService {
         switch (action) {
             case "accept" -> {          // 商户接单：1 → 2
                 requireStatus(order, 1);
-                orderDao.updateStatus(orderId, 2, "accept_time", now);
+                requireStatusUpdated(orderDao.updateStatusFrom(orderId, 1, 2, "accept_time", now));
             }
             case "ready" -> {           // 出餐完成：写 ready_time，进入骑手待取餐池（数字状态仍为 2）
                 requireStatus(order, 2);
@@ -495,12 +511,12 @@ public class OrderService {
             case "deliver" -> {         // 出餐配送：2 → 3（仅未分配骑手的订单，避免与骑手流程冲突）
                 requireStatus(order, 2);
                 requireNoRider(orderId);
-                orderDao.updateStatus(orderId, 3, "deliver_time", now);
+                requireStatusUpdated(orderDao.merchantDeliver(orderId, now));
             }
             case "complete" -> {        // 确认送达：3 → 4（仅未分配骑手的订单）
                 requireStatus(order, 3);
                 requireNoRider(orderId);
-                orderDao.updateStatus(orderId, 4, "complete_time", now);
+                requireStatusUpdated(orderDao.merchantComplete(orderId, now));
             }
             default -> throw new BizException("不支持的操作：" + action);
         }
@@ -533,13 +549,17 @@ public class OrderService {
         return orderDetail(orderId);
     }
 
-    /** 骑手送达：3 → 4（仅本人配送的订单）。 */
+    /** 骑手送达：3 → 4（仅本人配送的订单），单量与配送收入在同一事务内累加。 */
     @Transactional
     public Order.OrderView riderDeliver(long riderId, long orderId) {
         String now = LocalDateTime.now().format(FMT);
         if (!orderDao.riderDeliver(orderId, riderId, now)) {
             throw new BizException("无法送达：请确认已取餐且由你配送");
         }
+        // 与订单状态同事务：否则订单已置 4 而收入累加失败时，重试会被条件更新拒绝，
+        // 骑手单量/收入永久少记一笔且无补偿路径。
+        Order order = orderDao.findById(orderId).orElseThrow(() -> new BizException("订单不存在"));
+        riderDao.addCompleted(riderId, order.deliveryFee());
         return orderDetail(orderId);
     }
 
@@ -562,7 +582,8 @@ public class OrderService {
             throw new BizException("订单款项已结算或退款，不能重复确认");
         }
         User merchant = userDao.findById(store.ownerId()).orElseThrow(() -> new BizException("商户不存在"));
-        userDao.updateBalance(merchant.id(), round2(merchant.balance() + order.payAmount()));
+        // 原子加款：并发确认/退款下不会互相覆盖余额
+        userDao.addBalance(merchant.id(), order.payAmount());
         return orderDetail(orderId);
     }
 
@@ -613,7 +634,7 @@ public class OrderService {
         }
         String now = LocalDateTime.now().format(FMT);
         long reviewId = reviewDao.insert(orderId, order.storeId(), selectedGoodsId, userId, user.username(),
-                rating, content == null ? "" : content, toJson(tags == null ? List.of() : tags),
+                rating, requireMaxLength(content, 512, "评价内容"), toJson(tags == null ? List.of() : tags),
                 toJson(images == null ? List.of() : images), anonymous == 0 ? 0 : 1, now);
         // 评价后重算店铺与商品平均评分
         storeDao.updateRating(order.storeId(), round1(reviewDao.avgRating(order.storeId())));
@@ -690,7 +711,8 @@ public class OrderService {
     private boolean isExpired(String expireTime) {
         try {
             return LocalDateTime.parse(expireTime, FMT).isBefore(LocalDateTime.now());
-        } catch (DateTimeParseException e) {
+        } catch (Exception e) {
+            // 含 null：券过期时间缺失一律按已过期处理，不能抛 NPE 变成 500
             return true;
         }
     }
@@ -699,6 +721,22 @@ public class OrderService {
         if (order.status() != expected) {
             throw new BizException("订单状态不允许该操作（当前状态码 " + order.status() + "）");
         }
+    }
+
+    /** 条件状态更新失败 = 期间已被其它操作改变（用户取消/骑手接单），必须回滚整单。 */
+    private void requireStatusUpdated(boolean updated) {
+        if (!updated) {
+            throw new BizException("订单状态已变化，请刷新后重试");
+        }
+    }
+
+    /** 长度上限校验：列宽有限，超长会在写库时抛 500，这里提前给出可读的 400 提示。 */
+    private static String requireMaxLength(String value, int max, String field) {
+        String safe = value == null ? "" : value;
+        if (safe.length() > max) {
+            throw new BizException(field + "最多 " + max + " 个字符");
+        }
+        return safe;
     }
 
     /** 四端改造：订单一旦分配骑手，配送与送达只能由骑手完成，商户不得再操作。 */

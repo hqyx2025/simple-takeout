@@ -1636,7 +1636,9 @@ function toCoupon(c: ServerCoupon): Coupon {
     minOrder: c.threshold,
     startTime: c.createTime,
     endTime: c.expireTime,
-    used: c.status === 1,
+    // 券状态 0=可用 1=已使用 2=已过期失效：只有 0 才可用，
+    // 否则过期券会被列进「可用券」，选中后下单必被后端拒绝（提示还与券列表自相矛盾）
+    used: c.status !== 0,
     storeId: c.storeId,
     storeName: '',
     condition: `满${Math.round(c.threshold)}减${Math.round(c.amount)}`

@@ -92,6 +92,11 @@ export function logout(): void {
   AppStorage.setOrCreate<Address[]>('addressList', [])
   AppStorage.setOrCreate<Address | null>('currentAddress', null)
   AppStorage.setOrCreate<GeoPosition | null>('lastLocationPosition', null)
+  // 券与订单也必须清：否则换账号登录后会继承上一账号的已选优惠券，
+  // 带着别人的 couponId 提交，后端查不到该券 → 下单必然失败
+  AppStorage.setOrCreate<Coupon | null>('selectedCoupon', null)
+  AppStorage.setOrCreate<Coupon[]>('couponList', [])
+  AppStorage.setOrCreate<Order[]>('orderList', [])
   clearAllData()
   logInfo('Auth', '用户退出登录，已清除登录态与购物车')
 }
@@ -323,7 +328,7 @@ export function getMerchantTodayStats(merchantId: number): MerchantStatsData {
   const today = new Date()
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 
-  const todayOrders = orders.filter(o => o.createTime.startsWith(todayStr))
+  const todayOrders = orders.filter(o => (o.createTime ?? '').startsWith(todayStr))
   // 收入口径与大纲 21.4 一致：仅统计已结算订单（status=4 且 escrow=1，用户确认收货后）
   const completedOrders = todayOrders.filter(o => o.status === 4 && (o.escrowStatus ?? 0) === 1)
   const revenue = completedOrders.reduce((sum, o) => sum + o.payAmount, 0)
@@ -389,7 +394,7 @@ export function getMerchantTodayStatusOrders(merchantId: number): number[] {
   const orders: Order[] = getMerchantOrders(merchantId)
   const today = new Date()
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-  const todayOrders = orders.filter(o => o.createTime.startsWith(todayStr))
+  const todayOrders = orders.filter(o => (o.createTime ?? '').startsWith(todayStr))
   const dist: number[] = [0, 0, 0, 0, 0]
   todayOrders.forEach(o => {
     if (o.status === 1) {

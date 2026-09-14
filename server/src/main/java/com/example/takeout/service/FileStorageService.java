@@ -29,6 +29,10 @@ public class FileStorageService {
     /** 允许的图片扩展名。 */
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp", "gif");
 
+    /** 允许的 MIME 白名单：只放行四种图片，image/svg+xml 等可承载脚本的子类型一律拒绝。 */
+    private static final Set<String> ALLOWED_CONTENT_TYPES =
+            Set.of("image/jpeg", "image/png", "image/webp", "image/gif", "image/jpg");
+
     /** 单张图片大小上限 5MB。 */
     private static final long MAX_BYTES = 5L * 1024 * 1024;
 
@@ -65,9 +69,10 @@ public class FileStorageService {
         if (!ALLOWED_EXTENSIONS.contains(extension)) {
             throw new BizException("仅支持 jpg / png / webp / gif 格式的图片");
         }
-        String contentType = file.getContentType();
-        if (contentType != null && !contentType.toLowerCase(Locale.ROOT).startsWith("image/")) {
-            throw new BizException("仅支持上传图片文件");
+        // content-type 为 null 时原逻辑会整个跳过校验，这里改成必填 + 精确白名单
+        String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase(Locale.ROOT);
+        if (!ALLOWED_CONTENT_TYPES.contains(contentType)) {
+            throw new BizException("仅支持 jpg / png / webp / gif 格式的图片");
         }
         String day = LocalDate.now().format(DAY);
         String fileName = UUID.randomUUID().toString().replace("-", "") + "." + extension;

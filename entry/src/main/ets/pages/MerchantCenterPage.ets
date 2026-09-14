@@ -808,8 +808,13 @@ export struct MerchantCenterPage {
       promptAction.showToast({ message: '所选地址内容为空，请先完善地址信息' })
       return
     }
-    const fee = Number(this.newStoreDeliveryFee) || 3
-    const minOrder = Number(this.newStoreMinOrder) || 20
+    // 「|| 3」会把合法的 0（免配送费）当成空值改回 3；先判空再解析，并挡住非数字与负数
+    const fee = this.newStoreDeliveryFee.trim() === '' ? 3 : Number(this.newStoreDeliveryFee)
+    const minOrder = this.newStoreMinOrder.trim() === '' ? 20 : Number(this.newStoreMinOrder)
+    if (!Number.isFinite(fee) || !Number.isFinite(minOrder) || fee < 0 || minOrder < 0) {
+      promptAction.showToast({ message: '配送费和起送价必须是非负数字', duration: 1800 })
+      return
+    }
     this.creatingStore = true
     let latitude: number = selectedAddress.latitude ?? 0
     let longitude: number = selectedAddress.longitude ?? 0
@@ -874,8 +879,13 @@ export struct MerchantCenterPage {
       promptAction.showToast({ message: '店铺信息已变化，请刷新后重试', duration: 1800 })
       return
     }
-    const fee = Number(this.editStoreDeliveryFee) || 0
-    const minOrder = Number(this.editStoreMinOrder) || 0
+    // 留空表示「不修改」而不是「改成 0」：原写法空输入会把配送费静默改成 0
+    const fee = this.editStoreDeliveryFee.trim() === '' ? originalStore.deliveryFee : Number(this.editStoreDeliveryFee)
+    const minOrder = this.editStoreMinOrder.trim() === '' ? originalStore.minOrder : Number(this.editStoreMinOrder)
+    if (!Number.isFinite(fee) || !Number.isFinite(minOrder) || fee < 0 || minOrder < 0) {
+      promptAction.showToast({ message: '配送费和起送价必须是非负数字', duration: 1800 })
+      return
+    }
     this.savingStore = true
     const selectedAddress: Address | null = this.findMerchantAddress(this.editStoreAddressId)
     let address: string = ''

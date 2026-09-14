@@ -225,7 +225,7 @@ export struct MerchantOrdersPage {
               .fontColor(COLORS.TEXT_SECONDARY)
           }
           .width('100%')
-        }, (item: CartItem) => `${item.goods.id}`)
+        }, (item: CartItem) => `${item.goods.id}_${item.specId ?? 0}`)
       }
       .width('100%')
       .padding({ top: SPACING.XS, bottom: SPACING.XS })

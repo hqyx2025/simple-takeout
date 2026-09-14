@@ -34,6 +34,12 @@ public class AuthService {
         if (username == null || username.isBlank()) {
             throw new BizException("用户名不能为空");
         }
+        // users.username 为 VARCHAR(64)：超长会因列宽溢出变成 500；trim 后再落库，
+        // 否则「 张三」与「张三 」会成为两个显示相同的账号（资料修改路径已是 trim 口径）
+        String trimmedUsername = username.trim();
+        if (trimmedUsername.length() > 64) {
+            throw new BizException("用户名最多 64 个字符");
+        }
         if (phone == null || !phone.matches("1\\d{10}")) {
             throw new BizException("手机号格式不正确");
         }
@@ -48,7 +54,7 @@ public class AuthService {
         }
         double balance = role == 0 ? 20.0 : 0.0;
         String now = LocalDateTime.now().format(FMT);
-        return userDao.insert(username, phone, PasswordUtil.hash(password), role, balance, now);
+        return userDao.insert(trimmedUsername, phone, PasswordUtil.hash(password), role, balance, now);
     }
 
     /**

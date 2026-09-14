@@ -53,12 +53,6 @@ public class RiderService {
         return riderDao.findById(rider.id()).orElseThrow(() -> new BizException("骑手不存在"));
     }
 
-    /** 送达完成后累加骑手单量与配送收入（简化口径：按订单配送费计）。 */
-    public Rider recordDelivered(long riderId, double income) {
-        riderDao.addCompleted(riderId, income);
-        return riderDao.findById(riderId).orElseThrow(() -> new BizException("骑手不存在"));
-    }
-
     /** 管理端：骑手列表。 */
     public List<Rider> listAll() {
         return riderDao.listAll();

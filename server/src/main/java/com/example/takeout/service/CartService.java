@@ -74,7 +74,13 @@ public class CartService {
         Goods goods = requireAvailableGoods(goodsId);
         GoodsSpec spec = requireSpec(goods, specId);
         CartItemEntity existing = findEntity(userId, goodsId, specId);
-        int nextQuantity = existing == null ? quantity : existing.getQuantity() + quantity;
+        // 用 long 累加再判上限：int 直接相加会在「已加购 1 份 + 请求 2147483647 份」时溢出成负数，
+        // 而 validateStock 的 quantity > available 对负数不成立 → 负数落库、库存口径被绕过。
+        long next = existing == null ? quantity : (long) existing.getQuantity() + quantity;
+        if (next > Integer.MAX_VALUE) {
+            throw new BizException("商品数量超出上限");
+        }
+        int nextQuantity = (int) next;
         validateStock(goods, spec, nextQuantity);
         saveQuantity(userId, goodsId, specId, nextQuantity, existing);
         return list(userId);

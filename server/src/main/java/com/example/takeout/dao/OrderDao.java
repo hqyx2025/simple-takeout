@@ -70,13 +70,36 @@ public class OrderDao {
         return jdbc.query("SELECT * FROM orders WHERE id = ?", MAPPER, id).stream().findFirst();
     }
 
-    public void updateStatus(long id, int status, String timeField, String timeValue) {
-        jdbc.update("UPDATE orders SET status = ?, " + timeField + " = ? WHERE id = ?", status, timeValue, id);
+    /**
+     * 条件状态流转（状态机唯一入口）：仅当当前状态等于 fromStatus 时更新，返回 false 表示
+     * 状态已被其它操作改变（用户取消 / 骑手接单 / 并发流转），调用方必须回滚整单并提示刷新。
+     * timeField 只允许传常量列名（内部调用，不接受外部输入）。
+     */
+    public boolean updateStatusFrom(long id, int fromStatus, int toStatus, String timeField, String timeValue) {
+        return jdbc.update("UPDATE orders SET status = ?, " + timeField + " = ? WHERE id = ? AND status = ?",
+                toStatus, timeValue, id, fromStatus) == 1;
     }
 
-    /** 仅更新订单状态，不写时间字段（退款申请/审批回退使用）。 */
-    public void updateStatusOnly(long id, int status) {
-        jdbc.update("UPDATE orders SET status = ? WHERE id = ?", status, id);
+    /** 条件状态流转（不写时间字段），用于退款申请/审批回退等无时间语义的流转。 */
+    public boolean updateStatusOnlyFrom(long id, int fromStatus, int toStatus) {
+        return jdbc.update("UPDATE orders SET status = ? WHERE id = ? AND status = ?", toStatus, id, fromStatus) == 1;
+    }
+
+    /** 申请退款：4 已送达 + escrow 0 托管中 → 6 退款中（条件更新，防与确认收货/重复申请并发）。 */
+    public boolean markRefunding(long id) {
+        return jdbc.update("UPDATE orders SET status = 6 WHERE id = ? AND status = 4 AND escrow_status = 0", id) == 1;
+    }
+
+    /** 商户自行配送：2 → 3（条件更新同时锁 rider_id，防与骑手抢单并发）。 */
+    public boolean merchantDeliver(long id, String now) {
+        return jdbc.update("UPDATE orders SET status = 3, deliver_time = ? WHERE id = ? AND status = 2 AND rider_id = 0",
+                now, id) == 1;
+    }
+
+    /** 商户确认送达：3 → 4（仅未分配骑手的订单）。 */
+    public boolean merchantComplete(long id, String now) {
+        return jdbc.update("UPDATE orders SET status = 4, complete_time = ? WHERE id = ? AND status = 3 AND rider_id = 0",
+                now, id) == 1;
     }
 
     // ============ 待付款支付模型 ============

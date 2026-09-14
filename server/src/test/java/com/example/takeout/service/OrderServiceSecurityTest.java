@@ -102,7 +102,7 @@ class OrderServiceSecurityTest {
 
         service.confirmOrder(1, 8);
 
-        verify(userDao).updateBalance(2, 70.0);
+        verify(userDao).addBalance(2, 20.0);
         BizException error = assertThrows(BizException.class, () -> service.confirmOrder(1, 8));
         assertEquals("订单款项已结算或退款，不能重复确认", error.getMessage());
     }

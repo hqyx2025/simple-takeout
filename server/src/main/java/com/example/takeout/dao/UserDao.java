@@ -121,12 +121,21 @@ public class UserDao {
         return new User(id, username, "", phone, passwordHash, role, balance, now);
     }
 
-    public void updateBalance(long userId, double balance) {
-        jdbc.update("UPDATE users SET balance = ? WHERE id = ?", balance, userId);
-    }
-
+    /**
+     * 原子加款（退款/结算入账）：库内自增，避免「读余额→加→整值写回」在并发下丢更新。
+     */
     public void addBalance(long userId, double amount) {
         jdbc.update("UPDATE users SET balance = ROUND(balance + ?, 2) WHERE id = ?", amount, userId);
+    }
+
+    /**
+     * 原子扣款（支付扣余额）：条件更新，余额不足或并发扣款返回 false。
+     * 注意不要改回「读余额→减→setBalance」：同一用户两笔订单并发支付会各读到同一份旧余额，
+     * 后写入者覆盖前者，等于少扣一笔（实测可白吃一单）。
+     */
+    public boolean deductBalance(long userId, double amount) {
+        return jdbc.update("UPDATE users SET balance = ROUND(balance - ?, 2) WHERE id = ? AND balance >= ?",
+                amount, userId, amount) == 1;
     }
 
     public void updateProfile(long userId, String username, String phone) {
