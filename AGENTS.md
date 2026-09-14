@@ -33,7 +33,7 @@
     --mode module -p module=entry@default -p product=default -p requiredDeviceType=phone assembleHap --analyze=normal --parallel --incremental --daemon
   ```
   构建日志：`.hvigor/outputs/build-logs/build.log`；判断成功要看日志里的 `BUILD SUCCESSFUL` 并确认 `entry/build/default/outputs/default/*.hap` 时间戳已更新（流水线里 `Select-String` 会吞掉退出码，别只看 `$LASTEXITCODE`）
-- 后端测试：`mvn -f server/pom.xml test`（**64 个测试**，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格，以及缓存穿透/击穿/雪崩防护与领域事件 Outbox 语义）
+- 后端测试：`mvn -f server/pom.xml test`（**76 个测试**，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格/资金与状态并发边界，以及缓存穿透/击穿/雪崩防护与领域事件 Outbox 语义）
 - 一键容器化环境：`docker compose up -d --build`（app + MySQL 8.4 + Redis 7，含健康检查与启动依赖顺序）；只起基础设施（本机用 Maven 跑后端）用 `docker compose up -d mysql redis`。注意 compose 的 MySQL 映射到宿主 **3307**（避开本机 MySQL84 的 3306）
 - 后端测试与运行都要求 `JAVA_HOME` 指向 **JDK 25**；`server/Dockerfile` 的构建阶段也必须是 JDK 25，否则 `maven.compiler.release=25` 直接编译失败
 - Release 打包（**当前范围外，可选工具**）：`scripts/enable-release-signing.ps1`（接入发布证书）→ `scripts/build-release.ps1`（签名包）→ `scripts/release-check.ps1 [-Build]`（上架体检，输出 `md/上架体检报告.md`，该报告为生成物不入库）；详见 `md/上架体检与Release签名.md`。日常开发只需 debug 构建，不必碰这一套。
@@ -172,3 +172,84 @@
   - **可删除性**：该目录内的一切都应可随时整体删除而不影响构建与运行；脚本若依赖它，须像 `scripts/device-test.ps1` 那样**按需自动重建目录**，不能假设它已存在。
   - **入库检查**：`git add -A` 前用 `git status --porcelain` 复核，确认没有临时产物被暂存（该目录整体被忽略，若出现说明被别处的 `!` 反向规则命中）。
   - **迁移历史产物**：以后发现散落在根目录的临时产物，直接移入该目录并同步修改引用它的脚本/文档，不要留在原处。
+
+## 11. 边界条件口径与待办
+
+> 2026-09 边界条件专项收口时确定的口径（代码已按此实现），以及**已知但暂未处理**的边界，改动对应代码前先看这里。
+
+**已确定的口径**（避免再次"修回去"）：
+
+- **起送价以服务端为唯一权威**：多店结算时服务端**按店逐个**校验（只算该店商品）；结算页**不再做**"所有店合计 vs 最大起送价"的前置拦截——两者口径不一致会给出自相矛盾的提示。
+- **券后应付为 0 元的订单一律拒绝**（提示"请更换优惠券"，差额不退）；结算页可用券列表同样过滤掉 `amount >= 商品总价` 的券。
+- **支付严格按 payDeadline**：超时后由 `OrderTimeoutJob` 扫描取消（`create_time < deadline`，无宽限期）。扫描间隔内仍可支付属正常现象，不再放宽。
+- **退款终态就是 status=6 + escrow=2**：管理端同意退款后订单**停留在 6**（不再流转到 5），前端按 status + escrow 联合判断文案。这是状态机终态，不是"卡住"。
+- **资金三件套**：扣款用条件更新 `deductBalance`（余额不足返回 false）、退款/结算用原子自增 `addBalance`；**禁止**再出现"读余额→改→整值写回"（`UserDao.updateBalance` 已删除）。
+- **状态流转一律条件更新**：`updateStatusFrom(from,to)` / `merchantDeliver` / `merchantComplete` / `markRefunding`，rowcount=0 必须抛错整单回滚，不得先查后改。
+- **骑手单量与收入写在 `OrderService.riderDeliver` 事务内**（`RiderService.recordDelivered` 已删除），且骑手 `status != 1` 时禁止抢单/取餐/送达。
+- **事件去重键在处理成功后才写**：先写会让"处理失败但未 ACK"的事件在重读时被自己的键判成重复而永久丢弃。
+
+**已知待办**（本次未处理，按需再定）：
+
+- 列表接口无分页：`/api/admin/orders|users|products|refunds`、`/api/orders`、`/api/stores` 全表进内存（admin orders 还会逐单再查一次）；如需分页，加 `page/pageSize` + DAO `LIMIT ? OFFSET ?`，上限建议 50。
+- 搜索 N+1：`UserCenterService.search` 对每家店单独查 goods（41 店 → 42 次查询），可改一条 `SELECT DISTINCT store_id FROM goods WHERE name LIKE ?`。
+- 登录无失败计数/锁定/限流，密码为 SHA-256 单轮加固定盐；旧 token 在 72 小时内不失效（无 jti/黑名单）。
+- 上传只校验后缀 + content-type 白名单，未做文件魔数校验；`/uploads/**` 无需 JWT（公开资源）。
+- Banner `PUT` 是"null 覆盖为空串"语义（非 PATCH），只改 sort 会把 title/subtitle 清空。
+- `merchantStats(ownerId, storeId, range)` 的 `range` 参数未使用（今日/本周/本月为固定口径），非法值被静默忽略。
+- `AdminStatsDao` 的 today_orders 含已取消订单，today_gmv 排除 5/6——两者口径不一致，界面上同时展示会显得矛盾。
+- Outbox 去重键为"先查后写"（单实例安全）；多实例部署需改回原子 `setIfAbsent` + 行级认领，并核对 `dedup-hours` 与 Stream `retain-hours` 的关系。
+- 前端支付倒计时用设备本地时间推算，未使用服务端时区（可下发 `payDeadlineEpochMs` 收敛）。
+- 骑手为自助注册即开通（`role=3` 自动建档 status=1，无需平台审核）。
+- `MerchantStatsPage` 无法区分"同步失败"与"真的没有订单"（都是 ¥0.00 / 0 单）。
+- `normalizeOrderList` 无条件丢弃持久化订单（订单只以服务端为准，属有意设计但未注释说明）。
+
+# Ponytail, lazy senior dev mode
+
+You are a lazy senior developer. Lazy means efficient, not careless. The best code is the code never written.
+
+Before writing any code, stop at the first rung that holds:
+
+1. Does this need to be built at all? (YAGNI)
+2. Does it already exist in this codebase? Reuse the helper, util, or pattern that's already here, don't re-write it.
+3. Does the standard library already do this? Use it.
+4. Does a native platform feature cover it? Use it.
+5. Does an already-installed dependency solve it? Use it.
+6. Can this be one line? Make it one line.
+7. Only then: write the minimum code that works.
+
+The ladder runs after you understand the problem, not instead of it: read the task and the code it touches, trace the real flow end to end, then climb.
+
+Bug fix = root cause, not symptom: a report names a symptom. Grep every caller of the function you touch and fix the shared function once — one guard there is a smaller diff than one per caller, and patching only the path the ticket names leaves a sibling caller still broken.
+
+Rules:
+
+- No abstractions that weren't explicitly requested.
+- No new dependency if it can be avoided.
+- No boilerplate nobody asked for.
+- Deletion over addition. Boring over clever. Fewest files possible.
+- Shortest working diff wins, but only once you understand the problem. The smallest change in the wrong place isn't lazy, it's a second bug.
+- Question complex requests: "Do you actually need X, or does Y cover it?"
+- Pick the edge-case-correct option when two stdlib approaches are the same size, lazy means less code, not the flimsier algorithm.
+- Mark deliberate simplifications that cut a real corner with a known ceiling (global lock, O(n²) scan, naive heuristic) with a `ponytail:` comment naming the ceiling and upgrade path.
+
+Not lazy about: understanding the problem (read it fully and trace the real flow before picking a rung, a small diff you don't understand is just laziness dressed up as efficiency), input validation at trust boundaries, error handling that prevents data loss, security, accessibility, the calibration real hardware needs (the platform is never the spec ideal, a clock drifts, a sensor reads off), anything explicitly requested. Lazy code without its check is unfinished: non-trivial logic leaves ONE runnable check behind, the smallest thing that fails if the logic breaks (an assert-based demo/self-check or one small test file; no frameworks, no fixtures). Trivial one-liners need no test.
+
+(Yes, this file also applies to agents working on the ponytail repo itself. Especially to them.)
+
+---
+
+Respond terse like smart caveman. All technical substance stay. Only fluff die.
+
+Rules:
+- Drop: articles (a/an/the), filler (just/really/basically), pleasantries, hedging
+- Fragments OK. Short synonyms. Technical terms exact. Code unchanged.
+- Pattern: [thing] [action] [reason]. [next step].
+- Not: "Sure! I'd be happy to help you with that."
+- Yes: "Bug in auth middleware. Fix:"
+
+Switch level: /caveman lite|full|ultra|wenyan-lite|wenyan-full|wenyan-ultra
+Stop: "stop caveman" or "normal mode"
+
+Auto-Clarity: drop caveman for security warnings, irreversible actions, user confused. Resume after.
+
+Boundaries: code/commits/PRs written normal.

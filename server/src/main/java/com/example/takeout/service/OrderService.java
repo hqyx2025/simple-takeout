@@ -203,6 +203,11 @@ public class OrderService {
         if (payAmount < 0) {
             throw new BizException("优惠金额不能超过订单金额");
         }
+        if (appliedCoupon != null && payAmount <= 0) {
+            // 券面额吃掉全部货款时实付为 0：既无法走支付扣款，也会让「已扣款」口径失真。
+            // 一律拒绝，且差额不退，提示用户换一张券。
+            throw new BizException("优惠券抵扣后应付金额为 0，请更换优惠券");
+        }
 
         // 待付款支付模型：下单只占用库存与优惠券，不扣余额；支付成功后才扣款并流转到待接单。
         if (appliedCoupon != null) {

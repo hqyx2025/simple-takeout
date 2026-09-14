@@ -16,6 +16,7 @@ import com.example.takeout.dao.UserDao;
 import com.example.takeout.mapper.CartItemMapper;
 import com.example.takeout.model.Address;
 import com.example.takeout.model.CartItemEntity;
+import com.example.takeout.model.Coupon;
 import com.example.takeout.model.Goods;
 import com.example.takeout.model.GoodsSpec;
 import com.example.takeout.model.Order;
@@ -224,6 +225,22 @@ class OrderBoundaryTest {
                 List.of(item()), ADDRESS_ID, 0, "备".repeat(300), List.of()));
 
         assertEquals("订单备注最多 255 个字符", error.getMessage());
+        verify(orderDao, never()).insert(any(Order.class));
+    }
+
+    @Test
+    void createOrderRejectsCouponThatCoversTheWholeOrder() {
+        stubMinimalOrderContext();
+        // 门槛 0 元、面额 20 元：券后应付 0 元（货款 10 + 配送费 3 - 20 < 0 已由负值校验拦住，
+        // 这里取面额恰好等于应付的临界值）
+        when(couponDao.listByUser(USER_ID)).thenReturn(List.of(
+                new Coupon(66, USER_ID, 0, "测试券", 0, 13, 0, "2030-01-01 00:00:00", "", "2026-08-16 10:00:00")));
+
+        BizException error = assertThrows(BizException.class, () -> service.createOrder(USER_ID, STORE_ID,
+                List.of(item()), ADDRESS_ID, 66, "", List.of()));
+
+        assertEquals("优惠券抵扣后应付金额为 0，请更换优惠券", error.getMessage());
+        verify(couponDao, never()).markUsed(anyLong());
         verify(orderDao, never()).insert(any(Order.class));
     }
 

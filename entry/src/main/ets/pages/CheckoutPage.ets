@@ -148,7 +148,9 @@ export struct CheckoutPage {
   private getAvailableCoupons(): Coupon[] {
     const coupons: Coupon[] = AppStorage.get<Coupon[]>('couponList') || []
     const total: number = this.getGoodsTotalPrice()
-    return coupons.filter((c: Coupon) => !c.used && c.minOrder <= total)
+    // 面额吃掉全部货款（券后应付 0 元）的券服务端会拒绝，这里直接不列出来，
+    // 免得用户选中后才被「请更换优惠券」拦下
+    return coupons.filter((c: Coupon) => !c.used && c.minOrder <= total && c.amount < total)
   }
 
   // ============ 时间格式化 YYYY-MM-DD HH:mm:ss ============
@@ -183,16 +185,9 @@ export struct CheckoutPage {
       promptAction.showToast({ message: '订单正在提交，请稍候', duration: 1500 })
       return
     }
-    const checkoutTotal: number = this.getGoodsTotalPrice()
-    const checkoutMinOrder: number = this.getCheckoutMinOrder()
-    if (checkoutTotal < checkoutMinOrder) {
-      const shortage: number = checkoutMinOrder - checkoutTotal
-      promptAction.showToast({
-        message: `未达到本次订单起送价，还差¥${shortage.toFixed(2)}`,
-        duration: 2200
-      })
-      return
-    }
+    // 起送价以服务端下单校验为唯一权威：多店结算时服务端按店逐个判断，
+    // 前端「所有店合计 vs 最大起送价」的合计口径与之不一致，这里不再前置拦截，
+    // 避免出现「页面显示金额够、提交却被拒」的自相矛盾提示
     if (this.currentAddress === null) {
       promptAction.showToast({ message: '请先添加收货地址' })
       return
