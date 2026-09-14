@@ -64,6 +64,7 @@ public class OrderService {
     private final RiderDao riderDao;
     private final GoodsSpecDao specDao;
     private final SeckillDao seckillDao;
+    private final HotDataCacheService cache;
 
     /** 待付款订单的支付时限（分钟），超时由定时任务自动取消。 */
     @Value("${takeout.order.pay-timeout-minutes:15}")
@@ -72,7 +73,7 @@ public class OrderService {
     public OrderService(OrderDao orderDao, StoreDao storeDao, GoodsDao goodsDao, AddressDao addressDao,
                         CouponDao couponDao, ReviewDao reviewDao, UserDao userDao, RefundDao refundDao,
                         ObjectMapper objectMapper, CartItemMapper cartItemMapper, RiderDao riderDao,
-                        GoodsSpecDao specDao, SeckillDao seckillDao) {
+                        GoodsSpecDao specDao, SeckillDao seckillDao, HotDataCacheService cache) {
         this.orderDao = orderDao;
         this.storeDao = storeDao;
         this.goodsDao = goodsDao;
@@ -86,6 +87,18 @@ public class OrderService {
         this.riderDao = riderDao;
         this.specDao = specDao;
         this.seckillDao = seckillDao;
+        this.cache = cache;
+    }
+
+    /**
+     * 库存/秒杀名额变化后的展示缓存失效。
+     * 菜品库存与秒杀 sold 会直接影响店铺列表、店内菜品、特价菜、热销榜与秒杀专区的展示，
+     * 因此这些聚合视图统一失效，避免用户看到「有货/有名额」的过期信息而下单失败。
+     */
+    private void invalidateStockDependentCache() {
+        for (String pattern : HotDataCacheService.Keys.STOCK_DEPENDENT_PATTERNS) {
+            cache.evictByPattern(pattern);
+        }
     }
 
     /** 创建订单：从用户余额扣款后进入平台托管，状态=1 待接单。 */
@@ -214,6 +227,8 @@ public class OrderService {
                 appliedCoupon == null ? 0 : appliedCoupon.id());
         long id = orderDao.insert(order);
         storeDao.updateMonthlySales(storeId, 1);
+        // 下单扣减了库存与秒杀名额，且店铺月销量变化会影响榜单，需失效相关展示缓存
+        invalidateStockDependentCache();
         return orderDetail(id);
     }
 
@@ -421,6 +436,8 @@ public class OrderService {
                 seckillDao.restoreQuota(item.seckillId(), item.quantity());
             }
         }
+        // 库存与秒杀名额已归还，让展示层重新读取真实余量
+        invalidateStockDependentCache();
     }
 
     /**

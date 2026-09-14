@@ -14,7 +14,6 @@ import com.example.takeout.model.SpecialGoods;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
-
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
@@ -35,18 +34,24 @@ public class StoreService {
     private final GoodsSpecDao specDao;
     private final SeckillDao seckillDao;
     private final ObjectMapper objectMapper;
+    private final HotDataCacheService cache;
 
     public StoreService(StoreDao storeDao, GoodsDao goodsDao, GoodsSpecDao specDao, SeckillDao seckillDao,
-                        ObjectMapper objectMapper) {
+                        ObjectMapper objectMapper, HotDataCacheService cache) {
         this.storeDao = storeDao;
         this.goodsDao = goodsDao;
         this.specDao = specDao;
         this.seckillDao = seckillDao;
         this.objectMapper = objectMapper;
+        this.cache = cache;
     }
 
     public List<Category> listCategories() {
-        return storeDao.listCategories();
+        // 热点：首页分类导航，全量用户高频读取，TTL+抖动防雪崩
+        return cache.get(HotDataCacheService.Keys.CATEGORIES,
+                new TypeReference<List<Category>>() {
+                },
+                storeDao::listCategories);
     }
 
     public List<Store.StoreView> listStores(Integer categoryId) {
@@ -60,10 +65,15 @@ public class StoreService {
         if (categoryId != null && categoryId > 0 && !storeDao.categoryExists(categoryId)) {
             throw new BizException(404, "分类不存在");
         }
-        List<Store> stores = categoryId == null || categoryId == 0
-                ? storeDao.listAll()
-                : storeDao.listByCategory(categoryId);
-        return stores.stream().map(store -> toView(store, latitude, longitude)).toList();
+        return cache.get(HotDataCacheService.Keys.storeList(categoryId, latitude, longitude),
+                new TypeReference<List<Store.StoreView>>() {
+                },
+                () -> {
+                    List<Store> stores = categoryId == null || categoryId == 0
+                            ? storeDao.listAll()
+                            : storeDao.listByCategory(categoryId);
+                    return stores.stream().map(store -> toView(store, latitude, longitude)).toList();
+                });
     }
 
     public List<Store.StoreView> recommendedStores(double maxDistanceKm, int limit) {
@@ -78,24 +88,44 @@ public class StoreService {
         if (limit <= 0 || limit > 50) {
             throw new BizException("推荐店铺数量必须在 1 到 50 之间");
         }
-        return storeDao.listRecommended().stream()
-                .map(store -> store.withDistance(latitude, longitude))
-                .filter(store -> parseDistance(store.distance()) <= maxDistanceKm)
-                .sorted(Comparator.comparingDouble((Store store) -> parseDistance(store.distance()))
-                        .thenComparing(Comparator.comparingDouble(Store::rating).reversed()))
-                .limit(limit)
-                .map(this::toView)
-                .toList();
+        return cache.get(HotDataCacheService.Keys.recommendedStores(maxDistanceKm, limit, latitude, longitude),
+                new TypeReference<List<Store.StoreView>>() {
+                },
+                () -> storeDao.listRecommended().stream()
+                        .map(store -> store.withDistance(latitude, longitude))
+                        .filter(store -> parseDistance(store.distance()) <= maxDistanceKm)
+                        .sorted(Comparator.comparingDouble((Store store) -> parseDistance(store.distance()))
+                                .thenComparing(Comparator.comparingDouble(Store::rating).reversed()))
+                        .limit(limit)
+                        .map(this::toView)
+                        .toList());
     }
 
     public Store.StoreView storeDetail(long id) {
-        Store store = storeDao.findById(id).orElseThrow(() -> new BizException("店铺不存在"));
-        return toView(store);
+        // 热点：店铺详情页高频访问；店铺不存在时由缓存写入空值占位防穿透
+        return cache.get(HotDataCacheService.Keys.storeDetail(id),
+                new TypeReference<Store.StoreView>() {
+                },
+                () -> storeDao.findById(id).map(this::toView).orElse(null));
     }
 
     public List<Goods> listGoods(long storeId) {
         storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
-        return goodsDao.listByStore(storeId);
+        return cache.get(HotDataCacheService.Keys.storeGoods(storeId),
+                new TypeReference<List<Goods>>() {
+                },
+                () -> goodsDao.listByStore(storeId));
+    }
+
+    /**
+     * 店铺/商品数据变更后的缓存失效。
+     * 店铺名、距离、起送价、菜品价格库存等会同时影响店铺列表、榜单、秒杀与特价等
+     * 多个聚合视图，因此按模式整体失效，避免遗漏造成长期脏读。
+     */
+    private void invalidateStoreAndGoodsCache() {
+        for (String pattern : HotDataCacheService.Keys.STORE_GOODS_PATTERNS) {
+            cache.evictByPattern(pattern);
+        }
     }
 
     public List<SpecialGoods> listSpecialGoods(int limit) {
@@ -106,7 +136,10 @@ public class StoreService {
         if (limit <= 0 || limit > 50) {
             throw new BizException("特价团购商品数量必须在 1 到 50 之间");
         }
-        return withDistance(goodsDao.listSpecialGoods(limit), latitude, longitude);
+        return cache.get(HotDataCacheService.Keys.specialGoods(limit, latitude, longitude),
+                new TypeReference<List<SpecialGoods>>() {
+                },
+                () -> withDistance(goodsDao.listSpecialGoods(limit), latitude, longitude));
     }
 
     // ============ 营销：榜单 / 限时秒杀 / 凑单 ============
@@ -114,34 +147,48 @@ public class StoreService {
     /** 店铺榜：按累计月销量与评分排序（仅营业店铺）。 */
     public List<Store.StoreView> rankStores(int limit, Double latitude, Double longitude) {
         requireRankLimit(limit);
-        return storeDao.listAll().stream()
-                .filter(store -> store.status() == 1)
-                .sorted(Comparator.comparingInt(Store::monthlySales).reversed()
-                        .thenComparing(Comparator.comparingDouble(Store::rating).reversed()))
-                .limit(limit)
-                .map(store -> toView(store, latitude, longitude))
-                .toList();
+        return cache.get(HotDataCacheService.Keys.rankStores(limit, latitude, longitude),
+                new TypeReference<List<Store.StoreView>>() {
+                },
+                () -> storeDao.listAll().stream()
+                        .filter(store -> store.status() == 1)
+                        .sorted(Comparator.comparingInt(Store::monthlySales).reversed()
+                                .thenComparing(Comparator.comparingDouble(Store::rating).reversed()))
+                        .limit(limit)
+                        .map(store -> toView(store, latitude, longitude))
+                        .toList());
     }
 
     /** 菜品榜（热销榜）：跨店铺按累计销量排序。 */
     public List<SpecialGoods> rankGoods(int limit, Double latitude, Double longitude) {
         requireRankLimit(limit);
-        return withDistance(goodsDao.listTopGoods(limit), latitude, longitude);
+        return cache.get(HotDataCacheService.Keys.rankGoods(limit, latitude, longitude),
+                new TypeReference<List<SpecialGoods>>() {
+                },
+                () -> withDistance(goodsDao.listTopGoods(limit), latitude, longitude));
     }
 
-    /** 首页秒杀专区：进行中且仍有名额的秒杀。 */
+    /**
+     * 首页秒杀专区：进行中且仍有名额的秒杀。
+     * 秒杀名额（sold）会随下单变化，因此 TTL 取较短值由下单/取消时显式失效兜底。
+     */
     public List<Seckill.SeckillView> listSeckills(int limit, Double latitude, Double longitude) {
         if (limit <= 0 || limit > 50) {
             throw new BizException("秒杀商品数量必须在 1 到 50 之间");
         }
-        String now = LocalDateTime.now().format(FMT);
-        return seckillDao.listActiveViews(limit, now).stream()
-                .map(view -> new Seckill.SeckillView(view.id(), view.goodsId(), view.goodsName(), view.image(),
-                        view.originalPrice(), view.price(), view.quota(), view.sold(), view.startTime(),
-                        view.endTime(), view.storeId(), view.storeName(),
-                        normalizeDistance(view.storeId(), view.storeDistance(), latitude, longitude),
-                        view.remainSeconds()))
-                .toList();
+        return cache.get(HotDataCacheService.Keys.seckills(limit, latitude, longitude),
+                new TypeReference<List<Seckill.SeckillView>>() {
+                },
+                () -> {
+                    String now = LocalDateTime.now().format(FMT);
+                    return seckillDao.listActiveViews(limit, now).stream()
+                            .map(view -> new Seckill.SeckillView(view.id(), view.goodsId(), view.goodsName(),
+                                    view.image(), view.originalPrice(), view.price(), view.quota(), view.sold(),
+                                    view.startTime(), view.endTime(), view.storeId(), view.storeName(),
+                                    normalizeDistance(view.storeId(), view.storeDistance(), latitude, longitude),
+                                    view.remainSeconds()))
+                            .toList();
+                });
     }
 
     /**
@@ -220,6 +267,7 @@ public class StoreService {
                 "0.0km", "[\"新店特惠\"]", notice == null ? "" : notice,
                 normalizedAddress, latitude, longitude, categoryId, "[" + categoryId + "]", ownerId, 1, 0, now);
         long id = storeDao.insert(store);
+        invalidateStoreAndGoodsCache();
         return storeDetail(id);
     }
 
@@ -241,6 +289,7 @@ public class StoreService {
                 store.categoryId(), store.categoryIds(), store.ownerId(),
                 patch.status() < 0 ? store.status() : patch.status(), store.recommended(), store.createTime());
         storeDao.update(updated);
+        invalidateStoreAndGoodsCache();
         return storeDetail(storeId);
     }
 
@@ -256,6 +305,7 @@ public class StoreService {
                 input.tag() == null ? "" : input.tag(), input.special(), 1, now);
         long id = goodsDao.insert(goods);
         applySpecs(id, input.specs());
+        invalidateStoreAndGoodsCache();
         return goodsDao.findById(id).orElseThrow(() -> new BizException("商品创建失败"));
     }
 
@@ -277,6 +327,7 @@ public class StoreService {
                 goods.version(), goods.sales(), goods.rating(), input.tag() == null ? "" : input.tag(),
                 input.special(), input.status() < 0 ? goods.status() : input.status(), goods.createTime());
         goodsDao.update(updated);
+        invalidateStoreAndGoodsCache();
         return goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品更新失败"));
     }
 
@@ -294,6 +345,7 @@ public class StoreService {
         Goods goods = goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品不存在"));
         requireOwned(ownerId, goods.storeId());
         applySpecs(goodsId, specs == null ? List.of() : specs);
+        invalidateStoreAndGoodsCache();
         return goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品更新失败"));
     }
 
@@ -359,6 +411,7 @@ public class StoreService {
             throw new BizException("多规格菜品请分别调整各规格库存");
         }
         goodsDao.updateStock(goodsId, stock);
+        invalidateStoreAndGoodsCache();
         return goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品更新失败"));
     }
 
@@ -371,7 +424,10 @@ public class StoreService {
     /** 用户端：店铺详情展示的店内商户分类。 */
     public List<Category> publicMerchantCategories(long storeId) {
         Store store = storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
-        return storeDao.listMerchantCategories(store.ownerId());
+        return cache.get(HotDataCacheService.Keys.storeCategories(storeId),
+                new TypeReference<List<Category>>() {
+                },
+                () -> storeDao.listMerchantCategories(store.ownerId()));
     }
 
     public Category createMerchantCategory(long ownerId, String name, int sort) {
@@ -380,6 +436,7 @@ public class StoreService {
             throw new BizException("分类名称已存在");
         }
         long id = storeDao.insertMerchantCategory(ownerId, normalized, Math.max(sort, 0));
+        invalidateStoreAndGoodsCache();
         return storeDao.findCategoryById(id).orElseThrow(() -> new BizException("分类创建失败"));
     }
 
@@ -390,6 +447,7 @@ public class StoreService {
             throw new BizException("分类名称已存在");
         }
         storeDao.updateMerchantCategory(categoryId, normalized, Math.max(sort, 0));
+        invalidateStoreAndGoodsCache();
         return storeDao.findCategoryById(categoryId).orElseThrow(() -> new BizException("分类更新失败"));
     }
 
@@ -399,6 +457,7 @@ public class StoreService {
             throw new BizException("该分类下仍有商品，请先调整商品分类后再删除");
         }
         storeDao.deleteMerchantCategory(categoryId);
+        invalidateStoreAndGoodsCache();
     }
 
     private void requireMerchantCategoryOwned(long ownerId, long categoryId) {
@@ -417,6 +476,7 @@ public class StoreService {
         Goods goods = goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品不存在"));
         requireOwned(ownerId, goods.storeId());
         goodsDao.delete(goodsId);
+        invalidateStoreAndGoodsCache();
     }
 
     private Store requireOwned(long ownerId, long storeId) {

@@ -43,6 +43,12 @@
       <version>3.5.12</version>
     </dependency>
 
+    <!-- Redis：热点数据缓存（首页店铺/分类/商品/秒杀/Banner/公告等） -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-redis</artifactId>
+    </dependency>
+
     <!-- MySQL 驱动 -->
     <dependency>
       <groupId>com.mysql</groupId>

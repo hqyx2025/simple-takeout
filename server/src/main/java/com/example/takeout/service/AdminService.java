@@ -33,9 +33,11 @@ public class AdminService {
     private final RefundDao refundDao;
     private final OrderService orderService;
     private final AdminStatsDao adminStatsDao;
+    private final HotDataCacheService cache;
 
     public AdminService(StoreDao storeDao, OrderDao orderDao, UserDao userDao, GoodsDao goodsDao,
-                        RefundDao refundDao, OrderService orderService, AdminStatsDao adminStatsDao) {
+                        RefundDao refundDao, OrderService orderService, AdminStatsDao adminStatsDao,
+                        HotDataCacheService cache) {
         this.storeDao = storeDao;
         this.orderDao = orderDao;
         this.userDao = userDao;
@@ -43,6 +45,17 @@ public class AdminService {
         this.refundDao = refundDao;
         this.orderService = orderService;
         this.adminStatsDao = adminStatsDao;
+        this.cache = cache;
+    }
+
+    /**
+     * 平台分类、店铺状态/推荐位、商品上下架与删除都会改变用户端展示结果，
+     * 统一失效店铺与商品相关缓存，避免首页长时间显示过期数据。
+     */
+    private void invalidateStoreAndGoodsCache() {
+        for (String pattern : HotDataCacheService.Keys.STORE_GOODS_PATTERNS) {
+            cache.evictByPattern(pattern);
+        }
     }
 
     public List<Category> categories() {
@@ -57,6 +70,7 @@ public class AdminService {
         long id = storeDao.insertCategory(normalizedName,
                 icon == null ? "" : icon.trim(),
                 color == null || color.isBlank() ? "#FF6B35" : color.trim());
+        invalidateStoreAndGoodsCache();
         return storeDao.findCategoryById(id).orElseThrow(() -> new BizException("分类创建失败"));
     }
 
@@ -68,6 +82,7 @@ public class AdminService {
         }
         storeDao.updateCategory(id, normalizedName, icon == null ? "" : icon.trim(),
                 color == null || color.isBlank() ? "#FF6B35" : color.trim());
+        invalidateStoreAndGoodsCache();
         return storeDao.findCategoryById(id).orElseThrow(() -> new BizException("分类更新失败"));
     }
 
@@ -77,6 +92,7 @@ public class AdminService {
             throw new BizException("该分类仍有关联店铺，不能删除");
         }
         storeDao.deleteCategory(id);
+        invalidateStoreAndGoodsCache();
     }
 
     public List<Store.StoreView> stores() {
@@ -89,6 +105,7 @@ public class AdminService {
         }
         storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
         storeDao.updateStatus(storeId, status);
+        invalidateStoreAndGoodsCache();
     }
 
     public void updateStoreRecommended(long storeId, int recommended) {
@@ -97,6 +114,7 @@ public class AdminService {
         }
         storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
         storeDao.updateRecommended(storeId, recommended);
+        invalidateStoreAndGoodsCache();
     }
 
     public List<Order.OrderView> orders() {
@@ -141,11 +159,13 @@ public class AdminService {
         }
         goodsDao.findById(id).orElseThrow(() -> new BizException("商品不存在"));
         goodsDao.updateStatus(id, status);
+        invalidateStoreAndGoodsCache();
     }
 
     public void deleteProduct(long id) {
         goodsDao.findById(id).orElseThrow(() -> new BizException("商品不存在"));
         goodsDao.delete(id);
+        invalidateStoreAndGoodsCache();
     }
 
     public AdminStatistics statistics(int hotLimit) {
@@ -236,6 +256,8 @@ public class AdminService {
         User user = userDao.findById(order.userId()).orElseThrow(() -> new BizException("用户不存在"));
         userDao.updateBalance(user.id(), round2(user.balance() + order.payAmount()));
         orderDao.updateStatus(orderId, 5, "complete_time", now());
+        // 已回滚库存，用户端展示需重新读取真实余量
+        invalidateStoreAndGoodsCache();
         return orderService.orderDetail(orderId);
     }
 
@@ -264,6 +286,8 @@ public class AdminService {
             goodsDao.restoreStock(item.goodsId(), item.quantity());
         }
         refundDao.updateStatus(refundId, "REFUNDED", now(), "");
+        // 同意退款已回滚库存，失效相关展示缓存
+        invalidateStoreAndGoodsCache();
         return refundDao.findById(refundId).orElseThrow(() -> new BizException("退款处理失败"));
     }
 
