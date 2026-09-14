@@ -25,6 +25,7 @@ import com.example.takeout.model.Rider;
 import com.example.takeout.model.Seckill;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.User;
+import com.example.takeout.service.mq.DomainEventPublisher;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,6 +40,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -65,6 +67,7 @@ public class OrderService {
     private final GoodsSpecDao specDao;
     private final SeckillDao seckillDao;
     private final HotDataCacheService cache;
+    private final DomainEventPublisher eventPublisher;
 
     /** 待付款订单的支付时限（分钟），超时由定时任务自动取消。 */
     @Value("${takeout.order.pay-timeout-minutes:15}")
@@ -73,7 +76,8 @@ public class OrderService {
     public OrderService(OrderDao orderDao, StoreDao storeDao, GoodsDao goodsDao, AddressDao addressDao,
                         CouponDao couponDao, ReviewDao reviewDao, UserDao userDao, RefundDao refundDao,
                         ObjectMapper objectMapper, CartItemMapper cartItemMapper, RiderDao riderDao,
-                        GoodsSpecDao specDao, SeckillDao seckillDao, HotDataCacheService cache) {
+                        GoodsSpecDao specDao, SeckillDao seckillDao, HotDataCacheService cache,
+                        DomainEventPublisher eventPublisher) {
         this.orderDao = orderDao;
         this.storeDao = storeDao;
         this.goodsDao = goodsDao;
@@ -88,6 +92,7 @@ public class OrderService {
         this.specDao = specDao;
         this.seckillDao = seckillDao;
         this.cache = cache;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -229,6 +234,9 @@ public class OrderService {
         storeDao.updateMonthlySales(storeId, 1);
         // 下单扣减了库存与秒杀名额，且店铺月销量变化会影响榜单，需失效相关展示缓存
         invalidateStockDependentCache();
+        // 领域事件：与订单同事务写入 Outbox，提交后由中继投递到 Redis Stream
+        eventPublisher.publish(DomainEventPublisher.ORDER_CREATED, id,
+                Map.of("userId", userId, "storeId", storeId, "payAmount", payAmount));
         return orderDetail(id);
     }
 
@@ -258,6 +266,9 @@ public class OrderService {
             throw new BizException("订单状态已变化，请刷新后重试");
         }
         userDao.updateBalance(userId, round2(user.balance() - order.payAmount()));
+        // 支付成功后才发出事件：条件更新失败会抛异常回滚，不会产生「假支付」事件
+        eventPublisher.publish(DomainEventPublisher.ORDER_PAID, orderId,
+                Map.of("userId", userId, "payAmount", order.payAmount()));
         return orderDetail(orderId);
     }
 
@@ -286,6 +297,8 @@ public class OrderService {
         if (order.couponId() > 0) {
             couponDao.release(order.couponId(), LocalDateTime.now().format(FMT));
         }
+        eventPublisher.publish(DomainEventPublisher.ORDER_CANCELLED, order.id(),
+                Map.of("userId", order.userId(), "reason", reason == null ? "" : reason));
         return true;
     }
 
@@ -392,6 +405,8 @@ public class OrderService {
         User user = userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
         userDao.updateBalance(userId, round2(user.balance() + order.payAmount()));
         orderDao.updateStatus(orderId, 5, "complete_time", LocalDateTime.now().format(FMT));
+        eventPublisher.publish(DomainEventPublisher.ORDER_CANCELLED, orderId,
+                Map.of("userId", userId, "reason", "用户取消已支付订单，已即时退款"));
         return orderDetail(orderId);
     }
 

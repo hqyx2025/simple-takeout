@@ -17,8 +17,11 @@
 | 前端 | HarmonyOS NEXT ArkTS（严格模式）+ ArkUI | SDK 6.1.1(24)，无第三方 UI 依赖，AppStorage + Preferences 持久化 |
 | 后端 | Spring Boot 3.5.4 + Java 25 | JWT 认证（`Authorization: Bearer`）、JdbcTemplate（**非 MyBatis-Plus**）、Lombok |
 | 数据库 | MySQL 8.4（本机服务名 MySQL84） | 库名 `takeout`，`createDatabaseIfNotExist=true` 自动建库，schema.sql 启动自动执行 |
+| 缓存 | **Redis 7（已落地）** | 热点浏览数据缓存（`HotDataCacheService`），防穿透/击穿/雪崩；Redis 故障自动回源数据库 |
+| 消息 | **Redis Stream + 事务性 Outbox（已落地）** | 领域事件异步化（`DomainEventPublisher`/`OutboxRelayJob`/`DomainEventConsumer`）；下单主流程仍同步 |
+| 容器化 | **Docker Compose（已落地）** | `docker-compose.yml` 一键起 app + MySQL 8.4 + Redis 7；镜像 `server/Dockerfile` 必须用 JDK 25 构建 |
 | 地图 | 高德 Web 端 JS API v2.0 + Web 组件 | 无 native 依赖，模拟器/真机均可运行；**勿用 @amap/amap_lbs_map3d**（仅 arm64，x86_64 模拟器 ABI 不匹配安装失败 9568347） |
-| 工具 | Maven、Hutool 可选演进 | 短信/微信支付/支付宝/OSS/Redis 均为**演进项**，未批准不得落地 |
+| 工具 | Maven、Hutool 可选演进 | 短信/微信支付/支付宝/OSS 仍为**演进项**，未批准不得落地；RabbitMQ/RocketMQ 未引入（Redis Stream 代替） |
 
 ## 3. 构建与运行
 
@@ -30,14 +33,18 @@
     --mode module -p module=entry@default -p product=default -p requiredDeviceType=phone assembleHap --analyze=normal --parallel --incremental --daemon
   ```
   构建日志：`.hvigor/outputs/build-logs/build.log`；判断成功要看日志里的 `BUILD SUCCESSFUL` 并确认 `entry/build/default/outputs/default/*.hap` 时间戳已更新（流水线里 `Select-String` 会吞掉退出码，别只看 `$LASTEXITCODE`）
-- 后端测试：`mvn -f server/pom.xml test`（**50 个测试**，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格）
+- 后端测试：`mvn -f server/pom.xml test`（**64 个测试**，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格，以及缓存穿透/击穿/雪崩防护与领域事件 Outbox 语义）
+- 一键容器化环境：`docker compose up -d --build`（app + MySQL 8.4 + Redis 7，含健康检查与启动依赖顺序）；只起基础设施（本机用 Maven 跑后端）用 `docker compose up -d mysql redis`。注意 compose 的 MySQL 映射到宿主 **3307**（避开本机 MySQL84 的 3306）
+- 后端测试与运行都要求 `JAVA_HOME` 指向 **JDK 25**；`server/Dockerfile` 的构建阶段也必须是 JDK 25，否则 `maven.compiler.release=25` 直接编译失败
 - Release 打包（**当前范围外，可选工具**）：`scripts/enable-release-signing.ps1`（接入发布证书）→ `scripts/build-release.ps1`（签名包）→ `scripts/release-check.ps1 [-Build]`（上架体检，输出 `md/上架体检报告.md`，该报告为生成物不入库）；详见 `md/上架体检与Release签名.md`。日常开发只需 debug 构建，不必碰这一套。
 - **注意**：PowerShell 5.x 不支持 `&&`，连续命令必须分开执行；`git commit` 不支持 heredoc，长提交信息先写文件再 `git commit -F <file>`
 - 模拟器访问宿主机后端：`http://10.0.2.2:9000`
 
 ## 4. 环境配置
 
-- **MySQL**：`localhost:3306`，root / 123456，库 takeout；凭据走环境变量 `TAKEOUT_DB_USERNAME/TAKEOUT_DB_PASSWORD`（默认 root/123456）
+- **MySQL**：`localhost:3306`，root / 123456，库 takeout；凭据走环境变量 `TAKEOUT_DB_USERNAME/TAKEOUT_DB_PASSWORD`（默认 root/123456）；主机/端口可用 `TAKEOUT_DB_HOST/TAKEOUT_DB_PORT` 覆盖（容器内指向 `mysql:3306`，本机默认 `localhost:3306` 不变）
+- **Redis**：`localhost:6379`；`TAKEOUT_REDIS_HOST/TAKEOUT_REDIS_PORT/TAKEOUT_REDIS_PASSWORD/TAKEOUT_REDIS_DATABASE`；缓存与事件开关 `TAKEOUT_CACHE_ENABLED`、`TAKEOUT_MQ_ENABLED`；本地开发需自行起一个 Redis（`docker run -d -p 6379:6379 redis:7-alpine`，或 `docker compose up -d redis`）
+- **缓存与事件参数**：TTL `takeout.cache.ttl-seconds`(300) + 抖动 `jitter-seconds`(120)、空值占位 `null-ttl-seconds`(60)、回源锁 `rebuild-lock-ms`(3000)；Outbox 中继 `takeout.mq.relay-scan-ms`(2000)、消费幂等 `dedup-hours`(24)。细节见 `md/Redis缓存与异步事件架构.md`
 - **JWT**：`TAKEOUT_JWT_SECRET` 环境变量，`expire-hours: 72`；无刷新令牌（每 72 小时重新登录的体验取舍已接受）
 - **日志**：按天分文件 `app-YYYY-MM-DD.log`，单文件 2MB 轮转压缩归档（zip）；同时输出控制台 + `filesDir/log/app.log`；密码/JWT/手机号完整值禁止入日志
 - **高德 Key**（双 Key 概念）：`AMAP_CONFIG.MAP_JS_KEY`（Web端 JS API 类型，`a0373d4b39b6524b7f80e825339e7a28`，需同步修改 `resources/rawfile/amap_map.html` 中 AMAP_KEY）；2021 年后 Key 需配置安全密钥 jscode
@@ -61,7 +68,7 @@
 ## 6. 数据库现状（差异以 22.8 节清单为准）
 
 - 实际表名（复数）：`users` `stores` `goods` `orders` `coupons` `reviews` `favorites` `addresses` `categories` `refund_records` `cart_items`
-- 演进项已落地的表：`riders`（骑手档案）、`banners`、`announcements`、**`goods_specs`（多规格 SKU：goods_id/name/price/stock/version/sort/status）**、**`seckills`（限时秒杀：goods_id/store_id/price/quota/sold/start_time/end_time/status）**
+- 演进项已落地的表：`riders`（骑手档案）、`banners`、`announcements`、**`goods_specs`（多规格 SKU：goods_id/name/price/stock/version/sort/status）**、**`seckills`（限时秒杀：goods_id/store_id/price/quota/sold/start_time/end_time/status）**、**`outbox_events`（事务性 Outbox：event_type/order_id/payload/status/retry_count/create_time，status 0待投递 1已投递）**
 - 新增列：`cart_items.spec_id`（唯一键 `uk_cart_user_goods_spec(user_id, goods_id, spec_id)`，老库的 `uk_cart_user_goods` 由 SchemaMigration 自动替换）、`orders.coupon_id`（待付款取消时释放优惠券）
 - 关键现状：goods 有 `stock/version/merchant_category_id`（演进项已落地）；orders 的 items/address 为 **JSON 快照**（无独立明细表，items 内含 `specId/specName/seckillId`）；categories 有 `type`（PLATFORM/MERCHANT）+ `merchant_id`；reviews 已有 `order_id/images/reply/reply_time`（按 `(order_id, goods_id)` 防重）
 - 演进项（未落地，勿实现）：order_item/payment_record/user_coupon/order_status_log 表、address 经纬度、商户配送半径、逻辑删除字段
@@ -118,10 +125,24 @@
 - **`findComponents` 未命中同样返回 `null`（不是空数组）**，直接 `.length` 会抛 `Cannot read property length of null`；长页面里的目标节点即使能被 `findComponent` 找到，也可能在屏幕外且 `getBounds()` 返回整屏 `[0,117][1320,2232]`，拿它算中心点点击等于点空 —— 用 `UiTestHelper.scrollUntilVisible`（先直接查一次，未命中再滚回顶部逐屏下滑，只接受边界明显小于整屏的节点）。
 - **设备实测脚本集合**：`scripts/device-uitest.ps1`（通用单类运行器：`-Class X -GuestClean -GrantLocation -Build`）、`device-checkout-regression.ps1`（结算负路径 + 待付款订单）、`device-review-regression.ps1`（图文评价上传/渲染/预览）、`device-merchant-regression.ps1`（商户订单流转 + 收入统计）、`device-role-regression.ps1`（骑手抢单/取餐/送达 + 管理端冒烟）、`ui-dump.ps1`（结构化解析 dumpLayout）。
 
+### Redis 缓存与领域事件（2025 落地时踩的坑）
+
+- **瞬时故障绝不能升级为数据丢失**：Outbox 中继最初把 `retry_count >= max-retry` 当作「跳过」条件，实测停 Redis 下单后 `retry_count` 触顶 10，Redis 恢复后该事件**被永久跳过、再也不投递**。事件已持久化在数据库，重试几乎零成本，正确做法是**永不放弃投递**，`retry_count` 只用于告警。
+- **不要为了「快速失败」关掉 Lettuce 的 `autoReconnect`**：`autoReconnect(false)` 会让客户端在 Redis 重启后永久停留在 `Currently not connected. Commands are rejected.`，Outbox 中继再也无法投递。缓存的快速失败只需靠**短超时**（`timeout/connect-timeout: 500ms`）实现，必须保留自动重连。这两条是配套的：只看单条都会做出错误取舍。
+- **Lettuce 默认重试会把请求拖到 ~10 秒**：Redis 不可用时一次读请求实测约 10071ms；把 `timeout`/`connect-timeout` 收紧到 500ms 后降到约 565ms，且请求全部成功（降级回源）。
+- **`XREADGROUP` 在 Stream 不存在时报 `NOGROUP`**：Stream 只在第一条消息写入后才存在，而消费者启动即开始读 → 首条事件到来前每 2 秒刷一条警告栈，淹没真实故障。解法是在消费者启动时**主动创建 Stream 与消费组**（写一条占位再删掉，或用 `MKSTREAM`），实测初始化后再无 `NOGROUP`。
+- **缓存失效范围要按业务语义定，不能用注解一把梭**：库存/秒杀名额参与「列表、榜单、秒杀专区」的展示筛选，所以下单扣库存、取消回滚、退款、超时取消都必须失效 `STOCK_DEPENDENT_PATTERNS`，否则会出现「下完单列表还显示有货」。批量失效用 `SCAN` 游标，**禁用 `KEYS`**。
+- **回源互斥锁必须带等待上限并最终降级**：抢不到锁的请求不能无限自旋，等不到就回源数据库——**可用性优先于「只查一次库」**，锁只是削峰不是门禁。
+- **不要用 Redis 锁替换数据库条件更新来防超卖**：现有 `WHERE sold + ? <= quota` / `WHERE stock >= ?` 在本地事务内已保证不超卖；Redis 锁覆盖不到数据库写入，Redis 挂掉时反而更弱。异步化同理——`createOrder` 保持同步事务，异步只覆盖提交后的通知类动作（真正的异步下单需要 saga + 补偿）。
+- **事件必须在条件更新成功之后发布**：`markPaid`/`cancelPending`/退款状态更新都是条件更新，只有在返回 true 之后才发事件，否则会产生「假支付」「假退款」事件。
+- **Docker 的 JRE 镜像没有 `curl`/`wget`**：容器健康检查不能用 curl。本工程改为编译一个极简 TCP 探测类（`server/docker/healthcheck.java`），用 `java -cp /app healthcheck 127.0.0.1 9000` 做健康检查。
+- **`docker-compose` 的 MySQL 端口要避开本机 3306**：本机有 MySQL84 服务，compose 映射到宿主 **3307**；`application.yml` 的数据源必须用 `${TAKEOUT_DB_HOST}`/`${TAKEOUT_DB_PORT}` 占位，否则容器内硬编码 `localhost:3306` 会连不上 MySQL 而 crash-loop。
+- **PowerShell 5.1 用 `powershell` 而不是 `pwsh`**（本机无 pwsh）；且用 `Select-String` 过滤 `mvn` 输出会让 `$LASTEXITCODE` 失真（常显示为 1），判定 Maven 成功要看 `BUILD SUCCESSFUL`。
+
 ## 9. 提交规范
 
 - 提交信息格式 `<type>(<scope>): <描述>`，如 `feat(merchant):`、`fix(order):`、`docs:`
-- 任务完成后主动 commit + push 到 Gitee（https://gitee.com/pengzhiqiang87/simple-takeout.git，master 分支）
+- 任务完成后主动 commit + push 到 GitHub（https://github.com/hqyx2025/simple-takeout.git，master 分支；原 Gitee 远端已弃用）
 - 只改文档时不得修改业务代码/数据库脚本/配置文件，且不自动提交
 
 ## 10. 项目约束（AI/agent 工作约定）

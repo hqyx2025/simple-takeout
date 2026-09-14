@@ -58,7 +58,8 @@ class OrderServiceFlowTest {
     private final HotDataCacheService cache = mock(HotDataCacheService.class);
     private final OrderService service = new OrderService(orderDao, storeDao, goodsDao, addressDao,
             couponDao, reviewDao, userDao, refundDao, new ObjectMapper(), mock(CartItemMapper.class),
-            mock(RiderDao.class), specDao, seckillDao, cache);
+            mock(RiderDao.class), specDao, seckillDao, cache,
+            mock(com.example.takeout.service.mq.DomainEventPublisher.class));
 
     private static final long STORE_ID = 10L;
     private static final long GOODS_ID = 100L;

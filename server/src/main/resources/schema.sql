@@ -248,3 +248,17 @@ CREATE TABLE IF NOT EXISTS seckills (
     KEY idx_seckill_goods (goods_id),
     KEY idx_seckill_window (status, start_time, end_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 事务性 Outbox：领域事件与业务数据同事务落库，再由中继任务投递到 Redis Stream。
+-- status：0 待投递 / 1 已投递；retry_count 用于限制投递重试次数。
+CREATE TABLE IF NOT EXISTS outbox_events (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    event_type VARCHAR(64) NOT NULL,
+    order_id BIGINT NOT NULL DEFAULT 0,
+    payload TEXT,
+    status INT NOT NULL DEFAULT 0,
+    retry_count INT NOT NULL DEFAULT 0,
+    create_time VARCHAR(32) NOT NULL,
+    KEY idx_outbox_pending (status, id),
+    KEY idx_outbox_order (order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

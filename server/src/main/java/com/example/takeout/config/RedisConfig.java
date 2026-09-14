@@ -49,9 +49,12 @@ public class RedisConfig {
     }
 
     /**
-     * Redis 故障时的快速失败：关闭命令自动重试并收紧连接超时。
-     * 缓存是可选加速层，Redis 宕机时必须尽快回源数据库，
-     * 不能让默认的多次重试把单个请求拖到数秒。
+     * Redis 故障时的快速失败：缩短连接与命令超时，让缓存读取尽快回源数据库。
+     *
+     * <p>注意这里<b>保留自动重连</b>（autoReconnect=true）。关闭重连会让 Lettuce
+     * 在 Redis 重启后永久停留在 "Currently not connected"，导致 Outbox 中继再也
+     * 无法投递事件（实测踩过）；而缓存的快速失败仅依赖短超时即可实现，
+     * 不必牺牲恢复能力。</p>
      */
     @Bean
     public LettuceClientConfigurationBuilderCustomizer cacheFailFastCustomizer(
@@ -59,7 +62,8 @@ public class RedisConfig {
             @Value("${spring.data.redis.timeout:500ms}") Duration commandTimeout) {
         return builder -> builder
                 .clientOptions(ClientOptions.builder()
-                        .autoReconnect(false)
+                        .autoReconnect(true)
+                        // 断线期间直接拒绝命令而非排队：配合短超时快速降级回源
                         .disconnectedBehavior(ClientOptions.DisconnectedBehavior.REJECT_COMMANDS)
                         .timeoutOptions(TimeoutOptions.enabled(commandTimeout))
                         .socketOptions(SocketOptions.builder()

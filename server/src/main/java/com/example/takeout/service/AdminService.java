@@ -17,6 +17,7 @@ import com.example.takeout.model.RefundRecord;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.User;
 import com.example.takeout.security.PasswordUtil;
+import com.example.takeout.service.mq.DomainEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,10 +35,11 @@ public class AdminService {
     private final OrderService orderService;
     private final AdminStatsDao adminStatsDao;
     private final HotDataCacheService cache;
+    private final DomainEventPublisher eventPublisher;
 
     public AdminService(StoreDao storeDao, OrderDao orderDao, UserDao userDao, GoodsDao goodsDao,
                         RefundDao refundDao, OrderService orderService, AdminStatsDao adminStatsDao,
-                        HotDataCacheService cache) {
+                        HotDataCacheService cache, DomainEventPublisher eventPublisher) {
         this.storeDao = storeDao;
         this.orderDao = orderDao;
         this.userDao = userDao;
@@ -46,6 +48,7 @@ public class AdminService {
         this.orderService = orderService;
         this.adminStatsDao = adminStatsDao;
         this.cache = cache;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -288,6 +291,9 @@ public class AdminService {
         refundDao.updateStatus(refundId, "REFUNDED", now(), "");
         // 同意退款已回滚库存，失效相关展示缓存
         invalidateStoreAndGoodsCache();
+        // 领域事件：与退款状态更新同事务写入 Outbox，提交后异步投递
+        eventPublisher.publish(DomainEventPublisher.ORDER_REFUNDED, order.id(),
+                java.util.Map.of("userId", order.userId(), "refundId", refundId));
         return refundDao.findById(refundId).orElseThrow(() -> new BizException("退款处理失败"));
     }
 
