@@ -215,65 +215,100 @@ public class DataSeeder implements ApplicationRunner {
      * merchant_category_id 全为 0 —— 结果芯片只剩「全部 + 该店唯一的平台分类」
      * 两个，而两者返回的商品列表完全相同，用户点分类看起来「点了没反应」。
      *
-     * 幂等策略：只要该商户已有任意 MERCHANT 分类就整体跳过，不覆盖商户在
-     * 后台自己配好的分组。分类按商户（owner_id）维度存放，与该商户名下
-     * 多家店铺共用一套分类名，这正是 listMerchantCategories 的既有口径。
+     * 幂等与安全边界：
+     *  - 分类按商户（owner_id）维度存放，与该商户名下多家店铺共用一套分类名，
+     *    这正是 listMerchantCategories 的既有口径。
+     *  - 4 个默认分类**按名字**补齐，不能按位置推断：商户 3 自己建了「你好」并
+     *    占据第一个位置，按位置对应会把「人气主食」之类张冠李戴，且永远建不出
+     *    「招牌热销」（曾经的 bug）。
+     *  - 只有「使用的分类数 < 2」的店铺才重新分组。这类店铺本来就没有可切换的
+     *    分区（芯片点了没有任何变化），重新分组不损失任何功能；而使用 >=2 个
+     *    分类的店铺（含商户自己整理过的）一律不动，尊重既有分组。
+     *  - 分配用确定性轮转（只取决于商品 id 顺序），重复执行结果一致 → 幂等；
+     *    分组后该店的分类数必然 >= 2，下次运行直接跳过。分类本身从不删除。
+     *  - 必须**按店铺**铺开，不能按 is_special 全局一刀切：后者会让「整店商品
+     *    全是招牌」的店铺（31~40 号店各 6 个商品全是招牌）全部落进同一个分类，
+     *    芯片仍只有一个非空项，点了依旧没反应。
      */
     private void ensureStoreMerchantCategories() {
+        String[] defaults = {"招牌热销", "人气主食", "特色小吃", "解腻饮品"};
         List<java.util.Map<String, Object>> owners = jdbc.queryForList(
                 "SELECT DISTINCT owner_id FROM stores WHERE owner_id > 0");
-        int backfilled = 0;
-        int grouped = 0;
+        int createdCategories = 0;
+        int regrouped = 0;
         for (java.util.Map<String, Object> owner : owners) {
             long ownerId = ((Number) owner.get("owner_id")).longValue();
-            // 该商户名下还有未分组商品吗？（与「有没有分类」是两件事：
-            // 商户可能自己建过分类但商品没挂上去，只按分类存在与否判断会漏掉）
-            Integer ungrouped = jdbc.queryForObject(
-                    "SELECT COUNT(*) FROM goods g JOIN stores s ON s.id = g.store_id " +
-                            "WHERE s.owner_id = ? AND g.merchant_category_id = 0",
-                    Integer.class, ownerId);
-            if (ungrouped == null || ungrouped == 0) {
+            // 按名字补齐 4 个默认分类（已存在的商户自定义分类原样保留）
+            for (String name : defaults) {
+                Integer exists = jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM categories WHERE type = 'MERCHANT' AND merchant_id = ? AND name = ?",
+                        Integer.class, ownerId, name);
+                if (exists == null || exists == 0) {
+                    Integer maxSort = jdbc.queryForObject(
+                            "SELECT COALESCE(MAX(sort), 0) FROM categories WHERE type = 'MERCHANT' AND merchant_id = ?",
+                            Integer.class, ownerId);
+                    jdbc.update("INSERT INTO categories(name, icon, color, type, merchant_id, sort, status) " +
+                                    "VALUES(?,'','','MERCHANT',?,?,1)",
+                            name, ownerId, (maxSort == null ? 0 : maxSort) + 1);
+                    createdCategories++;
+                }
+            }
+            // 分配序列：招牌热销固定第一位（招牌商品落点），其余默认分类按 sort 随后
+            Long specialCategoryId = jdbc.query(
+                    "SELECT id FROM categories WHERE type = 'MERCHANT' AND merchant_id = ? AND name = '招牌热销'",
+                    (rs, i) -> rs.getLong("id"), ownerId).stream().findFirst().orElse(null);
+            if (specialCategoryId == null) {
                 continue;
             }
-            List<Long> existingIds = jdbc.query(
-                    "SELECT id FROM categories WHERE type = 'MERCHANT' AND merchant_id = ? ORDER BY sort, id",
+            List<Long> categoryIds = new java.util.ArrayList<>();
+            categoryIds.add(specialCategoryId);
+            categoryIds.addAll(jdbc.query(
+                    "SELECT id FROM categories WHERE type = 'MERCHANT' AND merchant_id = ? " +
+                            "AND name IN ('人气主食','特色小吃','解腻饮品') AND id <> ? ORDER BY sort, id",
+                    (rs, i) -> rs.getLong("id"), ownerId, specialCategoryId));
+            if (categoryIds.size() < 2) {
+                continue;
+            }
+            List<Long> storeIds = jdbc.query("SELECT id FROM stores WHERE owner_id = ? ORDER BY id",
                     (rs, i) -> rs.getLong("id"), ownerId);
-            // 分类不足 4 个时补建，凑够 4 个分组；已有的自定义分类保留并参与分组
-            List<Long> categoryIds = new java.util.ArrayList<>(existingIds);
-            String[] defaults = {"招牌热销", "人气主食", "特色小吃", "解腻饮品"};
-            int sort = existingIds.size();
-            for (int i = categoryIds.size(); i < 4; i++) {
-                String name = defaults[i];
-                jdbc.update("INSERT INTO categories(name, icon, color, type, merchant_id, sort, status) " +
-                        "VALUES(?,'','','MERCHANT',?,?,1)", name, ownerId, ++sort);
-                categoryIds.add(jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
-            }
-            // 招牌商品统一归第一个分类；其余按 id 取模轮转落到后面几个分类，
-            // 保证每个芯片都非空、且同一店铺内各分类的商品集合互不相同。
-            // 只更新 merchant_category_id = 0 的行，绝不覆盖商户已有的分组。
-            jdbc.update("UPDATE goods g JOIN stores s ON s.id = g.store_id " +
-                            "SET g.merchant_category_id = ? " +
-                            "WHERE s.owner_id = ? AND g.is_special = 1 AND g.merchant_category_id = 0",
-                    categoryIds.get(0), ownerId);
-            if (categoryIds.size() > 1) {
-                int span = categoryIds.size() - 1;
-                StringBuilder sql = new StringBuilder(
-                        "UPDATE goods g JOIN stores s ON s.id = g.store_id SET g.merchant_category_id = CASE g.id % ")
-                        .append(span).append(" ");
-                for (int i = 1; i < categoryIds.size(); i++) {
-                    sql.append("WHEN ").append(i - 1).append(" THEN ").append(categoryIds.get(i)).append(" ");
+            for (long storeId : storeIds) {
+                List<long[]> rows = jdbc.query(
+                        "SELECT id, is_special, merchant_category_id FROM goods WHERE store_id = ? ORDER BY id",
+                        (rs, i) -> new long[]{rs.getLong("id"), rs.getLong("is_special"),
+                                rs.getLong("merchant_category_id")}, storeId);
+                if (rows.isEmpty()) {
+                    continue;
                 }
-                sql.append("END WHERE s.owner_id = ? AND g.is_special = 0 AND g.merchant_category_id = 0");
-                jdbc.update(sql.toString(), ownerId);
-            }
-            grouped++;
-            if (existingIds.size() < 4) {
-                backfilled++;
+                long usedCategories = rows.stream().map(r -> r[2]).filter(c -> c > 0).distinct().count();
+                if (usedCategories >= 2) {
+                    // 已有 >=2 个分类在生效，切换本来就能工作，不动它
+                    continue;
+                }
+                boolean hasNonSpecial = rows.stream().anyMatch(r -> r[1] == 0);
+                int cursor = 0;
+                for (long[] row : rows) {
+                    long categoryId;
+                    if (hasNonSpecial && row[1] == 1) {
+                        // 招牌商品统一落「招牌热销」（categoryIds 第一位）
+                        categoryId = categoryIds.get(0);
+                    } else if (hasNonSpecial) {
+                        // 非招牌在其余默认分类间轮转
+                        categoryId = categoryIds.get(1 + (cursor % (categoryIds.size() - 1)));
+                        cursor++;
+                    } else {
+                        // 整店都是招牌商品：没有「其余分类」可用，就在全部分类间轮转，
+                        // 否则这家店的芯片永远只有一个非空项
+                        categoryId = categoryIds.get(cursor % categoryIds.size());
+                        cursor++;
+                    }
+                    jdbc.update("UPDATE goods SET merchant_category_id = ? WHERE id = ?", categoryId, row[0]);
+                }
+                regrouped++;
             }
         }
-        if (grouped > 0) {
-            log.info("已为 {} 个商户补齐店内分类（其中 {} 个新建分类），并完成 {} 个商户的商品分组",
-                    grouped, backfilled, grouped);
+        if (createdCategories > 0 || regrouped > 0) {
+            log.info("店内分类：新建 {} 个默认分类，重新分组 {} 家店铺（分类数<2、原本无法切换的店铺）",
+                    createdCategories, regrouped);
         }
     }
 
