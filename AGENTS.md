@@ -138,12 +138,18 @@
 - **Docker 的 JRE 镜像没有 `curl`/`wget`**：容器健康检查不能用 curl。本工程改为编译一个极简 TCP 探测类（`server/docker/healthcheck.java`），用 `java -cp /app healthcheck 127.0.0.1 9000` 做健康检查。
 - **`docker-compose` 的 MySQL 端口要避开本机 3306**：本机有 MySQL84 服务，compose 映射到宿主 **3307**；`application.yml` 的数据源必须用 `${TAKEOUT_DB_HOST}`/`${TAKEOUT_DB_PORT}` 占位，否则容器内硬编码 `localhost:3306` 会连不上 MySQL 而 crash-loop。
 - **PowerShell 5.1 用 `powershell` 而不是 `pwsh`**（本机无 pwsh）；且用 `Select-String` 过滤 `mvn` 输出会让 `$LASTEXITCODE` 失真（常显示为 1），判定 Maven 成功要看 `BUILD SUCCESSFUL`。
+- **GitHub 的 Contributors 由「提交邮箱 → 账号已验证邮箱」决定，而且列表是异步缓存，改完不会立刻生效**。两个独立坑都在本仓库踩过：
+  - ① 用未关联到账号的邮箱提交（本仓库曾有 221 个提交用 Gitee 的 `...@user.noreply.gitee.com`）→ GitHub 把它算成**另一个 Contributor**。修法是重写提交邮箱：`git filter-branch -f --env-filter "GIT_AUTHOR_EMAIL=...; export GIT_AUTHOR_EMAIL; GIT_COMMITTER_EMAIL=...; export GIT_COMMITTER_EMAIL" -- master`（只改 email，保留姓名/时间/信息），再 `push --force-with-lease`。**改完必须自证内容零变化**：比对重写前后的 `git rev-parse "HEAD^{tree}"`（本仓库两次都是 `5ec5886098c18a5d6d8c921e7f2234e3c8c60ed9`）并确认 `git diff <旧HEAD> <新HEAD>` 输出为空。注意 filter-branch **要求工作区干净**，有未提交改动时先 `git stash push <file>`（只 stash 那一个文件，别用 `-u`）。
+  - ② 已推上去的 AI 署名（`Co-Authored-By: Claude`）即使随后 amend + force push 把该提交删掉，Contributors 里仍可能长期留着 "Claude" 条目——GitHub 不会立即重算贡献者缓存（实测超过 1 天仍在；通常需数小时至 24h，顽固时只能找 Support 清除）。**所以 AI 署名一次都不要推**。
+  - 另：`refs/original/` + reflog 会留着旧对象，彻底清理用 `git update-ref -d`（逐个删 `refs/original/*`）+ `git reflog expire --expire=now --all` + `git gc --prune=now`；重写后哈希全变，其他机器上的旧克隆必须重新 clone。
 
 ## 9. 提交规范
 
 - 提交信息格式 `<type>(<scope>): <描述>`，如 `feat(merchant):`、`fix(order):`、`docs:`
 - 任务完成后主动 commit + push 到 GitHub（https://github.com/hqyx2025/simple-takeout.git，master 分支；原 Gitee 远端已弃用）
 - 只改文档时不得修改业务代码/数据库脚本/配置文件，且不自动提交
+- **提交身份固定用 GitHub 已绑定邮箱 `751848863@qq.com`**（本仓库 `git config user.email` 已设为它，勿改回）：GitHub 只把提交归到账号里已验证的邮箱，用 Gitee 的 `...@user.noreply.gitee.com` 会被算成**另一个 Contributor**。本仓库曾因 221 个提交用了 Gitee 邮箱而多出一个身份，2025 年已重写全部提交邮箱修复。
+- **禁止在提交信息里出现任何 AI 署名**：`Co-Authored-By: Claude <noreply@anthropic.com>`、`Generated with ...`、`claude`/`anthropic` 等一律不得出现，提交只以项目作者身份签署。**一次都不要推**——推上去之后即使立刻 amend + force push 删掉该提交，GitHub 的 Contributors 仍可能长期保留这个已不存在的身份（机制见第 8 节）。
 
 ## 10. 项目约束（AI/agent 工作约定）
 
