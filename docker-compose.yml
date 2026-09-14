@@ -1,0 +1,93 @@
+# 简单外卖一键本地环境：MySQL 8.4 + Redis 7 + 后端服务
+#
+# 用法：
+#   docker compose up -d --build      # 首次构建并启动全部服务
+#   docker compose logs -f app        # 查看后端日志
+#   docker compose down               # 停止（数据保留在命名卷中）
+#   docker compose down -v            # 停止并清空数据库数据
+#
+# 说明：
+# - 后端 schema.sql 在启动时自动建表（spring.sql.init.mode=always），
+#   因此不需要手工导入 SQL；DataSeeder 会自动补齐演示数据与测试账号。
+# - app 依赖 MySQL/Redis 的健康检查通过后才启动，避免启动即连接失败。
+# - 若只想跑基础设施（本机用 Maven 起后端），执行：docker compose up -d mysql redis
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: takeout-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${TAKEOUT_DB_PASSWORD:-123456}
+      MYSQL_DATABASE: takeout
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports:
+      # 映射到宿主 3307，避免与宿主机已装的 MySQL84（3306）冲突
+      - "${TAKEOUT_MYSQL_PORT:-3307}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${TAKEOUT_DB_PASSWORD:-123456}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: takeout-redis-compose
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${TAKEOUT_REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    image: takeout-server:latest
+    container_name: takeout-app
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # 容器内用服务名互联；MySQL 端口是容器内 3306（不是宿主映射的 3307）
+      TAKEOUT_DB_HOST: mysql
+      TAKEOUT_DB_PORT: 3306
+      TAKEOUT_DB_USERNAME: root
+      TAKEOUT_DB_PASSWORD: ${TAKEOUT_DB_PASSWORD:-123456}
+      TAKEOUT_REDIS_HOST: redis
+      TAKEOUT_REDIS_PORT: 6379
+      TAKEOUT_JWT_SECRET: ${TAKEOUT_JWT_SECRET:-simple-takeout-jwt-secret-key-please-change-2026}
+      TAKEOUT_CACHE_ENABLED: "true"
+      TZ: Asia/Shanghai
+    ports:
+      - "${TAKEOUT_APP_PORT:-9000}:9000"
+    volumes:
+      # 评价图片持久化，容器重建不丢
+      - uploads-data:/app/uploads
+    healthcheck:
+      # 运行镜像基于 JRE，没有 curl/wget，用构建阶段编译好的 healthcheck.class 探活
+      test: ["CMD", "java", "-cp", "/app", "healthcheck", "127.0.0.1", "9000"]
+      interval: 10s
+      timeout: 8s
+      retries: 12
+      start_period: 60s
+
+volumes:
+  mysql-data:
+  redis-data:
+  uploads-data:

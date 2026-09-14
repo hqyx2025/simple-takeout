@@ -6,7 +6,9 @@ spring:
   application:
     name: simple-takeout-server
   datasource:
-    url: jdbc:mysql://localhost:3306/takeout?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8&allowPublicKeyRetrieval=true
+    # 主机/端口可用环境变量覆盖：本机开发默认 localhost:3306，
+    # 容器编排（docker-compose）下指向服务名 mysql:3306
+    url: jdbc:mysql://${TAKEOUT_DB_HOST:localhost}:${TAKEOUT_DB_PORT:3306}/takeout?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8&allowPublicKeyRetrieval=true
     username: ${TAKEOUT_DB_USERNAME:root}
     password: ${TAKEOUT_DB_PASSWORD:123456}
     driver-class-name: com.mysql.cj.jdbc.Driver
