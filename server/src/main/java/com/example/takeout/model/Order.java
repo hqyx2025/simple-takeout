@@ -100,19 +100,20 @@ public record Order(
             long couponId,
             String payDeadline,
             String riderName,
-            String riderPhone
+            String riderPhone,
+            String readyTime
     ) {
     }
 
     public OrderView toView(List<OrderItem> itemList, AddressInfo addr, String riderName, String riderPhone) {
-        return toView(itemList, addr, "", riderName, riderPhone);
+        return toView(itemList, addr, "", riderName, riderPhone, "");
     }
 
     public OrderView toView(List<OrderItem> itemList, AddressInfo addr, String payDeadline,
-                            String riderName, String riderPhone) {
+                            String riderName, String riderPhone, String readyTime) {
         return new OrderView(id, orderNo, userId, storeId, storeName, status, itemList, addr,
                 goodsAmount, deliveryFee, discount, payAmount, remark, reviewed, escrowStatus,
                 createTime, payTime, acceptTime, deliverTime, completeTime, expectTime, couponId,
-                payDeadline, riderName, riderPhone);
+                payDeadline, riderName, riderPhone, readyTime);
     }
 }

@@ -79,14 +79,15 @@ export struct MerchantOrdersPage {
     this.loadOrders()
   }
 
-  private async handleStartDelivery(order: Order): Promise<void> {
-    const ok: boolean = await merchantActionRemote(order.id, 'deliver')
+  /** 出餐完成：写 ready_time 并进入骑手待取餐池（数字状态仍为 2），订单由骑手接单后配送。 */
+  private async handleReady(order: Order): Promise<void> {
+    const ok: boolean = await merchantActionRemote(order.id, 'ready')
     if (!ok) {
-      promptAction.showToast({ message: '出餐失败，请检查登录状态或订单状态', duration: 2200 })
+      promptAction.showToast({ message: '出餐操作失败，请检查登录状态或订单状态', duration: 2200 })
       return
     }
     logInfo('Merchant', `点击出餐 orderId=${order.id} 店铺=${order.storeName}`)
-    promptAction.showToast({ message: '已出餐，配送中' })
+    promptAction.showToast({ message: '已出餐，等待骑手接单', duration: 2200 })
     this.loadOrders()
   }
 
@@ -268,27 +269,47 @@ export struct MerchantOrdersPage {
         .id(`merchant-action-${order.id}`)
         .onClick(() => { this.handleAccept(order) })
     } else if (order.status === 2) {
-      // 制作中：出餐按钮（2→3）
-      Button('出餐')
-        .height(32)
-        .fontSize(FONT_SIZE.SM)
-        .fontColor(COLORS.TEXT_WHITE)
-        .backgroundColor(COLORS.PRIMARY)
-        .borderRadius(BORDER_RADIUS.ROUND)
-        .type(ButtonType.Capsule)
-        .id(`merchant-action-${order.id}`)
-        .onClick(() => { this.handleStartDelivery(order) })
+      if ((order.riderName ?? '') !== '') {
+        // 已被骑手接单：商户侧不再有可执行动作，等骑手取餐即可
+        Text(`骑手 ${order.riderName} 已接单，等待取餐`)
+          .fontSize(FONT_SIZE.SM)
+          .fontColor(COLORS.PRIMARY)
+      } else if ((order.readyTime ?? '') !== '') {
+        // 已出餐并进入骑手待取餐池：状态仍是制作中，必须给可见凭据，否则商户以为没点上
+        Text('已出餐，等待骑手接单')
+          .fontSize(FONT_SIZE.SM)
+          .fontColor(COLORS.SUCCESS)
+          .id(`merchant-ready-${order.id}`)
+      } else {
+        // 制作中：出餐完成（写 ready_time，进入骑手待取餐池）
+        Button('出餐完成')
+          .height(32)
+          .fontSize(FONT_SIZE.SM)
+          .fontColor(COLORS.TEXT_WHITE)
+          .backgroundColor(COLORS.PRIMARY)
+          .borderRadius(BORDER_RADIUS.ROUND)
+          .type(ButtonType.Capsule)
+          .id(`merchant-action-${order.id}`)
+          .onClick(() => { this.handleReady(order) })
+      }
     } else if (order.status === 3) {
-      // 配送中：确认送达按钮（3→4）
-      Button('确认送达')
-        .height(32)
-        .fontSize(FONT_SIZE.SM)
-        .fontColor(COLORS.TEXT_WHITE)
-        .backgroundColor(COLORS.PRIMARY)
-        .borderRadius(BORDER_RADIUS.ROUND)
-        .type(ButtonType.Capsule)
-        .id(`merchant-action-${order.id}`)
-        .onClick(() => { this.handleComplete(order) })
+      if ((order.riderName ?? '') !== '') {
+        // 骑手配送中：由骑手送达，商户不需要也不能确认送达
+        Text(`骑手 ${order.riderName} 配送中`)
+          .fontSize(FONT_SIZE.SM)
+          .fontColor(COLORS.PRIMARY)
+      } else {
+        // 未分配骑手的订单仍保留商户自行确认送达（兼容无骑手时的自配送）
+        Button('确认送达')
+          .height(32)
+          .fontSize(FONT_SIZE.SM)
+          .fontColor(COLORS.TEXT_WHITE)
+          .backgroundColor(COLORS.PRIMARY)
+          .borderRadius(BORDER_RADIUS.ROUND)
+          .type(ButtonType.Capsule)
+          .id(`merchant-action-${order.id}`)
+          .onClick(() => { this.handleComplete(order) })
+      }
     } else if (order.status === 4) {
       // 已送达待确认收货 / 已结算完成（与大纲 6.4 口径一致）
       Text(getOrderStatusText(order.status, order.escrowStatus ?? 0))

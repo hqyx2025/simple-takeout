@@ -4,7 +4,7 @@
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText } from '../common/Constants'
 import { Order } from '../model/Models'
-import { syncRiderPoolRemote, grabOrderRemote } from '../service/AppStorageManager'
+import { syncRiderPoolRemote, grabOrderRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
 
 @Entry
@@ -37,7 +37,12 @@ export struct RiderOrderPoolPage {
       promptAction.showToast({ message: '抢单成功，请及时取餐', duration: 1500 })
       await this.loadPool()
     } else {
-      promptAction.showToast({ message: '手慢了，该订单已被其他骑手接走', duration: 2000 })
+      // 抢单失败可能因为被抢走、未上线、账号停用等，优先展示后端原因，避免全部误报成"手慢了"
+      const errorMessage: string = getLastRemoteErrorMessage()
+      promptAction.showToast({
+        message: errorMessage === '' ? '手慢了，该订单已被其他骑手接走' : errorMessage,
+        duration: 2500
+      })
       await this.loadPool()
     }
   }

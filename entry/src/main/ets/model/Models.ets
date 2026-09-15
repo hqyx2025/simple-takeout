@@ -177,6 +177,8 @@ export interface Order {
   /** 配送骑手姓名/电话（配送中及之后返回） */
   riderName?: string
   riderPhone?: string
+  /** 商户出餐时间：非空表示已出餐并已进入骑手待取餐池（此时数字状态仍为 2 制作中） */
+  readyTime?: string
   address: Address
   remark: string
 }

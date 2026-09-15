@@ -4,7 +4,7 @@
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText } from '../common/Constants'
 import { Order } from '../model/Models'
-import { syncRiderOrdersRemote, pickupOrderRemote, deliverOrderRemote } from '../service/AppStorageManager'
+import { syncRiderOrdersRemote, pickupOrderRemote, deliverOrderRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
 
 @Entry
@@ -35,7 +35,11 @@ export struct RiderOrdersPage {
     if (ok) {
       promptAction.showToast({ message: '已取餐，开始配送', duration: 1500 })
     } else {
-      promptAction.showToast({ message: '取餐失败，请确认订单状态', duration: 2000 })
+      const errorMessage: string = getLastRemoteErrorMessage()
+      promptAction.showToast({
+        message: errorMessage === '' ? '取餐失败，请确认订单状态' : errorMessage,
+        duration: 2500
+      })
     }
     await this.loadOrders()
   }
@@ -50,7 +54,11 @@ export struct RiderOrdersPage {
     if (ok) {
       promptAction.showToast({ message: '已送达', duration: 1500 })
     } else {
-      promptAction.showToast({ message: '送达失败，请确认订单状态', duration: 2000 })
+      const errorMessage: string = getLastRemoteErrorMessage()
+      promptAction.showToast({
+        message: errorMessage === '' ? '送达失败，请确认订单状态' : errorMessage,
+        duration: 2500
+      })
     }
     await this.loadOrders()
   }

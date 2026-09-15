@@ -374,7 +374,8 @@ public class OrderService {
                 .flatMap(sid -> orderDao.listByStore(sid).stream())
                 .filter(order -> order.status() != 0)
                 .sorted((a, b) -> Long.compare(b.id(), a.id()))
-                .map(this::toView)
+                // 商户需要看到是谁接的单：骑手抢单后商户不再负责配送，界面上要能显示骑手并禁用商户侧流转按钮
+                .map(this::toViewWithRider)
                 .toList();
     }
 
@@ -774,7 +775,7 @@ public class OrderService {
     private Order.OrderView toView(Order order) {
         List<Order.OrderItem> items = parseItems(order.items());
         Order.AddressInfo address = parseAddress(order.address());
-        return order.toView(items, address, payDeadline(order), "", "");
+        return order.toView(items, address, payDeadline(order), "", "", "");
     }
 
     /** 待付款订单的支付截止时间（前端倒计时用）；非待付款返回空串。 */
@@ -791,7 +792,7 @@ public class OrderService {
         }
     }
 
-    /** 订单详情视图：附带骑手姓名/电话（未分配骑手时为空）。 */
+    /** 订单详情视图：附带骑手姓名/电话（未分配骑手时为空）与出餐时间（未出餐为空）。 */
     private Order.OrderView toViewWithRider(Order order) {
         List<Order.OrderItem> items = parseItems(order.items());
         Order.AddressInfo address = parseAddress(order.address());
@@ -807,7 +808,8 @@ public class OrderService {
                 }
             }
         }
-        return order.toView(items, address, payDeadline(order), riderName, riderPhone);
+        return order.toView(items, address, payDeadline(order), riderName, riderPhone,
+                orderDao.findReadyTime(order.id()));
     }
 
     private List<Order.OrderItem> parseItems(String json) {

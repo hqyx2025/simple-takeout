@@ -751,7 +751,8 @@ export async function applyRefundRemote(orderId: number, reason: string): Promis
 }
 
 /**
- * 远程商户订单流转：action = accept(接单)/deliver(出餐)/complete(完成)
+ * 远程商户订单流转：action = accept(接单)/ready(出餐完成，进入骑手待取餐池)/deliver/complete。
+ * 出餐必须用 ready：deliver 会直接把订单推到配送中，订单就再也不会出现在骑手抢单池里。
  */
 export async function merchantActionRemote(orderId: number, action: string): Promise<boolean> {
   const ok: boolean = await merchantActionApi(orderId, action)

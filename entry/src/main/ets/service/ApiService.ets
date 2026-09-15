@@ -157,6 +157,7 @@ interface ServerOrder {
   expectTime: string
   riderName: string
   riderPhone: string
+  readyTime?: string
   couponId?: number
   payDeadline?: string
 }
@@ -1070,7 +1071,8 @@ export async function fetchMerchantOrdersApi(): Promise<Order[]> {
 }
 
 /**
- * 商户订单流转：action = accept(接单) / deliver(出餐) / complete(完成)
+ * 商户订单流转：action = accept(接单 1→2) / ready(出餐完成，写 ready_time 进入骑手待取餐池)
+ * / deliver(2→3) / complete(3→4)。出餐必须用 ready，否则订单不会进入骑手抢单池。
  */
 export async function merchantActionApi(orderId: number, action: string): Promise<boolean> {
   const resp: ApiResponse<ServerOrder> = await put<ServerOrder>(`/api/merchant/orders/${orderId}/${action}`, undefined)
@@ -1623,6 +1625,7 @@ function toOrder(o: ServerOrder): Order {
     orderNo: o.orderNo || '',
     riderName: o.riderName || '',
     riderPhone: o.riderPhone || '',
+    readyTime: o.readyTime || '',
     address: addr,
     remark: o.remark
   }

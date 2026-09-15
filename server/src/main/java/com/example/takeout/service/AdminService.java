@@ -223,13 +223,23 @@ public class AdminService {
                 requireStatus(order, 1);
                 requireStatusUpdated(orderDao.updateStatusFrom(orderId, 1, 2, "accept_time", now));
             }
+            case "ready" -> {
+                // 出餐完成：只写 ready_time，状态保持 2，订单由此进入骑手待取餐池。
+                // 若这里走 deliver(2→3)，订单会永久跳过骑手（池子按 status=2 + ready_time 筛选）。
+                requireStatus(order, 2);
+                if (!orderDao.markReady(orderId, now)) {
+                    throw new BizException("该订单已出餐，请勿重复操作");
+                }
+            }
             case "deliver" -> {
                 requireStatus(order, 2);
-                requireStatusUpdated(orderDao.updateStatusFrom(orderId, 2, 3, "deliver_time", now));
+                requireNoRider(order);
+                requireStatusUpdated(orderDao.merchantDeliver(orderId, now));
             }
             case "complete" -> {
                 requireStatus(order, 3);
-                requireStatusUpdated(orderDao.updateStatusFrom(orderId, 3, 4, "complete_time", now));
+                requireNoRider(order);
+                requireStatusUpdated(orderDao.merchantComplete(orderId, now));
             }
             case "cancel" -> {
                 if (order.status() != 1 && order.status() != 2 && order.status() != 3) {
@@ -240,6 +250,13 @@ public class AdminService {
             default -> throw new BizException("不支持的订单操作：" + action);
         }
         return orderService.orderDetail(orderId);
+    }
+
+    /** 已由骑手接单的订单由骑手负责配送，平台侧不再代为流转。 */
+    private void requireNoRider(Order order) {
+        if (orderDao.findRiderId(order.id()) > 0) {
+            throw new BizException("该订单已由骑手配送，无需平台操作");
+        }
     }
 
     @Transactional

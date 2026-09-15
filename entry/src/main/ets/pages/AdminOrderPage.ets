@@ -18,6 +18,8 @@ interface AdminOrder {
   status: number
   payAmount: number
   escrowStatus?: number
+  /** 出餐时间：非空表示已出餐并已进入骑手待取餐池（此时 status 仍为 2 制作中） */
+  readyTime?: string
 }
 
 class OrderTabItem {
@@ -215,10 +217,15 @@ export struct AdminOrderPage {
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                   .onClick(() => { this.runOrderAction(order.id, 'cancel', '订单已取消并退款') })
               } else if (order.status === 2) {
-                Button('出餐').height(30).fontSize(FONT_SIZE.XS)
-                  .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
-                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-                  .onClick(() => { this.runOrderAction(order.id, 'deliver', '订单已进入配送中') })
+                if ((order.readyTime ?? '') !== '') {
+                  // 已出餐并进入骑手待取餐池（状态仍为制作中），给可见凭据
+                  Text('已出餐，等待骑手接单').fontSize(FONT_SIZE.XS).fontColor(COLORS.SUCCESS)
+                } else {
+                  Button('出餐').height(30).fontSize(FONT_SIZE.XS)
+                    .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
+                    .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                    .onClick(() => { this.runOrderAction(order.id, 'ready', '已出餐，等待骑手接单') })
+                }
                 Button('取消').height(30).fontSize(FONT_SIZE.XS)
                   .fontColor(COLORS.ERROR).backgroundColor(COLORS.ERROR_LIGHT)
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)

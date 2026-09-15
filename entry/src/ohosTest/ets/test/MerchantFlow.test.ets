@@ -9,10 +9,14 @@
  * 覆盖：
  *   1. guest → 隐私同意 → 一键登录商户 → 我的 Tab；
  *   2. 订单管理：fixture 订单卡片在列表里、状态文案「待接单」、动作按钮文案「接单」；
- *   3. 商户订单流转（界面驱动）：接单 1→2（按钮变「出餐」）→ 出餐 2→3（按钮变「确认送达」）→
- *      确认送达 3→4（状态文案「已送达，待确认收货」）；
+ *   3. 商户订单流转（界面驱动）：接单 1→2（按钮变「出餐完成」）→ 出餐完成（ready：状态仍为 2，
+ *      出现「已出餐，等待骑手接单」凭据，订单进入骑手待取餐池）→ 商户侧不再有流转按钮，
+ *      后续 2→3/3→4 由骑手端 pickup/deliver 完成；
  *   4. 收入统计页：今日收入/今日订单/已完成订单/本周收入/本周订单 全部渲染出数字，
  *      并把数字打进 hilog，供 host 侧与 /api/merchant/stats 交叉核对。
+ *
+ * 为什么断言「状态仍为制作中」：商户端出餐若走 deliver（2→3），订单会永久跳过骑手抢单池
+ * （池子按 status = 2 AND ready_time <> '' 筛选），骑手端恒为空列表。这条断言就是那个回归的哨兵。
  */
 import { Driver, ON, Component } from '@kit.TestKit'
 import { describe, it, expect } from '@ohos/hypium'
@@ -110,19 +114,18 @@ export default function merchantFlowTest() {
       expect(status1).assertEqual('制作中')
       expect(action1).assertEqual('出餐')
 
-      // ---------- 5. 出餐 2→3 ----------
-      expect(await clickByIdOrText(driver, actionId, '出餐')).assertTrue()
-      const status2: string = await waitForText(driver, statusId, '配送中', 20000)
-      const action2: string = await textOf(requireComponent(await scrollUntilVisible(driver, actionId), actionId))
-      console.info('[MerchantFlow] after deliver status=' + status2 + ' action=' + action2)
-      expect(status2).assertEqual('配送中')
-      expect(action2).assertEqual('确认送达')
+      // ---------- 5. 出餐完成（ready：只写 ready_time，状态仍为 2，订单进入骑手待取餐池）----------
+      // 注意：出餐不能把订单推到 3（配送中），那会让订单永久跳过骑手抢单池；
+      // 也因此状态文案保持「制作中」，但必须出现「已出餐，等待骑手接单」的可见凭据。
+      expect(await clickByIdOrText(driver, actionId, '出餐完成')).assertTrue()
+      const readyHint: string = await waitForText(driver, statusId, '制作中', 20000)
+      console.info('[MerchantFlow] after ready status=' + readyHint)
+      expect(readyHint).assertEqual('制作中')
+      expect(await isFound(await scrollUntilVisible(driver, 'merchant-ready-' + orderId))).assertTrue()
 
-      // ---------- 6. 确认送达 3→4 ----------
-      expect(await clickByIdOrText(driver, actionId, '确认送达')).assertTrue()
-      const status3: string = await waitForText(driver, statusId, '已送达，待确认收货', 20000)
-      console.info('[MerchantFlow] after complete status=' + status3)
-      expect(status3).assertEqual('已送达，待确认收货')
+      // ---------- 6. 已出餐的订单由骑手接管：商户侧不再有「确认送达」按钮 ----------
+      // 后续 2→3/3→4 由骑手端 pickup/deliver 完成（见 RiderFlow.test.ets），商户端不参与。
+      expect(await isFound(await scrollUntilVisible(driver, actionId))).assertFalse()
 
       // ---------- 7. 收入统计页（数字打进 hilog，host 侧与 /api/merchant/stats 交叉核对）----------
       expect(await clickByIdOrText(driver, 'merchant-orders-back', '‹ 返回')).assertTrue()

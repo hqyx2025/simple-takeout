@@ -185,4 +185,10 @@ public class OrderDao {
         Long riderId = jdbc.queryForObject("SELECT rider_id FROM orders WHERE id = ?", Long.class, orderId);
         return riderId == null ? 0 : riderId;
     }
+
+    /** 商户出餐时间：非空表示订单已出餐并在骑手待取餐池中（前端据此显示"已出餐，等待骑手接单"）。 */
+    public String findReadyTime(long orderId) {
+        String readyTime = jdbc.queryForObject("SELECT ready_time FROM orders WHERE id = ?", String.class, orderId);
+        return readyTime == null ? "" : readyTime;
+    }
 }
