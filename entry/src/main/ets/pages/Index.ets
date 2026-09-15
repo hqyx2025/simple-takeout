@@ -287,9 +287,9 @@ struct Index {
         AssistantPage()
       }.tabBar(this.tabBuilder('AI助手', 1))
 
-      // 购物车Tab：复用 pages/CartPage 的实现，Tab 内不显示返回键
+      // 购物车Tab：购物车已收敛为底部标签，不再是独立路由页
       TabContent() {
-        CartPage({ showNavBar: false })
+        CartPage()
       }.tabBar(this.tabBuilder('购物车', 2))
 
       // 我的Tab
@@ -1978,12 +1978,10 @@ struct ProfileMainPage {
   @State recharging: boolean = false
   @Prop @Watch('onRefreshTokenChange') refreshToken: number = 0
   @StorageLink('isLoggedIn') loggedIn: boolean = false
-  @StorageLink('cartItems') @Watch('onCartItemsChange') cartItems: CartItem[] = []
   @State user: User = {
     id: 0, username: '未登录', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER,
     balance: 0, coupons: [], orders: [], storeIds: []
   }
-  @State cartTitle: string = '购物车'
   // 资产卡片使用页面自身的可观察文本，避免 Builder 继续复用充值前的余额快照。
   @State balanceDisplay: string = '0.00'
   // 余额显示只由当前页面的接口结果驱动，避免 StorageLink 旧快照回调覆盖新余额。
@@ -1993,19 +1991,13 @@ struct ProfileMainPage {
   onNavigateLogin: () => void = () => {}
 
   async aboutToAppear(): Promise<void> {
-    this.refreshCartTitle()
     this.loadLocalUser()
     await this.refreshFromDatabase()
   }
 
   async onRefreshTokenChange(): Promise<void> {
-    this.refreshCartTitle()
     this.loadLocalUser()
     await this.refreshFromDatabase()
-  }
-
-  onCartItemsChange(): void {
-    this.refreshCartTitle()
   }
 
   private loadLocalUser(): void {
@@ -2106,20 +2098,6 @@ struct ProfileMainPage {
     const confirmedUser: User = updatedUser as User
     this.applyUser(confirmedUser)
     promptAction.showToast({ message: `\u5145\u503c\u6210\u529f\uff0c\u5f53\u524d\u4f59\u989d ¥${confirmedUser.balance.toFixed(2)}`, duration: 2000 })
-  }
-
-  private refreshCartTitle(): void {
-    const currentCart: CartItem[] = AppStorage.get<CartItem[]>('cartItems') || []
-    let count: number = 0
-    const storeIds: number[] = []
-    for (let i = 0; i < currentCart.length; i++) {
-      const item: CartItem = currentCart[i]
-      if (item !== null && item !== undefined && item.quantity > 0 && storeIds.indexOf(item.storeId) < 0) {
-        storeIds.push(item.storeId)
-        count += 1
-      }
-    }
-    this.cartTitle = count > 0 ? `购物车 (${count})` : '购物车'
   }
 
   build() {
@@ -2228,14 +2206,6 @@ struct ProfileMainPage {
             }
             router.pushUrl({ url: 'pages/AddressListPage' })
           })
-          this.ProfileMenuRow('🛒', this.getCartTitle(), () => {
-            if (!this.loggedIn) {
-              promptAction.showToast({ message: '请先登录后查看购物车', duration: 1500 })
-              this.onNavigateLogin()
-              return
-            }
-            router.pushUrl({ url: 'pages/CartPage' })
-          }, 'profile-cart-entry')
           this.ProfileMenuRow('❤️', '我的收藏', () => { router.pushUrl({ url: 'pages/FavoriteListPage' }) })
           this.ProfileMenuRow('📞', '联系客服', () => { router.pushUrl({ url: 'pages/ContactCustomerServicePage' }) })
           this.ProfileMenuRow('⚙️', '设置', () => { router.pushUrl({ url: 'pages/SettingsPage' }) })
@@ -2389,10 +2359,6 @@ struct ProfileMainPage {
       }
       router.pushUrl({ url: 'pages/OrderListPage' })
     })
-  }
-
-  private getCartTitle(): string {
-    return '\u8d2d\u7269\u8f66'
   }
 
   @Builder

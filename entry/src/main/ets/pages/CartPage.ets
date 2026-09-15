@@ -1,9 +1,8 @@
 /**
  * 购物车页面。
  *
- * 两种承载方式共用同一份实现：
- * - 底部 Tab 的「购物车」标签（`showNavBar = false`）：标题栏不放返回键；
- * - 独立路由页 pages/CartPage（默认 `showNavBar = true`）：从「我的」页的购物车入口进入，带返回键。
+ * 只作为首页底部 Tab 的「购物车」标签内容承载（Tab 内嵌，标题栏不放返回键）。
+ * 「我的」页的购物车入口已删除，因此这里不再需要 showNavBar 开关与路由返回。
  */
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
@@ -34,16 +33,14 @@ class BundleHint {
 /**
  * 购物车页面。
  *
- * 两种承载方式共用同一份实现：
- * - 底部 Tab 的「购物车」标签（`showNavBar = false`）：标题栏不放返回键；
- * - 独立路由页 pages/CartPage（默认 `showNavBar = true`）：从「我的」页的购物车入口进入，带返回键。
+ * 只作为首页底部 Tab 的「购物车」标签内容承载（Tab 内嵌，标题栏不放返回键）。
+ * 「我的」页的购物车入口已删除，因此这里不再需要 showNavBar 开关与路由返回。
  */
-@Entry
 @Component
 export struct CartPage {
-  /** 是否显示带返回键的页面标题栏（Tab 内嵌时传 false）。 */
-  @Prop showNavBar: boolean = true
   @State cartItems: CartItem[] = []
+  // 全局购物车变化时刷新本页（Tab 常驻内存，没有页面级 onPageShow 可依赖）
+  @StorageLink('cartItems') @Watch('onGlobalCartChange') globalCartItems: CartItem[] = []
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State editing: boolean = false
   // 多规格：勾选按 (菜品, 规格) 行粒度记录，避免同菜品不同规格互相串选
@@ -63,9 +60,15 @@ export struct CartPage {
     await this.refreshFromDatabase()
   }
 
-  async onPageShow(): Promise<void> {
+  /**
+   * 购物车作为 Tab 内容常驻内存时不会走页面级 onPageShow，
+   * 因此改为监听全局购物车变化：在店铺详情/结算页改过购物车后切回来能立刻看到最新数据。
+   */
+  onGlobalCartChange(): void {
     if (this.loggedIn) {
-      await this.refreshFromDatabase()
+      this.cartItems = AppStorage.get<CartItem[]>('cartItems') || []
+      this.recomputeTotals()
+      this.cartRenderVersion += 1
     }
   }
 
@@ -75,17 +78,22 @@ export struct CartPage {
       return false
     }
     this.cartItems = remoteCart.slice()
-    let nextTotalCount: number = 0
-    let nextTotalPrice: number = 0
-    for (let i = 0; i < remoteCart.length; i++) {
-      nextTotalCount += remoteCart[i].quantity
-      nextTotalPrice += (remoteCart[i].price ?? remoteCart[i].goods.price) * remoteCart[i].quantity
-    }
-    this.totalCount = nextTotalCount
-    this.totalPrice = nextTotalPrice
+    this.recomputeTotals()
     this.cartRenderVersion += 1
     await this.refreshBundleHints()
     return true
+  }
+
+  /** 按当前 cartItems 重算总件数与总价（与后端返回的购物车、以及全局购物车变化共用）。 */
+  private recomputeTotals(): void {
+    let nextTotalCount: number = 0
+    let nextTotalPrice: number = 0
+    for (let i = 0; i < this.cartItems.length; i++) {
+      nextTotalCount += this.cartItems[i].quantity
+      nextTotalPrice += (this.cartItems[i].price ?? this.cartItems[i].goods.price) * this.cartItems[i].quantity
+    }
+    this.totalCount = nextTotalCount
+    this.totalPrice = nextTotalPrice
   }
 
   /** 凑单提示：对未达起送价的店铺查询还差多少元并给出可凑单菜品。 */
@@ -319,13 +327,6 @@ export struct CartPage {
   build() {
     Column() {
       Row() {
-        // Tab 内嵌时不显示返回键（Tab 页没有可返回的上一级）
-        if (this.showNavBar) {
-          Text('‹')
-            .fontSize(FONT_SIZE.BIG_TITLE)
-            .fontColor(COLORS.TEXT_PRIMARY)
-            .onClick(() => { router.back() })
-        }
         Text('购物车')
           .fontSize(FONT_SIZE.XL)
           .fontWeight(FontWeight.Bold)
@@ -343,8 +344,7 @@ export struct CartPage {
               this.selectedRowKeys = []
             }
           })
-      }
-      .width('100%')
+      }      .width('100%')
       .height(56)
       .padding({ left: SPACING.LG, right: SPACING.LG })
       .backgroundColor(COLORS.BG_WHITE)
