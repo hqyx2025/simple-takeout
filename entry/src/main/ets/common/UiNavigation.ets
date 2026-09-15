@@ -5,6 +5,7 @@
  * 确保异步请求完成后的返回、跳转和 Toast 仍然使用同一个页面上下文。
  */
 import { UIContext } from '@kit.ArkUI'
+import { navigationThrottle } from './NavigationThrottle'
 
 let cachedUiContext: UIContext | undefined = undefined
 
@@ -28,24 +29,36 @@ export interface ToastOptionsCompat {
 
 export function navigate(url: string): void {
   const context: UIContext | undefined = resolveUiContext()
-  if (context !== undefined) {
-    try {
-      context.getRouter().pushUrl({ url })
-    } catch (_) {
-      // 页面销毁或路由栈异常时忽略导航请求，避免影响当前页面生命周期。
-    }
+  if (context === undefined) {
+    return
+  }
+  if (!navigationThrottle.allowPush(url, Date.now())) {
+    // 连点同一入口：丢弃重复跳转，避免路由栈里叠两层同名页面。
+    return
+  }
+  try {
+    context.getRouter().pushUrl({ url })
+  } catch (_) {
+    // 页面销毁或路由栈异常时忽略导航请求，避免影响当前页面生命周期。
+    navigationThrottle.reset()
   }
 }
 
 export function goBack(): void {
   const context: UIContext | undefined = resolveUiContext()
-  if (context !== undefined) {
-    try {
-      context.getRouter().back()
-    } catch (_) {
-      // 页面已经退出时忽略返回请求。
-    }
+  if (context === undefined) {
+    return
   }
+  if (!navigationThrottle.allowBack(Date.now())) {
+    // 连点返回：丢弃重复返回，避免一次点击弹出两层页面。
+    return
+  }
+  try {
+    context.getRouter().back()
+  } catch (_) {
+    // 页面已经退出时忽略返回请求。
+  }
+  navigationThrottle.reset()
 }
 
 export function showToast(message: string, duration?: number): void {

@@ -107,6 +107,7 @@
 - **禁止用 PowerShell 的 `Get-Content`/`Set-Content` 读写仓库里的 UTF-8 源码**：PS 5.1 默认按 ANSI 解码、`Set-Content` 又按 ANSI 回写，会把中文注释整段打乱（本项目已踩过，恢复靠 `git checkout`）。改文件一律用编辑工具；确需脚本处理时用 `[System.IO.File]::ReadAllText/WriteAllText` 并显式指定 UTF-8。
 - **判断构建结果不要只看退出码**：`hvigor | Select-String` 这类管道会让 `$LASTEXITCODE` 失真，必须同时确认日志里的 `BUILD SUCCESSFUL` 与产物时间戳。
 - 多规格下单/加购必须带 `specId`，否则后端返回 400「请先选择规格」；前端购物车的 +/− 走的是 `specId=0` 语义，多规格菜品因此改为「选规格」按钮而非 +/−（避免必然失败的操作路径）。
+- **导航连点会让同一页面在路由栈里叠两层**（连点「定位」→ 两层 LocationPage，定位完成返回一次后看到的还是定位页）。工程里所有 `pushUrl/back` 都收敛在 `entry/src/main/ets/common/UiNavigation.ets`，因此防御只加在这一处（`NavigationThrottle`：同 URL 800ms 内第二次跳转丢弃、300ms 内第二次返回丢弃，返回后 `reset()` 允许再次进入同一页面）。**新增页面跳转必须走 `routerCompat.pushUrl`，禁止直接 `import router from '@ohos.router'`**，否则会绕过该防御；同理「确认位置」这类保存按钮要自带 `saving` 标记，避免连点落库出重复地址。
 - 待付款模型下"下单成功"≠"支付成功"：结算页下单后必须引导到订单详情完成支付，任何"下单即完成"的旧文案/旧判断都要同步更新。
 - DevEco 的 Code Linter / AppAnalyzer 目前**没有可用的命令行入口**（`plugins/codelinter/index.js` 脱离 IDE 运行会报 `configuration file ... is in use` 并写出 `undefined` 日志文件），上架前需在 IDE 内执行；仓库用 `scripts/release-check.ps1` 提供可复现的静态门禁作为补充。
 - 图片上传用 `@ohos.net.http` 的 `multiFormDataList`（把 picker 拿到的 URI 经 `fileIo` 读成 ArrayBuffer 再提交），不要依赖 axios 的 FormData 传本地文件；系统图库选择器（`photoAccessHelper.PhotoViewPicker`）**不需要申请媒体权限**。
@@ -159,7 +160,7 @@
 - 提交信息格式 `<type>(<scope>): <描述>`，如 `feat(merchant):`、`fix(order):`、`docs:`
 - 任务完成后主动 commit + push 到 GitHub（https://github.com/hqyx2025/simple-takeout.git，master 分支；原 Gitee 远端已弃用）
 - 只改文档时不得修改业务代码/数据库脚本/配置文件，且不自动提交
-- **提交身份固定用 GitHub 已绑定邮箱 `751848863@qq.com`**（本仓库 `git config user.email` 已设为它，勿改回）：GitHub 只把提交归到账号里已验证的邮箱，用 Gitee 的 `...@user.noreply.gitee.com` 会被算成**另一个 Contributor**。本仓库曾因 221 个提交用了 Gitee 邮箱而多出一个身份，2025 年已重写全部提交邮箱修复。
+- **提交身份固定用 GitHub 已绑定邮箱 `751848863@qq.com`**（本仓库 `git config user.email` 已设为它，勿改回）：GitHub 只把提交归到账号里已验证的邮箱，用 Gitee 的 `...@user.noreply.gitee.com` 会被算成**另一个 Contributor**。2026-06-14 用 `filter-branch` 把历史里 221 个 Gitee 邮箱提交统一重写为 `HQYX2025 <751848863@qq.com>` 并 force push（重写后 master = `2db984e`，工作树内容零变更；重写前历史留存于本地分支 `backup-before-email-rewrite` 与 tag `backup-pre-email-rewrite-20260614`，Gitee 有同名备份分支）。**注意：那条 `backup-before-email-rewrite` 仍含旧 Gitee 邮箱，永远不要推到 GitHub**，否则会把已消失的身份重新引入 Contributors。
 - **禁止在提交信息里出现任何 AI 署名**：`Co-Authored-By: Claude <noreply@anthropic.com>`、`Generated with ...`、`claude`/`anthropic` 等一律不得出现，提交只以项目作者身份签署。**一次都不要推**——推上去之后即使立刻 amend + force push 删掉该提交，GitHub 的 Contributors 仍可能长期保留这个已不存在的身份（机制见第 8 节）。
 
 ## 10. 项目约束（AI/agent 工作约定）

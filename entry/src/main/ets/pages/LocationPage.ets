@@ -78,6 +78,8 @@ export struct LocationPage {
   // 选中的搜索结果
   @State selectedPlace: SearchPlace | null = null
   @State showSavedDialog: boolean = false
+  // 确认位置保存中标记，防止连点重复新增地址
+  private savingAddress: boolean = false
 
   aboutToAppear() {
     if (!isLoggedIn()) {
@@ -337,27 +339,36 @@ export struct LocationPage {
       promptAction.showToast({ message: '请先定位或拖动地图选择位置', duration: 1500 })
       return
     }
-    const pos: GeoPosition = this.currentPosition as GeoPosition
-    const detail: string = this.selectedPlace !== null ? (this.selectedPlace as SearchPlace).name : ''
-    let addressText: string = this.currentAddressText
-    if (addressText === '') {
-      addressText = await reverseGeocodePosition(pos)
-    }
-    if (addressText === '' && this.selectedPlace !== null) {
-      const place: SearchPlace = this.selectedPlace as SearchPlace
-      addressText = place.district !== '' ? `${place.district} ${place.address}` : place.address
-      if (addressText === '') {
-        addressText = place.name
-      }
-    }
-    if (addressText === '') {
-      promptAction.showToast({ message: '正在解析当前位置，请稍后再点击确认位置', duration: 1800 })
-      if (this.isMapReady) {
-        await this.refreshMap()
-      }
+    // 连点确认会重复调用新增地址接口，落库出多条重复地址；保存期间直接忽略后续点击。
+    if (this.savingAddress) {
       return
     }
-    await this.applyAddress(addressText, detail, pos)
+    this.savingAddress = true
+    try {
+      const pos: GeoPosition = this.currentPosition as GeoPosition
+      const detail: string = this.selectedPlace !== null ? (this.selectedPlace as SearchPlace).name : ''
+      let addressText: string = this.currentAddressText
+      if (addressText === '') {
+        addressText = await reverseGeocodePosition(pos)
+      }
+      if (addressText === '' && this.selectedPlace !== null) {
+        const place: SearchPlace = this.selectedPlace as SearchPlace
+        addressText = place.district !== '' ? `${place.district} ${place.address}` : place.address
+        if (addressText === '') {
+          addressText = place.name
+        }
+      }
+      if (addressText === '') {
+        promptAction.showToast({ message: '正在解析当前位置，请稍后再点击确认位置', duration: 1800 })
+        if (this.isMapReady) {
+          await this.refreshMap()
+        }
+        return
+      }
+      await this.applyAddress(addressText, detail, pos)
+    } finally {
+      this.savingAddress = false
+    }
   }
 
   // 保存配送地址后明确提示用户，并由用户确认是否返回首页。
