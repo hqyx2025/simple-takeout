@@ -102,10 +102,9 @@ public class OrderController {
     @GetMapping("/merchant/stats")
     public ApiResponse<OrderService.MerchantStats> stats(@RequestAttribute("userId") long userId,
                                                          @RequestAttribute("role") int role,
-                                                         @RequestParam(defaultValue = "0") long storeId,
-                                                         @RequestParam(defaultValue = "week") String range) {
+                                                         @RequestParam(defaultValue = "0") long storeId) {
         requireMerchant(role);
-        return ApiResponse.ok(orderService.merchantStats(userId, storeId, range));
+        return ApiResponse.ok(orderService.merchantStats(userId, storeId));
     }
 
     public record CreateOrderRequest(long storeId, List<Order.OrderItem> items, long addressId,

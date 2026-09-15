@@ -655,7 +655,12 @@ public class OrderService {
 
     // ============ 商户统计 ============
 
-    public MerchantStats merchantStats(long ownerId, long storeId, String range) {
+    /**
+     * 商户统计：固定返回今日/本周/本月三档（周一为一周起点，与前端 AppStorageManager 口径一致）。
+     * 不接收 range 参数——历史上它被声明过却从未使用，非法值还会被静默忽略，
+     * 与其留一个骗人的入参，不如让接口签名如实反映"三档一起返回"。
+     */
+    public MerchantStats merchantStats(long ownerId, long storeId) {
         List<Store> stores = storeDao.listByOwner(ownerId);
         if (stores.isEmpty()) {
             return new MerchantStats(0, 0, 0, 0, 0, 0);

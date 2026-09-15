@@ -511,7 +511,8 @@ export struct CheckoutPage {
         .layoutWeight(1)
         .margin({ left: SPACING.SM })
       if (this.selectedCoupon !== null) {
-        Text(`-¥${this.selectedCoupon.amount.toFixed(2)}`)
+        // 券 amount 缺失时 toFixed 会渲染成 ¥NaN；与项目其余兜底口径统一
+        Text(`-¥${(Number.isFinite(this.selectedCoupon.amount) ? this.selectedCoupon.amount : 0).toFixed(2)}`)
           .fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.PRIMARY)
       } else {

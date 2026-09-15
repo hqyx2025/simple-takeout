@@ -34,7 +34,7 @@
     --mode module -p module=entry@default -p product=default -p requiredDeviceType=phone assembleHap --analyze=normal --parallel --incremental --daemon
   ```
   构建日志：`.hvigor/outputs/build-logs/build.log`；判断成功要看日志里的 `BUILD SUCCESSFUL` 并确认 `entry/build/default/outputs/default/*.hap` 时间戳已更新（流水线里 `Select-String` 会吞掉退出码，别只看 `$LASTEXITCODE`）
-- 后端测试：`mvn -f server/pom.xml test`（**135 个测试**，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格/资金与状态并发边界/文本列宽边界、缓存穿透/击穿/雪崩防护与领域事件 Outbox 语义、AI 助手意图路由、**登录限流与 token 吊销（jti 黑名单 + 改密即失效）**、**搜索不逐店查商品（N+1 契约）**，以及**骑手待取餐池 SQL 契约**与骑手配送闭环）
+- 后端测试：`mvn -f server/pom.xml test`（**138 个测试**，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格/资金与状态并发边界/文本列宽边界、缓存穿透/击穿/雪崩防护与领域事件 Outbox 语义、AI 助手意图路由、**登录限流与 token 吊销（jti 黑名单 + 改密即失效）**、**搜索不逐店查商品（N+1 契约）**、**平台统计口径（订单数与成交额同步排除 5/6）**，以及**骑手待取餐池 SQL 契约**与骑手配送闭环）
 - 一键容器化环境：`docker compose up -d --build`（app + MySQL 8.4 + Redis 7，含健康检查与启动依赖顺序）；只起基础设施（本机用 Maven 跑后端）用 `docker compose up -d mysql redis`。注意 compose 的 MySQL 映射到宿主 **3307**（避开本机 MySQL84 的 3306）
 - 后端测试与运行都要求 `JAVA_HOME` 指向 **JDK 25**；`server/Dockerfile` 的构建阶段也必须是 JDK 25，否则 `maven.compiler.release=25` 直接编译失败
 - Release 打包（**当前范围外，可选工具**）：`scripts/enable-release-signing.ps1`（接入发布证书）→ `scripts/build-release.ps1`（签名包）→ `scripts/release-check.ps1 [-Build]`（上架体检，输出 `md/上架体检报告.md`，该报告为生成物不入库）；详见 `md/上架体检与Release签名.md`。日常开发只需 debug 构建，不必碰这一套。
@@ -214,15 +214,15 @@
 - ~~搜索 N+1~~ **已修复**：`UserCenterService.search` 原先对每家店调一次 `goodsDao.listByStore`（41 店 → 42 次查询，且每次还带 `attachSpecs` 批量查规格并水合最多 959 行商品对象）；现改为一条 `SELECT DISTINCT store_id FROM goods WHERE status = 1 AND name LIKE ?`（`GoodsDao.listStoreIdsByNameLike`）拿命中店铺 id 集合再本地过滤。用例 `UserCenterSearchTest` 守住这条契约（`searchNeverQueriesGoodsPerStore` 断言逐店查询次数必须为 0）。
 - 密码仍为 SHA-256 单轮加固定盐（未换 bcrypt/Argon2）；登录/注册限流与 token 吊销（jti 黑名单、改密即失效）**已落地**，见第 4 节。
 - 上传只校验后缀 + content-type 白名单，未做文件魔数校验；`/uploads/**` 无需 JWT（公开资源）。
-- Banner `PUT` 是"null 覆盖为空串"语义（非 PATCH），只改 sort 会把 title/subtitle 清空。
-- `merchantStats(ownerId, storeId, range)` 的 `range` 参数未使用（今日/本周/本月为固定口径），非法值被静默忽略。
-- `AdminStatsDao` 的 today_orders 含已取消订单，today_gmv 排除 5/6——两者口径不一致，界面上同时展示会显得矛盾。
+- ~~`merchantStats(ownerId, storeId, range)` 的 `range` 参数未使用~~ **已删除该参数**：响应固定返回今日/本周/本月三档（周一为一周起点），`range` 从未被使用、非法值还会被静默忽略，前端也从不传它。接口签名现为 `GET /api/merchant/stats?storeId=`，如实反映"三档一起返回"。
+- ~~`AdminStatsDao` 的 today_orders 含已取消订单，today_gmv 排除 5/6~~ **已统一口径**：订单数与成交额**同时排除已取消(5)/退款中(6)**；`today_orders` 补上排除条件，近7日趋势的 `order_count` 从 `COUNT(*)` 改为 `COUNT(CASE WHEN status NOT IN (5,6) THEN 1 END)`（同一个漏网字段）。`total_orders` 是"累计下单数"的展示口径，**故意含全部状态**，不要顺手改掉。契约由 `AdminStatsDaoSqlTest` 钉住。
+- ~~前端兜底口径不统一~~ **已修**：`BalancePage` 的 `this.balance = user.balance` 与充值回写都改为 `Number.isFinite(x) ? x : 0`；`CheckoutPage` 的 `selectedCoupon.amount.toFixed(2)` 同样加兜底（缺字段会渲染成 `¥NaN`）。
+- Banner `PUT` 是"null 覆盖为空串"语义（非 PATCH），只改 sort 会把 title/subtitle 清空。**现状已缓解**：`ContentService.updateBanner` 会拒绝空标题，且管理端界面只有 Banner 的新增/上下架/删除、**没有编辑入口**，该路径只能被直接调 API 触发；真要支持部分更新需改成 PATCH 语义。
 - Outbox 去重键为"先查后写"（单实例安全）；多实例部署需改回原子 `setIfAbsent` + 行级认领，并核对 `dedup-hours` 与 Stream `retain-hours` 的关系。
 - 前端支付倒计时用设备本地时间推算，未使用服务端时区（可下发 `payDeadlineEpochMs` 收敛）。
 - 骑手为自助注册即开通（`role=3` 自动建档 status=1，无需平台审核）。
 - `MerchantStatsPage` 无法区分"同步失败"与"真的没有订单"（都是 ¥0.00 / 0 单）。
 - `normalizeOrderList` 无条件丢弃持久化订单（订单只以服务端为准，属有意设计但未注释说明）。
-- 前端兜底口径不统一：`CheckoutPage` 里 `selectedCoupon.amount.toFixed(2)` 与 `BalancePage` 的 `this.balance = user.balance` 都未做 `?? 0` / `Number.isFinite` 归一（同项目 `AppStorageManager`、`Index` 已有 `Number.isFinite(user.balance) ? ... : 0` 的写法），响应缺字段时会显示 `¥NaN` 或渲染失败。
 - `AppStorageManager.syncCategoriesFromServer` 对服务端 `name/icon/color` 直接 `.trim()` 无 `?? ''` 兜底，字段为 NULL 时该次同步静默失败（调用处未 await 也未 try/catch），首页分类停留在默认 8 个图标。
 
 # Ponytail, lazy senior dev mode

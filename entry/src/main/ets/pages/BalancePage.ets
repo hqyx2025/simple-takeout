@@ -43,7 +43,8 @@ export struct BalancePage {
     // 余额与银行卡相互独立：任一失败都不应该让另一块空白
     const user: User | undefined = await fetchCurrentUserApi()
     if (user !== undefined && user !== null) {
-      this.balance = user.balance
+      // 响应缺 balance 时显示 ¥NaN 是明显的坏体验；与 AppStorageManager/Index 统一兜底口径
+      this.balance = Number.isFinite(user.balance) ? user.balance : 0
     }
     this.cards = await fetchBankCardsApi()
     this.loading = false
@@ -78,8 +79,9 @@ export struct BalancePage {
     this.showRechargeDialog = false
     this.rechargeAmount = ''
     // 以服务端返回的最新余额为准，避免前端自己加减算错
-    this.balance = updated.balance
-    promptAction.showToast({ message: `充值成功，当前余额 ¥${updated.balance.toFixed(2)}`, duration: 2000 })
+    const nextBalance: number = Number.isFinite(updated.balance) ? updated.balance : 0
+    this.balance = nextBalance
+    promptAction.showToast({ message: `充值成功，当前余额 ¥${nextBalance.toFixed(2)}`, duration: 2000 })
   }
 
   build() {
