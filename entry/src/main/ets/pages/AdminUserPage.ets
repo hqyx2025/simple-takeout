@@ -16,6 +16,8 @@ export struct AdminUserPage {
   @State users: AdminUser[] = []
   @State keyword: string = ''
   @State roleFilter: number = -1
+  // -1 全部 / 1 已启用 / 0 已停用（后端 /api/admin/users 的 status 参数）
+  @State statusFilter: number = -1
   @State loading: boolean = false
   // ForEach 键含 id 时，刷新回来的同 id 新对象会被复用而不重建行，
   // 表现为停用后按钮仍显示「停用」；用版本号拼进键强制重建。
@@ -37,7 +39,8 @@ export struct AdminUserPage {
     }
     this.loading = true
     const role: number | undefined = this.roleFilter < 0 ? undefined : this.roleFilter
-    this.users = await fetchAdminUsersApi(role, undefined, this.keyword)
+    const status: number | undefined = this.statusFilter < 0 ? undefined : this.statusFilter
+    this.users = await fetchAdminUsersApi(role, status, this.keyword)
     this.renderVersion += 1
     this.loading = false
   }
@@ -69,6 +72,7 @@ export struct AdminUserPage {
       }.width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE)
 
       Row({ space: SPACING.MD }) {
+        Text('角色').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
         Button('全部').fontSize(FONT_SIZE.SM).backgroundColor(this.roleFilter === -1 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
           .fontColor(this.roleFilter === -1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.roleFilter = -1; this.refresh() })
@@ -80,10 +84,27 @@ export struct AdminUserPage {
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.roleFilter = 1; this.refresh() })
       }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
 
+      Row({ space: SPACING.MD }) {
+        Text('状态').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+        Button('全部').id('admin-user-status-all').fontSize(FONT_SIZE.SM)
+          .backgroundColor(this.statusFilter === -1 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+          .fontColor(this.statusFilter === -1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = -1; this.refresh() })
+        Button('已启用').id('admin-user-status-enabled').fontSize(FONT_SIZE.SM)
+          .backgroundColor(this.statusFilter === 1 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+          .fontColor(this.statusFilter === 1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 1; this.refresh() })
+        Button('已停用').id('admin-user-status-disabled').fontSize(FONT_SIZE.SM)
+          .backgroundColor(this.statusFilter === 0 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+          .fontColor(this.statusFilter === 0 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 0; this.refresh() })
+      }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
+
       Scroll() {
         Column({ space: SPACING.MD }) {
           if (this.users.length === 0) {
-            Text('暂无账号数据').width('100%').padding(SPACING.LG).fontColor(COLORS.TEXT_HINT)
+            Text(this.statusFilter === -1 && this.roleFilter === -1 ? '暂无账号数据' : '当前筛选条件下暂无账号')
+              .width('100%').padding(SPACING.LG).fontColor(COLORS.TEXT_HINT)
           }
           ForEach(this.users, (item: AdminUser) => { this.UserRow(item) },
             (item: AdminUser) => `${this.renderVersion}-${item.id}`)
