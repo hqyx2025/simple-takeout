@@ -1720,3 +1720,38 @@ function toAnnouncement(a: ServerAnnouncement): Announcement {
   }
   return announcement
 }
+
+// ===================== AI 智能助手（规则问答） =====================
+
+/** 助手提问请求体（后端 AskRequest 对应字段）。 */
+interface AssistantAskRequest {
+  question: string
+}
+
+/** 助手回答（后端 AssistantReply 对应字段）。 */
+interface ServerAssistantReply {
+  answer: string
+  suggestions: string[]
+}
+
+/** 助手回答的前端结构：不依赖后端字段名，避免字段缺失时渲染崩溃。 */
+export class AssistantReply {
+  answer: string = ''
+  suggestions: string[] = []
+}
+
+/**
+ * 向智能助手提问。
+ * 助手是纯只读的规则问答（不接外部大模型），失败时返回 null 由页面给出兜底提示。
+ */
+export async function askAssistantApi(question: string): Promise<AssistantReply | null> {
+  const req: AssistantAskRequest = { question: question }
+  const resp: ApiResponse<ServerAssistantReply> = await post<ServerAssistantReply>('/api/assistant/chat', req)
+  if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
+    return null
+  }
+  const reply: AssistantReply = new AssistantReply()
+  reply.answer = resp.data.answer ?? ''
+  reply.suggestions = Array.isArray(resp.data.suggestions) ? resp.data.suggestions : []
+  return reply
+}

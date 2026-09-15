@@ -6,6 +6,7 @@ import { Category, StoreItem, GoodsItem, GoodsSpec, SpecialGoodsItem, SeckillIte
 import { addToCart, addCartItemRemote, updateCartItemQuantity, updateCartItemQuantityRemote, refreshCartFromServer, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCartRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncBannersRemote, syncAnnouncementsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, cancelOrderRemote, payOrderRemote, fetchSeckillsRemote, getLastRemoteErrorMessage, rechargeBalanceRemote, syncCurrentUserFromServer } from '../service/AppStorageManager'
 import { fetchRecommendedStoresApi, fetchSpecialGoodsApi, fetchStoreMerchantCategoriesApi, fetchStoreDetailApi } from '../service/ApiService'
 import { LoginPage } from './LoginPage'
+import { AssistantPage } from './AssistantPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, formatSales } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
 import { RatingStars } from '../components/RatingStars'
@@ -30,17 +31,6 @@ class QuickEntryItem {
   }
 }
 
-class OrderTabItem {
-  title: string = ''
-  status: number = -1
-
-  static create(title: string, status: number): OrderTabItem {
-    let item = new OrderTabItem()
-    item.title = title
-    item.status = status
-    return item
-  }
-}
 
 // 店铺列表懒加载数据源（实现 IDataSource）
 class StoreDataSource implements IDataSource {
@@ -69,32 +59,6 @@ class StoreDataSource implements IDataSource {
   }
 }
 
-// 订单列表懒加载数据源（实现 IDataSource）
-class OrderDataSource implements IDataSource {
-  private list: Order[] = []
-  private listeners: DataChangeListener[] = []
-
-  totalCount(): number {
-    return this.list.length
-  }
-
-  getData(index: number): Order {
-    return this.list[index]
-  }
-
-  registerDataChangeListener(listener: DataChangeListener): void {
-    this.listeners.push(listener)
-  }
-
-  unregisterDataChangeListener(listener: DataChangeListener): void {
-    this.listeners = this.listeners.filter((l: DataChangeListener) => l !== listener)
-  }
-
-  setData(data: Order[]): void {
-    this.list = data
-    this.listeners.forEach((l: DataChangeListener) => l.onDataReloaded())
-  }
-}
 
 @Entry
 @Component
@@ -306,7 +270,7 @@ struct Index {
       } else {
       if (!this.showLogin) {
       Tabs({ controller: this.tabsController, barPosition: BarPosition.End }) {
-      // 首页Tab
+      // 首页Tab（含原「发现」的附近推荐板块）
       TabContent() {
         HomePage({
           onStoreClick: (store: StoreItem) => {
@@ -317,40 +281,24 @@ struct Index {
         })
       }.tabBar(this.tabBuilder('首页', 0))
 
-      // 发现Tab - 店铺详情
+      // AI 智能助手Tab（原「发现」位置）
       TabContent() {
-        DiscoverPage({
-          onBack: () => {
-            this.currentTab = 0
-            this.tabsController.changeIndex(0)
-          },
-          onNavigateLogin: () => { this.showLogin = true },
-          onStoreClick: (store: StoreItem) => { this.showStoreDetail(store.id, store.name) }
-        })
-      }.tabBar(this.tabBuilder('发现', 1))
-
-      // 订单Tab
-      TabContent() {
-        OrderListMainPage()
-      }.tabBar(this.tabBuilder('订单', 2))
+        AssistantPage()
+      }.tabBar(this.tabBuilder('AI助手', 1))
 
       // 我的Tab
       TabContent() {
         ProfileMainPage({
           refreshToken: this.profileRefreshToken,
-          onNavigate: (tab: number) => {
-            this.currentTab = tab
-            this.tabsController.changeIndex(tab)
-          },
           onNavigateLogin: () => { this.showLogin = true }
         })
-      }.tabBar(this.tabBuilder('我的', 3))
+      }.tabBar(this.tabBuilder('我的', 2))
     }
     .barHeight(50)
     .barBackgroundColor(COLORS.BG_WHITE)
     .onChange((index: number) => {
       this.currentTab = index
-      if (index === 3) {
+      if (index === 2) {
         this.profileRefreshToken += 1
       }
       logInfo('Page', `首页 Tab 切换 index=${index}`)
@@ -445,6 +393,9 @@ struct HomePage {
   @State isRefreshing: boolean = false
   @StorageLink('currentAddress') @Watch('onCurrentAddressChange') currentAddress: Address | null = null
   @State isHeaderVisible: boolean = false
+  // 附近推荐（原「发现」Tab 的能力，现并入首页）：进入首页与定位变化时刷新
+  @State recommendedStores: StoreItem[] = []
+  @State recommendedLoading: boolean = false
   // 隐私政策同意改由独立页面 pages/ConsentPage 承载（见该文件注释），首页不再内嵌同意弹窗
   onStoreClick: (store: StoreItem) => void = () => {}
   onNavigateLogin: () => void = () => {}
@@ -453,13 +404,42 @@ struct HomePage {
   onLoginStateChange(): void {
     if (this.loggedIn) {
       this.refreshHomeData()
+      this.refreshRecommended()
     } else {
       this.specialGoods = []
+      this.recommendedStores = []
     }
   }
 
   onCurrentAddressChange(): void {
     this.refreshHomeData()
+    this.refreshRecommended()
+  }
+
+  /** 拉取附近推荐店铺（2 公里内、平台推荐位）。 */
+  private async refreshRecommended(): Promise<void> {
+    if (!this.loggedIn) {
+      return
+    }
+    if (this.recommendedLoading) {
+      promptAction.showToast({ message: '推荐店铺正在刷新，请稍候', duration: 1200 })
+      return
+    }
+    this.recommendedLoading = true
+    const latitude: number | undefined = this.currentAddress !== null ? this.currentAddress.latitude : undefined
+    const longitude: number | undefined = this.currentAddress !== null ? this.currentAddress.longitude : undefined
+    this.recommendedStores = await fetchRecommendedStoresApi(2, 10, latitude, longitude)
+    this.recommendedLoading = false
+  }
+
+  /** 推荐区需要定位：没有经纬度时提示去定位，而不是显示空列表。 */
+  private hasRecommendLocation(): boolean {
+    if (this.currentAddress === null) {
+      return false
+    }
+    const address: Address = this.currentAddress as Address
+    return address.latitude !== undefined && address.longitude !== undefined
+      && Number.isFinite(address.latitude) && Number.isFinite(address.longitude)
   }
 
   // 首页定位栏只展示“市 + 区/县/旗”，完整地址仍保留在 currentAddress 中供结算和配送使用
@@ -511,6 +491,7 @@ struct HomePage {
     // 隐私同意前不发起网络请求（未同意时 Index 会先跳转 ConsentPage，正常不会走到这里）
     if (AppStorage.get<boolean>('privacyConsent') || false) {
       this.refreshHomeData()
+      this.refreshRecommended()
     } else {
       logInfo('Home', '隐私政策未同意，等待用户确认后再加载首页数据')
     }
@@ -884,6 +865,63 @@ struct HomePage {
             .width('100%')
           }
 
+          // 附近推荐（原「发现」Tab 并入首页）：2 公里内、平台推荐位的店铺
+          Row() {
+            Text('附近推荐')
+              .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+              .layoutWeight(1)
+            Text('刷新')
+              .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
+              .id('home-recommend-refresh')
+              .onClick(() => { this.refreshRecommended() })
+          }
+          .width('100%')
+          .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.SM })
+
+          if (!this.loggedIn) {
+            Text('登录后查看平台推荐商户')
+              .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+              .width('100%').textAlign(TextAlign.Center)
+              .padding({ top: SPACING.SM, bottom: SPACING.SM })
+          } else if (!this.hasRecommendLocation()) {
+            Row({ space: SPACING.SM }) {
+              Text('定位后可看到附近推荐商户')
+                .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).layoutWeight(1)
+              Button('去定位').height(32).fontSize(FONT_SIZE.SM)
+                .id('home-recommend-location')
+                .onClick(() => { router.pushUrl({ url: 'pages/LocationPage' }) })
+            }
+            .width('100%')
+            .padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
+          } else if (this.recommendedLoading) {
+            Text('正在查询附近推荐商户…')
+              .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+              .width('100%').textAlign(TextAlign.Center)
+              .padding({ top: SPACING.SM, bottom: SPACING.SM })
+          } else if (this.recommendedStores.length === 0) {
+            Text('暂无附近推荐商户，平台会按距离和营业状态持续更新')
+              .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+              .width('100%').textAlign(TextAlign.Center)
+              .padding({ top: SPACING.SM, bottom: SPACING.SM })
+          } else {
+            List({ space: SPACING.SM }) {
+              ForEach(this.recommendedStores, (store: StoreItem) => {
+                ListItem() {
+                  RecommendedStoreCardHost({
+                    store: store,
+                    onStoreClick: (target: StoreItem) => { this.onStoreClick(target) }
+                  })
+                }
+              }, (store: StoreItem) => `recommend-${store.id}`)
+            }
+            .id('home-recommend-list')
+            // 高度按内容自适应（推荐是首页的一段，不是整屏列表），靠外层 Scroll 滚动
+            .width('100%')
+            .height(this.recommendedStores.length * 108)
+            .scrollBar(BarState.Off)
+            .padding({ left: SPACING.LG, right: SPACING.LG })
+          }
+
           // 特价团购标题
           Row() {
             Text('特价团购')
@@ -1091,124 +1129,26 @@ struct HomePage {
   }
 }
 
-// ===================== 发现/附近推荐页 =====================
+// ===================== 附近推荐卡片 =====================
+// 原「发现」Tab 已并入首页：推荐数据与卡片渲染都留在首页，这里只保留共享的卡片构建器
 @Component
-struct DiscoverPage {
-  @StorageLink('isLoggedIn') loggedIn: boolean = false
-  @StorageLink('currentAddress') @Watch('onCurrentAddressChange') currentAddress: Address | null = null
-  @State recommendedStores: StoreItem[] = []
-  @State loading: boolean = false
-  onBack: () => void = () => {}
-  onNavigateLogin: () => void = () => {}
+struct RecommendedStoreCardHost {
+  store: StoreItem = {
+    id: 0, name: '', image: '', rating: 0, monthlySales: 0, deliveryFee: 0, minOrder: 0,
+    deliveryTime: '', distance: '', tags: [], notice: '', categoryId: 0, ownerId: 0
+  }
   onStoreClick: (store: StoreItem) => void = () => {}
 
-  aboutToAppear() {
-    this.refreshRecommended()
-  }
-
-  onCurrentAddressChange(): void {
-    this.refreshRecommended()
-  }
-
-  private async refreshRecommended(): Promise<void> {
-    if (!this.loggedIn) {
-      return
-    }
-    if (this.loading) {
-      promptAction.showToast({ message: '推荐店铺正在刷新，请稍候', duration: 1200 })
-      return
-    }
-    this.loading = true
-    const latitude: number | undefined = this.currentAddress !== null ? this.currentAddress.latitude : undefined
-    const longitude: number | undefined = this.currentAddress !== null ? this.currentAddress.longitude : undefined
-    this.recommendedStores = await fetchRecommendedStoresApi(2, 10, latitude, longitude)
-    this.loading = false
-  }
-
-  private hasLocation(): boolean {
-    if (this.currentAddress === null) {
-      return false
-    }
-    const address: Address = this.currentAddress as Address
-    return address.latitude !== undefined && address.longitude !== undefined
-      && Number.isFinite(address.latitude) && Number.isFinite(address.longitude)
-  }
-
   build() {
-    Column() {
-      // 导航栏
-      Row() {
-        Text('‹ 返回')
-          .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
-          .onClick(() => { this.onBack() })
-        Text('发现')
-          .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
-          .layoutWeight(1).textAlign(TextAlign.Center)
-        Text('   ').fontSize(FONT_SIZE.MD) // 占位
-      }
-      .width('100%').height(44)
-      .padding({ left: SPACING.LG, right: SPACING.LG })
-      .backgroundColor(COLORS.BG_WHITE)
-
-      Column() {
-          Row() {
-            Text('附近推荐')
-              .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
-              .layoutWeight(1)
-            Button('刷新').height(32).fontSize(FONT_SIZE.SM)
-              .onClick(() => { this.refreshRecommended() })
-          }
-          .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD })
-          if (!this.loggedIn) {
-            Column({ space: SPACING.SM }) {
-              Text('请登录后查看平台推荐商户').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
-              Button('立即登录').height(40).fontSize(FONT_SIZE.MD).onClick(() => { this.onNavigateLogin() })
-            }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
-          } else if (!this.hasLocation()) {
-            Column({ space: SPACING.SM }) {
-              Text('请先定位，再查看附近推荐商户').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
-              Button('去定位').height(40).fontSize(FONT_SIZE.MD)
-                .onClick(() => { router.pushUrl({ url: 'pages/LocationPage' }) })
-            }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
-          } else if (this.loading) {
-            Column() {
-              Text('正在查询附近推荐商户…').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
-            }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
-          } else if (this.recommendedStores.length === 0) {
-            Column() {
-              Text('暂无附近推荐商户').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
-              Text('平台会根据距离和营业状态持续更新推荐').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
-                .margin({ top: SPACING.SM })
-            }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
-          } else {
-            // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
-            List({ space: SPACING.SM }) {
-              ForEach(this.recommendedStores, (store: StoreItem) => {
-                ListItem() {
-                  this.RecommendedStoreCard(store)
-                }
-              }, (store: StoreItem) => store.id.toString())
-            }
-            .width('100%').layoutWeight(1).scrollBar(BarState.Off).padding(SPACING.LG)
-          }
-      }
-      .width('100%').layoutWeight(1)
-    }
-    .width('100%').height('100%')
-    .backgroundColor(COLORS.BG_PRIMARY)
-  }
-
-  @Builder
-  RecommendedStoreCard(store: StoreItem) {
     Row({ space: SPACING.MD }) {
       Column() {
-        Text(store.name.substring(0, 1)).fontSize(28).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_WHITE)
+        Text(this.store.name.substring(0, 1)).fontSize(28).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_WHITE)
       }
       .width(76).height(76).backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.MD)
       .justifyContent(FlexAlign.Center)
       Column({ space: SPACING.XS }) {
         Row() {
-          Text(store.name).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
+          Text(this.store.name).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
             .fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1).maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
           Text('平台推荐').fontSize(FONT_SIZE.XS).fontColor(COLORS.PRIMARY)
@@ -1216,18 +1156,18 @@ struct DiscoverPage {
             .borderRadius(BORDER_RADIUS.ROUND)
         }.width('100%')
         Row({ space: SPACING.SM }) {
-          RatingStars({ rating: store.rating, fontSize: FONT_SIZE.SM, showNumber: true })
-          Text(`月售${formatSales(store.monthlySales)}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
-          Text(store.distance).fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
+          RatingStars({ rating: this.store.rating, fontSize: FONT_SIZE.SM, showNumber: true })
+          Text(`月售${formatSales(this.store.monthlySales)}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+          Text(this.store.distance).fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
         }
-        Text(`${store.deliveryTime} · 配送¥${store.deliveryFee} · ${store.minOrder}元起送`)
+        Text(`${this.store.deliveryTime} · 配送¥${this.store.deliveryFee} · ${this.store.minOrder}元起送`)
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
-        Text(store.notice).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+        Text(this.store.notice).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
       }.layoutWeight(1).alignItems(HorizontalAlign.Start)
     }
     .width('100%').padding(SPACING.MD).backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG).onClick(() => { this.onStoreClick(store) })
+    .borderRadius(BORDER_RADIUS.LG).onClick(() => { this.onStoreClick(this.store) })
   }
 }
 
@@ -2023,257 +1963,6 @@ export struct StoreDetailContent {
   }
 }
 
-// ===================== 订单列表 =====================
-@Component
-struct OrderListMainPage {
-  // 注意：数据源必须在 @StorageLink+@Watch 字段之前声明，
-  // 避免 @StorageLink 首次绑定时触发 @Watch 回调访问到未初始化的数据源
-  private orderDataSource: OrderDataSource = new OrderDataSource()
-  @StorageLink('orderList') @Watch('onOrderListChange') orderList: Order[] = []
-  @StorageLink('isLoggedIn') @Watch('onLoginStateChange') loggedIn: boolean = false
-  @StorageLink('orderFilterStatus') @Watch('onOrderFilterRequest') requestedStatus: number = -1
-  @State @Watch('onFilterChange') currentStatus: number = -1
-  @State isRefreshing: boolean = false
-
-  aboutToAppear() {
-    // 诊断日志：确认启动渲染时订单数据状态
-    this.debugOrderState()
-    this.currentStatus = this.requestedStatus
-    this.refreshDataSource()
-    if (!this.loggedIn) {
-      this.orderList = []
-      return
-    }
-    // 从后端拉取最新订单（真实后端模式）
-    this.refreshOrders()
-  }
-
-  onLoginStateChange(): void {
-    if (!this.loggedIn) {
-      this.orderList = []
-      this.refreshDataSource()
-      return
-    }
-    this.refreshOrders()
-  }
-
-  onOrderFilterRequest(): void {
-    if (this.requestedStatus >= -1 && this.requestedStatus <= 6) {
-      this.currentStatus = this.requestedStatus
-    }
-  }
-
-  // 拉取后端用户订单并刷新列表
-  private async refreshOrders(): Promise<void> {
-    if (!this.loggedIn) {
-      this.orderList = []
-      this.refreshDataSource()
-      return
-    }
-    await syncUserOrdersFromServer()
-    this.orderList = AppStorage.get<Order[]>('orderList') || []
-    this.refreshDataSource()
-  }
-
-  onOrderListChange(): void {
-    // 防御：@StorageLink 首次绑定也可能触发本回调，数据源未就绪时直接返回
-    if (this.orderDataSource === undefined || this.orderDataSource === null) {
-      return
-    }
-    this.refreshDataSource()
-  }
-
-  onFilterChange(): void {
-    if (this.orderDataSource === undefined || this.orderDataSource === null) {
-      return
-    }
-    this.refreshDataSource()
-  }
-
-  private refreshDataSource(): void {
-    // 绝对防御：orderList 非数组时按空数组处理，避免 LazyForEach 崩溃
-    let list: Order[] = []
-    if (this.loggedIn && Array.isArray(this.orderList)) {
-      list = this.orderList
-    }
-    let filtered: Order[] = list
-    if (this.currentStatus !== -1) {
-      filtered = filtered.filter(o => o !== null && typeof o === 'object' && o.status === this.currentStatus)
-    }
-    this.orderDataSource.setData(filtered)
-  }
-
-  build() {
-    Column() {
-      Row() {
-        Text('我的订单')
-          .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
-      }
-      .width('100%').height(56)
-      .padding({ left: SPACING.LG, top: 40 })
-      .backgroundColor(COLORS.BG_WHITE)
-
-      Scroll() {
-        Row({ space: 0 }) {
-          ForEach([
-            OrderTabItem.create('全部', -1),
-            OrderTabItem.create('待付款', 0),
-            OrderTabItem.create('待接单', 1),
-            OrderTabItem.create('配送中', 3),
-            OrderTabItem.create('已完成', 4),
-          ], (item: OrderTabItem) => {
-            Text(item.title)
-              .fontSize(FONT_SIZE.MD)
-              .fontColor(this.currentStatus === item.status ? COLORS.PRIMARY : COLORS.TEXT_SECONDARY)
-              .fontWeight(this.currentStatus === item.status ? FontWeight.Bold : FontWeight.Normal)
-              .padding({ left: SPACING.MD, right: SPACING.MD, top: SPACING.SM, bottom: SPACING.SM })
-              .id(`order-filter-${item.status}`)
-              .onClick(() => { this.currentStatus = item.status })
-          }, (item: OrderTabItem) => item.title)
-        }
-        .padding({ left: SPACING.LG, right: SPACING.LG })
-      }
-      .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
-      .width('100%').backgroundColor(COLORS.BG_WHITE)
-
-      if (!this.loggedIn) {
-        EmptyState({ icon: '??', title: '暂无登录', description: '请登录后查看订单' })
-      } else if (!Array.isArray(this.orderList) || this.orderList.length === 0) {
-        EmptyState({ icon: '📦', title: '暂无订单', description: '快去点一份美味吧' })
-      } else {
-        Refresh({ refreshing: this.isRefreshing }) {
-          List({ space: SPACING.SM }) {
-            LazyForEach(this.orderDataSource, (order: Order) => {
-              ListItem() {
-                this.OrderCard(order)
-              }
-            }, (item: Order) => item.id.toString())
-          }
-          .layoutWeight(1)
-          .width('100%')
-          .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.LG })
-          .scrollBar(BarState.Off).divider({ strokeWidth: 0 })
-          .cachedCount(5)
-        }
-        .onRefreshing(() => {
-          this.orderList = AppStorage.get<Order[]>('orderList') || []
-          this.refreshDataSource()
-          this.isRefreshing = false
-        })
-      }
-    }
-    .width('100%').height('100%')
-    .backgroundColor(COLORS.BG_PRIMARY)
-  }
-
-  get filteredOrders(): Order[] {
-    // 绝对防御：非数组 / 空数组均返回空列表
-    if (!Array.isArray(this.orderList) || this.orderList.length === 0) {
-      return []
-    }
-    if (this.currentStatus === -1) {
-      return this.orderList
-    }
-    return this.orderList.filter(o => o !== null && typeof o === 'object' && o.status === this.currentStatus)
-  }
-
-  // 诊断：确认订单列表在渲染时的真实状态（排查崩溃后保留）
-  private debugOrderState(): void {
-    console.info(`[OrderList] orderList type=${typeof this.orderList} isArray=${Array.isArray(this.orderList)} len=${Array.isArray(this.orderList) ? (this.orderList as Order[]).length : -1} currentStatus=${this.currentStatus}`)
-  }
-
-  /** 支付待付款订单：扣余额并流转到待接单（余额支付模型）。 */
-  private async payPendingOrder(order: Order): Promise<void> {
-    const paid: Order | null = await payOrderRemote(order.id)
-    this.orderList = AppStorage.get<Order[]>('orderList') || []
-    this.refreshDataSource()
-    if (paid === null) {
-      const errorMessage: string = getLastRemoteErrorMessage()
-      promptAction.showToast({ message: errorMessage === '' ? '支付失败，请稍后重试' : errorMessage, duration: 3000 })
-      return
-    }
-    promptAction.showToast({ message: `支付成功，已支付 ¥${paid.payAmount.toFixed(2)}`, duration: 2500 })
-  }
-
-  /** 取消待付款订单：尚未扣款，仅释放库存与优惠券。 */
-  private async cancelPendingOrder(order: Order): Promise<void> {
-    const ok: boolean = await cancelOrderRemote(order.id)
-    this.orderList = AppStorage.get<Order[]>('orderList') || []
-    this.refreshDataSource()
-    if (ok) {
-      promptAction.showToast({ message: '订单已取消，库存与优惠券已释放', duration: 2400 })
-    } else {
-      const errorMessage: string = getLastRemoteErrorMessage()
-      promptAction.showToast({ message: errorMessage === '' ? '取消订单失败，请稍后重试' : errorMessage, duration: 3000 })
-    }
-  }
-
-  @Builder
-  OrderCard(order: Order) {
-    Column({ space: SPACING.SM }) {
-      Row() {
-        Text(order.storeName)
-          .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
-        Text(getOrderStatusText(order.status, order.escrowStatus ?? 0))
-          .fontSize(FONT_SIZE.MD).fontColor(getOrderStatusColor(order.status, order.escrowStatus ?? 0)).fontWeight(FontWeight.Bold)
-      }
-      ForEach(order.items || [], (item: CartItem) => {
-        Row() {
-          // 多规格：订单行附带下单时锁定的规格快照
-          Text((item.specName ?? '') !== '' ? `${item.goods.name}（${item.specName}）` : item.goods.name)
-            .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_SECONDARY).layoutWeight(1)
-          Text(`x${item.quantity}`).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
-        }.width('100%')
-      }, (item: CartItem) => `${item.goods.id}_${item.specId ?? 0}`)
-      Row() {
-        Text(`共${(order.items || []).reduce((s, i) => s + i.quantity, 0)}件 实付`)
-          .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
-        Text(`¥${order.payAmount.toFixed(2)}`)
-          .fontSize(FONT_SIZE.LG).fontColor(COLORS.PRICE_RED).fontWeight(FontWeight.Bold)
-        Blank()
-        if (order.status === 0) {
-          // 待付款：可取消（释放库存与优惠券）或立即支付
-          Button('取消订单').height(32).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
-            .backgroundColor(COLORS.BG_PRIMARY).borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-            .margin({ right: SPACING.SM })
-            .onClick(() => { this.cancelPendingOrder(order) })
-          Button('立即支付').height(32).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_WHITE)
-            .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-            .onClick(() => { this.payPendingOrder(order) })
-        } else if (order.status === 4 && (order.escrowStatus ?? 0) === 0) {
-          Button('确认收货并结算').height(32).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_WHITE)
-            .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-            .onClick(async () => {
-              const ok: boolean = await confirmOrderRemote(order.id)
-              this.orderList = AppStorage.get<Order[]>('orderList') || []
-              this.refreshDataSource()
-              if (ok) {
-                promptAction.showToast({ message: '已确认收货，订单已完成', duration: 1800 })
-              } else {
-                const errorMessage: string = getLastRemoteErrorMessage()
-                promptAction.showToast({ message: errorMessage === '' ? '确认收货失败，请稍后重试' : errorMessage, duration: 2200 })
-              }
-            })
-        } else if (order.status === 3) {
-          Text('配送中，送达后可确认收货')
-            .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
-        } else if (order.status === 5) {
-          Button('已取消').height(32).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
-            .backgroundColor(COLORS.BG_PRIMARY).borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-        }
-      }.width('100%')
-    }
-    .width('100%').padding(SPACING.MD)
-    .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
-    .id(`order-card-${order.id}`)
-    .onClick(() => {
-      AppStorage.setOrCreate<Order>('currentOrder', order)
-      AppStorage.setOrCreate<number>('currentOrderId', order.id)
-      router.pushUrl({ url: 'pages/OrderDetailPage' })
-    })
-  }
-}
-
 // ===================== 个人中心 =====================
 @Component
 struct ProfileMainPage {
@@ -2294,7 +1983,6 @@ struct ProfileMainPage {
   @State balance: number = 0
   @State isRefreshing: boolean = false
   @State refreshStatus: string = '余额数据来自数据库'
-  onNavigate: (tab: number) => void = () => {}
   onNavigateLogin: () => void = () => {}
 
   async aboutToAppear(): Promise<void> {
@@ -2486,7 +2174,12 @@ struct ProfileMainPage {
           this.AssetItem((this.user.coupons || []).filter(c => !c.used).length.toString(), '优惠券', () => { router.pushUrl({ url: 'pages/CouponCenterPage' }) })
           this.AssetItem((this.user.orders || []).length.toString(), '订单', () => {
             AppStorage.setOrCreate<number>('orderFilterStatus', -1)
-            this.onNavigate(2)
+            if (!this.loggedIn) {
+              promptAction.showToast({ message: '请先登录后查看订单', duration: 1500 })
+              this.onNavigateLogin()
+              return
+            }
+            router.pushUrl({ url: 'pages/OrderListPage' })
           })
         }
         .width('100%').padding(SPACING.LG)
@@ -2682,7 +2375,12 @@ struct ProfileMainPage {
     }
     .onClick(() => {
       AppStorage.setOrCreate<number>('orderFilterStatus', status)
-      this.onNavigate(2)
+      if (!this.loggedIn) {
+        promptAction.showToast({ message: '请先登录后查看订单', duration: 1500 })
+        this.onNavigateLogin()
+        return
+      }
+      router.pushUrl({ url: 'pages/OrderListPage' })
     })
   }
 
