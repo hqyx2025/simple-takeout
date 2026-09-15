@@ -1,6 +1,9 @@
 /**
- * 购物车页面
- * 从“我的”页面进入，展示当前用户购物车中的真实商品，并按店铺分别结算。
+ * 购物车页面。
+ *
+ * 两种承载方式共用同一份实现：
+ * - 底部 Tab 的「购物车」标签（`showNavBar = false`）：标题栏不放返回键；
+ * - 独立路由页 pages/CartPage（默认 `showNavBar = true`）：从「我的」页的购物车入口进入，带返回键。
  */
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
@@ -28,9 +31,18 @@ class BundleHint {
   }
 }
 
+/**
+ * 购物车页面。
+ *
+ * 两种承载方式共用同一份实现：
+ * - 底部 Tab 的「购物车」标签（`showNavBar = false`）：标题栏不放返回键；
+ * - 独立路由页 pages/CartPage（默认 `showNavBar = true`）：从「我的」页的购物车入口进入，带返回键。
+ */
 @Entry
 @Component
 export struct CartPage {
+  /** 是否显示带返回键的页面标题栏（Tab 内嵌时传 false）。 */
+  @Prop showNavBar: boolean = true
   @State cartItems: CartItem[] = []
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State editing: boolean = false
@@ -307,10 +319,13 @@ export struct CartPage {
   build() {
     Column() {
       Row() {
-        Text('‹')
-          .fontSize(FONT_SIZE.BIG_TITLE)
-          .fontColor(COLORS.TEXT_PRIMARY)
-          .onClick(() => { router.back() })
+        // Tab 内嵌时不显示返回键（Tab 页没有可返回的上一级）
+        if (this.showNavBar) {
+          Text('‹')
+            .fontSize(FONT_SIZE.BIG_TITLE)
+            .fontColor(COLORS.TEXT_PRIMARY)
+            .onClick(() => { router.back() })
+        }
         Text('购物车')
           .fontSize(FONT_SIZE.XL)
           .fontWeight(FontWeight.Bold)

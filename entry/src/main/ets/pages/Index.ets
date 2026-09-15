@@ -7,6 +7,7 @@ import { addToCart, addCartItemRemote, updateCartItemQuantity, updateCartItemQua
 import { fetchRecommendedStoresApi, fetchSpecialGoodsApi, fetchStoreMerchantCategoriesApi, fetchStoreDetailApi } from '../service/ApiService'
 import { LoginPage } from './LoginPage'
 import { AssistantPage } from './AssistantPage'
+import { CartPage } from './CartPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, formatSales } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
 import { RatingStars } from '../components/RatingStars'
@@ -286,19 +287,25 @@ struct Index {
         AssistantPage()
       }.tabBar(this.tabBuilder('AI助手', 1))
 
+      // 购物车Tab：复用 pages/CartPage 的实现，Tab 内不显示返回键
+      TabContent() {
+        CartPage({ showNavBar: false })
+      }.tabBar(this.tabBuilder('购物车', 2))
+
       // 我的Tab
       TabContent() {
         ProfileMainPage({
           refreshToken: this.profileRefreshToken,
           onNavigateLogin: () => { this.showLogin = true }
         })
-      }.tabBar(this.tabBuilder('我的', 2))
+      }.tabBar(this.tabBuilder('我的', 3))
     }
     .barHeight(50)
     .barBackgroundColor(COLORS.BG_WHITE)
     .onChange((index: number) => {
       this.currentTab = index
-      if (index === 2) {
+      // 「我的」Tab 的余额/订单计数需要在每次切回时重新读取，否则显示旧值
+      if (index === 3) {
         this.profileRefreshToken += 1
       }
       logInfo('Page', `首页 Tab 切换 index=${index}`)
