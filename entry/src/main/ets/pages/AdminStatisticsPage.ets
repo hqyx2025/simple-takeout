@@ -49,38 +49,55 @@ export struct AdminStatisticsPage {
           .onClick(() => { this.refresh() })
       }.width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 }).backgroundColor(COLORS.BG_WHITE)
 
-      Scroll() {
-        Column({ space: SPACING.MD }) {
-          if (this.stats === null) {
+      // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一块内容不在顶部
+      List({ space: SPACING.MD }) {
+        if (this.stats === null) {
+          ListItem() {
             Text('暂无统计数据，请稍后刷新').width('100%').padding(SPACING.LG).fontColor(COLORS.TEXT_HINT)
-          } else {
+          }
+        } else {
+          ListItem() {
             Row({ space: SPACING.SM }) {
               this.Metric('用户', this.stats.totalUsers.toString(), false)
               this.Metric('商户', this.stats.totalMerchants.toString(), false)
               this.Metric('店铺', this.stats.totalStores.toString(), false)
               this.Metric('商品', this.stats.totalGoods.toString(), false)
             }.width('100%')
+          }
+          ListItem() {
             Row({ space: SPACING.SM }) {
               this.Metric('订单', this.stats.totalOrders.toString(), false)
               this.Metric('累计成交', `¥${this.valueOrZero(this.stats.totalGmv)}`, true)
               this.Metric('已结算', `¥${this.valueOrZero(this.stats.settledAmount)}`, false)
               this.Metric('待结算', `¥${this.valueOrZero(this.stats.pendingEscrowAmount)}`, false)
             }.width('100%')
+          }
+          ListItem() {
             Row({ space: SPACING.MD }) {
               Text(`今日订单：${this.stats.todayOrders}`).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
               Text(`今日成交：¥${this.valueOrZero(this.stats.todayGmv)}`).fontSize(FONT_SIZE.MD).fontColor(COLORS.PRIMARY)
             }.width('100%').padding(SPACING.MD).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
-            Text('近7日订单趋势').fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
-            ForEach(this.trend, (point: AdminTrendPoint) => {
-              this.TrendRow(point)
-            }, (point: AdminTrendPoint) => point.date)
-            Text('热销商品排行').fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
-            ForEach(this.stats.hotGoods, (item: AdminHotGoods) => {
-              this.HotGoodsRow(item.goodsName, item.storeName, item.sales, item.price, item.status)
-            }, (item: AdminHotGoods) => item.goodsId.toString())
           }
-        }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
-      }.layoutWeight(1).scrollBar(BarState.Off)
+          ListItem() {
+            Text('近7日订单趋势').fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+          }
+          ForEach(this.trend, (point: AdminTrendPoint) => {
+            ListItem() {
+              this.TrendRow(point)
+            }
+          }, (point: AdminTrendPoint) => point.date)
+          ListItem() {
+            Text('热销商品排行').fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+          }
+          ForEach(this.stats.hotGoods, (item: AdminHotGoods) => {
+            ListItem() {
+              this.HotGoodsRow(item.goodsName, item.storeName, item.sales, item.price, item.status)
+            }
+          }, (item: AdminHotGoods) => item.goodsId.toString())
+        }
+      }
+      .width('100%').layoutWeight(1).scrollBar(BarState.Off)
+      .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
     }.width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)
   }
 

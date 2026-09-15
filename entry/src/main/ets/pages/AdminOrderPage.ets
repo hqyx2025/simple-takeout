@@ -180,15 +180,20 @@ export struct AdminOrderPage {
       .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
       .width('100%').backgroundColor(COLORS.BG_WHITE)
 
-      Scroll() {
-        Column({ space: SPACING.MD }) {
+      // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
+      List({ space: SPACING.MD }) {
+        ListItem() {
           Text('托管资金：下单即托管，用户确认收货后结算给商户；未完成订单可由平台直接退款')
             .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%')
+        }
 
-          if (!Array.isArray(this.displayOrders) || this.displayOrders.length === 0) {
+        if (!Array.isArray(this.displayOrders) || this.displayOrders.length === 0) {
+          ListItem() {
             Text('暂无该状态订单').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%').padding(SPACING.MD)
           }
-          ForEach(this.displayOrders, (order: AdminOrder) => {
+        }
+        ForEach(this.displayOrders, (order: AdminOrder) => {
+          ListItem() {
             Row({ space: SPACING.MD }) {
               Column({ space: SPACING.XS }) {
                 Text(`${order.storeName}  #${order.orderNo}`).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
@@ -239,11 +244,11 @@ export struct AdminOrderPage {
             }
             .width('100%').padding(SPACING.MD)
             .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
-          }, (order: AdminOrder) => `${this.renderVersion}-${order.id}`)
-        }
-        .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
+          }
+        }, (order: AdminOrder) => `${this.renderVersion}-${order.id}`)
       }
-      .layoutWeight(1).scrollBar(BarState.Off)
+      .width('100%').layoutWeight(1).scrollBar(BarState.Off)
+      .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
 
       // 退款二次确认弹窗
       if (this.showRefundConfirm) {

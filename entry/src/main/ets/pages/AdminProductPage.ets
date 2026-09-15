@@ -94,15 +94,22 @@ export struct AdminProductPage {
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 0; this.refresh() })
       }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
 
-      Scroll() {
-        Column({ space: SPACING.MD }) {
-          if (this.products.length === 0) {
-            Text('暂无商品数据').width('100%').padding(SPACING.LG).fontColor(COLORS.TEXT_HINT)
+      // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在筛选行下方
+      List({ space: SPACING.MD }) {
+        if (this.products.length === 0) {
+          ListItem() {
+            Text(this.statusFilter === -1 && this.keyword.trim() === '' ? '暂无商品数据' : '当前筛选条件下暂无商品')
+              .width('100%').padding(SPACING.LG).fontColor(COLORS.TEXT_HINT)
           }
-          ForEach(this.products, (product: AdminProduct) => { this.ProductRow(product) },
-            (product: AdminProduct) => `${this.renderVersion}-${product.id}`)
-        }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
-      }.layoutWeight(1).scrollBar(BarState.Off)
+        }
+        ForEach(this.products, (product: AdminProduct) => {
+          ListItem() {
+            this.ProductRow(product)
+          }
+        }, (product: AdminProduct) => `${this.renderVersion}-${product.id}`)
+      }
+      .width('100%').layoutWeight(1).scrollBar(BarState.Off)
+      .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
 
       if (this.showDeleteConfirm) {
         ConfirmDialog({

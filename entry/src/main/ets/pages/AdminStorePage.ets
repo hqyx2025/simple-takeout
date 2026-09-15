@@ -35,6 +35,9 @@ export struct AdminStorePage {
     balance: 0, coupons: [], orders: [], storeIds: []
   }
   @State stores: AdminStore[] = []
+  // -1 全部 / 1 营业中 / 0 已暂停（列表已在内存中，本地筛选即可，无需后端参数）
+  @State statusFilter: number = -1
+  @State displayStores: AdminStore[] = []
   // 刷新回来的同 id 新对象会被 ForEach 复用，营业/推荐状态变更后按钮不刷新。
   @State renderVersion: number = 0
 
@@ -51,6 +54,18 @@ export struct AdminStorePage {
   async refresh(): Promise<void> {
     const resp: ApiResponse<AdminStore[]> = await get<AdminStore[]>('/api/admin/stores')
     this.stores = resp.code === 200 && resp.data !== null ? resp.data : []
+    this.applyFilter()
+  }
+
+  /** 按营业状态筛选（显式计算，避免渲染期 getter 求值）。 */
+  private applyFilter(): void {
+    if (!Array.isArray(this.stores)) {
+      this.displayStores = []
+      return
+    }
+    this.displayStores = this.statusFilter === -1
+      ? this.stores
+      : this.stores.filter((store: AdminStore) => store.status === this.statusFilter)
     this.renderVersion += 1
   }
 
@@ -94,15 +109,37 @@ export struct AdminStorePage {
       .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 })
       .backgroundColor(COLORS.BG_WHITE)
 
-      Scroll() {
-        Column({ space: SPACING.MD }) {
+      Row({ space: SPACING.MD }) {
+        Text('状态').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+        Button('全部').id('admin-store-status-all').fontSize(FONT_SIZE.SM)
+          .backgroundColor(this.statusFilter === -1 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+          .fontColor(this.statusFilter === -1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = -1; this.applyFilter() })
+        Button('营业中').id('admin-store-status-open').fontSize(FONT_SIZE.SM)
+          .backgroundColor(this.statusFilter === 1 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+          .fontColor(this.statusFilter === 1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 1; this.applyFilter() })
+        Button('已暂停').id('admin-store-status-closed').fontSize(FONT_SIZE.SM)
+          .backgroundColor(this.statusFilter === 0 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+          .fontColor(this.statusFilter === 0 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 0; this.applyFilter() })
+      }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
+
+      // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在筛选行下方
+      List({ space: SPACING.MD }) {
+        ListItem() {
           Text('推荐状态决定是否展示在用户发现页；距离超过 2 公里的店铺不会出现在附近推荐中。')
             .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%')
+        }
 
-          if (this.stores.length === 0) {
-            Text('暂无店铺').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%').padding(SPACING.MD)
+        if (this.displayStores.length === 0) {
+          ListItem() {
+            Text(this.statusFilter === -1 ? '暂无店铺' : '当前筛选条件下暂无店铺')
+              .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%').padding(SPACING.MD)
           }
-          ForEach(this.stores, (store: AdminStore) => {
+        }
+        ForEach(this.displayStores, (store: AdminStore) => {
+          ListItem() {
             Row({ space: SPACING.MD }) {
               Column({ space: SPACING.XS }) {
                 Text(store.name).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
@@ -125,11 +162,11 @@ export struct AdminStorePage {
             }
             .width('100%').padding(SPACING.MD)
             .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
-          }, (store: AdminStore) => `${this.renderVersion}-${store.id}`)
-        }
-        .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
+          }
+        }, (store: AdminStore) => `${this.renderVersion}-${store.id}`)
       }
-      .layoutWeight(1).scrollBar(BarState.Off)
+      .width('100%').layoutWeight(1).scrollBar(BarState.Off)
+      .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
     }
     .width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)
   }

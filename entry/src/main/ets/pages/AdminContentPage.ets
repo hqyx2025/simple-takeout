@@ -119,9 +119,10 @@ export struct AdminContentPage {
             Text('正在加载…').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
           }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
         } else {
-          Scroll() {
-            Column({ space: SPACING.SM }) {
-              // Banner 区
+          // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
+          List({ space: SPACING.SM }) {
+            // Banner 区
+            ListItem() {
               Row() {
                 Text('轮播 Banner').fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
                 Button('新增 Banner').height(32).fontSize(FONT_SIZE.SM)
@@ -129,33 +130,43 @@ export struct AdminContentPage {
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                   .onClick(() => { this.showBannerDialog = true })
               }.width('100%')
-              if (this.banners.length === 0) {
+            }
+            if (this.banners.length === 0) {
+              ListItem() {
                 Text('暂无 Banner').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%')
-              } else {
-                ForEach(this.banners, (banner: Banner) => {
-                  this.BannerCard(banner)
-                }, (banner: Banner) => banner.id.toString())
               }
+            } else {
+              ForEach(this.banners, (banner: Banner) => {
+                ListItem() {
+                  this.BannerCard(banner)
+                }
+              }, (banner: Banner) => banner.id.toString())
+            }
 
-              // 公告区
+            // 公告区
+            ListItem() {
               Row() {
                 Text('平台公告').fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
                 Button('发布公告').height(32).fontSize(FONT_SIZE.SM)
                   .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                   .onClick(() => { this.showAnnouncementDialog = true })
-              }.width('100%').margin({ top: SPACING.MD })
-              if (this.announcements.length === 0) {
-                Text('暂无公告').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%')
-              } else {
-                ForEach(this.announcements, (a: Announcement) => {
-                  this.AnnouncementCard(a)
-                }, (a: Announcement) => a.id.toString())
-              }
+              }.width('100%')
             }
-            .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.XXL })
+            if (this.announcements.length === 0) {
+              ListItem() {
+                Text('暂无公告').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%')
+              }
+            } else {
+              ForEach(this.announcements, (a: Announcement) => {
+                ListItem() {
+                  this.AnnouncementCard(a)
+                }
+              }, (a: Announcement) => a.id.toString())
+            }
           }
-          .layoutWeight(1).scrollBar(BarState.Off)
+          .width('100%').layoutWeight(1).scrollBar(BarState.Off)
+          .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.XXL })
         }
       }
       .width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)

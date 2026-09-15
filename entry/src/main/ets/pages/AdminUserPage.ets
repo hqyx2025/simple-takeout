@@ -100,16 +100,22 @@ export struct AdminUserPage {
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 0; this.refresh() })
       }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
 
-      Scroll() {
-        Column({ space: SPACING.MD }) {
-          if (this.users.length === 0) {
+      // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在筛选行下方
+      List({ space: SPACING.MD }) {
+        if (this.users.length === 0) {
+          ListItem() {
             Text(this.statusFilter === -1 && this.roleFilter === -1 ? '暂无账号数据' : '当前筛选条件下暂无账号')
               .width('100%').padding(SPACING.LG).fontColor(COLORS.TEXT_HINT)
           }
-          ForEach(this.users, (item: AdminUser) => { this.UserRow(item) },
-            (item: AdminUser) => `${this.renderVersion}-${item.id}`)
-        }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
-      }.layoutWeight(1).scrollBar(BarState.Off)
+        }
+        ForEach(this.users, (item: AdminUser) => {
+          ListItem() {
+            this.UserRow(item)
+          }
+        }, (item: AdminUser) => `${this.renderVersion}-${item.id}`)
+      }
+      .width('100%').layoutWeight(1).scrollBar(BarState.Off)
+      .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
     }.width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)
   }
 

@@ -103,15 +103,20 @@ export struct AdminRefundPage {
         .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 })
         .backgroundColor(COLORS.BG_WHITE)
 
-        Scroll() {
-          Column({ space: SPACING.MD }) {
+        // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
+        List({ space: SPACING.MD }) {
+          ListItem() {
             Text('同意退款后：托管款退回用户余额、商品库存回滚；拒绝后订单恢复为已送达')
               .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%')
+          }
 
-            if (this.refunds.length === 0) {
+          if (this.refunds.length === 0) {
+            ListItem() {
               Text('暂无退款申请').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%').padding(SPACING.MD)
             }
-            ForEach(this.refunds, (record: RefundRecord) => {
+          }
+          ForEach(this.refunds, (record: RefundRecord) => {
+            ListItem() {
               Column({ space: SPACING.SM }) {
                 Row() {
                   Column({ space: SPACING.XS }) {
@@ -149,11 +154,11 @@ export struct AdminRefundPage {
               }
               .width('100%').padding(SPACING.MD)
               .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
-            }, (record: RefundRecord) => `${this.renderVersion}-${record.id}`)
-          }
-          .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
+            }
+          }, (record: RefundRecord) => `${this.renderVersion}-${record.id}`)
         }
-        .layoutWeight(1).scrollBar(BarState.Off)
+        .width('100%').layoutWeight(1).scrollBar(BarState.Off)
+        .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
       }
       .width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)
 

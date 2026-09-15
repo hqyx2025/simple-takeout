@@ -110,24 +110,31 @@ export struct AdminCategoryPage {
         .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 })
         .backgroundColor(COLORS.BG_WHITE)
 
-        Scroll() {
-          Column({ space: SPACING.MD }) {
+        // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
+        List({ space: SPACING.MD }) {
+          ListItem() {
             Text('平台分类用于首页导航与店铺/商品归类，删除前需先解除店铺关联')
               .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%')
+          }
 
-            // 新增分类
+          // 新增分类
+          ListItem() {
             Row({ space: SPACING.SM }) {
               TextInput({ placeholder: '新增分类名称', text: this.newCategoryName })
                 .layoutWeight(1).height(42).onChange((value: string) => { this.newCategoryName = value })
               Button('新增').height(42).fontSize(FONT_SIZE.SM)
                 .backgroundColor(COLORS.PRIMARY).onClick(() => { this.createCategory() })
             }.width('100%')
+          }
 
-            // 分类列表（含行内编辑与删除）
-            if (this.categories.length === 0) {
+          // 分类列表（含行内编辑与删除）
+          if (this.categories.length === 0) {
+            ListItem() {
               Text('暂无分类').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%').padding(SPACING.MD)
             }
-            ForEach(this.categories, (category: Category) => {
+          }
+          ForEach(this.categories, (category: Category) => {
+            ListItem() {
               Row({ space: SPACING.MD }) {
                 Text(category.icon).fontSize(FONT_SIZE.LG)
                 if (this.editingCategoryId === category.id) {
@@ -165,11 +172,11 @@ export struct AdminCategoryPage {
               }
               .width('100%').padding(SPACING.MD)
               .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
-            }, (category: Category) => `${this.renderVersion}-${category.id}`)
-          }
-          .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
+            }
+          }, (category: Category) => `${this.renderVersion}-${category.id}`)
         }
-        .layoutWeight(1).scrollBar(BarState.Off)
+        .width('100%').layoutWeight(1).scrollBar(BarState.Off)
+        .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
       }
       .width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)
 

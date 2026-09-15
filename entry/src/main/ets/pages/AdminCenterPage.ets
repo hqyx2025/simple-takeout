@@ -132,9 +132,10 @@ export struct AdminCenterPage {
       .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 })
       .backgroundColor(COLORS.BG_WHITE)
 
-      Scroll() {
-        Column({ space: SPACING.MD }) {
-          // 数据概览
+      // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一块内容不在顶部
+      List({ space: SPACING.MD }) {
+        // 数据概览
+        ListItem() {
           Row() {
             Column({ space: SPACING.XS }) {
               Text(this.categories.length.toString())
@@ -160,19 +161,22 @@ export struct AdminCenterPage {
           }
           .width('100%').padding(SPACING.LG)
           .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+        }
 
-          // 功能入口卡片
-          ForEach(this.getAdminEntries(), (item: AdminEntryItem) => {
+        // 功能入口卡片
+        ForEach(this.getAdminEntries(), (item: AdminEntryItem) => {
+          ListItem() {
             this.EntryCard(item)
-          }, (item: AdminEntryItem) => item.title)
+          }
+        }, (item: AdminEntryItem) => item.title)
 
+        ListItem() {
           Text('管理端仅提供后台运营功能，不包含点餐、定位等用户端能力')
             .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%').textAlign(TextAlign.Center)
-            .margin({ top: SPACING.MD })
         }
-        .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
       }
-      .layoutWeight(1).scrollBar(BarState.Off)
+      .width('100%').layoutWeight(1).scrollBar(BarState.Off)
+      .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
     }
     .width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)
   }

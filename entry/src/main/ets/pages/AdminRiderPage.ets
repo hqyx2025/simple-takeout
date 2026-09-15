@@ -12,6 +12,10 @@ import { logInfo } from '../service/AppLogger'
 @Component
 export struct AdminRiderPage {
   @State riders: Rider[] = []
+  // -1 全部 / 1 已启用 / 0 已停用（列表已在内存中，本地筛选即可）
+  @State statusFilter: number = -1
+  @State displayRiders: Rider[] = []
+  @State renderVersion: number = 0
   @State loading: boolean = false
 
   async aboutToAppear(): Promise<void> {
@@ -22,7 +26,20 @@ export struct AdminRiderPage {
   private async loadRiders(): Promise<void> {
     this.loading = true
     this.riders = await syncAdminRidersRemote()
+    this.applyFilter()
     this.loading = false
+  }
+
+  /** 按启用状态筛选（显式计算，避免渲染期 getter 求值）。 */
+  private applyFilter(): void {
+    if (!Array.isArray(this.riders)) {
+      this.displayRiders = []
+      return
+    }
+    this.displayRiders = this.statusFilter === -1
+      ? this.riders
+      : this.riders.filter((rider: Rider) => rider.status === this.statusFilter)
+    this.renderVersion += 1
   }
 
   private async toggleStatus(rider: Rider): Promise<void> {
@@ -52,26 +69,46 @@ export struct AdminRiderPage {
       .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG })
       .backgroundColor(COLORS.BG_WHITE)
 
+      Row({ space: SPACING.MD }) {
+        Text('状态').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+        Button('全部').id('admin-rider-status-all').fontSize(FONT_SIZE.SM)
+          .backgroundColor(this.statusFilter === -1 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+          .fontColor(this.statusFilter === -1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = -1; this.applyFilter() })
+        Button('已启用').id('admin-rider-status-enabled').fontSize(FONT_SIZE.SM)
+          .backgroundColor(this.statusFilter === 1 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+          .fontColor(this.statusFilter === 1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 1; this.applyFilter() })
+        Button('已停用').id('admin-rider-status-disabled').fontSize(FONT_SIZE.SM)
+          .backgroundColor(this.statusFilter === 0 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+          .fontColor(this.statusFilter === 0 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 0; this.applyFilter() })
+      }
+      .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
+      .backgroundColor(COLORS.BG_PRIMARY)
+
       if (this.loading) {
         Column() {
           Text('正在加载…').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
         }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
-      } else if (this.riders.length === 0) {
+      } else if (this.displayRiders.length === 0) {
         Column() {
           Text('🛵').fontSize(60).margin({ top: 40 })
-          Text('暂无骑手').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
+          Text(this.statusFilter === -1 ? '暂无骑手' : '当前筛选条件下暂无骑手')
+            .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
           Text('骑手通过「注册→选择骑手」开通').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.SM })
         }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
       } else {
-        Scroll() {
-          Column({ space: SPACING.SM }) {
-            ForEach(this.riders, (rider: Rider) => {
+        // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在筛选行下方
+        List({ space: SPACING.SM }) {
+          ForEach(this.displayRiders, (rider: Rider) => {
+            ListItem() {
               this.RiderCard(rider)
-            }, (rider: Rider) => rider.id.toString())
-          }
-          .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.XXL })
+            }
+          }, (rider: Rider) => `${this.renderVersion}-${rider.id}`)
         }
-        .layoutWeight(1).scrollBar(BarState.Off)
+        .width('100%').layoutWeight(1).scrollBar(BarState.Off)
+        .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.XXL })
       }
     }
     .width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)
