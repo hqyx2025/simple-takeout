@@ -20,8 +20,10 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * 用户中心服务：优惠券、收藏、地址、评价浏览、搜索
@@ -231,17 +233,14 @@ public class UserCenterService {
             return List.of();
         }
         String kw = keyword.trim().toLowerCase(Locale.ROOT);
+        // 命中商品名的店铺一次查出来，避免逐店查商品（原实现是 41 店 → 42 次查询）
+        Set<Long> storeIdsWithMatchingGoods = new HashSet<>(goodsDao.listStoreIdsByNameLike(kw));
         return storeDao.listAll().stream()
                 .filter(s -> s.name().toLowerCase(Locale.ROOT).contains(kw)
-                        || matchGoods(s.id(), kw)
+                        || storeIdsWithMatchingGoods.contains(s.id())
                         || matchNotice(s.notice(), kw))
                 .map(store -> toView(store.withDistance(latitude, longitude)))
                 .toList();
-    }
-
-    private boolean matchGoods(long storeId, String kw) {
-        return goodsDao.listByStore(storeId).stream()
-                .anyMatch(g -> g.name().toLowerCase(Locale.ROOT).contains(kw));
     }
 
     private boolean matchNotice(String notice, String kw) {

@@ -34,7 +34,7 @@
     --mode module -p module=entry@default -p product=default -p requiredDeviceType=phone assembleHap --analyze=normal --parallel --incremental --daemon
   ```
   构建日志：`.hvigor/outputs/build-logs/build.log`；判断成功要看日志里的 `BUILD SUCCESSFUL` 并确认 `entry/build/default/outputs/default/*.hap` 时间戳已更新（流水线里 `Select-String` 会吞掉退出码，别只看 `$LASTEXITCODE`）
-- 后端测试：`mvn -f server/pom.xml test`（**129 个测试**，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格/资金与状态并发边界/文本列宽边界、缓存穿透/击穿/雪崩防护与领域事件 Outbox 语义、AI 助手意图路由、**登录限流与 token 吊销（jti 黑名单 + 改密即失效）**，以及**骑手待取餐池 SQL 契约**与骑手配送闭环）
+- 后端测试：`mvn -f server/pom.xml test`（**135 个测试**，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格/资金与状态并发边界/文本列宽边界、缓存穿透/击穿/雪崩防护与领域事件 Outbox 语义、AI 助手意图路由、**登录限流与 token 吊销（jti 黑名单 + 改密即失效）**、**搜索不逐店查商品（N+1 契约）**，以及**骑手待取餐池 SQL 契约**与骑手配送闭环）
 - 一键容器化环境：`docker compose up -d --build`（app + MySQL 8.4 + Redis 7，含健康检查与启动依赖顺序）；只起基础设施（本机用 Maven 跑后端）用 `docker compose up -d mysql redis`。注意 compose 的 MySQL 映射到宿主 **3307**（避开本机 MySQL84 的 3306）
 - 后端测试与运行都要求 `JAVA_HOME` 指向 **JDK 25**；`server/Dockerfile` 的构建阶段也必须是 JDK 25，否则 `maven.compiler.release=25` 直接编译失败
 - Release 打包（**当前范围外，可选工具**）：`scripts/enable-release-signing.ps1`（接入发布证书）→ `scripts/build-release.ps1`（签名包）→ `scripts/release-check.ps1 [-Build]`（上架体检，输出 `md/上架体检报告.md`，该报告为生成物不入库）；详见 `md/上架体检与Release签名.md`。日常开发只需 debug 构建，不必碰这一套。
@@ -210,8 +210,8 @@
 
 **已知待办**（本次未处理，按需再定）：
 
-- 列表接口无分页：`/api/admin/orders|users|products|refunds`、`/api/orders`、`/api/stores` 全表进内存（admin orders 还会逐单再查一次）；如需分页，加 `page/pageSize` + DAO `LIMIT ? OFFSET ?`，上限建议 50。
-- 搜索 N+1：`UserCenterService.search` 对每家店单独查 goods（41 店 → 42 次查询），可改一条 `SELECT DISTINCT store_id FROM goods WHERE name LIKE ?`。
+- 列表接口无分页：`/api/admin/orders|users|products|refunds`、`/api/orders`、`/api/stores` 全表进内存（admin orders 还会逐单再查一次）；如需分页，加 `page/pageSize` + DAO `LIMIT ? OFFSET ?`，上限建议 50。**2026-09 复查后暂缓**：实测 admin/orders 44 行、admin/users 25 行、refunds 2 行，只有 `goods` 959 行是真实跑量，所以那时唯一值得分页的是 `/api/admin/products`；真要加时优先它，并且要同步改管理端商品页的筛选与 List 渲染。
+- ~~搜索 N+1~~ **已修复**：`UserCenterService.search` 原先对每家店调一次 `goodsDao.listByStore`（41 店 → 42 次查询，且每次还带 `attachSpecs` 批量查规格并水合最多 959 行商品对象）；现改为一条 `SELECT DISTINCT store_id FROM goods WHERE status = 1 AND name LIKE ?`（`GoodsDao.listStoreIdsByNameLike`）拿命中店铺 id 集合再本地过滤。用例 `UserCenterSearchTest` 守住这条契约（`searchNeverQueriesGoodsPerStore` 断言逐店查询次数必须为 0）。
 - 密码仍为 SHA-256 单轮加固定盐（未换 bcrypt/Argon2）；登录/注册限流与 token 吊销（jti 黑名单、改密即失效）**已落地**，见第 4 节。
 - 上传只校验后缀 + content-type 白名单，未做文件魔数校验；`/uploads/**` 无需 JWT（公开资源）。
 - Banner `PUT` 是"null 覆盖为空串"语义（非 PATCH），只改 sort 会把 title/subtitle 清空。

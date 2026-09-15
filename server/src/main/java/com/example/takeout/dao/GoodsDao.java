@@ -98,6 +98,16 @@ public class GoodsDao {
         return attachSpecs(jdbc.query("SELECT * FROM goods WHERE store_id = ? ORDER BY id", MAPPER, storeId));
     }
 
+    /**
+     * 搜索用：一次查出名称命中关键词的店铺 id，避免逐店查商品（41 店 → 42 次查询）。
+     * 语义与原先的 goodsDao.listByStore(storeId).anyMatch(name contains kw) 一致：
+     * 只看 status=1 的在售菜品，LIKE 两端通配（MySQL 默认不区分大小写，与前端 lower-case 匹配等价）。
+     */
+    public List<Long> listStoreIdsByNameLike(String keyword) {
+        return jdbc.queryForList("SELECT DISTINCT store_id FROM goods WHERE status = 1 AND name LIKE ?",
+                Long.class, "%" + keyword + "%");
+    }
+
     public List<SpecialGoods> listSpecialGoods(int limit) {
         return attachSpecsToSpecial(jdbc.query("SELECT g.*, s.name AS store_name, s.distance AS store_distance " +
                         "FROM goods g JOIN stores s ON s.id = g.store_id " +
