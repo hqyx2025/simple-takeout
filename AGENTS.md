@@ -8,6 +8,7 @@
 - **四端闭环**：用户端（搜索→下单→评价）/ 商户端（接单→出餐→统计）/ 骑手端（抢单→取餐→送达）/ 平台管理端（审核→内容→统计）
 - **目录结构**：`server/` 后端模块（Spring Boot）+ `entry/` 前端模块（HarmonyOS ArkTS）
 - **核心文档**：`md/重构大纲提示词.md` 是唯一权威设计文档（26 章），含"现状/演进"标注；第 17 节约束：**以仓库现状为准、禁止推倒重来、冲突先列后改**
+- **`md/` 只放当前有效文档**（设计大纲、业务流程、架构、骑手设计、设备实测、上架签名）；**历史会话记录与已完结的待办清单归档在 `md/archive/`**（`会话记录-<日期>-<主题>.md`、`未完成.txt`）。新增会话记录直接写进 `md/archive/`，不要再堆在 `md/` 根下；`README.md` 的「文档索引」列出全部有效文档。**归档时注意**：会话记录之间以及 `README.md` 都用仓库根相对路径互相引用（`md/会话记录-….md`），移动后必须同步改成 `md/archive/…`，否则链接失效
 - **管理端独立后台**：ADMIN 登录后直接进入平台管理页（AdminCenterPage + 分类/店铺/订单/退款审批四个独立页面），任何情况下不展示主页/定位/购物车等 C 端功能
 
 ## 2. 技术栈
@@ -33,7 +34,7 @@
     --mode module -p module=entry@default -p product=default -p requiredDeviceType=phone assembleHap --analyze=normal --parallel --incremental --daemon
   ```
   构建日志：`.hvigor/outputs/build-logs/build.log`；判断成功要看日志里的 `BUILD SUCCESSFUL` 并确认 `entry/build/default/outputs/default/*.hap` 时间戳已更新（流水线里 `Select-String` 会吞掉退出码，别只看 `$LASTEXITCODE`）
-- 后端测试：`mvn -f server/pom.xml test`（**107 个测试**，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格/资金与状态并发边界/文本列宽边界、缓存穿透/击穿/雪崩防护与领域事件 Outbox 语义、AI 助手意图路由，以及**骑手待取餐池 SQL 契约**与骑手配送闭环）
+- 后端测试：`mvn -f server/pom.xml test`（**129 个测试**，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格/资金与状态并发边界/文本列宽边界、缓存穿透/击穿/雪崩防护与领域事件 Outbox 语义、AI 助手意图路由、**登录限流与 token 吊销（jti 黑名单 + 改密即失效）**，以及**骑手待取餐池 SQL 契约**与骑手配送闭环）
 - 一键容器化环境：`docker compose up -d --build`（app + MySQL 8.4 + Redis 7，含健康检查与启动依赖顺序）；只起基础设施（本机用 Maven 跑后端）用 `docker compose up -d mysql redis`。注意 compose 的 MySQL 映射到宿主 **3307**（避开本机 MySQL84 的 3306）
 - 后端测试与运行都要求 `JAVA_HOME` 指向 **JDK 25**；`server/Dockerfile` 的构建阶段也必须是 JDK 25，否则 `maven.compiler.release=25` 直接编译失败
 - Release 打包（**当前范围外，可选工具**）：`scripts/enable-release-signing.ps1`（接入发布证书）→ `scripts/build-release.ps1`（签名包）→ `scripts/release-check.ps1 [-Build]`（上架体检，输出 `md/上架体检报告.md`，该报告为生成物不入库）；详见 `md/上架体检与Release签名.md`。日常开发只需 debug 构建，不必碰这一套。
@@ -45,7 +46,8 @@
 - **MySQL**：`localhost:3306`，root / 123456，库 takeout；凭据走环境变量 `TAKEOUT_DB_USERNAME/TAKEOUT_DB_PASSWORD`（默认 root/123456）；主机/端口可用 `TAKEOUT_DB_HOST/TAKEOUT_DB_PORT` 覆盖（容器内指向 `mysql:3306`，本机默认 `localhost:3306` 不变）
 - **Redis**：`localhost:6379`；`TAKEOUT_REDIS_HOST/TAKEOUT_REDIS_PORT/TAKEOUT_REDIS_PASSWORD/TAKEOUT_REDIS_DATABASE`；缓存与事件开关 `TAKEOUT_CACHE_ENABLED`、`TAKEOUT_MQ_ENABLED`；本地开发需自行起一个 Redis（`docker run -d -p 6379:6379 redis:7-alpine`，或 `docker compose up -d redis`）
 - **缓存与事件参数**：TTL `takeout.cache.ttl-seconds`(300) + 抖动 `jitter-seconds`(120)、空值占位 `null-ttl-seconds`(60)、回源锁 `rebuild-lock-ms`(3000)；Outbox 中继 `takeout.mq.relay-scan-ms`(2000)、消费幂等 `dedup-hours`(24)。细节见 `md/Redis缓存与异步事件架构.md`
-- **JWT**：`TAKEOUT_JWT_SECRET` 环境变量，`expire-hours: 72`；无刷新令牌（每 72 小时重新登录的体验取舍已接受）
+- **JWT**：`TAKEOUT_JWT_SECRET` 环境变量，`expire-hours: 72`；无刷新令牌（每 72 小时重新登录的体验取舍已接受）。**登录态可吊销**：`POST /api/auth/logout` 把当前 token 的 jti 记入 `token_blacklist`（落**数据库**而非 Redis——Redis 挂了登出也必须生效），`PUT /api/auth/password` 改密写 `users.password_changed_at` 使所有早于此刻签发的 token 失效；两处校验都收口在 `AuthInterceptor`（唯一认证入口，新增接口不会漏挂），token 载荷含 `jti` 与 `pwdAt`
+- **登录/注册限流**：`takeout.security.rate-limit.enabled`（环境变量 `TAKEOUT_RATE_LIMIT_ENABLED`，默认 true）。计数存 Redis（key `takeout:rl:<action>:<ip>`；login 10 次/60 秒、register 5 次/小时，超限封该 IP），**Redis 不可用时一律放行**（限流是加固，不能变成登录不可用）；超限抛 `BizException(429, …)`，`GlobalExceptionHandler` 映射为 HTTP 429
 - **日志**：按天分文件 `app-YYYY-MM-DD.log`，单文件 2MB 轮转压缩归档（zip）；同时输出控制台 + `filesDir/log/app.log`；密码/JWT/手机号完整值禁止入日志
 - **高德 Key**（双 Key 概念）：`AMAP_CONFIG.MAP_JS_KEY`（Web端 JS API 类型，`a0373d4b39b6524b7f80e825339e7a28`，需同步修改 `resources/rawfile/amap_map.html` 中 AMAP_KEY）；2021 年后 Key 需配置安全密钥 jscode
 - **订单支付时限**：`takeout.order.pay-timeout-minutes`（环境变量 `TAKEOUT_PAY_TIMEOUT_MINUTES`，默认 15 分钟）；超时扫描间隔 `takeout.order.timeout-scan-ms`（默认 60 秒，启动 30 秒后首扫）
@@ -63,13 +65,13 @@
 - **金额口径**：满减券门槛按**商品总价**判断（非实付）；月销量为"累计下单数"（取消不回滚，含待付款）；金额统一两位小数
 - **幂等**：退款/结算必须条件更新（`WHERE escrow_status=0`），防重复打款/退款；库存扣减用乐观锁（`WHERE stock>=? AND status=1`），取消/退款时 escrow 更新成功后才回滚库存
 - **测试账号**（密码均 `123456`）：用户 `13800138000`（送 20 元）/ `13900139000`（15 元）、商户 `13600136000` / `13700137000` / `13500135000`、管理端 `13100131000`、**骑手 `13300133000`**（role=3）。骑手账号与 `riders` 档案由 `DataSeeder.ensureRiderUser()` 幂等补齐（全新库与已有数据的库都会补），骑手端开箱可用，无需手工 `UPDATE users SET role = 3`。
-- **接口约定**：除 `/api/auth/login`、`/api/auth/register` 外全部接口需 JWT（含浏览类）；401 时前端清登录态回登录页
+- **接口约定**：除 `/api/auth/login`、`/api/auth/register` 外全部接口需 JWT（含浏览类）；401 时前端清登录态回登录页。新增 `POST /api/auth/logout`（吊销当前 token）与 `PUT /api/auth/password`（改密后旧 token 全失效，前端必须回登录页）
 
 ## 6. 数据库现状（差异以 22.8 节清单为准）
 
 - 实际表名（复数）：`users` `stores` `goods` `orders` `coupons` `reviews` `favorites` `addresses` `categories` `refund_records` `cart_items`
-- 演进项已落地的表：`riders`（骑手档案）、`banners`、`announcements`、**`goods_specs`（多规格 SKU：goods_id/name/price/stock/version/sort/status）**、**`seckills`（限时秒杀：goods_id/store_id/price/quota/sold/start_time/end_time/status）**、**`outbox_events`（事务性 Outbox：event_type/order_id/payload/status/retry_count/create_time，status 0待投递 1已投递）**
-- 新增列：`cart_items.spec_id`（唯一键 `uk_cart_user_goods_spec(user_id, goods_id, spec_id)`，老库的 `uk_cart_user_goods` 由 SchemaMigration 自动替换）、`orders.coupon_id`（待付款取消时释放优惠券）
+- 演进项已落地的表：`riders`（骑手档案）、`banners`、`announcements`、**`goods_specs`（多规格 SKU：goods_id/name/price/stock/version/sort/status）**、**`seckills`（限时秒杀：goods_id/store_id/price/quota/sold/start_time/end_time/status）**、**`outbox_events`（事务性 Outbox：event_type/order_id/payload/status/retry_count/create_time，status 0待投递 1已投递）**、**`token_blacklist`（登出吊销：jti 主键/user_id/reason/expires_at/create_time）**
+- 新增列：`cart_items.spec_id`（唯一键 `uk_cart_user_goods_spec(user_id, goods_id, spec_id)`，老库的 `uk_cart_user_goods` 由 SchemaMigration 自动替换）、`orders.coupon_id`（待付款取消时释放优惠券）、**`users.password_changed_at`（VARCHAR(32)，空=从未改密；改密即让早于它签发的 token 失效，由 SchemaMigration 给老库补列）**
 - 关键现状：goods 有 `stock/version/merchant_category_id`（演进项已落地）；orders 的 items/address 为 **JSON 快照**（无独立明细表，items 内含 `specId/specName/seckillId`）；categories 有 `type`（PLATFORM/MERCHANT）+ `merchant_id`；reviews 已有 `order_id/images/reply/reply_time`（按 `(order_id, goods_id)` 防重）
 - 演进项（未落地，勿实现）：order_item/payment_record/user_coupon/order_status_log 表、address 经纬度、商户配送半径、逻辑删除字段
 
@@ -210,7 +212,7 @@
 
 - 列表接口无分页：`/api/admin/orders|users|products|refunds`、`/api/orders`、`/api/stores` 全表进内存（admin orders 还会逐单再查一次）；如需分页，加 `page/pageSize` + DAO `LIMIT ? OFFSET ?`，上限建议 50。
 - 搜索 N+1：`UserCenterService.search` 对每家店单独查 goods（41 店 → 42 次查询），可改一条 `SELECT DISTINCT store_id FROM goods WHERE name LIKE ?`。
-- 登录无失败计数/锁定/限流，密码为 SHA-256 单轮加固定盐；旧 token 在 72 小时内不失效（无 jti/黑名单）。
+- 密码仍为 SHA-256 单轮加固定盐（未换 bcrypt/Argon2）；登录/注册限流与 token 吊销（jti 黑名单、改密即失效）**已落地**，见第 4 节。
 - 上传只校验后缀 + content-type 白名单，未做文件魔数校验；`/uploads/**` 无需 JWT（公开资源）。
 - Banner `PUT` 是"null 覆盖为空串"语义（非 PATCH），只改 sort 会把 title/subtitle 清空。
 - `merchantStats(ownerId, storeId, range)` 的 `range` 参数未使用（今日/本周/本月为固定口径），非法值被静默忽略。

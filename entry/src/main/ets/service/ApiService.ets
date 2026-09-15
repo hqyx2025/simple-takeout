@@ -345,6 +345,11 @@ interface RegisterRequest {
   role: number
 }
 
+interface ChangePasswordRequest {
+  oldPassword: string
+  newPassword: string
+}
+
 interface ProfileUpdateRequest {
   username: string
   phone: string
@@ -549,6 +554,34 @@ export async function apiRegister(username: string, phone: string, password: str
   }
   logInfo('Api', `注册成功 userId=${resp.data.id}`)
   return toUser(resp.data)
+}
+
+/**
+ * 登出：把当前 token 交给后端拉黑，使其在剩余有效期内立刻失效。
+ * showErrorToast 关闭：退出登录失败只提示不打断（本地登录态无论如何都要清）。
+ */
+export async function apiLogout(): Promise<boolean> {
+  const resp: ApiResponse<string> = await post<string>('/api/auth/logout', undefined, false)
+  if (resp.code !== 200) {
+    logWarn('Api', `登出接口失败：${resp.message}`)
+    return false
+  }
+  logInfo('Api', '登出接口成功，当前 token 已加入黑名单')
+  return true
+}
+
+/**
+ * 修改密码：成功后所有旧 token（含当前这个）立即失效，必须重新登录
+ */
+export async function changePasswordApi(oldPassword: string, newPassword: string): Promise<boolean> {
+  const req: ChangePasswordRequest = { oldPassword: oldPassword, newPassword: newPassword }
+  const resp: ApiResponse<string> = await put<string>('/api/auth/password', req)
+  if (resp.code !== 200) {
+    logWarn('Api', `修改密码失败：${resp.message}`)
+    return false
+  }
+  logInfo('Api', '修改密码成功，旧 token 已失效')
+  return true
 }
 
 export async function updateUserProfileApi(username: string, phone: string): Promise<User | undefined> {

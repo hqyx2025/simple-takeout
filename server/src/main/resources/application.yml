@@ -48,6 +48,11 @@ takeout:
     # HS256 密钥（生产环境请通过环境变量注入）
     secret: ${TAKEOUT_JWT_SECRET:simple-takeout-jwt-secret-key-please-change-2026}
     expire-hours: 72
+  security:
+    rate-limit:
+      # 登录/注册按来源 IP 限流（计数存 Redis，多实例共享、重启不丢）；
+      # Redis 不可用时放行，绝不因为限流把正常用户挡在门外
+      enabled: ${TAKEOUT_RATE_LIMIT_ENABLED:true}
   cache:
     # 热点数据缓存总开关；Redis 不可用时写缓存/失效为尽力而为，读缓存异常自动回源数据库
     enabled: ${TAKEOUT_CACHE_ENABLED:true}

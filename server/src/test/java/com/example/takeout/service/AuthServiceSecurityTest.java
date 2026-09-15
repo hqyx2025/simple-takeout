@@ -36,7 +36,7 @@ class AuthServiceSecurityTest {
         JwtUtil jwtUtil = mock(JwtUtil.class);
         User admin = new User(3, "管理员", "", "13100131000", PasswordUtil.hash("123456"), 2, 0, "now");
         when(userDao.findByPhone("13100131000")).thenReturn(java.util.Optional.of(admin));
-        when(jwtUtil.generateToken(3, 2)).thenReturn("token");
+        when(jwtUtil.generateToken(3, 2, "")).thenReturn("token");
 
         AuthService.LoginResult result = new AuthService(userDao, jwtUtil)
                 .login("13100131000", "123456", "ADMIN");
@@ -113,5 +113,61 @@ class AuthServiceSecurityTest {
                 () -> new AuthService(userDao, jwtUtil).recharge(1, 0));
 
         assertEquals("\u5145\u503c\u91d1\u989d\u9700\u5728 0.01 \u81f3 10000 \u5143\u4e4b\u95f4", error.getMessage());
+    }
+
+    @Test
+    void changePasswordRejectsWrongOldPassword() {
+        UserDao userDao = mock(UserDao.class);
+        User user = new User(1, "用户", "", "13800138000", PasswordUtil.hash("123456"), 0, 20, "now");
+        when(userDao.findById(1)).thenReturn(java.util.Optional.of(user));
+
+        com.example.takeout.common.BizException error = assertThrows(
+                com.example.takeout.common.BizException.class,
+                () -> new AuthService(userDao, mock(JwtUtil.class)).changePassword(1, "wrong", "newpass123"));
+
+        assertEquals("原密码不正确", error.getMessage());
+        verify(userDao, org.mockito.Mockito.never())
+                .updatePassword(org.mockito.ArgumentMatchers.anyLong(),
+                        org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void changePasswordRejectsShortNewPassword() {
+        UserDao userDao = mock(UserDao.class);
+        User user = new User(1, "用户", "", "13800138000", PasswordUtil.hash("123456"), 0, 20, "now");
+        when(userDao.findById(1)).thenReturn(java.util.Optional.of(user));
+
+        com.example.takeout.common.BizException error = assertThrows(
+                com.example.takeout.common.BizException.class,
+                () -> new AuthService(userDao, mock(JwtUtil.class)).changePassword(1, "123456", "12345"));
+
+        assertEquals("新密码长度至少 6 位", error.getMessage());
+    }
+
+    @Test
+    void changePasswordRejectsSamePassword() {
+        UserDao userDao = mock(UserDao.class);
+        User user = new User(1, "用户", "", "13800138000", PasswordUtil.hash("123456"), 0, 20, "now");
+        when(userDao.findById(1)).thenReturn(java.util.Optional.of(user));
+
+        com.example.takeout.common.BizException error = assertThrows(
+                com.example.takeout.common.BizException.class,
+                () -> new AuthService(userDao, mock(JwtUtil.class)).changePassword(1, "123456", "123456"));
+
+        assertEquals("新密码不能与原密码相同", error.getMessage());
+    }
+
+    /** 改密必须同时写新哈希与改密时间：只改哈希无法让旧 token 失效。 */
+    @Test
+    void changePasswordWritesNewHashAndChangeTime() {
+        UserDao userDao = mock(UserDao.class);
+        User user = new User(1, "用户", "", "13800138000", PasswordUtil.hash("123456"), 0, 20, "now");
+        when(userDao.findById(1)).thenReturn(java.util.Optional.of(user));
+
+        new AuthService(userDao, mock(JwtUtil.class)).changePassword(1, "123456", "newpass123");
+
+        verify(userDao).updatePassword(org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.argThat(hash -> PasswordUtil.matches("newpass123", hash)),
+                org.mockito.ArgumentMatchers.matches("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}"));
     }
 }

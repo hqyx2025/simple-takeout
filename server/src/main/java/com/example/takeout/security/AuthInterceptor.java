@@ -12,6 +12,9 @@ import org.springframework.web.servlet.HandlerInterceptor;
 /**
  * 认证拦截器：校验 Authorization: Bearer <token>，
  * 解析后的 userId/role 写入 request attribute 供 Controller 使用
+ *
+ * <p>这里同时是「登录态可吊销」的唯一收口：登出拉黑的 jti、以及改密后失效的旧 token
+ * 都在本处拦下，任何接口都不会绕过。</p>
  */
 @Component
 public class AuthInterceptor implements HandlerInterceptor {
@@ -21,10 +24,12 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     private final JwtUtil jwtUtil;
     private final UserDao userDao;
+    private final TokenRevocationService tokenRevocationService;
 
-    public AuthInterceptor(JwtUtil jwtUtil, UserDao userDao) {
+    public AuthInterceptor(JwtUtil jwtUtil, UserDao userDao, TokenRevocationService tokenRevocationService) {
         this.jwtUtil = jwtUtil;
         this.userDao = userDao;
+        this.tokenRevocationService = tokenRevocationService;
     }
 
     @Override
@@ -39,12 +44,21 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
         try {
             Claims claims = jwtUtil.parseToken(auth.substring(7));
+            if (tokenRevocationService.isRevoked(jwtUtil.getJti(claims))) {
+                throw new BizException(401, "登录已退出，请重新登录");
+            }
             long userId = jwtUtil.getUserId(claims);
             int tokenRole = jwtUtil.getRole(claims);
             User user = userDao.findById(userId)
                     .orElseThrow(() -> new BizException(401, "用户不存在，请重新登录"));
             if (user.role() != tokenRole) {
                 throw new BizException(401, "登录身份已变化，请重新登录");
+            }
+            // 改密即失效：两个时间同为 yyyy-MM-dd HH:mm:ss，字典序即时间序；
+            // token 里的时间早于库里的改密时间，说明它签发于改密之前
+            String changedAt = user.passwordChangedAt() == null ? "" : user.passwordChangedAt();
+            if (!changedAt.isBlank() && changedAt.compareTo(jwtUtil.getPasswordChangedAt(claims)) > 0) {
+                throw new BizException(401, "密码已修改，请重新登录");
             }
             request.setAttribute(ATTR_USER_ID, userId);
             request.setAttribute(ATTR_ROLE, user.role());

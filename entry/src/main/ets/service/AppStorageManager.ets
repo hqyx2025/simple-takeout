@@ -3,7 +3,7 @@
  */
 import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, Rider, Banner, Announcement, MerchantStatsData, Category, RefundRecord, GoodsSpec, SeckillItem, SpecialGoodsItem, BundleInfo, UploadResult, createEmptyUser, createDefaultCategories } from '../model/Models'
 import { saveAllData, clearAllData } from './DataPersistence'
-import { apiLogin, apiRegister, updateUserProfileApi, fetchCurrentUserApi, rechargeBalanceApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, payOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi, fetchMerchantReviewsApi, replyReviewApi, fetchRiderProfileApi, setRiderStatusApi, fetchRiderPoolApi, fetchRiderOrdersApi, grabOrderApi, pickupOrderApi, deliverOrderApi, fetchBannersApi, fetchAnnouncementsApi, fetchAdminRidersApi, updateRiderStatusApi, fetchAdminBannersApi, createBannerApi, updateBannerStatusApi, deleteBannerApi, fetchAdminAnnouncementsApi, createAnnouncementApi, updateAnnouncementStatusApi, deleteAnnouncementApi, applyRefundApi, fetchCartApi, addCartItemApi, updateCartItemQuantityApi, deleteCartItemApi, deleteCartItemsApi, clearCartApi, uploadImageApi, fetchSeckillsApi, fetchRankStoresApi, fetchRankGoodsApi, fetchBundleApi, updateMerchantGoodsSpecsApi } from './ApiService'
+import { apiLogin, apiRegister, updateUserProfileApi, fetchCurrentUserApi, rechargeBalanceApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, payOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi, fetchMerchantReviewsApi, replyReviewApi, fetchRiderProfileApi, setRiderStatusApi, fetchRiderPoolApi, fetchRiderOrdersApi, grabOrderApi, pickupOrderApi, deliverOrderApi, fetchBannersApi, fetchAnnouncementsApi, fetchAdminRidersApi, updateRiderStatusApi, fetchAdminBannersApi, createBannerApi, updateBannerStatusApi, deleteBannerApi, fetchAdminAnnouncementsApi, createAnnouncementApi, updateAnnouncementStatusApi, deleteAnnouncementApi, applyRefundApi, fetchCartApi, addCartItemApi, updateCartItemQuantityApi, deleteCartItemApi, deleteCartItemsApi, clearCartApi, uploadImageApi, fetchSeckillsApi, fetchRankStoresApi, fetchRankGoodsApi, fetchBundleApi, updateMerchantGoodsSpecsApi, apiLogout, changePasswordApi } from './ApiService'
 import { getAuthToken, setAuthToken, getLastApiErrorMessage } from './HttpClient'
 import { logInfo, logWarn, logError } from './AppLogger'
 import { GeoPosition } from './LocationService'
@@ -83,6 +83,11 @@ export function initAppStorage() {
 
 // ============ 登录/登出 ============
 export function logout(): void {
+  // 先让后端吊销当前 token：本地 token 一清就再也吊销不了。
+  // 不 await（退出登录不能被弱网拖住）；apiLogout 的请求头在本次同步调用里就已带上 Authorization。
+  apiLogout().catch((err: Error) => {
+    logWarn('Auth', `登出接口调用失败，仅清理本地登录态：${err.message}`)
+  })
   currentUserSyncVersion += 1
   setAuthToken('')
   AppStorage.setOrCreate<string>('authToken', '')
@@ -498,6 +503,18 @@ export async function registerRemote(username: string, phone: string, password: 
   }
   logWarn('Api', '远程注册失败')
   return undefined
+}
+
+/**
+ * 远程修改密码：成功后服务端会把所有旧 token 判为失效，
+ * 因此调用方必须在成功后立刻清理本地登录态并回登录页。
+ */
+export async function changePasswordRemote(oldPassword: string, newPassword: string): Promise<boolean> {
+  const ok: boolean = await changePasswordApi(oldPassword, newPassword)
+  if (!ok) {
+    logWarn('Api', '远程修改密码失败')
+  }
+  return ok
 }
 
 // ==================== 数据拉取 ====================

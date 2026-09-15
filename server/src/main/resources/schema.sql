@@ -10,7 +10,9 @@ CREATE TABLE IF NOT EXISTS users (
     role INT NOT NULL DEFAULT 0,
     status INT NOT NULL DEFAULT 1,
     balance DECIMAL(10,2) NOT NULL DEFAULT 0,
-    create_time VARCHAR(32) NOT NULL
+    create_time VARCHAR(32) NOT NULL,
+    -- 最后一次改密时间（yyyy-MM-dd HH:mm:ss，空=从未改密）：签发时间早于它的 token 一律失效
+    password_changed_at VARCHAR(32) NOT NULL DEFAULT ''
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS stores (
@@ -261,4 +263,15 @@ CREATE TABLE IF NOT EXISTS outbox_events (
     create_time VARCHAR(32) NOT NULL,
     KEY idx_outbox_pending (status, id),
     KEY idx_outbox_order (order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Token 黑名单：登出时把当前 token 的 jti 落库，过期时间与 token 自身一致。
+-- 放数据库而非 Redis：登出必须"Redis 挂了也照样生效"，且本地开发常不开 Redis。
+CREATE TABLE IF NOT EXISTS token_blacklist (
+    jti VARCHAR(64) PRIMARY KEY,
+    user_id BIGINT NOT NULL DEFAULT 0,
+    reason VARCHAR(32) NOT NULL DEFAULT 'logout',
+    expires_at BIGINT NOT NULL DEFAULT 0,
+    create_time VARCHAR(32) NOT NULL,
+    KEY idx_blacklist_expires (expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

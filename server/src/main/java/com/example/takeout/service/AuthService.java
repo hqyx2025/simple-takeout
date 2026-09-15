@@ -80,8 +80,29 @@ public class AuthService {
                 throw new BizException(403, "登录端与账号角色不匹配，请切换正确的登录端");
             }
         }
-        String token = jwtUtil.generateToken(user.id(), user.role());
+        String token = jwtUtil.generateToken(user.id(), user.role(), user.passwordChangedAt());
         return new LoginResult(token, user.safe());
+    }
+
+    /**
+     * 修改密码：校验原密码后写入新哈希，并记录改密时间。
+     *
+     * <p>改密时间会让**所有早于此刻签发的 token 立即失效**（含当前这一个），
+     * 所以前端改密成功后必须回到登录页重新登录——这不是体验缺陷，是「改密即踢掉其他会话」的实现。</p>
+     */
+    public void changePassword(long userId, String oldPassword, String newPassword) {
+        User user = userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
+        if (oldPassword == null || !PasswordUtil.matches(oldPassword, user.password())) {
+            throw new BizException("原密码不正确");
+        }
+        if (newPassword == null || newPassword.length() < 6) {
+            throw new BizException("新密码长度至少 6 位");
+        }
+        if (PasswordUtil.matches(newPassword, user.password())) {
+            throw new BizException("新密码不能与原密码相同");
+        }
+        userDao.updatePassword(userId, PasswordUtil.hash(newPassword),
+                LocalDateTime.now().format(FMT));
     }
 
     private int roleOf(String loginType) {

@@ -24,7 +24,8 @@ public class UserDao {
             rs.getString("password"),
             rs.getInt("role"),
             rs.getDouble("balance"),
-            rs.getString("create_time")
+            rs.getString("create_time"),
+            rs.getString("password_changed_at")
     );
 
     private final JdbcTemplate jdbc;
@@ -140,5 +141,13 @@ public class UserDao {
 
     public void updateProfile(long userId, String username, String phone) {
         jdbc.update("UPDATE users SET username = ?, phone = ? WHERE id = ?", username, phone, userId);
+    }
+
+    /**
+     * 改密：同时写入 password_changed_at，使签发时间早于改密时刻的 token 全部失效。
+     */
+    public void updatePassword(long userId, String passwordHash, String changedAt) {
+        jdbc.update("UPDATE users SET password = ?, password_changed_at = ? WHERE id = ?",
+                passwordHash, changedAt, userId);
     }
 }
