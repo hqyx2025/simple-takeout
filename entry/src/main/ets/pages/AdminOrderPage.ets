@@ -48,6 +48,8 @@ export struct AdminOrderPage {
   @State refundingOrderId: number = 0
   @State showRefundConfirm: boolean = false
   @State actioningOrderId: number = 0
+  // 拼进 ForEach 键，强制重建同 id 的订单行（否则刷新后状态/按钮文案停留在旧值）
+  @State renderVersion: number = 0
 
   aboutToAppear(): void {
     logInfo('Page', '进入管理端订单管理页 AdminOrderPage')
@@ -73,9 +75,11 @@ export struct AdminOrderPage {
     }
     if (this.currentStatus === -1) {
       this.displayOrders = this.orders
-      return
+    } else {
+      this.displayOrders = this.orders.filter(o => o !== null && typeof o === 'object' && o.status === this.currentStatus)
     }
-    this.displayOrders = this.orders.filter(o => o !== null && typeof o === 'object' && o.status === this.currentStatus)
+    // 键只含 id 时，刷新回来的同 id 新对象会被 ForEach 复用，退款后状态不刷新。
+    this.renderVersion += 1
   }
 
   /** 切换筛选 Tab。 */
@@ -235,7 +239,7 @@ export struct AdminOrderPage {
             }
             .width('100%').padding(SPACING.MD)
             .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
-          }, (order: AdminOrder) => order.id.toString())
+          }, (order: AdminOrder) => `${this.renderVersion}-${order.id}`)
         }
         .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
       }

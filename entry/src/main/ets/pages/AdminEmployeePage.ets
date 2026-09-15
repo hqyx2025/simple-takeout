@@ -16,6 +16,8 @@ export struct AdminEmployeePage {
   }
   @State employees: AdminEmployee[] = []
   @State loading: boolean = false
+  // 键只含 id 时，刷新回来的同 id 新对象会被复用，停用/改名后行内容不刷新。
+  @State renderVersion: number = 0
   @State showForm: boolean = false
   @State editingId: number = 0
   @State formUsername: string = ''
@@ -35,6 +37,7 @@ export struct AdminEmployeePage {
   async refresh(): Promise<void> {
     this.loading = true
     this.employees = await fetchAdminEmployeesApi()
+    this.renderVersion += 1
     this.loading = false
   }
 
@@ -119,7 +122,7 @@ export struct AdminEmployeePage {
           }
           ForEach(this.employees, (employee: AdminEmployee) => {
             this.EmployeeRow(employee)
-          }, (employee: AdminEmployee) => employee.id.toString())
+          }, (employee: AdminEmployee) => `${this.renderVersion}-${employee.id}`)
         }
         .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
       }

@@ -20,6 +20,8 @@ export struct AdminProductPage {
   @State loading: boolean = false
   @State deletingId: number = 0
   @State showDeleteConfirm: boolean = false
+  // 同 AdminUserPage：键只含 id 时刷新回来的新对象会被复用，强制上下架后按钮不刷新。
+  @State renderVersion: number = 0
 
   aboutToAppear(): void {
     if (!this.loggedIn || this.user.role !== UserRole.ADMIN) {
@@ -38,6 +40,7 @@ export struct AdminProductPage {
     this.loading = true
     const status: number | undefined = this.statusFilter < 0 ? undefined : this.statusFilter
     this.products = await fetchAdminProductsApi(this.keyword, status)
+    this.renderVersion += 1
     this.loading = false
   }
 
@@ -97,7 +100,7 @@ export struct AdminProductPage {
             Text('暂无商品数据').width('100%').padding(SPACING.LG).fontColor(COLORS.TEXT_HINT)
           }
           ForEach(this.products, (product: AdminProduct) => { this.ProductRow(product) },
-            (product: AdminProduct) => product.id.toString())
+            (product: AdminProduct) => `${this.renderVersion}-${product.id}`)
         }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
       }.layoutWeight(1).scrollBar(BarState.Off)
 

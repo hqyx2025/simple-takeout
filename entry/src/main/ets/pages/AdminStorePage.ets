@@ -35,6 +35,8 @@ export struct AdminStorePage {
     balance: 0, coupons: [], orders: [], storeIds: []
   }
   @State stores: AdminStore[] = []
+  // 刷新回来的同 id 新对象会被 ForEach 复用，营业/推荐状态变更后按钮不刷新。
+  @State renderVersion: number = 0
 
   aboutToAppear(): void {
     logInfo('Page', '进入管理端店铺管理页 AdminStorePage')
@@ -49,6 +51,7 @@ export struct AdminStorePage {
   async refresh(): Promise<void> {
     const resp: ApiResponse<AdminStore[]> = await get<AdminStore[]>('/api/admin/stores')
     this.stores = resp.code === 200 && resp.data !== null ? resp.data : []
+    this.renderVersion += 1
   }
 
   /** 切换店铺营业状态：1 营业中 ↔ 0 已暂停（后端校验 status 合法性）。 */
@@ -122,7 +125,7 @@ export struct AdminStorePage {
             }
             .width('100%').padding(SPACING.MD)
             .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
-          }, (store: AdminStore) => store.id.toString())
+          }, (store: AdminStore) => `${this.renderVersion}-${store.id}`)
         }
         .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
       }

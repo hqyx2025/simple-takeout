@@ -19,6 +19,8 @@ export struct AdminRefundPage {
   }
   @State refunds: RefundRecord[] = []
   @State loading: boolean = false
+  // 键只含 id 时，审批后刷新回来的同 id 新对象会被复用，状态徽标与按钮不刷新。
+  @State renderVersion: number = 0
   // 拒绝退款原因输入
   @State showRejectDialog: boolean = false
   @State rejectingRefundId: number = 0
@@ -41,6 +43,7 @@ export struct AdminRefundPage {
     }
     this.loading = true
     this.refunds = await fetchAdminRefundsApi()
+    this.renderVersion += 1
     this.loading = false
   }
 
@@ -146,7 +149,7 @@ export struct AdminRefundPage {
               }
               .width('100%').padding(SPACING.MD)
               .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
-            }, (record: RefundRecord) => record.id.toString())
+            }, (record: RefundRecord) => `${this.renderVersion}-${record.id}`)
           }
           .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
         }

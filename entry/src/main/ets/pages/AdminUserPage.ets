@@ -17,6 +17,9 @@ export struct AdminUserPage {
   @State keyword: string = ''
   @State roleFilter: number = -1
   @State loading: boolean = false
+  // ForEach 键含 id 时，刷新回来的同 id 新对象会被复用而不重建行，
+  // 表现为停用后按钮仍显示「停用」；用版本号拼进键强制重建。
+  @State renderVersion: number = 0
 
   aboutToAppear(): void {
     if (!this.loggedIn || this.user.role !== UserRole.ADMIN) {
@@ -35,6 +38,7 @@ export struct AdminUserPage {
     this.loading = true
     const role: number | undefined = this.roleFilter < 0 ? undefined : this.roleFilter
     this.users = await fetchAdminUsersApi(role, undefined, this.keyword)
+    this.renderVersion += 1
     this.loading = false
   }
 
@@ -81,7 +85,8 @@ export struct AdminUserPage {
           if (this.users.length === 0) {
             Text('暂无账号数据').width('100%').padding(SPACING.LG).fontColor(COLORS.TEXT_HINT)
           }
-          ForEach(this.users, (item: AdminUser) => { this.UserRow(item) }, (item: AdminUser) => item.id.toString())
+          ForEach(this.users, (item: AdminUser) => { this.UserRow(item) },
+            (item: AdminUser) => `${this.renderVersion}-${item.id}`)
         }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
       }.layoutWeight(1).scrollBar(BarState.Off)
     }.width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)
