@@ -102,17 +102,18 @@ export struct MerchantReviewsPage {
           .justifyContent(FlexAlign.Center)
           .alignItems(HorizontalAlign.Center)
         } else {
-          Scroll() {
-            Column({ space: SPACING.SM }) {
-              ForEach(this.reviews, (review: Review) => {
+          // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
+          List({ space: SPACING.SM }) {
+            ForEach(this.reviews, (review: Review) => {
+              ListItem() {
                 this.ReviewCard(review)
-              }, (review: Review) => review.id.toString())
-            }
-            .width('100%')
-            .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.XXL })
+              }
+            }, (review: Review) => review.id.toString())
           }
+          .width('100%')
           .layoutWeight(1)
           .scrollBar(BarState.Off)
+          .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.XXL })
         }
       }
       .width('100%')

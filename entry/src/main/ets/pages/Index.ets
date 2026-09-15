@@ -1181,14 +1181,15 @@ struct DiscoverPage {
                 .margin({ top: SPACING.SM })
             }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
           } else {
-            Scroll() {
-              Column({ space: SPACING.SM }) {
-                ForEach(this.recommendedStores, (store: StoreItem) => {
+            // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
+            List({ space: SPACING.SM }) {
+              ForEach(this.recommendedStores, (store: StoreItem) => {
+                ListItem() {
                   this.RecommendedStoreCard(store)
-                }, (store: StoreItem) => store.id.toString())
-              }
-              .width('100%').padding(SPACING.LG)
-            }.layoutWeight(1).scrollBar(BarState.Off)
+                }
+              }, (store: StoreItem) => store.id.toString())
+            }
+            .width('100%').layoutWeight(1).scrollBar(BarState.Off).padding(SPACING.LG)
           }
       }
       .width('100%').layoutWeight(1)
@@ -1645,14 +1646,17 @@ export struct StoreDetailContent {
 
       // 商品列表
       Column() {
-        Scroll() {
-          Column() {
-            if (this.goodsLoading) {
+        // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
+        List() {
+          if (this.goodsLoading) {
+            ListItem() {
               Text('正在加载商品…')
                 .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
                 .width('100%').textAlign(TextAlign.Center)
                 .padding({ top: SPACING.XXL, bottom: SPACING.XXL })
-            } else if (this.filteredGoodsList.length === 0) {
+            }
+          } else if (this.filteredGoodsList.length === 0) {
+            ListItem() {
               Column({ space: SPACING.SM }) {
                 Text('暂无商品')
                   .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT)
@@ -1661,15 +1665,19 @@ export struct StoreDetailContent {
               }
               .width('100%').padding({ top: SPACING.XXL, bottom: SPACING.XXL })
               .alignItems(HorizontalAlign.Center)
-            } else {
-              // 当前分类命中的商品数：id 里带数量，供设备端用例断言「切分类确实换了列表」
+            }
+          } else {
+            // 当前分类命中的商品数：id 里带数量，供设备端用例断言「切分类确实换了列表」
+            ListItem() {
               Text(`共 ${this.filteredGoodsList.length} 件商品`)
                 .id(`goods-count-${this.filteredGoodsList.length}`)
                 .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
                 .width('100%')
                 .padding({ top: SPACING.SM, bottom: SPACING.SM })
-              ForEach(this.filteredGoodsList, (goods: GoodsItem) => {
-              Row({ space: SPACING.MD }) {
+            }
+            ForEach(this.filteredGoodsList, (goods: GoodsItem) => {
+            ListItem() {
+            Row({ space: SPACING.MD }) {
                 // 商品图片
                 Column() {
                   Text(goods.name.substring(0, 2))
@@ -1727,16 +1735,19 @@ export struct StoreDetailContent {
                 .layoutWeight(1).alignItems(HorizontalAlign.Start)
               }
               .width('100%').padding(SPACING.MD)
-              }, (item: GoodsItem) => `${this.goodsRenderVersion}-${item.id}`)
-            }
+              }
+            }, (item: GoodsItem) => `${this.goodsRenderVersion}-${item.id}`)
+          }
 
-            // 用户评价列表区域
+          // 用户评价列表区域
+          ListItem() {
             this.ReviewsSection()
           }
-          .padding({ bottom: SPACING.XL })
         }
+        .width('100%')
         .scrollBar(BarState.Off)
         .layoutWeight(1)
+        .padding({ bottom: SPACING.XL })
 
         // 购物车栏
         this.CartBar()

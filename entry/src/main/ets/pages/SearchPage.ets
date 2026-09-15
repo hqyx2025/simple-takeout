@@ -97,41 +97,43 @@ export struct SearchPage {
       .padding({ left: SPACING.LG, right: SPACING.LG })
       .backgroundColor(COLORS.BG_WHITE)
 
-      // 内容区
-      Scroll() {
-        Column() {
-          if (!this.loggedIn) {
+      // 内容区（用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中）
+      List() {
+        if (!this.loggedIn) {
+          ListItem() {
             this.EmptyLoginResult()
-          } else if (!this.hasSearched) {
-            // 未搜索时显示：热门搜索 + 历史搜索
-            if (this.hotWords.length > 0) {
+          }
+        } else if (!this.hasSearched) {
+          // 未搜索时显示：热门搜索 + 历史搜索
+          if (this.hotWords.length > 0) {
+            ListItem() {
               this.HotSearchSection()
             }
+          }
+          ListItem() {
             this.HistorySection()
-          } else {
-            // 搜索结果
-            if (this.searchResults.length === 0) {
+          }
+        } else {
+          // 搜索结果
+          if (this.searchResults.length === 0) {
+            ListItem() {
               this.EmptyResult()
-            } else {
-              List({ space: SPACING.SM }) {
-                ForEach(this.searchResults, (store: StoreItem) => {
-                  ListItem() {
-                    this.StoreCard(store)
-                  }
-                }, (item: StoreItem) => item.id.toString())
-              }
-              .id('search-result-list')
-              .width('100%')
-              .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.LG })
-              .scrollBar(BarState.Off)
-              .divider({ strokeWidth: 0 })
             }
+          } else {
+            ForEach(this.searchResults, (store: StoreItem) => {
+              ListItem() {
+                this.StoreCard(store)
+              }
+            }, (item: StoreItem) => item.id.toString())
           }
         }
-        .width('100%')
       }
+      .id('search-page-list')
+      .width('100%')
       .scrollBar(BarState.Off)
+      .divider({ strokeWidth: 0 })
       .layoutWeight(1)
+      .padding(this.hasSearched ? { left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.LG } : { bottom: SPACING.LG })
     }
     .width('100%')
     .height('100%')

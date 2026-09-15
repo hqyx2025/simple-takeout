@@ -711,15 +711,18 @@ export struct CheckoutPage {
           .justifyContent(FlexAlign.Center)
           .alignItems(HorizontalAlign.Center)
         } else {
-          Scroll() {
-            Column({ space: SPACING.SM }) {
+          // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
+          List({ space: SPACING.SM }) {
+            ListItem() {
               this.CouponOption(null)
-              ForEach(this.getAvailableCoupons(), (coupon: Coupon) => {
-                this.CouponOption(coupon)
-              }, (coupon: Coupon) => `${coupon.id}`)
             }
-            .width('100%')
+            ForEach(this.getAvailableCoupons(), (coupon: Coupon) => {
+              ListItem() {
+                this.CouponOption(coupon)
+              }
+            }, (coupon: Coupon) => `${coupon.id}`)
           }
+          .width('100%')
           .layoutWeight(1)
           .scrollBar(BarState.Off)
         }

@@ -340,8 +340,9 @@ export struct CartPage {
       } else if (this.getCurrentCartItems().length === 0) {
         EmptyState({ icon: '🛒', title: '购物车是空的', description: '去首页挑选喜欢的商品吧' })
       } else {
-        Scroll() {
-          Column({ space: SPACING.SM }) {
+        // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
+        List({ space: SPACING.SM }) {
+          ListItem() {
             Row() {
               Text(`\u5f53\u524d\u8d2d\u7269\u8f66\u8d2d\u7269\u603b\u6570\u4e3a(${this.totalCount})\u4ef6`)
                 .fontSize(FONT_SIZE.LG)
@@ -351,16 +352,18 @@ export struct CartPage {
             }
             .width('100%')
             .padding({ left: SPACING.SM, right: SPACING.SM, top: SPACING.SM, bottom: SPACING.XS })
-            ForEach(this.getStoreIds(), (storeId: number) => {
-              this.StoreCard(storeId)
-            }, (storeId: number) => `${this.cartRenderVersion}-${storeId}`)
           }
-          .width('100%')
-          .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: 96 })
+          ForEach(this.getStoreIds(), (storeId: number) => {
+            ListItem() {
+              this.StoreCard(storeId)
+            }
+          }, (storeId: number) => `${this.cartRenderVersion}-${storeId}`)
         }
+        .width('100%')
         .layoutWeight(1)
         .scrollBar(BarState.Off)
         .backgroundColor(COLORS.BG_PRIMARY)
+        .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: 96 })
 
         Row() {
           if (this.editing) {

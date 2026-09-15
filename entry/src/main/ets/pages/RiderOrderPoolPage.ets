@@ -68,15 +68,16 @@ export struct RiderOrderPoolPage {
           Text('暂无待抢订单').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
         }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
       } else {
-        Scroll() {
-          Column({ space: SPACING.SM }) {
-            ForEach(this.orders, (order: Order) => {
+        // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
+        List({ space: SPACING.SM }) {
+          ForEach(this.orders, (order: Order) => {
+            ListItem() {
               this.PoolCard(order)
-            }, (order: Order) => order.id.toString())
-          }
-          .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.XXL })
+            }
+          }, (order: Order) => order.id.toString())
         }
-        .layoutWeight(1).scrollBar(BarState.Off)
+        .width('100%').layoutWeight(1).scrollBar(BarState.Off)
+        .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.XXL })
       }
     }
     .width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)

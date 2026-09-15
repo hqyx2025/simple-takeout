@@ -4,7 +4,7 @@
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { Rider } from '../model/Models'
-import { fetchRiderProfileRemote, setRiderStatusRemote } from '../service/AppStorageManager'
+import { fetchRiderProfileRemote, logout, setRiderStatusRemote } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
 
 @Entry
@@ -47,6 +47,14 @@ export struct RiderCenterPage {
   build() {
     Column() {
       Row() {
+        Text('退出登录')
+          .fontSize(FONT_SIZE.MD)
+          .fontColor(COLORS.PRIMARY)
+          .layoutWeight(1)
+          .onClick(() => {
+            logout()
+            router.replaceUrl({ url: 'pages/Index' })
+          })
         Text('🛵 骑手中心')
           .fontSize(FONT_SIZE.XXL)
           .fontWeight(FontWeight.Bold)
@@ -76,9 +84,10 @@ export struct RiderCenterPage {
         }
         .layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
       } else {
-        Scroll() {
-          Column({ space: SPACING.SM }) {
-            // 上线开关
+        // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致内容不在顶部
+        List({ space: SPACING.SM }) {
+          // 上线开关
+          ListItem() {
             Column({ space: SPACING.SM }) {
               Row() {
                 Text(this.rider!.name)
@@ -96,8 +105,10 @@ export struct RiderCenterPage {
                 .id('rider-online-status')
             }
             .width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+          }
 
-            // 统计
+          // 统计
+          ListItem() {
             Row() {
               Column({ space: SPACING.XS }) {
                 Text(this.rider!.totalOrders.toString())
@@ -111,25 +122,38 @@ export struct RiderCenterPage {
               }.layoutWeight(1).alignItems(HorizontalAlign.Center)
             }
             .width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
-
-            Button('抢单大厅')
-              .width('100%').height(48).fontSize(FONT_SIZE.LG)
-              .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
-              .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-              .margin({ top: SPACING.MD })
-              .id('rider-pool-entry')
-              .onClick(() => { router.pushUrl({ url: 'pages/RiderOrderPoolPage' }) })
-
-            Button('我的配送单')
-              .width('100%').height(48).fontSize(FONT_SIZE.LG)
-              .fontColor(COLORS.PRIMARY).backgroundColor(COLORS.TAG_BG)
-              .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-              .id('rider-orders-entry')
-              .onClick(() => { router.pushUrl({ url: 'pages/RiderOrdersPage' }) })
           }
-          .width('100%').padding(SPACING.LG)
+
+          ListItem() {
+            Column() {
+              Button('抢单大厅')
+                .width('100%').height(48).fontSize(FONT_SIZE.LG)
+                .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
+                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                .margin({ top: SPACING.MD })
+                .id('rider-pool-entry')
+                .onClick(() => {
+                  if (this.rider!.online === 1) {
+                    router.pushUrl({ url: 'pages/RiderOrderPoolPage' })
+                  }
+                  else {
+                    promptAction.showToast({ message: '请先上线', duration: 1500 })
+                  }
+                })
+
+              Button('我的配送单')
+                .width('100%').height(48).fontSize(FONT_SIZE.LG)
+                .fontColor(COLORS.PRIMARY).backgroundColor(COLORS.TAG_BG)
+                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                .id('rider-orders-entry')
+                .onClick(() => { router.pushUrl({ url: 'pages/RiderOrdersPage' }) })
+            }
+            .width('100%')
+          }
         }
+        .width('100%')
         .layoutWeight(1).scrollBar(BarState.Off)
+        .padding(SPACING.LG)
       }
     }
     .width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)

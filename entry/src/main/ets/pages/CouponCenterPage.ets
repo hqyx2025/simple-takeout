@@ -27,15 +27,26 @@ export struct CouponCenterPage {
   @StorageLink('couponList') couponList: Coupon[] = []
   @StorageLink('claimableCoupons') claimableCoupons: Coupon[] = []
   @State currentTab: number = 0  // 0=可领取, 1=我的优惠券, 2=已使用
+  // 渲染路径禁止调用 getter（ArkUI 求值时序问题）：未使用/已使用在数据变化时显式计算
+  @State unusedCoupons: Coupon[] = []
+  @State usedCoupons: Coupon[] = []
   onBack: () => void = () => { router.back() }
   onSelectCoupon: (coupon: Coupon) => void = () => {}  // 选择优惠券回调（结算页用）
 
   aboutToAppear() {
     logInfo('Page', '进入优惠券中心页 CouponCenterPage')
+    this.applyCouponFilter()
     // 从后端拉取最新优惠券（真实后端模式）
     if (this.loggedIn) {
       syncCouponsRemote()
     }
+  }
+
+  /** 按使用状态拆分列表（显式计算，渲染路径不调用 getter）。 */
+  private applyCouponFilter(): void {
+    const list: Coupon[] = Array.isArray(this.couponList) ? this.couponList : []
+    this.unusedCoupons = list.filter((c: Coupon) => !c.used)
+    this.usedCoupons = list.filter((c: Coupon) => c.used)
   }
 
   build() {
@@ -81,42 +92,55 @@ export struct CouponCenterPage {
       .padding({ top: SPACING.SM, bottom: SPACING.SM })
       .backgroundColor(COLORS.BG_WHITE)
 
-      // 内容区
-      Scroll() {
-        Column({ space: SPACING.MD }) {
-          if (!this.loggedIn) {
+      // 内容区（用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中）
+      List({ space: SPACING.MD }) {
+        if (!this.loggedIn) {
+          ListItem() {
             this.EmptyView('🔒', '暂无登录', '请登录后查看优惠券')
-          } else if (this.currentTab === 0) {
-            // 可领取优惠券
-            if (this.claimableCoupons.length === 0) {
+          }
+        } else if (this.currentTab === 0) {
+          // 可领取优惠券
+          if (this.claimableCoupons.length === 0) {
+            ListItem() {
               this.EmptyView('🎁', '暂无可领取的优惠券', '')
             }
-            ForEach(this.claimableCoupons, (coupon: Coupon) => {
+          }
+          ForEach(this.claimableCoupons, (coupon: Coupon) => {
+            ListItem() {
               this.CouponCard(coupon)
-            }, (coupon: Coupon) => coupon.id.toString())
-          } else if (this.currentTab === 1) {
-            // 我的优惠券（未使用的）
-            if (this.getUnusedCoupons().length === 0) {
+            }
+          }, (coupon: Coupon) => coupon.id.toString())
+        } else if (this.currentTab === 1) {
+          // 我的优惠券（未使用的）
+          if (this.unusedCoupons.length === 0) {
+            ListItem() {
               this.EmptyView('🎫', '暂无可用优惠券', '去"可领取"领取优惠券吧~')
             }
-            ForEach(this.getUnusedCoupons(), (coupon: Coupon) => {
+          }
+          ForEach(this.unusedCoupons, (coupon: Coupon) => {
+            ListItem() {
               this.CouponCard(coupon)
-            }, (coupon: Coupon) => coupon.id.toString())
-          } else {
-            // 已使用
-            if (this.getUsedCoupons().length === 0) {
+            }
+          }, (coupon: Coupon) => coupon.id.toString())
+        } else {
+          // 已使用
+          if (this.usedCoupons.length === 0) {
+            ListItem() {
               this.EmptyView('📋', '暂无已使用优惠券', '')
             }
-            ForEach(this.getUsedCoupons(), (coupon: Coupon) => {
-              this.CouponCard(coupon)
-            }, (coupon: Coupon) => coupon.id.toString())
           }
+          ForEach(this.usedCoupons, (coupon: Coupon) => {
+            ListItem() {
+              this.CouponCard(coupon)
+            }
+          }, (coupon: Coupon) => coupon.id.toString())
         }
-        .width('100%')
-        .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.LG })
       }
+      .width('100%')
       .layoutWeight(1)
+      .scrollBar(BarState.Off)
       .backgroundColor(COLORS.BG_PRIMARY)
+      .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.LG })
     }
     .width('100%')
     .height('100%')

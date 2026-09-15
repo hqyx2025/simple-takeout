@@ -617,13 +617,16 @@ export struct MerchantCenterPage {
             }
             .width('100%')
 
-            Scroll() {
-              Column({ space: SPACING.SM }) {
-                if (this.merchantCategories.length === 0) {
+            // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
+            List({ space: SPACING.SM }) {
+              if (this.merchantCategories.length === 0) {
+                ListItem() {
                   Text('暂无分类，请先新增')
                     .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
                 }
-                ForEach(this.merchantCategories, (category: Category) => {
+              }
+              ForEach(this.merchantCategories, (category: Category) => {
+                ListItem() {
                   Row({ space: SPACING.SM }) {
                     if (this.editingCategoryId === category.id) {
                       TextInput({ placeholder: '分类名称', text: this.editCategoryName })
@@ -657,10 +660,10 @@ export struct MerchantCenterPage {
                   .padding(SPACING.SM)
                   .backgroundColor(COLORS.BG_PRIMARY)
                   .borderRadius(BORDER_RADIUS.MD)
-                }, (category: Category) => category.id.toString())
-              }
-              .width('100%')
+                }
+              }, (category: Category) => category.id.toString())
             }
+            .width('100%')
             .layoutWeight(1)
             .scrollBar(BarState.Off)
           }

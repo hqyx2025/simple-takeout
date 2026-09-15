@@ -209,14 +209,13 @@ export struct SpecSelectDialog {
       }
       .width('100%')
 
-      // 规格列表：库存为 0 显示售罄且不可选
-      Scroll() {
-        Column({ space: SPACING.SM }) {
-          ForEach(this.specList, (spec: GoodsSpec) => {
+      // 规格列表：库存为 0 显示售罄且不可选（用 List 承载，避免 Scroll 内容不足一屏时垂直居中）
+      List({ space: SPACING.SM }) {
+        ForEach(this.specList, (spec: GoodsSpec) => {
+          ListItem() {
             this.SpecRow(spec)
-          }, (spec: GoodsSpec) => spec.id.toString())
-        }
-        .width('100%')
+          }
+        }, (spec: GoodsSpec) => spec.id.toString())
       }
       .scrollBar(BarState.Off)
       .width('100%')
