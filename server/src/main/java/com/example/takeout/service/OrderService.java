@@ -19,6 +19,7 @@ import com.example.takeout.model.Coupon;
 import com.example.takeout.model.Goods;
 import com.example.takeout.model.GoodsSpec;
 import com.example.takeout.model.Order;
+import com.example.takeout.model.RefundReason;
 import com.example.takeout.model.RefundRecord;
 import com.example.takeout.model.Review;
 import com.example.takeout.model.Rider;
@@ -489,11 +490,24 @@ public class OrderService {
     }
 
     /**
-     * 用户申请退款（演进项：退款审批流程，见大纲 7.11/9.7/10.7）
+     * 用户申请退款（退款审批流程，见大纲 7.11/9.7/10.7）
      * 条件：订单已送达（status=4）、托管未结算（escrow=0）、未评价；申请后订单进入退款中（status=6）。
      */
+    /** 兼容旧客户端：只传文本原因，归入 OTHER。 */
     @Transactional
     public RefundRecord applyRefund(long userId, long orderId, String reason) {
+        return applyRefund(userId, orderId, null, reason);
+    }
+
+    /** 结构化退款：reasonType 为枚举 code（显式非法值直接拒绝），reason 为可选备注。 */
+    @Transactional
+    public RefundRecord applyRefund(long userId, long orderId, String reasonType, String reason) {
+        RefundReason type = RefundReason.fromCode(reasonType);
+        if (type == null) {
+            throw new BizException("退款原因类型无效");
+        }
+        String safeReason = requireMaxLength(reason == null ? "" : reason, 255, "退款原因");
+
         Order order = requireOrder(orderId);
         if (order.userId() != userId) {
             throw new BizException(403, "无权操作该订单");
@@ -517,9 +531,8 @@ public class OrderService {
         }
         Store store = storeDao.findById(order.storeId()).orElseThrow(() -> new BizException("店铺不存在"));
         String now = LocalDateTime.now().format(FMT);
-        String safeReason = requireMaxLength(reason == null ? "" : reason, 255, "退款原因");
         long id = refundDao.insert(orderId, userId, store.ownerId(),
-                safeReason, order.payAmount(), now);
+                type.code(), safeReason, order.payAmount(), now);
         return refundDao.findById(id).orElseThrow(() -> new BizException("退款申请失败"));
     }
 

@@ -87,8 +87,9 @@ public class OrderController {
     @PostMapping("/orders/{id}/refund")
     public ApiResponse<RefundRecord> refund(@RequestAttribute("userId") long userId, @PathVariable long id,
                                             @RequestBody(required = false) RefundRequest req) {
+        String reasonType = req == null ? null : req.reasonType();
         String reason = req == null ? "" : req.reason();
-        return ApiResponse.ok(orderService.applyRefund(userId, id, reason));
+        return ApiResponse.ok(orderService.applyRefund(userId, id, reasonType, reason));
     }
 
     // ============ 商户端 ============
@@ -127,7 +128,7 @@ public class OrderController {
                                 List<String> images, int anonymous) {
     }
 
-    public record RefundRequest(String reason) {
+    public record RefundRequest(String reasonType, String reason) {
     }
 
     private void requireMerchant(int role) {

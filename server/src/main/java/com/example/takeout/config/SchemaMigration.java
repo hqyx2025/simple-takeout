@@ -37,6 +37,8 @@ public class SchemaMigration implements ApplicationRunner {
         addColumnIfMissing("cart_items", "spec_id", "BIGINT NOT NULL DEFAULT 0");
         // 改密即失效：老库补列，空值表示从未改密（存量 token 不受影响）
         addColumnIfMissing("users", "password_changed_at", "VARCHAR(32) NOT NULL DEFAULT ''");
+        // 退款原因结构化：枚举 code + 文本备注
+        addColumnIfMissing("refund_records", "reason_type", "VARCHAR(32) NOT NULL DEFAULT 'OTHER'");
         rebuildCartUniqueKey();
     }
 

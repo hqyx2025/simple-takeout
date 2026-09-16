@@ -19,6 +19,7 @@ public class RefundDao {
             rs.getLong("order_id"),
             rs.getLong("user_id"),
             rs.getLong("merchant_id"),
+            rs.getString("reason_type"),
             rs.getString("reason"),
             rs.getDouble("amount"),
             rs.getString("status"),
@@ -33,9 +34,9 @@ public class RefundDao {
         this.jdbc = jdbc;
     }
 
-    public long insert(long orderId, long userId, long merchantId, String reason, double amount, String applyTime) {
-        jdbc.update("INSERT INTO refund_records(order_id, user_id, merchant_id, reason, amount, status, apply_time, process_time, reject_reason) VALUES(?,?,?,?,?,?,?,?,?)",
-                orderId, userId, merchantId, reason, amount, "PENDING", applyTime, "", "");
+    public long insert(long orderId, long userId, long merchantId, String reasonType, String reason, double amount, String applyTime) {
+        jdbc.update("INSERT INTO refund_records(order_id, user_id, merchant_id, reason_type, reason, amount, status, apply_time, process_time, reject_reason) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                orderId, userId, merchantId, reasonType, reason, amount, "PENDING", applyTime, "", "");
         return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 

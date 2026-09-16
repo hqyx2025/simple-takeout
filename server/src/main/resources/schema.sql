@@ -174,6 +174,7 @@ CREATE TABLE IF NOT EXISTS refund_records (
     user_id BIGINT NOT NULL,
     merchant_id BIGINT NOT NULL,
     reason VARCHAR(255) DEFAULT '',
+    reason_type VARCHAR(32) NOT NULL DEFAULT 'OTHER',
     amount DECIMAL(10,2) NOT NULL DEFAULT 0,
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     apply_time VARCHAR(32) NOT NULL,

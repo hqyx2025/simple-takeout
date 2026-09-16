@@ -20,6 +20,7 @@ import com.example.takeout.model.Coupon;
 import com.example.takeout.model.Goods;
 import com.example.takeout.model.GoodsSpec;
 import com.example.takeout.model.Order;
+import com.example.takeout.model.RefundRecord;
 import com.example.takeout.model.Rider;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.User;
@@ -145,7 +146,7 @@ class OrderBoundaryTest {
         BizException error = assertThrows(BizException.class, () -> service.applyRefund(USER_ID, 8, "不想要了"));
 
         assertTrue(error.getMessage().contains("订单资金已处理或状态已变化"));
-        verify(refundDao, never()).insert(anyLong(), anyLong(), anyLong(), anyString(), anyDouble(), anyString());
+        verify(refundDao, never()).insert(anyLong(), anyLong(), anyLong(), anyString(), anyString(), anyDouble(), anyString());
     }
 
     @Test
@@ -219,7 +220,33 @@ class OrderBoundaryTest {
                 () -> service.applyRefund(USER_ID, 8, "理".repeat(300)));
 
         assertEquals("退款原因最多 255 个字符", error.getMessage());
-        verify(refundDao, never()).insert(anyLong(), anyLong(), anyLong(), anyString(), anyDouble(), anyString());
+        verify(refundDao, never()).insert(anyLong(), anyLong(), anyLong(), anyString(), anyString(), anyDouble(), anyString());
+    }
+
+    @Test
+    void applyRefundStoresStructuredReasonTypeAndRemark() {
+        when(orderDao.findById(8)).thenReturn(Optional.of(storedOrder(8, 4, 0)));
+        when(refundDao.existsPending(8)).thenReturn(false);
+        when(orderDao.markRefunding(8)).thenReturn(true);
+        when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore(0, 3)));
+        when(refundDao.insert(anyLong(), anyLong(), anyLong(), anyString(), anyString(), anyDouble(), anyString()))
+                .thenReturn(99L);
+        when(refundDao.findById(99)).thenReturn(Optional.of(
+                new RefundRecord(99, 8, USER_ID, OWNER_ID, "QUALITY_ISSUE", "汤洒了", 13.0, "PENDING", "", "", "")));
+
+        RefundRecord rec = service.applyRefund(USER_ID, 8, "QUALITY_ISSUE", "汤洒了");
+
+        assertEquals("QUALITY_ISSUE", rec.reasonType());
+        verify(refundDao).insert(eq(8L), eq(USER_ID), eq(OWNER_ID), eq("QUALITY_ISSUE"), eq("汤洒了"), anyDouble(), anyString());
+    }
+
+    @Test
+    void applyRefundRejectsUnknownReasonType() {
+        BizException error = assertThrows(BizException.class,
+                () -> service.applyRefund(USER_ID, 8, "HACK", ""));
+
+        assertEquals("退款原因类型无效", error.getMessage());
+        verify(refundDao, never()).insert(anyLong(), anyLong(), anyLong(), anyString(), anyString(), anyDouble(), anyString());
     }
 
     @Test
