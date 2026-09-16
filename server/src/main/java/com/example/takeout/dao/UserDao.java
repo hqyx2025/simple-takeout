@@ -23,6 +23,7 @@ public class UserDao {
             rs.getString("phone"),
             rs.getString("password"),
             rs.getInt("role"),
+            rs.getInt("status"),
             rs.getDouble("balance"),
             rs.getString("create_time"),
             rs.getString("password_changed_at")
@@ -51,11 +52,6 @@ public class UserDao {
         Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM users WHERE phone = ? AND id <> ?",
                 Integer.class, phone, userId);
         return count != null && count > 0;
-    }
-
-    public boolean isDisabled(long userId) {
-        Integer status = jdbc.queryForObject("SELECT status FROM users WHERE id = ?", Integer.class, userId);
-        return status != null && status == 0;
     }
 
     public List<AdminEmployee> listEmployees() {

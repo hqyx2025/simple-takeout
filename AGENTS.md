@@ -34,7 +34,7 @@
     --mode module -p module=entry@default -p product=default -p requiredDeviceType=phone assembleHap --analyze=normal --parallel --incremental --daemon
   ```
   构建日志：`.hvigor/outputs/build-logs/build.log`；判断成功要看日志里的 `BUILD SUCCESSFUL` 并确认 `entry/build/default/outputs/default/*.hap` 时间戳已更新（流水线里 `Select-String` 会吞掉退出码，别只看 `$LASTEXITCODE`）
-- 后端测试：`mvn -f server/pom.xml test`（**138 个测试**，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格/资金与状态并发边界/文本列宽边界、缓存穿透/击穿/雪崩防护与领域事件 Outbox 语义、AI 助手意图路由、**登录限流与 token 吊销（jti 黑名单 + 改密即失效）**、**搜索不逐店查商品（N+1 契约）**、**平台统计口径（订单数与成交额同步排除 5/6）**，以及**骑手待取餐池 SQL 契约**与骑手配送闭环）
+- 后端测试：`mvn -f server/pom.xml test`（**142 个测试**，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格/资金与状态并发边界/文本列宽边界、缓存穿透/击穿/雪崩防护与领域事件 Outbox 语义、AI 助手意图路由、**登录限流与 token 吊销（jti 黑名单 + 改密即失效 + 禁用账号存量 token 立即失效）**、**下单防重 idempotencyKey（Redis SET NX，失败释放占位、Redis 挂了跳过）**、**停用骑手服务层拒绝抢单/取餐/送达**、**搜索不逐店查商品（N+1 契约）**、**平台统计口径（订单数与成交额同步排除 5/6）**，以及**骑手待取餐池 SQL 契约**与骑手配送闭环）
 - 一键容器化环境：`docker compose up -d --build`（app + MySQL 8.4 + Redis 7，含健康检查与启动依赖顺序）；只起基础设施（本机用 Maven 跑后端）用 `docker compose up -d mysql redis`。注意 compose 的 MySQL 映射到宿主 **3307**（避开本机 MySQL84 的 3306）
 - 后端测试与运行都要求 `JAVA_HOME` 指向 **JDK 25**；`server/Dockerfile` 的构建阶段也必须是 JDK 25，否则 `maven.compiler.release=25` 直接编译失败
 - Release 打包（**当前范围外，可选工具**）：`scripts/enable-release-signing.ps1`（接入发布证书）→ `scripts/build-release.ps1`（签名包）→ `scripts/release-check.ps1 [-Build]`（上架体检，输出 `md/上架体检报告.md`，该报告为生成物不入库）；详见 `md/上架体检与Release签名.md`。日常开发只需 debug 构建，不必碰这一套。
@@ -46,7 +46,8 @@
 - **MySQL**：`localhost:3306`，root / 123456，库 takeout；凭据走环境变量 `TAKEOUT_DB_USERNAME/TAKEOUT_DB_PASSWORD`（默认 root/123456）；主机/端口可用 `TAKEOUT_DB_HOST/TAKEOUT_DB_PORT` 覆盖（容器内指向 `mysql:3306`，本机默认 `localhost:3306` 不变）
 - **Redis**：`localhost:6379`；`TAKEOUT_REDIS_HOST/TAKEOUT_REDIS_PORT/TAKEOUT_REDIS_PASSWORD/TAKEOUT_REDIS_DATABASE`；缓存与事件开关 `TAKEOUT_CACHE_ENABLED`、`TAKEOUT_MQ_ENABLED`；本地开发需自行起一个 Redis（`docker run -d -p 6379:6379 redis:7-alpine`，或 `docker compose up -d redis`）
 - **缓存与事件参数**：TTL `takeout.cache.ttl-seconds`(300) + 抖动 `jitter-seconds`(120)、空值占位 `null-ttl-seconds`(60)、回源锁 `rebuild-lock-ms`(3000)；Outbox 中继 `takeout.mq.relay-scan-ms`(2000)、消费幂等 `dedup-hours`(24)。细节见 `md/Redis缓存与异步事件架构.md`
-- **JWT**：`TAKEOUT_JWT_SECRET` 环境变量，`expire-hours: 72`；无刷新令牌（每 72 小时重新登录的体验取舍已接受）。**登录态可吊销**：`POST /api/auth/logout` 把当前 token 的 jti 记入 `token_blacklist`（落**数据库**而非 Redis——Redis 挂了登出也必须生效），`PUT /api/auth/password` 改密写 `users.password_changed_at` 使所有早于此刻签发的 token 失效；两处校验都收口在 `AuthInterceptor`（唯一认证入口，新增接口不会漏挂），token 载荷含 `jti` 与 `pwdAt`
+- **JWT**：`TAKEOUT_JWT_SECRET` 环境变量，`expire-hours: 72`；无刷新令牌（每 72 小时重新登录的体验取舍已接受）。**登录态可吊销**：`POST /api/auth/logout` 把当前 token 的 jti 记入 `token_blacklist`（落**数据库**而非 Redis——Redis 挂了登出也必须生效），`PUT /api/auth/password` 改密写 `users.password_changed_at` 使所有早于此刻签发的 token 失效，**管理端禁用账号（`users.status=0`）使其存量 token 立即失效**；三处校验都收口在 `AuthInterceptor`（唯一认证入口，新增接口不会漏挂），token 载荷含 `jti` 与 `pwdAt`
+- **下单防重（idempotencyKey）**：`POST /api/orders` 请求体可带 `idempotencyKey`（前端结算页每页面实例生成一次 `submitKey`，多店结算按 `-storeId` 派生）；服务端 Redis `SET NX`（key `takeout:idempotent:order:<userId>:<key>`，TTL 5 分钟）拦截连点/网络重放，**下单失败会释放占位**允许同 token 重试，**Redis 不可用时跳过校验**（与登录限流同口径：加固不能变成下单不可用）；旧客户端不传该字段则完全不受影响
 - **登录/注册限流**：`takeout.security.rate-limit.enabled`（环境变量 `TAKEOUT_RATE_LIMIT_ENABLED`，默认 true）。计数存 Redis（key `takeout:rl:<action>:<ip>`；login 10 次/60 秒、register 5 次/小时，超限封该 IP），**Redis 不可用时一律放行**（限流是加固，不能变成登录不可用）；超限抛 `BizException(429, …)`，`GlobalExceptionHandler` 映射为 HTTP 429
 - **日志**：按天分文件 `app-YYYY-MM-DD.log`，单文件 2MB 轮转压缩归档（zip）；同时输出控制台 + `filesDir/log/app.log`；密码/JWT/手机号完整值禁止入日志
 - **高德 Key**（双 Key 概念）：`AMAP_CONFIG.MAP_JS_KEY`（Web端 JS API 类型，`a0373d4b39b6524b7f80e825339e7a28`，需同步修改 `resources/rawfile/amap_map.html` 中 AMAP_KEY）；2021 年后 Key 需配置安全密钥 jscode

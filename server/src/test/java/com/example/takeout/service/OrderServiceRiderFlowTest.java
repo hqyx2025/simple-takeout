@@ -59,7 +59,14 @@ class OrderServiceRiderFlowTest {
             mock(AddressDao.class), mock(CouponDao.class), mock(ReviewDao.class), mock(UserDao.class),
             mock(RefundDao.class), new ObjectMapper(), mock(CartItemMapper.class), riderDao,
             mock(GoodsSpecDao.class), mock(SeckillDao.class), mock(HotDataCacheService.class),
-            mock(com.example.takeout.service.mq.DomainEventPublisher.class));
+            mock(com.example.takeout.service.mq.DomainEventPublisher.class),
+            mock(org.springframework.beans.factory.ObjectProvider.class));
+
+    /** 服务层独立校验骑手未被停用：走 riderGrab/riderPickup/riderDeliver 的用例必须先桩一个启用中的骑手档案。 */
+    private void stubActiveRider() {
+        when(riderDao.findById(RIDER_ID)).thenReturn(Optional.of(
+                new Rider(RIDER_ID, 5L, "骑手小张", "13300133000", 1, 0, 0.0, 1, "")));
+    }
 
     /** 库中订单（25 个组件：id..couponId 为模型字段，rider_id / ready_time 由 DAO 单独读写）。 */
     private Order storedOrder(int status) {
@@ -112,6 +119,7 @@ class OrderServiceRiderFlowTest {
 
     @Test
     void riderGrabBindsRiderAndIsRejectedWhenSomeoneElseTookIt() {
+        stubActiveRider();
         when(orderDao.tryAssignRider(ORDER_ID, RIDER_ID)).thenReturn(true);
         when(orderDao.findById(ORDER_ID)).thenReturn(Optional.of(storedOrder(2)));
 
@@ -125,6 +133,7 @@ class OrderServiceRiderFlowTest {
 
     @Test
     void fullChainFromReadyToDeliveredAccumulatesRiderIncome() {
+        stubActiveRider();
         stubStore();
         when(orderDao.findById(ORDER_ID)).thenReturn(Optional.of(storedOrder(2)));
         when(orderDao.markReady(eq(ORDER_ID), anyString())).thenReturn(true);
@@ -148,6 +157,7 @@ class OrderServiceRiderFlowTest {
 
     @Test
     void riderActionsFailWhenOrderIsNotYours() {
+        stubActiveRider();
         when(orderDao.riderPickup(eq(ORDER_ID), eq(RIDER_ID), anyString())).thenReturn(false);
         BizException pickup = assertThrows(BizException.class, () -> service.riderPickup(RIDER_ID, ORDER_ID));
         assertTrue(pickup.getMessage().contains("无法取餐"), pickup.getMessage());
@@ -156,6 +166,26 @@ class OrderServiceRiderFlowTest {
         BizException deliver = assertThrows(BizException.class, () -> service.riderDeliver(RIDER_ID, ORDER_ID));
         assertTrue(deliver.getMessage().contains("无法送达"), deliver.getMessage());
         // 送达失败绝不能给骑手记一笔收入
+        verify(riderDao, never()).addCompleted(anyLong(), anyDouble());
+    }
+
+    @Test
+    void disabledRiderCannotGrabPickupOrDeliver() {
+        // 平台停用的骑手（status=0）：控制器有在线/停用校验，服务层必须独立兜底，
+        // 防止绕过控制器的调用路径（内部调用/新增接口）让停用骑手继续接单配送
+        when(riderDao.findById(RIDER_ID)).thenReturn(Optional.of(
+                new Rider(RIDER_ID, 5L, "骑手小张", "13300133000", 1, 0, 0.0, 0, "")));
+
+        BizException grab = assertThrows(BizException.class, () -> service.riderGrab(RIDER_ID, ORDER_ID));
+        assertEquals(403, grab.getCode());
+        verify(orderDao, never()).tryAssignRider(anyLong(), anyLong());
+
+        BizException pickup = assertThrows(BizException.class, () -> service.riderPickup(RIDER_ID, ORDER_ID));
+        assertEquals(403, pickup.getCode());
+
+        BizException deliver = assertThrows(BizException.class, () -> service.riderDeliver(RIDER_ID, ORDER_ID));
+        assertEquals(403, deliver.getCode());
+        // 停用骑手绝不能记一笔收入
         verify(riderDao, never()).addCompleted(anyLong(), anyDouble());
     }
 

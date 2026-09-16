@@ -21,6 +21,7 @@ import com.example.takeout.model.Store;
 import com.example.takeout.model.User;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.util.List;
 import java.util.Optional;
@@ -59,7 +60,8 @@ class OrderServiceFlowTest {
     private final OrderService service = new OrderService(orderDao, storeDao, goodsDao, addressDao,
             couponDao, reviewDao, userDao, refundDao, new ObjectMapper(), mock(CartItemMapper.class),
             mock(RiderDao.class), specDao, seckillDao, cache,
-            mock(com.example.takeout.service.mq.DomainEventPublisher.class));
+            mock(com.example.takeout.service.mq.DomainEventPublisher.class),
+            mock(org.springframework.beans.factory.ObjectProvider.class));
 
     private static final long STORE_ID = 10L;
     private static final long GOODS_ID = 100L;
@@ -376,5 +378,50 @@ class OrderServiceFlowTest {
                 () -> service.createOrder(USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "", List.of()));
 
         assertTrue(error.getMessage().contains("库存不足"));
+    }
+
+    /** 下单防重 token：同一 idempotencyKey 第二次提交被拒；首次提交失败时释放占位允许重试。 */
+    @Test
+    void rejectsDuplicateIdempotencyKeyAndReleasesKeyOnFailure() {
+        @SuppressWarnings("unchecked")
+        org.springframework.beans.factory.ObjectProvider<StringRedisTemplate> provider =
+                mock(org.springframework.beans.factory.ObjectProvider.class);
+        StringRedisTemplate redis = mock(StringRedisTemplate.class);
+        @SuppressWarnings("unchecked")
+        org.springframework.data.redis.core.ValueOperations<String, String> ops =
+                mock(org.springframework.data.redis.core.ValueOperations.class);
+        when(provider.getIfAvailable()).thenReturn(redis);
+        when(redis.opsForValue()).thenReturn(ops);
+        OrderService svc = new OrderService(orderDao, storeDao, goodsDao, addressDao,
+                couponDao, reviewDao, userDao, refundDao, new ObjectMapper(), mock(CartItemMapper.class),
+                mock(RiderDao.class), specDao, seckillDao, cache,
+                mock(com.example.takeout.service.mq.DomainEventPublisher.class), provider);
+
+        // 同一 token 第二次提交：SET NX 失败 → 拒绝，且不进任何业务校验
+        when(ops.setIfAbsent(anyString(), anyString(), any(java.time.Duration.class))).thenReturn(false);
+        BizException dup = assertThrows(BizException.class, () -> svc.createOrder(USER_ID, STORE_ID,
+                List.of(item()), ADDRESS_ID, 0, "", List.of(), "", "key-1"));
+        assertTrue(dup.getMessage().contains("请勿重复操作"), dup.getMessage());
+        verify(orderDao, never()).insert(any(Order.class));
+
+        // 首次提交但下单失败（空 items）：占位必须被释放，用户修正后可用同一 token 重试
+        when(ops.setIfAbsent(anyString(), anyString(), any(java.time.Duration.class))).thenReturn(true);
+        assertThrows(BizException.class, () -> svc.createOrder(USER_ID, STORE_ID,
+                List.of(), ADDRESS_ID, 0, "", List.of(), "", "key-2"));
+        verify(redis).delete("takeout:idempotent:order:" + USER_ID + ":key-2");
+    }
+
+    /** Redis 不可用时防重校验跳过，下单照常（加固不能反过来让下单不可用，与登录限流同口径）。 */
+    @Test
+    void idempotencyCheckSkippedWhenRedisUnavailable() {
+        stubCommon(10, 0, 3);
+        when(orderDao.insert(any(Order.class))).thenReturn(13L);
+        when(orderDao.findById(13)).thenReturn(Optional.of(storedOrder(13, 0, ITEMS, "")));
+
+        // 类级 service 的 provider mock 未桩 getIfAvailable → 返回 null，等价 Redis 不可用
+        Order.OrderView view = service.createOrder(USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "",
+                List.of(), "", "key-3");
+
+        assertEquals(13, view.id());
     }
 }

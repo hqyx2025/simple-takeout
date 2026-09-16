@@ -44,7 +44,8 @@ class OrderServiceSecurityTest {
     private final OrderService service = new OrderService(orderDao, storeDao, goodsDao, addressDao,
             couponDao, reviewDao, userDao, refundDao, new ObjectMapper(), mock(CartItemMapper.class),
             mock(RiderDao.class), mock(GoodsSpecDao.class), mock(SeckillDao.class), mock(HotDataCacheService.class),
-            mock(com.example.takeout.service.mq.DomainEventPublisher.class));
+            mock(com.example.takeout.service.mq.DomainEventPublisher.class),
+            mock(org.springframework.beans.factory.ObjectProvider.class));
 
     @Test
     void rejectsNonPositiveQuantity() {

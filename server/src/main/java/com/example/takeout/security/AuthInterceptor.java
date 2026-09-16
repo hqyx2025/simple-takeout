@@ -54,6 +54,9 @@ public class AuthInterceptor implements HandlerInterceptor {
             if (user.role() != tokenRole) {
                 throw new BizException(401, "登录身份已变化，请重新登录");
             }
+            if (user.status() != 1) {
+                throw new BizException(401, "账号已被禁用，请联系管理员");
+            }
             // 改密即失效：两个时间同为 yyyy-MM-dd HH:mm:ss，字典序即时间序；
             // token 里的时间早于库里的改密时间，说明它签发于改密之前
             String changedAt = user.passwordChangedAt() == null ? "" : user.passwordChangedAt();

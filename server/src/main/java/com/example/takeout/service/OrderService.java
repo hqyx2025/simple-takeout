@@ -28,8 +28,10 @@ import com.example.takeout.model.User;
 import com.example.takeout.service.mq.DomainEventPublisher;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +44,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.time.Duration;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -68,6 +71,7 @@ public class OrderService {
     private final SeckillDao seckillDao;
     private final HotDataCacheService cache;
     private final DomainEventPublisher eventPublisher;
+    private final ObjectProvider<StringRedisTemplate> redisProvider;
 
     /** 待付款订单的支付时限（分钟），超时由定时任务自动取消。 */
     @Value("${takeout.order.pay-timeout-minutes:15}")
@@ -77,7 +81,8 @@ public class OrderService {
                         CouponDao couponDao, ReviewDao reviewDao, UserDao userDao, RefundDao refundDao,
                         ObjectMapper objectMapper, CartItemMapper cartItemMapper, RiderDao riderDao,
                         GoodsSpecDao specDao, SeckillDao seckillDao, HotDataCacheService cache,
-                        DomainEventPublisher eventPublisher) {
+                        DomainEventPublisher eventPublisher,
+                        ObjectProvider<StringRedisTemplate> redisProvider) {
         this.orderDao = orderDao;
         this.storeDao = storeDao;
         this.goodsDao = goodsDao;
@@ -93,6 +98,7 @@ public class OrderService {
         this.seckillDao = seckillDao;
         this.cache = cache;
         this.eventPublisher = eventPublisher;
+        this.redisProvider = redisProvider;
     }
 
     /**
@@ -126,6 +132,49 @@ public class OrderService {
     public Order.OrderView createOrder(long userId, long storeId, List<Order.OrderItem> items,
                                        long addressId, long couponId, String remark,
                                        List<Long> checkoutGoodsIds, String expectTime) {
+        return createOrder(userId, storeId, items, addressId, couponId, remark, checkoutGoodsIds, expectTime, "");
+    }
+
+    /**
+     * 创建订单完整签名：含 idempotencyKey 防重复提交。
+     * 客户端生成一次性 token（如 UUID）随下单请求提交，服务端 Redis SET NX（5 分钟 TTL）拦截连点/网络重放；
+     * Redis 不可用时跳过校验（与登录限流同口径：加固不能反过来让下单不可用）。
+     * 下单失败时释放占位，用户修正后（如减少数量）可用同一 token 立即重试。
+     */
+    @Transactional
+    public Order.OrderView createOrder(long userId, long storeId, List<Order.OrderItem> items,
+                                       long addressId, long couponId, String remark,
+                                       List<Long> checkoutGoodsIds, String expectTime,
+                                       String idempotencyKey) {
+        StringRedisTemplate redis = null;
+        String redisKey = null;
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            redis = redisProvider.getIfAvailable();
+            if (redis != null) {
+                redisKey = "takeout:idempotent:order:" + userId + ":" + idempotencyKey.trim();
+                Boolean first = redis.opsForValue().setIfAbsent(redisKey, "1", Duration.ofMinutes(5));
+                if (Boolean.FALSE.equals(first)) {
+                    throw new BizException("订单正在提交中，请勿重复操作");
+                }
+            }
+        }
+        try {
+            return doCreateOrder(userId, storeId, items, addressId, couponId, remark, checkoutGoodsIds, expectTime);
+        } catch (RuntimeException e) {
+            if (redisKey != null) {
+                try {
+                    redis.delete(redisKey);
+                } catch (RuntimeException ignore) {
+                    // 释放失败不掩盖原始异常；最坏退化为「同一 token 5 分钟内不能重试」
+                }
+            }
+            throw e;
+        }
+    }
+
+    private Order.OrderView doCreateOrder(long userId, long storeId, List<Order.OrderItem> items,
+                                          long addressId, long couponId, String remark,
+                                          List<Long> checkoutGoodsIds, String expectTime) {
         if (items == null || items.isEmpty()) {
             throw new BizException("订单商品不能为空");
         }
@@ -536,9 +585,18 @@ public class OrderService {
         return orderDao.listRiderPool().stream().map(this::toView).toList();
     }
 
+    /** 抢单/取餐/送达前校验骑手未被平台停用（控制器已做在线校验，服务层做独立防御）。 */
+    private void requireActiveRider(long riderId) {
+        Rider rider = riderDao.findById(riderId).orElseThrow(() -> new BizException("骑手不存在"));
+        if (rider.status() != 1) {
+            throw new BizException(403, "骑手账号已停用，请联系平台管理员");
+        }
+    }
+
     /** 骑手抢单：条件更新，防并发重复抢单。 */
     @Transactional
     public Order.OrderView riderGrab(long riderId, long orderId) {
+        requireActiveRider(riderId);
         if (!orderDao.tryAssignRider(orderId, riderId)) {
             throw new BizException("手慢了，该订单已被其他骑手接走");
         }
@@ -548,6 +606,7 @@ public class OrderService {
     /** 骑手取餐：2 → 3（仅本人接单的订单）。 */
     @Transactional
     public Order.OrderView riderPickup(long riderId, long orderId) {
+        requireActiveRider(riderId);
         String now = LocalDateTime.now().format(FMT);
         if (!orderDao.riderPickup(orderId, riderId, now)) {
             throw new BizException("无法取餐：请确认已接单且商家已出餐");
@@ -558,6 +617,7 @@ public class OrderService {
     /** 骑手送达：3 → 4（仅本人配送的订单），单量与配送收入在同一事务内累加。 */
     @Transactional
     public Order.OrderView riderDeliver(long riderId, long orderId) {
+        requireActiveRider(riderId);
         String now = LocalDateTime.now().format(FMT);
         if (!orderDao.riderDeliver(orderId, riderId, now)) {
             throw new BizException("无法送达：请确认已取餐且由你配送");

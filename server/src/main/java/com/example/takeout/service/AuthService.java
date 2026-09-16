@@ -68,7 +68,8 @@ public class AuthService {
     public LoginResult login(String phone, String password, String loginType) {
         User user = userDao.findByPhone(phone)
                 .orElseThrow(() -> new BizException("账号或密码错误"));
-        if (userDao.isDisabled(user.id())) {
+        // status 已随 findByPhone 一并取回，无需再查一次库；禁用用户的存量 token 由 AuthInterceptor 统一失效
+        if (user.status() != 1) {
             throw new BizException("账号已停用，请联系平台管理员");
         }
         if (!PasswordUtil.matches(password, user.password())) {

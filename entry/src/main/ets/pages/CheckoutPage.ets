@@ -27,6 +27,9 @@ export struct CheckoutPage {
   private deliveryOptions: string[] = ['立即送达', '1小时后', '2小时后']
   @State showCouponDialog: boolean = false
   @State submitting: boolean = false
+  // 防重提交 token：每个结算页实例生成一次，本次结算的所有重试共用（服务端下单失败会释放，
+  // 成功后保留 5 分钟）；多店结算按 storeId 派生子 key，避免第二家店被误判为重复提交
+  private submitKey: string = Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 10)
   @State showOrderFailureDialog: boolean = false
   @State orderFailureMessage: string = ''
   private orderFailureWebController: webview.WebviewController = new webview.WebviewController()
@@ -225,7 +228,7 @@ export struct CheckoutPage {
         && (this.selectedCoupon.storeId === undefined || this.selectedCoupon.storeId === 0 || this.selectedCoupon.storeId === storeId)
         && groupTotal >= this.selectedCoupon.minOrder
       const couponId: number = couponCanApply && this.selectedCoupon !== null ? this.selectedCoupon.id : 0
-      const serverOrder: Order | null = await createOrderRemote(storeId, items, address.id, couponId, this.remark, checkoutGoodsIds, this.getExpectTime())
+      const serverOrder: Order | null = await createOrderRemote(storeId, items, address.id, couponId, this.remark, checkoutGoodsIds, this.getExpectTime(), `${this.submitKey}-${storeId}`)
       if (serverOrder === null) {
         if (successfulRows.length > 0) {
           await this.removeCartRows(successfulRows)

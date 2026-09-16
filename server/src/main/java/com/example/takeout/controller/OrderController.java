@@ -36,7 +36,8 @@ public class OrderController {
     public ApiResponse<Order.OrderView> createOrder(@RequestAttribute("userId") long userId,
                                                     @RequestBody CreateOrderRequest req) {
         return ApiResponse.ok(orderService.createOrder(userId, req.storeId(), req.items(),
-                req.addressId(), req.couponId(), req.remark(), req.checkoutGoodsIds(), req.expectTime()));
+                req.addressId(), req.couponId(), req.remark(), req.checkoutGoodsIds(), req.expectTime(),
+                req.idempotencyKey()));
     }
 
     @GetMapping("/orders")
@@ -107,9 +108,10 @@ public class OrderController {
         return ApiResponse.ok(orderService.merchantStats(userId, storeId));
     }
 
+    /** idempotencyKey：客户端为每次下单意图生成的一次性 UUID，服务端 Redis SET NX 防连点/重放；旧客户端不传则跳过校验。 */
     public record CreateOrderRequest(long storeId, List<Order.OrderItem> items, long addressId,
                                      long couponId, String remark, List<Long> checkoutGoodsIds,
-                                     String expectTime) {
+                                     String expectTime, String idempotencyKey) {
     }
 
     public record ReviewRequest(long goodsId, int rating, String content, List<String> tags,

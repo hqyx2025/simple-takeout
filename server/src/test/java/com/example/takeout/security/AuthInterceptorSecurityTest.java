@@ -135,4 +135,23 @@ class AuthInterceptorSecurityTest {
 
         assertTrue(interceptor.preHandle(request, mock(HttpServletResponse.class), new Object()));
     }
+
+    /** 平台禁用账号（status=0）后，其存量 token 必须立即失效——否则「禁用」只挡住了下一次登录。 */
+    @Test
+    void rejectsDisabledAccountEvenWithValidToken() {
+        HttpServletRequest request = bearerRequest("token");
+        Claims claims = mock(Claims.class);
+        when(jwtUtil.parseToken("token")).thenReturn(claims);
+        when(jwtUtil.getUserId(claims)).thenReturn(1L);
+        when(jwtUtil.getRole(claims)).thenReturn(0);
+        // 规范 10 参构造：role=0、status=0（禁用）
+        when(userDao.findById(1L)).thenReturn(Optional.of(
+                new User(1, "用户", "", "13800138000", "", 0, 0, 20, "now", "")));
+
+        BizException error = assertThrows(BizException.class,
+                () -> interceptor.preHandle(request, mock(HttpServletResponse.class), new Object()));
+
+        assertEquals(401, error.getCode());
+        assertEquals("账号已被禁用，请联系管理员", error.getMessage());
+    }
 }

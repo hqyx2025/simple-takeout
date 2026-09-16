@@ -20,6 +20,7 @@ import com.example.takeout.model.Coupon;
 import com.example.takeout.model.Goods;
 import com.example.takeout.model.GoodsSpec;
 import com.example.takeout.model.Order;
+import com.example.takeout.model.Rider;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.User;
 import com.example.takeout.service.mq.DomainEventPublisher;
@@ -67,7 +68,8 @@ class OrderBoundaryTest {
 
     private final OrderService service = new OrderService(orderDao, storeDao, goodsDao, addressDao,
             couponDao, reviewDao, userDao, refundDao, new ObjectMapper(), cartItemMapper,
-            riderDao, specDao, seckillDao, cache, eventPublisher);
+            riderDao, specDao, seckillDao, cache, eventPublisher,
+            mock(org.springframework.beans.factory.ObjectProvider.class));
 
     private final AdminService adminService = new AdminService(storeDao, orderDao, userDao, goodsDao,
             refundDao, service, mock(AdminStatsDao.class), cache, eventPublisher);
@@ -147,6 +149,8 @@ class OrderBoundaryTest {
 
     @Test
     void riderDeliverRecordsIncomeInSameCall() {
+        when(riderDao.findById(5)).thenReturn(Optional.of(
+                new Rider(5, 3L, "骑手小张", "13300133000", 1, 0, 0.0, 1, "")));
         when(orderDao.riderDeliver(eq(9L), eq(5L), anyString())).thenReturn(true);
         when(orderDao.findById(9)).thenReturn(Optional.of(storedOrder(9, 3, 0)));
         when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore(0, 3)));
