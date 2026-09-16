@@ -1,7 +1,7 @@
 ﻿<#
 .SYNOPSIS
-  Device regression driver for the merchant (商户端) flow: fixture a paid order, drive 接单→出餐→确认送达
-  through the app UI, then cross-check the order state and the stats numbers on the host.
+  Device regression driver for the merchant (商户端) flow: fixture a paid order, drive 接单→出餐(ready)
+  through the app UI, then cross-check the order state (制作中/骑手池) and the stats numbers on the host.
 
 .DESCRIPTION
   Fixture (backend API only, ASCII request bodies to avoid the documented encoding traps):
@@ -11,8 +11,8 @@
 
   Checks after the on-device run:
     * UiTest class passed
-    * fixture order ended at status=4 / escrow=0 (商户确认送达后待用户确认收货)
-    * hilog contains the three merchant action logs (接单/出餐/确认送达)
+    * fixture order ended at status=2 with ready_time set (出餐完成进入骑手待取餐池；2->3、3->4 由骑手端)
+    * hilog contains the two merchant action logs (接单/出餐)
     * the numbers rendered on 收入统计 match /api/merchant/stats (today count/income); mismatch is
       reported as a warning because the page may intentionally derive some figures from the local list.
 
@@ -135,7 +135,7 @@ Check 'uitest-class-passed' ($pass -ge 1 -and $fail -eq 0 -and $err -eq 0) ("pas
 Write-Host '=== [6/6] host-side checks ===' -ForegroundColor Cyan
 $after = (Invoke-Api 'GET' "/api/orders/$orderId" $userToken '').data
 Write-Host ("  order {0}: status={1} escrow={2}" -f $orderId, $after.status, $after.escrowStatus)
-Check 'order-completed-by-merchant' ([int]$after.status -eq 4) ("status {0} -> {1} (4 = 已送达待确认收货)" -f $paid.status, $after.status)
+Check 'order-ready-by-merchant' ([int]$after.status -eq 2) ("status {0} -> {1} (2 = 制作中/已出餐，待骑手接单；2->3、3->4 由骑手端完成)" -f $paid.status, $after.status)
 Check 'escrow-still-pending' ([int]$after.escrowStatus -eq 0) ("escrow={0} (0 = 用户尚未确认收货)" -f $after.escrowStatus)
 
 $merchantLogs = & $hdc shell "hilog -x | grep -cE 'Merchant'"

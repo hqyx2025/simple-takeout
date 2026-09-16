@@ -7,7 +7,7 @@
  *
  * 一条用例按顺序覆盖整条链路（合并成一条是因为用例之间共享同一个应用实例，
  * 拆开会让「订单6 已评价」这类前置状态互相破坏）：
- *   1. 契约：应用自身数据里找出可评价订单 → 订单 Tab → 已完成 → 订单卡片 → 订单详情 →「评价商品」→
+ *   1. 契约：应用自身数据里找出可评价订单 →「我的」页「已完成」快捷入口 → 已完成 → 订单卡片 → 订单详情 →「评价商品」→
  *      断言评价页五星评分/标签/文字评价/添加图片/图片计数 0/3/提交按钮都在（滚动区内的组件用 scrollSearch 找）；
  *   2. 上传：在应用沙箱里生成一张真实 PNG，调用**应用自己的** uploadReviewImageRemote() 上传
  *      （multipart 走 @ohos.net.http，与页面同一条代码路径），断言返回可访问地址；
@@ -91,7 +91,10 @@ export default function reviewFlowTest() {
       const orderId: number = order.id
       const orderCardId: string = 'order-card-' + orderId
 
-      expect(await clickByIdOrText(driver, 'tab-2', '订单')).assertTrue()
+      // 订单列表已从底部 Tab 收敛为独立路由页（pages/OrderListPage），改从「我的」页「已完成」快捷入口进入（自带 status=4 过滤）
+      expect(await clickByIdOrText(driver, 'tab-3', '我的')).assertTrue()
+      await driver.delayMs(1500)
+      expect(await clickByIdOrText(driver, '已完成', '已完成')).assertTrue()
       await driver.delayMs(2500)
       expect(await clickByIdOrText(driver, 'order-filter-4', '已完成')).assertTrue()
       await driver.delayMs(2500)
@@ -134,6 +137,10 @@ export default function reviewFlowTest() {
       expect(await clickByIdOrText(driver, 'review-back', '‹ 返回')).assertTrue()
       await driver.delayMs(2500)
       expect(await clickByIdOrText(driver, 'order-detail-back', '‹')).assertTrue()
+      await driver.delayMs(2500)
+      // 订单列表现在是独立路由页（OrderListPage，从「我的」pushUrl 进入），
+      // 比旧「订单 Tab」多一层路由，需再点一次返回才回到底部 Tab。
+      expect(await clickByIdOrText(driver, 'order-list-back', '‹ 返回')).assertTrue()
       await driver.delayMs(2500)
       expect(await clickByIdOrText(driver, 'tab-0', '首页')).assertTrue()
       await driver.delayMs(2500)

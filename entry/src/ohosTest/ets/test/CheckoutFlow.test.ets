@@ -6,10 +6,11 @@
  *   - 购物车只有一行：goodsId=282 / specId=0 / 数量 1（¥6.82，店铺 storeId=10，起送价 ¥17）。
  *
  * 断言链（每一步都拿可核对的数字，不写"看起来正常"）：
- *   1. 我的 → 购物车：凑单提示必须是「还差 ¥10.18 起送」、行数量为 1；
+ *   1. 购物车 Tab：凑单提示必须是「还差 ¥10.18 起送」、行数量为 1；
  *   2. 去结算：结算页实付必须是 ¥9.82（6.82 商品 + 3.00 配送费）；
- *   3. 低于起送价点「提交订单」：**必须仍停留在结算页**（客户端拦截，没发出下单请求）；
- *      对应的服务端断言（POST /api/orders 次数 = 0）由 host 脚本用 hilog 计数核对；
+ *   3. 低于起送价点「提交订单」：起送价以服务端为唯一权威（§11），服务端返回 400 并弹
+ *      「提交订单失败」对话框（无订单产生、仍在结算页，不会跳到订单详情）；
+ *      对应的服务端断言（POST /api/orders 共 2 次 = 拒绝 1 + 成功 1）由 host 脚本用 hilog 计数核对；
  *   4. 购物车 +2 件（数量 1→3，¥20.46 ≥ ¥17）：凑单提示必须消失；
  *   5. 再次提交：必须跳转订单详情、状态文案为「待付款」、出现「立即支付」按钮；
  *      对应服务端断言（多出恰好 1 笔 status=0 订单、余额不变、库存 −3）由 host 脚本核对。
@@ -25,10 +26,8 @@ export default function checkoutFlowTest() {
       // 必须先把应用拉到前台：aa test 会把测试 Ability 的 Hello World 页盖在最上面
       await launchAppUnderTest(driver)
 
-      // ---------- 1. 我的 → 购物车 ----------
-      expect(await clickByIdOrText(driver, 'tab-3', '我的')).assertTrue()
-      await driver.delayMs(1500)
-      expect(await clickByIdOrText(driver, 'profile-cart-entry', '购物车 (1)')).assertTrue()
+      // ---------- 1. 购物车 Tab（已收敛为底部 tab-2，不再是「我的」页购物车行） ----------
+      expect(await clickByIdOrText(driver, 'tab-2', '购物车')).assertTrue()
       await driver.delayMs(2500)
 
       // ---------- 2. 购物车：凑单提示「还差 ¥10.18 起送」+ 行数量 1 ----------
@@ -52,9 +51,15 @@ export default function checkoutFlowTest() {
       console.info('[CheckoutFlow] pay amount (below min order) = ' + payAmountLow)
       expect(payAmountLow).assertEqual('¥9.82')
 
-      // ---------- 4. 负路径：低于起送价提交必须被拦住（停留在本页） ----------
+      // ---------- 4. 负路径：低于起送价提交 → 服务端 400 拒绝 + 「提交订单失败」对话框，无订单产生 ----------
       expect(await clickByIdOrText(driver, 'checkout-submit', '提交订单')).assertTrue()
       await driver.delayMs(3000)
+
+      // 起送价以服务端为唯一权威（§11）：低于起送价不再是客户端拦截，而是服务端 400 + 失败对话框
+      const failDialog = await driver.waitForComponent(ON.text('提交订单失败'), 10000)
+      expect(isFound(failDialog)).assertTrue()
+      expect(await clickByIdOrText(driver, '知道了', '知道了')).assertTrue()
+      await driver.delayMs(1500)
 
       const stillOnCheckout = await driver.findComponent(ON.id('checkout-submit'))
       expect(isFound(stillOnCheckout)).assertTrue()

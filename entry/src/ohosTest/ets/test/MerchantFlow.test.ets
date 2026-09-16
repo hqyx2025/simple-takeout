@@ -112,7 +112,7 @@ export default function merchantFlowTest() {
       const action1: string = await textOf(requireComponent(await scrollUntilVisible(driver, actionId), actionId))
       console.info('[MerchantFlow] after accept status=' + status1 + ' action=' + action1)
       expect(status1).assertEqual('制作中')
-      expect(action1).assertEqual('出餐')
+      expect(action1).assertEqual('出餐完成')
 
       // ---------- 5. 出餐完成（ready：只写 ready_time，状态仍为 2，订单进入骑手待取餐池）----------
       // 注意：出餐不能把订单推到 3（配送中），那会让订单永久跳过骑手抢单池；
