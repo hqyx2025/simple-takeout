@@ -160,6 +160,7 @@ interface ServerOrder {
   readyTime?: string
   couponId?: number
   payDeadline?: string
+  payDeadlineEpochMs?: number
 }
 
 interface ServerUser {
@@ -1654,6 +1655,7 @@ function toOrder(o: ServerOrder): Order {
     completeTime: o.completeTime,
     expectTime: o.expectTime || '',
     payDeadline: o.payDeadline || '',
+    payDeadlineEpochMs: o.payDeadlineEpochMs ?? 0,
     couponId: o.couponId ?? 0,
     orderNo: o.orderNo || '',
     riderName: o.riderName || '',

@@ -219,7 +219,7 @@
 - ~~前端兜底口径不统一~~ **已修**：`BalancePage` 的 `this.balance = user.balance` 与充值回写都改为 `Number.isFinite(x) ? x : 0`；`CheckoutPage` 的 `selectedCoupon.amount.toFixed(2)` 同样加兜底（缺字段会渲染成 `¥NaN`）。
 - Banner `PUT` 是"null 覆盖为空串"语义（非 PATCH），只改 sort 会把 title/subtitle 清空。**现状已缓解**：`ContentService.updateBanner` 会拒绝空标题，且管理端界面只有 Banner 的新增/上下架/删除、**没有编辑入口**，该路径只能被直接调 API 触发；真要支持部分更新需改成 PATCH 语义。
 - Outbox 去重键为"先查后写"（单实例安全）；多实例部署需改回原子 `setIfAbsent` + 行级认领，并核对 `dedup-hours` 与 Stream `retain-hours` 的关系。
-- 前端支付倒计时用设备本地时间推算，未使用服务端时区（可下发 `payDeadlineEpochMs` 收敛）。
+- ~~前端支付倒计时用设备本地时间推算，未使用服务端时区（可下发 `payDeadlineEpochMs` 收敛）。~~ **已修复**：后端在 `OrderView` 中增加 `payDeadlineEpochMs` 字段（服务端计算的毫秒时间戳），前端 `computePayRemain()` 直接用该时间戳减去 `Date.now()`，避免解析字符串时的时区问题。
 - 骑手为自助注册即开通（`role=3` 自动建档 status=1，无需平台审核）。
 - ~~`MerchantStatsPage` 无法区分"同步失败"与"真的没有订单"（都是 ¥0.00 / 0 单）。~~ **已缓解**：`refreshRemoteStats` 加 try/catch 捕获网络/后端错误，`loadError` 标记驱动一条浅红背景横幅「数据加载失败，以下数据可能不准确」+「重试」按钮；成功时自动清除。
 - `normalizeOrderList` 无条件丢弃持久化订单（订单只以服务端为准，属有意设计但**已补注释**：本地恢复的订单可能状态过期，每次进相关页面通过 `syncMerchantOrdersFromServer` / `syncUserOrdersFromServer` 实时拉取最新订单）。

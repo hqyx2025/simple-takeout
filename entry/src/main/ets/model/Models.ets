@@ -171,6 +171,8 @@ export interface Order {
   expectTime?: string
   /** 待付款订单的支付截止时间（非待付款为空串），前端据此倒计时 */
   payDeadline?: string
+  /** 服务端计算的支付截止毫秒时间戳，避免前端解析字符串时区问题 */
+  payDeadlineEpochMs?: number
   /** 下单使用的优惠券 ID（0=未使用），待付款取消时由后端自动退回 */
   couponId?: number
   orderNo?: string

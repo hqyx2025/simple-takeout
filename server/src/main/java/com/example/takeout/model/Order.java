@@ -73,7 +73,8 @@ public record Order(
     }
 
     /**
-     * 视图模型：items/address 解析为结构体；payDeadline 为待付款订单的支付截止时间（非待付款为空串）
+     * 视图模型：items/address 解析为结构体；payDeadline 为待付款订单的支付截止时间（非待付款为空串）；
+     * payDeadlineEpochMs 为服务端计算的毫秒时间戳，避免前端解析字符串时区问题
      */
     public record OrderView(
             long id,
@@ -99,6 +100,7 @@ public record Order(
             String expectTime,
             long couponId,
             String payDeadline,
+            long payDeadlineEpochMs,
             String riderName,
             String riderPhone,
             String readyTime
@@ -106,14 +108,14 @@ public record Order(
     }
 
     public OrderView toView(List<OrderItem> itemList, AddressInfo addr, String riderName, String riderPhone) {
-        return toView(itemList, addr, "", riderName, riderPhone, "");
+        return toView(itemList, addr, "", 0L, riderName, riderPhone, "");
     }
 
-    public OrderView toView(List<OrderItem> itemList, AddressInfo addr, String payDeadline,
+    public OrderView toView(List<OrderItem> itemList, AddressInfo addr, String payDeadline, long payDeadlineEpochMs,
                             String riderName, String riderPhone, String readyTime) {
         return new OrderView(id, orderNo, userId, storeId, storeName, status, itemList, addr,
                 goodsAmount, deliveryFee, discount, payAmount, remark, reviewed, escrowStatus,
                 createTime, payTime, acceptTime, deliverTime, completeTime, expectTime, couponId,
-                payDeadline, riderName, riderPhone, readyTime);
+                payDeadline, payDeadlineEpochMs, riderName, riderPhone, readyTime);
     }
 }

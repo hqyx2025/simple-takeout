@@ -108,15 +108,11 @@ export struct OrderDetailPage {
     if (this.order === null || this.order.status !== 0) {
       return 0
     }
-    const deadline: string = this.order.payDeadline ?? ''
-    if (deadline === '') {
+    const epochMs: number = this.order.payDeadlineEpochMs ?? 0
+    if (epochMs <= 0) {
       return 0
     }
-    const deadlineTime: number = new Date(deadline.replace(/-/g, '/')).getTime()
-    if (Number.isNaN(deadlineTime)) {
-      return 0
-    }
-    return Math.max(Math.floor((deadlineTime - Date.now()) / 1000), 0)
+    return Math.max(Math.floor((epochMs - Date.now()) / 1000), 0)
   }
 
   /** mm:ss 倒计时文案。 */

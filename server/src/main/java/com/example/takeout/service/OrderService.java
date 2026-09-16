@@ -780,20 +780,24 @@ public class OrderService {
     private Order.OrderView toView(Order order) {
         List<Order.OrderItem> items = parseItems(order.items());
         Order.AddressInfo address = parseAddress(order.address());
-        return order.toView(items, address, payDeadline(order), "", "", "");
+        var deadline = payDeadline(order);
+        return order.toView(items, address, deadline.text, deadline.epochMs, "", "", "");
     }
 
-    /** 待付款订单的支付截止时间（前端倒计时用）；非待付款返回空串。 */
-    private String payDeadline(Order order) {
+    /** 待付款订单的支付截止时间（前端倒计时用）；非待付款返回空串和0。 */
+    private record PayDeadline(String text, long epochMs) {}
+
+    private PayDeadline payDeadline(Order order) {
         if (order.status() != 0) {
-            return "";
+            return new PayDeadline("", 0L);
         }
         try {
-            return LocalDateTime.parse(order.createTime(), FMT)
-                    .plusMinutes(Math.max(payTimeoutMinutes, 1))
-                    .format(FMT);
+            var deadline = LocalDateTime.parse(order.createTime(), FMT)
+                    .plusMinutes(Math.max(payTimeoutMinutes, 1));
+            long epochMs = deadline.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+            return new PayDeadline(deadline.format(FMT), epochMs);
         } catch (DateTimeParseException e) {
-            return "";
+            return new PayDeadline("", 0L);
         }
     }
 
@@ -813,7 +817,8 @@ public class OrderService {
                 }
             }
         }
-        return order.toView(items, address, payDeadline(order), riderName, riderPhone,
+        var deadline = payDeadline(order);
+        return order.toView(items, address, deadline.text, deadline.epochMs, riderName, riderPhone,
                 orderDao.findReadyTime(order.id()));
     }
 
