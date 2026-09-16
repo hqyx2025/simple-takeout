@@ -289,7 +289,7 @@ Release 构建需要签名与证书：参考 `signing/release-signing.template.j
 | [md/设备实测指南.md](md/设备实测指南.md) · [md/设备实测进展与待办.md](md/设备实测进展与待办.md) | 设备端 UiTest 实测链路与进展 |
 | [md/上架体检与Release签名.md](md/上架体检与Release签名.md) | Release 签名与上架前质量自检 |
 | [md/archive/未完成.txt](md/archive/未完成.txt) | 尚未完成的质量项记录 |
-| [md/archive/](md/archive) | 历史会话记录归档（2026-08-20 ~ 2026-09-14） |
+| [md/archive/](md/archive) | 历史会话记录归档（2026-08-20 ~ 2026-09-15） |
 | [AGENTS.md](AGENTS.md) | AI 编码助手项目记忆：技术栈、构建、业务口径、陷阱清单、提交规范 |
 | [.agents/skills/specs](.agents/skills/specs) | 功能规格与验收清单（开发/验收依据） |
 
