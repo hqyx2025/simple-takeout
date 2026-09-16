@@ -117,6 +117,7 @@ class OrderBoundaryTest {
         verify(goodsDao).restoreStock(GOODS_ID, 2);
         verify(specDao).restoreStock(300, 2);
         verify(seckillDao).restoreQuota(400, 2);
+        verify(seckillDao).releaseOnce(USER_ID, 400);
         verify(userDao).addBalance(USER_ID, 13.0);
     }
 

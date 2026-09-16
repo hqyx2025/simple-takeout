@@ -34,7 +34,7 @@
     --mode module -p module=entry@default -p product=default -p requiredDeviceType=phone assembleHap --analyze=normal --parallel --incremental --daemon
   ```
   构建日志：`.hvigor/outputs/build-logs/build.log`；判断成功要看日志里的 `BUILD SUCCESSFUL` 并确认 `entry/build/default/outputs/default/*.hap` 时间戳已更新（流水线里 `Select-String` 会吞掉退出码，别只看 `$LASTEXITCODE`）
-- 后端测试：`mvn -f server/pom.xml test`（**151 个测试**，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格/资金与状态并发边界/文本列宽边界、缓存穿透/击穿/雪崩防护与领域事件 Outbox 语义、AI 助手意图路由、**登录限流与 token 吊销（jti 黑名单 + 改密即失效 + 禁用账号存量 token 立即失效）**、**下单防重 idempotencyKey（Redis SET NX，失败释放占位、Redis 挂了跳过）**、**下单接口限流（LoginRateLimiter.order 按账号 10/60s）**、**待付款订单支付时限秒级显式检查（payOrder 扣款前判 payDeadline）**、**管理端商品分页（LIMIT/OFFSET + count 同套筛选）**、**收货地址上限 20 个（addAddress 拦第 21 个）**、**停用骑手服务层拒绝抢单/取餐/送达**、**搜索不逐店查商品（N+1 契约）**、**平台统计口径（订单数与成交额同步排除 5/6）**，以及**骑手待取餐池 SQL 契约**与骑手配送闭环）
+- 后端测试：`mvn -f server/pom.xml test`（**156 个测试**，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格/资金与状态并发边界/文本列宽边界/**秒杀一人一单（seckill_orders 唯一键 + INSERT IGNORE 防重 + 回滚释放）**、缓存穿透/击穿/雪崩防护与领域事件 Outbox 语义、AI 助手意图路由、**登录限流与 token 吊销（jti 黑名单 + 改密即失效 + 禁用账号存量 token 立即失效）**、**下单防重 idempotencyKey（Redis SET NX，失败释放占位、Redis 挂了跳过）**、**下单接口限流（LoginRateLimiter.order 按账号 10/60s）**、**待付款订单支付时限秒级显式检查（payOrder 扣款前判 payDeadline）**、**管理端商品分页（LIMIT/OFFSET + count 同套筛选）**、**收货地址上限 20 个（addAddress 拦第 21 个）**、**停用骑手服务层拒绝抢单/取餐/送达**、**搜索不逐店查商品（N+1 契约）**、**平台统计口径（订单数与成交额同步排除 5/6）**，以及**骑手待取餐池 SQL 契约**与骑手配送闭环）
 - 一键容器化环境：`docker compose up -d --build`（app + MySQL 8.4 + Redis 7，含健康检查与启动依赖顺序）；只起基础设施（本机用 Maven 跑后端）用 `docker compose up -d mysql redis`。注意 compose 的 MySQL 映射到宿主 **3307**（避开本机 MySQL84 的 3306）
 - 后端测试与运行都要求 `JAVA_HOME` 指向 **JDK 25**；`server/Dockerfile` 的构建阶段也必须是 JDK 25，否则 `maven.compiler.release=25` 直接编译失败
 - Release 打包（**当前范围外，可选工具**）：`scripts/enable-release-signing.ps1`（接入发布证书）→ `scripts/build-release.ps1`（签名包）→ `scripts/release-check.ps1 [-Build]`（上架体检，输出 `md/上架体检报告.md`，该报告为生成物不入库）；详见 `md/上架体检与Release签名.md`。日常开发只需 debug 构建，不必碰这一套。
@@ -61,7 +61,7 @@
 - **支付（待付款模型，已落地）**：`POST /api/orders` 只**占用库存/秒杀名额/优惠券**并落库为 status=0，不扣余额；`POST /api/orders/{id}/pay` 扣余额并条件更新 0→1（`WHERE status=0` 防重复支付，失败回滚余额）；`payDeadline` = create_time + `takeout.order.pay-timeout-minutes`（默认 15 分钟，前端据此倒计时）；`OrderTimeoutJob` 每分钟扫描超时待付款订单自动取消并回滚。**商户列表不展示 status=0 订单**（尚未支付不进入商户待处理队列）
 - **取消订单**：status 0 直接取消（未扣款，只释放库存/秒杀名额/优惠券，escrow 保持 0）；status 1/2/3 直接取消、**即时退款**（escrow 0→2 条件更新防重复 → 退用户余额 → status=5），无需商家确认；退款审批流程仅用于已送达订单（status=4 且 escrow=0 且未评价可申请 → status=6 → 管理端同意 escrow=2 或拒绝回退 status=4）。已支付订单取消**不退优惠券**，仅待付款取消释放优惠券（`orders.coupon_id` 记录所用券）
 - **多规格 SKU**：`goods_specs` 每个规格独立价格与库存；菜品的 `price`/`stock` 是**规格最低价/库存合计**（由规格聚合回写，保证列表、起送价、筛选口径一致）；购物车按 `(user_id, goods_id, spec_id)` 唯一；下单必须带 `specId`（无规格菜品传 0 且不接受非 0），订单 items JSON 快照 `specName` 保证历史可读；扣库存需**同时扣 goods 与规格库存**，取消时同步回滚
-- **限时秒杀**：`seckills` 表按时间窗口 + 名额（quota/sold）控制；**仅对无规格菜品生效**（规格价与秒杀价语义冲突）；下单时后端自动套用秒杀价并占用名额（`sold + n <= quota` 条件更新），占不到名额自动回退原价，取消/超时取消归还名额
+- **限时秒杀**：`seckills` 表按时间窗口 + 名额（quota/sold）控制；**仅对无规格菜品生效**（规格价与秒杀价语义冲突）；下单时后端自动套用秒杀价并占用名额（`sold + n <= quota` 条件更新），占不到名额自动回退原价，取消/超时取消归还名额；**一人一单（已落地）**：`seckill_orders` 表唯一键 (user_id, seckill_id) 拦截同一用户对同一秒杀重复下单（`INSERT IGNORE` 依赖唯一键，重复报「该秒杀商品每人限购一次」），取消/超时/退款回滚时与名额一并释放
 - **凑单**：`GET /api/stores/{id}/bundle?amount=X` 返回还差多少元起送（gap）与店内最低价菜品推荐；起送价判断仍以服务端下单校验为权威
 - **金额口径**：满减券门槛按**商品总价**判断（非实付）；月销量为"累计下单数"（取消不回滚，含待付款）；金额统一两位小数
 - **幂等**：退款/结算必须条件更新（`WHERE escrow_status=0`），防重复打款/退款；库存扣减用乐观锁（`WHERE stock>=? AND status=1`），取消/退款时 escrow 更新成功后才回滚库存
@@ -71,7 +71,7 @@
 ## 6. 数据库现状（差异以 22.8 节清单为准）
 
 - 实际表名（复数）：`users` `stores` `goods` `orders` `coupons` `reviews` `favorites` `addresses` `categories` `refund_records` `cart_items`
-- 演进项已落地的表：`riders`（骑手档案）、`banners`、`announcements`、**`goods_specs`（多规格 SKU：goods_id/name/price/stock/version/sort/status）**、**`seckills`（限时秒杀：goods_id/store_id/price/quota/sold/start_time/end_time/status）**、**`outbox_events`（事务性 Outbox：event_type/order_id/payload/status/retry_count/create_time，status 0待投递 1已投递）**、**`token_blacklist`（登出吊销：jti 主键/user_id/reason/expires_at/create_time）**
+- 演进项已落地的表：`riders`（骑手档案）、`banners`、`announcements`、**`goods_specs`（多规格 SKU：goods_id/name/price/stock/version/sort/status）**、**`seckills`（限时秒杀：goods_id/store_id/price/quota/sold/start_time/end_time/status）**、**`seckill_orders`（秒杀一人一单：user_id/seckill_id/order_id/create_time，唯一键 (user_id, seckill_id)）**、**`outbox_events`（事务性 Outbox：event_type/order_id/payload/status/retry_count/create_time，status 0待投递 1已投递）**、**`token_blacklist`（登出吊销：jti 主键/user_id/reason/expires_at/create_time）**
 - 新增列：`cart_items.spec_id`（唯一键 `uk_cart_user_goods_spec(user_id, goods_id, spec_id)`，老库的 `uk_cart_user_goods` 由 SchemaMigration 自动替换）、`orders.coupon_id`（待付款取消时释放优惠券）、**`users.password_changed_at`（VARCHAR(32)，空=从未改密；改密即让早于它签发的 token 失效，由 SchemaMigration 给老库补列）**
 - 关键现状：goods 有 `stock/version/merchant_category_id`（演进项已落地）；orders 的 items/address 为 **JSON 快照**（无独立明细表，items 内含 `specId/specName/seckillId`）；categories 有 `type`（PLATFORM/MERCHANT）+ `merchant_id`；reviews 已有 `order_id/images/reply/reply_time`（按 `(order_id, goods_id)` 防重）
 - 演进项（未落地，勿实现）：order_item/payment_record/user_coupon/order_status_log 表、address 经纬度、商户配送半径、逻辑删除字段

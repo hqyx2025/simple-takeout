@@ -285,6 +285,12 @@ public class OrderService {
                 remark == null ? "" : requireMaxLength(remark, 255, "订单备注"), 0, 0, now, "", "", "", "", normalizedExpect,
                 appliedCoupon == null ? 0 : appliedCoupon.id());
         long id = orderDao.insert(order);
+        // 一人一单：下单登记秒杀参与记录，唯一键(user_id, seckill_id)拦截跨单重复；重复则回滚整单
+        for (StockHold hold : holds) {
+            if (hold.seckillId() > 0 && !seckillDao.joinOnce(userId, hold.seckillId(), id, now)) {
+                throw new BizException("该秒杀商品每人限购一次，请勿重复下单");
+            }
+        }
         storeDao.updateMonthlySales(storeId, 1);
         // 下单扣减了库存与秒杀名额，且店铺月销量变化会影响榜单，需失效相关展示缓存
         invalidateStockDependentCache();
@@ -526,6 +532,7 @@ public class OrderService {
             }
             if (item.seckillId() > 0) {
                 seckillDao.restoreQuota(item.seckillId(), item.quantity());
+                seckillDao.releaseOnce(order.userId(), item.seckillId());
             }
         }
         // 库存与秒杀名额已归还，让展示层重新读取真实余量

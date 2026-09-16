@@ -114,4 +114,18 @@ public class SeckillDao {
     public void restoreQuota(long id, int quantity) {
         jdbc.update("UPDATE seckills SET sold = GREATEST(sold - ?, 0) WHERE id = ?", quantity, id);
     }
+
+    /**
+     * 登记「一人一单」参与记录：INSERT IGNORE 依赖唯一键 (user_id, seckill_id)，
+     * 同一用户对同一场秒杀重复下单时返回 false（0 行受影响），由调用方回滚整单。
+     */
+    public boolean joinOnce(long userId, long seckillId, long orderId, String now) {
+        return jdbc.update("INSERT IGNORE INTO seckill_orders(user_id, seckill_id, order_id, create_time) " +
+                "VALUES(?,?,?,?)", userId, seckillId, orderId, now) == 1;
+    }
+
+    /** 释放「一人一单」资格（取消/超时未支付回滚时与名额一并释放）。 */
+    public void releaseOnce(long userId, long seckillId) {
+        jdbc.update("DELETE FROM seckill_orders WHERE user_id = ? AND seckill_id = ?", userId, seckillId);
+    }
 }

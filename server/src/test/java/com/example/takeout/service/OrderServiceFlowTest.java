@@ -17,6 +17,7 @@ import com.example.takeout.model.Address;
 import com.example.takeout.model.Goods;
 import com.example.takeout.model.GoodsSpec;
 import com.example.takeout.model.Order;
+import com.example.takeout.model.Seckill;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.User;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -441,5 +442,43 @@ class OrderServiceFlowTest {
                 List.of(), "", "key-3");
 
         assertEquals(13, view.id());
+    }
+
+    // ============ 秒杀「一人一单」 ============
+
+    private Seckill activeSeckill() {
+        return new Seckill(400L, GOODS_ID, STORE_ID, 5.0, 100, 0,
+                "2026-01-01 00:00:00", "2099-01-01 00:00:00", 1, "");
+    }
+
+    /** 秒杀下单：登记参与记录，且秒杀价生效（5 元 + 配送 3 元 = 8 元）。 */
+    @Test
+    void seckillOrderRegistersOnePerUserParticipation() {
+        stubCommon(10, 0, 3);
+        when(seckillDao.findActiveByGoods(anyLong(), anyString())).thenReturn(Optional.of(activeSeckill()));
+        when(seckillDao.deductQuota(anyLong(), anyInt(), anyString())).thenReturn(true);
+        when(seckillDao.joinOnce(anyLong(), anyLong(), anyLong(), anyString())).thenReturn(true);
+        when(orderDao.insert(any(Order.class))).thenReturn(13L);
+        when(orderDao.findById(13)).thenReturn(Optional.of(storedOrder(13, 0, ITEMS, "")));
+
+        service.createOrder(USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "", List.of());
+
+        verify(orderDao).insert(org.mockito.ArgumentMatchers.argThat(o -> o.payAmount() == 8.0));
+        verify(seckillDao).joinOnce(anyLong(), anyLong(), anyLong(), anyString());
+    }
+
+    /** 同一用户对同一场秒杀的第二笔订单被唯一键拦截，返回可读错误并回滚整单。 */
+    @Test
+    void rejectsSecondSeckillOrderForSameUser() {
+        stubCommon(10, 0, 3);
+        when(seckillDao.findActiveByGoods(anyLong(), anyString())).thenReturn(Optional.of(activeSeckill()));
+        when(seckillDao.deductQuota(anyLong(), anyInt(), anyString())).thenReturn(true);
+        when(seckillDao.joinOnce(anyLong(), anyLong(), anyLong(), anyString())).thenReturn(false);
+        when(orderDao.insert(any(Order.class))).thenReturn(13L);
+
+        BizException error = assertThrows(BizException.class, () ->
+                service.createOrder(USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "", List.of()));
+
+        assertEquals("该秒杀商品每人限购一次，请勿重复下单", error.getMessage());
     }
 }

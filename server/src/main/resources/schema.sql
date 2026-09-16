@@ -251,6 +251,18 @@ CREATE TABLE IF NOT EXISTS seckills (
     KEY idx_seckill_window (status, start_time, end_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 秒杀「一人一单」：同一用户对同一场秒杀最多一笔未取消订单；下单登记，取消/超时释放。
+-- 唯一键(user_id, seckill_id)是防重的唯一权威，Dao 用 INSERT IGNORE 依赖它。
+CREATE TABLE IF NOT EXISTS seckill_orders (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    seckill_id BIGINT NOT NULL,
+    order_id BIGINT NOT NULL DEFAULT 0,
+    create_time VARCHAR(32) NOT NULL,
+    UNIQUE KEY uk_seckill_user (user_id, seckill_id),
+    KEY idx_seckill_orders_seckill (seckill_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- 事务性 Outbox：领域事件与业务数据同事务落库，再由中继任务投递到 Redis Stream。
 -- status：0 待投递 / 1 已投递；retry_count 用于限制投递重试次数。
 CREATE TABLE IF NOT EXISTS outbox_events (
