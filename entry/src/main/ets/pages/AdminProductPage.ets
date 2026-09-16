@@ -20,6 +20,10 @@ export struct AdminProductPage {
   @State loading: boolean = false
   @State deletingId: number = 0
   @State showDeleteConfirm: boolean = false
+  // 分页状态：刷新回到第 1 页，加载更多时按 hasMore 追加下一页
+  @State page: number = 1
+  @State total: number = 0
+  @State hasMore: boolean = false
   // 同 AdminUserPage：键只含 id 时刷新回来的新对象会被复用，强制上下架后按钮不刷新。
   @State renderVersion: number = 0
 
@@ -39,7 +43,26 @@ export struct AdminProductPage {
     }
     this.loading = true
     const status: number | undefined = this.statusFilter < 0 ? undefined : this.statusFilter
-    this.products = await fetchAdminProductsApi(this.keyword, status)
+    const result = await fetchAdminProductsApi(this.keyword, status, 1, 50)
+    this.products = result.list
+    this.page = result.page
+    this.total = result.total
+    this.hasMore = result.hasMore
+    this.renderVersion += 1
+    this.loading = false
+  }
+
+  private async loadMore(): Promise<void> {
+    if (this.loading || !this.hasMore) {
+      return
+    }
+    this.loading = true
+    const status: number | undefined = this.statusFilter < 0 ? undefined : this.statusFilter
+    const result = await fetchAdminProductsApi(this.keyword, status, this.page + 1, 50)
+    this.products = this.products.concat(result.list)
+    this.page = result.page
+    this.total = result.total
+    this.hasMore = result.hasMore
     this.renderVersion += 1
     this.loading = false
   }
@@ -107,6 +130,18 @@ export struct AdminProductPage {
             this.ProductRow(product)
           }
         }, (product: AdminProduct) => `${this.renderVersion}-${product.id}`)
+        if (this.hasMore) {
+          ListItem() {
+            Button(this.loading ? '加载中…' : `加载更多（已显示 ${this.products.length}/${this.total}）`)
+              .width('100%').height(40).fontSize(FONT_SIZE.SM)
+              .onClick(() => { this.loadMore() })
+          }
+        } else if (this.products.length > 0) {
+          ListItem() {
+            Text(`已显示全部 ${this.total} 件商品`).width('100%').textAlign(TextAlign.Center)
+              .padding(SPACING.MD).fontColor(COLORS.TEXT_HINT).fontSize(FONT_SIZE.SM)
+          }
+        }
       }
       .width('100%').layoutWeight(1).scrollBar(BarState.Off)
       .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })

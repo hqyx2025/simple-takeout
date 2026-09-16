@@ -7,7 +7,7 @@ import { get, post, put, del, uploadFile, ApiResponse, setAuthToken } from './Ht
 import { API_CONFIG } from '../common/Constants'
 import {
   User, UserRole, StoreItem, GoodsItem, SpecialGoodsItem, Category, Order, CartItem,
-  Address, Coupon, Review, Rider, Banner, Announcement, Favorite, RefundRecord, AdminEmployee, AdminProduct, AdminUser,
+  Address, Coupon, Review, Rider, Banner, Announcement, Favorite, RefundRecord, AdminEmployee, AdminProduct, AdminProductPage, AdminUser,
   BankCard,
   AdminStatisticsData, AdminTrendPoint, AdminHotGoods, SeckillItem, BundleInfo, UploadResult, GoodsSpec
 } from '../model/Models'
@@ -283,6 +283,14 @@ interface ServerAdminProduct {
   tag: string
   status: number
   createTime: string
+}
+
+interface ServerAdminProductPage {
+  list: ServerAdminProduct[]
+  total: number
+  page: number
+  pageSize: number
+  hasMore: boolean
 }
 
 interface ServerAdminUser {
@@ -1347,7 +1355,7 @@ export async function updateAdminUserStatusApi(id: number, status: number): Prom
   return resp.code === 200
 }
 
-export async function fetchAdminProductsApi(keyword?: string, status?: number): Promise<AdminProduct[]> {
+export async function fetchAdminProductsApi(keyword?: string, status?: number, page: number = 1, pageSize: number = 50): Promise<AdminProductPage> {
   const params: string[] = []
   if (keyword !== undefined && keyword.trim() !== '') {
     params.push(`keyword=${encodeURIComponent(keyword.trim())}`)
@@ -1355,12 +1363,14 @@ export async function fetchAdminProductsApi(keyword?: string, status?: number): 
   if (status !== undefined) {
     params.push(`status=${status}`)
   }
+  params.push(`page=${page}`)
+  params.push(`pageSize=${pageSize}`)
   const url: string = params.length > 0 ? `/api/admin/products?${params.join('&')}` : '/api/admin/products'
-  const resp: ApiResponse<ServerAdminProduct[]> = await get<ServerAdminProduct[]>(url)
+  const resp: ApiResponse<ServerAdminProductPage> = await get<ServerAdminProductPage>(url)
   if (resp.code !== 200 || resp.data === null) {
-    return []
+    return { list: [], total: 0, page: page, pageSize: pageSize, hasMore: false }
   }
-  return resp.data.map((item: ServerAdminProduct) => {
+  const list: AdminProduct[] = resp.data.list.map((item: ServerAdminProduct) => {
     const product: AdminProduct = {
       id: item.id, storeId: item.storeId, storeName: item.storeName, name: item.name,
       description: item.description, price: item.price, originalPrice: item.originalPrice,
@@ -1370,6 +1380,7 @@ export async function fetchAdminProductsApi(keyword?: string, status?: number): 
     }
     return product
   })
+  return { list: list, total: resp.data.total, page: resp.data.page, pageSize: resp.data.pageSize, hasMore: resp.data.hasMore }
 }
 
 export async function updateAdminProductStatusApi(id: number, status: number): Promise<boolean> {

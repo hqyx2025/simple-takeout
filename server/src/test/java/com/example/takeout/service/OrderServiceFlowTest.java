@@ -23,6 +23,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
 
@@ -67,6 +69,7 @@ class OrderServiceFlowTest {
     private static final long GOODS_ID = 100L;
     private static final long ADDRESS_ID = 20L;
     private static final long USER_ID = 1L;
+    private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final String ITEMS =
             "[{\"goodsId\":100,\"goodsName\":\"测试商品\",\"price\":10.0,\"quantity\":1,\"image\":\"\"}]";
     private static final String ADDRESS_JSON =
@@ -92,8 +95,8 @@ class OrderServiceFlowTest {
     /** 库中已落库的订单（状态与时间按用例传入）。 */
     private Order storedOrder(long id, int status, String couponIdFreeItems, String expectTime) {
         return new Order(id, "NO" + id, USER_ID, STORE_ID, "测试店", status, couponIdFreeItems, ADDRESS_JSON,
-                10, 3, 0, 13, "", 0, 0, "2026-08-16 10:00:00",
-                status == 0 ? "" : "2026-08-16 10:00:00", "", "", "", expectTime, 0);
+                10, 3, 0, 13, "", 0, 0, LocalDateTime.now().format(FMT),
+                status == 0 ? "" : LocalDateTime.now().format(FMT), "", "", "", expectTime, 0);
     }
 
     private void stubCommon(double price, double minOrder, double deliveryFee) {
@@ -145,6 +148,21 @@ class OrderServiceFlowTest {
         BizException error = assertThrows(BizException.class, () -> service.payOrder(USER_ID, 13));
 
         assertEquals("订单已取消，无法支付", error.getMessage());
+        verify(userDao, never()).deductBalance(anyLong(), anyDouble());
+    }
+
+    @Test
+    void rejectsPayingOrderThatPassedItsPayDeadline() {
+        // 待付款订单已过 15 分钟支付时限：支付必须直接拒绝，不再扣余额（超时定时任务会竞争取消）
+        String expired = LocalDateTime.now().minusMinutes(16).format(FMT);
+        Order overdue = new Order(13, "NO13", USER_ID, STORE_ID, "测试店", 0, ITEMS, ADDRESS_JSON,
+                10, 3, 0, 13, "", 0, 0, expired, "", "", "", "", "", 0);
+        when(orderDao.findById(13)).thenReturn(Optional.of(overdue));
+
+        BizException error = assertThrows(BizException.class, () -> service.payOrder(USER_ID, 13));
+
+        assertEquals("订单已超过支付时限，请重新下单", error.getMessage());
+        verify(orderDao, never()).markPaid(anyLong(), anyString());
         verify(userDao, never()).deductBalance(anyLong(), anyDouble());
     }
 

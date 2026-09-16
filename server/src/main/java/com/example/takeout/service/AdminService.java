@@ -149,11 +149,19 @@ public class AdminService {
         userDao.updateStatus(id, status);
     }
 
-    public List<AdminProduct> products(String keyword, Integer status) {
+    public AdminService.ProductPage products(String keyword, Integer status, int page, int pageSize) {
         if (status != null && status != 0 && status != 1) {
             throw new BizException("商品状态不合法");
         }
-        return goodsDao.listForAdmin(keyword, status);
+        int size = Math.clamp(pageSize, 1, 100);
+        int current = Math.max(page, 1);
+        int total = goodsDao.countForAdmin(keyword, status);
+        List<AdminProduct> list = goodsDao.listForAdmin(keyword, status, size, (current - 1) * size);
+        return new AdminService.ProductPage(list, total, current, size, current * size < total);
+    }
+
+    /** 管理端商品分页结果。 */
+    public record ProductPage(List<AdminProduct> list, int total, int page, int pageSize, boolean hasMore) {
     }
 
     public void updateProductStatus(long id, int status) {

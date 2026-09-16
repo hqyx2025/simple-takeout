@@ -311,6 +311,12 @@ public class OrderService {
         if (order.status() != 0) {
             throw new BizException(order.status() == 5 ? "订单已取消，无法支付" : "订单已支付，请勿重复支付");
         }
+        // 支付时限秒级显式检查：过了 payDeadline 的待付款订单不再接受支付（超时定时任务会竞争取消，
+        // 这里提前拦下避免扣余额后才发现订单已被取消回滚；先查后改只影响几秒钟窗口，最终以条件更新为准）
+        PayDeadline deadline = payDeadline(order);
+        if (deadline.epochMs() > 0 && System.currentTimeMillis() > deadline.epochMs()) {
+            throw new BizException("订单已超过支付时限，请重新下单");
+        }
         User user = userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
         if (user.balance() < order.payAmount()) {
             throw new BizException("余额不足，请先充值");

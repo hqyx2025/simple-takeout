@@ -4,7 +4,6 @@ import com.example.takeout.common.ApiResponse;
 import com.example.takeout.common.BizException;
 import com.example.takeout.model.Category;
 import com.example.takeout.model.AdminEmployee;
-import com.example.takeout.model.AdminProduct;
 import com.example.takeout.model.AdminStatistics;
 import com.example.takeout.model.AdminUser;
 import com.example.takeout.model.Order;
@@ -134,11 +133,13 @@ public class AdminController {
     }
 
     @GetMapping("/products")
-    public ApiResponse<List<AdminProduct>> products(@RequestAttribute("role") int role,
-                                                     @RequestParam(required = false) String keyword,
-                                                     @RequestParam(required = false) Integer status) {
+    public ApiResponse<AdminService.ProductPage> products(@RequestAttribute("role") int role,
+                                                          @RequestParam(required = false) String keyword,
+                                                          @RequestParam(required = false) Integer status,
+                                                          @RequestParam(defaultValue = "1") int page,
+                                                          @RequestParam(defaultValue = "50") int pageSize) {
         requireAdmin(role);
-        return ApiResponse.ok(adminService.products(keyword, status));
+        return ApiResponse.ok(adminService.products(keyword, status, page, pageSize));
     }
 
     @PutMapping("/products/{id}/status")

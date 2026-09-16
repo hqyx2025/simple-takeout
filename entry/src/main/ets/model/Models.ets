@@ -393,6 +393,15 @@ export interface AdminProduct {
   createTime: string
 }
 
+/** 管理端商品分页结果 */
+export interface AdminProductPage {
+  list: AdminProduct[]
+  total: number
+  page: number
+  pageSize: number
+  hasMore: boolean
+}
+
 /** 管理端用户/商户账号 */
 export interface AdminUser {
   id: number

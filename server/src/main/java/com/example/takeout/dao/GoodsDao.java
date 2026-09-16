@@ -132,29 +132,67 @@ public class GoodsDao {
     }
 
     public List<AdminProduct> listForAdmin(String keyword, Integer status) {
-        StringBuilder sql = new StringBuilder("SELECT g.*, s.name AS store_name FROM goods g " +
-                "JOIN stores s ON s.id = g.store_id WHERE 1 = 1");
+        return listForAdmin(keyword, status, 0, 0);
+    }
+
+    /** 分页版管理端商品列表：limit<=0 时返回全部（兼容旧的分页未落地调用）。 */
+    public List<AdminProduct> listForAdmin(String keyword, Integer status, int limit, int offset) {
+        StringBuilder sql = adminProductSql(keyword, status);
+        List<Object> args = adminProductArgs(keyword, status);
+        sql.append(" ORDER BY g.id DESC");
+        if (limit > 0) {
+            sql.append(" LIMIT ? OFFSET ?");
+            args.add(limit);
+            args.add(offset);
+        }
+        return jdbc.query(sql.toString(), ADMIN_PRODUCT_MAPPER, args.toArray());
+    }
+
+    /** 管理端商品总数（与 listForAdmin 同一套筛选，用于分页 hasMore 判断）。 */
+    public int countForAdmin(String keyword, Integer status) {
+        String sql = "SELECT COUNT(*) FROM goods g JOIN stores s ON s.id = g.store_id WHERE 1 = 1"
+                + whereClause(keyword, status);
+        Integer count = jdbc.queryForObject(sql, Integer.class, adminProductArgs(keyword, status).toArray());
+        return count == null ? 0 : count;
+    }
+
+    private StringBuilder adminProductSql(String keyword, Integer status) {
+        return new StringBuilder("SELECT g.*, s.name AS store_name FROM goods g " +
+                "JOIN stores s ON s.id = g.store_id WHERE 1 = 1" + whereClause(keyword, status));
+    }
+
+    private List<Object> adminProductArgs(String keyword, Integer status) {
         List<Object> args = new java.util.ArrayList<>();
         if (keyword != null && !keyword.isBlank()) {
-            sql.append(" AND (g.name LIKE ? OR s.name LIKE ?)");
             String value = "%" + keyword.trim() + "%";
             args.add(value);
             args.add(value);
         }
         if (status != null) {
-            sql.append(" AND g.status = ?");
             args.add(status);
         }
-        sql.append(" ORDER BY g.id DESC");
-        return jdbc.query(sql.toString(), (rs, i) -> new AdminProduct(
-                rs.getLong("id"), rs.getLong("store_id"), rs.getString("store_name"),
-                rs.getString("name"), rs.getString("description"), rs.getDouble("price"),
-                rs.getDouble("original_price"), rs.getString("image"), rs.getInt("category_id"),
-                rs.getLong("merchant_category_id"), rs.getInt("stock"), rs.getInt("sales"),
-                rs.getDouble("rating"), rs.getString("tag"), rs.getInt("status"),
-                rs.getString("create_time")
-        ), args.toArray());
+        return args;
     }
+
+    private String whereClause(String keyword, Integer status) {
+        StringBuilder w = new StringBuilder();
+        if (keyword != null && !keyword.isBlank()) {
+            w.append(" AND (g.name LIKE ? OR s.name LIKE ?)");
+        }
+        if (status != null) {
+            w.append(" AND g.status = ?");
+        }
+        return w.toString();
+    }
+
+    private static final RowMapper<AdminProduct> ADMIN_PRODUCT_MAPPER = (rs, i) -> new AdminProduct(
+            rs.getLong("id"), rs.getLong("store_id"), rs.getString("store_name"),
+            rs.getString("name"), rs.getString("description"), rs.getDouble("price"),
+            rs.getDouble("original_price"), rs.getString("image"), rs.getInt("category_id"),
+            rs.getLong("merchant_category_id"), rs.getInt("stock"), rs.getInt("sales"),
+            rs.getDouble("rating"), rs.getString("tag"), rs.getInt("status"),
+            rs.getString("create_time")
+    );
 
     public Optional<Goods> findById(long id) {
         return attachSpecs(jdbc.query("SELECT * FROM goods WHERE id = ?", MAPPER, id)).stream().findFirst();

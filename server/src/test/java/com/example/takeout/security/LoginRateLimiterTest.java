@@ -74,6 +74,21 @@ class LoginRateLimiterTest {
     }
 
     @Test
+    void orderPolicyBlocksOnTenthOrderWithinOneMinute() {
+        // 下单按账号限流：窗口 60s、阈值 10、封禁 60s。钉住「order」动作参数，
+        // 防止有人把它混同登录（10/60/600）改错成误伤正常多店下单。
+        StringRedisTemplate redis = mock(StringRedisTemplate.class);
+        ValueOperations<String, String> ops = mock(ValueOperations.class);
+        when(redis.opsForValue()).thenReturn(ops);
+        when(ops.increment("takeout:rl:order:u1")).thenReturn(10L);
+
+        new LoginRateLimiter(provider(redis)).recordAttempt("order", "u1");
+
+        verify(ops).set(eq("takeout:rl:order:u1:blocked"), eq("1"), eq(Duration.ofSeconds(60)));
+        verify(redis).delete("takeout:rl:order:u1");
+    }
+
+    @Test
     void resetClearsCounterAndBlockMarker() {
         StringRedisTemplate redis = mock(StringRedisTemplate.class);
 

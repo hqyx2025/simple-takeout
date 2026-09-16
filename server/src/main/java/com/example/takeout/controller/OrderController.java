@@ -1,9 +1,11 @@
 package com.example.takeout.controller;
 
 import com.example.takeout.common.ApiResponse;
+import com.example.takeout.common.BizException;
 import com.example.takeout.model.Order;
 import com.example.takeout.model.RefundRecord;
 import com.example.takeout.model.Review;
+import com.example.takeout.security.LoginRateLimiter;
 import com.example.takeout.service.OrderService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,9 +27,11 @@ import java.util.List;
 public class OrderController {
 
     private final OrderService orderService;
+    private final LoginRateLimiter orderRateLimiter;
 
-    public OrderController(OrderService orderService) {
+    public OrderController(OrderService orderService, LoginRateLimiter orderRateLimiter) {
         this.orderService = orderService;
+        this.orderRateLimiter = orderRateLimiter;
     }
 
     // ============ 用户端 ============
@@ -35,6 +39,11 @@ public class OrderController {
     @PostMapping("/orders")
     public ApiResponse<Order.OrderView> createOrder(@RequestAttribute("userId") long userId,
                                                     @RequestBody CreateOrderRequest req) {
+        // 下单按账号限流（脚本刷单防护）；Identifier 用 userId，Redis 不可用时自动放行
+        if (orderRateLimiter.isBlocked("order", "u" + userId)) {
+            throw new BizException(429, "下单过于频繁，请稍后再试");
+        }
+        orderRateLimiter.recordAttempt("order", "u" + userId);
         return ApiResponse.ok(orderService.createOrder(userId, req.storeId(), req.items(),
                 req.addressId(), req.couponId(), req.remark(), req.checkoutGoodsIds(), req.expectTime(),
                 req.idempotencyKey()));

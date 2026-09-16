@@ -35,7 +35,7 @@ class AdminControllerSecurityTest {
         AdminController controller = new AdminController(mock(AdminService.class));
 
         BizException error = assertThrows(BizException.class,
-                () -> controller.products(1, null, null));
+                () -> controller.products(1, null, null, 1, 50));
 
         assertEquals(403, error.getCode());
     }

@@ -34,7 +34,7 @@
     --mode module -p module=entry@default -p product=default -p requiredDeviceType=phone assembleHap --analyze=normal --parallel --incremental --daemon
   ```
   构建日志：`.hvigor/outputs/build-logs/build.log`；判断成功要看日志里的 `BUILD SUCCESSFUL` 并确认 `entry/build/default/outputs/default/*.hap` 时间戳已更新（流水线里 `Select-String` 会吞掉退出码，别只看 `$LASTEXITCODE`）
-- 后端测试：`mvn -f server/pom.xml test`（**142 个测试**，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格/资金与状态并发边界/文本列宽边界、缓存穿透/击穿/雪崩防护与领域事件 Outbox 语义、AI 助手意图路由、**登录限流与 token 吊销（jti 黑名单 + 改密即失效 + 禁用账号存量 token 立即失效）**、**下单防重 idempotencyKey（Redis SET NX，失败释放占位、Redis 挂了跳过）**、**停用骑手服务层拒绝抢单/取餐/送达**、**搜索不逐店查商品（N+1 契约）**、**平台统计口径（订单数与成交额同步排除 5/6）**，以及**骑手待取餐池 SQL 契约**与骑手配送闭环）
+- 后端测试：`mvn -f server/pom.xml test`（**150 个测试**，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格/资金与状态并发边界/文本列宽边界、缓存穿透/击穿/雪崩防护与领域事件 Outbox 语义、AI 助手意图路由、**登录限流与 token 吊销（jti 黑名单 + 改密即失效 + 禁用账号存量 token 立即失效）**、**下单防重 idempotencyKey（Redis SET NX，失败释放占位、Redis 挂了跳过）**、**下单接口限流（LoginRateLimiter.order 按账号 10/60s）**、**待付款订单支付时限秒级显式检查（payOrder 扣款前判 payDeadline）**、**管理端商品分页（LIMIT/OFFSET + count 同套筛选）**、**停用骑手服务层拒绝抢单/取餐/送达**、**搜索不逐店查商品（N+1 契约）**、**平台统计口径（订单数与成交额同步排除 5/6）**，以及**骑手待取餐池 SQL 契约**与骑手配送闭环）
 - 一键容器化环境：`docker compose up -d --build`（app + MySQL 8.4 + Redis 7，含健康检查与启动依赖顺序）；只起基础设施（本机用 Maven 跑后端）用 `docker compose up -d mysql redis`。注意 compose 的 MySQL 映射到宿主 **3307**（避开本机 MySQL84 的 3306）
 - 后端测试与运行都要求 `JAVA_HOME` 指向 **JDK 25**；`server/Dockerfile` 的构建阶段也必须是 JDK 25，否则 `maven.compiler.release=25` 直接编译失败
 - Release 打包（**当前范围外，可选工具**）：`scripts/enable-release-signing.ps1`（接入发布证书）→ `scripts/build-release.ps1`（签名包）→ `scripts/release-check.ps1 [-Build]`（上架体检，输出 `md/上架体检报告.md`，该报告为生成物不入库）；详见 `md/上架体检与Release签名.md`。日常开发只需 debug 构建，不必碰这一套。
@@ -48,7 +48,7 @@
 - **缓存与事件参数**：TTL `takeout.cache.ttl-seconds`(300) + 抖动 `jitter-seconds`(120)、空值占位 `null-ttl-seconds`(60)、回源锁 `rebuild-lock-ms`(3000)；Outbox 中继 `takeout.mq.relay-scan-ms`(2000)、消费幂等 `dedup-hours`(24)。细节见 `md/Redis缓存与异步事件架构.md`
 - **JWT**：`TAKEOUT_JWT_SECRET` 环境变量，`expire-hours: 72`；无刷新令牌（每 72 小时重新登录的体验取舍已接受）。**登录态可吊销**：`POST /api/auth/logout` 把当前 token 的 jti 记入 `token_blacklist`（落**数据库**而非 Redis——Redis 挂了登出也必须生效），`PUT /api/auth/password` 改密写 `users.password_changed_at` 使所有早于此刻签发的 token 失效，**管理端禁用账号（`users.status=0`）使其存量 token 立即失效**；三处校验都收口在 `AuthInterceptor`（唯一认证入口，新增接口不会漏挂），token 载荷含 `jti` 与 `pwdAt`
 - **下单防重（idempotencyKey）**：`POST /api/orders` 请求体可带 `idempotencyKey`（前端结算页每页面实例生成一次 `submitKey`，多店结算按 `-storeId` 派生）；服务端 Redis `SET NX`（key `takeout:idempotent:order:<userId>:<key>`，TTL 5 分钟）拦截连点/网络重放，**下单失败会释放占位**允许同 token 重试，**Redis 不可用时跳过校验**（与登录限流同口径：加固不能变成下单不可用）；旧客户端不传该字段则完全不受影响
-- **登录/注册限流**：`takeout.security.rate-limit.enabled`（环境变量 `TAKEOUT_RATE_LIMIT_ENABLED`，默认 true）。计数存 Redis（key `takeout:rl:<action>:<ip>`；login 10 次/60 秒、register 5 次/小时，超限封该 IP），**Redis 不可用时一律放行**（限流是加固，不能变成登录不可用）；超限抛 `BizException(429, …)`，`GlobalExceptionHandler` 映射为 HTTP 429
+- **登录/注册/下单限流**：`takeout.security.rate-limit.enabled`（环境变量 `TAKEOUT_RATE_LIMIT_ENABLED`，默认 true）。计数存 Redis（key `takeout:rl:<action>:<ip>`；login 10 次/60 秒、register 5 次/小时，**order 按账号 10 次/60 秒**——多店结算一次连续提交 N 笔故放宽到 10，identifier 用 `u<userId>`），超限封该 IP/账号，**Redis 不可用时一律放行**（限流是加固，不能变成登录/下单不可用）；超限抛 `BizException(429, …)`，`GlobalExceptionHandler` 映射为 HTTP 429
 - **日志**：按天分文件 `app-YYYY-MM-DD.log`，单文件 2MB 轮转压缩归档（zip）；同时输出控制台 + `filesDir/log/app.log`；密码/JWT/手机号完整值禁止入日志
 - **高德 Key**（双 Key 概念）：`AMAP_CONFIG.MAP_JS_KEY`（Web端 JS API 类型，`a0373d4b39b6524b7f80e825339e7a28`，需同步修改 `resources/rawfile/amap_map.html` 中 AMAP_KEY）；2021 年后 Key 需配置安全密钥 jscode
 - **订单支付时限**：`takeout.order.pay-timeout-minutes`（环境变量 `TAKEOUT_PAY_TIMEOUT_MINUTES`，默认 15 分钟）；超时扫描间隔 `takeout.order.timeout-scan-ms`（默认 60 秒，启动 30 秒后首扫）
@@ -200,7 +200,7 @@
 
 - **起送价以服务端为唯一权威**：多店结算时服务端**按店逐个**校验（只算该店商品）；结算页**不再做**"所有店合计 vs 最大起送价"的前置拦截——两者口径不一致会给出自相矛盾的提示。
 - **券后应付为 0 元的订单一律拒绝**（提示"请更换优惠券"，差额不退）；结算页可用券列表同样过滤掉 `amount >= 商品总价` 的券。
-- **支付严格按 payDeadline**：超时后由 `OrderTimeoutJob` 扫描取消（`create_time < deadline`，无宽限期）。扫描间隔内仍可支付属正常现象，不再放宽。
+- **支付严格按 payDeadline**：超时后由 `OrderTimeoutJob` 扫描取消（`create_time < deadline`，无宽限期）。`payOrder` 在扣款前也显式判定——`payDeadline` 的 epochMs 已过直接抛「订单已超过支付时限，请重新下单」，不再出现「倒计时归零了还能支付成功直至扫描兜底」的窗口。
 - **退款终态就是 status=6 + escrow=2**：管理端同意退款后订单**停留在 6**（不再流转到 5），前端按 status + escrow 联合判断文案。这是状态机终态，不是"卡住"。
 - **资金三件套**：扣款用条件更新 `deductBalance`（余额不足返回 false）、退款/结算用原子自增 `addBalance`；**禁止**再出现"读余额→改→整值写回"（`UserDao.updateBalance` 已删除）。
 - **状态流转一律条件更新**：`updateStatusFrom(from,to)` / `merchantDeliver` / `merchantComplete` / `markRefunding`，rowcount=0 必须抛错整单回滚，不得先查后改。
@@ -211,7 +211,7 @@
 
 **已知待办**（本次未处理，按需再定）：
 
-- 列表接口无分页：`/api/admin/orders|users|products|refunds`、`/api/orders`、`/api/stores` 全表进内存（admin orders 还会逐单再查一次）；如需分页，加 `page/pageSize` + DAO `LIMIT ? OFFSET ?`，上限建议 50。**2026-09 复查后暂缓**：实测 admin/orders 44 行、admin/users 25 行、refunds 2 行，只有 `goods` 959 行是真实跑量，所以那时唯一值得分页的是 `/api/admin/products`；真要加时优先它，并且要同步改管理端商品页的筛选与 List 渲染。
+- 列表接口分页：~~`/api/admin/products`~~ **已修**（`page/pageSize` + `GoodsDao.listForAdmin LIMIT/OFFSET` + `countForAdmin` 同套筛选，前端管理端商品页「加载更多」+ 末页提示，`AdminService` 收敛 pageSize∈[1,100]）。**仍暂缓**：`/api/admin/orders|users|refunds`、`/api/orders`、`/api/stores` 全表进内存（admin orders 还逐单再查一次）——实测 admin/orders 44 行、admin/users 25 行、refunds 2 行、单用户订单量小，全量加载不构成内存风险；待订单涨到千级再按 `page/pageSize + LIMIT/OFFSET` 落地，并同步改管理端订单页的逐单再查与 List 渲染。
 - ~~搜索 N+1~~ **已修复**：`UserCenterService.search` 原先对每家店调一次 `goodsDao.listByStore`（41 店 → 42 次查询，且每次还带 `attachSpecs` 批量查规格并水合最多 959 行商品对象）；现改为一条 `SELECT DISTINCT store_id FROM goods WHERE status = 1 AND name LIKE ?`（`GoodsDao.listStoreIdsByNameLike`）拿命中店铺 id 集合再本地过滤。用例 `UserCenterSearchTest` 守住这条契约（`searchNeverQueriesGoodsPerStore` 断言逐店查询次数必须为 0）。
 - 密码仍为 SHA-256 单轮加固定盐（未换 bcrypt/Argon2）；登录/注册限流与 token 吊销（jti 黑名单、改密即失效）**已落地**，见第 4 节。
 - 上传只校验后缀 + content-type 白名单，未做文件魔数校验；`/uploads/**` 无需 JWT（公开资源）。

@@ -34,7 +34,10 @@ public class LoginRateLimiter {
     private static final Policy DEFAULT_POLICY = new Policy(20, 60, 300);
     private static final Map<String, Policy> POLICIES = Map.of(
             "login", new Policy(10, 60, 600),
-            "register", new Policy(5, 3600, 3600));
+            "register", new Policy(5, 3600, 3600),
+            // 下单按账号（非 IP）限流：多店结算一次会连续提交 N 笔订单，故放宽到 10/min，
+            // 只为拦住脚本刷单，不误伤正常的多店下单（与登录限流同口径：Redis 挂了放行）
+            "order", new Policy(10, 60, 60));
 
     private static final String KEY_PREFIX = "takeout:rl:";
     private static final String BLOCK_SUFFIX = ":blocked";
