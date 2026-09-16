@@ -537,9 +537,9 @@ export async function syncCategoriesFromServer(): Promise<void> {
       const fallback: Category | undefined = defaults.find((item: Category) => item.id === remote.id)
       const category: Category = {
         id: remote.id,
-        name: remote.name.trim() === '' && fallback !== undefined ? fallback.name : remote.name,
-        icon: remote.icon.trim() === '' && fallback !== undefined ? fallback.icon : remote.icon,
-        color: remote.color.trim() === '' && fallback !== undefined ? fallback.color : remote.color
+        name: (remote.name ?? '').trim() === '' && fallback !== undefined ? fallback.name : (remote.name ?? ''),
+        icon: (remote.icon ?? '').trim() === '' && fallback !== undefined ? fallback.icon : (remote.icon ?? ''),
+        color: (remote.color ?? '').trim() === '' && fallback !== undefined ? fallback.color : (remote.color ?? '')
       }
       return category
     })
