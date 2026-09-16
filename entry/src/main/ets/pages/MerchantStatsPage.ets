@@ -27,6 +27,7 @@ export struct MerchantStatsPage {
     totalRevenue: 0
   }
   @State balance: number = 0
+  @State loadError: boolean = false
   // 近7天每日收入（折线图）
   @State weekRevenue: number[] = [0, 0, 0, 0, 0, 0, 0]
   @State weekLabels: string[] = []
@@ -65,13 +66,18 @@ export struct MerchantStatsPage {
 
   // 从后端同步订单后按统一口径重算统计（status=4 且 escrow=1，与大纲 21.4/后端接口一致）
   private async refreshRemoteStats(): Promise<void> {
-    await syncMerchantOrdersFromServer()
-    const user: User | undefined = getCurrentUser()
-    if (user !== undefined && user !== null) {
-      this.todayStats = getMerchantTodayStats(user.id)
-      this.weekStats = getMerchantWeekStats(user.id)
-      this.weekRevenue = getMerchantWeekRevenue(user.id)
-      this.todayStatus = getMerchantTodayStatusOrders(user.id)
+    this.loadError = false
+    try {
+      await syncMerchantOrdersFromServer()
+      const user: User | undefined = getCurrentUser()
+      if (user !== undefined && user !== null) {
+        this.todayStats = getMerchantTodayStats(user.id)
+        this.weekStats = getMerchantWeekStats(user.id)
+        this.weekRevenue = getMerchantWeekRevenue(user.id)
+        this.todayStatus = getMerchantTodayStatusOrders(user.id)
+      }
+    } catch (_e) {
+      this.loadError = true
     }
   }
 
@@ -83,6 +89,11 @@ export struct MerchantStatsPage {
       // 内容区
       Scroll() {
         Column({ space: SPACING.MD }) {
+          // 网络错误时显示重试横幅——否则全零数据与"真的没订单"无法区分
+          if (this.loadError) {
+            this.ErrorBanner()
+          }
+
           // 今日数据卡片（主色调背景，大卡片）
           this.TodayCard()
 
@@ -135,6 +146,25 @@ export struct MerchantStatsPage {
     .padding({ left: SPACING.LG, right: SPACING.LG, top: 26 })
     .backgroundColor(COLORS.BG_WHITE)
     .alignItems(VerticalAlign.Center)
+  }
+
+  @Builder
+  ErrorBanner() {
+    Row() {
+      Text('数据加载失败，以下数据可能不准确')
+        .fontSize(FONT_SIZE.SM)
+        .fontColor('#b71c1c')
+        .layoutWeight(1)
+      Text('重试')
+        .fontSize(FONT_SIZE.SM)
+        .fontColor(COLORS.PRIMARY)
+        .fontWeight(FontWeight.Bold)
+        .onClick(() => { this.refreshRemoteStats() })
+    }
+    .width('100%')
+    .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
+    .backgroundColor('#ffebee')
+    .borderRadius(BORDER_RADIUS.MD)
   }
 
   @Builder
