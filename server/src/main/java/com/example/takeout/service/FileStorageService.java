@@ -1,6 +1,7 @@
 package com.example.takeout.service;
 
 import com.example.takeout.common.BizException;
+import com.example.takeout.service.thirdparty.ObjectStorage;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -24,7 +25,7 @@ import java.util.UUID;
  * 说明：毕设环境不引入 OSS，故采用本地文件存储；生产环境可替换为对象存储实现。
  */
 @Service
-public class FileStorageService {
+public class FileStorageService implements ObjectStorage {
 
     /** 允许的图片扩展名。 */
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp", "gif");
@@ -57,6 +58,7 @@ public class FileStorageService {
     /**
      * 保存上传图片，返回可直接拼接访问的相对地址（/uploads/yyyyMMdd/xxx.jpg）。
      */
+    @Override
     public String store(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new BizException("请选择要上传的图片");

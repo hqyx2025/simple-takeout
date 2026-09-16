@@ -6,6 +6,7 @@ import com.example.takeout.model.User;
 import com.example.takeout.security.LoginRateLimiter;
 import com.example.takeout.security.TokenRevocationService;
 import com.example.takeout.service.AuthService;
+import com.example.takeout.service.thirdparty.SmsSender;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,12 +30,14 @@ public class AuthController {
     private final AuthService authService;
     private final LoginRateLimiter loginRateLimiter;
     private final TokenRevocationService tokenRevocationService;
+    private final SmsSender smsSender;
 
     public AuthController(AuthService authService, LoginRateLimiter loginRateLimiter,
-                          TokenRevocationService tokenRevocationService) {
+                          TokenRevocationService tokenRevocationService, SmsSender smsSender) {
         this.authService = authService;
         this.loginRateLimiter = loginRateLimiter;
         this.tokenRevocationService = tokenRevocationService;
+        this.smsSender = smsSender;
     }
 
     @PostMapping("/register")
@@ -45,6 +48,15 @@ public class AuthController {
         }
         loginRateLimiter.recordAttempt("register", ip);
         return ApiResponse.ok(authService.register(req.username(), req.phone(), req.password(), req.role()).safe());
+    }
+
+    /** 短信验证码（Mock 适配层：固定码 + 日志，真实短信服务商可替换 SmsSender 实现）。 */
+    @PostMapping("/sms-code")
+    public ApiResponse<SmsCodeResult> smsCode(@RequestBody SmsCodeRequest req) {
+        if (req == null || req.phone() == null || !req.phone().matches("1\\d{10}")) {
+            throw new BizException("手机号格式不正确");
+        }
+        return ApiResponse.ok(new SmsCodeResult(smsSender.sendSmsCode(req.phone()), true));
     }
 
     @PostMapping("/login")
@@ -112,6 +124,12 @@ public class AuthController {
     }
 
     public record RechargeRequest(double amount) {
+    }
+
+    public record SmsCodeRequest(String phone) {
+    }
+
+    public record SmsCodeResult(String code, boolean mock) {
     }
 
     public record ChangePasswordRequest(String oldPassword, String newPassword) {

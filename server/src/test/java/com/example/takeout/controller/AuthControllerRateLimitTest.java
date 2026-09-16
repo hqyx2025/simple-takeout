@@ -24,7 +24,7 @@ class AuthControllerRateLimitTest {
     private final AuthService authService = mock(AuthService.class);
     private final LoginRateLimiter limiter = mock(LoginRateLimiter.class);
     private final AuthController controller = new AuthController(authService, limiter,
-            mock(TokenRevocationService.class));
+            mock(TokenRevocationService.class), mock(com.example.takeout.service.thirdparty.SmsSender.class));
     private final AuthController.LoginRequest loginRequest =
             new AuthController.LoginRequest("13800138000", "123456", "USER");
 

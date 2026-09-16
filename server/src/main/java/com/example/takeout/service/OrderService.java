@@ -28,6 +28,7 @@ import com.example.takeout.model.Seckill;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.User;
 import com.example.takeout.service.mq.DomainEventPublisher;
+import com.example.takeout.service.thirdparty.PaymentChannels;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.ObjectProvider;
@@ -319,6 +320,15 @@ public class OrderService {
      */
     @Transactional
     public Order.OrderView payOrder(long userId, long orderId) {
+        return payOrder(userId, orderId, null);
+    }
+
+    /** 支付：channel 空/余额走余额扣款；微信/支付宝为 Mock（走余额 + 模拟回调）。 */
+    public Order.OrderView payOrder(long userId, long orderId, String channel) {
+        String normalizedChannel = PaymentChannels.normalize(channel);
+        if (!PaymentChannels.SUPPORTED.contains(normalizedChannel)) {
+            throw new BizException("不支持的支付方式");
+        }
         Order order = requireOrder(orderId);
         if (order.userId() != userId) {
             throw new BizException(403, "无权操作该订单");
@@ -344,7 +354,10 @@ public class OrderService {
         if (!userDao.deductBalance(userId, order.payAmount())) {
             throw new BizException("余额不足，请先充值");
         }
-        paymentRecordDao.insert(orderId, userId, order.payAmount(), "PAY", "BALANCE", "SUCCESS", now);
+        if (PaymentChannels.isMockThirdParty(normalizedChannel)) {
+            PaymentChannels.logMockCallback(normalizedChannel, orderId);
+        }
+        paymentRecordDao.insert(orderId, userId, order.payAmount(), "PAY", normalizedChannel, "SUCCESS", now);
         // 支付成功后才发出事件：条件更新失败会抛异常回滚，不会产生「假支付」事件
         eventPublisher.publish(DomainEventPublisher.ORDER_PAID, orderId,
                 Map.of("userId", userId, "payAmount", order.payAmount()));
