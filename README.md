@@ -26,7 +26,7 @@
 
 - 店铺资料维护、平台分类下开店
 - 商品管理（增删改、上下架、库存、**多规格 SKU**、商户自定义分类、限时特惠标记）
-- 订单处理：接单 → 制作 → 配送 → 送达，按状态推进订单
+- 订单处理：接单 → 出餐（订单进入骑手待取餐池）；配送与送达由骑手端推进
 - 评价回复
 - 营业额统计（仅统计已结算订单，区分待结算/已结算）
 
@@ -76,7 +76,7 @@
 | 消息 | Redis Stream + 事务性 Outbox | 领域事件异步投递，**未引入 RabbitMQ/RocketMQ 等外部 MQ** |
 | 容器化 | Docker · Docker Compose | 后端镜像基于 JDK 25 多阶段构建；MySQL 8.4 + Redis 7 |
 | 地图 | 高德 Web 端 JS API v2.0 | 通过 ArkUI `Web` 组件内嵌运行，模拟器/真机均可用，无 native 依赖 |
-| 测试 | JUnit 5（后端 **64 个**）、Hypium + hamock（前端） | `server/src/test`、`entry/src/test`（Local Unit）、`entry/src/ohosTest`（UI 自动化） |
+| 测试 | JUnit 5（后端 **151 个**）、Hypium + hamock（前端） | `server/src/test`、`entry/src/test`（Local Unit）、`entry/src/ohosTest`（UI 自动化） |
 
 ## 系统架构
 
@@ -234,7 +234,7 @@ Release 构建需要签名与证书：参考 `signing/release-signing.template.j
 | 购物车 `CartController` | `POST /api/cart/items`、`PUT/DELETE /api/cart/items/{goodsId}`、`DELETE /api/cart/items` |
 | 文件上传 `UploadController` | `POST /api/upload`（评价图片，静态访问 `/uploads/**`） |
 | 商户 `StoreController` | 店铺增改查 `/api/merchant/stores`、商品增删改查、`PUT /api/merchant/goods/{goodsId}/stock`、规格 `GET/PUT /api/merchant/goods/{goodsId}/specs`、商户分类 `/api/merchant/categories` CRUD |
-| 商户订单 `OrderController` | `GET /api/merchant/orders`、`PUT /api/merchant/orders/{id}/{action}`（接单/制作/配送/送达）、`GET /api/merchant/stats` |
+| 商户订单 `OrderController` | `GET /api/merchant/orders`、`PUT /api/merchant/orders/{id}/{action}`（接单 `accept` / 出餐 `ready`；出餐后订单进骑手待取餐池，配送与送达由骑手端完成）、`GET /api/merchant/stats` |
 | 骑手 `RiderController` | `GET /api/rider/profile`、`PUT /api/rider/status`（上线/下线）、`GET /api/rider/orders/pool`（待取餐池）、`GET /api/rider/orders`、`POST /api/rider/orders/{id}/grab`（抢单）、`PUT /api/rider/orders/{id}/pickup`、`/deliver` |
 | 管理端 `AdminController` | 分类/店铺/商品/用户/员工 CRUD 与状态管理（`/api/admin/*`）、`GET /api/admin/statistics/overview`、`/order-trend`、退款审批 `GET /api/admin/refunds`、`POST /api/admin/refunds/{id}/approve`、`/reject` |
 | 管理端骑手 `AdminRiderController` | `PUT /api/admin/riders/{id}/status` |
@@ -267,7 +267,7 @@ Release 构建需要签名与证书：参考 `signing/release-signing.template.j
 - **取消订单**：`status=0` 直接取消（未扣款，释放库存/名额/优惠券）；
   `status` 1/2/3 可直接取消并**即时退款**（条件更新 `escrow 0→2` 防重复 → 退用户余额 → `status=5`）。
   已支付订单取消不退优惠券，仅待付款取消释放优惠券。
-- **骑手配送**：已支付订单可被在线骑手抢单（`/api/rider/orders/pool` → `grab`），
+- **骑手配送**：商户出餐（`ready`）后订单进入骑手待取餐池，在线骑手抢单（`/api/rider/orders/pool` → `grab`），
   随后取餐 → 送达，推进 `status` 到 4。
 - **确认收货**：`status` 保持 4，`escrow_status` 0 → 1，金额结算到商户余额。
 - **已送达订单退款**：`status=4`、`escrow=0` 且未评价时可申请 → 6 → 管理端审批：
