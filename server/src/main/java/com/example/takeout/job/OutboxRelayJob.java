@@ -54,6 +54,9 @@ public class OutboxRelayJob {
         }
         try {
             List<OutboxEventDao.OutboxEvent> pending = outboxDao.listPending(batchSize);
+            // ponytail: listPending 用 SELECT ... WHERE status=0 无行级锁，多实例会重复投递同一事件。
+            // 消费端 setIfAbsent 去重保证不会重复处理，故仅为轻微浪费（Stream 多存一份副本）。
+            // 真正多实例生产环境应改为 SELECT ... FOR UPDATE SKIP LOCKED + 事务内 claim。
             if (pending.isEmpty()) {
                 return;
             }

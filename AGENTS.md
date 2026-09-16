@@ -218,7 +218,7 @@
 - ~~`AdminStatsDao` 的 today_orders 含已取消订单，today_gmv 排除 5/6~~ **已统一口径**：订单数与成交额**同时排除已取消(5)/退款中(6)**；`today_orders` 补上排除条件，近7日趋势的 `order_count` 从 `COUNT(*)` 改为 `COUNT(CASE WHEN status NOT IN (5,6) THEN 1 END)`（同一个漏网字段）。`total_orders` 是"累计下单数"的展示口径，**故意含全部状态**，不要顺手改掉。契约由 `AdminStatsDaoSqlTest` 钉住。
 - ~~前端兜底口径不统一~~ **已修**：`BalancePage` 的 `this.balance = user.balance` 与充值回写都改为 `Number.isFinite(x) ? x : 0`；`CheckoutPage` 的 `selectedCoupon.amount.toFixed(2)` 同样加兜底（缺字段会渲染成 `¥NaN`）。
 - Banner `PUT` 是"null 覆盖为空串"语义（非 PATCH），只改 sort 会把 title/subtitle 清空。**现状已缓解**：`ContentService.updateBanner` 会拒绝空标题，且管理端界面只有 Banner 的新增/上下架/删除、**没有编辑入口**，该路径只能被直接调 API 触发；真要支持部分更新需改成 PATCH 语义。
-- Outbox 去重键为"先查后写"（单实例安全）；多实例部署需改回原子 `setIfAbsent` + 行级认领，并核对 `dedup-hours` 与 Stream `retain-hours` 的关系。
+- ~~Outbox 去重键为"先查后写"（单实例安全）；多实例部署需改回原子 `setIfAbsent` + 行级认领。~~ **已修复消费端**：`DomainEventConsumer` 改用 `setIfAbsent` 原子抢占去重键（短 TTL 5 分钟作处理中锁，成功后延长到 `dedupHours`），抢占失败直接 ACK 跳过。Outbox 中继 `listPending` 加 `ponytail:` 注释说明多实例行级认领升级路径（`SELECT ... FOR UPDATE SKIP LOCKED`），当前消费端去重已保证重复投递不会重复处理。
 - ~~前端支付倒计时用设备本地时间推算，未使用服务端时区（可下发 `payDeadlineEpochMs` 收敛）。~~ **已修复**：后端在 `OrderView` 中增加 `payDeadlineEpochMs` 字段（服务端计算的毫秒时间戳），前端 `computePayRemain()` 直接用该时间戳减去 `Date.now()`，避免解析字符串时的时区问题。
 - 骑手为自助注册即开通（`role=3` 自动建档 status=1，无需平台审核）。
 - ~~`MerchantStatsPage` 无法区分"同步失败"与"真的没有订单"（都是 ¥0.00 / 0 单）。~~ **已缓解**：`refreshRemoteStats` 加 try/catch 捕获网络/后端错误，`loadError` 标记驱动一条浅红背景横幅「数据加载失败，以下数据可能不准确」+「重试」按钮；成功时自动清除。

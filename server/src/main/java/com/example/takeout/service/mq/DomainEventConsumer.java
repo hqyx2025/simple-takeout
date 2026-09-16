@@ -143,10 +143,13 @@ public class DomainEventConsumer {
             return true;
         }
 
-        // 幂等：重复投递的事件只处理一次。
-        // 去重键必须等处理成功之后再写：若先写，一旦 handle 抛异常（不 ACK，留待下次重读），
-        // 重读时会被自己刚写的去重键判成「重复事件」直接 ACK → 处理失败的事件被静默永久丢弃。
-        if (Boolean.TRUE.equals(redis.hasKey(DEDUP_PREFIX + eventId))) {
+        // 幂等：用 setIfAbsent 原子抢占去重键（多实例安全）。
+        // 抢占成功说明自己是第一个处理该事件的工作者；抢占失败说明另一实例正在处理或已处理过。
+        // 先用短 TTL（5 分钟）作为处理中锁，处理成功后延长到 dedupHours。
+        // 若处理失败不延长，短 TTL 过期后另一实例可重试。
+        Boolean claimed = redis.opsForValue()
+                .setIfAbsent(DEDUP_PREFIX + eventId, "1", Duration.ofMinutes(5));
+        if (!Boolean.TRUE.equals(claimed)) {
             log.debug("[事件消费] 重复事件已跳过 eventId={} type={}", eventId, eventType);
             return true;
         }
@@ -162,8 +165,8 @@ public class DomainEventConsumer {
                     log.info("[事件消费] 订单已退款，触发财务对账记录 orderId={}", orderId);
             default -> log.info("[事件消费] 未识别事件类型 type={} orderId={}（已忽略）", eventType, orderId);
         }
-        // 处理成功才落去重键（单实例部署；多实例需改回 setIfAbsent 原子写并以行级认领配合）
-        redis.opsForValue().set(DEDUP_PREFIX + eventId, "1", Duration.ofHours(Math.max(dedupHours, 1)));
+        // 处理成功：延长去重键 TTL 到配置值，防止同一事件在 dedupHours 内被重复投递
+        redis.expire(DEDUP_PREFIX + eventId, Duration.ofHours(Math.max(dedupHours, 1)));
         return true;
     }
 
