@@ -301,4 +301,4 @@ Release 构建需要签名与证书：参考 `signing/release-signing.template.j
 ## 说明
 
 - 本项目为毕业设计/学习用途，支付为余额支付模拟，未接入真实第三方支付/短信/推送。
-- 仓库未声明开源许可证，使用前请先与作者确认。
+- 许可协议：[PolyForm Noncommercial License 1.0.0](LICENSE)——允许个人学习/研究/非商业使用，**禁止商用**。
