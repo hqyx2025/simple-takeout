@@ -71,6 +71,18 @@ function normalizeUser(value: Object): Object {
   return user
 }
 
+/**
+ * 订单不从本地持久化恢复，一律返回空数组。
+ *
+ * 这是有意设计：订单列表必须以后端为准，前端不缓存订单状态，
+ * 否则会出现"本地有订单但服务端已取消/超时取消"的不一致。
+ * 每次进入相关页面时通过 syncMerchantOrdersFromServer / syncUserOrdersFromServer
+ * 从服务端实时拉取最新订单列表。
+ *
+ * 如果觉得这条规则需要修改，请先确认：
+ * - 本地恢复的订单可能状态已过期（超时取消、退款、骑手完成等）
+ * - 展示过期订单会让用户做出错误操作（如对已取消订单申请退款）
+ */
 function normalizeOrderList(value: Object): Object {
   const emptyOrders: Order[] = []
   return emptyOrders
