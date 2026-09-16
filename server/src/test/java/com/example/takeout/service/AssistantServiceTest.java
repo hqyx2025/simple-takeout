@@ -74,7 +74,7 @@ class AssistantServiceTest {
 
     private static Store.StoreView store(String name, double rating) {
         return new Store.StoreView(1L, name, "", rating, 100, 3.0, 20.0, "30分钟", "1.2km",
-                List.of(), "", "地址", null, null, 1, List.of(1), 1L, 1, 1);
+                List.of(), "", "地址", null, null, 1, List.of(1), 1L, 1, 1, 0, true);
     }
 
     private AssistantService service(List<Order> orders, User user, List<Store.StoreView> stores) {

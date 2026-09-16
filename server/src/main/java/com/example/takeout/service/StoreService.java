@@ -249,11 +249,14 @@ public class StoreService {
 
     public Store.StoreView createStore(long ownerId, String name, int categoryId, double deliveryFee,
                                        double minOrder, String deliveryTime, String notice,
-                                       String address, Double latitude, Double longitude) {
+                                       String address, Double latitude, Double longitude, int deliveryRadius) {
         String safeName = requireMaxLength(normalizeRequired(name, "店铺名称不能为空"), 128, "店铺名称");
         validateCategory(categoryId);
         if (!Double.isFinite(deliveryFee) || deliveryFee < 0 || !Double.isFinite(minOrder) || minOrder < 0) {
             throw new BizException("配送费和起送价必须为非负数字");
+        }
+        if (deliveryRadius < 0) {
+            throw new BizException("配送半径必须为非负整数（0 表示不限）");
         }
         String normalizedAddress = requireMaxLength(normalizeRequired(address, "店铺地址不能为空"), 512, "店铺地址");
         if (!validCoordinates(latitude, longitude)) {
@@ -264,7 +267,7 @@ public class StoreService {
                 deliveryTime == null || deliveryTime.isBlank() ? "30分钟"
                         : requireMaxLength(deliveryTime, 32, "配送时间"),
                 "0.0km", "[\"新店特惠\"]", requireMaxLength(notice, 512, "店铺公告"),
-                normalizedAddress, latitude, longitude, categoryId, "[" + categoryId + "]", ownerId, 1, 0, now);
+                normalizedAddress, latitude, longitude, categoryId, "[" + categoryId + "]", ownerId, 1, 0, now, deliveryRadius);
         long id = storeDao.insert(store);
         invalidateStoreAndGoodsCache();
         return storeDetail(id);
@@ -286,6 +289,7 @@ public class StoreService {
                 patch.deliveryTime() == null ? store.deliveryTime() : patch.deliveryTime(), 32, "配送时间");
         Double nextLatitude = patch.address() == null ? store.latitude() : patch.latitude();
         Double nextLongitude = patch.address() == null ? store.longitude() : patch.longitude();
+        int nextRadius = patch.deliveryRadius() < 0 ? store.deliveryRadius() : patch.deliveryRadius();
         if (!nextAddress.isBlank() && !validCoordinates(nextLatitude, nextLongitude)) {
             throw new BizException("店铺地址定位失败，请重新选择地址");
         }
@@ -297,7 +301,7 @@ public class StoreService {
                 store.distance(), store.tags(), nextNotice,
                 nextAddress, nextLatitude, nextLongitude,
                 store.categoryId(), store.categoryIds(), store.ownerId(),
-                patch.status() < 0 ? store.status() : patch.status(), store.recommended(), store.createTime());
+                patch.status() < 0 ? store.status() : patch.status(), store.recommended(), store.createTime(), nextRadius);
         storeDao.update(updated);
         invalidateStoreAndGoodsCache();
         return storeDetail(storeId);
@@ -555,7 +559,7 @@ public class StoreService {
         Store displayStore = store.withDistance(latitude, longitude);
         List<String> tags = parseList(store.tags());
         List<Integer> categoryIds = parseIds(store.categoryIds());
-        return displayStore.toView(tags, categoryIds);
+        return displayStore.toView(tags, categoryIds, latitude, longitude);
     }
 
     private double parseDistance(String distance) {
@@ -603,7 +607,8 @@ public class StoreService {
      * 店铺信息修改项（可选字段）
      */
     public record StorePatch(String name, double deliveryFee, double minOrder, String deliveryTime,
-                             String notice, String address, Double latitude, Double longitude, int status) {
+                             String notice, String address, Double latitude, Double longitude, int status,
+                             int deliveryRadius) {
     }
 
     /**

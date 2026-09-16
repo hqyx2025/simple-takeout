@@ -147,12 +147,19 @@ public class UserCenterService {
     }
 
     public Address addAddress(long userId, String name, String phone, String detail, int isDefault) {
+        return addAddress(userId, name, phone, detail, isDefault, null, null);
+    }
+
+    public Address addAddress(long userId, String name, String phone, String detail, int isDefault,
+                              Double latitude, Double longitude) {
         validateAddress(name, phone, detail, isDefault);
+        validateCoords(latitude, longitude);
         // 大纲 20.1：每个用户最多 20 个地址；超了先删再加（防止脚本刷成整库地址）
         if (addressDao.listByUser(userId).size() >= 20) {
             throw new BizException("收货地址最多保存 20 个，请先删除部分地址");
         }
-        long id = addressDao.insert(userId, name, phone, detail, isDefault, LocalDateTime.now().format(FMT));
+        long id = addressDao.insert(userId, name, phone, detail, isDefault, latitude, longitude,
+                LocalDateTime.now().format(FMT));
         return addressDao.listByUser(userId).stream()
                 .filter(a -> a.id() == id)
                 .findFirst()
@@ -160,8 +167,23 @@ public class UserCenterService {
     }
 
     public Address updateAddress(long userId, long id, String name, String phone, String detail, int isDefault) {
+        return updateAddress(userId, id, name, phone, detail, isDefault, null, null);
+    }
+
+    public Address updateAddress(long userId, long id, String name, String phone, String detail, int isDefault,
+                                 Double latitude, Double longitude) {
         validateAddress(name, phone, detail, isDefault);
-        addressDao.update(userId, id, name, phone, detail, isDefault);
+        validateCoords(latitude, longitude);
+        // 未传坐标时保留已有坐标（纯改姓名/电话等字段不丢定位）
+        if (latitude == null && longitude == null) {
+            Address existing = addressDao.listByUser(userId).stream()
+                    .filter(a -> a.id() == id)
+                    .findFirst()
+                    .orElseThrow(() -> new BizException("地址不存在"));
+            latitude = existing.latitude();
+            longitude = existing.longitude();
+        }
+        addressDao.update(userId, id, name, phone, detail, isDefault, latitude, longitude);
         return addressDao.listByUser(userId).stream()
                 .filter(a -> a.id() == id)
                 .findFirst()
@@ -170,6 +192,18 @@ public class UserCenterService {
 
     public void deleteAddress(long userId, long id) {
         addressDao.delete(userId, id);
+    }
+
+    private void validateCoords(Double latitude, Double longitude) {
+        boolean hasLat = latitude != null;
+        boolean hasLng = longitude != null;
+        if (hasLat != hasLng) {
+            throw new BizException("经纬度必须成对提供");
+        }
+        if (hasLat && (!Double.isFinite(latitude) || !Double.isFinite(longitude)
+                || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180)) {
+            throw new BizException("地址经纬度不合法");
+        }
     }
 
     public void setDefaultAddress(long userId, long id) {

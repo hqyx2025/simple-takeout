@@ -187,6 +187,10 @@ public class OrderService {
                 .filter(a -> a.id() == addressId)
                 .findFirst()
                 .orElseThrow(() -> new BizException("收货地址不存在"));
+        // 商户配送半径：半径>0 且地址有坐标、且超出半径时拒绝下单（无坐标的存量地址不拦截）
+        if (!store.canDeliver(address.latitude(), address.longitude())) {
+            throw new BizException("该店铺超出配送范围，无法配送到所选地址");
+        }
 
         // 金额计算：商品总价 + 配送费 - 优惠（多规格取规格价，生效中的秒杀自动套用秒杀价）
         String now = LocalDateTime.now().format(FMT);

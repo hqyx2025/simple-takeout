@@ -44,13 +44,13 @@ class InputBoundaryTest {
     @Test
     void createStoreRejectsOverlongNameAndNotice() {
         BizException nameError = assertThrows(BizException.class, () -> storeService.createStore(OWNER_ID,
-                "店".repeat(129), 1, 3, 20, "30分钟", "", "北京市海淀区", 39.9, 116.4));
+                "店".repeat(129), 1, 3, 20, "30分钟", "", "北京市海淀区", 39.9, 116.4, 0));
         assertEquals("店铺名称最多 128 个字符", nameError.getMessage());
         verify(storeDao, never()).insert(any(Store.class));
 
         when(storeDao.categoryExists(1)).thenReturn(true);
         BizException noticeError = assertThrows(BizException.class, () -> storeService.createStore(OWNER_ID,
-                "测试店", 1, 3, 20, "30分钟", "公".repeat(513), "北京市海淀区", 39.9, 116.4));
+                "测试店", 1, 3, 20, "30分钟", "公".repeat(513), "北京市海淀区", 39.9, 116.4, 0));
         assertEquals("店铺公告最多 512 个字符", noticeError.getMessage());
         verify(storeDao, never()).insert(any(Store.class));
     }

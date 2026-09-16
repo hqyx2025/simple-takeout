@@ -20,7 +20,9 @@ public class AddressDao {
             rs.getString("phone"),
             rs.getString("detail"),
             rs.getInt("is_default"),
-            rs.getString("create_time")
+            rs.getString("create_time"),
+            rs.getObject("latitude", Double.class),
+            rs.getObject("longitude", Double.class)
     );
 
     private final JdbcTemplate jdbc;
@@ -33,12 +35,13 @@ public class AddressDao {
         return jdbc.query("SELECT * FROM addresses WHERE user_id = ? ORDER BY is_default DESC, id DESC", MAPPER, userId);
     }
 
-    public long insert(long userId, String name, String phone, String detail, int isDefault, String now) {
+    public long insert(long userId, String name, String phone, String detail, int isDefault,
+                       Double latitude, Double longitude, String now) {
         if (isDefault == 1) {
             clearDefault(userId);
         }
-        jdbc.update("INSERT INTO addresses(user_id, name, phone, detail, is_default, create_time) VALUES(?,?,?,?,?,?)",
-                userId, name, phone, detail, isDefault, now);
+        jdbc.update("INSERT INTO addresses(user_id, name, phone, detail, is_default, latitude, longitude, create_time) VALUES(?,?,?,?,?,?,?,?)",
+                userId, name, phone, detail, isDefault, latitude, longitude, now);
         return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 
@@ -46,12 +49,13 @@ public class AddressDao {
         jdbc.update("DELETE FROM addresses WHERE id = ? AND user_id = ?", id, userId);
     }
 
-    public void update(long userId, long id, String name, String phone, String detail, int isDefault) {
+    public void update(long userId, long id, String name, String phone, String detail, int isDefault,
+                       Double latitude, Double longitude) {
         if (isDefault == 1) {
             clearDefault(userId);
         }
-        jdbc.update("UPDATE addresses SET name = ?, phone = ?, detail = ?, is_default = ? WHERE id = ? AND user_id = ?",
-                name, phone, detail, isDefault, id, userId);
+        jdbc.update("UPDATE addresses SET name = ?, phone = ?, detail = ?, is_default = ?, latitude = ?, longitude = ? WHERE id = ? AND user_id = ?",
+                name, phone, detail, isDefault, latitude, longitude, id, userId);
     }
 
     public void setDefault(long userId, long id) {

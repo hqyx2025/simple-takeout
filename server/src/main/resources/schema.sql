@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS stores (
     address VARCHAR(512) NOT NULL DEFAULT '',
     latitude DECIMAL(10,7) DEFAULT NULL,
     longitude DECIMAL(10,7) DEFAULT NULL,
+    delivery_radius INT NOT NULL DEFAULT 0,
     category_id INT NOT NULL DEFAULT 1,
     category_ids VARCHAR(128) DEFAULT '[]',
     owner_id BIGINT NOT NULL,
@@ -155,6 +156,8 @@ CREATE TABLE IF NOT EXISTS addresses (
     phone VARCHAR(20) NOT NULL,
     detail VARCHAR(255) NOT NULL,
     is_default INT NOT NULL DEFAULT 0,
+    latitude DECIMAL(10,7) DEFAULT NULL,
+    longitude DECIMAL(10,7) DEFAULT NULL,
     create_time VARCHAR(32) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

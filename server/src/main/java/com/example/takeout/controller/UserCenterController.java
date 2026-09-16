@@ -75,7 +75,8 @@ public class UserCenterController {
     @PostMapping("/addresses")
     public ApiResponse<Address> addAddress(@RequestAttribute("userId") long userId,
                                            @RequestBody AddressRequest req) {
-        return ApiResponse.ok(service.addAddress(userId, req.name(), req.phone(), req.detail(), req.isDefault()));
+        return ApiResponse.ok(service.addAddress(userId, req.name(), req.phone(), req.detail(), req.isDefault(),
+                req.latitude(), req.longitude()));
     }
 
     @DeleteMapping("/addresses/{id}")
@@ -88,7 +89,8 @@ public class UserCenterController {
     public ApiResponse<Address> updateAddress(@RequestAttribute("userId") long userId,
                                               @PathVariable long id,
                                               @RequestBody AddressRequest req) {
-        return ApiResponse.ok(service.updateAddress(userId, id, req.name(), req.phone(), req.detail(), req.isDefault()));
+        return ApiResponse.ok(service.updateAddress(userId, id, req.name(), req.phone(), req.detail(), req.isDefault(),
+                req.latitude(), req.longitude()));
     }
 
     @PutMapping("/addresses/{id}/default")
@@ -147,7 +149,8 @@ public class UserCenterController {
     public record ClaimCouponRequest(long storeId, String name, double threshold, double amount) {
     }
 
-    public record AddressRequest(String name, String phone, String detail, int isDefault) {
+    public record AddressRequest(String name, String phone, String detail, int isDefault,
+                                 Double latitude, Double longitude) {
     }
 
     public record ReplyRequest(String reply) {

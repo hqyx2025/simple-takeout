@@ -150,7 +150,7 @@ public class StoreController {
         requireMerchant(role);
         return ApiResponse.ok(storeService.createStore(userId, req.name(), req.categoryId(),
                 req.deliveryFee(), req.minOrder(), req.deliveryTime(), req.notice(),
-                req.address(), req.latitude(), req.longitude()));
+                req.address(), req.latitude(), req.longitude(), req.deliveryRadius()));
     }
 
     @PutMapping("/merchant/stores/{storeId}")
@@ -255,7 +255,8 @@ public class StoreController {
 
     public record CreateStoreRequest(String name, int categoryId, double deliveryFee,
                                      double minOrder, String deliveryTime, String notice,
-                                     String address, Double latitude, Double longitude) {
+                                     String address, Double latitude, Double longitude,
+                                     int deliveryRadius) {
     }
 
     public record StockRequest(int stock) {

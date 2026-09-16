@@ -26,7 +26,8 @@ public record Store(
         long ownerId,
         int status,
         int recommended,
-        String createTime
+        String createTime,
+        int deliveryRadius
 ) {
     /** 兼容旧测试数据与旧调用方：历史店铺没有地址坐标。 */
     public Store(long id, String name, String image, double rating, int monthlySales, double deliveryFee,
@@ -34,7 +35,7 @@ public record Store(
                  int categoryId, String categoryIds, long ownerId, int status, int recommended,
                  String createTime) {
         this(id, name, image, rating, monthlySales, deliveryFee, minOrder, deliveryTime, distance, tags, notice,
-                "", null, null, categoryId, categoryIds, ownerId, status, recommended, createTime);
+                "", null, null, categoryId, categoryIds, ownerId, status, recommended, createTime, 0);
     }
 
     /** 按用户当前位置计算距离；无坐标的存量店铺使用规范化后的历史距离。 */
@@ -46,7 +47,18 @@ public record Store(
         }
         return new Store(id, name, image, rating, monthlySales, deliveryFee, minOrder, deliveryTime,
                 nextDistance, tags, notice, address, latitude, longitude, categoryId, categoryIds,
-                ownerId, status, recommended, createTime);
+                ownerId, status, recommended, createTime, deliveryRadius);
+    }
+
+    /** 配送半径（米）：radius<=0 不限；地址无坐标的存量情形不拦截。 */
+    public boolean canDeliver(Double userLatitude, Double userLongitude) {
+        if (deliveryRadius <= 0) {
+            return true;
+        }
+        if (!validCoordinates(userLatitude, userLongitude) || !validCoordinates(latitude, longitude)) {
+            return true;
+        }
+        return haversine(userLatitude, userLongitude, latitude, longitude) * 1000 <= deliveryRadius;
     }
 
     public static String normalizeDistance(String value) {
@@ -108,13 +120,21 @@ public record Store(
             List<Integer> categoryIds,
             long ownerId,
             int status,
-            int recommended
+            int recommended,
+            int deliveryRadius,
+            boolean deliverable
     ) {
     }
 
     public StoreView toView(List<String> tagsList, List<Integer> categoryIdsList) {
+        return toView(tagsList, categoryIdsList, null, null);
+    }
+
+    public StoreView toView(List<String> tagsList, List<Integer> categoryIdsList,
+                            Double userLatitude, Double userLongitude) {
         return new StoreView(id, name, image, rating, monthlySales, deliveryFee, minOrder,
                 deliveryTime, distance, tagsList, notice, address, latitude, longitude,
-                categoryId, categoryIdsList, ownerId, status, recommended);
+                categoryId, categoryIdsList, ownerId, status, recommended,
+                deliveryRadius, canDeliver(userLatitude, userLongitude));
     }
 }

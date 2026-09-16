@@ -11,6 +11,7 @@ import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -40,6 +41,6 @@ class UserCenterAddressBoundaryTest {
                 () -> service.addAddress(1, "张三", "13800138000", "测试地址", 0));
 
         assertEquals("收货地址最多保存 20 个，请先删除部分地址", error.getMessage());
-        verify(addressDao, never()).insert(anyLong(), anyString(), anyString(), anyString(), anyInt(), anyString());
+        verify(addressDao, never()).insert(anyLong(), anyString(), anyString(), anyString(), anyInt(), any(), any(), anyString());
     }
 }

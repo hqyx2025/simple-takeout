@@ -44,6 +44,10 @@ public class SchemaMigration implements ApplicationRunner {
         addColumnIfMissing("categories", "deleted", "INT NOT NULL DEFAULT 0");
         addColumnIfMissing("banners", "deleted", "INT NOT NULL DEFAULT 0");
         addColumnIfMissing("announcements", "deleted", "INT NOT NULL DEFAULT 0");
+        // 地址经纬度 + 商户配送半径：配送范围校验所需坐标与半径
+        addColumnIfMissing("stores", "delivery_radius", "INT NOT NULL DEFAULT 0");
+        addColumnIfMissing("addresses", "latitude", "DECIMAL(10,7) DEFAULT NULL");
+        addColumnIfMissing("addresses", "longitude", "DECIMAL(10,7) DEFAULT NULL");
         rebuildCartUniqueKey();
     }
 
