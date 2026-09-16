@@ -57,16 +57,16 @@ public class StoreDao {
 
     /** 平台分类（首页导航与店铺/商品创建时选择）。 */
     public List<Category> listCategories() {
-        return jdbc.query("SELECT * FROM categories WHERE type = 'PLATFORM' AND status = 1 ORDER BY id", CATEGORY_MAPPER);
+        return jdbc.query("SELECT * FROM categories WHERE type = 'PLATFORM' AND status = 1 AND deleted = 0 ORDER BY id", CATEGORY_MAPPER);
     }
 
     public Optional<Category> findCategoryById(long categoryId) {
-        return jdbc.query("SELECT * FROM categories WHERE id = ?", CATEGORY_MAPPER, categoryId)
+        return jdbc.query("SELECT * FROM categories WHERE id = ? AND deleted = 0", CATEGORY_MAPPER, categoryId)
                 .stream().findFirst();
     }
 
     public boolean categoryNameExists(String name, long excludeId) {
-        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM categories WHERE name = ? AND id <> ? AND type = 'PLATFORM'",
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM categories WHERE name = ? AND id <> ? AND type = 'PLATFORM' AND deleted = 0",
                 Integer.class, name, excludeId);
         return count != null && count > 0;
     }
@@ -81,7 +81,7 @@ public class StoreDao {
     }
 
     public void deleteCategory(long id) {
-        jdbc.update("DELETE FROM categories WHERE id = ?", id);
+        jdbc.update("UPDATE categories SET deleted = 1 WHERE id = ?", id);
     }
 
     public int countStoresByCategory(long categoryId) {
@@ -112,7 +112,7 @@ public class StoreDao {
     }
 
     public boolean categoryExists(long categoryId) {
-        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM categories WHERE id = ? AND type = 'PLATFORM'",
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM categories WHERE id = ? AND type = 'PLATFORM' AND deleted = 0",
                 Integer.class, categoryId);
         return count != null && count > 0;
     }
@@ -121,20 +121,20 @@ public class StoreDao {
 
     public List<Category> listMerchantCategories(long merchantId) {
         return jdbc.query("SELECT * FROM categories WHERE type = 'MERCHANT' AND merchant_id = ? " +
-                "AND status = 1 ORDER BY sort, id", CATEGORY_MAPPER, merchantId);
+                "AND status = 1 AND deleted = 0 ORDER BY sort, id", CATEGORY_MAPPER, merchantId);
     }
 
     /** 归属校验：商户分类必须属于当前商户用户。 */
     public boolean merchantCategoryOwned(long categoryId, long merchantId) {
         Integer count = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM categories WHERE id = ? AND type = 'MERCHANT' AND merchant_id = ?",
+                "SELECT COUNT(*) FROM categories WHERE id = ? AND type = 'MERCHANT' AND merchant_id = ? AND deleted = 0",
                 Integer.class, categoryId, merchantId);
         return count != null && count > 0;
     }
 
     public boolean merchantCategoryNameExists(long merchantId, String name, long excludeId) {
         Integer count = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM categories WHERE type = 'MERCHANT' AND merchant_id = ? AND name = ? AND id <> ?",
+                "SELECT COUNT(*) FROM categories WHERE type = 'MERCHANT' AND merchant_id = ? AND name = ? AND id <> ? AND deleted = 0",
                 Integer.class, merchantId, name, excludeId);
         return count != null && count > 0;
     }
@@ -150,13 +150,13 @@ public class StoreDao {
     }
 
     public void deleteMerchantCategory(long id) {
-        jdbc.update("DELETE FROM categories WHERE id = ?", id);
+        jdbc.update("UPDATE categories SET deleted = 1 WHERE id = ?", id);
     }
 
     /** 分类下商品引用计数（删除分类前校验）。 */
     public int countGoodsByMerchantCategory(long categoryId) {
         Integer count = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM goods WHERE merchant_category_id = ?", Integer.class, categoryId);
+                "SELECT COUNT(*) FROM goods WHERE merchant_category_id = ? AND deleted = 0", Integer.class, categoryId);
         return count == null ? 0 : count;
     }
 

@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS goods (
     tag VARCHAR(32) DEFAULT '',
     is_special INT NOT NULL DEFAULT 0,
     status INT NOT NULL DEFAULT 1,
+    deleted INT NOT NULL DEFAULT 0,
     create_time VARCHAR(32) NOT NULL,
     KEY idx_goods_store (store_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -165,7 +166,8 @@ CREATE TABLE IF NOT EXISTS categories (
     type VARCHAR(16) NOT NULL DEFAULT 'PLATFORM',
     merchant_id BIGINT NOT NULL DEFAULT 0,
     sort INT NOT NULL DEFAULT 0,
-    status INT NOT NULL DEFAULT 1
+    status INT NOT NULL DEFAULT 1,
+    deleted INT NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS refund_records (
@@ -224,6 +226,7 @@ CREATE TABLE IF NOT EXISTS banners (
     link_value VARCHAR(128) DEFAULT '',
     sort INT NOT NULL DEFAULT 0,
     status INT NOT NULL DEFAULT 1,
+    deleted INT NOT NULL DEFAULT 0,
     create_time VARCHAR(32) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -233,6 +236,7 @@ CREATE TABLE IF NOT EXISTS announcements (
     title VARCHAR(128) NOT NULL DEFAULT '',
     content VARCHAR(1024) NOT NULL DEFAULT '',
     status INT NOT NULL DEFAULT 1,
+    deleted INT NOT NULL DEFAULT 0,
     create_time VARCHAR(32) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

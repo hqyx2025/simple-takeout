@@ -39,6 +39,11 @@ public class SchemaMigration implements ApplicationRunner {
         addColumnIfMissing("users", "password_changed_at", "VARCHAR(32) NOT NULL DEFAULT ''");
         // 退款原因结构化：枚举 code + 文本备注
         addColumnIfMissing("refund_records", "reason_type", "VARCHAR(32) NOT NULL DEFAULT 'OTHER'");
+        // 逻辑删除：内容类表软删除字段，删除改打标、查询过滤 deleted=0
+        addColumnIfMissing("goods", "deleted", "INT NOT NULL DEFAULT 0");
+        addColumnIfMissing("categories", "deleted", "INT NOT NULL DEFAULT 0");
+        addColumnIfMissing("banners", "deleted", "INT NOT NULL DEFAULT 0");
+        addColumnIfMissing("announcements", "deleted", "INT NOT NULL DEFAULT 0");
         rebuildCartUniqueKey();
     }
 

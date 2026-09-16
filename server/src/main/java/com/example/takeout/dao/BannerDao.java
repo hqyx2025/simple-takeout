@@ -34,11 +34,11 @@ public class BannerDao {
     }
 
     public List<Banner> listActive() {
-        return jdbc.query("SELECT * FROM banners WHERE status = 1 ORDER BY sort, id DESC", MAPPER);
+        return jdbc.query("SELECT * FROM banners WHERE status = 1 AND deleted = 0 ORDER BY sort, id DESC", MAPPER);
     }
 
     public List<Banner> listAll() {
-        return jdbc.query("SELECT * FROM banners ORDER BY sort, id DESC", MAPPER);
+        return jdbc.query("SELECT * FROM banners WHERE deleted = 0 ORDER BY sort, id DESC", MAPPER);
     }
 
     public long insert(String title, String subtitle, String image, String color,
@@ -59,7 +59,7 @@ public class BannerDao {
     }
 
     public void delete(long id) {
-        jdbc.update("DELETE FROM banners WHERE id = ?", id);
+        jdbc.update("UPDATE banners SET deleted = 1 WHERE id = ?", id);
     }
 
     public Optional<Banner> findById(long id) {

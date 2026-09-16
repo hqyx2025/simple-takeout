@@ -90,12 +90,12 @@ public class GoodsDao {
     }
 
     public List<Goods> listByStore(long storeId) {
-        return attachSpecs(jdbc.query("SELECT * FROM goods WHERE store_id = ? AND status = 1 ORDER BY sales DESC",
+        return attachSpecs(jdbc.query("SELECT * FROM goods WHERE store_id = ? AND status = 1 AND deleted = 0 ORDER BY sales DESC",
                 MAPPER, storeId));
     }
 
     public List<Goods> listByStoreAll(long storeId) {
-        return attachSpecs(jdbc.query("SELECT * FROM goods WHERE store_id = ? ORDER BY id", MAPPER, storeId));
+        return attachSpecs(jdbc.query("SELECT * FROM goods WHERE store_id = ? AND deleted = 0 ORDER BY id", MAPPER, storeId));
     }
 
     /**
@@ -104,14 +104,14 @@ public class GoodsDao {
      * 只看 status=1 的在售菜品，LIKE 两端通配（MySQL 默认不区分大小写，与前端 lower-case 匹配等价）。
      */
     public List<Long> listStoreIdsByNameLike(String keyword) {
-        return jdbc.queryForList("SELECT DISTINCT store_id FROM goods WHERE status = 1 AND name LIKE ?",
+        return jdbc.queryForList("SELECT DISTINCT store_id FROM goods WHERE status = 1 AND deleted = 0 AND name LIKE ?",
                 Long.class, "%" + keyword + "%");
     }
 
     public List<SpecialGoods> listSpecialGoods(int limit) {
         return attachSpecsToSpecial(jdbc.query("SELECT g.*, s.name AS store_name, s.distance AS store_distance " +
                         "FROM goods g JOIN stores s ON s.id = g.store_id " +
-                        "WHERE g.status = 1 AND g.is_special = 1 AND g.stock > 0 AND s.status = 1 " +
+                        "WHERE g.status = 1 AND g.is_special = 1 AND g.stock > 0 AND g.deleted = 0 AND s.status = 1 " +
                         "ORDER BY g.create_time DESC, g.sales DESC, g.id DESC LIMIT ?",
                 SPECIAL_MAPPER, limit));
     }
@@ -120,14 +120,14 @@ public class GoodsDao {
     public List<SpecialGoods> listTopGoods(int limit) {
         return attachSpecsToSpecial(jdbc.query("SELECT g.*, s.name AS store_name, s.distance AS store_distance " +
                         "FROM goods g JOIN stores s ON s.id = g.store_id " +
-                        "WHERE g.status = 1 AND s.status = 1 " +
+                        "WHERE g.status = 1 AND g.deleted = 0 AND s.status = 1 " +
                         "ORDER BY g.sales DESC, g.rating DESC, g.id DESC LIMIT ?",
                 SPECIAL_MAPPER, limit));
     }
 
     /** 凑单推荐：店铺内可下单的最低价格菜品（价格升序）。 */
     public List<Goods> listCheapest(long storeId, int limit) {
-        return attachSpecs(jdbc.query("SELECT * FROM goods WHERE store_id = ? AND status = 1 AND stock > 0 " +
+        return attachSpecs(jdbc.query("SELECT * FROM goods WHERE store_id = ? AND status = 1 AND stock > 0 AND deleted = 0 " +
                 "ORDER BY price, id LIMIT ?", MAPPER, storeId, limit));
     }
 
@@ -175,7 +175,7 @@ public class GoodsDao {
     }
 
     private String whereClause(String keyword, Integer status) {
-        StringBuilder w = new StringBuilder();
+        StringBuilder w = new StringBuilder(" AND g.deleted = 0");
         if (keyword != null && !keyword.isBlank()) {
             w.append(" AND (g.name LIKE ? OR s.name LIKE ?)");
         }
@@ -195,7 +195,7 @@ public class GoodsDao {
     );
 
     public Optional<Goods> findById(long id) {
-        return attachSpecs(jdbc.query("SELECT * FROM goods WHERE id = ?", MAPPER, id)).stream().findFirst();
+        return attachSpecs(jdbc.query("SELECT * FROM goods WHERE id = ? AND deleted = 0", MAPPER, id)).stream().findFirst();
     }
 
     public long insert(Goods g) {
@@ -246,6 +246,6 @@ public class GoodsDao {
     }
 
     public void delete(long id) {
-        jdbc.update("DELETE FROM goods WHERE id = ?", id);
+        jdbc.update("UPDATE goods SET deleted = 1 WHERE id = ?", id);
     }
 }

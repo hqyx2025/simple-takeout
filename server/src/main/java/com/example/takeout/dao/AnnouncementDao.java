@@ -29,11 +29,11 @@ public class AnnouncementDao {
     }
 
     public List<Announcement> listActive() {
-        return jdbc.query("SELECT * FROM announcements WHERE status = 1 ORDER BY id DESC", MAPPER);
+        return jdbc.query("SELECT * FROM announcements WHERE status = 1 AND deleted = 0 ORDER BY id DESC", MAPPER);
     }
 
     public List<Announcement> listAll() {
-        return jdbc.query("SELECT * FROM announcements ORDER BY id DESC", MAPPER);
+        return jdbc.query("SELECT * FROM announcements WHERE deleted = 0 ORDER BY id DESC", MAPPER);
     }
 
     public long insert(String title, String content, String now) {
@@ -47,7 +47,7 @@ public class AnnouncementDao {
     }
 
     public void delete(long id) {
-        jdbc.update("DELETE FROM announcements WHERE id = ?", id);
+        jdbc.update("UPDATE announcements SET deleted = 1 WHERE id = ?", id);
     }
 
     public Optional<Announcement> findById(long id) {
