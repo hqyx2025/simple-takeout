@@ -66,7 +66,7 @@ class UserCenterSearchTest {
     }
 
     private static UserCenterService service(FakeStoreDao storeDao, CountingGoodsDao goodsDao) {
-        return new UserCenterService(null, null, null, null, storeDao, goodsDao, null, new ObjectMapper());
+        return new UserCenterService(null, null, null, null, storeDao, goodsDao, null, new ObjectMapper(), null);
     }
 
     @Test

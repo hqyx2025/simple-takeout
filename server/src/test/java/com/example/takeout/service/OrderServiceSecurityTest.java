@@ -6,6 +6,7 @@ import com.example.takeout.dao.CouponDao;
 import com.example.takeout.dao.GoodsDao;
 import com.example.takeout.dao.GoodsSpecDao;
 import com.example.takeout.dao.OrderDao;
+import com.example.takeout.dao.PaymentRecordDao;
 import com.example.takeout.dao.RefundDao;
 import com.example.takeout.dao.ReviewDao;
 import com.example.takeout.dao.RiderDao;
@@ -45,7 +46,7 @@ class OrderServiceSecurityTest {
             couponDao, reviewDao, userDao, refundDao, new ObjectMapper(), mock(CartItemMapper.class),
             mock(RiderDao.class), mock(GoodsSpecDao.class), mock(SeckillDao.class), mock(HotDataCacheService.class),
             mock(com.example.takeout.service.mq.DomainEventPublisher.class),
-            mock(org.springframework.beans.factory.ObjectProvider.class));
+            mock(org.springframework.beans.factory.ObjectProvider.class), mock(PaymentRecordDao.class));
 
     @Test
     void rejectsNonPositiveQuantity() {

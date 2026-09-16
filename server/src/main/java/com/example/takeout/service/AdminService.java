@@ -4,6 +4,7 @@ import com.example.takeout.common.BizException;
 import com.example.takeout.dao.GoodsDao;
 import com.example.takeout.dao.AdminStatsDao;
 import com.example.takeout.dao.OrderDao;
+import com.example.takeout.dao.PaymentRecordDao;
 import com.example.takeout.dao.RefundDao;
 import com.example.takeout.dao.StoreDao;
 import com.example.takeout.dao.UserDao;
@@ -36,10 +37,12 @@ public class AdminService {
     private final AdminStatsDao adminStatsDao;
     private final HotDataCacheService cache;
     private final DomainEventPublisher eventPublisher;
+    private final PaymentRecordDao paymentRecordDao;
 
     public AdminService(StoreDao storeDao, OrderDao orderDao, UserDao userDao, GoodsDao goodsDao,
                         RefundDao refundDao, OrderService orderService, AdminStatsDao adminStatsDao,
-                        HotDataCacheService cache, DomainEventPublisher eventPublisher) {
+                        HotDataCacheService cache, DomainEventPublisher eventPublisher,
+                        PaymentRecordDao paymentRecordDao) {
         this.storeDao = storeDao;
         this.orderDao = orderDao;
         this.userDao = userDao;
@@ -49,6 +52,7 @@ public class AdminService {
         this.adminStatsDao = adminStatsDao;
         this.cache = cache;
         this.eventPublisher = eventPublisher;
+        this.paymentRecordDao = paymentRecordDao;
     }
 
     /**
@@ -309,6 +313,7 @@ public class AdminService {
             throw new BizException("订单资金已处理，不能重复退款");
         }
         userDao.addBalance(order.userId(), order.payAmount());
+        paymentRecordDao.insert(order.id(), order.userId(), order.payAmount(), "REFUND", "BALANCE", "SUCCESS", now());
         // 复用统一回滚：goods 库存 + 规格库存 + 秒杀名额，避免规格库存与秒杀名额泄漏
         orderService.rollbackStock(order);
         refundDao.updateStatus(refundId, "REFUNDED", now(), "");

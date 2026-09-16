@@ -121,6 +121,34 @@ CREATE TABLE IF NOT EXISTS coupons (
     KEY idx_coupons_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 支付/退款明细台账（最小侵入拆表：只增此表，订单商品仍走 items JSON 快照）
+CREATE TABLE IF NOT EXISTS payment_records (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+    type VARCHAR(16) NOT NULL,
+    channel VARCHAR(16) NOT NULL DEFAULT 'BALANCE',
+    status VARCHAR(16) NOT NULL DEFAULT 'SUCCESS',
+    create_time VARCHAR(32) NOT NULL,
+    KEY idx_payment_records_order (order_id),
+    KEY idx_payment_records_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 优惠券领取台账：按活动唯一(user_id,store_id,name)终身限领一次，唯一键兜底并发
+CREATE TABLE IF NOT EXISTS user_coupons (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    store_id BIGINT NOT NULL DEFAULT 0,
+    name VARCHAR(64) NOT NULL,
+    threshold DECIMAL(10,2) NOT NULL DEFAULT 0,
+    amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+    claim_time VARCHAR(32) NOT NULL,
+    expire_time VARCHAR(32) NOT NULL,
+    UNIQUE KEY uk_user_coupon_campaign (user_id, store_id, name),
+    KEY idx_user_coupons_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS reviews (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     order_id BIGINT NOT NULL DEFAULT 0,

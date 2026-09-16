@@ -46,6 +46,11 @@ public class UserCenterController {
         return ApiResponse.ok(service.claimCoupon(userId, req.storeId(), req.name(), req.threshold(), req.amount()));
     }
 
+    @GetMapping("/coupons/activities")
+    public ApiResponse<List<UserCenterService.CouponActivity>> couponActivities(@RequestAttribute("userId") long userId) {
+        return ApiResponse.ok(service.listCouponActivities());
+    }
+
     // ============ 收藏 ============
 
     @GetMapping("/favorites")

@@ -6,6 +6,7 @@ import com.example.takeout.dao.CouponDao;
 import com.example.takeout.dao.GoodsDao;
 import com.example.takeout.dao.GoodsSpecDao;
 import com.example.takeout.dao.OrderDao;
+import com.example.takeout.dao.PaymentRecordDao;
 import com.example.takeout.dao.RefundDao;
 import com.example.takeout.dao.ReviewDao;
 import com.example.takeout.dao.RiderDao;
@@ -64,7 +65,7 @@ class OrderServiceFlowTest {
             couponDao, reviewDao, userDao, refundDao, new ObjectMapper(), mock(CartItemMapper.class),
             mock(RiderDao.class), specDao, seckillDao, cache,
             mock(com.example.takeout.service.mq.DomainEventPublisher.class),
-            mock(org.springframework.beans.factory.ObjectProvider.class));
+            mock(org.springframework.beans.factory.ObjectProvider.class), mock(PaymentRecordDao.class));
 
     private static final long STORE_ID = 10L;
     private static final long GOODS_ID = 100L;
@@ -414,7 +415,7 @@ class OrderServiceFlowTest {
         OrderService svc = new OrderService(orderDao, storeDao, goodsDao, addressDao,
                 couponDao, reviewDao, userDao, refundDao, new ObjectMapper(), mock(CartItemMapper.class),
                 mock(RiderDao.class), specDao, seckillDao, cache,
-                mock(com.example.takeout.service.mq.DomainEventPublisher.class), provider);
+                mock(com.example.takeout.service.mq.DomainEventPublisher.class), provider, mock(PaymentRecordDao.class));
 
         // 同一 token 第二次提交：SET NX 失败 → 拒绝，且不进任何业务校验
         when(ops.setIfAbsent(anyString(), anyString(), any(java.time.Duration.class))).thenReturn(false);

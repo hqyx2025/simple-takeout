@@ -8,6 +8,7 @@ import com.example.takeout.dao.FavoriteDao;
 import com.example.takeout.dao.GoodsDao;
 import com.example.takeout.dao.ReviewDao;
 import com.example.takeout.dao.StoreDao;
+import com.example.takeout.dao.UserCouponDao;
 import com.example.takeout.model.Address;
 import com.example.takeout.model.BankCard;
 import com.example.takeout.model.Coupon;
@@ -16,10 +17,13 @@ import com.example.takeout.model.Review;
 import com.example.takeout.model.Store;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -41,10 +45,12 @@ public class UserCenterService {
     private final GoodsDao goodsDao;
     private final BankCardDao bankCardDao;
     private final ObjectMapper objectMapper;
+    private final UserCouponDao userCouponDao;
 
     public UserCenterService(CouponDao couponDao, FavoriteDao favoriteDao, AddressDao addressDao,
                              ReviewDao reviewDao, StoreDao storeDao, GoodsDao goodsDao,
-                             BankCardDao bankCardDao, ObjectMapper objectMapper) {
+                             BankCardDao bankCardDao, ObjectMapper objectMapper,
+                             UserCouponDao userCouponDao) {
         this.couponDao = couponDao;
         this.favoriteDao = favoriteDao;
         this.addressDao = addressDao;
@@ -53,6 +59,7 @@ public class UserCenterService {
         this.goodsDao = goodsDao;
         this.bankCardDao = bankCardDao;
         this.objectMapper = objectMapper;
+        this.userCouponDao = userCouponDao;
     }
 
     // ============ 钱包（余额 + 已绑定银行卡） ============
@@ -74,6 +81,7 @@ public class UserCenterService {
         return couponDao.listByUser(userId);
     }
 
+    @Transactional
     public Coupon claimCoupon(long userId, long storeId, String name, double threshold, double amount) {
         if (storeId > 0) {
             storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
@@ -82,37 +90,54 @@ public class UserCenterService {
         if (!isAllowedCampaign(threshold, amount)) {
             throw new BizException("优惠券活动不存在或参数无效");
         }
-        final double campaignThreshold = threshold;
-        final double campaignAmount = amount;
-        final String campaignName = "满" + (long) campaignThreshold + "减" + (long) campaignAmount;
-        boolean alreadyClaimed = couponDao.listByUser(userId).stream()
-                .anyMatch(c -> c.storeId() == storeId && c.status() == 0 && campaignName.equals(c.name()));
-        if (alreadyClaimed) {
-            throw new BizException("该优惠券已领取");
+        String campaignName = campaignName(threshold, amount);
+        // 严格限领：同一活动每人终身限领一次（唯一键 uk_user_coupon_campaign 兜底并发）
+        if (userCouponDao.exists(userId, storeId, campaignName)) {
+            throw new BizException("该优惠券每人限领一次，请勿重复领取");
         }
+        String now = LocalDateTime.now().format(FMT);
         String expire = LocalDateTime.now().plusDays(30).format(FMT);
-        long id = couponDao.insert(userId, storeId, campaignName, campaignThreshold, campaignAmount, expire, "claim",
-                LocalDateTime.now().format(FMT));
+        long id = couponDao.insert(userId, storeId, campaignName, threshold, amount, expire, "claim", now);
+        try {
+            userCouponDao.insert(userId, storeId, campaignName, threshold, amount, now, expire);
+        } catch (DuplicateKeyException e) {
+            throw new BizException("该优惠券每人限领一次，请勿重复领取");
+        }
         return couponDao.listByUser(userId).stream()
                 .filter(c -> c.id() == id)
                 .findFirst()
                 .orElseThrow(() -> new BizException("领券失败"));
     }
 
+    /** 领取中心可领活动列表（服务端白名单，前端据此渲染）。 */
+    public List<CouponActivity> listCouponActivities() {
+        return Arrays.stream(COUPON_CAMPAIGNS)
+                .map(c -> new CouponActivity(campaignName(c[0], c[1]), c[0], c[1]))
+                .toList();
+    }
+
+    public record CouponActivity(String name, double threshold, double amount) {
+    }
+
+    private static final double[][] COUPON_CAMPAIGNS = {
+            {10, 2}, {14, 3}, {15, 4}, {20, 5}, {23, 6}, {29, 8},
+            {35, 10}, {41, 12}, {45, 12}, {50, 15}, {59, 18}, {65, 20}, {80, 25}
+    };
+
     private boolean isAllowedCampaign(double threshold, double amount) {
         if (!Double.isFinite(threshold) || !Double.isFinite(amount) || amount <= 0 || threshold < amount) {
             return false;
         }
-        double[][] campaigns = {
-                {10, 2}, {14, 3}, {15, 4}, {20, 5}, {23, 6}, {29, 8},
-                {35, 10}, {41, 12}, {45, 12}, {50, 15}, {59, 18}, {65, 20}, {80, 25}
-        };
-        for (double[] campaign : campaigns) {
+        for (double[] campaign : COUPON_CAMPAIGNS) {
             if (Double.compare(campaign[0], threshold) == 0 && Double.compare(campaign[1], amount) == 0) {
                 return true;
             }
         }
         return false;
+    }
+
+    private static String campaignName(double threshold, double amount) {
+        return "满" + (long) threshold + "减" + (long) amount;
     }
 
     // ============ 收藏 ============

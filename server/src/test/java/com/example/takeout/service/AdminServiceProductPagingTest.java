@@ -3,6 +3,7 @@ package com.example.takeout.service;
 import com.example.takeout.dao.AdminStatsDao;
 import com.example.takeout.dao.GoodsDao;
 import com.example.takeout.dao.OrderDao;
+import com.example.takeout.dao.PaymentRecordDao;
 import com.example.takeout.dao.RefundDao;
 import com.example.takeout.dao.StoreDao;
 import com.example.takeout.dao.UserDao;
@@ -29,7 +30,7 @@ class AdminServiceProductPagingTest {
     private final AdminService service = new AdminService(mock(StoreDao.class), mock(OrderDao.class),
             mock(UserDao.class), goodsDao, mock(RefundDao.class), mock(OrderService.class),
             mock(AdminStatsDao.class), mock(HotDataCacheService.class),
-            mock(com.example.takeout.service.mq.DomainEventPublisher.class));
+            mock(com.example.takeout.service.mq.DomainEventPublisher.class), mock(PaymentRecordDao.class));
 
     private AdminProduct product(long id) {
         return new AdminProduct(id, 10L, "测试店", "商品" + id, "", 1.0, 1.0, "", 1, 0, 0, 0, 5.0, "", 1, "");

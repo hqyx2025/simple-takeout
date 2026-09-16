@@ -6,6 +6,7 @@ import com.example.takeout.dao.CouponDao;
 import com.example.takeout.dao.GoodsDao;
 import com.example.takeout.dao.GoodsSpecDao;
 import com.example.takeout.dao.OrderDao;
+import com.example.takeout.dao.PaymentRecordDao;
 import com.example.takeout.dao.RefundDao;
 import com.example.takeout.dao.ReviewDao;
 import com.example.takeout.dao.RiderDao;
@@ -65,6 +66,7 @@ public class OrderService {
     private final ReviewDao reviewDao;
     private final UserDao userDao;
     private final RefundDao refundDao;
+    private final PaymentRecordDao paymentRecordDao;
     private final ObjectMapper objectMapper;
     private final CartItemMapper cartItemMapper;
     private final RiderDao riderDao;
@@ -83,7 +85,8 @@ public class OrderService {
                         ObjectMapper objectMapper, CartItemMapper cartItemMapper, RiderDao riderDao,
                         GoodsSpecDao specDao, SeckillDao seckillDao, HotDataCacheService cache,
                         DomainEventPublisher eventPublisher,
-                        ObjectProvider<StringRedisTemplate> redisProvider) {
+                        ObjectProvider<StringRedisTemplate> redisProvider,
+                        PaymentRecordDao paymentRecordDao) {
         this.orderDao = orderDao;
         this.storeDao = storeDao;
         this.goodsDao = goodsDao;
@@ -92,6 +95,7 @@ public class OrderService {
         this.reviewDao = reviewDao;
         this.userDao = userDao;
         this.refundDao = refundDao;
+        this.paymentRecordDao = paymentRecordDao;
         this.objectMapper = objectMapper;
         this.cartItemMapper = cartItemMapper;
         this.riderDao = riderDao;
@@ -340,6 +344,7 @@ public class OrderService {
         if (!userDao.deductBalance(userId, order.payAmount())) {
             throw new BizException("余额不足，请先充值");
         }
+        paymentRecordDao.insert(orderId, userId, order.payAmount(), "PAY", "BALANCE", "SUCCESS", now);
         // 支付成功后才发出事件：条件更新失败会抛异常回滚，不会产生「假支付」事件
         eventPublisher.publish(DomainEventPublisher.ORDER_PAID, orderId,
                 Map.of("userId", userId, "payAmount", order.payAmount()));
@@ -488,6 +493,8 @@ public class OrderService {
         // escrow 条件更新成功才回滚库存（同一事务内，防重复回滚）
         rollbackStock(order);
         userDao.addBalance(userId, order.payAmount());
+        paymentRecordDao.insert(orderId, userId, order.payAmount(), "REFUND", "BALANCE", "SUCCESS",
+                LocalDateTime.now().format(FMT));
         eventPublisher.publish(DomainEventPublisher.ORDER_CANCELLED, orderId,
                 Map.of("userId", userId, "reason", "用户取消已支付订单，已即时退款"));
         return orderDetail(orderId);

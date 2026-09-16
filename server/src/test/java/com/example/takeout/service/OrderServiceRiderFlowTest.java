@@ -6,6 +6,7 @@ import com.example.takeout.dao.CouponDao;
 import com.example.takeout.dao.GoodsDao;
 import com.example.takeout.dao.GoodsSpecDao;
 import com.example.takeout.dao.OrderDao;
+import com.example.takeout.dao.PaymentRecordDao;
 import com.example.takeout.dao.RefundDao;
 import com.example.takeout.dao.ReviewDao;
 import com.example.takeout.dao.RiderDao;
@@ -60,7 +61,7 @@ class OrderServiceRiderFlowTest {
             mock(RefundDao.class), new ObjectMapper(), mock(CartItemMapper.class), riderDao,
             mock(GoodsSpecDao.class), mock(SeckillDao.class), mock(HotDataCacheService.class),
             mock(com.example.takeout.service.mq.DomainEventPublisher.class),
-            mock(org.springframework.beans.factory.ObjectProvider.class));
+            mock(org.springframework.beans.factory.ObjectProvider.class), mock(PaymentRecordDao.class));
 
     /** 服务层独立校验骑手未被停用：走 riderGrab/riderPickup/riderDeliver 的用例必须先桩一个启用中的骑手档案。 */
     private void stubActiveRider() {

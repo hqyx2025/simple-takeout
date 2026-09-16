@@ -7,6 +7,7 @@ import com.example.takeout.dao.CouponDao;
 import com.example.takeout.dao.GoodsDao;
 import com.example.takeout.dao.GoodsSpecDao;
 import com.example.takeout.dao.OrderDao;
+import com.example.takeout.dao.PaymentRecordDao;
 import com.example.takeout.dao.RefundDao;
 import com.example.takeout.dao.ReviewDao;
 import com.example.takeout.dao.RiderDao;
@@ -70,10 +71,10 @@ class OrderBoundaryTest {
     private final OrderService service = new OrderService(orderDao, storeDao, goodsDao, addressDao,
             couponDao, reviewDao, userDao, refundDao, new ObjectMapper(), cartItemMapper,
             riderDao, specDao, seckillDao, cache, eventPublisher,
-            mock(org.springframework.beans.factory.ObjectProvider.class));
+            mock(org.springframework.beans.factory.ObjectProvider.class), mock(PaymentRecordDao.class));
 
     private final AdminService adminService = new AdminService(storeDao, orderDao, userDao, goodsDao,
-            refundDao, service, mock(AdminStatsDao.class), cache, eventPublisher);
+            refundDao, service, mock(AdminStatsDao.class), cache, eventPublisher, mock(PaymentRecordDao.class));
 
     private static final long STORE_ID = 10L;
     private static final long GOODS_ID = 100L;

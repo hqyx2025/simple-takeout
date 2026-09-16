@@ -28,7 +28,7 @@ class UserCenterAddressBoundaryTest {
 
     private final AddressDao addressDao = mock(AddressDao.class);
     private final UserCenterService service = new UserCenterService(
-            null, null, addressDao, null, null, null, null, new ObjectMapper());
+            null, null, addressDao, null, null, null, null, new ObjectMapper(), null);
 
     @Test
     void rejectsAddressWhenAlreadyAtTwenty() {

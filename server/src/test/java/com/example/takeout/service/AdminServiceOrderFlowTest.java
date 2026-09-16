@@ -4,6 +4,7 @@ import com.example.takeout.common.BizException;
 import com.example.takeout.dao.AdminStatsDao;
 import com.example.takeout.dao.GoodsDao;
 import com.example.takeout.dao.OrderDao;
+import com.example.takeout.dao.PaymentRecordDao;
 import com.example.takeout.dao.RefundDao;
 import com.example.takeout.dao.StoreDao;
 import com.example.takeout.dao.UserDao;
@@ -38,7 +39,8 @@ class AdminServiceOrderFlowTest {
     private final OrderService orderService = mock(OrderService.class);
     private final AdminService service = new AdminService(mock(StoreDao.class), orderDao, mock(UserDao.class),
             mock(GoodsDao.class), mock(RefundDao.class), orderService, mock(AdminStatsDao.class),
-            mock(HotDataCacheService.class), mock(com.example.takeout.service.mq.DomainEventPublisher.class));
+            mock(HotDataCacheService.class), mock(com.example.takeout.service.mq.DomainEventPublisher.class),
+            mock(PaymentRecordDao.class));
 
     private Order storedOrder(int status) {
         return new Order(ORDER_ID, "NO500", 1L, 10L, "测试店", status, "[]",
