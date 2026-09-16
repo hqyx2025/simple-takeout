@@ -148,6 +148,10 @@ public class UserCenterService {
 
     public Address addAddress(long userId, String name, String phone, String detail, int isDefault) {
         validateAddress(name, phone, detail, isDefault);
+        // 大纲 20.1：每个用户最多 20 个地址；超了先删再加（防止脚本刷成整库地址）
+        if (addressDao.listByUser(userId).size() >= 20) {
+            throw new BizException("收货地址最多保存 20 个，请先删除部分地址");
+        }
         long id = addressDao.insert(userId, name, phone, detail, isDefault, LocalDateTime.now().format(FMT));
         return addressDao.listByUser(userId).stream()
                 .filter(a -> a.id() == id)
