@@ -12,7 +12,7 @@ import { photoAccessHelper } from '@kit.MediaLibraryKit'
 import { promptCompat as promptAction } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
 import { routerCompat as router } from '../common/UiNavigation'
-import { AddressSearchResult, searchAddress } from '../service/LocationService'
+import { AddressSearchResult, searchAddress, joinAddressParts } from '../service/LocationService'
 import { syncAddressesRemote } from '../service/AppStorageManager'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 
@@ -226,7 +226,7 @@ export struct MerchantCenterPage {
     if (picked === null) {
       return
     }
-    const text: string = `${picked.address ?? ''} ${picked.detail ?? ''}`.trim()
+    const text: string = joinAddressParts(picked.address ?? '', picked.detail ?? '')
     const target: string = AppStorage.get<string>('storeLocationPickTarget') || 'new'
     if (text !== '') {
       if (target === 'edit') {

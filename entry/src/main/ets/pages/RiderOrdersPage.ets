@@ -4,8 +4,11 @@
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { Order } from '../model/Models'
-import { syncRiderOrdersRemote, pickupOrderRemote, deliverOrderRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
+import { syncRiderOrdersRemote, pickupOrderRemote, deliverOrderRemote, getLastRemoteErrorMessage, reportRiderLocationRemote } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
+
+/** 配送途中的位置上报间隔（毫秒）：接单后进入配送阶段开始周期性上报 */
+const RIDER_REPORT_INTERVAL_MS: number = 30000
 
 @Entry
 @Component
@@ -13,16 +16,48 @@ export struct RiderOrdersPage {
   @State orders: Order[] = []
   @State loading: boolean = false
   @State acting: boolean = false
+  // 配送途中的实时定位定时器（-1 表示未开启）
+  private locationTimer: number = -1
 
   async aboutToAppear(): Promise<void> {
     logInfo('Page', '进入我的配送单 RiderOrdersPage')
     await this.loadOrders()
   }
 
+  /** 离开页面停止上报，避免后台空转耗电 */
+  onPageHide(): void {
+    this.stopLocationReporting()
+  }
+
   private async loadOrders(): Promise<void> {
     this.loading = true
     this.orders = await syncRiderOrdersRemote()
     this.loading = false
+    this.syncLocationReporting()
+  }
+
+  /**
+   * 配送途中实时定位：只要名下有"配送中(status=3)"的订单，就每 30 秒上报一次骑手位置；
+   * 没有配送中订单（还没取餐或已送达）就停掉，避免无意义的后台定位。
+   */
+  private syncLocationReporting(): void {
+    const delivering: boolean = this.orders.some((order: Order) => order.status === 3)
+    if (delivering && this.locationTimer < 0) {
+      this.locationTimer = setInterval(() => { reportRiderLocationRemote() }, RIDER_REPORT_INTERVAL_MS)
+      logInfo('Rider', `开始配送途中位置上报（每 ${RIDER_REPORT_INTERVAL_MS / 1000} 秒一次）`)
+      // 取餐后立刻补一次，不等第一个周期
+      reportRiderLocationRemote()
+    } else if (!delivering) {
+      this.stopLocationReporting()
+    }
+  }
+
+  private stopLocationReporting(): void {
+    if (this.locationTimer >= 0) {
+      clearInterval(this.locationTimer)
+      this.locationTimer = -1
+      logInfo('Rider', '已无配送中订单，停止位置上报')
+    }
   }
 
   private async pickup(order: Order): Promise<void> {

@@ -4,12 +4,11 @@
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { Rider, Address } from '../model/Models'
-import { fetchRiderProfileRemote, logout, setRiderStatusRemote } from '../service/AppStorageManager'
+import { fetchRiderProfileRemote, logout, setRiderStatusRemote, reportRiderLocationRemote } from '../service/AppStorageManager'
 import { updateRiderRadiusApi, updateRiderLocationApi } from '../service/ApiService'
-import { GeoPosition, getCurrentPosition, requestLocationPermission } from '../service/LocationService'
+import { joinAddressParts } from '../service/LocationService'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { logInfo } from '../service/AppLogger'
-import { common } from '@kit.AbilityKit'
 
 /** 骑手配送半径的软阈值（公里）：低于/高于会先弹确认框，服务端仍接受 */
 const RIDER_RADIUS_DEFAULT_KM: number = 25
@@ -28,6 +27,7 @@ export struct RiderCenterPage {
   @State savingRadius: boolean = false
   @State updatingLocation: boolean = false
   @State showRadiusConfirm: boolean = false
+  @State showLogoutConfirm: boolean = false
   @State radiusConfirmText: string = ''
   @State pendingRadiusMeters: number = 0
 
@@ -44,7 +44,7 @@ export struct RiderCenterPage {
     if (picked !== null) {
       AppStorage.setOrCreate<Address | null>('pickedRiderLocation', null)
       await this.saveLocation(picked.latitude ?? 0, picked.longitude ?? 0,
-        `${picked.address ?? ''} ${picked.detail ?? ''}`.trim())
+        joinAddressParts(picked.address ?? '', picked.detail ?? ''))
     }
   }
 
@@ -115,30 +115,26 @@ export struct RiderCenterPage {
 
   /** 地图选点设置接单位置（抢单圆心）。 */
   private openRiderLocationPicker(): void {
+    // 清掉上一次的选择：否则"打开选点后直接返回"会消费到旧值，产生一次意料之外的位置上报
+    AppStorage.setOrCreate<Address | null>('pickedRiderLocation', null)
     AppStorage.setOrCreate<boolean>('riderLocationPickMode', true)
     router.pushUrl({ url: 'pages/LocationPage' })
   }
 
-  /** 用设备当前定位设置接单位置。 */
+  /** 用设备当前定位设置接单位置（地址取逆地理编码结果，不写死"我的当前位置"）。 */
   private async useCurrentLocation(): Promise<void> {
     if (this.updatingLocation) {
       return
     }
     this.updatingLocation = true
     try {
-      const context: common.UIAbilityContext | undefined =
-        AppStorage.get<common.UIAbilityContext>('appContext')
-      if (context === undefined) {
-        promptAction.showToast({ message: '定位服务不可用，请稍后重试', duration: 2000 })
-        return
+      const ok: boolean = await reportRiderLocationRemote()
+      if (ok) {
+        await this.loadProfile()
+        promptAction.showToast({ message: '接单位置已更新为当前定位', duration: 1800 })
+      } else {
+        promptAction.showToast({ message: '定位失败，请检查定位权限或改用地图选点', duration: 2500 })
       }
-      const granted: boolean = await requestLocationPermission(context)
-      if (!granted) {
-        promptAction.showToast({ message: '未获得定位权限，可在设置里开启或用地图选点', duration: 2500 })
-        return
-      }
-      const position: GeoPosition = await getCurrentPosition(context)
-      await this.saveLocation(position.latitude, position.longitude, '我的当前位置')
     } finally {
       this.updatingLocation = false
     }
@@ -178,19 +174,16 @@ export struct RiderCenterPage {
     Stack() {
     Column() {
       Row() {
-        Text('退出登录')
-          .fontSize(FONT_SIZE.MD)
-          .fontColor(MODULE_COLOR.RIDER)
-          .layoutWeight(1)
-          .onClick(() => {
-            logout()
-            router.replaceUrl({ url: 'pages/Index' })
-          })
+        // 左上角保持留白：这里与其它页面的「‹ 返回」同位置，原先放"退出登录"导致从地图选点返回后
+        // 习惯性点左上角会直接退出到登录页（设备实测：点 (107,208) 即触发退出登录）
+        Text(' ').fontSize(FONT_SIZE.MD).width(28)
         Text('🛵 骑手中心')
           .fontSize(FONT_SIZE.XXL)
           .fontWeight(FontWeight.Bold)
           .fontColor(MODULE_COLOR.RIDER)
           .layoutWeight(1)
+          .textAlign(TextAlign.Center)
+        Text(' ').fontSize(FONT_SIZE.MD).width(28)
       }
       .width('100%')
       .height(56)
@@ -334,6 +327,15 @@ export struct RiderCenterPage {
                 .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                 .id('rider-orders-entry')
                 .onClick(() => { router.pushUrl({ url: 'pages/RiderOrdersPage' }) })
+
+              // 退出登录挪到页面底部并二次确认：不再和返回键抢左上角
+              Button('退出登录')
+                .width('100%').height(44).fontSize(FONT_SIZE.MD)
+                .fontColor(COLORS.ERROR).backgroundColor(COLORS.ERROR_LIGHT)
+                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                .margin({ top: SPACING.SM })
+                .id('rider-logout')
+                .onClick(() => { this.showLogoutConfirm = true })
             }
             .width('100%')
           }
@@ -344,6 +346,21 @@ export struct RiderCenterPage {
       }
     }
     .width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)
+
+      if (this.showLogoutConfirm) {
+        ConfirmDialog({
+          title: '退出登录',
+          content: '退出后需要重新登录才能抢单，确定退出吗？',
+          confirmText: '退出',
+          cancelText: '再想想',
+          onConfirm: () => {
+            this.showLogoutConfirm = false
+            logout()
+            router.replaceUrl({ url: 'pages/Index' })
+          },
+          onCancel: () => { this.showLogoutConfirm = false }
+        })
+      }
 
       if (this.showRadiusConfirm) {
         ConfirmDialog({

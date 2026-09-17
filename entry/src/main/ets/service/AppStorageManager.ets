@@ -3,10 +3,11 @@
  */
 import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, Rider, Banner, Announcement, MerchantStatsData, Category, RefundRecord, GoodsSpec, SeckillItem, SpecialGoodsItem, BundleInfo, UploadResult, SetmealOrder, createEmptyUser, createDefaultCategories } from '../model/Models'
 import { saveAllData, clearAllData } from './DataPersistence'
-import { apiLogin, apiRegister, updateUserProfileApi, fetchCurrentUserApi, rechargeBalanceApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, payOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi, fetchMerchantReviewsApi, replyReviewApi, fetchRiderProfileApi, setRiderStatusApi, fetchRiderPoolApi, fetchRiderOrdersApi, grabOrderApi, pickupOrderApi, deliverOrderApi, fetchBannersApi, fetchAnnouncementsApi, fetchAdminRidersApi, updateRiderStatusApi, fetchAdminBannersApi, createBannerApi, updateBannerStatusApi, deleteBannerApi, fetchAdminAnnouncementsApi, createAnnouncementApi, updateAnnouncementStatusApi, deleteAnnouncementApi, applyRefundApi, fetchCartApi, addCartItemApi, updateCartItemQuantityApi, deleteCartItemApi, deleteCartItemsApi, clearCartApi, uploadImageApi, fetchSeckillsApi, fetchRankStoresApi, fetchRankGoodsApi, fetchBundleApi, updateMerchantGoodsSpecsApi, apiLogout, changePasswordApi } from './ApiService'
+import { apiLogin, apiRegister, updateUserProfileApi, fetchCurrentUserApi, rechargeBalanceApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, payOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi, fetchMerchantReviewsApi, replyReviewApi, fetchRiderProfileApi, setRiderStatusApi, fetchRiderPoolApi, fetchRiderOrdersApi, grabOrderApi, pickupOrderApi, deliverOrderApi, fetchBannersApi, fetchAnnouncementsApi, fetchAdminRidersApi, updateRiderStatusApi, fetchAdminBannersApi, createBannerApi, updateBannerStatusApi, deleteBannerApi, fetchAdminAnnouncementsApi, createAnnouncementApi, updateAnnouncementStatusApi, deleteAnnouncementApi, applyRefundApi, fetchCartApi, addCartItemApi, updateCartItemQuantityApi, deleteCartItemApi, deleteCartItemsApi, clearCartApi, uploadImageApi, fetchSeckillsApi, fetchRankStoresApi, fetchRankGoodsApi, fetchBundleApi, updateMerchantGoodsSpecsApi, apiLogout, changePasswordApi, updateRiderLocationApi } from './ApiService'
 import { getAuthToken, setAuthToken, getLastApiErrorMessage } from './HttpClient'
 import { logInfo, logWarn, logError } from './AppLogger'
-import { GeoPosition } from './LocationService'
+import { GeoPosition, getCurrentPosition, requestLocationPermission, reverseGeocodePosition } from './LocationService'
+import { common } from '@kit.AbilityKit'
 import { API_CONFIG } from '../common/Constants'
 
 let categoriesSyncInFlight: Promise<void> | null = null
@@ -921,6 +922,41 @@ export async function syncRiderPoolRemote(): Promise<Order[]> {
 
 export async function syncRiderOrdersRemote(): Promise<Order[]> {
   return await fetchRiderOrdersApi()
+}
+
+/**
+ * 骑手位置上报：读取设备当前位置 → 逆地理编码成可读地址 → PUT /api/rider/range/location。
+ * 用途：接单时定位一次；配送途中按固定间隔实时上报（平台据此知道骑手在哪）。
+ * 定位权限被拒或定位失败时返回 false（不抛错，由调用方决定是否提示）。
+ */
+export async function reportRiderLocationRemote(): Promise<boolean> {
+  const context: common.UIAbilityContext | undefined =
+    AppStorage.get<common.UIAbilityContext>('appContext')
+  if (context === undefined) {
+    logWarn('Rider', '骑手位置上报失败：appContext 不可用')
+    return false
+  }
+  try {
+    const granted: boolean = await requestLocationPermission(context)
+    if (!granted) {
+      logWarn('Rider', '骑手位置上报失败：未获得定位权限')
+      return false
+    }
+    const position: GeoPosition = await getCurrentPosition(context)
+    // 逆地理编码：显示"我的当前位置"没有信息量，要的是"沈阳市沈河区xx路"
+    const address: string = await reverseGeocodePosition(position)
+    const updated: Rider | null = await updateRiderLocationApi(position.latitude, position.longitude,
+      address.trim() === '' ? '地图定位' : address.trim())
+    if (updated === null) {
+      logWarn('Rider', '骑手位置上报失败：接口未返回数据')
+      return false
+    }
+    logInfo('Rider', `骑手位置已上报：${address.trim()}（${position.latitude},${position.longitude}）`)
+    return true
+  } catch (err) {
+    logWarn('Rider', `骑手位置上报异常：${JSON.stringify(err)}`)
+    return false
+  }
 }
 
 export async function grabOrderRemote(orderId: number): Promise<boolean> {

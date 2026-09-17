@@ -156,6 +156,35 @@ interface LocationFailure {
   message?: string
 }
 
+/**
+ * 拼地址时去掉重叠前缀。
+ * 系统逆地理编码会把"完整地址"塞进 roadName/premises，直接首尾相接会出现
+ * "中国辽宁省沈阳市沈河区辽宁省沈阳市沈河区杏林街…" 这种重复（设备实测）。
+ * 取"已有串后缀 与 新片段前缀"的最长重叠，只追加不重叠的尾巴。
+ */
+function overlapRemainder(joined: string, value: string): string {
+  const maxLength: number = Math.min(joined.length, value.length)
+  for (let length = maxLength; length > 0; length--) {
+    if (joined.substring(joined.length - length) === value.substring(0, length)) {
+      return value.substring(length)
+    }
+  }
+  return value
+}
+
+/** 拼接地址主体与详情（去重叠），避免"沈阳市沈河区沈阳市沈河区xx路"这类重复。 */
+export function joinAddressParts(primary: string, detail: string): string {
+  const head: string = (primary ?? '').trim()
+  const tail: string = (detail ?? '').trim()
+  if (head === '') {
+    return tail
+  }
+  if (tail === '') {
+    return head
+  }
+  return head + overlapRemainder(head, tail)
+}
+
 /** 将经纬度转换为可展示的中文地址（逆地理编码）。 */
 export async function reverseGeocodePosition(position: GeoPosition): Promise<string> {
   try {
@@ -170,10 +199,10 @@ export async function reverseGeocodePosition(position: GeoPosition): Promise<str
       return ''
     }
     const address: geoLocationManager.GeoAddress = addresses[0]
-    const parts: string[] = []
+    let result: string = ''
     const append = (value: string | undefined): void => {
-      if (value !== undefined && value !== '' && (parts.length === 0 || parts[parts.length - 1] !== value)) {
-        parts.push(value)
+      if (value !== undefined && value !== '') {
+        result += overlapRemainder(result, value)
       }
     }
     append(address.countryName)
@@ -183,7 +212,7 @@ export async function reverseGeocodePosition(position: GeoPosition): Promise<str
     append(address.roadName)
     append(address.premises)
     append(address.placeName)
-    return parts.join('')
+    return result
   } catch (err) {
     logWarn('Location', '逆地理编码失败')
     return ''
