@@ -9,7 +9,7 @@ import {
   User, UserRole, StoreItem, GoodsItem, SpecialGoodsItem, Category, Order, CartItem,
   Address, Coupon, Review, Rider, Banner, Announcement, Favorite, RefundRecord, AdminEmployee, AdminProduct, AdminProductPage, AdminUser,
   BankCard,
-  AdminStatisticsData, AdminTrendPoint, AdminHotGoods, AdminDashboard, AdminOrderStatusCount, AdminTopStore, SeckillItem, BundleInfo, UploadResult, GoodsSpec
+  AdminStatisticsData, AdminTrendPoint, AdminHotGoods, AdminDashboard, AdminOrderStatusCount, AdminTopStore, MarketingActivity, Setmeal, SeckillItem, BundleInfo, UploadResult, GoodsSpec
 } from '../model/Models'
 import { logInfo, logWarn } from './AppLogger'
 
@@ -771,6 +771,22 @@ export async function fetchSeckillsApi(limit: number = 6, latitude?: number, lon
 }
 
 /** 凑单提示：还差多少元起送 + 店内可凑单菜品。 */
+export async function fetchStoreActivitiesApi(storeId: number): Promise<MarketingActivity[]> {
+  const resp: ApiResponse<MarketingActivity[]> = await get<MarketingActivity[]>(`/api/stores/${storeId}/activities`)
+  if (resp.code !== 200 || resp.data === null) {
+    return []
+  }
+  return resp.data
+}
+
+export async function fetchStoreSetmealsApi(storeId: number): Promise<Setmeal[]> {
+  const resp: ApiResponse<Setmeal[]> = await get<Setmeal[]>(`/api/stores/${storeId}/setmeals`)
+  if (resp.code !== 200 || resp.data === null) {
+    return []
+  }
+  return resp.data
+}
+
 export async function fetchBundleApi(storeId: number, amount: number): Promise<BundleInfo | null> {
   const resp: ApiResponse<ServerBundle> = await get<ServerBundle>(`/api/stores/${storeId}/bundle?amount=${amount}`)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {

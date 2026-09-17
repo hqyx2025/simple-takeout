@@ -462,3 +462,39 @@ export interface AdminDashboard {
   orderStatuses: AdminOrderStatusCount[]
   topStores: AdminTopStore[]
 }
+
+export interface MarketingActivity {
+  id: number
+  storeId: number
+  type: string
+  title: string
+  discountRate: number
+  reduceAmount: number
+  threshold: number
+  giftGoodsId: number
+  startTime: string
+  endTime: string
+  status: number
+  createTime: string
+}
+
+export interface SetmealItem {
+  id: number
+  setmealId: number
+  goodsId: number
+  goodsName: string
+  quantity: number
+}
+
+export interface Setmeal {
+  id: number
+  storeId: number
+  name: string
+  description: string
+  price: number
+  originalPrice: number
+  image: string
+  status: number
+  createTime: string
+  items: SetmealItem[]
+}

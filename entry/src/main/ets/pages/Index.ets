@@ -2,9 +2,9 @@
  * 主页面 - 简单外卖App
  * 包含：搜索栏、分类导航、店铺列表、店铺详情、购物车、订单列表、个人中心、底部Tab导航
  */
-import { Category, StoreItem, GoodsItem, GoodsSpec, SpecialGoodsItem, SeckillItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, Banner, Announcement, createEmptyUser } from '../model/Models'
+import { Category, StoreItem, GoodsItem, GoodsSpec, SpecialGoodsItem, SeckillItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, Banner, Announcement, MarketingActivity, Setmeal, createEmptyUser } from '../model/Models'
 import { addToCart, addCartItemRemote, updateCartItemQuantity, updateCartItemQuantityRemote, refreshCartFromServer, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCartRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncBannersRemote, syncAnnouncementsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, cancelOrderRemote, payOrderRemote, fetchSeckillsRemote, getLastRemoteErrorMessage, rechargeBalanceRemote, syncCurrentUserFromServer } from '../service/AppStorageManager'
-import { fetchRecommendedStoresApi, fetchSpecialGoodsApi, fetchStoreMerchantCategoriesApi, fetchStoreDetailApi } from '../service/ApiService'
+import { fetchRecommendedStoresApi, fetchSpecialGoodsApi, fetchStoreMerchantCategoriesApi, fetchStoreDetailApi, fetchStoreActivitiesApi, fetchStoreSetmealsApi } from '../service/ApiService'
 import { LoginPage } from './LoginPage'
 import { AssistantPage } from './AssistantPage'
 import { CartPage } from './CartPage'
@@ -1217,6 +1217,9 @@ export struct StoreDetailContent {
   onSelectSpecGoods: (goods: GoodsItem) => void = () => {}
   // 本店进行中的秒杀（商品卡片标出秒杀价）
   @State storeSeckills: SeckillItem[] = []
+  // 本店生效中的营销活动与套餐（门店首页横幅/套餐区展示）
+  @State storeActivities: MarketingActivity[] = []
+  @State storeSetmeals: Setmeal[] = []
 
   aboutToAppear() {
     this.loadStoreData()
@@ -1269,6 +1272,8 @@ export struct StoreDetailContent {
     this.refreshReviews()
     this.refreshStoreInfo()
     this.refreshStoreSeckills()
+    this.refreshStoreActivities()
+    this.refreshStoreSetmeals()
   }
 
   // 本店进行中的限时秒杀：用于在商品卡片上标出秒杀价（下单时后端会自动按秒杀价结算）
@@ -1279,6 +1284,24 @@ export struct StoreDetailContent {
     }
     const list: SeckillItem[] = await fetchSeckillsRemote(50)
     this.storeSeckills = list.filter((item: SeckillItem) => item.storeId === this.storeId)
+  }
+
+  /** 本店生效中的营销活动（折扣/新客立减/满赠），门店首页横幅展示。 */
+  private async refreshStoreActivities(): Promise<void> {
+    if (!this.loggedIn || this.storeId <= 0) {
+      this.storeActivities = []
+      return
+    }
+    this.storeActivities = await fetchStoreActivitiesApi(this.storeId)
+  }
+
+  /** 本店套餐（组合购），门店套餐区展示。 */
+  private async refreshStoreSetmeals(): Promise<void> {
+    if (!this.loggedIn || this.storeId <= 0) {
+      this.storeSetmeals = []
+      return
+    }
+    this.storeSetmeals = await fetchStoreSetmealsApi(this.storeId)
   }
 
   /** 菜品当前秒杀价（无秒杀返回 0）。 */
@@ -1567,6 +1590,22 @@ export struct StoreDetailContent {
       .width('100%')
       .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.MD })
       .backgroundColor(COLORS.BG_WHITE).margin({ top: SPACING.SM })
+
+      if (this.storeActivities.length > 0) {
+        Column({ space: SPACING.XS }) {
+          Text('店铺活动').fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY).width('100%')
+          Row({ space: SPACING.SM }) {
+            ForEach(this.storeActivities, (act: MarketingActivity) => {
+              Text(act.title)
+                .fontSize(FONT_SIZE.XS).fontColor(COLORS.PRIMARY)
+                .backgroundColor(COLORS.TAG_BG)
+                .padding({ left: SPACING.SM, right: SPACING.SM, top: 4, bottom: 4 }).borderRadius(BORDER_RADIUS.SM)
+            }, (act: MarketingActivity) => act.id.toString())
+          }
+          .width('100%')
+        }
+        .width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE).margin({ top: SPACING.SM })
+      }
 
       // 分类Tab
       Scroll() {
