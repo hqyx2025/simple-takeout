@@ -16,13 +16,30 @@
  */
 import { Driver, ON, Component } from '@kit.TestKit'
 import { describe, it, expect } from '@ohos/hypium'
-import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, findByIdOrText } from './UiTestHelper'
+import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, findByIdOrText, waitAny } from './UiTestHelper'
 
 export default function searchFlowTest() {
   describe('SearchFlow', () => {
     it('SearchFlow_search_keyword_then_back_home', 0, async () => {
       const driver: Driver = Driver.create()
       await launchAppUnderTest(driver)
+
+      // 确保已登录并落在首页（干净态需先同意隐私 + 快捷登录）
+      const consent = await waitAny(driver, ['privacy-accept'], 8000)
+      if (isFound(consent)) {
+        await clickByIdOrText(driver, 'privacy-accept', '同意并继续')
+        await driver.delayMs(2000)
+      }
+      let homeCheck = await driver.waitForComponent(ON.id('home-search-entry'), 8000)
+      if (!isFound(homeCheck)) {
+        const quick = await driver.waitForComponent(ON.id('quick-login-user'), 10000)
+        if (isFound(quick)) {
+          await (quick as Component).click()
+          await driver.delayMs(4000)
+        }
+        homeCheck = await driver.waitForComponent(ON.id('home-search-entry'), 10000)
+      }
+      requireComponent(homeCheck, 'home-search-entry')
 
       // ---------- 1. 首页搜索栏 → 搜索页 ----------
       expect(await clickByIdOrText(driver, 'home-search-entry', '搜索美食、店铺')).assertTrue()
