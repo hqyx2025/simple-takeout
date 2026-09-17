@@ -1,11 +1,13 @@
 package com.example.takeout.service;
 
 import com.example.takeout.common.BizException;
+import com.example.takeout.dao.EmployeeDao;
 import com.example.takeout.dao.GoodsDao;
 import com.example.takeout.dao.GoodsSpecDao;
 import com.example.takeout.dao.SeckillDao;
 import com.example.takeout.dao.StoreDao;
 import com.example.takeout.model.Category;
+import com.example.takeout.model.Employee;
 import com.example.takeout.model.Goods;
 import com.example.takeout.model.GoodsSpec;
 import com.example.takeout.model.MarketingActivity;
@@ -38,15 +40,17 @@ public class StoreService {
     private final SeckillDao seckillDao;
     private final ObjectMapper objectMapper;
     private final HotDataCacheService cache;
+    private final EmployeeDao employeeDao;
 
     public StoreService(StoreDao storeDao, GoodsDao goodsDao, GoodsSpecDao specDao, SeckillDao seckillDao,
-                        ObjectMapper objectMapper, HotDataCacheService cache) {
+                        ObjectMapper objectMapper, HotDataCacheService cache, EmployeeDao employeeDao) {
         this.storeDao = storeDao;
         this.goodsDao = goodsDao;
         this.specDao = specDao;
         this.seckillDao = seckillDao;
         this.objectMapper = objectMapper;
         this.cache = cache;
+        this.employeeDao = employeeDao;
     }
 
     public List<Category> listCategories() {
@@ -544,9 +548,35 @@ public class StoreService {
         invalidateStoreAndGoodsCache();
     }
 
+    // ============ 门店员工（多门店按店按角色） ============
+
+    public List<Employee> listStoreEmployees(long ownerId, long storeId) {
+        requireOwned(ownerId, storeId);
+        return employeeDao.listByStore(storeId);
+    }
+
+    public Employee addStoreEmployee(long ownerId, long storeId, long userId, String roleName) {
+        Store store = requireOwned(ownerId, storeId);
+        if (store.ownerId() == userId) {
+            throw new BizException("店铺主无需添加为员工");
+        }
+        String role = roleName == null || roleName.isBlank() ? "店员" : requireMaxLength(roleName.trim(), 16, "员工角色");
+        long id = employeeDao.insert(storeId, userId, role, LocalDateTime.now().format(FMT));
+        return employeeDao.listByStore(storeId).stream()
+                .filter(e -> e.id() == id)
+                .findFirst()
+                .orElseThrow(() -> new BizException("员工添加失败"));
+    }
+
+    public void removeStoreEmployee(long ownerId, long storeId, long employeeId) {
+        requireOwned(ownerId, storeId);
+        employeeDao.delete(employeeId);
+    }
+
     private Store requireOwned(long ownerId, long storeId) {
         Store store = storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
-        if (store.ownerId() != ownerId) {
+        // 多门店员工：店主或该店启用员工均可操作（店主优先，避免员工查询）
+        if (store.ownerId() != ownerId && !employeeDao.isEmployee(ownerId, storeId)) {
             throw new BizException(403, "无权操作该店铺");
         }
         return store;

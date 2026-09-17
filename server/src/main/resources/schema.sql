@@ -190,6 +190,18 @@ CREATE TABLE IF NOT EXISTS setmeal_items (
     KEY idx_setmeal_item_setmeal (setmeal_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 门店员工：商户可把账号按店分配角色，员工仅能操作被分配的店铺
+CREATE TABLE IF NOT EXISTS employees (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    store_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    role_name VARCHAR(16) NOT NULL DEFAULT '',
+    status INT NOT NULL DEFAULT 1,
+    create_time VARCHAR(32) NOT NULL,
+    UNIQUE KEY uk_employee_store_user (store_id, user_id),
+    KEY idx_employee_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS reviews (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     order_id BIGINT NOT NULL DEFAULT 0,

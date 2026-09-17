@@ -62,7 +62,7 @@ class AssistantServiceTest {
         private final List<Store.StoreView> stores;
 
         FakeStoreService(List<Store.StoreView> stores) {
-            super(null, null, null, null, null, null);
+            super(null, null, null, null, null, null, null);
             this.stores = stores;
         }
 

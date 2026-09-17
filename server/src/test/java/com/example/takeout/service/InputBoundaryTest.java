@@ -3,6 +3,7 @@ package com.example.takeout.service;
 import com.example.takeout.common.BizException;
 import com.example.takeout.dao.AnnouncementDao;
 import com.example.takeout.dao.BannerDao;
+import com.example.takeout.dao.EmployeeDao;
 import com.example.takeout.dao.GoodsDao;
 import com.example.takeout.dao.GoodsSpecDao;
 import com.example.takeout.dao.SeckillDao;
@@ -38,7 +39,7 @@ class InputBoundaryTest {
     private final HotDataCacheService cache = mock(HotDataCacheService.class);
 
     private final StoreService storeService = new StoreService(storeDao, goodsDao, mock(GoodsSpecDao.class),
-            mock(SeckillDao.class), new ObjectMapper(), cache);
+            mock(SeckillDao.class), new ObjectMapper(), cache, mock(EmployeeDao.class));
     private final ContentService contentService = new ContentService(bannerDao, announcementDao, cache);
 
     @Test
@@ -53,6 +54,16 @@ class InputBoundaryTest {
                 "测试店", 1, 3, 20, "30分钟", "公".repeat(513), "北京市海淀区", 39.9, 116.4, 0));
         assertEquals("店铺公告最多 512 个字符", noticeError.getMessage());
         verify(storeDao, never()).insert(any(Store.class));
+    }
+
+    @Test
+    void addStoreEmployeeRejectsOwner() {
+        when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore()));
+
+        BizException error = assertThrows(BizException.class,
+                () -> storeService.addStoreEmployee(OWNER_ID, STORE_ID, OWNER_ID, "店长"));
+
+        assertEquals("店铺主无需添加为员工", error.getMessage());
     }
 
     @Test

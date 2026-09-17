@@ -87,6 +87,36 @@ public class StoreController {
         return ApiResponse.ok();
     }
 
+    @GetMapping("/merchant/employees")
+    public ApiResponse<List<com.example.takeout.model.Employee>> merchantEmployees(@RequestAttribute("userId") long userId,
+                                                                                   @RequestAttribute("role") int role,
+                                                                                   @RequestParam long storeId) {
+        requireMerchant(role);
+        return ApiResponse.ok(storeService.listStoreEmployees(userId, storeId));
+    }
+
+    @PostMapping("/merchant/employees")
+    public ApiResponse<com.example.takeout.model.Employee> addEmployee(@RequestAttribute("userId") long userId,
+                                                                       @RequestAttribute("role") int role,
+                                                                       @RequestParam long storeId,
+                                                                       @RequestBody EmployeeBody req) {
+        requireMerchant(role);
+        return ApiResponse.ok(storeService.addStoreEmployee(userId, storeId, req.userId(), req.roleName()));
+    }
+
+    @DeleteMapping("/merchant/employees/{employeeId}")
+    public ApiResponse<Void> removeEmployee(@RequestAttribute("userId") long userId,
+                                            @RequestAttribute("role") int role,
+                                            @RequestParam long storeId,
+                                            @PathVariable long employeeId) {
+        requireMerchant(role);
+        storeService.removeStoreEmployee(userId, storeId, employeeId);
+        return ApiResponse.ok();
+    }
+
+    public record EmployeeBody(long userId, String roleName) {
+    }
+
     @GetMapping("/stores")
     public ApiResponse<List<Store.StoreView>> stores(@RequestParam(required = false) Integer categoryId,
                                                      @RequestParam(required = false) Double latitude,
