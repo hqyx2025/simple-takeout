@@ -1,8 +1,9 @@
 /** 商户新增商品页：表单确认后才写入数据库，并在返回前重新读取商品数据。 */
 import { Category, GoodsItem, GoodsSpec, User, UserRole } from '../model/Models'
-import { createMerchantGoodsApi, fetchMerchantCategoriesApi, fetchMerchantGoodsApi } from '../service/ApiService'
+import { createMerchantGoodsApi, fetchMerchantCategoriesApi, fetchMerchantGoodsApi, uploadImageApi } from '../service/ApiService'
 import { getLastRemoteErrorMessage, updateGoodsSpecsRemote } from '../service/AppStorageManager'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { API_CONFIG, COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { photoAccessHelper } from '@kit.MediaLibraryKit'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 
 /** 多规格最多行数（超出时提示，不静默丢弃） */
@@ -39,6 +40,7 @@ export struct MerchantAddGoodsPage {
   @State goodsDescription: string = ''
   @State price: string = ''
   @State originalPrice: string = ''
+  @State image: string = ''
   @State stock: string = '99'
   @State categoryId: number = 0
   @State isSpecial: boolean = false
@@ -252,7 +254,7 @@ export struct MerchantAddGoodsPage {
       description: this.goodsDescription.trim() || '美味可口',
       price: price,
       originalPrice: originalPrice,
-      image: '',
+      image: this.image,
       categoryId: 1,
       merchantCategoryId: this.categoryId,
       stock: stock,
@@ -292,6 +294,29 @@ export struct MerchantAddGoodsPage {
     }
     AppStorage.setOrCreate<string>('merchantGoodsFeedback', '商品添加成功，列表已刷新')
     router.back()
+  }
+
+  /** 选择并上传商品图片：成功后写入 this.image（相对 /uploads/ 地址）。 */
+  private async pickImage(): Promise<void> {
+    try {
+      const picker: photoAccessHelper.PhotoViewPicker = new photoAccessHelper.PhotoViewPicker()
+      const options: photoAccessHelper.PhotoSelectOptions = new photoAccessHelper.PhotoSelectOptions()
+      options.MIMEType = photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE
+      options.maxSelectNumber = 1
+      const result: photoAccessHelper.PhotoSelectResult = await picker.select(options)
+      if (!result.photoUris || result.photoUris.length === 0) {
+        return
+      }
+      const uploaded = await uploadImageApi(result.photoUris[0], false)
+      if (uploaded !== null && uploaded.url !== '') {
+        this.image = uploaded.url
+        promptAction.showToast({ message: '图片已上传', duration: 1500 })
+      } else {
+        promptAction.showToast({ message: '图片上传失败，请重试', duration: 2200 })
+      }
+    } catch (err) {
+      promptAction.showToast({ message: '选择图片失败，请重试', duration: 2200 })
+    }
   }
 
   @Builder
@@ -475,6 +500,19 @@ export struct MerchantAddGoodsPage {
               TextInput({ placeholder: '特价时填写，如：30.00', text: this.originalPrice })
                 .width('100%').height(44).type(InputType.Number)
                 .onChange((value: string) => { this.originalPrice = value })
+            }
+            Column({ space: SPACING.XS }) {
+              this.FieldLabel('商品图片', false)
+              Row({ space: SPACING.MD }) {
+                if (this.image !== '') {
+                  Image(this.image.startsWith('/') ? API_CONFIG.BASE_URL + this.image : this.image)
+                    .width(72).height(72).objectFit(ImageFit.Cover).borderRadius(BORDER_RADIUS.MD)
+                }
+                Button(this.image === '' ? '＋ 上传图片' : '更换图片')
+                  .fontSize(FONT_SIZE.SM).height(36).borderRadius(BORDER_RADIUS.MD)
+                  .onClick(() => { this.pickImage() })
+              }
+              .width('100%').alignItems(VerticalAlign.Center)
             }
             Row() {
               Text('加入特价团购')
