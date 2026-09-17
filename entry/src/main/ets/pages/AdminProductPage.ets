@@ -1,7 +1,7 @@
 /** 平台商品监管：搜索全部店铺商品、强制上下架和删除违规商品。 */
 import { AdminProduct, User, UserRole } from '../model/Models'
 import { deleteAdminProductApi, fetchAdminProductsApi, updateAdminProductStatusApi } from '../service/ApiService'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { StatusBadge } from '../components/StatusBadge'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { ConfirmDialog } from '../components/ConfirmDialog'
@@ -93,26 +93,26 @@ export struct AdminProductPage {
   build() {
     Column() {
       Row() {
-        Text('返回').fontSize(FONT_SIZE.MD).fontColor(COLORS.PRIMARY).onClick(() => { router.back() })
-        Text('商品监管').fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).layoutWeight(1).textAlign(TextAlign.Center)
+        Text('返回').fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.ADMIN).onClick(() => { router.back() })
+        Text('商品监管').fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.ADMIN).layoutWeight(1).textAlign(TextAlign.Center)
         Button(this.loading ? '加载中' : '刷新').height(32).fontSize(FONT_SIZE.SM)
           .onClick(() => { this.refresh() })
-      }.width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 }).backgroundColor(COLORS.BG_WHITE)
+      }.width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 }).backgroundColor(MODULE_BG.ADMIN)
 
       Row({ space: SPACING.SM }) {
         TextInput({ placeholder: '搜索商品名或店铺名', text: this.keyword })
           .layoutWeight(1).height(40).onChange((value: string) => { this.keyword = value })
         Button('搜索').height(40).fontSize(FONT_SIZE.SM).onClick(() => { this.refresh() })
-      }.width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE)
+      }.width('100%').padding(SPACING.LG).backgroundColor(MODULE_BG.ADMIN)
 
       Row({ space: SPACING.MD }) {
-        Button('全部').fontSize(FONT_SIZE.SM).backgroundColor(this.statusFilter === -1 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+        Button('全部').fontSize(FONT_SIZE.SM).backgroundColor(this.statusFilter === -1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.statusFilter === -1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = -1; this.refresh() })
-        Button('上架').fontSize(FONT_SIZE.SM).backgroundColor(this.statusFilter === 1 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+        Button('上架').fontSize(FONT_SIZE.SM).backgroundColor(this.statusFilter === 1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.statusFilter === 1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 1; this.refresh() })
-        Button('下架').fontSize(FONT_SIZE.SM).backgroundColor(this.statusFilter === 0 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+        Button('下架').fontSize(FONT_SIZE.SM).backgroundColor(this.statusFilter === 0 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.statusFilter === 0 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 0; this.refresh() })
       }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
@@ -159,6 +159,12 @@ export struct AdminProductPage {
   @Builder
   ProductRow(product: AdminProduct) {
     Row({ space: SPACING.MD }) {
+      Text(product.name.substring(0, 1))
+        .width(40).height(40).textAlign(TextAlign.Center)
+        .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
+        .fontColor(accentFg(accentIndexFromText(product.name)))
+        .backgroundColor(accentBg(accentIndexFromText(product.name)))
+        .borderRadius(BORDER_RADIUS.ROUND)
       Column({ space: SPACING.XS }) {
         Text(product.name).fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
         Text(`${product.storeName}  ¥${product.price.toFixed(2)}  月销${product.sales}`)

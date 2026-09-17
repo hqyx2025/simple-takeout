@@ -8,7 +8,7 @@ import { fetchRecommendedStoresApi, fetchSpecialGoodsApi, fetchStoreMerchantCate
 import { LoginPage } from './LoginPage'
 import { AssistantPage } from './AssistantPage'
 import { CartPage } from './CartPage'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, formatSales, merchantImageSource, DEFAULT_MERCHANT_IMAGE } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, formatSales, merchantImageSource, DEFAULT_MERCHANT_IMAGE, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
 import { RatingStars } from '../components/RatingStars'
 import { ConfirmDialog } from '../components/ConfirmDialog'
@@ -343,12 +343,20 @@ struct Index {
     }
   }
 
+  /** 底部 4 个 Tab 各用一种模块色：一眼看出当前在哪个模块。 */
+  private tabColor(targetIndex: number): string {
+    if (targetIndex === 0) { return MODULE_COLOR.HOME }
+    if (targetIndex === 1) { return MODULE_COLOR.REVIEW }
+    if (targetIndex === 2) { return MODULE_COLOR.CART }
+    return MODULE_COLOR.MINE
+  }
+
   @Builder
   tabBuilder(title: string, targetIndex: number) {
     Column({ space: 2 }) {
       Text(title)
         .fontSize(10)
-        .fontColor(this.currentTab === targetIndex ? COLORS.PRIMARY : COLORS.TAB_INACTIVE)
+        .fontColor(this.currentTab === targetIndex ? this.tabColor(targetIndex) : COLORS.TAB_INACTIVE)
         .fontWeight(this.currentTab === targetIndex ? FontWeight.Bold : FontWeight.Normal)
     }
     .width('100%')
@@ -718,13 +726,18 @@ struct HomePage {
           Column() {
             // 分类导航
           Grid() {
-            ForEach(this.categories, (cat: Category) => {
+            ForEach(this.categories, (cat: Category, index: number) => {
               GridItem() {
                 Column({ space: SPACING.XS }) {
-                  Text(this.getCategoryIcon(cat)).fontSize(28)
+                  Text(this.getCategoryIcon(cat))
+                    .fontSize(26)
+                    .width(46).height(46)
+                    .textAlign(TextAlign.Center)
+                    .backgroundColor(accentBg(index))
+                    .borderRadius(BORDER_RADIUS.LG)
                   Text(cat.name)
                     .fontSize(FONT_SIZE.SM)
-                    .fontColor(this.currentCategory === cat.id ? COLORS.PRIMARY : COLORS.TEXT_PRIMARY)
+                    .fontColor(this.currentCategory === cat.id ? COLORS.PRIMARY : accentFg(index))
                     .fontWeight(this.currentCategory === cat.id ? FontWeight.Bold : FontWeight.Normal)
                 }
                 .width('100%')
@@ -831,15 +844,21 @@ struct HomePage {
 
           // 限时秒杀：服务端时间窗口内的活动，倒计时结束或名额售罄后自动从列表消失
           if (this.seckills.length > 0) {
-            Row() {
-              Text('⚡ 限时秒杀')
-                .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRICE_RED)
+            Row({ space: SPACING.SM }) {
+              Text('⚡')
+                .fontSize(FONT_SIZE.MD)
+                .width(28).height(28).textAlign(TextAlign.Center)
+                .backgroundColor(MODULE_COLOR.SECKILL)
+                .borderRadius(BORDER_RADIUS.SM)
+              Text('限时秒杀')
+                .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.SECKILL)
               Blank()
               Text('秒杀价下单自动生效')
-                .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+                .fontSize(FONT_SIZE.SM).fontColor(MODULE_COLOR.SECKILL)
             }
             .width('100%')
             .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.SM })
+            .backgroundColor(MODULE_BG.SECKILL)
 
             Scroll() {
               Row({ space: SPACING.SM }) {
@@ -855,17 +874,23 @@ struct HomePage {
           }
 
           // 附近推荐（原「发现」Tab 并入首页）：2 公里内、平台推荐位的店铺
-          Row() {
+          Row({ space: SPACING.SM }) {
+            Text('📍')
+              .fontSize(FONT_SIZE.MD)
+              .width(28).height(28).textAlign(TextAlign.Center)
+              .backgroundColor(MODULE_COLOR.NEARBY)
+              .borderRadius(BORDER_RADIUS.SM)
             Text('附近推荐')
-              .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+              .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.NEARBY)
               .layoutWeight(1)
             Text('刷新')
-              .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
+              .fontSize(FONT_SIZE.SM).fontColor(MODULE_COLOR.NEARBY)
               .id('home-recommend-refresh')
               .onClick(() => { this.refreshRecommended() })
           }
           .width('100%')
           .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.SM })
+          .backgroundColor(MODULE_BG.NEARBY)
 
           if (!this.loggedIn) {
             Text('登录后查看平台推荐商户')
@@ -912,15 +937,21 @@ struct HomePage {
           }
 
           // 特价团购标题
-          Row() {
+          Row({ space: SPACING.SM }) {
+            Text('🏷️')
+              .fontSize(FONT_SIZE.MD)
+              .width(28).height(28).textAlign(TextAlign.Center)
+              .backgroundColor(MODULE_COLOR.SPECIAL)
+              .borderRadius(BORDER_RADIUS.SM)
             Text('特价团购')
-              .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+              .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.SPECIAL)
             Blank()
             Text('查看全部 >')
-              .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+              .fontSize(FONT_SIZE.SM).fontColor(MODULE_COLOR.SPECIAL)
           }
           .width('100%')
           .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.SM })
+          .backgroundColor(MODULE_BG.SPECIAL)
           .onClick(() => {
             this.openProductList('special', 0, '特价团购')
           })
@@ -1016,8 +1047,10 @@ struct HomePage {
     }
     .width(140)
     .padding(SPACING.MD)
-    .backgroundColor(COLORS.BG_WHITE)
+    .backgroundColor(MODULE_BG.SECKILL)
     .borderRadius(BORDER_RADIUS.LG)
+    .borderWidth(1)
+    .borderColor(MODULE_COLOR.SECKILL)
     .alignItems(HorizontalAlign.Start)
     .onClick(() => { this.openSeckillStore(item) })
   }
@@ -1027,9 +1060,12 @@ struct HomePage {
     Row({ space: SPACING.MD }) {
       Column() {
         Text(item.goods.name.substring(0, 1))
-          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRIMARY)
+          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold)
+          .fontColor(accentFg(accentIndexFromText(item.goods.name)))
       }
-      .width(82).height(82).backgroundColor(COLORS.WARM_BG).borderRadius(BORDER_RADIUS.MD)
+      .width(82).height(82)
+      .backgroundColor(accentBg(accentIndexFromText(item.goods.name)))
+      .borderRadius(BORDER_RADIUS.MD)
       .justifyContent(FlexAlign.Center)
 
       Column({ space: SPACING.XS }) {
@@ -1060,7 +1096,7 @@ struct HomePage {
       }
       .layoutWeight(1).alignItems(HorizontalAlign.Start)
     }
-    .width('100%').padding(SPACING.MD).backgroundColor(COLORS.BG_WHITE)
+    .width('100%').padding(SPACING.MD).backgroundColor(MODULE_BG.SPECIAL)
     .borderRadius(BORDER_RADIUS.LG)
     .onClick(() => { this.openSpecialStore(item) })
   }
@@ -1074,7 +1110,7 @@ struct HomePage {
           .fontSize(28).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_WHITE)
       }
       .width(80).height(80)
-      .backgroundColor(COLORS.PRIMARY)
+      .backgroundColor(accentFg(accentIndexFromText(store.name)))
       .borderRadius(BORDER_RADIUS.MD)
       .justifyContent(FlexAlign.Center)
 
@@ -1136,7 +1172,9 @@ struct RecommendedStoreCardHost {
       Column() {
         Text(this.store.name.substring(0, 1)).fontSize(28).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_WHITE)
       }
-      .width(76).height(76).backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.MD)
+      .width(76).height(76)
+      .backgroundColor(accentFg(accentIndexFromText(this.store.name)))
+      .borderRadius(BORDER_RADIUS.MD)
       .justifyContent(FlexAlign.Center)
       Column({ space: SPACING.XS }) {
         Row() {
@@ -1540,7 +1578,7 @@ export struct StoreDetailContent {
       Column({ space: 6 }) {
         Row() {
           Text(this.storeName)
-            .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+            .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.MERCHANT)
             .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           Text(this.isFav ? '❤️' : '🤍')
             .fontSize(24)
@@ -1592,11 +1630,11 @@ export struct StoreDetailContent {
       }
       .width('100%')
       .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.MD })
-      .backgroundColor(COLORS.BG_WHITE).margin({ top: SPACING.SM })
+      .backgroundColor(MODULE_BG.MERCHANT).margin({ top: SPACING.SM })
 
       if (this.storeActivities.length > 0) {
         Column({ space: SPACING.XS }) {
-          Text('店铺活动').fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY).width('100%')
+          Text('店铺活动').fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.MERCHANT).width('100%')
           Row({ space: SPACING.SM }) {
             ForEach(this.storeActivities, (act: MarketingActivity) => {
               Text(act.title)
@@ -1607,13 +1645,13 @@ export struct StoreDetailContent {
           }
           .width('100%')
         }
-        .width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE).margin({ top: SPACING.SM })
+        .width('100%').padding(SPACING.LG).backgroundColor(MODULE_BG.MERCHANT).margin({ top: SPACING.SM })
       }
 
       if (this.storeSetmeals.length > 0) {
         Column({ space: SPACING.SM }) {
-          Text('超值套餐').fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY).width('100%')
-          ForEach(this.storeSetmeals, (sm: Setmeal) => {
+          Text('超值套餐').fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.SPECIAL).width('100%')
+          ForEach(this.storeSetmeals, (sm: Setmeal, index: number) => {
             Column({ space: SPACING.XS }) {
               Row() {
                 Text(sm.name).fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1).maxLines(1)
@@ -1625,20 +1663,20 @@ export struct StoreDetailContent {
                 Text(`原价 ¥${sm.originalPrice.toFixed(2)}`).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).decoration({ type: TextDecorationType.LineThrough })
               }
             }
-            .width('100%').padding(SPACING.MD).backgroundColor(COLORS.BG_PRIMARY).borderRadius(BORDER_RADIUS.MD)
+            .width('100%').padding(SPACING.MD).backgroundColor(accentBg(index)).borderRadius(BORDER_RADIUS.MD)
           }, (sm: Setmeal) => sm.id.toString())
         }
-        .width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE).margin({ top: SPACING.SM })
+        .width('100%').padding(SPACING.LG).backgroundColor(MODULE_BG.SPECIAL).margin({ top: SPACING.SM })
       }
 
       // 分类Tab
       Scroll() {
         Row({ space: SPACING.SM }) {
-          ForEach(this.goodsCats, (catName: string) => {
+          ForEach(this.goodsCats, (catName: string, index: number) => {
             Text(catName)
               .fontSize(FONT_SIZE.MD)
-              .fontColor(this.currentCat === catName ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
-              .backgroundColor(this.currentCat === catName ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+              .fontColor(this.currentCat === catName ? COLORS.TEXT_WHITE : accentFg(index))
+              .backgroundColor(this.currentCat === catName ? accentFg(index) : accentBg(index))
               .padding({ left: 12, right: 12, top: 4, bottom: 4 })
               .borderRadius(BORDER_RADIUS.ROUND)
               .height(28)
@@ -1743,6 +1781,8 @@ export struct StoreDetailContent {
                 .layoutWeight(1).alignItems(HorizontalAlign.Start)
               }
               .width('100%').padding(SPACING.MD)
+              .backgroundColor(accentBg(accentIndexFromText(goods.name)))
+              .borderRadius(BORDER_RADIUS.MD)
               }
             }, (item: GoodsItem) => `${this.goodsRenderVersion}-${item.id}`)
           }
@@ -1874,7 +1914,7 @@ export struct StoreDetailContent {
     Row() {
       Stack() {
         Text('🛒').width(50).height(50).fontSize(24)
-          .backgroundColor(COLORS.TEXT_PRIMARY).borderRadius(BORDER_RADIUS.ROUND)
+          .backgroundColor(MODULE_COLOR.CART).borderRadius(BORDER_RADIUS.ROUND)
           .textAlign(TextAlign.Center)
         if (this.cartCount > 0) {
           Text(this.cartCount.toString())
@@ -1896,7 +1936,7 @@ export struct StoreDetailContent {
       Blank()
       Button(this.cartCount > 0 ? `去结算(${this.cartCount})` : '去购物')
         .height(40).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_WHITE)
-        .backgroundColor(this.cartCount > 0 ? COLORS.PRIMARY : COLORS.TEXT_SECONDARY)
+        .backgroundColor(this.cartCount > 0 ? MODULE_COLOR.CART : COLORS.TEXT_SECONDARY)
         .borderRadius({ topRight: BORDER_RADIUS.LG, bottomRight: BORDER_RADIUS.LG })
         .width(100)
         .onClick(() => {
@@ -1917,8 +1957,10 @@ export struct StoreDetailContent {
   ReviewsSection() {
     Column({ space: SPACING.SM }) {
       Text(`用户评价（${this.storeReviews.length}条）`)
-        .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
-        .width('100%')
+        .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.REVIEW)
+        .width('100%').padding(SPACING.SM)
+        .backgroundColor(MODULE_BG.REVIEW)
+        .borderRadius(BORDER_RADIUS.MD)
 
       if (this.storeReviews.length === 0) {
         Text('暂无评价')
@@ -2398,7 +2440,8 @@ struct ProfileMainPage {
   @Builder
   AssetItem(value: string, label: string, action: () => void) {
     Column({ space: SPACING.XS }) {
-      Text(value).fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRIMARY)
+      Text(value).fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold)
+        .fontColor(accentFg(accentIndexFromText(label)))
       Text(label).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
     }
     .layoutWeight(1).alignItems(HorizontalAlign.Center)
@@ -2408,7 +2451,10 @@ struct ProfileMainPage {
   @Builder
   ProfileOrderEntry(icon: string, title: string, status: number) {
     Column({ space: SPACING.XS }) {
-      Text(icon).fontSize(28)
+      Text(icon).fontSize(24)
+        .width(44).height(44).textAlign(TextAlign.Center)
+        .backgroundColor(accentBg(accentIndexFromText(title)))
+        .borderRadius(BORDER_RADIUS.CIRCLE)
       Text(title).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
     }
     .onClick(() => {
@@ -2426,6 +2472,9 @@ struct ProfileMainPage {
   ProfileMenuRow(icon: string, title: string, action: () => void, rowId: string = '') {
     Row({ space: SPACING.MD }) {
       Text(icon).fontSize(18)
+        .width(36).height(36).textAlign(TextAlign.Center)
+        .backgroundColor(accentBg(accentIndexFromText(title)))
+        .borderRadius(BORDER_RADIUS.MD)
       Text(title).fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
       Text('›').fontSize(20).fontColor(COLORS.TEXT_HINT)
     }

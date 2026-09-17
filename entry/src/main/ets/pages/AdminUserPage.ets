@@ -1,7 +1,7 @@
 /** 平台用户和商户账号管理：查看账号并启用/停用，不修改余额和业务数据。 */
 import { AdminUser, User, UserRole } from '../model/Models'
 import { fetchAdminUsersApi, updateAdminUserStatusApi } from '../service/ApiService'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { StatusBadge } from '../components/StatusBadge'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 
@@ -59,27 +59,27 @@ export struct AdminUserPage {
   build() {
     Column() {
       Row() {
-        Text('返回').fontSize(FONT_SIZE.MD).fontColor(COLORS.PRIMARY).onClick(() => { router.back() })
-        Text('用户管理').fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).layoutWeight(1).textAlign(TextAlign.Center)
+        Text('返回').fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.ADMIN).onClick(() => { router.back() })
+        Text('用户管理').fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.ADMIN).layoutWeight(1).textAlign(TextAlign.Center)
         Button(this.loading ? '加载中' : '刷新').height(32).fontSize(FONT_SIZE.SM)
           .onClick(() => { this.refresh() })
-      }.width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 }).backgroundColor(COLORS.BG_WHITE)
+      }.width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 }).backgroundColor(MODULE_BG.ADMIN)
 
       Row({ space: SPACING.SM }) {
         TextInput({ placeholder: '搜索姓名或手机号', text: this.keyword }).layoutWeight(1).height(40)
           .onChange((value: string) => { this.keyword = value })
         Button('搜索').height(40).fontSize(FONT_SIZE.SM).onClick(() => { this.refresh() })
-      }.width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE)
+      }.width('100%').padding(SPACING.LG).backgroundColor(MODULE_BG.ADMIN)
 
       Row({ space: SPACING.MD }) {
         Text('角色').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
-        Button('全部').fontSize(FONT_SIZE.SM).backgroundColor(this.roleFilter === -1 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+        Button('全部').fontSize(FONT_SIZE.SM).backgroundColor(this.roleFilter === -1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.roleFilter === -1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.roleFilter = -1; this.refresh() })
-        Button('用户').fontSize(FONT_SIZE.SM).backgroundColor(this.roleFilter === 0 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+        Button('用户').fontSize(FONT_SIZE.SM).backgroundColor(this.roleFilter === 0 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.roleFilter === 0 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.roleFilter = 0; this.refresh() })
-        Button('商户').fontSize(FONT_SIZE.SM).backgroundColor(this.roleFilter === 1 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+        Button('商户').fontSize(FONT_SIZE.SM).backgroundColor(this.roleFilter === 1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.roleFilter === 1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.roleFilter = 1; this.refresh() })
       }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
@@ -87,15 +87,15 @@ export struct AdminUserPage {
       Row({ space: SPACING.MD }) {
         Text('状态').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
         Button('全部').id('admin-user-status-all').fontSize(FONT_SIZE.SM)
-          .backgroundColor(this.statusFilter === -1 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+          .backgroundColor(this.statusFilter === -1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.statusFilter === -1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = -1; this.refresh() })
         Button('已启用').id('admin-user-status-enabled').fontSize(FONT_SIZE.SM)
-          .backgroundColor(this.statusFilter === 1 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+          .backgroundColor(this.statusFilter === 1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.statusFilter === 1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 1; this.refresh() })
         Button('已停用').id('admin-user-status-disabled').fontSize(FONT_SIZE.SM)
-          .backgroundColor(this.statusFilter === 0 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+          .backgroundColor(this.statusFilter === 0 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.statusFilter === 0 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 0; this.refresh() })
       }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
@@ -122,6 +122,12 @@ export struct AdminUserPage {
   @Builder
   UserRow(item: AdminUser) {
     Row({ space: SPACING.MD }) {
+      Text(item.username.substring(0, 1))
+        .width(40).height(40).textAlign(TextAlign.Center)
+        .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
+        .fontColor(accentFg(accentIndexFromText(item.username)))
+        .backgroundColor(accentBg(accentIndexFromText(item.username)))
+        .borderRadius(BORDER_RADIUS.ROUND)
       Column({ space: SPACING.XS }) {
         Text(item.username).fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
         Text(`${item.phone}  ${item.role === 1 ? '商户' : '普通用户'}${item.role === 1 ? `  店铺${item.storeCount}家` : ''}`)

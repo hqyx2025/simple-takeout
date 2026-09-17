@@ -2,7 +2,7 @@
  * 管理端骑手管理（四端改造）：骑手列表与启用/停用
  */
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { Rider } from '../model/Models'
 import { syncAdminRidersRemote, updateRiderStatusRemote } from '../service/AppStorageManager'
 import { StatusBadge } from '../components/StatusBadge'
@@ -57,35 +57,35 @@ export struct AdminRiderPage {
     Column() {
       Row() {
         Text('‹ 返回')
-          .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
+          .fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.ADMIN)
           .onClick(() => { router.back() })
         Text('骑手管理')
-          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.ADMIN)
           .layoutWeight(1).textAlign(TextAlign.Center)
         Text('刷新')
-          .fontSize(FONT_SIZE.MD).fontColor(COLORS.PRIMARY)
+          .fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.ADMIN)
           .onClick(() => { this.loadRiders() })
       }
       .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG })
-      .backgroundColor(COLORS.BG_WHITE)
+      .backgroundColor(MODULE_BG.ADMIN)
 
       Row({ space: SPACING.MD }) {
         Text('状态').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
         Button('全部').id('admin-rider-status-all').fontSize(FONT_SIZE.SM)
-          .backgroundColor(this.statusFilter === -1 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+          .backgroundColor(this.statusFilter === -1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.statusFilter === -1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = -1; this.applyFilter() })
         Button('已启用').id('admin-rider-status-enabled').fontSize(FONT_SIZE.SM)
-          .backgroundColor(this.statusFilter === 1 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+          .backgroundColor(this.statusFilter === 1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.statusFilter === 1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 1; this.applyFilter() })
         Button('已停用').id('admin-rider-status-disabled').fontSize(FONT_SIZE.SM)
-          .backgroundColor(this.statusFilter === 0 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+          .backgroundColor(this.statusFilter === 0 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.statusFilter === 0 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 0; this.applyFilter() })
       }
       .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
-      .backgroundColor(COLORS.BG_PRIMARY)
+      .backgroundColor(MODULE_BG.ADMIN)
 
       if (this.loading) {
         Column() {
@@ -117,7 +117,13 @@ export struct AdminRiderPage {
   @Builder
   RiderCard(rider: Rider) {
     Column({ space: SPACING.XS }) {
-      Row() {
+      Row({ space: SPACING.SM }) {
+        Text(rider.name.substring(0, 1))
+          .width(40).height(40).textAlign(TextAlign.Center)
+          .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
+          .fontColor(accentFg(accentIndexFromText(rider.name)))
+          .backgroundColor(accentBg(accentIndexFromText(rider.name)))
+          .borderRadius(BORDER_RADIUS.ROUND)
         Text(rider.name).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
         StatusBadge({ text: rider.status === 1 ? '启用中' : '已停用', mode: rider.status === 1 ? 'success' : 'gray' })
       }.width('100%')
@@ -128,7 +134,7 @@ export struct AdminRiderPage {
         Blank()
         Button(rider.status === 1 ? '停用' : '启用')
           .height(32).fontSize(FONT_SIZE.SM)
-          .fontColor(rider.status === 1 ? COLORS.ERROR : COLORS.PRIMARY)
+          .fontColor(rider.status === 1 ? COLORS.ERROR : MODULE_COLOR.ADMIN)
           .backgroundColor(rider.status === 1 ? COLORS.ERROR_LIGHT : COLORS.TAG_BG)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
           .onClick(() => { this.toggleStatus(rider) })

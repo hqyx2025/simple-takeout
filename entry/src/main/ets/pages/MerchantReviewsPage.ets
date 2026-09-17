@@ -3,7 +3,7 @@
  * 查看本店收到的评价并回复
  */
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { Review } from '../model/Models'
 import { syncMerchantReviewsRemote, replyReviewRemote } from '../service/AppStorageManager'
 import { RatingStars } from '../components/RatingStars'
@@ -68,12 +68,12 @@ export struct MerchantReviewsPage {
         Row() {
           Text('‹ 返回')
             .fontSize(FONT_SIZE.MD)
-            .fontColor(COLORS.TEXT_PRIMARY)
+            .fontColor(MODULE_COLOR.MERCHANT)
             .onClick(() => { router.back() })
           Text('评价管理')
             .fontSize(FONT_SIZE.XL)
             .fontWeight(FontWeight.Bold)
-            .fontColor(COLORS.TEXT_PRIMARY)
+            .fontColor(MODULE_COLOR.MERCHANT)
             .layoutWeight(1)
             .textAlign(TextAlign.Center)
           Text(' ')
@@ -83,7 +83,7 @@ export struct MerchantReviewsPage {
         .width('100%')
         .height(56)
         .padding({ left: SPACING.LG, right: SPACING.LG })
-        .backgroundColor(COLORS.BG_WHITE)
+        .backgroundColor(MODULE_BG.MERCHANT)
 
         if (this.loading) {
           Column() {
@@ -132,6 +132,12 @@ export struct MerchantReviewsPage {
   ReviewCard(review: Review) {
     Column({ space: SPACING.XS }) {
       Row({ space: SPACING.SM }) {
+        Text(review.anonymous === 1 ? '匿' : review.username.substring(0, 1))
+          .fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold)
+          .fontColor(accentFg(accentIndexFromText(review.username)))
+          .backgroundColor(accentBg(accentIndexFromText(review.username)))
+          .width(28).height(28).textAlign(TextAlign.Center)
+          .borderRadius(BORDER_RADIUS.SM)
         Text(review.anonymous === 1 ? '匿名用户' : review.username)
           .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY).fontWeight(FontWeight.Bold)
         RatingStars({ rating: review.rating, fontSize: FONT_SIZE.SM, showNumber: false })
@@ -163,7 +169,9 @@ export struct MerchantReviewsPage {
         Flex({ wrap: FlexWrap.Wrap }) {
           ForEach(review.tags, (tag: string) => {
             Text(tag)
-              .fontSize(FONT_SIZE.XS).fontColor(COLORS.TAG_TEXT).backgroundColor(COLORS.TAG_BG)
+              .fontSize(FONT_SIZE.XS)
+              .fontColor(accentFg(accentIndexFromText(tag)))
+              .backgroundColor(accentBg(accentIndexFromText(tag)))
               .padding({ left: 6, right: 6, top: 2, bottom: 2 })
               .borderRadius(BORDER_RADIUS.SM)
               .margin({ right: 4, bottom: 4 })
@@ -189,7 +197,7 @@ export struct MerchantReviewsPage {
         Blank()
         Button(review.reply === '' ? '回复' : '修改回复')
           .height(32).fontSize(FONT_SIZE.SM)
-          .fontColor(COLORS.PRIMARY).backgroundColor(COLORS.TAG_BG)
+          .fontColor(MODULE_COLOR.MERCHANT).backgroundColor(MODULE_BG.MERCHANT)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
           .onClick(() => { this.openReply(review) })
       }
@@ -206,7 +214,7 @@ export struct MerchantReviewsPage {
     Column() {
       Column({ space: SPACING.MD }) {
         Text('回复评价')
-          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.MERCHANT)
           .width('100%').textAlign(TextAlign.Center)
         Text('回复会展示在用户评价下方')
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%')
@@ -223,7 +231,7 @@ export struct MerchantReviewsPage {
             .onClick(() => { this.replyTarget = null })
           Button(this.submitting ? '提交中…' : '提交回复')
             .layoutWeight(1).height(42)
-            .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
+            .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.MERCHANT)
             .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
             .onClick(() => { this.submitReply() })
         }

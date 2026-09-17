@@ -2,7 +2,7 @@
 import { Category, GoodsItem, GoodsSpec, User, UserRole } from '../model/Models'
 import { fetchMerchantCategoriesApi, fetchMerchantGoodsApi, updateMerchantGoodsApi, uploadImageApi } from '../service/ApiService'
 import { getLastRemoteErrorMessage, updateGoodsSpecsRemote } from '../service/AppStorageManager'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, merchantImageSource, DEFAULT_MERCHANT_IMAGE } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, merchantImageSource, DEFAULT_MERCHANT_IMAGE, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { photoAccessHelper } from '@kit.MediaLibraryKit'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 
@@ -373,16 +373,16 @@ export struct MerchantEditGoodsPage {
       Row({ space: SPACING.SM }) {
         Text('未分组')
           .fontSize(FONT_SIZE.SM)
-          .fontColor(this.categoryId === 0 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
-          .backgroundColor(this.categoryId === 0 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+          .fontColor(this.categoryId === 0 ? accentFg(accentIndexFromText('未分组')) : COLORS.TEXT_SECONDARY)
+          .backgroundColor(this.categoryId === 0 ? accentBg(accentIndexFromText('未分组')) : COLORS.BG_PRIMARY)
           .padding({ left: SPACING.MD, right: SPACING.MD, top: SPACING.SM, bottom: SPACING.SM })
           .borderRadius(BORDER_RADIUS.ROUND)
           .onClick(() => { this.selectCategory(0) })
         ForEach(this.categories, (category: Category) => {
           Text(category.name)
             .fontSize(FONT_SIZE.SM)
-            .fontColor(this.categoryId === category.id ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
-            .backgroundColor(this.categoryId === category.id ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+            .fontColor(this.categoryId === category.id ? accentFg(accentIndexFromText(category.name)) : COLORS.TEXT_SECONDARY)
+            .backgroundColor(this.categoryId === category.id ? accentBg(accentIndexFromText(category.name)) : COLORS.BG_PRIMARY)
             .padding({ left: SPACING.MD, right: SPACING.MD, top: SPACING.SM, bottom: SPACING.SM })
             .borderRadius(BORDER_RADIUS.ROUND)
             .onClick(() => { this.selectCategory(category.id) })
@@ -414,7 +414,7 @@ export struct MerchantEditGoodsPage {
         .onChange((next: string) => { onChange(next) })
       if (hint !== '') {
         Text(hint)
-          .fontSize(FONT_SIZE.XS).fontColor(COLORS.PRIMARY)
+          .fontSize(FONT_SIZE.XS).fontColor(MODULE_COLOR.MERCHANT)
       }
     }
     .layoutWeight(1)
@@ -463,9 +463,14 @@ export struct MerchantEditGoodsPage {
   SpecSection() {
     Column({ space: SPACING.SM }) {
       Row() {
+        Text('🧾')
+          .fontSize(FONT_SIZE.MD)
+          .width(28).height(28).textAlign(TextAlign.Center)
+          .backgroundColor(accentBg(2))
+          .borderRadius(BORDER_RADIUS.SM)
         Column({ space: SPACING.XS }) {
           Text('多规格')
-            .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
+            .fontSize(FONT_SIZE.MD).fontColor(accentFg(2))
           Text('如：大份/小份、加辣')
             .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
         }
@@ -488,7 +493,7 @@ export struct MerchantEditGoodsPage {
         }, (row: SpecRow, index: number) => `${row.key}-${index}`)
         Button(`＋ 添加规格（${this.specRows.length}/${MAX_SPEC_ROWS}）`)
           .width('100%').height(40).fontSize(FONT_SIZE.SM)
-          .fontColor(COLORS.PRIMARY).backgroundColor(COLORS.TAG_BG)
+          .fontColor(MODULE_COLOR.MERCHANT).backgroundColor(MODULE_BG.MERCHANT)
           .borderRadius(BORDER_RADIUS.MD)
           .onClick(() => { this.addSpecRow() })
         Text(this.originalSpecCount > 0
@@ -529,14 +534,25 @@ export struct MerchantEditGoodsPage {
       Column({ space: SPACING.MD }) {
         Column({ space: SPACING.SM }) {
           Text('确认保存后将写入数据库，并刷新商品管理列表')
-            .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
+            .fontSize(FONT_SIZE.SM).fontColor(accentFg(0))
           Text('商品名称、价格和库存会进行范围校验；店内分类只能选择数据库中已有分类。')
             .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
         }
         .width('100%').padding(SPACING.MD)
-        .backgroundColor(COLORS.TAG_BG).borderRadius(BORDER_RADIUS.MD)
+        .backgroundColor(accentBg(0)).borderRadius(BORDER_RADIUS.MD)
 
         Column({ space: SPACING.MD }) {
+          Row() {
+            Text('📝')
+              .fontSize(FONT_SIZE.MD)
+              .width(28).height(28).textAlign(TextAlign.Center)
+              .backgroundColor(accentBg(1))
+              .borderRadius(BORDER_RADIUS.SM)
+            Text('基本信息')
+              .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
+              .fontColor(accentFg(1)).margin({ left: SPACING.SM })
+          }
+          .width('100%')
           Column({ space: SPACING.XS }) {
             this.FieldLabel('商品名称', true)
             TextInput({ placeholder: '如：宫保鸡丁', text: this.goodsName })
@@ -567,6 +583,7 @@ export struct MerchantEditGoodsPage {
                 .width(72).height(72).objectFit(ImageFit.Cover).borderRadius(BORDER_RADIUS.MD)
               Button(this.image === '' ? '＋ 上传图片' : '更换图片')
                 .fontSize(FONT_SIZE.SM).height(36).borderRadius(BORDER_RADIUS.MD)
+                .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.MERCHANT)
                 .onClick(() => { this.pickImage() })
             }
             .width('100%').alignItems(VerticalAlign.Center)
@@ -602,15 +619,15 @@ export struct MerchantEditGoodsPage {
     Column() {
       Row() {
         Text('‹ 返回')
-          .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
+          .fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.MERCHANT)
           .onClick(() => { router.back() })
         Text('编辑商品')
           .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1).textAlign(TextAlign.Center)
+          .fontColor(MODULE_COLOR.MERCHANT).layoutWeight(1).textAlign(TextAlign.Center)
         Text(' ').width(28)
       }
       .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG })
-      .backgroundColor(COLORS.BG_WHITE).alignItems(VerticalAlign.Center)
+      .backgroundColor(MODULE_BG.MERCHANT).alignItems(VerticalAlign.Center)
 
       if (this.loading) {
         Column() {
@@ -629,7 +646,7 @@ export struct MerchantEditGoodsPage {
             .onClick(() => { router.back() })
           Button(this.submitting ? '提交中...' : '确认保存')
             .layoutWeight(1).height(46).fontSize(FONT_SIZE.MD)
-            .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
+            .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.MERCHANT)
             .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
             .onClick(() => { this.confirmEdit() })
         }

@@ -6,7 +6,7 @@
  */
 import { CartItem, Order } from '../model/Models'
 import { syncUserOrdersFromServer, confirmOrderRemote, cancelOrderRemote, payOrderRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, MODULE_COLOR, MODULE_BG } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
@@ -255,11 +255,11 @@ struct OrderListPage {
             .margin({ right: SPACING.SM })
             .onClick(() => { this.cancelPendingOrder(order) })
           Button('立即支付').height(32).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_WHITE)
-            .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+            .backgroundColor(MODULE_COLOR.ORDER).borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
             .onClick(() => { this.payPendingOrder(order) })
         } else if (order.status === 4 && (order.escrowStatus ?? 0) === 0) {
           Button('确认收货并结算').height(32).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_WHITE)
-            .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+            .backgroundColor(MODULE_COLOR.CART).borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
             .onClick(async () => {
               const ok: boolean = await confirmOrderRemote(order.id)
               this.orderList = AppStorage.get<Order[]>('orderList') || []
@@ -281,7 +281,7 @@ struct OrderListPage {
       }.width('100%')
     }
     .width('100%').padding(SPACING.MD)
-    .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+    .backgroundColor(MODULE_BG.ORDER).borderRadius(BORDER_RADIUS.LG)
     .id(`order-card-${order.id}`)
     .onClick(() => {
       AppStorage.setOrCreate<Order>('currentOrder', order)

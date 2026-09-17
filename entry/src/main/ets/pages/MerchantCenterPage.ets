@@ -7,7 +7,7 @@ import { fetchMerchantStoresApi, fetchMerchantGoodsApi, createMerchantStoreApi, 
   updateMerchantGoodsApi, deleteMerchantGoodsApi,
   fetchMerchantCategoriesApi, createMerchantCategoryApi, updateMerchantCategoryApi, deleteMerchantCategoryApi,
   fetchMerchantEmployeesApi, removeMerchantEmployeeApi } from '../service/ApiService'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, formatSales } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, formatSales, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { promptCompat as promptAction } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
 import { routerCompat as router } from '../common/UiNavigation'
@@ -286,12 +286,12 @@ export struct MerchantCenterPage {
         Row() {
           Text('‹')
             .fontSize(FONT_SIZE.XXL)
-            .fontColor(COLORS.TEXT_PRIMARY)
+            .fontColor(MODULE_COLOR.MERCHANT)
             .onClick(() => { router.back() })
           Text('🏪 商户中心')
             .fontSize(FONT_SIZE.XXL)
             .fontWeight(FontWeight.Bold)
-            .fontColor(COLORS.TEXT_PRIMARY)
+            .fontColor(MODULE_COLOR.MERCHANT)
             .layoutWeight(1)
             .margin({ left: SPACING.MD })
           Text(this.user.username)
@@ -301,20 +301,20 @@ export struct MerchantCenterPage {
         .width('100%')
         .height(56)
         .padding({ left: SPACING.LG, right: SPACING.LG, top: 26 })
-        .backgroundColor(COLORS.BG_WHITE)
+        .backgroundColor(MODULE_BG.MERCHANT)
 
         // 统计概览
         Row() {
           Column({ space: SPACING.XS }) {
             Text(this.myStores.length.toString())
-              .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRIMARY)
+              .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(accentFg(0))
             Text('我的店铺')
               .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
           }
           .layoutWeight(1).alignItems(HorizontalAlign.Center)
           Column({ space: SPACING.XS }) {
             Text(this.user.balance.toFixed(2))
-              .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRIMARY)
+              .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(accentFg(1))
             Text('账户余额')
               .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
           }
@@ -332,7 +332,7 @@ export struct MerchantCenterPage {
           .height(44)
           .fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_WHITE)
-          .backgroundColor(COLORS.PRIMARY)
+          .backgroundColor(MODULE_COLOR.MERCHANT)
           .borderRadius(BORDER_RADIUS.ROUND)
           .type(ButtonType.Capsule)
           .margin({ top: SPACING.LG })
@@ -347,12 +347,12 @@ export struct MerchantCenterPage {
             .layoutWeight(1)
           Text('评价管理')
             .fontSize(FONT_SIZE.SM)
-            .fontColor(COLORS.PRIMARY)
+            .fontColor(MODULE_COLOR.MERCHANT)
             .id('merchant-reviews-entry')
             .onClick(() => { router.pushUrl({ url: 'pages/MerchantReviewsPage' }) })
           Text('分类管理')
             .fontSize(FONT_SIZE.SM)
-            .fontColor(COLORS.PRIMARY)
+            .fontColor(MODULE_COLOR.MERCHANT)
             .margin({ left: SPACING.LG })
             .onClick(() => { this.showManageCategories = true })
         }
@@ -365,10 +365,11 @@ export struct MerchantCenterPage {
               Row({ space: SPACING.MD }) {
                 Column() {
                   Text(store.name.substring(0, 1))
-                    .fontSize(FONT_SIZE.TITLE).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_WHITE)
+                    .fontSize(FONT_SIZE.TITLE).fontWeight(FontWeight.Bold)
+                    .fontColor(accentFg(accentIndexFromText(store.name)))
                 }
                 .width(60).height(60)
-                .backgroundColor(COLORS.PRIMARY)
+                .backgroundColor(accentBg(accentIndexFromText(store.name)))
                 .borderRadius(BORDER_RADIUS.MD)
                 .justifyContent(FlexAlign.Center)
 
@@ -388,16 +389,16 @@ export struct MerchantCenterPage {
                 .layoutWeight(1)
                 .alignItems(HorizontalAlign.Start)
                 Blank()
-                Text('编辑').fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
+                Text('编辑').fontSize(FONT_SIZE.SM).fontColor(MODULE_COLOR.MERCHANT)
                   .padding({ left: SPACING.SM, right: SPACING.SM })
                   .onClick(() => { this.startEditStore(store) })
                 Text('员工')
-                  .fontSize(FONT_SIZE.MD).fontColor(COLORS.PRIMARY)
+                  .fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.MERCHANT)
                   .onClick(() => {
                     promptAction.showToast({ message: '员工管理：可通过后端接口分配员工账号到本店', duration: 1800 })
                   })
                 Text('管理 ›')
-                  .fontSize(FONT_SIZE.MD).fontColor(COLORS.PRIMARY)
+                  .fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.MERCHANT)
               }
               .width('100%')
               .padding(SPACING.MD)
@@ -427,7 +428,7 @@ export struct MerchantCenterPage {
           Column({ space: SPACING.MD }) {
             Row() {
               Text('新建店铺')
-                .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+                .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.MERCHANT)
                 .layoutWeight(1).textAlign(TextAlign.Center)
               Text('✕')
                 .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT)
@@ -455,7 +456,7 @@ export struct MerchantCenterPage {
               } else {
                 Button('暂无保存地址，去新增地址')
                   .width('100%').height(44).fontSize(FONT_SIZE.SM)
-                  .fontColor(COLORS.PRIMARY).backgroundColor(COLORS.TAG_BG)
+                  .fontColor(MODULE_COLOR.MERCHANT).backgroundColor(MODULE_BG.MERCHANT)
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                   .onClick(() => { this.openStoreAddressManager('new') })
               }
@@ -494,7 +495,7 @@ export struct MerchantCenterPage {
                 .onClick(() => { this.showAddStore = false })
               Button(this.creatingStore ? '创建中...' : '确认创建')
                 .layoutWeight(1).height(42).fontSize(FONT_SIZE.MD)
-                .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
+                .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.MERCHANT)
                 .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                 .onClick(() => { this.doCreateStore() })
             }
@@ -516,7 +517,7 @@ export struct MerchantCenterPage {
           Column({ space: SPACING.MD }) {
             Row() {
               Text('编辑店铺')
-                .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+                .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.MERCHANT)
                 .layoutWeight(1).textAlign(TextAlign.Center)
               Text('✕')
                 .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT)
@@ -544,7 +545,7 @@ export struct MerchantCenterPage {
               } else {
                 Button('暂无保存地址，去新增地址')
                   .width('100%').height(44).fontSize(FONT_SIZE.SM)
-                  .fontColor(COLORS.PRIMARY).backgroundColor(COLORS.TAG_BG)
+                  .fontColor(MODULE_COLOR.MERCHANT).backgroundColor(MODULE_BG.MERCHANT)
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                   .onClick(() => { this.openStoreAddressManager('edit') })
               }
@@ -583,7 +584,7 @@ export struct MerchantCenterPage {
                 .onClick(() => { this.showEditStore = false })
               Button(this.savingStore ? '保存中...' : '确认保存')
                 .layoutWeight(1).height(42).fontSize(FONT_SIZE.MD)
-                .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
+                .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.MERCHANT)
                 .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                 .onClick(() => { this.doEditStore() })
             }
@@ -605,7 +606,7 @@ export struct MerchantCenterPage {
           Column({ space: SPACING.MD }) {
             Row() {
               Text('分类管理')
-                .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
+                .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.MERCHANT).layoutWeight(1)
               Text('✕')
                 .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT)
                 .onClick(() => { this.showManageCategories = false })
@@ -620,7 +621,7 @@ export struct MerchantCenterPage {
                 .onChange((v: string) => { this.newCategoryName = v })
               Button('新增')
                 .height(40).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_WHITE)
-                .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.ROUND)
+                .backgroundColor(MODULE_COLOR.MERCHANT).borderRadius(BORDER_RADIUS.ROUND)
                 .type(ButtonType.Capsule)
                 .onClick(() => { this.doAddCategory() })
             }
@@ -652,10 +653,16 @@ export struct MerchantCenterPage {
                         .type(ButtonType.Capsule)
                         .onClick(() => { this.editingCategoryId = 0 })
                     } else {
+                      Text(category.name.substring(0, 1))
+                        .fontSize(FONT_SIZE.XS).fontWeight(FontWeight.Bold)
+                        .fontColor(accentFg(accentIndexFromText(category.name)))
+                        .backgroundColor(accentBg(accentIndexFromText(category.name)))
+                        .width(24).height(24).textAlign(TextAlign.Center)
+                        .borderRadius(BORDER_RADIUS.SM)
                       Text(category.name)
                         .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
                       Text('改名')
-                        .fontSize(FONT_SIZE.XS).fontColor(COLORS.PRIMARY)
+                        .fontSize(FONT_SIZE.XS).fontColor(MODULE_COLOR.MERCHANT)
                         .onClick(() => {
                           this.editingCategoryId = category.id
                           this.editCategoryName = category.name
@@ -697,10 +704,11 @@ export struct MerchantCenterPage {
               .onClick(() => { this.selectedStoreId = 0 })
             Text('商品管理')
               .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
+              .fontColor(MODULE_COLOR.MERCHANT)
               .layoutWeight(1).textAlign(TextAlign.Center)
             Button('+ 添加商品')
               .height(32).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_WHITE)
-              .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.ROUND)
+              .backgroundColor(MODULE_COLOR.MERCHANT).borderRadius(BORDER_RADIUS.ROUND)
               .type(ButtonType.Capsule)
               .onClick(() => { this.openAddGoodsPage() })
           }
@@ -749,8 +757,8 @@ export struct MerchantCenterPage {
                             }
                         })
                       Button('编辑')
-                        .height(28).fontSize(FONT_SIZE.XS).fontColor(COLORS.PRIMARY)
-                        .backgroundColor(COLORS.TAG_BG).borderRadius(BORDER_RADIUS.ROUND)
+                        .height(28).fontSize(FONT_SIZE.XS).fontColor(MODULE_COLOR.MERCHANT)
+                        .backgroundColor(MODULE_BG.MERCHANT).borderRadius(BORDER_RADIUS.ROUND)
                         .type(ButtonType.Capsule)
                         .onClick(() => { this.openEditGoodsPage(goods) })
                       if (goods.isOnShelf === false) {

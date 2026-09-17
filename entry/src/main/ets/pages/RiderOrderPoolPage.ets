@@ -2,7 +2,7 @@
  * 抢单大厅（四端改造）：展示待取餐池订单，骑手在线即可抢单
  */
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { Order } from '../model/Models'
 import { syncRiderPoolRemote, grabOrderRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
@@ -54,14 +54,14 @@ export struct RiderOrderPoolPage {
           .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
           .onClick(() => { router.back() })
         Text('抢单大厅')
-          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.RIDER)
           .layoutWeight(1).textAlign(TextAlign.Center)
         Text('刷新')
-          .fontSize(FONT_SIZE.MD).fontColor(COLORS.PRIMARY)
+          .fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.RIDER)
           .onClick(() => { this.loadPool() })
       }
       .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG })
-      .backgroundColor(COLORS.BG_WHITE)
+      .backgroundColor(MODULE_BG.RIDER)
 
       if (this.loading) {
         Column() {
@@ -91,12 +91,18 @@ export struct RiderOrderPoolPage {
   @Builder
   PoolCard(order: Order) {
     Column({ space: SPACING.XS }) {
-      Row() {
-        Text(`🏪 ${order.storeName}`)
+      Row({ space: SPACING.SM }) {
+        Text(order.storeName.substring(0, 1))
+          .width(32).height(32).textAlign(TextAlign.Center)
+          .fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold)
+          .fontColor(accentFg(accentIndexFromText(order.storeName)))
+          .backgroundColor(accentBg(accentIndexFromText(order.storeName)))
+          .borderRadius(BORDER_RADIUS.MD)
+        Text(order.storeName)
           .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
           .layoutWeight(1)
         Text(`配送费 ¥${order.deliveryFee.toFixed(2)}`)
-          .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY).fontWeight(FontWeight.Bold)
+          .fontSize(FONT_SIZE.SM).fontColor(MODULE_COLOR.RIDER).fontWeight(FontWeight.Bold)
       }.width('100%')
 
       Text(`收货：${order.address.name} ${order.address.phone}`)
@@ -110,7 +116,7 @@ export struct RiderOrderPoolPage {
           .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).layoutWeight(1)
         Button('抢单')
           .height(36).fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
+          .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.RIDER)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
           .id(`rider-grab-${order.id}`)
           .onClick(() => { this.grab(order) })

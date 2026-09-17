@@ -5,7 +5,7 @@
  */
 import { User, UserRole } from '../model/Models'
 import { ApiResponse, get, put } from '../service/HttpClient'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { logInfo } from '../service/AppLogger'
@@ -146,14 +146,14 @@ export struct AdminOrderPage {
       Row() {
         Text('‹ 返回')
           .fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.PRIMARY)
+          .fontColor(MODULE_COLOR.ADMIN)
           .onClick(() => { router.back() })
         Text('订单管理')
-          .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).layoutWeight(1).textAlign(TextAlign.Center)
+          .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.ADMIN).layoutWeight(1).textAlign(TextAlign.Center)
         Button('刷新').height(32).fontSize(FONT_SIZE.SM).onClick(() => { this.refresh() })
       }
       .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 })
-      .backgroundColor(COLORS.BG_WHITE)
+      .backgroundColor(MODULE_BG.ADMIN)
 
       // 状态筛选 Tab
       Scroll() {
@@ -168,11 +168,11 @@ export struct AdminOrderPage {
           ], (item: OrderTabItem) => {
             Text(item.title)
               .fontSize(FONT_SIZE.MD)
-              .fontColor(this.currentStatus === item.status ? COLORS.PRIMARY : COLORS.TEXT_SECONDARY)
+              .fontColor(this.currentStatus === item.status ? MODULE_COLOR.ADMIN : COLORS.TEXT_SECONDARY)
               .fontWeight(this.currentStatus === item.status ? FontWeight.Bold : FontWeight.Normal)
-              .backgroundColor(this.currentStatus === item.status ? COLORS.TAG_BG : Color.Transparent)
+              .backgroundColor(this.currentStatus === item.status ? MODULE_BG.ADMIN : Color.Transparent)
               .borderRadius(BORDER_RADIUS.ROUND)
-              .border({ width: this.currentStatus === item.status ? 2 : 0, color: COLORS.PRIMARY })
+              .border({ width: this.currentStatus === item.status ? 2 : 0, color: MODULE_COLOR.ADMIN })
               .padding({ left: SPACING.MD, right: SPACING.MD, top: SPACING.SM, bottom: SPACING.SM })
               .onClick(() => { this.onStatusChange(item.status) })
           }, (item: OrderTabItem) => item.title)
@@ -180,7 +180,7 @@ export struct AdminOrderPage {
         .padding({ left: SPACING.LG, right: SPACING.LG })
       }
       .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
-      .width('100%').backgroundColor(COLORS.BG_WHITE)
+      .width('100%').backgroundColor(MODULE_BG.ADMIN)
 
       // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
       List({ space: SPACING.MD }) {
@@ -197,6 +197,12 @@ export struct AdminOrderPage {
         ForEach(this.displayOrders, (order: AdminOrder) => {
           ListItem() {
             Row({ space: SPACING.MD }) {
+              Text(order.storeName.substring(0, 1))
+                .width(40).height(40).textAlign(TextAlign.Center)
+                .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
+                .fontColor(accentFg(accentIndexFromText(order.storeName)))
+                .backgroundColor(accentBg(accentIndexFromText(order.storeName)))
+                .borderRadius(BORDER_RADIUS.ROUND)
               Column({ space: SPACING.XS }) {
                 Text(`${order.storeName}  #${order.orderNo}`).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
                 Row({ space: SPACING.SM }) {
@@ -209,7 +215,7 @@ export struct AdminOrderPage {
               }.alignItems(HorizontalAlign.Start).layoutWeight(1)
               if (order.status === 1) {
                 Button('接单').height(30).fontSize(FONT_SIZE.XS)
-                  .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
+                  .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.ADMIN)
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                   .onClick(() => { this.runOrderAction(order.id, 'accept', '订单已接单') })
                 Button('取消').height(30).fontSize(FONT_SIZE.XS)
@@ -222,7 +228,7 @@ export struct AdminOrderPage {
                   Text('已出餐，等待骑手接单').fontSize(FONT_SIZE.XS).fontColor(COLORS.SUCCESS)
                 } else {
                   Button('出餐').height(30).fontSize(FONT_SIZE.XS)
-                    .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
+                    .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.ADMIN)
                     .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                     .onClick(() => { this.runOrderAction(order.id, 'ready', '已出餐，等待骑手接单') })
                 }
@@ -232,7 +238,7 @@ export struct AdminOrderPage {
                   .onClick(() => { this.runOrderAction(order.id, 'cancel', '订单已取消并退款') })
               } else if (order.status === 3) {
                 Button('确认送达').height(30).fontSize(FONT_SIZE.XS)
-                  .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
+                  .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.ADMIN)
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                   .onClick(() => { this.runOrderAction(order.id, 'complete', '订单已标记送达') })
                 Button('取消').height(30).fontSize(FONT_SIZE.XS)

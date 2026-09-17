@@ -4,7 +4,7 @@
  */
 import { Coupon } from '../model/Models'
 import { claimCouponRemote, syncCouponsRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR } from '../common/Constants'
 import { logInfo } from '../service/AppLogger'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 
@@ -185,7 +185,7 @@ export struct CouponCenterPage {
       }
       .width(100)
       .height(80)
-      .backgroundColor(this.currentTab === 2 ? COLORS.DIVIDER : COLORS.PRIMARY)
+      .backgroundColor(this.currentTab === 2 ? COLORS.DIVIDER : MODULE_COLOR.COUPON)
       .borderRadius({ topLeft: BORDER_RADIUS.LG, bottomLeft: BORDER_RADIUS.LG })
       .justifyContent(FlexAlign.Center)
       .alignItems(HorizontalAlign.Center)
@@ -213,7 +213,7 @@ export struct CouponCenterPage {
           .height(32)
           .fontSize(FONT_SIZE.SM)
           .fontColor(this.isClaimed(coupon) ? COLORS.TEXT_HINT : COLORS.TEXT_WHITE)
-          .backgroundColor(this.isClaimed(coupon) ? COLORS.DIVIDER : COLORS.PRIMARY)
+          .backgroundColor(this.isClaimed(coupon) ? COLORS.DIVIDER : MODULE_COLOR.COUPON)
           .borderRadius(BORDER_RADIUS.ROUND)
           .type(ButtonType.Capsule)
           .margin({ right: SPACING.MD })

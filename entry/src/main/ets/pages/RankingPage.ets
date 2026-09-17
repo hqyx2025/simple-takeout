@@ -4,7 +4,7 @@
  */
 import { SpecialGoodsItem, StoreItem } from '../model/Models'
 import { fetchRankGoodsRemote, fetchRankStoresRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, formatSales, merchantImageSource, DEFAULT_MERCHANT_IMAGE } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, formatSales, merchantImageSource, DEFAULT_MERCHANT_IMAGE, MODULE_COLOR, MODULE_BG } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { RatingStars } from '../components/RatingStars'
 import { EmptyState } from '../components/EmptyState'
@@ -126,16 +126,21 @@ export struct RankingPage {
     .borderRadius(BORDER_RADIUS.SM)
   }
 
+  /** 每个榜单一种模块色，避免两个 Tab 完全同色。 */
+  private tabColor(index: number): string {
+    return index === 0 ? MODULE_COLOR.NEARBY : MODULE_COLOR.SPECIAL
+  }
+
   @Builder
   TabButton(title: string, index: number) {
     Column({ space: SPACING.XS }) {
       Text(title)
         .fontSize(FONT_SIZE.MD)
         .fontWeight(this.currentTab === index ? FontWeight.Bold : FontWeight.Normal)
-        .fontColor(this.currentTab === index ? COLORS.PRIMARY : COLORS.TEXT_SECONDARY)
+        .fontColor(this.currentTab === index ? this.tabColor(index) : COLORS.TEXT_SECONDARY)
       Divider()
         .strokeWidth(2)
-        .color(this.currentTab === index ? COLORS.PRIMARY : COLORS.DIVIDER)
+        .color(this.currentTab === index ? this.tabColor(index) : COLORS.DIVIDER)
     }
     .layoutWeight(1)
     .height(48)
@@ -319,7 +324,7 @@ export struct RankingPage {
         this.TabButton('菜品榜', 1)
       }
       .width('100%')
-      .backgroundColor(COLORS.BG_WHITE)
+      .backgroundColor(MODULE_BG.RANKING)
 
       // 内容区
       if (this.loading) {

@@ -4,7 +4,7 @@
  */
 import { User, UserRole, RefundRecord } from '../model/Models'
 import { fetchAdminRefundsApi, approveRefundApi, rejectRefundApi } from '../service/ApiService'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg } from '../common/Constants'
 import { StatusBadge } from '../components/StatusBadge'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
@@ -103,15 +103,15 @@ export struct AdminRefundPage {
         Row() {
           Text('‹ 返回')
             .fontSize(FONT_SIZE.MD)
-            .fontColor(COLORS.PRIMARY)
+            .fontColor(MODULE_COLOR.ADMIN)
             .onClick(() => { router.back() })
           Text('退款审批')
-            .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).layoutWeight(1).textAlign(TextAlign.Center)
+            .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.ADMIN).layoutWeight(1).textAlign(TextAlign.Center)
           Button(this.loading ? '加载中…' : '刷新').height(32).fontSize(FONT_SIZE.SM)
             .onClick(() => { this.refresh() })
         }
         .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 })
-        .backgroundColor(COLORS.BG_WHITE)
+        .backgroundColor(MODULE_BG.ADMIN)
 
         // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
         List({ space: SPACING.MD }) {
@@ -128,7 +128,12 @@ export struct AdminRefundPage {
           ForEach(this.refunds, (record: RefundRecord) => {
             ListItem() {
               Column({ space: SPACING.SM }) {
-                Row() {
+                Row({ space: SPACING.SM }) {
+                  Text('退')
+                    .width(36).height(36).textAlign(TextAlign.Center)
+                    .fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold)
+                    .fontColor(accentFg(record.id)).backgroundColor(accentBg(record.id))
+                    .borderRadius(BORDER_RADIUS.ROUND)
                   Column({ space: SPACING.XS }) {
                     Text(`退款单 #${record.id}  订单 #${record.orderId}`).fontSize(FONT_SIZE.MD)
                       .fontColor(COLORS.TEXT_PRIMARY)

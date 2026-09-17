@@ -4,7 +4,7 @@
  */
 import { User, UserRole } from '../model/Models'
 import { ApiResponse, get, put } from '../service/HttpClient'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { StatusBadge } from '../components/StatusBadge'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
@@ -100,27 +100,27 @@ export struct AdminStorePage {
       Row() {
         Text('‹ 返回')
           .fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.PRIMARY)
+          .fontColor(MODULE_COLOR.ADMIN)
           .onClick(() => { router.back() })
         Text('店铺管理')
-          .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).layoutWeight(1).textAlign(TextAlign.Center)
+          .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.ADMIN).layoutWeight(1).textAlign(TextAlign.Center)
         Button('刷新').height(32).fontSize(FONT_SIZE.SM).onClick(() => { this.refresh() })
       }
       .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 })
-      .backgroundColor(COLORS.BG_WHITE)
+      .backgroundColor(MODULE_BG.ADMIN)
 
       Row({ space: SPACING.MD }) {
         Text('状态').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
         Button('全部').id('admin-store-status-all').fontSize(FONT_SIZE.SM)
-          .backgroundColor(this.statusFilter === -1 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+          .backgroundColor(this.statusFilter === -1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.statusFilter === -1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = -1; this.applyFilter() })
         Button('营业中').id('admin-store-status-open').fontSize(FONT_SIZE.SM)
-          .backgroundColor(this.statusFilter === 1 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+          .backgroundColor(this.statusFilter === 1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.statusFilter === 1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 1; this.applyFilter() })
         Button('已暂停').id('admin-store-status-closed').fontSize(FONT_SIZE.SM)
-          .backgroundColor(this.statusFilter === 0 ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+          .backgroundColor(this.statusFilter === 0 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.statusFilter === 0 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 0; this.applyFilter() })
       }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
@@ -141,6 +141,12 @@ export struct AdminStorePage {
         ForEach(this.displayStores, (store: AdminStore) => {
           ListItem() {
             Row({ space: SPACING.MD }) {
+              Text(store.name.substring(0, 1))
+                .width(40).height(40).textAlign(TextAlign.Center)
+                .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
+                .fontColor(accentFg(accentIndexFromText(store.name)))
+                .backgroundColor(accentBg(accentIndexFromText(store.name)))
+                .borderRadius(BORDER_RADIUS.ROUND)
               Column({ space: SPACING.XS }) {
                 Text(store.name).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
                 StatusBadge({ text: store.status === 1 ? '营业中' : '已暂停', mode: store.status === 1 ? 'success' : 'gray' })
@@ -148,8 +154,8 @@ export struct AdminStorePage {
               Column({ space: SPACING.XS }) {
                 Button(store.recommended === 1 ? '取消推荐' : '推荐到发现')
                   .height(32).fontSize(FONT_SIZE.XS)
-                  .fontColor(store.recommended === 1 ? COLORS.PRIMARY : COLORS.TEXT_WHITE)
-                  .backgroundColor(store.recommended === 1 ? COLORS.TAG_BG : COLORS.PRIMARY)
+                  .fontColor(store.recommended === 1 ? MODULE_COLOR.ADMIN : COLORS.TEXT_WHITE)
+                  .backgroundColor(store.recommended === 1 ? COLORS.TAG_BG : MODULE_COLOR.ADMIN)
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                   .onClick(() => { this.toggleRecommend(store) })
                 Button(store.status === 1 ? '暂停营业' : '恢复营业')

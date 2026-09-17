@@ -3,7 +3,7 @@
  * 展示今日 / 本周 / 累计收入与订单数据，以及账户余额
  */
 import { routerCompat as router } from '../common/UiNavigation'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusColor } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusColor, MODULE_COLOR, MODULE_BG, accentBg, accentFg } from '../common/Constants'
 import { MerchantStatsData, User, UserRole } from '../model/Models'
 import { getCurrentUser, getMerchantTodayStats, getMerchantWeekStats, getMerchantWeekRevenue, getMerchantTodayStatusOrders, formatPrice, syncMerchantOrdersFromServer } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
@@ -129,12 +129,12 @@ export struct MerchantStatsPage {
     Row() {
       Text('‹ 返回')
         .fontSize(FONT_SIZE.MD)
-        .fontColor(COLORS.TEXT_PRIMARY)
+        .fontColor(MODULE_COLOR.MERCHANT)
         .onClick(() => { router.back() })
       Text('收入统计')
         .fontSize(FONT_SIZE.XL)
         .fontWeight(FontWeight.Bold)
-        .fontColor(COLORS.TEXT_PRIMARY)
+        .fontColor(MODULE_COLOR.MERCHANT)
         .layoutWeight(1)
         .textAlign(TextAlign.Center)
       Text(' ')
@@ -144,7 +144,7 @@ export struct MerchantStatsPage {
     .width('100%')
     .height(56)
     .padding({ left: SPACING.LG, right: SPACING.LG, top: 26 })
-    .backgroundColor(COLORS.BG_WHITE)
+    .backgroundColor(MODULE_BG.MERCHANT)
     .alignItems(VerticalAlign.Center)
   }
 
@@ -153,17 +153,17 @@ export struct MerchantStatsPage {
     Row() {
       Text('数据加载失败，以下数据可能不准确')
         .fontSize(FONT_SIZE.SM)
-        .fontColor('#b71c1c')
+        .fontColor(COLORS.ERROR)
         .layoutWeight(1)
       Text('重试')
         .fontSize(FONT_SIZE.SM)
-        .fontColor(COLORS.PRIMARY)
+        .fontColor(MODULE_COLOR.MERCHANT)
         .fontWeight(FontWeight.Bold)
         .onClick(() => { this.refreshRemoteStats() })
     }
     .width('100%')
     .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
-    .backgroundColor('#ffebee')
+    .backgroundColor(COLORS.ERROR_LIGHT)
     .borderRadius(BORDER_RADIUS.MD)
   }
 
@@ -214,7 +214,7 @@ export struct MerchantStatsPage {
     }
     .width('100%')
     .padding(SPACING.XL)
-    .backgroundColor(COLORS.PRIMARY)
+    .backgroundColor(MODULE_COLOR.MERCHANT)
     .borderRadius(BORDER_RADIUS.LG)
   }
 
@@ -222,10 +222,18 @@ export struct MerchantStatsPage {
   WeekChartCard() {
     Column({ space: SPACING.MD }) {
       Row() {
+        Text('📈')
+          .fontSize(FONT_SIZE.MD)
+          .width(28)
+          .height(28)
+          .textAlign(TextAlign.Center)
+          .backgroundColor(accentBg(0))
+          .borderRadius(BORDER_RADIUS.SM)
         Text('近7天收入趋势')
           .fontSize(FONT_SIZE.LG)
           .fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.TEXT_PRIMARY)
+          .fontColor(accentFg(0))
+          .margin({ left: SPACING.SM })
         Text('单位：元')
           .fontSize(FONT_SIZE.XS)
           .fontColor(COLORS.TEXT_HINT)
@@ -248,10 +256,18 @@ export struct MerchantStatsPage {
   StatusChartCard() {
     Column({ space: SPACING.MD }) {
       Row() {
+        Text('📊')
+          .fontSize(FONT_SIZE.MD)
+          .width(28)
+          .height(28)
+          .textAlign(TextAlign.Center)
+          .backgroundColor(accentBg(1))
+          .borderRadius(BORDER_RADIUS.SM)
         Text('今日订单状态分布')
           .fontSize(FONT_SIZE.LG)
           .fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.TEXT_PRIMARY)
+          .fontColor(accentFg(1))
+          .margin({ left: SPACING.SM })
       }
       .width('100%')
 
@@ -306,7 +322,7 @@ export struct MerchantStatsPage {
     }
 
     // 绘制折线
-    ctx.strokeStyle = COLORS.PRIMARY
+    ctx.strokeStyle = MODULE_COLOR.MERCHANT
     ctx.lineWidth = 2
     ctx.beginPath()
     for (let i = 0; i < this.weekRevenue.length; i++) {
@@ -324,7 +340,7 @@ export struct MerchantStatsPage {
     for (let i = 0; i < this.weekRevenue.length; i++) {
       const x: number = paddingLeft + chartW * i / (this.weekRevenue.length - 1)
       const y: number = paddingTop + chartH - chartH * this.weekRevenue[i] / maxRevenue
-      ctx.fillStyle = COLORS.PRIMARY
+      ctx.fillStyle = MODULE_COLOR.MERCHANT
       ctx.beginPath()
       ctx.arc(x, y, 3, 0, 2 * Math.PI)
       ctx.fill()
@@ -398,10 +414,18 @@ export struct MerchantStatsPage {
   WeekCard() {
     Column({ space: SPACING.MD }) {
       Row() {
+        Text('🗓️')
+          .fontSize(FONT_SIZE.MD)
+          .width(28)
+          .height(28)
+          .textAlign(TextAlign.Center)
+          .backgroundColor(accentBg(2))
+          .borderRadius(BORDER_RADIUS.SM)
         Text('本周数据')
           .fontSize(FONT_SIZE.LG)
           .fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.TEXT_PRIMARY)
+          .fontColor(accentFg(2))
+          .margin({ left: SPACING.SM })
       }
       .width('100%')
 
@@ -454,10 +478,18 @@ export struct MerchantStatsPage {
   CumulativeCard() {
     Column({ space: SPACING.MD }) {
       Row() {
+        Text('🏆')
+          .fontSize(FONT_SIZE.MD)
+          .width(28)
+          .height(28)
+          .textAlign(TextAlign.Center)
+          .backgroundColor(accentBg(3))
+          .borderRadius(BORDER_RADIUS.SM)
         Text('累计数据')
           .fontSize(FONT_SIZE.LG)
           .fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.TEXT_PRIMARY)
+          .fontColor(accentFg(3))
+          .margin({ left: SPACING.SM })
       }
       .width('100%')
 
@@ -498,14 +530,22 @@ export struct MerchantStatsPage {
   InfoCard() {
     Column({ space: SPACING.SM }) {
       Row() {
+        Text('💰')
+          .fontSize(FONT_SIZE.MD)
+          .width(28)
+          .height(28)
+          .textAlign(TextAlign.Center)
+          .backgroundColor(accentBg(4))
+          .borderRadius(BORDER_RADIUS.SM)
         Text('账户余额')
           .fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_SECONDARY)
           .layoutWeight(1)
+          .margin({ left: SPACING.SM })
         Text(formatPrice(this.balance))
           .fontSize(FONT_SIZE.LG)
           .fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.PRIMARY)
+          .fontColor(accentFg(4))
       }
       .width('100%')
 

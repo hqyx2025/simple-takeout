@@ -1,7 +1,7 @@
 /** 平台经营统计：订单、GMV、托管资金与热销商品。 */
 import { AdminHotGoods, AdminOrderStatusCount, AdminStatisticsData, AdminTopStore, AdminTrendPoint, User, UserRole } from '../model/Models'
 import { fetchAdminDashboardApi, fetchAdminOrderTrendApi, fetchAdminStatisticsApi } from '../service/ApiService'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 
 @Entry
@@ -51,11 +51,11 @@ export struct AdminStatisticsPage {
   build() {
     Column() {
       Row() {
-        Text('返回').fontSize(FONT_SIZE.MD).fontColor(COLORS.PRIMARY).onClick(() => { router.back() })
-        Text('平台统计').fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).layoutWeight(1).textAlign(TextAlign.Center)
+        Text('返回').fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.ADMIN).onClick(() => { router.back() })
+        Text('平台统计').fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.ADMIN).layoutWeight(1).textAlign(TextAlign.Center)
         Button(this.loading ? '加载中' : '刷新').height(32).fontSize(FONT_SIZE.SM)
           .onClick(() => { this.refresh() })
-      }.width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 }).backgroundColor(COLORS.BG_WHITE)
+      }.width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 }).backgroundColor(MODULE_BG.ADMIN)
 
       // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一块内容不在顶部
       List({ space: SPACING.MD }) {
@@ -83,11 +83,11 @@ export struct AdminStatisticsPage {
           ListItem() {
             Row({ space: SPACING.MD }) {
               Text(`今日订单：${this.stats.todayOrders}`).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
-              Text(`今日成交：¥${this.valueOrZero(this.stats.todayGmv)}`).fontSize(FONT_SIZE.MD).fontColor(COLORS.PRIMARY)
-            }.width('100%').padding(SPACING.MD).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
+              Text(`今日成交：¥${this.valueOrZero(this.stats.todayGmv)}`).fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.ADMIN)
+            }.width('100%').padding(SPACING.MD).backgroundColor(MODULE_BG.ADMIN).borderRadius(BORDER_RADIUS.MD)
           }
           ListItem() {
-            Text('近7日订单趋势').fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+            this.SectionTitle('近7日订单趋势', 0)
           }
           ListItem() {
             Canvas(this.trendChartContext)
@@ -98,7 +98,7 @@ export struct AdminStatisticsPage {
               .onReady(() => { this.drawTrendChart() })
           }
           ListItem() {
-            Text('热销商品排行').fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+            this.SectionTitle('热销商品排行', 1)
           }
           ForEach(this.stats.hotGoods, (item: AdminHotGoods) => {
             ListItem() {
@@ -106,21 +106,22 @@ export struct AdminStatisticsPage {
             }
           }, (item: AdminHotGoods) => item.goodsId.toString())
           ListItem() {
-            Text('订单状态分布').fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+            this.SectionTitle('订单状态分布', 2)
           }
           ListItem() {
             Row({ space: SPACING.SM }) {
               ForEach(this.orderStatuses, (s: AdminOrderStatusCount) => {
                 Text(`${this.statusLabel(s.status)} ${s.count}`)
-                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_PRIMARY)
+                  .fontSize(FONT_SIZE.XS).fontColor(accentFg(accentIndexFromText(this.statusLabel(s.status))))
                   .padding({ left: SPACING.SM, right: SPACING.SM, top: 4, bottom: 4 })
-                  .backgroundColor(COLORS.TAG_BG).borderRadius(BORDER_RADIUS.SM)
+                  .backgroundColor(accentBg(accentIndexFromText(this.statusLabel(s.status))))
+                  .borderRadius(BORDER_RADIUS.SM)
               }, (s: AdminOrderStatusCount) => s.status.toString())
             }
             .width('100%')
           }
           ListItem() {
-            Text('店铺成交额排行').fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+            this.SectionTitle('店铺成交额排行', 3)
           }
           ForEach(this.topStores, (store: AdminTopStore, index: number) => {
             ListItem() {
@@ -132,6 +133,20 @@ export struct AdminStatisticsPage {
       .width('100%').layoutWeight(1).scrollBar(BarState.Off)
       .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
     }.width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)
+  }
+
+  /** 分区标题：小色块 + 主题色文字 + 浅底标题条（模块标题层级感）。 */
+  @Builder
+  SectionTitle(title: string, index: number) {
+    Row({ space: SPACING.SM }) {
+      Text('•')
+        .width(28).height(28).textAlign(TextAlign.Center)
+        .fontColor(accentFg(index)).backgroundColor(accentBg(index))
+        .borderRadius(BORDER_RADIUS.SM)
+      Text(title).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.ADMIN)
+    }
+    .width('100%').padding({ left: SPACING.SM, right: SPACING.SM, top: SPACING.XS, bottom: SPACING.XS })
+    .backgroundColor(MODULE_BG.ADMIN).borderRadius(BORDER_RADIUS.MD)
   }
 
   private statusLabel(status: number): string {
@@ -151,9 +166,15 @@ export struct AdminStatisticsPage {
   TopStoreRow(rank: number, store: AdminTopStore) {
     Row({ space: SPACING.MD }) {
       Text(`${rank}`).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
-        .fontColor(rank <= 3 ? COLORS.PRIMARY : COLORS.TEXT_HINT).width(28)
+        .fontColor(rank <= 3 ? accentFg(rank - 1) : COLORS.TEXT_HINT).width(28).textAlign(TextAlign.Center)
+      Text(store.storeName.substring(0, 1))
+        .width(36).height(36).textAlign(TextAlign.Center)
+        .fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold)
+        .fontColor(accentFg(accentIndexFromText(store.storeName)))
+        .backgroundColor(accentBg(accentIndexFromText(store.storeName)))
+        .borderRadius(BORDER_RADIUS.ROUND)
       Text(store.storeName).fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).layoutWeight(1)
-      Text(`成交 ¥${store.gmv.toFixed(2)}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
+      Text(`成交 ¥${store.gmv.toFixed(2)}`).fontSize(FONT_SIZE.SM).fontColor(MODULE_COLOR.ADMIN)
     }
     .width('100%').padding(SPACING.MD).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
   }
@@ -162,14 +183,21 @@ export struct AdminStatisticsPage {
   Metric(title: string, value: string, highlight: boolean) {
     Column({ space: SPACING.XS }) {
       Text(value).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
-        .fontColor(highlight ? COLORS.PRIMARY : COLORS.TEXT_PRIMARY)
+        .fontColor(highlight ? COLORS.PRIMARY : accentFg(accentIndexFromText(title)))
       Text(title).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
-    }.layoutWeight(1).padding({ top: SPACING.MD, bottom: SPACING.MD }).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
+    }.layoutWeight(1).padding({ top: SPACING.MD, bottom: SPACING.MD })
+    .backgroundColor(accentBg(accentIndexFromText(title))).borderRadius(BORDER_RADIUS.MD)
   }
 
   @Builder
   HotGoodsRow(name: string, storeName: string, sales: number, price: number, status: number) {
     Row({ space: SPACING.MD }) {
+      Text(name.substring(0, 1))
+        .width(36).height(36).textAlign(TextAlign.Center)
+        .fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold)
+        .fontColor(accentFg(accentIndexFromText(name)))
+        .backgroundColor(accentBg(accentIndexFromText(name)))
+        .borderRadius(BORDER_RADIUS.ROUND)
       Column({ space: SPACING.XS }) {
         Text(name).fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold)
         Text(`${storeName}  ¥${price.toFixed(2)}  销量${sales}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
@@ -217,7 +245,7 @@ export struct AdminStatisticsPage {
       ctx.fillText(`${label}`, 2, y + 3)
     }
 
-    ctx.strokeStyle = COLORS.PRIMARY
+    ctx.strokeStyle = MODULE_COLOR.ADMIN
     ctx.lineWidth = 2
     ctx.beginPath()
     for (let i = 0; i < this.trend.length; i++) {
@@ -234,7 +262,7 @@ export struct AdminStatisticsPage {
     for (let i = 0; i < this.trend.length; i++) {
       const x: number = paddingLeft + chartW * i / (this.trend.length - 1)
       const y: number = paddingTop + chartH - chartH * this.trend[i].orderCount / maxCount
-      ctx.fillStyle = COLORS.PRIMARY
+      ctx.fillStyle = MODULE_COLOR.ADMIN
       ctx.beginPath()
       ctx.arc(x, y, 3, 0, 2 * Math.PI)
       ctx.fill()

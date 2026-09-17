@@ -7,7 +7,7 @@ import { User, UserRole, Category, RefundRecord } from '../model/Models'
 import { logout } from '../service/AppStorageManager'
 import { ApiResponse, get } from '../service/HttpClient'
 import { fetchAdminRefundsApi } from '../service/ApiService'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
 
@@ -118,19 +118,34 @@ export struct AdminCenterPage {
     return entries
   }
 
+  /** 入口卡片主题色：每个后台模块一个 MODULE_COLOR，标题/徽标/箭头统一取它。 */
+  private entryThemeColor(title: string): string {
+    if (title === '分类管理') { return MODULE_COLOR.RANKING }
+    if (title === '店铺管理') { return MODULE_COLOR.MERCHANT }
+    if (title === '员工管理') { return MODULE_COLOR.MINE }
+    if (title === '商品监管') { return MODULE_COLOR.SPECIAL }
+    if (title === '用户管理') { return MODULE_COLOR.SEARCH }
+    if (title === '订单管理') { return MODULE_COLOR.ORDER }
+    if (title === '退款审批') { return MODULE_COLOR.COUPON }
+    if (title === '平台统计') { return MODULE_COLOR.HOME }
+    if (title === '骑手管理') { return MODULE_COLOR.RIDER }
+    if (title === '内容管理') { return MODULE_COLOR.FAVORITE }
+    return MODULE_COLOR.ADMIN
+  }
+
   build() {
     Column() {
       Row() {
-        Text('退出').fontSize(FONT_SIZE.MD).fontColor(COLORS.PRIMARY).onClick(() => {
+        Text('退出').fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.ADMIN).onClick(() => {
           logout()
           router.replaceUrl({ url: 'pages/Index' })
         })
-        Text('平台管理').fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).layoutWeight(1)
+        Text('平台管理').fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.ADMIN).layoutWeight(1)
         Button(this.loading ? '加载中…' : '刷新').height(32).fontSize(FONT_SIZE.SM)
           .onClick(() => { this.refresh() })
       }
       .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 })
-      .backgroundColor(COLORS.BG_WHITE)
+      .backgroundColor(MODULE_BG.ADMIN)
 
       // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一块内容不在顶部
       List({ space: SPACING.MD }) {
@@ -139,28 +154,28 @@ export struct AdminCenterPage {
           Row() {
             Column({ space: SPACING.XS }) {
               Text(this.categories.length.toString())
-                .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRIMARY)
+                .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(accentFg(0))
               Text('平台分类').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
             }.layoutWeight(1).alignItems(HorizontalAlign.Center)
             Column({ space: SPACING.XS }) {
               Text(this.stores.length.toString())
-                .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRIMARY)
+                .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(accentFg(2))
               Text('店铺总数').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
             }.layoutWeight(1).alignItems(HorizontalAlign.Center)
             Column({ space: SPACING.XS }) {
               Text(this.orders.length.toString())
-                .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRIMARY)
+                .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(accentFg(3))
               Text('订单总数').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
             }.layoutWeight(1).alignItems(HorizontalAlign.Center)
             Column({ space: SPACING.XS }) {
               Text(this.getPendingRefundCount().toString())
                 .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold)
-                .fontColor(this.getPendingRefundCount() > 0 ? COLORS.ERROR : COLORS.PRIMARY)
+                .fontColor(this.getPendingRefundCount() > 0 ? COLORS.ERROR : accentFg(1))
               Text('待审批退款').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
             }.layoutWeight(1).alignItems(HorizontalAlign.Center)
           }
           .width('100%').padding(SPACING.LG)
-          .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+          .backgroundColor(MODULE_BG.ADMIN).borderRadius(BORDER_RADIUS.LG)
         }
 
         // 功能入口卡片
@@ -185,21 +200,25 @@ export struct AdminCenterPage {
   @Builder
   EntryCard(item: AdminEntryItem) {
     Row({ space: SPACING.MD }) {
-      Text(item.icon).fontSize(32)
+      Text(item.icon)
+        .width(44).height(44).textAlign(TextAlign.Center).fontSize(24)
+        .backgroundColor(accentBg(accentIndexFromText(item.title)))
+        .borderRadius(BORDER_RADIUS.MD)
       Column({ space: SPACING.XS }) {
         Row({ space: SPACING.SM }) {
-          Text(item.title).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+          Text(item.title).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
+            .fontColor(this.entryThemeColor(item.title))
           if (item.count > 0) {
             Text(item.count.toString())
               .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_WHITE)
-              .backgroundColor(item.title === '退款审批' ? COLORS.ERROR : COLORS.PRIMARY)
+              .backgroundColor(item.title === '退款审批' ? COLORS.ERROR : this.entryThemeColor(item.title))
               .borderRadius(BORDER_RADIUS.ROUND)
               .padding({ left: SPACING.SM, right: SPACING.SM, top: SPACING.XS, bottom: SPACING.XS })
           }
         }
         Text(item.description).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-      Text('›').fontSize(FONT_SIZE.XL).fontColor(COLORS.TEXT_HINT)
+      Text('›').fontSize(FONT_SIZE.XL).fontColor(this.entryThemeColor(item.title))
     }
     .width('100%').padding(SPACING.LG)
     .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)

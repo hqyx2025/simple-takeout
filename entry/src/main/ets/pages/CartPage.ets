@@ -5,7 +5,7 @@
  * 「我的」页的购物车入口已删除，因此这里不再需要 showNavBar 开关与路由返回。
  */
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, merchantImageSource, DEFAULT_MERCHANT_IMAGE } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, merchantImageSource, DEFAULT_MERCHANT_IMAGE, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { CartItem, BundleInfo, GoodsItem } from '../model/Models'
 import { deleteCartItemRemote, deleteCartItemsRemote, refreshCartFromServer, updateCartItemQuantityRemote, fetchBundleRemote } from '../service/AppStorageManager'
 import { EmptyState } from '../components/EmptyState'
@@ -410,7 +410,7 @@ export struct CartPage {
               .height(40)
               .fontSize(FONT_SIZE.MD)
               .fontColor(COLORS.TEXT_WHITE)
-              .backgroundColor(COLORS.PRIMARY)
+              .backgroundColor(MODULE_COLOR.CART)
               .borderRadius(BORDER_RADIUS.ROUND)
               .type(ButtonType.Capsule)
               .id('cart-checkout')
@@ -431,11 +431,14 @@ export struct CartPage {
   StoreCard(storeId: number) {
     Column({ space: SPACING.SM }) {
       Row() {
-        Text('🏪').fontSize(FONT_SIZE.XL)
+        Text('\ud83c\udfea').fontSize(FONT_SIZE.XL)
+          .width(32).height(32).textAlign(TextAlign.Center)
+          .backgroundColor(accentBg(accentIndexFromText(this.getStoreName(storeId))))
+          .borderRadius(BORDER_RADIUS.SM)
         Text(this.getStoreName(storeId))
           .fontSize(FONT_SIZE.LG)
           .fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.TEXT_PRIMARY)
+          .fontColor(MODULE_COLOR.CART)
           .layoutWeight(1)
         Button('删除')
           .height(32)
@@ -457,7 +460,7 @@ export struct CartPage {
     }
     .width('100%')
     .padding(SPACING.MD)
-    .backgroundColor(COLORS.BG_WHITE)
+    .backgroundColor(MODULE_BG.CART)
     .borderRadius(BORDER_RADIUS.LG)
   }
 

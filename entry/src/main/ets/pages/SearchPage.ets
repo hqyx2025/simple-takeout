@@ -5,7 +5,7 @@ import { StoreItem } from '../model/Models'
 import { formatSales } from '../common/Constants'
 import { searchStoresRemote } from '../service/AppStorageManager'
 import { getSearchHistory, addSearchHistory, clearSearchHistory } from '../service/PreferencesHelper'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, accentFg, accentIndexFromText } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
 
@@ -262,7 +262,7 @@ export struct SearchPage {
       }
       .width(80)
       .height(80)
-      .backgroundColor(COLORS.PRIMARY)
+      .backgroundColor(accentFg(accentIndexFromText(store.name)))
       .borderRadius(BORDER_RADIUS.MD)
       .justifyContent(FlexAlign.Center)
 

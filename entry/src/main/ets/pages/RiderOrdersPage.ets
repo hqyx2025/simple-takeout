@@ -2,7 +2,7 @@
  * 我的配送单（四端改造）：骑手已接订单，取餐 / 送达
  */
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { Order } from '../model/Models'
 import { syncRiderOrdersRemote, pickupOrderRemote, deliverOrderRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
@@ -70,14 +70,14 @@ export struct RiderOrdersPage {
           .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
           .onClick(() => { router.back() })
         Text('我的配送单')
-          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.RIDER)
           .layoutWeight(1).textAlign(TextAlign.Center)
         Text('刷新')
-          .fontSize(FONT_SIZE.MD).fontColor(COLORS.PRIMARY)
+          .fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.RIDER)
           .onClick(() => { this.loadOrders() })
       }
       .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG })
-      .backgroundColor(COLORS.BG_WHITE)
+      .backgroundColor(MODULE_BG.RIDER)
 
       if (this.loading) {
         Column() {
@@ -107,12 +107,18 @@ export struct RiderOrdersPage {
   @Builder
   OrderCard(order: Order) {
     Column({ space: SPACING.XS }) {
-      Row() {
-        Text(`🏪 ${order.storeName}`)
+      Row({ space: SPACING.SM }) {
+        Text(order.storeName.substring(0, 1))
+          .width(32).height(32).textAlign(TextAlign.Center)
+          .fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold)
+          .fontColor(accentFg(accentIndexFromText(order.storeName)))
+          .backgroundColor(accentBg(accentIndexFromText(order.storeName)))
+          .borderRadius(BORDER_RADIUS.MD)
+        Text(order.storeName)
           .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
           .layoutWeight(1)
         Text(getOrderStatusText(order.status, order.escrowStatus ?? 0))
-          .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY).fontWeight(FontWeight.Bold)
+          .fontSize(FONT_SIZE.SM).fontColor(MODULE_COLOR.RIDER).fontWeight(FontWeight.Bold)
       }.width('100%')
 
       Text(`收货：${order.address.name} ${order.address.phone}`)
@@ -127,7 +133,7 @@ export struct RiderOrdersPage {
         if (order.status === 2) {
           Button('取餐')
             .height(36).fontSize(FONT_SIZE.MD)
-            .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
+            .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.RIDER)
             .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
             .id(`rider-pickup-${order.id}`)
             .onClick(() => { this.pickup(order) })

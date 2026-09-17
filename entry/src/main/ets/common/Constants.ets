@@ -184,3 +184,76 @@ export function merchantImageSource(image: string | undefined): ResourceStr {
   }
   return url.startsWith('/') ? API_CONFIG.BASE_URL + url : url
 }
+
+/**
+ * 功能模块主题色：一个模块一种颜色，同一模块在所有页面保持一致。
+ * 用途：模块标题、模块图标底、分区强调色，避免整屏只有白底 + 灰字（"很多空白"的观感来源之一）。
+ */
+export class MODULE_COLOR {
+  static readonly HOME: string = '#FF6B35'
+  static readonly SECKILL: string = '#FF3B30'
+  static readonly NEARBY: string = '#2F80ED'
+  static readonly SPECIAL: string = '#F2994A'
+  static readonly RANKING: string = '#8E44AD'
+  static readonly COUPON: string = '#E0526E'
+  static readonly CART: string = '#27AE60'
+  static readonly ORDER: string = '#2D9CDB'
+  static readonly MINE: string = '#00838F'
+  static readonly SEARCH: string = '#2196F3'
+  static readonly FAVORITE: string = '#D6455D'
+  static readonly REVIEW: string = '#9B51E0'
+  static readonly MERCHANT: string = '#B25E39'
+  static readonly RIDER: string = '#0F9D58'
+  static readonly ADMIN: string = '#5B6B8C'
+}
+
+/** 模块浅底色：与 MODULE_COLOR 一一配对，用于模块标题条/分区卡片背景。 */
+export class MODULE_BG {
+  static readonly HOME: string = '#FFF3E8'
+  static readonly SECKILL: string = '#FFEDEA'
+  static readonly NEARBY: string = '#EAF2FE'
+  static readonly SPECIAL: string = '#FFF4E5'
+  static readonly RANKING: string = '#F3EBFA'
+  static readonly COUPON: string = '#FDECEF'
+  static readonly CART: string = '#EAF7EF'
+  static readonly ORDER: string = '#E9F4FC'
+  static readonly MINE: string = '#E6F3F4'
+  static readonly SEARCH: string = '#E9F3FE'
+  static readonly FAVORITE: string = '#FCEAEE'
+  static readonly REVIEW: string = '#F4EBFC'
+  static readonly MERCHANT: string = '#F7EDE7'
+  static readonly RIDER: string = '#E8F6EE'
+  static readonly ADMIN: string = '#EDF0F6'
+}
+
+/** 逐项取色的浅色底 / 前景色板（成对），让相邻卡片、图标底颜色不相同。 */
+export class ACCENT {
+  static readonly BG: string[] = ['#FFE3D3', '#FFE0E6', '#E3EEFF', '#E4F6E9',
+    '#FFF3D6', '#EFE4FB', '#DFF3F5', '#FCE6DC']
+  static readonly FG: string[] = ['#E55A2B', '#D6455D', '#2F80ED', '#27AE60',
+    '#C99A05', '#8E44AD', '#00838F', '#B25E39']
+}
+
+/** 第 index 项的浅色底（确定性轮转，不用随机数，避免每次渲染跳色）。 */
+export function accentBg(index: number): string {
+  const list: string[] = ACCENT.BG
+  return list[Math.abs(index) % list.length]
+}
+
+/** 第 index 项的前景色（与 accentBg 成对，保证对比度）。 */
+export function accentFg(index: number): string {
+  const list: string[] = ACCENT.FG
+  return list[Math.abs(index) % list.length]
+}
+
+/**
+ * 由文本/名称推导取色序号：同一个名称永远同一色，不同名称大概率不同色。
+ * 用于没有天然序号的位置（菜单行、资产项），省掉逐处传 index 的样板代码。
+ */
+export function accentIndexFromText(text: string): number {
+  let sum: number = 0
+  for (let i = 0; i < text.length; i++) {
+    sum += text.charCodeAt(i)
+  }
+  return sum
+}

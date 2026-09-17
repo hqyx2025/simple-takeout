@@ -2,7 +2,7 @@
  * 管理端内容管理（演进项已落地）：首页轮播 Banner 与平台公告
  */
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { Banner, Announcement } from '../model/Models'
 import {
   syncAdminBannersRemote, updateBannerStatusRemote, deleteBannerRemote, createBannerRemote,
@@ -19,7 +19,7 @@ export struct AdminContentPage {
   @State loading: boolean = false
   @State showBannerDialog: boolean = false
   @State bannerTitle: string = ''
-  @State bannerColor: string = '#FF6B35'
+  @State bannerColor: string = MODULE_COLOR.HOME
   @State showAnnouncementDialog: boolean = false
   @State announcementTitle: string = ''
   @State announcementContent: string = ''
@@ -102,17 +102,17 @@ export struct AdminContentPage {
       Column() {
         Row() {
           Text('‹ 返回')
-            .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
+            .fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.ADMIN)
             .onClick(() => { router.back() })
           Text('内容管理')
-            .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+            .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.ADMIN)
             .layoutWeight(1).textAlign(TextAlign.Center)
           Text('刷新')
-            .fontSize(FONT_SIZE.MD).fontColor(COLORS.PRIMARY)
+            .fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.ADMIN)
             .onClick(() => { this.loadAll() })
         }
         .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG })
-        .backgroundColor(COLORS.BG_WHITE)
+        .backgroundColor(MODULE_BG.ADMIN)
 
         if (this.loading) {
           Column() {
@@ -123,10 +123,13 @@ export struct AdminContentPage {
           List({ space: SPACING.SM }) {
             // Banner 区
             ListItem() {
-              Row() {
-                Text('轮播 Banner').fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
+              Row({ space: SPACING.SM }) {
+                Text('🖼️')
+                  .width(28).height(28).textAlign(TextAlign.Center)
+                  .backgroundColor(accentBg(0)).borderRadius(BORDER_RADIUS.SM)
+                Text('轮播 Banner').fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.ADMIN).layoutWeight(1)
                 Button('新增 Banner').height(32).fontSize(FONT_SIZE.SM)
-                  .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
+                  .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.ADMIN)
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                   .onClick(() => { this.showBannerDialog = true })
               }.width('100%')
@@ -145,10 +148,13 @@ export struct AdminContentPage {
 
             // 公告区
             ListItem() {
-              Row() {
-                Text('平台公告').fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
+              Row({ space: SPACING.SM }) {
+                Text('📢')
+                  .width(28).height(28).textAlign(TextAlign.Center)
+                  .backgroundColor(accentBg(1)).borderRadius(BORDER_RADIUS.SM)
+                Text('平台公告').fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.ADMIN).layoutWeight(1)
                 Button('发布公告').height(32).fontSize(FONT_SIZE.SM)
-                  .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
+                  .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.ADMIN)
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                   .onClick(() => { this.showAnnouncementDialog = true })
               }.width('100%')
@@ -184,13 +190,19 @@ export struct AdminContentPage {
   @Builder
   BannerCard(banner: Banner) {
     Row({ space: SPACING.SM }) {
+      Text(banner.title.substring(0, 1))
+        .width(36).height(36).textAlign(TextAlign.Center)
+        .fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold)
+        .fontColor(accentFg(accentIndexFromText(banner.title)))
+        .backgroundColor(accentBg(accentIndexFromText(banner.title)))
+        .borderRadius(BORDER_RADIUS.ROUND)
       Column({ space: SPACING.XS }) {
         Text(banner.title).fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
         Text(banner.color).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
       }.layoutWeight(1).alignItems(HorizontalAlign.Start)
       StatusBadge({ text: banner.status === 1 ? '展示中' : '已隐藏', mode: banner.status === 1 ? 'success' : 'gray' })
       Button(banner.status === 1 ? '隐藏' : '展示').height(28).fontSize(FONT_SIZE.XS)
-        .fontColor(COLORS.PRIMARY).backgroundColor(COLORS.TAG_BG)
+        .fontColor(MODULE_COLOR.ADMIN).backgroundColor(MODULE_BG.ADMIN)
         .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
         .onClick(() => { this.toggleBanner(banner) })
       Button('删除').height(28).fontSize(FONT_SIZE.XS)
@@ -204,7 +216,13 @@ export struct AdminContentPage {
   @Builder
   AnnouncementCard(a: Announcement) {
     Column({ space: SPACING.XS }) {
-      Row() {
+      Row({ space: SPACING.SM }) {
+        Text(a.title.substring(0, 1))
+          .width(32).height(32).textAlign(TextAlign.Center)
+          .fontSize(FONT_SIZE.SM).fontWeight(FontWeight.Bold)
+          .fontColor(accentFg(accentIndexFromText(a.title)))
+          .backgroundColor(accentBg(accentIndexFromText(a.title)))
+          .borderRadius(BORDER_RADIUS.MD)
         Text(a.title).fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
         StatusBadge({ text: a.status === 1 ? '已发布' : '已下线', mode: a.status === 1 ? 'success' : 'gray' })
       }.width('100%')
@@ -213,7 +231,7 @@ export struct AdminContentPage {
       Row() {
         Blank()
         Button(a.status === 1 ? '下线' : '发布').height(28).fontSize(FONT_SIZE.XS)
-          .fontColor(COLORS.PRIMARY).backgroundColor(COLORS.TAG_BG)
+          .fontColor(MODULE_COLOR.ADMIN).backgroundColor(MODULE_BG.ADMIN)
           .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
           .onClick(() => { this.toggleAnnouncement(a) })
         Button('删除').height(28).fontSize(FONT_SIZE.XS)
@@ -247,7 +265,7 @@ export struct AdminContentPage {
             .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
             .onClick(() => { this.showBannerDialog = false })
           Button('新增').layoutWeight(1).height(42)
-            .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
+            .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.ADMIN)
             .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
             .onClick(() => { this.submitBanner() })
         }.width('100%')
@@ -279,7 +297,7 @@ export struct AdminContentPage {
             .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
             .onClick(() => { this.showAnnouncementDialog = false })
           Button('发布').layoutWeight(1).height(42)
-            .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
+            .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.ADMIN)
             .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
             .onClick(() => { this.submitAnnouncement() })
         }.width('100%')

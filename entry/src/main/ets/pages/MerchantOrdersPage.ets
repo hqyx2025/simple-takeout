@@ -3,7 +3,7 @@
  * 按状态Tab分类展示商户所有店铺订单
  * 支持接单(1→2)、出餐(2→3)、确认送达(3→4)状态流转
  */
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { Order, CartItem, User, UserRole } from '../model/Models'
 import { getCurrentUser, getMerchantOrders, merchantActionRemote, syncMerchantOrdersFromServer } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
@@ -108,13 +108,13 @@ export struct MerchantOrdersPage {
       Row() {
         Text('‹ 返回')
           .fontSize(FONT_SIZE.BIG_TITLE)
-          .fontColor(COLORS.TEXT_PRIMARY)
+          .fontColor(MODULE_COLOR.MERCHANT)
           .id('merchant-orders-back')
           .onClick(() => { router.back() })
         Text('订单管理')
           .fontSize(FONT_SIZE.XL)
           .fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.TEXT_PRIMARY)
+          .fontColor(MODULE_COLOR.MERCHANT)
           .layoutWeight(1)
           .textAlign(TextAlign.Center)
         Text(' ')
@@ -124,7 +124,7 @@ export struct MerchantOrdersPage {
       .width('100%')
       .height(56)
       .padding({ left: SPACING.LG, right: SPACING.LG })
-      .backgroundColor(COLORS.BG_WHITE)
+      .backgroundColor(MODULE_BG.MERCHANT)
       .alignItems(VerticalAlign.Center)
 
       // 状态Tab栏（横向滚动）
@@ -134,7 +134,7 @@ export struct MerchantOrdersPage {
             Text(tab.name)
               .fontSize(FONT_SIZE.MD)
               .fontColor(this.currentStatus === tab.status ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
-              .backgroundColor(this.currentStatus === tab.status ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+              .backgroundColor(this.currentStatus === tab.status ? MODULE_COLOR.MERCHANT : COLORS.BG_PRIMARY)
               .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
               .borderRadius(BORDER_RADIUS.ROUND)
               .onClick(() => { this.currentStatus = tab.status })
@@ -187,6 +187,11 @@ export struct MerchantOrdersPage {
       Row() {
         Text('🏪')
           .fontSize(FONT_SIZE.MD)
+          .width(28)
+          .height(28)
+          .textAlign(TextAlign.Center)
+          .backgroundColor(accentBg(accentIndexFromText(order.storeName)))
+          .borderRadius(BORDER_RADIUS.SM)
         Text(order.storeName)
           .fontSize(FONT_SIZE.LG)
           .fontWeight(FontWeight.Bold)
@@ -195,7 +200,10 @@ export struct MerchantOrdersPage {
           .margin({ left: SPACING.SM })
         Text(getOrderStatusText(order.status, order.escrowStatus ?? 0))
           .fontSize(FONT_SIZE.MD)
-          .fontColor(getOrderStatusColor(order.status, order.escrowStatus ?? 0))
+          .fontColor(accentFg(order.status))
+          .backgroundColor(accentBg(order.status))
+          .padding({ left: SPACING.SM, right: SPACING.SM, top: 2, bottom: 2 })
+          .borderRadius(BORDER_RADIUS.ROUND)
           .id(`merchant-order-status-${order.id}`)
       }
       .width('100%')
@@ -263,7 +271,7 @@ export struct MerchantOrdersPage {
         .height(32)
         .fontSize(FONT_SIZE.SM)
         .fontColor(COLORS.TEXT_WHITE)
-        .backgroundColor(COLORS.PRIMARY)
+        .backgroundColor(MODULE_COLOR.MERCHANT)
         .borderRadius(BORDER_RADIUS.ROUND)
         .type(ButtonType.Capsule)
         .id(`merchant-action-${order.id}`)
@@ -273,7 +281,7 @@ export struct MerchantOrdersPage {
         // 已被骑手接单：商户侧不再有可执行动作，等骑手取餐即可
         Text(`骑手 ${order.riderName} 已接单，等待取餐`)
           .fontSize(FONT_SIZE.SM)
-          .fontColor(COLORS.PRIMARY)
+          .fontColor(MODULE_COLOR.MERCHANT)
       } else if ((order.readyTime ?? '') !== '') {
         // 已出餐并进入骑手待取餐池：状态仍是制作中，必须给可见凭据，否则商户以为没点上
         Text('已出餐，等待骑手接单')
@@ -286,7 +294,7 @@ export struct MerchantOrdersPage {
           .height(32)
           .fontSize(FONT_SIZE.SM)
           .fontColor(COLORS.TEXT_WHITE)
-          .backgroundColor(COLORS.PRIMARY)
+          .backgroundColor(MODULE_COLOR.MERCHANT)
           .borderRadius(BORDER_RADIUS.ROUND)
           .type(ButtonType.Capsule)
           .id(`merchant-action-${order.id}`)
@@ -297,14 +305,14 @@ export struct MerchantOrdersPage {
         // 骑手配送中：由骑手送达，商户不需要也不能确认送达
         Text(`骑手 ${order.riderName} 配送中`)
           .fontSize(FONT_SIZE.SM)
-          .fontColor(COLORS.PRIMARY)
+          .fontColor(MODULE_COLOR.MERCHANT)
       } else {
         // 未分配骑手的订单仍保留商户自行确认送达（兼容无骑手时的自配送）
         Button('确认送达')
           .height(32)
           .fontSize(FONT_SIZE.SM)
           .fontColor(COLORS.TEXT_WHITE)
-          .backgroundColor(COLORS.PRIMARY)
+          .backgroundColor(MODULE_COLOR.MERCHANT)
           .borderRadius(BORDER_RADIUS.ROUND)
           .type(ButtonType.Capsule)
           .id(`merchant-action-${order.id}`)

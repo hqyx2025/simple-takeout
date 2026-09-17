@@ -3,7 +3,7 @@
  */
 import { Address, GoodsItem, StoreItem } from '../model/Models'
 import { getAllStoresList, getGoodsForStore, syncStoresFromServer, syncGoodsFromServer } from '../service/AppStorageManager'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, merchantImageSource, DEFAULT_MERCHANT_IMAGE } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, merchantImageSource, DEFAULT_MERCHANT_IMAGE, accentBg, accentFg } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
@@ -337,9 +337,15 @@ export struct ProductListPage {
         EmptyState({ icon: '🍽️', title: '暂无符合条件的商品', description: '可以换个分类或查看附近全部商品' })
       } else {
         List({ space: SPACING.SM }) {
-          LazyForEach(this.dataSource, (item: ProductListItem) => {
+          LazyForEach(this.dataSource, (item: ProductListItem, index: number) => {
             ListItem() {
               Row({ space: SPACING.MD }) {
+                // 左侧模块色条：相邻条目颜色不同，视觉上把整片白底切分开
+                Column()
+                  .width(4)
+                  .height(72)
+                  .backgroundColor(accentFg(index))
+                  .borderRadius(BORDER_RADIUS.SM)
                 Image(merchantImageSource(item.goods.image))
                   .alt(DEFAULT_MERCHANT_IMAGE)
                   .width(72)
@@ -386,12 +392,11 @@ export struct ProductListPage {
                   }
                 }
                 .width('100%')
-                .layoutWeight(1)
               }
               }
               .width('100%')
               .padding(SPACING.LG)
-              .backgroundColor(COLORS.BG_WHITE)
+              .backgroundColor(accentBg(index))
               .borderRadius(BORDER_RADIUS.LG)
               .onClick(() => { this.openStore(item) })
             }

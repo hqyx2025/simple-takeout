@@ -4,7 +4,7 @@
  * 支持取消收藏与点击跳转店铺（直接压栈独立 StoreDetailPage）
  */
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, accentFg, accentIndexFromText } from '../common/Constants'
 import { Favorite } from '../model/Models'
 import { getFavorites, toggleFavoriteRemote, syncFavoritesRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { EmptyState } from '../components/EmptyState'
@@ -122,7 +122,7 @@ export struct FavoriteListPage {
         .fontSize(FONT_SIZE.XXL)
         .fontWeight(FontWeight.Bold)
         .fontColor(COLORS.TEXT_WHITE)
-        .backgroundColor(COLORS.PRIMARY)
+        .backgroundColor(accentFg(accentIndexFromText(item.storeName)))
         .width(56)
         .height(56)
         .borderRadius(BORDER_RADIUS.LG)

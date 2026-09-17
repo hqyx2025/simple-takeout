@@ -4,7 +4,7 @@
  */
 import { User, UserRole, Category } from '../model/Models'
 import { ApiResponse, get, post, put, del } from '../service/HttpClient'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentIndexFromText } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { logInfo } from '../service/AppLogger'
@@ -101,14 +101,14 @@ export struct AdminCategoryPage {
         Row() {
           Text('‹ 返回')
             .fontSize(FONT_SIZE.MD)
-            .fontColor(COLORS.PRIMARY)
+            .fontColor(MODULE_COLOR.ADMIN)
             .onClick(() => { router.back() })
           Text('分类管理')
-            .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).layoutWeight(1).textAlign(TextAlign.Center)
+            .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.ADMIN).layoutWeight(1).textAlign(TextAlign.Center)
           Button('刷新').height(32).fontSize(FONT_SIZE.SM).onClick(() => { this.refresh() })
         }
         .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 })
-        .backgroundColor(COLORS.BG_WHITE)
+        .backgroundColor(MODULE_BG.ADMIN)
 
         // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
         List({ space: SPACING.MD }) {
@@ -123,7 +123,7 @@ export struct AdminCategoryPage {
               TextInput({ placeholder: '新增分类名称', text: this.newCategoryName })
                 .layoutWeight(1).height(42).onChange((value: string) => { this.newCategoryName = value })
               Button('新增').height(42).fontSize(FONT_SIZE.SM)
-                .backgroundColor(COLORS.PRIMARY).onClick(() => { this.createCategory() })
+                .backgroundColor(MODULE_COLOR.ADMIN).onClick(() => { this.createCategory() })
             }.width('100%')
           }
 
@@ -136,7 +136,10 @@ export struct AdminCategoryPage {
           ForEach(this.categories, (category: Category) => {
             ListItem() {
               Row({ space: SPACING.MD }) {
-                Text(category.icon).fontSize(FONT_SIZE.LG)
+                Text(category.icon)
+                  .width(36).height(36).textAlign(TextAlign.Center).fontSize(FONT_SIZE.LG)
+                  .backgroundColor(accentBg(accentIndexFromText(category.name)))
+                  .borderRadius(BORDER_RADIUS.MD)
                 if (this.editingCategoryId === category.id) {
                   TextInput({ placeholder: '分类名称', text: this.editCategoryName })
                     .layoutWeight(1).height(36).onChange((value: string) => { this.editCategoryName = value })
@@ -155,7 +158,7 @@ export struct AdminCategoryPage {
                   }
                   .layoutWeight(1).alignItems(HorizontalAlign.Start)
                   Text('编辑')
-                    .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
+                    .fontSize(FONT_SIZE.SM).fontColor(MODULE_COLOR.ADMIN)
                     .padding({ left: SPACING.SM, right: SPACING.SM, top: SPACING.XS, bottom: SPACING.XS })
                     .onClick(() => {
                       this.editingCategoryId = category.id

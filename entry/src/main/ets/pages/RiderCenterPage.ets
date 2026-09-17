@@ -2,7 +2,7 @@
  * 骑手中心（四端改造）：上线/下线、配送统计、入口
  */
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { Rider } from '../model/Models'
 import { fetchRiderProfileRemote, logout, setRiderStatusRemote } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
@@ -49,7 +49,7 @@ export struct RiderCenterPage {
       Row() {
         Text('退出登录')
           .fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.PRIMARY)
+          .fontColor(MODULE_COLOR.RIDER)
           .layoutWeight(1)
           .onClick(() => {
             logout()
@@ -58,13 +58,13 @@ export struct RiderCenterPage {
         Text('🛵 骑手中心')
           .fontSize(FONT_SIZE.XXL)
           .fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.TEXT_PRIMARY)
+          .fontColor(MODULE_COLOR.RIDER)
           .layoutWeight(1)
       }
       .width('100%')
       .height(56)
       .padding({ left: SPACING.LG, right: SPACING.LG })
-      .backgroundColor(COLORS.BG_WHITE)
+      .backgroundColor(MODULE_BG.RIDER)
 
       if (!this.loggedIn) {
         Column() {
@@ -89,7 +89,13 @@ export struct RiderCenterPage {
           // 上线开关
           ListItem() {
             Column({ space: SPACING.SM }) {
-              Row() {
+              Row({ space: SPACING.MD }) {
+                Text(this.rider!.name.substring(0, 1))
+                  .width(40).height(40).textAlign(TextAlign.Center)
+                  .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
+                  .fontColor(accentFg(accentIndexFromText(this.rider!.name)))
+                  .backgroundColor(accentBg(accentIndexFromText(this.rider!.name)))
+                  .borderRadius(BORDER_RADIUS.ROUND)
                 Text(this.rider!.name)
                   .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
                   .layoutWeight(1)
@@ -112,23 +118,23 @@ export struct RiderCenterPage {
             Row() {
               Column({ space: SPACING.XS }) {
                 Text(this.rider!.totalOrders.toString())
-                  .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRIMARY)
+                  .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(accentFg(0))
                 Text('累计配送').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
               }.layoutWeight(1).alignItems(HorizontalAlign.Center)
               Column({ space: SPACING.XS }) {
                 Text(`¥${this.rider!.totalIncome.toFixed(2)}`)
-                  .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRIMARY)
+                  .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(accentFg(2))
                 Text('累计收入').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
               }.layoutWeight(1).alignItems(HorizontalAlign.Center)
             }
-            .width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+            .width('100%').padding(SPACING.LG).backgroundColor(MODULE_BG.RIDER).borderRadius(BORDER_RADIUS.LG)
           }
 
           ListItem() {
             Column() {
               Button('抢单大厅')
                 .width('100%').height(48).fontSize(FONT_SIZE.LG)
-                .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
+                .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.RIDER)
                 .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                 .margin({ top: SPACING.MD })
                 .id('rider-pool-entry')
@@ -143,7 +149,7 @@ export struct RiderCenterPage {
 
               Button('我的配送单')
                 .width('100%').height(48).fontSize(FONT_SIZE.LG)
-                .fontColor(COLORS.PRIMARY).backgroundColor(COLORS.TAG_BG)
+                .fontColor(MODULE_COLOR.RIDER).backgroundColor(MODULE_BG.RIDER)
                 .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                 .id('rider-orders-entry')
                 .onClick(() => { router.pushUrl({ url: 'pages/RiderOrdersPage' }) })
