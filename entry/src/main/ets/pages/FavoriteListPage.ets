@@ -1,7 +1,7 @@
 /**
  * 收藏列表页
  * 展示当前用户的收藏店铺列表
- * 支持取消收藏与点击跳转店铺（存储 currentStoreId 后 router.back 由首页接收）
+ * 支持取消收藏与点击跳转店铺（直接压栈独立 StoreDetailPage）
  */
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
@@ -162,7 +162,7 @@ export struct FavoriteListPage {
     .backgroundColor(COLORS.BG_WHITE)
     .borderRadius(BORDER_RADIUS.LG)
     .alignItems(VerticalAlign.Center)
-    .onClick(() => { this.onItemClick(item.storeId) })
+    .onClick(() => { this.onItemClick(item.storeId, item.storeName) })
   }
 
   // 获取店铺名称首字符作为色块占位
@@ -186,9 +186,15 @@ export struct FavoriteListPage {
     promptAction.showToast({ message: '已取消收藏' })
   }
 
-  // 点击收藏项：存储店铺ID后返回（由首页接收跳转店铺详情）
-  private onItemClick(storeId: number): void {
-    AppStorage.setOrCreate<number>('currentStoreId', storeId)
-    router.back()
+  // 点击收藏项：直接压栈独立 StoreDetailPage，返回时回到收藏页
+  private onItemClick(storeId: number, storeName: string): void {
+    if (storeId <= 0) {
+      promptAction.showToast({ message: '店铺信息不完整，无法打开详情', duration: 2200 })
+      return
+    }
+    AppStorage.setOrCreate<number>('selectedStoreId', storeId)
+    AppStorage.setOrCreate<string>('selectedStoreName', storeName !== '' ? storeName : '店铺详情')
+    logInfo('Navigation', `收藏页打开店铺详情 storeId=${storeId}`)
+    router.pushUrl({ url: 'pages/StoreDetailPage' })
   }
 }

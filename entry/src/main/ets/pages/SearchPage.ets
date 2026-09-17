@@ -18,10 +18,15 @@ export struct SearchPage {
   @State historyWords: string[] = []
   @State searchResults: StoreItem[] = []
   @State hasSearched: boolean = false
-  // pushUrl 独立页面无法注入回调，默认实现返回首页
+  // 直接压栈独立 StoreDetailPage，返回时回到搜索页（不再 back 给首页代跳）
   onStoreClick: (store: StoreItem) => void = (store: StoreItem) => {
-    AppStorage.setOrCreate<number>('currentStoreId', store.id)
-    router.back()
+    if (store.id <= 0) {
+      promptAction.showToast({ message: '店铺信息不完整，无法打开详情', duration: 2200 })
+      return
+    }
+    AppStorage.setOrCreate<number>('selectedStoreId', store.id)
+    AppStorage.setOrCreate<string>('selectedStoreName', store.name !== '' ? store.name : '店铺详情')
+    router.pushUrl({ url: 'pages/StoreDetailPage' })
   }
   onBack: () => void = () => { router.back() }
 

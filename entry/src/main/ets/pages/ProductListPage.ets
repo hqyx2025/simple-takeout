@@ -206,23 +206,27 @@ export struct ProductListPage {
   }
 
   private openStore(item: ProductListItem): void {
-    this.prepareStoreDetail(item.store)
-    router.back()
+    this.openStoreDetail(item.store)
   }
 
   private openStoreByStore(store: StoreItem): void {
-    this.prepareStoreDetail(store)
-    router.back()
+    this.openStoreDetail(store)
   }
 
-  /** 返回首页后由 Index.onPageShow 消费状态，再进入独立 StoreDetailPage。 */
-  private prepareStoreDetail(store: StoreItem): void {
-    AppStorage.setOrCreate<number>('currentStoreId', store.id)
+  /**
+   * 直接压栈独立 StoreDetailPage，返回时回到本列表页。
+   * 旧实现是 router.back() + Index.onPageShow 代跳，会把列表页从路由栈弹掉，
+   * 导致详情页返回落到首页。
+   */
+  private openStoreDetail(store: StoreItem): void {
+    if (store.id <= 0) {
+      promptAction.showToast({ message: '店铺信息不完整，无法打开详情', duration: 2200 })
+      return
+    }
     AppStorage.setOrCreate<number>('selectedStoreId', store.id)
-    AppStorage.setOrCreate<string>('selectedStoreName', store.name)
-    // 标记本次返回必须打开店铺详情，避免返回首页过程中 currentStoreId 被旧页面生命周期覆盖。
-    AppStorage.setOrCreate<boolean>('pendingStoreDetail', true)
-    logInfo('Navigation', `ProductListPage prepare store detail storeId=${store.id} name=${store.name}`)
+    AppStorage.setOrCreate<string>('selectedStoreName', store.name !== '' ? store.name : '店铺详情')
+    logInfo('Navigation', `ProductListPage 打开店铺详情 storeId=${store.id} name=${store.name}`)
+    router.pushUrl({ url: 'pages/StoreDetailPage' })
   }
 
   @Builder

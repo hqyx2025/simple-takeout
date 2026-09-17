@@ -89,7 +89,6 @@ struct Index {
     this.sanitizeAppData()
     // 管理端守卫：已登录的管理端不渲染主页，直接跳转平台管理页
     this.guardAdminRole()
-    this.consumePendingStoreDetail('aboutToAppear')
   }
 
   private guardAdminRole(): void {
@@ -174,12 +173,10 @@ struct Index {
     }
   }
 
-  // 从子路由页面（收藏页/搜索页）返回时，处理店铺详情跳转
   onPageShow() {
     logInfo('Page', '首页 Index onPageShow')
     // 从购物车、结算页等子页面返回时，强制“我的”页重新读取购物车数量，避免 Tabs 子组件保留旧标题。
     this.profileRefreshToken += 1
-    this.consumePendingStoreDetail('onPageShow')
     // 管理端/骑手防御：任何情况下 Index 对管理端、骑手不可见（防止返回键/异常路由回到主页）
     const pageUser: User | undefined = AppStorage.get<User>('user')
     if (this.loggedIn && pageUser !== undefined && pageUser.role === UserRole.ADMIN) {
@@ -210,22 +207,6 @@ struct Index {
       syncStoresFromServer()
       syncUserOrdersFromServer()
     }
-  }
-
-  /** 消费外部列表页返回的店铺详情请求，必须早于首页隐私/数据刷新分支执行。 */
-  private consumePendingStoreDetail(source: string): void {
-    const currentStoreId: number = AppStorage.get<number>('currentStoreId') || 0
-    const selectedStoreId: number = AppStorage.get<number>('selectedStoreId') || 0
-    const pending: boolean = AppStorage.get<boolean>('pendingStoreDetail') || false
-    const storeId: number = currentStoreId > 0 ? currentStoreId : (pending ? selectedStoreId : 0)
-    logInfo('Navigation', `${source} store detail state current=${currentStoreId} selected=${selectedStoreId} pending=${pending} resolved=${storeId}`)
-    if (storeId <= 0) {
-      return
-    }
-    AppStorage.setOrCreate<boolean>('pendingStoreDetail', false)
-    AppStorage.setOrCreate<number>('currentStoreId', 0)
-    this.showStoreDetail(storeId)
-    logInfo('Navigation', `${source} switched to store detail storeId=${storeId} tab=${this.currentTab}`)
   }
 
   // 打开独立店铺详情页，详情不再复用发现Tab
