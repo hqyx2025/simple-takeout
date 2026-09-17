@@ -36,7 +36,8 @@ public class OrderDao {
             rs.getString("deliver_time"),
             rs.getString("complete_time"),
             rs.getString("expect_time"),
-            rs.getLong("coupon_id")
+            rs.getLong("coupon_id"),
+            rs.getString("delivery_type")
     );
 
     private final JdbcTemplate jdbc;
@@ -46,11 +47,11 @@ public class OrderDao {
     }
 
     public long insert(Order o) {
-        jdbc.update("INSERT INTO orders(order_no, user_id, store_id, store_name, status, items, address, goods_amount, delivery_fee, discount, coupon_id, pay_amount, remark, reviewed, escrow_status, create_time, pay_time, accept_time, deliver_time, complete_time, expect_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        jdbc.update("INSERT INTO orders(order_no, user_id, store_id, store_name, status, items, address, goods_amount, delivery_fee, discount, coupon_id, pay_amount, remark, reviewed, escrow_status, create_time, pay_time, accept_time, deliver_time, complete_time, expect_time, delivery_type) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 o.orderNo(), o.userId(), o.storeId(), o.storeName(), o.status(), o.items(), o.address(),
                 o.goodsAmount(), o.deliveryFee(), o.discount(), o.couponId(), o.payAmount(), o.remark(),
                 o.reviewed(), 0, o.createTime(), o.payTime(), o.acceptTime(), o.deliverTime(),
-                o.completeTime(), o.expectTime());
+                o.completeTime(), o.expectTime(), o.deliveryType());
         return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 

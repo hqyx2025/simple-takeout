@@ -28,8 +28,19 @@ public record Order(
         String deliverTime,
         String completeTime,
         String expectTime,
-        long couponId
+        long couponId,
+        String deliveryType
 ) {
+    /** 兼容存量调用：默认外卖配送（DELIVERY）。 */
+    public Order(long id, String orderNo, long userId, long storeId, String storeName, int status,
+                 String items, String address, double goodsAmount, double deliveryFee, double discount,
+                 double payAmount, String remark, int reviewed, int escrowStatus, String createTime,
+                 String payTime, String acceptTime, String deliverTime, String completeTime,
+                 String expectTime, long couponId) {
+        this(id, orderNo, userId, storeId, storeName, status, items, address, goodsAmount, deliveryFee,
+                discount, payAmount, remark, reviewed, escrowStatus, createTime, payTime, acceptTime,
+                deliverTime, completeTime, expectTime, couponId, "DELIVERY");
+    }
     /**
      * 订单商品项（对应客户端 CartItem 结构；多规格下单记录 specId/specName 规格快照，
      * 秒杀下单记录 seckillId 以便取消时归还秒杀名额）
@@ -103,7 +114,8 @@ public record Order(
             long payDeadlineEpochMs,
             String riderName,
             String riderPhone,
-            String readyTime
+            String readyTime,
+            String deliveryType
     ) {
     }
 
@@ -116,6 +128,6 @@ public record Order(
         return new OrderView(id, orderNo, userId, storeId, storeName, status, itemList, addr,
                 goodsAmount, deliveryFee, discount, payAmount, remark, reviewed, escrowStatus,
                 createTime, payTime, acceptTime, deliverTime, completeTime, expectTime, couponId,
-                payDeadline, payDeadlineEpochMs, riderName, riderPhone, readyTime);
+                payDeadline, payDeadlineEpochMs, riderName, riderPhone, readyTime, deliveryType);
     }
 }

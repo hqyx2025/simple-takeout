@@ -31,6 +31,8 @@ public class SchemaMigration implements ApplicationRunner {
         addColumnIfMissing("orders", "ready_time", "VARCHAR(32) DEFAULT ''");
         // 预约送达时间（空=立即送达）
         addColumnIfMissing("orders", "expect_time", "VARCHAR(32) DEFAULT ''");
+        // 送达方式：DELIVERY 外卖配送 / PICKUP 到店自取
+        addColumnIfMissing("orders", "delivery_type", "VARCHAR(16) NOT NULL DEFAULT 'DELIVERY'");
         // 待付款支付模型：订单与所用优惠券解绑时需要用 coupon_id 释放优惠券
         addColumnIfMissing("orders", "coupon_id", "BIGINT NOT NULL DEFAULT 0");
         // 多规格 SKU：购物车按 (用户,菜品,规格) 唯一

@@ -142,7 +142,7 @@ public class OrderService {
     public Order.OrderView createOrder(long userId, long storeId, List<Order.OrderItem> items,
                                        long addressId, long couponId, String remark,
                                        List<Long> checkoutGoodsIds, String expectTime) {
-        return createOrder(userId, storeId, items, addressId, couponId, remark, checkoutGoodsIds, expectTime, "", List.of());
+        return createOrder(userId, storeId, items, addressId, couponId, remark, checkoutGoodsIds, expectTime, "", List.of(), "");
     }
 
     /**
@@ -155,7 +155,8 @@ public class OrderService {
     public Order.OrderView createOrder(long userId, long storeId, List<Order.OrderItem> items,
                                        long addressId, long couponId, String remark,
                                        List<Long> checkoutGoodsIds, String expectTime,
-                                       String idempotencyKey, List<SetmealOrder> setmeals) {
+                                       String idempotencyKey, List<SetmealOrder> setmeals,
+                                       String deliveryType) {
         StringRedisTemplate redis = null;
         String redisKey = null;
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -169,7 +170,7 @@ public class OrderService {
             }
         }
         try {
-            return doCreateOrder(userId, storeId, items, addressId, couponId, remark, checkoutGoodsIds, expectTime, setmeals);
+            return doCreateOrder(userId, storeId, items, addressId, couponId, remark, checkoutGoodsIds, expectTime, setmeals, deliveryType);
         } catch (RuntimeException e) {
             if (redisKey != null) {
                 try {
@@ -185,9 +186,10 @@ public class OrderService {
     private Order.OrderView doCreateOrder(long userId, long storeId, List<Order.OrderItem> items,
                                           long addressId, long couponId, String remark,
                                           List<Long> checkoutGoodsIds, String expectTime,
-                                          List<SetmealOrder> setmeals) {
+                                          List<SetmealOrder> setmeals, String deliveryType) {
         List<Order.OrderItem> orderItems = items == null ? List.of() : items;
         List<SetmealOrder> setmealOrders = setmeals == null ? List.of() : setmeals;
+        String normalizedDeliveryType = normalizeDeliveryType(deliveryType);
         if (orderItems.isEmpty() && setmealOrders.isEmpty()) {
             throw new BizException("订单商品不能为空");
         }
@@ -195,6 +197,8 @@ public class OrderService {
         if (store.status() != 1) {
             throw new BizException("店铺当前未营业");
         }
+        // 到店自取（PICKUP）不产生配送费
+        double deliveryFee = "PICKUP".equals(normalizedDeliveryType) ? 0 : store.deliveryFee();
         Address address = addressDao.listByUser(userId).stream()
                 .filter(a -> a.id() == addressId)
                 .findFirst()
@@ -315,7 +319,7 @@ public class OrderService {
                 default -> { }
             }
         }
-        double payAmount = round2(goodsAmount + store.deliveryFee() - discount);
+        double payAmount = round2(goodsAmount + deliveryFee - discount);
         if (payAmount < 0) {
             throw new BizException("优惠金额不能超过订单金额");
         }
@@ -348,9 +352,9 @@ public class OrderService {
         String normalizedExpect = normalizeExpectTime(expectTime);
         Order order = new Order(0, orderNo, userId, storeId, store.name(), 0,
                 toJson(normalizedItems), toJson(new Order.AddressInfo(address.id(), address.name(), address.phone(), address.detail())),
-                goodsAmount, store.deliveryFee(), discount, payAmount,
+                goodsAmount, deliveryFee, discount, payAmount,
                 remark == null ? "" : requireMaxLength(remark, 255, "订单备注"), 0, 0, now, "", "", "", "", normalizedExpect,
-                appliedCoupon == null ? 0 : appliedCoupon.id());
+                appliedCoupon == null ? 0 : appliedCoupon.id(), normalizedDeliveryType);
         long id = orderDao.insert(order);
         // 一人一单：下单登记秒杀参与记录，唯一键(user_id, seckill_id)拦截跨单重复；重复则回滚整单
         for (StockHold hold : holds) {
@@ -928,6 +932,12 @@ public class OrderService {
      * 预约送达时间归一化：空 / “立即送达” → 立即配送（空串）；
      * 否则必须是合法且晚于当前时间的 yyyy-MM-dd HH:mm:ss。
      */
+    /** 送达方式：默认 DELIVERY（外卖配送），仅 PICKUP（到店自取）特殊。 */
+    private static String normalizeDeliveryType(String deliveryType) {
+        String t = deliveryType == null ? "" : deliveryType.trim().toUpperCase();
+        return "PICKUP".equals(t) ? "PICKUP" : "DELIVERY";
+    }
+
     private String normalizeExpectTime(String expectTime) {
         if (expectTime == null || expectTime.isBlank() || "立即送达".equals(expectTime.trim())) {
             return "";

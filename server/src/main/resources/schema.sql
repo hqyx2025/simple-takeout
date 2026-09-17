@@ -102,6 +102,7 @@ CREATE TABLE IF NOT EXISTS orders (
     rider_id BIGINT NOT NULL DEFAULT 0,
     ready_time VARCHAR(32) DEFAULT '',
     expect_time VARCHAR(32) DEFAULT '',
+    delivery_type VARCHAR(16) NOT NULL DEFAULT 'DELIVERY',
     KEY idx_orders_user (user_id),
     KEY idx_orders_store (store_id),
     KEY idx_orders_rider (rider_id)
