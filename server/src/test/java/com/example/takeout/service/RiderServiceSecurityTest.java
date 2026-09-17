@@ -38,7 +38,8 @@ class RiderServiceSecurityTest {
     @Test
     void createsRiderProfileOnFirstAccess() {
         User riderUser = new User(9, "骑手小王", "", "13900139000", "", 3, 0, "now");
-        Rider created = new Rider(5, 9, "骑手小王", "13900139000", 0, 0, 0.0, 1, "now");
+        Rider created = new Rider(5, 9, "骑手小王", "13900139000", 0, 0, 0.0, 1, 25000,
+                null, null, "", "now");
         when(userDao.findById(9)).thenReturn(Optional.of(riderUser));
         when(riderDao.findByUserId(9)).thenReturn(Optional.empty());
         when(riderDao.insert(ArgumentMatchers.eq(9L), ArgumentMatchers.eq("骑手小王"),
@@ -54,8 +55,10 @@ class RiderServiceSecurityTest {
     @Test
     void setOnlineTogglesRiderFlag() {
         User riderUser = new User(9, "骑手小王", "", "13900139000", "", 3, 0, "now");
-        Rider offline = new Rider(5, 9, "骑手小王", "13900139000", 0, 3, 25.5, 1, "now");
-        Rider online = new Rider(5, 9, "骑手小王", "13900139000", 1, 3, 25.5, 1, "now");
+        Rider offline = new Rider(5, 9, "骑手小王", "13900139000", 0, 3, 25.5, 1, 25000,
+                null, null, "", "now");
+        Rider online = new Rider(5, 9, "骑手小王", "13900139000", 1, 3, 25.5, 1, 25000,
+                null, null, "", "now");
         when(userDao.findById(9)).thenReturn(Optional.of(riderUser));
         when(riderDao.findByUserId(9)).thenReturn(Optional.of(offline));
         when(riderDao.findById(5)).thenReturn(Optional.of(online));

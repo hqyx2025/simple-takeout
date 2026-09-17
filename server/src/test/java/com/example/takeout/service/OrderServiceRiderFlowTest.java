@@ -45,6 +45,8 @@ import static org.mockito.Mockito.when;
 class OrderServiceRiderFlowTest {
 
     private static final long STORE_ID = 10L;
+    /** 距骑手约 100 公里的门店：超出默认 25 公里骑手半径，配单时应被过滤。 */
+    private static final long FAR_STORE_ID = 11L;
     private static final long ORDER_ID = 500L;
     private static final long OWNER_ID = 99L;
     private static final long RIDER_ID = 77L;
@@ -65,8 +67,10 @@ class OrderServiceRiderFlowTest {
 
     /** 服务层独立校验骑手未被停用：走 riderGrab/riderPickup/riderDeliver 的用例必须先桩一个启用中的骑手档案。 */
     private void stubActiveRider() {
+        // 骑手必须带接单位置与半径，否则配单判定（门店是否在自己半径内）会直接不派单
         when(riderDao.findById(RIDER_ID)).thenReturn(Optional.of(
-                new Rider(RIDER_ID, 5L, "骑手小张", "13300133000", 1, 0, 0.0, 1, "")));
+                new Rider(RIDER_ID, 5L, "骑手小张", "13300133000", 1, 0, 0.0, 1, 25000,
+                        22.8177, 108.3665, "南宁市青秀区", "")));
     }
 
     /** 库中订单（25 个组件：id..couponId 为模型字段，rider_id / ready_time 由 DAO 单独读写）。 */
@@ -77,9 +81,64 @@ class OrderServiceRiderFlowTest {
     }
 
     private void stubStore() {
+        // 门店与骑手相距约 60 米，落在默认 25 公里骑手半径内
         when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(
                 new Store(STORE_ID, "测试店", "", 4.5, 0, 5, 10, "30分钟", "1km", "[]", "",
-                        1, "[1]", OWNER_ID, 1, 0, "")));
+                        "南宁市青秀区", 22.8180, 108.3670, 1, "[1]", OWNER_ID, 1, 0, "", 0)));
+    }
+
+    /** 列表里带一个"远店"单：配单必须只在骑手半径内的门店。 */
+    private Order farStoredOrder(int status) {
+        return new Order(ORDER_ID + 1, "NO501", 1L, FAR_STORE_ID, "远店", status, ITEMS, ADDRESS_JSON,
+                10, 5, 0, 15, "", 0, 0, "2026-09-15 10:00:00",
+                "2026-09-15 10:01:00", "", "", "", "", 0);
+    }
+
+    private void stubFarStore() {
+        // 纬度 +0.9 度 ≈ 100 公里，远超骑手半径
+        when(storeDao.findById(FAR_STORE_ID)).thenReturn(Optional.of(
+                new Store(FAR_STORE_ID, "远店", "", 4.5, 0, 5, 10, "30分钟", "1km", "[]", "",
+                        "南宁市", 23.7177, 108.3665, 1, "[1]", OWNER_ID, 1, 0, "", 0)));
+    }
+
+    /**
+     * 平台配单：只在「商家半径 ∩ 骑手半径」内。
+     * 商家半径一侧在下单时已按收货地址校验（超距直接拒绝下单），池子侧只需再按骑手半径过滤。
+     */
+    @Test
+    void poolOnlyContainsOrdersWithinRiderRadius() {
+        stubActiveRider();
+        stubStore();
+        stubFarStore();
+        when(orderDao.listRiderPool()).thenReturn(List.of(storedOrder(2), farStoredOrder(2)));
+
+        List<Order.OrderView> pool = service.riderPool(RIDER_ID);
+
+        assertEquals(1, pool.size());
+        assertEquals(ORDER_ID, pool.get(0).id());
+    }
+
+    /** 骑手没设置接单位置时无法判定半径 → 不派任何单（前端提示先去设置）。 */
+    @Test
+    void poolIsEmptyWhenRiderHasNoLocation() {
+        when(riderDao.findById(RIDER_ID)).thenReturn(Optional.of(
+                new Rider(RIDER_ID, 5L, "骑手小张", "13300133000", 1, 0, 0.0, 1, 25000,
+                        null, null, "", "")));
+        when(orderDao.listRiderPool()).thenReturn(List.of(storedOrder(2)));
+
+        assertEquals(0, service.riderPool(RIDER_ID).size());
+    }
+
+    /** 抢单也不能绕过半径：直接拿订单 id 调接口同样要被拒。 */
+    @Test
+    void grabIsRejectedForOrderOutsideRiderRadius() {
+        stubActiveRider();
+        stubFarStore();
+        when(orderDao.findById(ORDER_ID)).thenReturn(Optional.of(farStoredOrder(2)));
+
+        BizException error = assertThrows(BizException.class, () -> service.riderGrab(RIDER_ID, ORDER_ID));
+
+        assertTrue(error.getMessage().contains("不在您的配送范围内"), error.getMessage());
     }
 
     @Test
@@ -110,9 +169,12 @@ class OrderServiceRiderFlowTest {
 
     @Test
     void deliveredOrderWithReadyTimeShowsUpInPool() {
+        stubActiveRider();
+        stubStore();
         when(orderDao.listRiderPool()).thenReturn(List.of(storedOrder(2)));
 
-        List<Order.OrderView> pool = service.riderPool();
+        // 池子按骑手半径过滤：门店必须在骑手接单位置的配送半径内
+        List<Order.OrderView> pool = service.riderPool(RIDER_ID);
 
         assertEquals(1, pool.size());
         assertEquals(ORDER_ID, pool.get(0).id());
@@ -121,6 +183,7 @@ class OrderServiceRiderFlowTest {
     @Test
     void riderGrabBindsRiderAndIsRejectedWhenSomeoneElseTookIt() {
         stubActiveRider();
+        stubStore();
         when(orderDao.tryAssignRider(ORDER_ID, RIDER_ID)).thenReturn(true);
         when(orderDao.findById(ORDER_ID)).thenReturn(Optional.of(storedOrder(2)));
 
@@ -175,7 +238,8 @@ class OrderServiceRiderFlowTest {
         // 平台停用的骑手（status=0）：控制器有在线/停用校验，服务层必须独立兜底，
         // 防止绕过控制器的调用路径（内部调用/新增接口）让停用骑手继续接单配送
         when(riderDao.findById(RIDER_ID)).thenReturn(Optional.of(
-                new Rider(RIDER_ID, 5L, "骑手小张", "13300133000", 1, 0, 0.0, 0, "")));
+                new Rider(RIDER_ID, 5L, "骑手小张", "13300133000", 1, 0, 0.0, 0, 25000,
+                        22.8177, 108.3665, "南宁市青秀区", "")));
 
         BizException grab = assertThrows(BizException.class, () -> service.riderGrab(RIDER_ID, ORDER_ID));
         assertEquals(403, grab.getCode());
@@ -212,7 +276,8 @@ class OrderServiceRiderFlowTest {
         when(orderDao.listByStore(STORE_ID)).thenReturn(List.of(storedOrder(3)));
         when(orderDao.findRiderId(ORDER_ID)).thenReturn(RIDER_ID);
         when(riderDao.findById(RIDER_ID)).thenReturn(Optional.of(
-                new Rider(RIDER_ID, 5L, "骑手小张", "13300133000", 1, 0, 0.0, 1, "")));
+                new Rider(RIDER_ID, 5L, "骑手小张", "13300133000", 1, 0, 0.0, 1, 25000,
+                        22.8177, 108.3665, "南宁市青秀区", "")));
 
         List<Order.OrderView> orders = service.merchantOrders(OWNER_ID);
 

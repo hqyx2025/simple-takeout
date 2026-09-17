@@ -154,7 +154,8 @@ class OrderBoundaryTest {
     @Test
     void riderDeliverRecordsIncomeInSameCall() {
         when(riderDao.findById(5)).thenReturn(Optional.of(
-                new Rider(5, 3L, "骑手小张", "13300133000", 1, 0, 0.0, 1, "")));
+                new Rider(5, 3L, "骑手小张", "13300133000", 1, 0, 0.0, 1, 25000,
+                        22.8177, 108.3665, "南宁市青秀区", "")));
         when(orderDao.riderDeliver(eq(9L), eq(5L), anyString())).thenReturn(true);
         when(orderDao.findById(9)).thenReturn(Optional.of(storedOrder(9, 3, 0)));
         when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore(0, 3)));

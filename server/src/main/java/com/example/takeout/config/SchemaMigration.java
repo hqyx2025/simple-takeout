@@ -50,6 +50,11 @@ public class SchemaMigration implements ApplicationRunner {
         addColumnIfMissing("stores", "delivery_radius", "INT NOT NULL DEFAULT 0");
         addColumnIfMissing("addresses", "latitude", "DECIMAL(10,7) DEFAULT NULL");
         addColumnIfMissing("addresses", "longitude", "DECIMAL(10,7) DEFAULT NULL");
+        // 骑手配送半径与接单位置：配单要同时落在商家半径与骑手半径内
+        addColumnIfMissing("riders", "delivery_radius", "INT NOT NULL DEFAULT 25000");
+        addColumnIfMissing("riders", "latitude", "DOUBLE DEFAULT NULL");
+        addColumnIfMissing("riders", "longitude", "DOUBLE DEFAULT NULL");
+        addColumnIfMissing("riders", "location_address", "VARCHAR(255) NOT NULL DEFAULT ''");
         rebuildCartUniqueKey();
     }
 

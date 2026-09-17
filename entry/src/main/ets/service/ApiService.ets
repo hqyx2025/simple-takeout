@@ -238,7 +238,23 @@ interface ServerRider {
   totalOrders: number
   totalIncome: number
   status: number
+  /** 配送半径（米）：默认 25 公里 */
+  deliveryRadius?: number
+  /** 接单位置（抢单圆心） */
+  latitude?: number
+  longitude?: number
+  locationAddress?: string
   createTime: string
+}
+
+interface RiderRadiusRequest {
+  radiusMeters: number
+}
+
+interface RiderLocationRequest {
+  latitude: number
+  longitude: number
+  address: string
 }
 
 interface ServerBanner {
@@ -859,6 +875,21 @@ export async function fetchRiderProfileApi(): Promise<Rider | null> {
     return null
   }
   return toRider(resp.data)
+}
+
+/** 骑手设置配送半径（米）。 */
+export async function updateRiderRadiusApi(radiusMeters: number): Promise<Rider | null> {
+  const req: RiderRadiusRequest = { radiusMeters: radiusMeters }
+  const resp: ApiResponse<ServerRider> = await put<ServerRider>('/api/rider/range/radius', req)
+  return resp.code === 200 && resp.data !== null ? toRider(resp.data) : null
+}
+
+/** 骑手设置接单位置（抢单圆心）。 */
+export async function updateRiderLocationApi(latitude: number, longitude: number,
+  address: string): Promise<Rider | null> {
+  const req: RiderLocationRequest = { latitude: latitude, longitude: longitude, address: address }
+  const resp: ApiResponse<ServerRider> = await put<ServerRider>('/api/rider/range/location', req)
+  return resp.code === 200 && resp.data !== null ? toRider(resp.data) : null
 }
 
 export async function setRiderStatusApi(online: number): Promise<Rider | null> {
@@ -1828,6 +1859,10 @@ function toRider(r: ServerRider): Rider {
     totalOrders: r.totalOrders,
     totalIncome: r.totalIncome,
     status: r.status,
+    deliveryRadius: r.deliveryRadius ?? 0,
+    latitude: r.latitude,
+    longitude: r.longitude,
+    locationAddress: r.locationAddress ?? '',
     createTime: r.createTime
   }
   return rider

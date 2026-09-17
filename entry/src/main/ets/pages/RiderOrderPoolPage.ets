@@ -3,8 +3,8 @@
  */
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
-import { Order } from '../model/Models'
-import { syncRiderPoolRemote, grabOrderRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
+import { Order, Rider } from '../model/Models'
+import { syncRiderPoolRemote, grabOrderRemote, getLastRemoteErrorMessage, fetchRiderProfileRemote } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
 
 @Entry
@@ -13,6 +13,7 @@ export struct RiderOrderPoolPage {
   @State orders: Order[] = []
   @State loading: boolean = false
   @State grabbing: boolean = false
+  @State rider: Rider | null = null
 
   async aboutToAppear(): Promise<void> {
     logInfo('Page', '进入抢单大厅 RiderOrderPoolPage')
@@ -21,8 +22,36 @@ export struct RiderOrderPoolPage {
 
   private async loadPool(): Promise<void> {
     this.loading = true
+    this.rider = await fetchRiderProfileRemote()
     this.orders = await syncRiderPoolRemote()
     this.loading = false
+  }
+
+  /** 接单范围摘要：没有接单位置就抢不到任何单。 */
+  private rangeText(): string {
+    if (this.rider === null) {
+      return ''
+    }
+    const radiusMeters: number = this.rider.deliveryRadius ?? 0
+    const radiusKm: number = radiusMeters > 0 ? radiusMeters / 1000 : 25
+    const latitude: number | undefined = this.rider.latitude
+    const longitude: number | undefined = this.rider.longitude
+    const hasLocation: boolean = latitude !== undefined && longitude !== undefined
+      && Number.isFinite(latitude) && Number.isFinite(longitude) && !(latitude === 0 && longitude === 0)
+    if (!hasLocation) {
+      return '未设置接单位置：请到骑手中心用地图选点或当前定位，否则抢不到单'
+    }
+    return `接单范围 ${radiusKm} 公里；平台只把商家与骑手半径内的订单派给你`
+  }
+
+  private needsLocation(): boolean {
+    if (this.rider === null) {
+      return false
+    }
+    const latitude: number | undefined = this.rider.latitude
+    const longitude: number | undefined = this.rider.longitude
+    return latitude === undefined || longitude === undefined
+      || !Number.isFinite(latitude) || !Number.isFinite(longitude) || (latitude === 0 && longitude === 0)
   }
 
   private async grab(order: Order): Promise<void> {
@@ -63,14 +92,28 @@ export struct RiderOrderPoolPage {
       .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG })
       .backgroundColor(MODULE_BG.RIDER)
 
+      if (this.rangeText() !== '') {
+        Text(this.rangeText())
+          .fontSize(FONT_SIZE.XS)
+          .fontColor(this.needsLocation() ? COLORS.ERROR : COLORS.TEXT_SECONDARY)
+          .width('100%')
+          .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
+          .id('rider-pool-range-hint')
+      }
+
       if (this.loading) {
         Column() {
           Text('正在加载可抢订单…').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
         }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
       } else if (this.orders.length === 0) {
-        Column() {
+        Column({ space: SPACING.SM }) {
           Text('🛵').fontSize(60).margin({ top: 40 })
-          Text('暂无待抢订单').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
+          Text(this.needsLocation() ? '请先设置接单位置' : '暂无待抢订单')
+            .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
+          Text(this.needsLocation()
+            ? '未设置接单位置时，平台无法判断你在哪些商家的配送范围内'
+            : '商家出餐后，落在你接单范围内的订单会出现在这里')
+            .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).textAlign(TextAlign.Center)
         }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
       } else {
         // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部

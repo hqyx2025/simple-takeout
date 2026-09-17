@@ -205,7 +205,7 @@ public class OrderService {
                 .orElseThrow(() -> new BizException("收货地址不存在"));
         // 商户配送半径：商户填了按商户的，没填按默认 2 公里；地址/门店缺坐标时无法判断，不拦截
         if (!store.canDeliver(address.latitude(), address.longitude())) {
-            throw new BizException("该店铺超出配送范围，无法配送到所选地址");
+            throw new BizException("超距，请重新选择地点");
         }
 
         // 金额计算：商品总价 + 配送费 - 优惠（多规格取规格价，生效中的秒杀自动套用秒杀价）
@@ -691,23 +691,57 @@ public class OrderService {
 
     // ============ 四端改造：骑手配送 ============
 
-    /** 待取餐池：已出餐且尚未分配骑手。 */
-    public List<Order.OrderView> riderPool() {
-        return orderDao.listRiderPool().stream().map(this::toView).toList();
+    /**
+     * 待取餐池：已出餐且尚未分配骑手，且**门店落在该骑手配送半径内**。
+     * 平台配单要求订单同时满足两侧半径：商家半径（用户地址到门店，下单时已校验，超距直接拒绝下单）
+     * 与骑手半径（骑手设置的接单位置到门店）。骑手未设置接单位置时无法判定，返回空池（前端提示去设置）。
+     */
+    public List<Order.OrderView> riderPool(long riderId) {
+        Rider rider = riderDao.findById(riderId).orElse(null);
+        if (rider == null) {
+            return List.of();
+        }
+        return orderDao.listRiderPool().stream()
+                .filter(order -> riderCanServe(rider, order.storeId()))
+                .map(this::toView)
+                .toList();
+    }
+
+    /** 该门店是否在骑手配送半径内（圆心=骑手接单位置）。 */
+    private boolean riderCanServe(Rider rider, long storeId) {
+        if (!rider.hasLocation()) {
+            return false;
+        }
+        Store store = storeDao.findById(storeId).orElse(null);
+        if (store == null) {
+            return false;
+        }
+        double distanceKm = store.distanceKmTo(rider.latitude(), rider.longitude());
+        if (distanceKm < 0) {
+            return false;
+        }
+        int radius = rider.deliveryRadius() > 0 ? rider.deliveryRadius() : Rider.DEFAULT_DELIVERY_RADIUS_METERS;
+        return distanceKm * 1000 <= radius;
     }
 
     /** 抢单/取餐/送达前校验骑手未被平台停用（控制器已做在线校验，服务层做独立防御）。 */
-    private void requireActiveRider(long riderId) {
+    private Rider requireActiveRider(long riderId) {
         Rider rider = riderDao.findById(riderId).orElseThrow(() -> new BizException("骑手不存在"));
         if (rider.status() != 1) {
             throw new BizException(403, "骑手账号已停用，请联系平台管理员");
         }
+        return rider;
     }
 
     /** 骑手抢单：条件更新，防并发重复抢单。 */
     @Transactional
     public Order.OrderView riderGrab(long riderId, long orderId) {
-        requireActiveRider(riderId);
+        Rider rider = requireActiveRider(riderId);
+        Order order = orderDao.findById(orderId).orElseThrow(() -> new BizException("订单不存在"));
+        // 抢单也要过半径判定：否则用订单 id 直接调用接口就能绕开派单范围
+        if (!riderCanServe(rider, order.storeId())) {
+            throw new BizException("该订单不在您的配送范围内，请调整接单范围或接单位置");
+        }
         if (!orderDao.tryAssignRider(orderId, riderId)) {
             throw new BizException("手慢了，该订单已被其他骑手接走");
         }

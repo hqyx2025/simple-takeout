@@ -47,6 +47,7 @@ public class DataSeeder implements ApplicationRunner {
         if (userCount != null && userCount > 0) {
             ensureAdminUser();
             ensureRiderUser();
+            ensureRiderDeliveryRange();
             ensureBankCards();
             ensureStoresAndGoods();
             ensureAdditionalStores();
@@ -59,6 +60,7 @@ public class DataSeeder implements ApplicationRunner {
         seed();
         ensureAdminUser();
         ensureRiderUser();
+        ensureRiderDeliveryRange();
         ensureBankCards();
         ensureAdditionalStores();
         ensureStoreCoordinates();
@@ -435,6 +437,23 @@ public class DataSeeder implements ApplicationRunner {
         }
         if (!pending.isEmpty()) {
             log.info("已为 {} 家种子店铺落位门店坐标（基准点南宁）", pending.size());
+        }
+    }
+
+    /**
+     * 幂等给骑手补接单位置（种子基准点南宁）。
+     * 配单要求门店落在骑手半径内，骑手没有位置时抢单池恒为空——新库和老库都要能开箱抢单。
+     */
+    private void ensureRiderDeliveryRange() {
+        List<Long> riderUserIds = jdbc.queryForList(
+                "SELECT user_id FROM riders WHERE latitude IS NULL OR longitude IS NULL", Long.class);
+        for (Long userId : riderUserIds) {
+            jdbc.update("UPDATE riders SET latitude = ?, longitude = ?, location_address = ? "
+                            + "WHERE user_id = ? AND (latitude IS NULL OR longitude IS NULL)",
+                    SEED_BASE_LATITUDE, SEED_BASE_LONGITUDE, "南宁市青秀区（默认接单位置）", userId);
+        }
+        if (!riderUserIds.isEmpty()) {
+            log.info("已为 {} 名骑手补齐默认接单位置（南宁）", riderUserIds.size());
         }
     }
 

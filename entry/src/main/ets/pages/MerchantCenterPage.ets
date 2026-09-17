@@ -14,6 +14,12 @@ import { logInfo } from '../service/AppLogger'
 import { routerCompat as router } from '../common/UiNavigation'
 import { AddressSearchResult, searchAddress } from '../service/LocationService'
 import { syncAddressesRemote } from '../service/AppStorageManager'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+
+/** 商户最远配送半径软阈值（公里）：低于/高于会先弹确认框，服务端仍接受 */
+const MERCHANT_RADIUS_DEFAULT_KM: number = 30
+const MERCHANT_RADIUS_MIN_KM: number = 5
+const MERCHANT_RADIUS_MAX_KM: number = 50
 
 class MerchantAddressOption {
   id: number = 0
@@ -61,8 +67,8 @@ export struct MerchantCenterPage {
   @State newStoreMinOrder: string = '20'
   // 店铺照片（上传接口返回的相对地址；空串表示未上传）
   @State newStoreImage: string = ''
-  // 配送半径（米，0=不限）
-  @State newStoreRadius: string = '0'
+  // 最远配送半径（公里输入；落库为米，未填按默认 30 公里）
+  @State newStoreRadius: string = `${MERCHANT_RADIUS_DEFAULT_KM}`
   // 「定位选择店铺位置」的结果：非空时优先于已保存地址
   @State newStorePickedAddress: string = ''
   @State newStorePickedLatitude: number = 0
@@ -82,10 +88,14 @@ export struct MerchantCenterPage {
   @State editStoreDeliveryFee: string = ''
   @State editStoreMinOrder: string = ''
   @State editStoreImage: string = ''
-  @State editStoreRadius: string = '0'
+  @State editStoreRadius: string = `${MERCHANT_RADIUS_DEFAULT_KM}`
   @State editingStoreId: number = 0
   @State savingStore: boolean = false
   @State creatingStore: boolean = false
+  // 半径过小/过大的确认弹窗（确认后带着 confirmed 标记重入提交）
+  @State showRadiusConfirm: boolean = false
+  @State radiusConfirmText: string = ''
+  @State pendingRadiusAction: string = ''
 
   aboutToAppear() {
     logInfo('Page', '进入商户中心页 MerchantCenterPage')
@@ -598,10 +608,11 @@ export struct MerchantCenterPage {
               .layoutWeight(1)
             }
             Column({ space: SPACING.XS }) {
-              Text('配送半径（米，0=不限；超出半径的用户在附近列表看不到本店）')
+              Text(`最远配送半径（公里，默认 ${MERCHANT_RADIUS_DEFAULT_KM}；超出半径的用户下单会提示超距)`)
                 .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-              TextInput({ placeholder: '如：3000', text: this.newStoreRadius })
+              TextInput({ placeholder: `如：${MERCHANT_RADIUS_DEFAULT_KM}`, text: this.newStoreRadius })
                 .width('100%').height(44).type(InputType.Number)
+                .id('merchant-radius-input-new')
                 .onChange((v: string) => { this.newStoreRadius = v })
             }
             Row({ space: SPACING.MD }) {
@@ -629,6 +640,25 @@ export struct MerchantCenterPage {
       }
 
       // 编辑店铺弹窗
+      // 半径过小/过大的二次确认（与骑手端同一套话术）
+      if (this.showRadiusConfirm) {
+        ConfirmDialog({
+          title: '确认最远配送半径',
+          content: this.radiusConfirmText,
+          confirmText: '仍要选择',
+          cancelText: '改一下',
+          onConfirm: () => {
+            this.showRadiusConfirm = false
+            if (this.pendingRadiusAction === 'edit') {
+              this.doEditStore(true)
+            } else {
+              this.doCreateStore(true)
+            }
+          },
+          onCancel: () => { this.showRadiusConfirm = false }
+        })
+      }
+
       if (this.showEditStore) {
         Column() {
           Column({ space: SPACING.MD }) {
@@ -713,10 +743,11 @@ export struct MerchantCenterPage {
               .layoutWeight(1)
             }
             Column({ space: SPACING.XS }) {
-              Text('配送半径（米，0=不限；超出半径的用户在附近列表看不到本店）')
+              Text(`最远配送半径（公里，默认 ${MERCHANT_RADIUS_DEFAULT_KM}；超出半径的用户下单会提示超距)`)
                 .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-              TextInput({ placeholder: '如：3000', text: this.editStoreRadius })
+              TextInput({ placeholder: `如：${MERCHANT_RADIUS_DEFAULT_KM}`, text: this.editStoreRadius })
                 .width('100%').height(44).type(InputType.Number)
+                .id('merchant-radius-input-edit')
                 .onChange((v: string) => { this.editStoreRadius = v })
             }
             Row({ space: SPACING.MD }) {
@@ -951,7 +982,7 @@ export struct MerchantCenterPage {
     .width('100%').height('100%')
   }
 
-  async doCreateStore() {
+  async doCreateStore(radiusConfirmed: boolean = false) {
     if (this.creatingStore) {
       promptAction.showToast({ message: '店铺正在创建，请稍候', duration: 1400 })
       return
@@ -983,11 +1014,21 @@ export struct MerchantCenterPage {
       promptAction.showToast({ message: '配送费和起送价必须是非负数字', duration: 1800 })
       return
     }
-    const radius: number = this.newStoreRadius.trim() === '' ? 0 : Number(this.newStoreRadius)
-    if (!Number.isFinite(radius) || radius < 0 || Math.floor(radius) !== radius) {
-      promptAction.showToast({ message: '配送半径必须是非负整数（米，0 表示不限）', duration: 2000 })
+    const radiusKm: number = this.newStoreRadius.trim() === ''
+      ? MERCHANT_RADIUS_DEFAULT_KM : Number(this.newStoreRadius)
+    if (!Number.isFinite(radiusKm) || radiusKm <= 0) {
+      promptAction.showToast({ message: '请输入有效的最远配送半径（公里）', duration: 2000 })
       return
     }
+    if (!radiusConfirmed && (radiusKm < MERCHANT_RADIUS_MIN_KM || radiusKm > MERCHANT_RADIUS_MAX_KM)) {
+      this.radiusConfirmText = radiusKm < MERCHANT_RADIUS_MIN_KM
+        ? `不推荐太小哦，可能会无单可抢，您真的要选择吗？（当前 ${radiusKm} 公里）`
+        : `半径超过 ${MERCHANT_RADIUS_MAX_KM} 公里，可能会接到很远的单，确定要设置吗？（当前 ${radiusKm} 公里）`
+      this.pendingRadiusAction = 'create'
+      this.showRadiusConfirm = true
+      return
+    }
+    const radius: number = Math.round(radiusKm * 1000)
     this.creatingStore = true
     let latitude: number = this.newStorePickedLatitude
     let longitude: number = this.newStorePickedLongitude
@@ -1036,7 +1077,9 @@ export struct MerchantCenterPage {
     this.editStoreDeliveryFee = store.deliveryFee.toString()
     this.editStoreMinOrder = store.minOrder.toString()
     this.editStoreImage = store.image ?? ''
-    this.editStoreRadius = (store.deliveryRadius ?? 0).toString()
+    const radiusMeters: number = store.deliveryRadius ?? 0
+    this.editStoreRadius = radiusMeters > 0
+      ? `${radiusMeters / 1000}` : `${MERCHANT_RADIUS_DEFAULT_KM}`
     this.editStoreAddressFallbackText = (store.address || '').trim()
     this.editStoreAddressFallbackLatitude = store.latitude ?? 0
     this.editStoreAddressFallbackLongitude = store.longitude ?? 0
@@ -1049,7 +1092,7 @@ export struct MerchantCenterPage {
     this.showEditStore = true
   }
 
-  async doEditStore() {
+  async doEditStore(radiusConfirmed: boolean = false) {
     if (this.savingStore) {
       promptAction.showToast({ message: '店铺正在保存，请稍候', duration: 1400 })
       return
@@ -1071,12 +1114,22 @@ export struct MerchantCenterPage {
       promptAction.showToast({ message: '配送费和起送价必须是非负数字', duration: 1800 })
       return
     }
-    // 留空表示沿用原值：旧实现不传该字段，服务端按 0（=不限）落库，保存店铺会把配送半径静默清零
-    const radius: number = this.editStoreRadius.trim() === '' ? (originalStore.deliveryRadius ?? 0) : Number(this.editStoreRadius)
-    if (!Number.isFinite(radius) || radius < 0 || Math.floor(radius) !== radius) {
-      promptAction.showToast({ message: '配送半径必须是非负整数（米，0 表示不限）', duration: 2000 })
+    // 表单项是公里，落库为米；留空按默认 30 公里（旧实现不传该字段会被服务端按 0 落库，保存即静默清零）
+    const radiusKm: number = this.editStoreRadius.trim() === ''
+      ? MERCHANT_RADIUS_DEFAULT_KM : Number(this.editStoreRadius)
+    if (!Number.isFinite(radiusKm) || radiusKm <= 0) {
+      promptAction.showToast({ message: '请输入有效的最远配送半径（公里）', duration: 2000 })
       return
     }
+    if (!radiusConfirmed && (radiusKm < MERCHANT_RADIUS_MIN_KM || radiusKm > MERCHANT_RADIUS_MAX_KM)) {
+      this.radiusConfirmText = radiusKm < MERCHANT_RADIUS_MIN_KM
+        ? `不推荐太小哦，可能会无单可抢，您真的要选择吗？（当前 ${radiusKm} 公里）`
+        : `半径超过 ${MERCHANT_RADIUS_MAX_KM} 公里，可能会接到很远的单，确定要设置吗？（当前 ${radiusKm} 公里）`
+      this.pendingRadiusAction = 'edit'
+      this.showRadiusConfirm = true
+      return
+    }
+    const radius: number = Math.round(radiusKm * 1000)
     this.savingStore = true
     const selectedAddress: Address | null = this.findMerchantAddress(this.editStoreAddressId)
     let address: string = ''

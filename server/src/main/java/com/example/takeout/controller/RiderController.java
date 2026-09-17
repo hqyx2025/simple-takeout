@@ -48,13 +48,30 @@ public class RiderController {
         return ApiResponse.ok(riderService.setOnline(userId, req.online()));
     }
 
-    /** 可抢订单池（已出餐、未分配骑手）。 */
+    /** 可抢订单池（已出餐、未分配骑手，且门店在本人配送半径内）。 */
     @GetMapping("/orders/pool")
     public ApiResponse<List<Order.OrderView>> pool(@RequestAttribute("userId") long userId,
                                                    @RequestAttribute("role") int role) {
         requireRider(role);
-        riderService.profile(userId);
-        return ApiResponse.ok(orderService.riderPool());
+        return ApiResponse.ok(orderService.riderPool(riderService.profile(userId).id()));
+    }
+
+    /** 设置本人配送半径（米）。 */
+    @PutMapping("/range/radius")
+    public ApiResponse<Rider> updateRadius(@RequestAttribute("userId") long userId,
+                                           @RequestAttribute("role") int role,
+                                           @RequestBody RiderRadiusRequest req) {
+        requireRider(role);
+        return ApiResponse.ok(riderService.updateDeliveryRadius(userId, req.radiusMeters()));
+    }
+
+    /** 设置本人接单位置（抢单圆心）。 */
+    @PutMapping("/range/location")
+    public ApiResponse<Rider> updateLocation(@RequestAttribute("userId") long userId,
+                                             @RequestAttribute("role") int role,
+                                             @RequestBody RiderLocationRequest req) {
+        requireRider(role);
+        return ApiResponse.ok(riderService.updateLocation(userId, req.latitude(), req.longitude(), req.address()));
     }
 
     /** 我的配送单。 */
@@ -93,6 +110,13 @@ public class RiderController {
     }
 
     public record RiderStatusRequest(int online) {
+    }
+
+    /** 配送半径单位：米。 */
+    public record RiderRadiusRequest(int radiusMeters) {
+    }
+
+    public record RiderLocationRequest(double latitude, double longitude, String address) {
     }
 
     /** 抢单/取餐/送达前必须在线且未被平台停用，避免离线/停用账号接单造成配送中断。 */

@@ -62,8 +62,12 @@ public record Store(
                 ownerId, status, recommended, createTime, deliveryRadius);
     }
 
-    /** 商户未填配送半径时使用的默认值（米）：2 公里。 */
-    public static final int DEFAULT_DELIVERY_RADIUS_METERS = 2000;
+    /** 商户未填最远配送半径时使用的默认值（米）：30 公里（约一个小城市范围）。 */
+    public static final int DEFAULT_DELIVERY_RADIUS_METERS = 30000;
+
+    /** 商户可接受的半径下限/上限（米）：过小/过大由前端弹窗确认，服务端只挡明显非法值。 */
+    public static final int MIN_DELIVERY_RADIUS_METERS = 1000;
+    public static final int MAX_DELIVERY_RADIUS_METERS = 200000;
 
     /**
      * 能否配送到用户当前位置。
@@ -76,6 +80,14 @@ public record Store(
         }
         int effectiveRadius = deliveryRadius > 0 ? deliveryRadius : DEFAULT_DELIVERY_RADIUS_METERS;
         return haversine(userLatitude, userLongitude, latitude, longitude) * 1000 <= effectiveRadius;
+    }
+
+    /** 到指定坐标的直线距离（公里）；任一侧缺坐标返回 -1（表示无法判定）。 */
+    public double distanceKmTo(Double otherLatitude, Double otherLongitude) {
+        if (!validCoordinates(otherLatitude, otherLongitude) || !validCoordinates(latitude, longitude)) {
+            return -1;
+        }
+        return haversine(otherLatitude, otherLongitude, latitude, longitude);
     }
 
     public static String normalizeDistance(String value) {

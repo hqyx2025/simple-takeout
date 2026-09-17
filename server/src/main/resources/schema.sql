@@ -294,6 +294,11 @@ CREATE TABLE IF NOT EXISTS riders (
     total_orders INT NOT NULL DEFAULT 0,
     total_income DECIMAL(10,2) NOT NULL DEFAULT 0,
     status INT NOT NULL DEFAULT 1,
+    -- 骑手配送半径（米）：默认 25 公里；接单圆心=下方 latitude/longitude
+    delivery_radius INT NOT NULL DEFAULT 25000,
+    latitude DOUBLE DEFAULT NULL,
+    longitude DOUBLE DEFAULT NULL,
+    location_address VARCHAR(255) NOT NULL DEFAULT '',
     create_time VARCHAR(32) NOT NULL,
     UNIQUE KEY uk_riders_user (user_id),
     KEY idx_riders_online (online)

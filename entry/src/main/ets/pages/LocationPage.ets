@@ -368,21 +368,22 @@ export struct LocationPage {
       // 门店选点模式：只把「地址 + 坐标」写回上层表单，不新增用户收货地址、不改当前配送地址
       const pickStore: boolean = AppStorage.get<boolean>('storeLocationPickMode') || false
       if (pickStore) {
-        const picked: Address = {
-          id: 0,
-          name: '',
-          phone: '',
-          address: addressText,
-          detail: detail,
-          isDefault: false,
-          tag: '门店定位',
-          latitude: pos.latitude,
-          longitude: pos.longitude
-        }
-        AppStorage.setOrCreate<Address>('pickedStoreLocation', picked)
+        AppStorage.setOrCreate<Address>('pickedStoreLocation',
+          this.buildPickedLocation(addressText, detail, pos, '门店定位'))
         AppStorage.setOrCreate<boolean>('storeLocationPickMode', false)
         logInfo('LocationPage', `门店定位已选：${addressText} ${detail}（${pos.latitude},${pos.longitude}）`)
         promptAction.showToast({ message: '已选择门店位置', duration: 1500 })
+        router.back()
+        return
+      }
+      // 骑手接单位置模式：同样只回传地址+坐标，不新增收货地址
+      const pickRider: boolean = AppStorage.get<boolean>('riderLocationPickMode') || false
+      if (pickRider) {
+        AppStorage.setOrCreate<Address>('pickedRiderLocation',
+          this.buildPickedLocation(addressText, detail, pos, '接单位置'))
+        AppStorage.setOrCreate<boolean>('riderLocationPickMode', false)
+        logInfo('LocationPage', `骑手接单位置已选：${addressText} ${detail}（${pos.latitude},${pos.longitude}）`)
+        promptAction.showToast({ message: '已选择接单位置', duration: 1500 })
         router.back()
         return
       }
@@ -390,6 +391,22 @@ export struct LocationPage {
     } finally {
       this.savingAddress = false
     }
+  }
+
+  /** 把当前选点打包成上层表单可直接消费的地址对象（门店/骑手选点共用，不落库）。 */
+  private buildPickedLocation(addressText: string, detail: string, pos: GeoPosition, tag: string): Address {
+    const picked: Address = {
+      id: 0,
+      name: '',
+      phone: '',
+      address: addressText,
+      detail: detail,
+      isDefault: false,
+      tag: tag,
+      latitude: pos.latitude,
+      longitude: pos.longitude
+    }
+    return picked
   }
 
   // 保存配送地址后明确提示用户，并由用户确认是否返回首页。

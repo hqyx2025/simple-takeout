@@ -28,10 +28,11 @@ class StoreDeliveryRadiusTest {
     }
 
     @Test
-    void blankRadiusFallsBackToDefaultTwoKilometers() {
-        // 商户没填半径（0）时按默认 2 公里，不再表示"不限"
-        assertTrue(store(39.90, 116.40, 0).canDeliver(39.91, 116.40), "约 1.1km 在默认 2 公里内");
-        assertFalse(store(39.90, 116.40, 0).canDeliver(39.95, 116.40), "约 5.5km 超出默认 2 公里");
+    void blankRadiusFallsBackToDefaultThirtyKilometers() {
+        // 商户没填半径（0）时按默认 30 公里（约一个小城市范围），不再表示"不限"
+        assertTrue(store(39.90, 116.40, 0).canDeliver(39.95, 116.40), "约 5.5km 在默认 30 公里内");
+        assertTrue(store(39.90, 116.40, 0).canDeliver(40.15, 116.40), "约 27.8km 在默认 30 公里内");
+        assertFalse(store(39.90, 116.40, 0).canDeliver(40.25, 116.40), "约 38.9km 超出默认 30 公里");
     }
 
     @Test

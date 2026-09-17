@@ -256,6 +256,10 @@ export interface Rider {
   totalOrders: number  // 累计完成配送单量
   totalIncome: number  // 累计配送收入
   status: number
+  deliveryRadius?: number   // 配送半径（米）：默认 25 公里
+  latitude?: number         // 接单位置（抢单圆心）
+  longitude?: number
+  locationAddress?: string
   createTime: string
 }
 

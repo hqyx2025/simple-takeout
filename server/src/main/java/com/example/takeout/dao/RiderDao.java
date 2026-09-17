@@ -23,6 +23,10 @@ public class RiderDao {
             rs.getInt("total_orders"),
             rs.getDouble("total_income"),
             rs.getInt("status"),
+            rs.getInt("delivery_radius"),
+            rs.getObject("latitude", Double.class),
+            rs.getObject("longitude", Double.class),
+            rs.getString("location_address"),
             rs.getString("create_time")
     );
 
@@ -52,6 +56,17 @@ public class RiderDao {
 
     public boolean updateStatus(long id, int status) {
         return jdbc.update("UPDATE riders SET status = ? WHERE id = ?", status, id) == 1;
+    }
+
+    /** 骑手配送半径（米）。 */
+    public boolean updateDeliveryRadius(long id, int radiusMeters) {
+        return jdbc.update("UPDATE riders SET delivery_radius = ? WHERE id = ?", radiusMeters, id) == 1;
+    }
+
+    /** 骑手接单位置（抢单圆心）。 */
+    public boolean updateLocation(long id, double latitude, double longitude, String address) {
+        return jdbc.update("UPDATE riders SET latitude = ?, longitude = ?, location_address = ? WHERE id = ?",
+                latitude, longitude, address, id) == 1;
     }
 
     /** 送达完成后累加骑手单量与收入。 */
