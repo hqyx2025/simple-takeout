@@ -2,7 +2,7 @@
  * 主页面 - 简单外卖App
  * 包含：搜索栏、分类导航、店铺列表、店铺详情、购物车、订单列表、个人中心、底部Tab导航
  */
-import { Category, StoreItem, GoodsItem, GoodsSpec, SpecialGoodsItem, SeckillItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, Banner, Announcement, MarketingActivity, Setmeal, createEmptyUser } from '../model/Models'
+import { Category, StoreItem, GoodsItem, GoodsSpec, SpecialGoodsItem, SeckillItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, Banner, Announcement, MarketingActivity, Setmeal, SetmealItem, createEmptyUser } from '../model/Models'
 import { addToCart, addCartItemRemote, updateCartItemQuantity, updateCartItemQuantityRemote, refreshCartFromServer, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCartRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncBannersRemote, syncAnnouncementsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, cancelOrderRemote, payOrderRemote, fetchSeckillsRemote, getLastRemoteErrorMessage, rechargeBalanceRemote, syncCurrentUserFromServer } from '../service/AppStorageManager'
 import { fetchRecommendedStoresApi, fetchSpecialGoodsApi, fetchStoreMerchantCategoriesApi, fetchStoreDetailApi, fetchStoreActivitiesApi, fetchStoreSetmealsApi } from '../service/ApiService'
 import { LoginPage } from './LoginPage'
@@ -1603,6 +1603,26 @@ export struct StoreDetailContent {
             }, (act: MarketingActivity) => act.id.toString())
           }
           .width('100%')
+        }
+        .width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE).margin({ top: SPACING.SM })
+      }
+
+      if (this.storeSetmeals.length > 0) {
+        Column({ space: SPACING.SM }) {
+          Text('超值套餐').fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY).width('100%')
+          ForEach(this.storeSetmeals, (sm: Setmeal) => {
+            Column({ space: SPACING.XS }) {
+              Row() {
+                Text(sm.name).fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1).maxLines(1)
+                Text(`¥${sm.price.toFixed(2)}`).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.PRICE_RED)
+              }.width('100%')
+              Text(sm.items.map((it: SetmealItem) => it.goodsName).join(' + ')).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+              if (sm.originalPrice > sm.price) {
+                Text(`原价 ¥${sm.originalPrice.toFixed(2)}`).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).decoration({ type: TextDecorationType.LineThrough })
+              }
+            }
+            .width('100%').padding(SPACING.MD).backgroundColor(COLORS.BG_PRIMARY).borderRadius(BORDER_RADIUS.MD)
+          }, (sm: Setmeal) => sm.id.toString())
         }
         .width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE).margin({ top: SPACING.SM })
       }
