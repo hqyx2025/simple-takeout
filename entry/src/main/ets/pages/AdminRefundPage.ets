@@ -73,6 +73,16 @@ export struct AdminRefundPage {
     }
   }
 
+  private reasonTypeLabel(code: string): string {
+    switch (code) {
+      case 'NOT_RECEIVED': return '未收到餐'
+      case 'QUALITY_ISSUE': return '餐品质量问题'
+      case 'WRONG_ITEM': return '商品不符'
+      case 'DONOT_WANT': return '不想要了'
+      default: return '其他'
+    }
+  }
+
   private getRefundStatusText(status: string): string {
     if (status === 'PENDING') {
       return '待审批'
@@ -125,7 +135,7 @@ export struct AdminRefundPage {
                     Text(`金额 ¥${record.amount.toFixed(2)}  申请时间 ${record.applyTime}`).fontSize(FONT_SIZE.SM)
                       .fontColor(COLORS.TEXT_SECONDARY)
                     if (record.reason !== '') {
-                      Text(`原因：${record.reason}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+                      Text(`原因：${record.reasonType ? this.reasonTypeLabel(record.reasonType) : ''}${record.reasonType && record.reason ? ' · ' : ''}${record.reason}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
                     }
                     if (record.status === 'REJECTED' && record.rejectReason !== '') {
                       Text(`拒绝原因：${record.rejectReason}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.ERROR)

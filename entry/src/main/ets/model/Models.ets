@@ -331,6 +331,7 @@ export interface RefundRecord {
   orderId: number
   userId: number
   merchantId: number
+  reasonType: string
   reason: string
   amount: number
   status: string        // PENDING待审批 / REFUNDED已退款 / REJECTED已拒绝
