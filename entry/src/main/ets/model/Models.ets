@@ -499,3 +499,14 @@ export interface Setmeal {
   createTime: string
   items: SetmealItem[]
 }
+
+export interface Employee {
+  id: number
+  storeId: number
+  userId: number
+  username: string
+  phone: string
+  roleName: string
+  status: number
+  createTime: string
+}

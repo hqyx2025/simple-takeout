@@ -9,7 +9,7 @@ import {
   User, UserRole, StoreItem, GoodsItem, SpecialGoodsItem, Category, Order, CartItem,
   Address, Coupon, Review, Rider, Banner, Announcement, Favorite, RefundRecord, AdminEmployee, AdminProduct, AdminProductPage, AdminUser,
   BankCard,
-  AdminStatisticsData, AdminTrendPoint, AdminHotGoods, AdminDashboard, AdminOrderStatusCount, AdminTopStore, MarketingActivity, Setmeal, SeckillItem, BundleInfo, UploadResult, GoodsSpec
+  AdminStatisticsData, AdminTrendPoint, AdminHotGoods, AdminDashboard, AdminOrderStatusCount, AdminTopStore, MarketingActivity, Setmeal, Employee, SeckillItem, BundleInfo, UploadResult, GoodsSpec
 } from '../model/Models'
 import { logInfo, logWarn } from './AppLogger'
 
@@ -505,6 +505,11 @@ interface RefundRequest {
 
 interface PayRequest {
   channel: string
+}
+
+interface MerchantEmployeeBody {
+  userId: number
+  roleName: string
 }
 
 interface AdminEmployeeCreateRequest {
@@ -1144,6 +1149,28 @@ export async function fetchMerchantOrdersApi(): Promise<Order[]> {
  */
 export async function merchantActionApi(orderId: number, action: string): Promise<boolean> {
   const resp: ApiResponse<ServerOrder> = await put<ServerOrder>(`/api/merchant/orders/${orderId}/${action}`, undefined)
+  return resp.code === 200
+}
+
+/** 商户门店员工（按店按角色）：列表。 */
+export async function fetchMerchantEmployeesApi(storeId: number): Promise<Employee[]> {
+  const resp: ApiResponse<Employee[]> = await get<Employee[]>(`/api/merchant/employees?storeId=${storeId}`)
+  if (resp.code !== 200 || resp.data === null) {
+    return []
+  }
+  return resp.data
+}
+
+/** 商户门店员工：添加（userId + roleName）。 */
+export async function addMerchantEmployeeApi(storeId: number, userId: number, roleName: string): Promise<boolean> {
+  const req: MerchantEmployeeBody = { userId: userId, roleName: roleName }
+  const resp: ApiResponse<Employee> = await post<Employee>(`/api/merchant/employees?storeId=${storeId}`, req)
+  return resp.code === 200
+}
+
+/** 商户门店员工：移除。 */
+export async function removeMerchantEmployeeApi(storeId: number, employeeId: number): Promise<boolean> {
+  const resp: ApiResponse<null> = await del<null>(`/api/merchant/employees/${employeeId}?storeId=${storeId}`)
   return resp.code === 200
 }
 
