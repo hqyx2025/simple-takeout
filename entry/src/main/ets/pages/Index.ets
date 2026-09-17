@@ -732,9 +732,10 @@ struct HomePage {
       .translate({ y: this.isHeaderVisible ? 0 : 8 })
       .animation({ duration: 260, curve: Curve.EaseInOut })
 
-      Scroll() {
-        Column() {
-          // 分类导航
+      Refresh({ refreshing: this.isRefreshing }) {
+        Scroll() {
+          Column() {
+            // 分类导航
           Grid() {
             ForEach(this.categories, (cat: Category) => {
               GridItem() {
@@ -951,20 +952,23 @@ struct HomePage {
           } else if (this.specialGoods.length === 0) {
             EmptyState({ icon: '🛍️', title: '暂无特价商品', description: '商家上新特价商品后会展示在这里' })
           } else {
-            Refresh({ refreshing: this.isRefreshing }) {
-              Column({ space: SPACING.SM }) {
-                ForEach(this.specialGoods, (item: SpecialGoodsItem) => {
-                  this.SpecialGoodsCard(item)
-                }, (item: SpecialGoodsItem) => `${item.goods.storeId}-${item.goods.id}`)
-              }
-              .width('100%')
-              .padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.LG })
+            Column({ space: SPACING.SM }) {
+              ForEach(this.specialGoods, (item: SpecialGoodsItem) => {
+                this.SpecialGoodsCard(item)
+              }, (item: SpecialGoodsItem) => `${item.goods.storeId}-${item.goods.id}`)
             }
-            .onRefreshing(() => { this.refreshHomeData() })
+            .width('100%')
+            .padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.LG })
           }
           }
-          .layoutWeight(1)
         }
+        .width('100%')
+        .height('100%')
+        .scrollBar(BarState.Off)
+      }
+      .layoutWeight(1)
+      .pullToRefresh(true)
+      .onRefreshing(() => { this.refreshHomeData() })
     }
     .width('100%')
     .height('100%')

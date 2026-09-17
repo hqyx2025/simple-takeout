@@ -377,7 +377,8 @@ export struct LocationPage {
     const name: string = user !== undefined && user !== null ? user.username : ''
     const phone: string = user !== undefined && user !== null ? user.phone : ''
     const fullAddress: string = `${addressText} ${detail}`.trim()
-    const persistedAddress: Address | null = await addAddressRemoteAndGet(name, phone, fullAddress, true)
+    const persistedAddress: Address | null = await addAddressRemoteAndGet(name, phone, fullAddress, true,
+      pos.latitude, pos.longitude)
     if (persistedAddress === null || persistedAddress.id <= 0) {
       promptAction.showToast({ message: '定位地址保存失败，请稍后重试', duration: 1800 })
       return

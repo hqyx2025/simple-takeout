@@ -194,6 +194,8 @@ interface ServerAddress {
   phone: string
   detail: string
   isDefault: number
+  latitude?: number
+  longitude?: number
 }
 
 /** 钱包银行卡：cardNoMasked 已是掩码卡号（服务端只存后四位，不下发完整卡号）。 */
@@ -438,6 +440,8 @@ interface AddressRequest {
   phone: string
   detail: string
   isDefault: number
+  latitude?: number
+  longitude?: number
 }
 
 interface CouponClaimRequest {
@@ -1551,14 +1555,22 @@ export async function fetchBankCardsApi(): Promise<BankCard[]> {
   })
 }
 
-export async function addAddressApi(name: string, phone: string, detail: string, isDefault: boolean): Promise<boolean> {
-  const req: AddressRequest = { name: name, phone: phone, detail: detail, isDefault: isDefault ? 1 : 0 }
+export async function addAddressApi(name: string, phone: string, detail: string, isDefault: boolean,
+  latitude?: number, longitude?: number): Promise<boolean> {
+  const req: AddressRequest = {
+    name: name, phone: phone, detail: detail, isDefault: isDefault ? 1 : 0,
+    latitude: latitude, longitude: longitude
+  }
   const resp: ApiResponse<ServerAddress> = await post<ServerAddress>(API_CONFIG.ENDPOINTS['addresses'], req)
   return resp.code === 200
 }
 
-export async function addAddressAndFetchApi(name: string, phone: string, detail: string, isDefault: boolean): Promise<Address | null> {
-  const req: AddressRequest = { name: name, phone: phone, detail: detail, isDefault: isDefault ? 1 : 0 }
+export async function addAddressAndFetchApi(name: string, phone: string, detail: string, isDefault: boolean,
+  latitude?: number, longitude?: number): Promise<Address | null> {
+  const req: AddressRequest = {
+    name: name, phone: phone, detail: detail, isDefault: isDefault ? 1 : 0,
+    latitude: latitude, longitude: longitude
+  }
   const resp: ApiResponse<ServerAddress> = await post<ServerAddress>(API_CONFIG.ENDPOINTS['addresses'], req)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     return null
@@ -1762,7 +1774,9 @@ function toAddress(a: ServerAddress): Address {
     // 服务端仅保存合并后的地址文本，回填到 address 字段可保证列表展示和编辑内容一致。
     address: a.detail,
     detail: '',
-    isDefault: a.isDefault === 1
+    isDefault: a.isDefault === 1,
+    latitude: a.latitude,
+    longitude: a.longitude
   }
   return addr
 }

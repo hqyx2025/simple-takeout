@@ -1019,8 +1019,9 @@ export async function syncAddressesRemote(): Promise<boolean> {
 /**
  * 远程新增地址
  */
-export async function addAddressRemote(name: string, phone: string, detail: string, isDefault: boolean): Promise<boolean> {
-  const ok: boolean = await addAddressApi(name, phone, detail, isDefault)
+export async function addAddressRemote(name: string, phone: string, detail: string, isDefault: boolean,
+  latitude?: number, longitude?: number): Promise<boolean> {
+  const ok: boolean = await addAddressApi(name, phone, detail, isDefault, latitude, longitude)
   if (ok) {
     await syncAddressesRemote()
     logInfo('Api', '远程新增地址成功')
@@ -1028,8 +1029,9 @@ export async function addAddressRemote(name: string, phone: string, detail: stri
   return ok
 }
 
-export async function addAddressRemoteAndGet(name: string, phone: string, detail: string, isDefault: boolean): Promise<Address | null> {
-  const address: Address | null = await addAddressAndFetchApi(name, phone, detail, isDefault)
+export async function addAddressRemoteAndGet(name: string, phone: string, detail: string, isDefault: boolean,
+  latitude?: number, longitude?: number): Promise<Address | null> {
+  const address: Address | null = await addAddressAndFetchApi(name, phone, detail, isDefault, latitude, longitude)
   if (address !== null) {
     await syncAddressesRemote()
     logInfo('Api', `远程新增地址成功 addressId=${address.id}`)
