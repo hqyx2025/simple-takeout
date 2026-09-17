@@ -510,3 +510,8 @@ export interface Employee {
   status: number
   createTime: string
 }
+
+export interface SetmealOrder {
+  setmealId: number
+  quantity: number
+}

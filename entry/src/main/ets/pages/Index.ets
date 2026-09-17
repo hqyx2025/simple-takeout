@@ -2,8 +2,8 @@
  * 主页面 - 简单外卖App
  * 包含：搜索栏、分类导航、店铺列表、店铺详情、购物车、订单列表、个人中心、底部Tab导航
  */
-import { Category, StoreItem, GoodsItem, GoodsSpec, SpecialGoodsItem, SeckillItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, Banner, Announcement, MarketingActivity, Setmeal, SetmealItem, createEmptyUser } from '../model/Models'
-import { addToCart, addCartItemRemote, updateCartItemQuantity, updateCartItemQuantityRemote, refreshCartFromServer, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCartRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncBannersRemote, syncAnnouncementsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, cancelOrderRemote, payOrderRemote, fetchSeckillsRemote, getLastRemoteErrorMessage, rechargeBalanceRemote, syncCurrentUserFromServer } from '../service/AppStorageManager'
+import { Category, StoreItem, GoodsItem, GoodsSpec, SpecialGoodsItem, SeckillItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, Banner, Announcement, MarketingActivity, Setmeal, SetmealItem, SetmealOrder, createEmptyUser } from '../model/Models'
+import { addToCart, addCartItemRemote, updateCartItemQuantity, updateCartItemQuantityRemote, createOrderRemote, refreshCartFromServer, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCartRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncBannersRemote, syncAnnouncementsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, cancelOrderRemote, payOrderRemote, fetchSeckillsRemote, getLastRemoteErrorMessage, rechargeBalanceRemote, syncCurrentUserFromServer } from '../service/AppStorageManager'
 import { fetchRecommendedStoresApi, fetchSpecialGoodsApi, fetchStoreMerchantCategoriesApi, fetchStoreDetailApi, fetchStoreActivitiesApi, fetchStoreSetmealsApi } from '../service/ApiService'
 import { LoginPage } from './LoginPage'
 import { AssistantPage } from './AssistantPage'
@@ -1304,6 +1304,24 @@ export struct StoreDetailContent {
     this.storeSetmeals = await fetchStoreSetmealsApi(this.storeId)
   }
 
+  /** 预订套餐：直接下单（items 为空 + setmeals），成功后提示去订单详情支付。 */
+  private async buySetmeal(sm: Setmeal): Promise<void> {
+    const addr: Address | null | undefined = AppStorage.get<Address | null>('currentAddress')
+    if (addr === null || addr === undefined || addr.id <= 0) {
+      promptAction.showToast({ message: '请先选择收货地址', duration: 1800 })
+      return
+    }
+    const setmeals: SetmealOrder[] = [ { setmealId: sm.id, quantity: 1 } ]
+    const key: string = `sm-${Date.now()}-${Math.floor(Math.random() * 100000)}`
+    const order: Order | null = await createOrderRemote(this.storeId, [], addr.id, 0, '', [], '', key, 'DELIVERY', setmeals)
+    if (order === null) {
+      const err: string = getLastRemoteErrorMessage()
+      promptAction.showToast({ message: err === '' ? '套餐下单失败，请稍后重试' : err, duration: 2200 })
+      return
+    }
+    promptAction.showToast({ message: '套餐已下单，请在订单详情完成支付', duration: 2000 })
+  }
+
   /** 菜品当前秒杀价（无秒杀返回 0）。 */
   private getSeckillPrice(goodsId: number): number {
     const matched: SeckillItem[] = this.storeSeckills.filter((item: SeckillItem) => item.goodsId === goodsId)
@@ -1615,6 +1633,7 @@ export struct StoreDetailContent {
               Row() {
                 Text(sm.name).fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1).maxLines(1)
                 Text(`¥${sm.price.toFixed(2)}`).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.PRICE_RED)
+                  .onClick(() => { this.buySetmeal(sm) })
               }.width('100%')
               Text(sm.items.map((it: SetmealItem) => it.goodsName).join(' + ')).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
               if (sm.originalPrice > sm.price) {

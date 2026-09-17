@@ -1,7 +1,7 @@
 /**
  * 全局状态管理 - 使用AppStorage管理应用级状态
  */
-import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, Rider, Banner, Announcement, MerchantStatsData, Category, RefundRecord, GoodsSpec, SeckillItem, SpecialGoodsItem, BundleInfo, UploadResult, createEmptyUser, createDefaultCategories } from '../model/Models'
+import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, Rider, Banner, Announcement, MerchantStatsData, Category, RefundRecord, GoodsSpec, SeckillItem, SpecialGoodsItem, BundleInfo, UploadResult, SetmealOrder, createEmptyUser, createDefaultCategories } from '../model/Models'
 import { saveAllData, clearAllData } from './DataPersistence'
 import { apiLogin, apiRegister, updateUserProfileApi, fetchCurrentUserApi, rechargeBalanceApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, payOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi, fetchMerchantReviewsApi, replyReviewApi, fetchRiderProfileApi, setRiderStatusApi, fetchRiderPoolApi, fetchRiderOrdersApi, grabOrderApi, pickupOrderApi, deliverOrderApi, fetchBannersApi, fetchAnnouncementsApi, fetchAdminRidersApi, updateRiderStatusApi, fetchAdminBannersApi, createBannerApi, updateBannerStatusApi, deleteBannerApi, fetchAdminAnnouncementsApi, createAnnouncementApi, updateAnnouncementStatusApi, deleteAnnouncementApi, applyRefundApi, fetchCartApi, addCartItemApi, updateCartItemQuantityApi, deleteCartItemApi, deleteCartItemsApi, clearCartApi, uploadImageApi, fetchSeckillsApi, fetchRankStoresApi, fetchRankGoodsApi, fetchBundleApi, updateMerchantGoodsSpecsApi, apiLogout, changePasswordApi } from './ApiService'
 import { getAuthToken, setAuthToken, getLastApiErrorMessage } from './HttpClient'
@@ -652,8 +652,8 @@ export async function syncMerchantOrdersFromServer(): Promise<void> {
  * 远程下单：成功返回服务端订单；失败返回 null
  * idempotencyKey：防重复提交 token，服务端 Redis SET NX 拦截连点/网络重放
  */
-export async function createOrderRemote(storeId: number, cartItems: CartItem[], addressId: number, couponId: number, remark: string, checkoutGoodsIds: number[], expectTime: string, idempotencyKey: string, deliveryType: string = 'DELIVERY'): Promise<Order | null> {
-  const order: Order | null = await createOrderApi(storeId, cartItems, addressId, couponId, remark, checkoutGoodsIds, expectTime, idempotencyKey, deliveryType)
+export async function createOrderRemote(storeId: number, cartItems: CartItem[], addressId: number, couponId: number, remark: string, checkoutGoodsIds: number[], expectTime: string, idempotencyKey: string, deliveryType: string = 'DELIVERY', setmeals: SetmealOrder[] = []): Promise<Order | null> {
+  const order: Order | null = await createOrderApi(storeId, cartItems, addressId, couponId, remark, checkoutGoodsIds, expectTime, idempotencyKey, deliveryType, setmeals)
   if (order !== null) {
     const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
     orders.unshift(order)
