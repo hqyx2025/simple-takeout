@@ -11,6 +11,15 @@ import { OrderStatusTimeline } from '../components/OrderStatusTimeline'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { logInfo } from '../service/AppLogger'
 
+class RefundReasonOption {
+  code: string
+  label: string
+  constructor(code: string, label: string) {
+    this.code = code
+    this.label = label
+  }
+}
+
 @Entry
 @Component
 export struct OrderDetailPage {
@@ -20,6 +29,14 @@ export struct OrderDetailPage {
   @State showConfirmDialog: boolean = false
   @State showRefundDialog: boolean = false
   @State refundReason: string = ''
+  @State refundReasonType: string = 'OTHER'
+  private refundReasonOptions: RefundReasonOption[] = [
+    new RefundReasonOption('NOT_RECEIVED', '未收到餐'),
+    new RefundReasonOption('QUALITY_ISSUE', '餐品质量问题'),
+    new RefundReasonOption('WRONG_ITEM', '商品不符'),
+    new RefundReasonOption('DONOT_WANT', '不想要了'),
+    new RefundReasonOption('OTHER', '其他')
+  ]
   orderId: number = 0
   // 骑手配送动画状态
   @State riderProgress: number = 0
@@ -382,7 +399,7 @@ export struct OrderDetailPage {
       this.showRefundDialog = false
       return
     }
-    const ok: boolean = await applyRefundRemote(this.order.id, this.refundReason)
+    const ok: boolean = await applyRefundRemote(this.order.id, this.refundReasonType, this.refundReason)
     this.showRefundDialog = false
     if (ok) {
       this.reloadOrder()
@@ -424,7 +441,21 @@ export struct OrderDetailPage {
           .width('100%')
           .margin({ bottom: SPACING.SM })
 
-        TextArea({ placeholder: '请填写退款原因（选填，最多50字）' })
+        Row({ space: SPACING.SM }) {
+          ForEach(this.refundReasonOptions, (opt: RefundReasonOption) => {
+            Text(opt.label)
+              .fontSize(FONT_SIZE.XS)
+              .fontColor(this.refundReasonType === opt.code ? COLORS.TEXT_WHITE : COLORS.TEXT_PRIMARY)
+              .backgroundColor(this.refundReasonType === opt.code ? COLORS.PRIMARY : COLORS.TAG_BG)
+              .padding({ left: SPACING.SM, right: SPACING.SM, top: 4, bottom: 4 })
+              .borderRadius(BORDER_RADIUS.SM)
+              .onClick(() => { this.refundReasonType = opt.code })
+          }, (opt: RefundReasonOption) => opt.code)
+        }
+        .width('100%')
+        .margin({ bottom: SPACING.MD })
+
+        TextArea({ placeholder: '补充说明（选填，最多50字）' })
           .width('100%')
           .height(90)
           .fontSize(FONT_SIZE.MD)

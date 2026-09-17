@@ -757,8 +757,8 @@ export async function confirmOrderRemote(orderId: number): Promise<boolean> {
 /**
  * 远程申请退款（演进项：退款审批，见大纲 7.11）：成功后订单进入退款中（status=6）
  */
-export async function applyRefundRemote(orderId: number, reason: string): Promise<boolean> {
-  const record: RefundRecord | null = await applyRefundApi(orderId, reason)
+export async function applyRefundRemote(orderId: number, reasonType: string, reason: string): Promise<boolean> {
+  const record: RefundRecord | null = await applyRefundApi(orderId, reasonType, reason)
   if (record !== null) {
     await syncUserOrdersFromServer()
     logInfo('Api', `远程申请退款 orderId=${orderId} refundId=${record.id}`)

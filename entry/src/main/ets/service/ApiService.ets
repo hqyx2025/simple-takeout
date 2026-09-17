@@ -498,6 +498,7 @@ interface GoodsSpecsRequest {
 }
 
 interface RefundRequest {
+  reasonType: string
   reason: string
 }
 
@@ -1248,8 +1249,8 @@ export async function deleteMerchantCategoryApi(categoryId: number): Promise<boo
 // ==================== 退款（演进项，见大纲 7.11/9.7） ====================
 
 /** 用户申请退款：订单 status=4 且 escrow=0 且未评价时可用。 */
-export async function applyRefundApi(orderId: number, reason: string): Promise<RefundRecord | null> {
-  const req: RefundRequest = { reason: reason }
+export async function applyRefundApi(orderId: number, reasonType: string, reason: string): Promise<RefundRecord | null> {
+  const req: RefundRequest = { reasonType: reasonType, reason: reason }
   const resp: ApiResponse<RefundRecord> = await post<RefundRecord>(`/api/orders/${orderId}/refund`, req)
   return resp.code === 200 && resp.data !== null ? resp.data : null
 }
