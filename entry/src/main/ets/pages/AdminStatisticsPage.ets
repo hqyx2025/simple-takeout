@@ -15,6 +15,7 @@ export struct AdminStatisticsPage {
   @State stats: AdminStatisticsData | null = null
   @State trend: AdminTrendPoint[] = []
   @State loading: boolean = false
+  private trendChartContext: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true))
 
   aboutToAppear(): void {
     if (!this.loggedIn || this.user.role !== UserRole.ADMIN) {
@@ -81,11 +82,14 @@ export struct AdminStatisticsPage {
           ListItem() {
             Text('近7日订单趋势').fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
           }
-          ForEach(this.trend, (point: AdminTrendPoint) => {
-            ListItem() {
-              this.TrendRow(point)
-            }
-          }, (point: AdminTrendPoint) => point.date)
+          ListItem() {
+            Canvas(this.trendChartContext)
+              .width('100%')
+              .height(190)
+              .backgroundColor(COLORS.BG_WHITE)
+              .borderRadius(BORDER_RADIUS.MD)
+              .onReady(() => { this.drawTrendChart() })
+          }
           ListItem() {
             Text('热销商品排行').fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
           }
@@ -119,6 +123,73 @@ export struct AdminStatisticsPage {
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       Text(status === 1 ? '上架' : '下架').fontSize(FONT_SIZE.XS).fontColor(status === 1 ? COLORS.SUCCESS : COLORS.ERROR)
     }.width('100%').padding(SPACING.MD).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
+  }
+
+  /** 近7日订单趋势折线图（复用商户端 Canvas 画法）。 */
+  private drawTrendChart(): void {
+    const ctx: CanvasRenderingContext2D = this.trendChartContext
+    const width: number = ctx.width
+    const height: number = ctx.height
+    const paddingLeft: number = 36
+    const paddingBottom: number = 22
+    const paddingTop: number = 10
+    const chartW: number = width - paddingLeft - 10
+    const chartH: number = height - paddingTop - paddingBottom
+
+    ctx.clearRect(0, 0, width, height)
+    if (this.trend.length < 2) {
+      return
+    }
+    let maxCount: number = 0
+    for (let i = 0; i < this.trend.length; i++) {
+      if (this.trend[i].orderCount > maxCount) {
+        maxCount = this.trend[i].orderCount
+      }
+    }
+    if (maxCount <= 0) {
+      maxCount = 1
+    }
+
+    ctx.strokeStyle = COLORS.DIVIDER
+    ctx.lineWidth = 1
+    ctx.font = '10px sans-serif'
+    for (let i = 0; i <= 4; i++) {
+      const y: number = paddingTop + chartH * i / 4
+      ctx.beginPath()
+      ctx.moveTo(paddingLeft, y)
+      ctx.lineTo(width - 10, y)
+      ctx.stroke()
+      const label: number = Math.round(maxCount * (4 - i) / 4)
+      ctx.fillStyle = COLORS.TEXT_HINT
+      ctx.fillText(`${label}`, 2, y + 3)
+    }
+
+    ctx.strokeStyle = COLORS.PRIMARY
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    for (let i = 0; i < this.trend.length; i++) {
+      const x: number = paddingLeft + chartW * i / (this.trend.length - 1)
+      const y: number = paddingTop + chartH - chartH * this.trend[i].orderCount / maxCount
+      if (i === 0) {
+        ctx.moveTo(x, y)
+      } else {
+        ctx.lineTo(x, y)
+      }
+    }
+    ctx.stroke()
+
+    for (let i = 0; i < this.trend.length; i++) {
+      const x: number = paddingLeft + chartW * i / (this.trend.length - 1)
+      const y: number = paddingTop + chartH - chartH * this.trend[i].orderCount / maxCount
+      ctx.fillStyle = COLORS.PRIMARY
+      ctx.beginPath()
+      ctx.arc(x, y, 3, 0, 2 * Math.PI)
+      ctx.fill()
+      ctx.fillStyle = COLORS.TEXT_HINT
+      ctx.font = '9px sans-serif'
+      const label: string = this.trend[i].date.length > 10 ? this.trend[i].date.substring(5, 10) : this.trend[i].date
+      ctx.fillText(label, x - 12, height - 6)
+    }
   }
 
   @Builder
