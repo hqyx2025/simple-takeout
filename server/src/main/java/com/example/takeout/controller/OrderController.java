@@ -70,8 +70,8 @@ public class OrderController {
     /** 支付待付款订单：扣余额并流转到待接单；channel 为 BALANCE/ALIPAY/WECHAT（微信支付宝为 Mock）。 */
     @PostMapping("/orders/{id}/pay")
     public ApiResponse<Order.OrderView> pay(@RequestAttribute("userId") long userId, @PathVariable long id,
-                                            @RequestBody(required = false) PayRequest req) {
-        return ApiResponse.ok(orderService.payOrder(userId, id, req == null ? null : req.channel()));
+                                            @RequestParam(required = false) String channel) {
+        return ApiResponse.ok(orderService.payOrder(userId, id, channel));
     }
 
     @PutMapping("/orders/{id}/confirm")
@@ -121,9 +121,6 @@ public class OrderController {
     }
 
     /** idempotencyKey：客户端为每次下单意图生成的一次性 UUID，服务端 Redis SET NX 防连点/重放；旧客户端不传则跳过校验。 */
-    public record PayRequest(String channel) {
-    }
-
     public record CreateOrderRequest(long storeId, List<Order.OrderItem> items, long addressId,
                                      long couponId, String remark, List<Long> checkoutGoodsIds,
                                      String expectTime, String idempotencyKey,

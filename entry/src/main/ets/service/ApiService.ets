@@ -504,10 +504,6 @@ interface RefundRequest {
   reason: string
 }
 
-interface PayRequest {
-  channel: string
-}
-
 interface MerchantEmployeeBody {
   userId: number
   roleName: string
@@ -1116,8 +1112,7 @@ export async function cancelOrderApi(orderId: number): Promise<boolean> {
 
 /** 支付待付款订单：扣余额并流转到待接单（余额支付模型）。 */
 export async function payOrderApi(orderId: number, channel: string = 'BALANCE'): Promise<Order | null> {
-  const req: PayRequest = { channel: channel }
-  const resp: ApiResponse<ServerOrder> = await post<ServerOrder>(`/api/orders/${orderId}/pay`, req)
+  const resp: ApiResponse<ServerOrder> = await post<ServerOrder>(`/api/orders/${orderId}/pay?channel=${channel}`)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     return null
   }
