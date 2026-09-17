@@ -1,6 +1,6 @@
 /** 平台经营统计：订单、GMV、托管资金与热销商品。 */
-import { AdminHotGoods, AdminStatisticsData, AdminTrendPoint, User, UserRole } from '../model/Models'
-import { fetchAdminOrderTrendApi, fetchAdminStatisticsApi } from '../service/ApiService'
+import { AdminHotGoods, AdminOrderStatusCount, AdminStatisticsData, AdminTopStore, AdminTrendPoint, User, UserRole } from '../model/Models'
+import { fetchAdminDashboardApi, fetchAdminOrderTrendApi, fetchAdminStatisticsApi } from '../service/ApiService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 
@@ -14,6 +14,8 @@ export struct AdminStatisticsPage {
   }
   @State stats: AdminStatisticsData | null = null
   @State trend: AdminTrendPoint[] = []
+  @State orderStatuses: AdminOrderStatusCount[] = []
+  @State topStores: AdminTopStore[] = []
   @State loading: boolean = false
   private trendChartContext: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true))
 
@@ -34,6 +36,11 @@ export struct AdminStatisticsPage {
     this.loading = true
     this.stats = await fetchAdminStatisticsApi(10)
     this.trend = await fetchAdminOrderTrendApi(7)
+    const dashboard = await fetchAdminDashboardApi()
+    if (dashboard !== null) {
+      this.orderStatuses = dashboard.orderStatuses
+      this.topStores = dashboard.topStores
+    }
     this.loading = false
   }
 
@@ -98,11 +105,57 @@ export struct AdminStatisticsPage {
               this.HotGoodsRow(item.goodsName, item.storeName, item.sales, item.price, item.status)
             }
           }, (item: AdminHotGoods) => item.goodsId.toString())
+          ListItem() {
+            Text('订单状态分布').fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+          }
+          ListItem() {
+            Row({ space: SPACING.SM }) {
+              ForEach(this.orderStatuses, (s: AdminOrderStatusCount) => {
+                Text(`${this.statusLabel(s.status)} ${s.count}`)
+                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_PRIMARY)
+                  .padding({ left: SPACING.SM, right: SPACING.SM, top: 4, bottom: 4 })
+                  .backgroundColor(COLORS.TAG_BG).borderRadius(BORDER_RADIUS.SM)
+              }, (s: AdminOrderStatusCount) => s.status.toString())
+            }
+            .width('100%')
+          }
+          ListItem() {
+            Text('店铺成交额排行').fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+          }
+          ForEach(this.topStores, (store: AdminTopStore, index: number) => {
+            ListItem() {
+              this.TopStoreRow(index + 1, store)
+            }
+          }, (store: AdminTopStore) => store.storeId.toString())
         }
       }
       .width('100%').layoutWeight(1).scrollBar(BarState.Off)
       .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
     }.width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)
+  }
+
+  private statusLabel(status: number): string {
+    switch (status) {
+      case 0: return '待付款'
+      case 1: return '待接单'
+      case 2: return '制作中'
+      case 3: return '配送中'
+      case 4: return '已送达'
+      case 5: return '已取消'
+      case 6: return '退款中'
+      default: return `状态${status}`
+    }
+  }
+
+  @Builder
+  TopStoreRow(rank: number, store: AdminTopStore) {
+    Row({ space: SPACING.MD }) {
+      Text(`${rank}`).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
+        .fontColor(rank <= 3 ? COLORS.PRIMARY : COLORS.TEXT_HINT).width(28)
+      Text(store.storeName).fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).layoutWeight(1)
+      Text(`成交 ¥${store.gmv.toFixed(2)}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
+    }
+    .width('100%').padding(SPACING.MD).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
   }
 
   @Builder

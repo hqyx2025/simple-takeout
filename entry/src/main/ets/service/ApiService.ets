@@ -9,7 +9,7 @@ import {
   User, UserRole, StoreItem, GoodsItem, SpecialGoodsItem, Category, Order, CartItem,
   Address, Coupon, Review, Rider, Banner, Announcement, Favorite, RefundRecord, AdminEmployee, AdminProduct, AdminProductPage, AdminUser,
   BankCard,
-  AdminStatisticsData, AdminTrendPoint, AdminHotGoods, SeckillItem, BundleInfo, UploadResult, GoodsSpec
+  AdminStatisticsData, AdminTrendPoint, AdminHotGoods, AdminDashboard, AdminOrderStatusCount, AdminTopStore, SeckillItem, BundleInfo, UploadResult, GoodsSpec
 } from '../model/Models'
 import { logInfo, logWarn } from './AppLogger'
 
@@ -1425,6 +1425,15 @@ export async function fetchAdminOrderTrendApi(days: number): Promise<AdminTrendP
     const point: AdminTrendPoint = { date: item.date, orderCount: item.orderCount, gmv: item.gmv }
     return point
   })
+}
+
+/** 数据大屏：一次性返回 指标 + 趋势 + 状态分布 + 店铺排行。 */
+export async function fetchAdminDashboardApi(): Promise<AdminDashboard | null> {
+  const resp: ApiResponse<AdminDashboard> = await get<AdminDashboard>('/api/admin/dashboard')
+  if (resp.code !== 200 || resp.data === null) {
+    return null
+  }
+  return resp.data
 }
 
 // ==================== 用户中心（需登录） ====================

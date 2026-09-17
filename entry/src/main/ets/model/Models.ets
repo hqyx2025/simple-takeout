@@ -443,3 +443,22 @@ export interface AdminTrendPoint {
   orderCount: number
   gmv: number
 }
+
+export interface AdminOrderStatusCount {
+  status: number
+  count: number
+}
+
+export interface AdminTopStore {
+  storeId: number
+  storeName: string
+  gmv: number
+  orderCount: number
+}
+
+export interface AdminDashboard {
+  overview: AdminStatisticsData
+  trend: AdminTrendPoint[]
+  orderStatuses: AdminOrderStatusCount[]
+  topStores: AdminTopStore[]
+}
