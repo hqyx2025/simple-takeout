@@ -74,4 +74,20 @@ public class AdminStatsDao {
                 (rs, rowNum) -> new AdminStatistics.TrendPoint(rs.getString("order_date"),
                         rs.getLong("order_count"), rs.getDouble("gmv")), start.toString());
     }
+
+    /** 订单状态分布（大屏饼图数据源）。 */
+    public List<AdminStatistics.OrderStatusCount> orderStatusCounts() {
+        return jdbc.query("SELECT status, COUNT(*) AS cnt FROM orders GROUP BY status ORDER BY status",
+                (rs, rowNum) -> new AdminStatistics.OrderStatusCount(rs.getInt("status"), rs.getLong("cnt")));
+    }
+
+    /** 店铺成交额排行（大屏 Top 榜，排除取消 5/退款中 6，与平台统计口径一致）。 */
+    public List<AdminStatistics.TopStore> topStores(int limit) {
+        return jdbc.query("SELECT s.id, s.name, COALESCE(SUM(o.pay_amount), 0) AS gmv, COUNT(o.id) AS cnt " +
+                        "FROM stores s LEFT JOIN orders o ON o.store_id = s.id AND o.status NOT IN (5,6) " +
+                        "GROUP BY s.id, s.name ORDER BY gmv DESC, cnt DESC LIMIT ?",
+                (rs, rowNum) -> new AdminStatistics.TopStore(rs.getLong("id"), rs.getString("name"),
+                        rs.getDouble("gmv"), rs.getLong("cnt")),
+                Math.max(1, Math.min(limit, 50)));
+    }
 }

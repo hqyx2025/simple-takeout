@@ -29,4 +29,10 @@ public record AdminStatistics(
 
     public record TrendPoint(String date, long orderCount, double gmv) {
     }
+
+    public record OrderStatusCount(int status, long count) {
+    }
+
+    public record TopStore(long storeId, String storeName, double gmv, long orderCount) {
+    }
 }

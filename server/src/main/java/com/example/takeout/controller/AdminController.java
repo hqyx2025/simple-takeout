@@ -172,6 +172,13 @@ public class AdminController {
         return ApiResponse.ok(adminService.orderTrend(days));
     }
 
+    /** 数据大屏：关键指标 + 趋势 + 状态分布 + 店铺排行 一次性返回。 */
+    @GetMapping("/dashboard")
+    public ApiResponse<AdminService.Dashboard> dashboard(@RequestAttribute("role") int role) {
+        requireAdmin(role);
+        return ApiResponse.ok(adminService.dashboard(10));
+    }
+
     @PostMapping("/employees")
     public ApiResponse<AdminEmployee> createEmployee(@RequestAttribute("role") int role,
                                                      @RequestBody EmployeeRequest req) {

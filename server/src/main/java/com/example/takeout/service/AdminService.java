@@ -191,6 +191,17 @@ public class AdminService {
         return adminStatsDao.orderTrend(days);
     }
 
+    /** 数据大屏：一次性汇聚 关键指标 + 7 日趋势 + 订单状态分布 + 店铺成交额排行。 */
+    public Dashboard dashboard(int hotLimit) {
+        return new Dashboard(adminStatsDao.overview(hotLimit), adminStatsDao.orderTrend(7),
+                adminStatsDao.orderStatusCounts(), adminStatsDao.topStores(10));
+    }
+
+    public record Dashboard(AdminStatistics overview, List<AdminStatistics.TrendPoint> trend,
+                            List<AdminStatistics.OrderStatusCount> orderStatuses,
+                            List<AdminStatistics.TopStore> topStores) {
+    }
+
     public AdminEmployee createEmployee(String username, String phone, String password) {
         String normalizedName = normalizeRequired(username, "员工姓名不能为空");
         validatePhone(phone);
