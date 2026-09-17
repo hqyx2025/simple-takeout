@@ -652,8 +652,8 @@ export async function syncMerchantOrdersFromServer(): Promise<void> {
  * 远程下单：成功返回服务端订单；失败返回 null
  * idempotencyKey：防重复提交 token，服务端 Redis SET NX 拦截连点/网络重放
  */
-export async function createOrderRemote(storeId: number, cartItems: CartItem[], addressId: number, couponId: number, remark: string, checkoutGoodsIds: number[], expectTime: string, idempotencyKey: string): Promise<Order | null> {
-  const order: Order | null = await createOrderApi(storeId, cartItems, addressId, couponId, remark, checkoutGoodsIds, expectTime, idempotencyKey)
+export async function createOrderRemote(storeId: number, cartItems: CartItem[], addressId: number, couponId: number, remark: string, checkoutGoodsIds: number[], expectTime: string, idempotencyKey: string, deliveryType: string = 'DELIVERY'): Promise<Order | null> {
+  const order: Order | null = await createOrderApi(storeId, cartItems, addressId, couponId, remark, checkoutGoodsIds, expectTime, idempotencyKey, deliveryType)
   if (order !== null) {
     const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
     orders.unshift(order)

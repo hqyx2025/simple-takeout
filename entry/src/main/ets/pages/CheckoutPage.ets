@@ -12,6 +12,15 @@ import { logInfo } from '../service/AppLogger'
 import { calculatePayAmount } from '../service/OrderCalculations'
 import { webview } from '@kit.ArkWeb'
 
+class DeliveryTypeOption {
+  code: string
+  label: string
+  constructor(code: string, label: string) {
+    this.code = code
+    this.label = label
+  }
+}
+
 @Entry
 @Component
 export struct CheckoutPage {
@@ -25,6 +34,11 @@ export struct CheckoutPage {
   @State remark: string = ''
   @State selectedDelivery: number = 0
   private deliveryOptions: string[] = ['立即送达', '1小时后', '2小时后']
+  @State deliveryType: string = 'DELIVERY'
+  private deliveryTypeOptions: DeliveryTypeOption[] = [
+    new DeliveryTypeOption('DELIVERY', '外卖配送'),
+    new DeliveryTypeOption('PICKUP', '到店自取')
+  ]
   @State showCouponDialog: boolean = false
   @State submitting: boolean = false
   // 防重提交 token：每个结算页实例生成一次，本次结算的所有重试共用（服务端下单失败会释放，
@@ -228,7 +242,7 @@ export struct CheckoutPage {
         && (this.selectedCoupon.storeId === undefined || this.selectedCoupon.storeId === 0 || this.selectedCoupon.storeId === storeId)
         && groupTotal >= this.selectedCoupon.minOrder
       const couponId: number = couponCanApply && this.selectedCoupon !== null ? this.selectedCoupon.id : 0
-      const serverOrder: Order | null = await createOrderRemote(storeId, items, address.id, couponId, this.remark, checkoutGoodsIds, this.getExpectTime(), `${this.submitKey}-${storeId}`)
+      const serverOrder: Order | null = await createOrderRemote(storeId, items, address.id, couponId, this.remark, checkoutGoodsIds, this.getExpectTime(), `${this.submitKey}-${storeId}`, this.deliveryType)
       if (serverOrder === null) {
         if (successfulRows.length > 0) {
           await this.removeCartRows(successfulRows)
@@ -590,6 +604,21 @@ export struct CheckoutPage {
         ForEach(this.deliveryOptions, (label: string, index: number) => {
           this.DeliveryOption(index, label)
         }, (label: string) => label)
+      }
+      .width('100%')
+      Text('送达方式')
+        .fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+        .width('100%')
+      Row({ space: SPACING.SM }) {
+        ForEach(this.deliveryTypeOptions, (opt: DeliveryTypeOption) => {
+          Text(this.deliveryType === opt.code && opt.code === 'PICKUP' ? `${opt.label}（免配送费）` : opt.label)
+            .fontSize(FONT_SIZE.XS)
+            .fontColor(this.deliveryType === opt.code ? COLORS.TEXT_WHITE : COLORS.TEXT_PRIMARY)
+            .backgroundColor(this.deliveryType === opt.code ? COLORS.PRIMARY : COLORS.TAG_BG)
+            .padding({ left: SPACING.SM, right: SPACING.SM, top: 4, bottom: 4 })
+            .borderRadius(BORDER_RADIUS.SM)
+            .onClick(() => { this.deliveryType = opt.code })
+        }, (opt: DeliveryTypeOption) => opt.code)
       }
       .width('100%')
     }
