@@ -62,15 +62,20 @@ public record Store(
                 ownerId, status, recommended, createTime, deliveryRadius);
     }
 
-    /** 配送半径（米）：radius<=0 不限；地址无坐标的存量情形不拦截。 */
+    /** 商户未填配送半径时使用的默认值（米）：2 公里。 */
+    public static final int DEFAULT_DELIVERY_RADIUS_METERS = 2000;
+
+    /**
+     * 能否配送到用户当前位置。
+     * 半径取商户填写的值；**商户没填（0）按默认 2 公里**，不再表示"不限"。
+     * 用户没定位、或门店没坐标时无法判断，返回 true（是否展示由调用方按距离另行决定）。
+     */
     public boolean canDeliver(Double userLatitude, Double userLongitude) {
-        if (deliveryRadius <= 0) {
-            return true;
-        }
         if (!validCoordinates(userLatitude, userLongitude) || !validCoordinates(latitude, longitude)) {
             return true;
         }
-        return haversine(userLatitude, userLongitude, latitude, longitude) * 1000 <= deliveryRadius;
+        int effectiveRadius = deliveryRadius > 0 ? deliveryRadius : DEFAULT_DELIVERY_RADIUS_METERS;
+        return haversine(userLatitude, userLongitude, latitude, longitude) * 1000 <= effectiveRadius;
     }
 
     public static String normalizeDistance(String value) {

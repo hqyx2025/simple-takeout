@@ -149,6 +149,8 @@ public class StoreService {
                 () -> storeDao.listRecommended().stream()
                         .map(store -> store.withDistance(latitude, longitude))
                         .filter(store -> parseDistance(store.distance()) <= maxDistanceKm)
+                        // 配送半径判定：商户填了按商户的，没填按默认 2 公里
+                        .filter(store -> store.canDeliver(latitude, longitude))
                         .sorted(Comparator.comparingDouble((Store store) -> parseDistance(store.distance()))
                                 .thenComparing(Comparator.comparingDouble(Store::rating).reversed()))
                         .limit(limit)

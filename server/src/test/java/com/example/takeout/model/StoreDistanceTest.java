@@ -28,4 +28,5 @@ class StoreDistanceTest {
         // 用户没有定位：同样不可判断
         assertEquals(Store.UNKNOWN_DISTANCE, storeWith(30.5928, 114.3055).withDistance(null, null).distance());
     }
+
 }

@@ -410,26 +410,31 @@ public class DataSeeder implements ApplicationRunner {
         }
     }
 
+    /** 种子门店基准点（南宁市中心）+ 环状偏移，让附近推荐有真实可算的距离。 */
+    private static final double SEED_BASE_LATITUDE = 22.8177;
+    private static final double SEED_BASE_LONGITUDE = 108.3665;
+
     /**
-     * 幂等给「没有坐标」的店铺补坐标（武汉市区基准点 + 确定性环状偏移，约 0.2~1.2 公里）。
-     * 没有坐标的店铺算不出与用户的距离，主页「附近推荐」会把它们当成"位置已知"地丢弃；
-     * 门店坐标的真实来源是商户在店铺表单里用定位选点（新建/编辑都支持）。
+     * 幂等给种子店铺落坐标（南宁基准点 + 确定性环状偏移，约 0.2~1.2 公里）。
+     * 覆盖两种情形：① 没有坐标的店（算不出距离，附近推荐会把它们整体丢掉）；
+     * ② 还停在**旧武汉基准点**上的店（基准点从武汉改成南宁后，不重新落位的话存量店仍在武汉）。
+     * 条件里用「旧武汉环」而不是「有没有地址」来判定，避免误伤商户用地图正式选过点的门店。
      */
     private void ensureStoreCoordinates() {
-        double baseLatitude = 30.5928;
-        double baseLongitude = 114.3055;
         List<java.util.Map<String, Object>> pending = jdbc.queryForList(
-                "SELECT id FROM stores WHERE latitude IS NULL OR longitude IS NULL ORDER BY id");
+                "SELECT id FROM stores WHERE latitude IS NULL OR longitude IS NULL "
+                        + "OR (latitude BETWEEN 30.5 AND 30.7 AND longitude BETWEEN 114.2 AND 114.4) "
+                        + "ORDER BY id");
         for (int i = 0; i < pending.size(); i++) {
             long storeId = ((Number) pending.get(i).get("id")).longValue();
             double angle = i * 0.7;
             double radiusDeg = 0.002 + (i % 8) * 0.0012;
-            double latitude = baseLatitude + radiusDeg * Math.cos(angle);
-            double longitude = baseLongitude + radiusDeg * Math.sin(angle) * 1.15;
+            double latitude = SEED_BASE_LATITUDE + radiusDeg * Math.cos(angle);
+            double longitude = SEED_BASE_LONGITUDE + radiusDeg * Math.sin(angle) * 1.15;
             jdbc.update("UPDATE stores SET latitude = ?, longitude = ? WHERE id = ?", latitude, longitude, storeId);
         }
         if (!pending.isEmpty()) {
-            log.info("已为 {} 家缺少坐标的店铺补齐门店坐标（基准点武汉）", pending.size());
+            log.info("已为 {} 家种子店铺落位门店坐标（基准点南宁）", pending.size());
         }
     }
 

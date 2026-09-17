@@ -126,7 +126,9 @@ export struct ProductListPage {
     if (this.mode === ProductListMode.SPECIAL) {
       return stores
     }
+    // 距离筛选之外再过一道配送半径判定（服务端算的 deliverable：商户填了按商户的，没填默认 2 公里）
     return stores.filter((store: StoreItem) => this.parseDistance(store.distance) <= radius)
+      .filter((store: StoreItem) => store.deliverable !== false)
   }
 
   private async loadProducts(): Promise<void> {

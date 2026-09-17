@@ -45,4 +45,17 @@ class StoreRecommendedDistanceTest {
         assertEquals(1, views.size());
         assertTrue(views.get(0).distance().endsWith("km"), views.get(0).distance());
     }
+
+    /** 配送半径判定：商户没填按默认 2 公里，超出半径的店不出现在附近推荐里。 */
+    @Test
+    void recommendedStoresRespectDeliveryRadius() {
+        // 门店在南宁基准点，用户在 2.8 公里外（纬度 0.025 度 ≈ 2.8km）
+        Store store = new Store(31L, "光谷牛肉粉", "", 4.7, 800, 3, 20, "20分钟", "0.2km", "[]", "",
+                "南宁市青秀区", 22.8177, 108.3665, 1, "[1]", 99L, 1, 1, "", 0);
+        when(storeDao.listRecommended()).thenReturn(List.of(store));
+        when(cache.get(any(), any(), any()))
+                .thenAnswer(invocation -> ((Supplier<?>) invocation.getArgument(2)).get());
+
+        assertEquals(0, storeService.recommendedStores(20, 10, 22.8427, 108.3665).size());
+    }
 }

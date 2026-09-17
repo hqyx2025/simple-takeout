@@ -203,7 +203,7 @@ public class OrderService {
                 .filter(a -> a.id() == addressId)
                 .findFirst()
                 .orElseThrow(() -> new BizException("收货地址不存在"));
-        // 商户配送半径：半径>0 且地址有坐标、且超出半径时拒绝下单（无坐标的存量地址不拦截）
+        // 商户配送半径：商户填了按商户的，没填按默认 2 公里；地址/门店缺坐标时无法判断，不拦截
         if (!store.canDeliver(address.latitude(), address.longitude())) {
             throw new BizException("该店铺超出配送范围，无法配送到所选地址");
         }
