@@ -61,6 +61,12 @@ export struct MerchantCenterPage {
   @State newStoreMinOrder: string = '20'
   // 店铺照片（上传接口返回的相对地址；空串表示未上传）
   @State newStoreImage: string = ''
+  // 配送半径（米，0=不限）
+  @State newStoreRadius: string = '0'
+  // 「定位选择店铺位置」的结果：非空时优先于已保存地址
+  @State newStorePickedAddress: string = ''
+  @State newStorePickedLatitude: number = 0
+  @State newStorePickedLongitude: number = 0
 
   // 商户分类管理（演进项，见大纲 8.3）
   @State merchantCategories: Category[] = []
@@ -76,6 +82,7 @@ export struct MerchantCenterPage {
   @State editStoreDeliveryFee: string = ''
   @State editStoreMinOrder: string = ''
   @State editStoreImage: string = ''
+  @State editStoreRadius: string = '0'
   @State editingStoreId: number = 0
   @State savingStore: boolean = false
   @State creatingStore: boolean = false
@@ -192,6 +199,44 @@ export struct MerchantCenterPage {
     this.rebuildStoreAddressOptions()
   }
 
+  /**
+   * 用地图给门店选点（新建/编辑店铺）。
+   * 复用定位页：选好中心点后只把「地址 + 经纬度」写回 AppStorage，不新增用户收货地址，
+   * 回来后由 applyPickedStoreLocation 填进表单。
+   */
+  private openStoreLocationPicker(target: string): void {
+    AppStorage.setOrCreate<boolean>('storeLocationPickMode', true)
+    AppStorage.setOrCreate<string>('storeLocationPickTarget', target)
+    router.pushUrl({ url: 'pages/LocationPage' })
+  }
+
+  /** 消费定位页选好的门店位置。 */
+  private applyPickedStoreLocation(): void {
+    const picked: Address | null = AppStorage.get<Address>('pickedStoreLocation') ?? null
+    if (picked === null) {
+      return
+    }
+    const text: string = `${picked.address ?? ''} ${picked.detail ?? ''}`.trim()
+    const target: string = AppStorage.get<string>('storeLocationPickTarget') || 'new'
+    if (text !== '') {
+      if (target === 'edit') {
+        // 编辑：写进"店铺自有地址"通道（下拉框里显示为当前门店位置），坐标一并更新
+        this.editStoreAddressFallbackText = text
+        this.editStoreAddressFallbackLatitude = picked.latitude ?? 0
+        this.editStoreAddressFallbackLongitude = picked.longitude ?? 0
+        this.editStoreAddressId = -1
+        this.rebuildStoreAddressOptions()
+      } else {
+        this.newStorePickedAddress = text
+        this.newStorePickedLatitude = picked.latitude ?? 0
+        this.newStorePickedLongitude = picked.longitude ?? 0
+      }
+      logInfo('Merchant', `门店定位已选（${target}）：${text}`)
+    }
+    AppStorage.setOrCreate<Address | null>('pickedStoreLocation', null)
+    AppStorage.setOrCreate<string>('storeLocationPickTarget', '')
+  }
+
   private openStoreAddressManager(target: string): void {
     AppStorage.setOrCreate<boolean>('addressSelectionMode', true)
     AppStorage.setOrCreate<boolean>('merchantAddressSelectionMode', true)
@@ -278,6 +323,7 @@ export struct MerchantCenterPage {
       return
     }
     await this.refreshMerchantAddresses()
+    this.applyPickedStoreLocation()
     await this.refreshStores()
     await this.refreshSelectedStoreGoods()
     const feedback: string = AppStorage.get<string>('merchantGoodsFeedback') || ''
@@ -501,8 +547,17 @@ export struct MerchantCenterPage {
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                   .onClick(() => { this.openStoreAddressManager('new') })
               }
-              Text('地址来自商户已保存地址，需要新地址请点击下拉框中的“新增地址”')
+              Text('地址来自商户已保存地址，也可以直接用地图定位门店位置')
                 .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%')
+              Button('定位选择店铺位置（地图选点）')
+                .width('100%').height(40).fontSize(FONT_SIZE.SM)
+                .fontColor(MODULE_COLOR.MERCHANT).backgroundColor(MODULE_BG.MERCHANT)
+                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                .onClick(() => { this.openStoreLocationPicker('new') })
+              if (this.newStorePickedAddress !== '') {
+                Text(`已定位门店位置：${this.newStorePickedAddress}`)
+                  .fontSize(FONT_SIZE.XS).fontColor(MODULE_COLOR.MERCHANT).width('100%')
+              }
             }
             Column({ space: SPACING.XS }) {
               Text('店铺公告（选填，将展示在店铺详情页）')
@@ -541,6 +596,13 @@ export struct MerchantCenterPage {
                   .onChange((v: string) => { this.newStoreMinOrder = v })
               }
               .layoutWeight(1)
+            }
+            Column({ space: SPACING.XS }) {
+              Text('配送半径（米，0=不限；超出半径的用户在附近列表看不到本店）')
+                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+              TextInput({ placeholder: '如：3000', text: this.newStoreRadius })
+                .width('100%').height(44).type(InputType.Number)
+                .onChange((v: string) => { this.newStoreRadius = v })
             }
             Row({ space: SPACING.MD }) {
               Button('取消')
@@ -604,8 +666,13 @@ export struct MerchantCenterPage {
                   .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
                   .onClick(() => { this.openStoreAddressManager('edit') })
               }
-              Text('地址来自商户已保存地址，需要新地址请点击下拉框中的“新增地址”')
+              Text('地址来自商户已保存地址，也可以直接用地图重新定位门店位置')
                 .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%')
+              Button('定位选择店铺位置（地图选点）')
+                .width('100%').height(40).fontSize(FONT_SIZE.SM)
+                .fontColor(MODULE_COLOR.MERCHANT).backgroundColor(MODULE_BG.MERCHANT)
+                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                .onClick(() => { this.openStoreLocationPicker('edit') })
             }
             Column({ space: SPACING.XS }) {
               Text('店铺公告（选填，将展示在店铺详情页）')
@@ -644,6 +711,13 @@ export struct MerchantCenterPage {
                   .onChange((v: string) => { this.editStoreMinOrder = v })
               }
               .layoutWeight(1)
+            }
+            Column({ space: SPACING.XS }) {
+              Text('配送半径（米，0=不限；超出半径的用户在附近列表看不到本店）')
+                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+              TextInput({ placeholder: '如：3000', text: this.editStoreRadius })
+                .width('100%').height(44).type(InputType.Number)
+                .onChange((v: string) => { this.editStoreRadius = v })
             }
             Row({ space: SPACING.MD }) {
               Button('取消')
@@ -887,12 +961,17 @@ export struct MerchantCenterPage {
       promptAction.showToast({ message: '请输入店铺名称' })
       return
     }
-    const selectedAddress: Address | null = this.findMerchantAddress(this.newStoreAddressId)
-    if (selectedAddress === null) {
-      promptAction.showToast({ message: '请选择一个已保存的店铺地址' })
+    // 门店位置优先用「定位选点」的结果（地图选点），没定位过才回落到已保存地址
+    const picked: boolean = this.newStorePickedAddress !== ''
+    const selectedAddress: Address | null = picked ? null : this.findMerchantAddress(this.newStoreAddressId)
+    if (!picked && selectedAddress === null) {
+      promptAction.showToast({ message: '请选择店铺地址，或点「定位选择店铺位置」用地图选点' })
       return
     }
-    const address: string = this.getAddressText(selectedAddress)
+    let address: string = this.newStorePickedAddress
+    if (!picked) {
+      address = this.getAddressText(selectedAddress as Address)
+    }
     if (address === '') {
       promptAction.showToast({ message: '所选地址内容为空，请先完善地址信息' })
       return
@@ -904,9 +983,19 @@ export struct MerchantCenterPage {
       promptAction.showToast({ message: '配送费和起送价必须是非负数字', duration: 1800 })
       return
     }
+    const radius: number = this.newStoreRadius.trim() === '' ? 0 : Number(this.newStoreRadius)
+    if (!Number.isFinite(radius) || radius < 0 || Math.floor(radius) !== radius) {
+      promptAction.showToast({ message: '配送半径必须是非负整数（米，0 表示不限）', duration: 2000 })
+      return
+    }
     this.creatingStore = true
-    let latitude: number = selectedAddress.latitude ?? 0
-    let longitude: number = selectedAddress.longitude ?? 0
+    let latitude: number = this.newStorePickedLatitude
+    let longitude: number = this.newStorePickedLongitude
+    if (!picked) {
+      const saved: Address = selectedAddress as Address
+      latitude = saved.latitude ?? 0
+      longitude = saved.longitude ?? 0
+    }
     if (!this.validCoordinates(latitude, longitude)) {
       const addressResults: AddressSearchResult[] = await searchAddress(address)
       if (addressResults.length === 0) {
@@ -919,7 +1008,7 @@ export struct MerchantCenterPage {
       longitude = location.longitude
     }
     const created: StoreItem | null = await createMerchantStoreApi(name, 1, fee, minOrder, '30分钟',
-      this.newStoreNotice.trim() || '欢迎光临', address, latitude, longitude, this.newStoreImage)
+      this.newStoreNotice.trim() || '欢迎光临', address, latitude, longitude, this.newStoreImage, radius)
     if (created === null) {
       this.creatingStore = false
       promptAction.showToast({ message: '创建失败，请检查网络或登录状态' })
@@ -928,6 +1017,10 @@ export struct MerchantCenterPage {
     this.newStoreName = ''
     this.newStoreNotice = ''
     this.newStoreImage = ''
+    this.newStoreRadius = '0'
+    this.newStorePickedAddress = ''
+    this.newStorePickedLatitude = 0
+    this.newStorePickedLongitude = 0
     this.newStoreAddressId = 0
     this.newStoreAddressIndex = -1
     this.showAddStore = false
@@ -943,6 +1036,7 @@ export struct MerchantCenterPage {
     this.editStoreDeliveryFee = store.deliveryFee.toString()
     this.editStoreMinOrder = store.minOrder.toString()
     this.editStoreImage = store.image ?? ''
+    this.editStoreRadius = (store.deliveryRadius ?? 0).toString()
     this.editStoreAddressFallbackText = (store.address || '').trim()
     this.editStoreAddressFallbackLatitude = store.latitude ?? 0
     this.editStoreAddressFallbackLongitude = store.longitude ?? 0
@@ -977,6 +1071,12 @@ export struct MerchantCenterPage {
       promptAction.showToast({ message: '配送费和起送价必须是非负数字', duration: 1800 })
       return
     }
+    // 留空表示沿用原值：旧实现不传该字段，服务端按 0（=不限）落库，保存店铺会把配送半径静默清零
+    const radius: number = this.editStoreRadius.trim() === '' ? (originalStore.deliveryRadius ?? 0) : Number(this.editStoreRadius)
+    if (!Number.isFinite(radius) || radius < 0 || Math.floor(radius) !== radius) {
+      promptAction.showToast({ message: '配送半径必须是非负整数（米，0 表示不限）', duration: 2000 })
+      return
+    }
     this.savingStore = true
     const selectedAddress: Address | null = this.findMerchantAddress(this.editStoreAddressId)
     let address: string = ''
@@ -1009,7 +1109,7 @@ export struct MerchantCenterPage {
     }
     const updated: StoreItem | null = await updateMerchantStoreApi(originalStore.id, name, fee, minOrder,
       originalStore.deliveryTime, this.editStoreNotice.trim() || '欢迎光临', address, latitude, longitude,
-      this.editStoreImage)
+      this.editStoreImage, radius)
     if (updated === null) {
       this.savingStore = false
       promptAction.showToast({ message: '保存失败，请稍后重试' })

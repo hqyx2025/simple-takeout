@@ -38,15 +38,27 @@ public record Store(
                 "", null, null, categoryId, categoryIds, ownerId, status, recommended, createTime, 0);
     }
 
-    /** 按用户当前位置计算距离；无坐标的存量店铺使用规范化后的历史距离。 */
+    /**
+     * 距离未知的展示文案：没有用户定位、或店铺本身没有坐标时使用。
+     * 「附近」筛选靠解析 distance 里的数字，未知距离不带数字 → 自然被排除。
+     */
+    public static final String UNKNOWN_DISTANCE = "未知距离";
+
+    /**
+     * 按用户当前位置计算距离。
+     * 只有「用户有定位 且 店铺有坐标」才能算出真实距离；否则返回 {@link #UNKNOWN_DISTANCE}。
+     * 历史实现会在缺坐标时沿用库里的 distance 字符串，于是没有坐标的店铺（例如新建时没定位）
+     * 会被当成「离你很近」出现在主页附近推荐里（实测：武汉的店在沈阳的用户端显示 0.2km）。
+     */
     public Store withDistance(Double userLatitude, Double userLongitude) {
-        String nextDistance = normalizeDistance(distance);
-        if (validCoordinates(userLatitude, userLongitude) && validCoordinates(latitude, longitude)) {
-            double distanceKm = haversine(userLatitude, userLongitude, latitude, longitude);
-            nextDistance = formatDistance(distanceKm);
+        if (!validCoordinates(userLatitude, userLongitude) || !validCoordinates(latitude, longitude)) {
+            return new Store(id, name, image, rating, monthlySales, deliveryFee, minOrder, deliveryTime,
+                    UNKNOWN_DISTANCE, tags, notice, address, latitude, longitude, categoryId, categoryIds,
+                    ownerId, status, recommended, createTime, deliveryRadius);
         }
+        double distanceKm = haversine(userLatitude, userLongitude, latitude, longitude);
         return new Store(id, name, image, rating, monthlySales, deliveryFee, minOrder, deliveryTime,
-                nextDistance, tags, notice, address, latitude, longitude, categoryId, categoryIds,
+                formatDistance(distanceKm), tags, notice, address, latitude, longitude, categoryId, categoryIds,
                 ownerId, status, recommended, createTime, deliveryRadius);
     }
 

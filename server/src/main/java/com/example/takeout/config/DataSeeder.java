@@ -50,6 +50,7 @@ public class DataSeeder implements ApplicationRunner {
             ensureBankCards();
             ensureStoresAndGoods();
             ensureAdditionalStores();
+            ensureStoreCoordinates();
             ensureStoreMerchantCategories();
             ensureMarketingData();
             log.info("用户数据已存在（users={}），已校验分类、店铺、商品和附近推荐数据", userCount);
@@ -60,6 +61,7 @@ public class DataSeeder implements ApplicationRunner {
         ensureRiderUser();
         ensureBankCards();
         ensureAdditionalStores();
+        ensureStoreCoordinates();
         ensureStoreMerchantCategories();
         ensureMarketingData();
         log.info("种子数据初始化完成：8 分类 / 40 店铺 / 1200 商品 / 6 账号（含骑手）");
@@ -405,6 +407,29 @@ public class DataSeeder implements ApplicationRunner {
                     categoryId, "[" + categoryId + "]", merchantIds[i % merchantIds.length], 1, 1, now());
             long storeId = jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
             seedGoods(storeId, categoryId, 6);
+        }
+    }
+
+    /**
+     * 幂等给「没有坐标」的店铺补坐标（武汉市区基准点 + 确定性环状偏移，约 0.2~1.2 公里）。
+     * 没有坐标的店铺算不出与用户的距离，主页「附近推荐」会把它们当成"位置已知"地丢弃；
+     * 门店坐标的真实来源是商户在店铺表单里用定位选点（新建/编辑都支持）。
+     */
+    private void ensureStoreCoordinates() {
+        double baseLatitude = 30.5928;
+        double baseLongitude = 114.3055;
+        List<java.util.Map<String, Object>> pending = jdbc.queryForList(
+                "SELECT id FROM stores WHERE latitude IS NULL OR longitude IS NULL ORDER BY id");
+        for (int i = 0; i < pending.size(); i++) {
+            long storeId = ((Number) pending.get(i).get("id")).longValue();
+            double angle = i * 0.7;
+            double radiusDeg = 0.002 + (i % 8) * 0.0012;
+            double latitude = baseLatitude + radiusDeg * Math.cos(angle);
+            double longitude = baseLongitude + radiusDeg * Math.sin(angle) * 1.15;
+            jdbc.update("UPDATE stores SET latitude = ?, longitude = ? WHERE id = ?", latitude, longitude, storeId);
+        }
+        if (!pending.isEmpty()) {
+            log.info("已为 {} 家缺少坐标的店铺补齐门店坐标（基准点武汉）", pending.size());
         }
     }
 

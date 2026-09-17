@@ -365,6 +365,27 @@ export struct LocationPage {
         }
         return
       }
+      // 门店选点模式：只把「地址 + 坐标」写回上层表单，不新增用户收货地址、不改当前配送地址
+      const pickStore: boolean = AppStorage.get<boolean>('storeLocationPickMode') || false
+      if (pickStore) {
+        const picked: Address = {
+          id: 0,
+          name: '',
+          phone: '',
+          address: addressText,
+          detail: detail,
+          isDefault: false,
+          tag: '门店定位',
+          latitude: pos.latitude,
+          longitude: pos.longitude
+        }
+        AppStorage.setOrCreate<Address>('pickedStoreLocation', picked)
+        AppStorage.setOrCreate<boolean>('storeLocationPickMode', false)
+        logInfo('LocationPage', `门店定位已选：${addressText} ${detail}（${pos.latitude},${pos.longitude}）`)
+        promptAction.showToast({ message: '已选择门店位置', duration: 1500 })
+        router.back()
+        return
+      }
       await this.applyAddress(addressText, detail, pos)
     } finally {
       this.savingAddress = false

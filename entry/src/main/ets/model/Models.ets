@@ -95,6 +95,8 @@ export interface StoreItem {
   categoryIds?: number[]
   ownerId: number  // 商户用户ID
   recommended?: number // 平台是否推荐到发现页：0否 1是
+  deliveryRadius?: number // 配送半径（米，0=不限）
+  deliverable?: boolean // 当前定位下是否在配送范围内（服务端判定）
 }
 
 // 购物车/订单商品项

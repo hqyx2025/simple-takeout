@@ -152,7 +152,9 @@ public class StoreService {
                         .sorted(Comparator.comparingDouble((Store store) -> parseDistance(store.distance()))
                                 .thenComparing(Comparator.comparingDouble(Store::rating).reversed()))
                         .limit(limit)
-                        .map(this::toView)
+                        // 必须带坐标再转视图：旧写法 toView(store) 会用 null 坐标重算一次距离，
+                        // 把刚算好的「距你 X km」覆盖掉（主页附近推荐因此一直显示库里的旧字符串/未知距离）
+                        .map(store -> toView(store, latitude, longitude))
                         .toList());
     }
 

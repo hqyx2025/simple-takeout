@@ -1173,6 +1173,18 @@ struct RecommendedStoreCardHost {
   }
   onStoreClick: (store: StoreItem) => void = () => {}
 
+  /**
+   * 距离文案：只有服务端用「用户定位 + 门店坐标」真算出来的距离才显示「距你 X」，
+   * 门店没坐标或未定位时是「未知距离」——不能沿用历史值假装很近。
+   */
+  private distanceText(): string {
+    const distance: string = this.store.distance ?? ''
+    if (distance === '' || distance === '未知距离') {
+      return '距离未知'
+    }
+    return `距你 ${distance}`
+  }
+
   build() {
     Row({ space: SPACING.MD }) {
       if (this.store.image !== '') {
@@ -1200,7 +1212,7 @@ struct RecommendedStoreCardHost {
         Row({ space: SPACING.SM }) {
           RatingStars({ rating: this.store.rating, fontSize: FONT_SIZE.SM, showNumber: true })
           Text(`月售${formatSales(this.store.monthlySales)}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
-          Text(this.store.distance).fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
+          Text(this.distanceText()).fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
         }
         Text(`${this.store.deliveryTime} · 配送¥${this.store.deliveryFee} · ${this.store.minOrder}元起送`)
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
@@ -1393,7 +1405,8 @@ export struct StoreDetailContent {
       this.storeMonthlySales = store.monthlySales
       this.storeDeliveryFee = store.deliveryFee
       this.storeDeliveryTime = store.deliveryTime
-      this.storeDistance = store.distance
+      // 距离不在这里覆盖：详情接口不带用户坐标（算不出真实距离），
+      // 覆盖会把列表接口按定位算好的「距你 X km」变成「未知距离」
       this.storeMinOrder = store.minOrder
       this.storeTags = store.tags
       this.storeNotice = store.notice

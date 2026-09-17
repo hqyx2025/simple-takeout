@@ -35,6 +35,10 @@ interface ServerStore {
   ownerId: number
   status: number
   recommended: number
+  /** 配送半径（米，0=不限） */
+  deliveryRadius?: number
+  /** 当前用户定位下是否在配送范围内（服务端按坐标判定） */
+  deliverable?: boolean
 }
 
 interface ServerGoodsSpec {
@@ -463,6 +467,8 @@ interface MerchantStoreRequest {
   longitude: number
   /** 店铺照片（上传接口返回的相对地址 /uploads/...），未上传为空串 */
   image: string
+  /** 配送半径（米，0=不限） */
+  deliveryRadius: number
 }
 
 interface MerchantStorePatch {
@@ -477,6 +483,8 @@ interface MerchantStorePatch {
   status: number
   /** 店铺照片（null/缺省=不修改，本次统一传当前值） */
   image: string
+  /** 配送半径（米）：-1=不修改；前端统一回传当前值，避免保存时被当成 0（不限）清掉 */
+  deliveryRadius: number
 }
 
 interface MerchantGoodsRequest {
@@ -1197,11 +1205,12 @@ export async function fetchMerchantGoodsApi(storeId: number): Promise<GoodsItem[
 
 export async function createMerchantStoreApi(name: string, categoryId: number, deliveryFee: number,
   minOrder: number, deliveryTime: string, notice: string, address: string,
-  latitude: number, longitude: number, image: string): Promise<StoreItem | null> {
+  latitude: number, longitude: number, image: string,
+  deliveryRadius: number = 0): Promise<StoreItem | null> {
   const req: MerchantStoreRequest = {
     name: name, categoryId: categoryId, deliveryFee: deliveryFee, minOrder: minOrder,
     deliveryTime: deliveryTime, notice: notice, address: address, latitude: latitude, longitude: longitude,
-    image: image
+    image: image, deliveryRadius: deliveryRadius
   }
   const resp: ApiResponse<ServerStore> = await post<ServerStore>(API_CONFIG.ENDPOINTS['merchantStores'], req)
   return resp.code === 200 && resp.data !== null ? toStoreItem(resp.data) : null
@@ -1209,11 +1218,12 @@ export async function createMerchantStoreApi(name: string, categoryId: number, d
 
 export async function updateMerchantStoreApi(storeId: number, name: string, deliveryFee: number,
   minOrder: number, deliveryTime: string, notice: string, address: string,
-  latitude: number, longitude: number, image: string): Promise<StoreItem | null> {
+  latitude: number, longitude: number, image: string,
+  deliveryRadius: number = -1): Promise<StoreItem | null> {
   const req: MerchantStorePatch = {
     name: name, deliveryFee: deliveryFee, minOrder: minOrder,
     deliveryTime: deliveryTime, notice: notice, address: address,
-    latitude: latitude, longitude: longitude, status: -1, image: image
+    latitude: latitude, longitude: longitude, status: -1, image: image, deliveryRadius: deliveryRadius
   }
   const resp: ApiResponse<ServerStore> = await put<ServerStore>(`/api/merchant/stores/${storeId}`, req)
   return resp.code === 200 && resp.data !== null ? toStoreItem(resp.data) : null
@@ -1654,7 +1664,9 @@ function toStoreItem(s: ServerStore): StoreItem {
     categoryId: s.categoryId,
     categoryIds: s.categoryIds || [],
     ownerId: s.ownerId,
-    recommended: s.recommended || 0
+    recommended: s.recommended || 0,
+    deliveryRadius: s.deliveryRadius ?? 0,
+    deliverable: s.deliverable === true
   }
   return store
 }
