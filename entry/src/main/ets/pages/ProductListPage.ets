@@ -3,7 +3,7 @@
  */
 import { Address, GoodsItem, StoreItem } from '../model/Models'
 import { getAllStoresList, getGoodsForStore, syncStoresFromServer, syncGoodsFromServer } from '../service/AppStorageManager'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { API_CONFIG, COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
@@ -298,7 +298,15 @@ export struct ProductListPage {
         List({ space: SPACING.SM }) {
           ForEach(this.products, (item: ProductListItem) => {
             ListItem() {
-              Column({ space: SPACING.SM }) {
+              Row({ space: SPACING.MD }) {
+                if (item.goods.image !== '') {
+                  Image(item.goods.image.startsWith('/') ? API_CONFIG.BASE_URL + item.goods.image : item.goods.image)
+                    .width(72)
+                    .height(72)
+                    .objectFit(ImageFit.Cover)
+                    .borderRadius(BORDER_RADIUS.MD)
+                }
+                Column({ space: SPACING.SM }) {
                 Row() {
                   Text(item.goods.name)
                     .fontSize(FONT_SIZE.LG)
@@ -338,6 +346,8 @@ export struct ProductListPage {
                   }
                 }
                 .width('100%')
+                .layoutWeight(1)
+              }
               }
               .width('100%')
               .padding(SPACING.LG)
