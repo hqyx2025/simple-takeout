@@ -54,6 +54,12 @@ public class OrderDao {
         return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 
+    /** 用户是否已有任何订单（新客立减判断：从未下单才享新客优惠）。 */
+    public boolean hasAnyOrder(long userId) {
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM orders WHERE user_id = ?", Integer.class, userId);
+        return count != null && count > 0;
+    }
+
     public List<Order> listByUser(long userId) {
         return jdbc.query("SELECT * FROM orders WHERE user_id = ? ORDER BY id DESC", MAPPER, userId);
     }

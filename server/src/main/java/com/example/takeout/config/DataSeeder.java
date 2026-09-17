@@ -613,6 +613,37 @@ public class DataSeeder implements ApplicationRunner {
     private void ensureMarketingData() {
         seedDemoSpecs();
         seedDemoSeckills();
+        seedMarketingActivities();
+    }
+
+    /** 营销活动演示数据：第一家营业店铺 全套（8折/新客立减3/满50赠招牌菜），幂等。 */
+    private void seedMarketingActivities() {
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM marketing_activities", Integer.class);
+        if (count != null && count > 0) {
+            return;
+        }
+        List<java.util.Map<String, Object>> stores = jdbc.queryForList(
+                "SELECT id FROM stores WHERE status = 1 ORDER BY id LIMIT 1");
+        if (stores.isEmpty()) {
+            return;
+        }
+        long storeId = ((Number) stores.get(0).get("id")).longValue();
+        Long gift = jdbc.queryForObject(
+                "SELECT id FROM goods WHERE store_id = ? AND status = 1 AND is_special = 1 ORDER BY id LIMIT 1",
+                Long.class, storeId);
+        long giftGoodsId = gift == null ? 0 : gift;
+        String now = now();
+        String end = "2099-12-31 23:59:59";
+        insertMarketingActivity(storeId, "DISCOUNT", "全场8折", 0.800, 0, 0, 0, now, end);
+        insertMarketingActivity(storeId, "NEW_USER", "新客立减3元", 0, 3, 0, 0, now, end);
+        insertMarketingActivity(storeId, "GIFT", "满50赠招牌菜", 0, 0, 50, giftGoodsId, now, end);
+        log.info("已为店铺 {} 补充营销活动演示数据（8折/新客立减/满赠赠品 {}）", storeId, giftGoodsId);
+    }
+
+    private void insertMarketingActivity(long storeId, String type, String title, double rate,
+                                         double reduce, double threshold, long gift, String start, String end) {
+        jdbc.update("INSERT INTO marketing_activities(store_id, type, title, discount_rate, reduce_amount, threshold, gift_goods_id, start_time, end_time, status, create_time) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                storeId, type, title, rate, reduce, threshold, gift, start, end, 1, start);
     }
 
     /** 为 3 个招牌商品补「标准份/大份/双人份」规格，用于演示多规格点单。 */

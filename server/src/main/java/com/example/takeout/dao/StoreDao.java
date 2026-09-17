@@ -1,6 +1,7 @@
 package com.example.takeout.dao;
 
 import com.example.takeout.model.Category;
+import com.example.takeout.model.MarketingActivity;
 import com.example.takeout.model.Store;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -37,6 +38,21 @@ public class StoreDao {
             rs.getInt("recommended"),
             rs.getString("create_time"),
             rs.getInt("delivery_radius")
+    );
+
+    private static final RowMapper<MarketingActivity> MARKETING_MAPPER = (rs, i) -> new MarketingActivity(
+            rs.getLong("id"),
+            rs.getLong("store_id"),
+            rs.getString("type"),
+            rs.getString("title"),
+            rs.getDouble("discount_rate"),
+            rs.getDouble("reduce_amount"),
+            rs.getDouble("threshold"),
+            rs.getLong("gift_goods_id"),
+            rs.getString("start_time"),
+            rs.getString("end_time"),
+            rs.getInt("status"),
+            rs.getString("create_time")
     );
 
     private static final RowMapper<Category> CATEGORY_MAPPER = (rs, i) -> new Category(
@@ -199,5 +215,25 @@ public class StoreDao {
     /** 评价后重算店铺平均评分（保留一位小数）。 */
     public void updateRating(long storeId, double rating) {
         jdbc.update("UPDATE stores SET rating = ? WHERE id = ?", rating, storeId);
+    }
+
+    // ============ 营销活动 ============
+
+    /** 当前生效的活动（status=1 且在时间窗内）。 */
+    public List<MarketingActivity> listActiveMarketingActivities(long storeId, String now) {
+        return jdbc.query("SELECT * FROM marketing_activities WHERE store_id = ? AND status = 1 AND start_time <= ? AND end_time >= ? ORDER BY id",
+                MARKETING_MAPPER, storeId, now, now);
+    }
+
+    public List<MarketingActivity> listMarketingActivities(long storeId) {
+        return jdbc.query("SELECT * FROM marketing_activities WHERE store_id = ? ORDER BY id DESC",
+                MARKETING_MAPPER, storeId);
+    }
+
+    public long insertMarketingActivity(MarketingActivity a) {
+        jdbc.update("INSERT INTO marketing_activities(store_id, type, title, discount_rate, reduce_amount, threshold, gift_goods_id, start_time, end_time, status, create_time) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                a.storeId(), a.type(), a.title(), a.discountRate(), a.reduceAmount(), a.threshold(),
+                a.giftGoodsId(), a.startTime(), a.endTime(), a.status(), a.createTime());
+        return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 }

@@ -4,6 +4,7 @@ import com.example.takeout.common.ApiResponse;
 import com.example.takeout.model.Category;
 import com.example.takeout.model.Goods;
 import com.example.takeout.model.GoodsSpec;
+import com.example.takeout.model.MarketingActivity;
 import com.example.takeout.model.Seckill;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.SpecialGoods;
@@ -46,6 +47,11 @@ public class StoreController {
         log.info("[数据] 分类查询返回 count={} items={}", categories.size(),
                 categories.stream().map(c -> c.id() + ":" + c.name()).collect(Collectors.joining(",")));
         return ApiResponse.ok(categories);
+    }
+
+    @GetMapping("/stores/{storeId}/activities")
+    public ApiResponse<List<MarketingActivity>> storeActivities(@PathVariable long storeId) {
+        return ApiResponse.ok(storeService.listStoreActivities(storeId));
     }
 
     @GetMapping("/stores")

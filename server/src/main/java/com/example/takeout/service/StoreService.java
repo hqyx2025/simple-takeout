@@ -8,6 +8,7 @@ import com.example.takeout.dao.StoreDao;
 import com.example.takeout.model.Category;
 import com.example.takeout.model.Goods;
 import com.example.takeout.model.GoodsSpec;
+import com.example.takeout.model.MarketingActivity;
 import com.example.takeout.model.Seckill;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.SpecialGoods;
@@ -52,6 +53,11 @@ public class StoreService {
                 new TypeReference<List<Category>>() {
                 },
                 storeDao::listCategories);
+    }
+
+    /** 店铺当前生效的营销活动（折扣/新客立减/满赠），供前端展示。 */
+    public List<MarketingActivity> listStoreActivities(long storeId) {
+        return storeDao.listActiveMarketingActivities(storeId, LocalDateTime.now().format(FMT));
     }
 
     public List<Store.StoreView> listStores(Integer categoryId) {

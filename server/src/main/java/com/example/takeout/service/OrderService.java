@@ -19,6 +19,7 @@ import com.example.takeout.model.CartItemEntity;
 import com.example.takeout.model.Coupon;
 import com.example.takeout.model.Goods;
 import com.example.takeout.model.GoodsSpec;
+import com.example.takeout.model.MarketingActivity;
 import com.example.takeout.model.Order;
 import com.example.takeout.model.RefundReason;
 import com.example.takeout.model.RefundRecord;
@@ -257,6 +258,32 @@ public class OrderService {
             }
             discount = coupon.amount();
             appliedCoupon = coupon;
+        }
+        // ===== 营销活动：折扣 / 新客立减 / 满赠（无活动时为恒等，不改变既有金额口径）=====
+        for (MarketingActivity activity : storeDao.listActiveMarketingActivities(storeId, now)) {
+            switch (activity.type()) {
+                case "DISCOUNT" -> {
+                    if (activity.discountRate() > 0 && activity.discountRate() < 1) {
+                        goodsAmount = round2(goodsAmount * activity.discountRate());
+                    }
+                }
+                case "NEW_USER" -> {
+                    if (activity.reduceAmount() > 0 && !orderDao.hasAnyOrder(userId)) {
+                        discount += activity.reduceAmount();
+                    }
+                }
+                case "GIFT" -> {
+                    if (activity.giftGoodsId() > 0 && goodsAmount >= activity.threshold()) {
+                        Goods gift = goodsDao.findById(activity.giftGoodsId()).orElse(null);
+                        boolean already = normalizedItems.stream().anyMatch(i -> i.goodsId() == activity.giftGoodsId());
+                        if (gift != null && gift.storeId() == storeId && gift.status() == 1 && gift.stock() > 0 && !already) {
+                            normalizedItems.add(new Order.OrderItem(gift.id(), gift.name(), 0, 1, gift.image(), 0, "", 0));
+                            holds.add(new StockHold(gift.id(), 0, 1, 0));
+                        }
+                    }
+                }
+                default -> { }
+            }
         }
         double payAmount = round2(goodsAmount + store.deliveryFee() - discount);
         if (payAmount < 0) {

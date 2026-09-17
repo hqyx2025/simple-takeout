@@ -20,6 +20,7 @@ import com.example.takeout.model.CartItemEntity;
 import com.example.takeout.model.Coupon;
 import com.example.takeout.model.Goods;
 import com.example.takeout.model.GoodsSpec;
+import com.example.takeout.model.MarketingActivity;
 import com.example.takeout.model.Order;
 import com.example.takeout.model.RefundRecord;
 import com.example.takeout.model.Rider;
@@ -206,6 +207,29 @@ class OrderBoundaryTest {
                 ADDRESS_ID, 0, "", List.of(GOODS_ID, GOODS_ID));
 
         verify(orderDao).insert(any(Order.class));
+    }
+
+    @Test
+    void discountActivityReducesGoodsAmount() {
+        when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore(0, 3)));
+        when(addressDao.listByUser(USER_ID)).thenReturn(List.of(
+                new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "")));
+        when(goodsDao.findById(GOODS_ID)).thenReturn(Optional.of(goods(GOODS_ID, STORE_ID, 10)));
+        when(goodsDao.deductStock(GOODS_ID, 1)).thenReturn(true);
+        when(storeDao.listActiveMarketingActivities(eq(STORE_ID), anyString())).thenReturn(List.of(
+                new MarketingActivity(1, STORE_ID, "DISCOUNT", "全场8折", 0.8, 0, 0, 0,
+                        "2026-01-01 00:00:00", "2099-12-31 23:59:59", 1, "2026-01-01 00:00:00")));
+        when(orderDao.insert(any(Order.class))).thenReturn(13L);
+        when(orderDao.findById(13)).thenReturn(Optional.of(storedOrder(13, 0, 0)));
+
+        service.createOrder(USER_ID, STORE_ID,
+                List.of(new Order.OrderItem(GOODS_ID, "测试商品", 10, 1, "", 0, "", 0)),
+                ADDRESS_ID, 0, "");
+
+        org.mockito.ArgumentCaptor<Order> captor = org.mockito.ArgumentCaptor.forClass(Order.class);
+        verify(orderDao).insert(captor.capture());
+        assertEquals(8.0, captor.getValue().goodsAmount(), 0.001);
+        assertEquals(11.0, captor.getValue().payAmount(), 0.001);
     }
 
     // ============ 输入长度边界 ============

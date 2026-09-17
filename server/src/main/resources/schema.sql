@@ -149,6 +149,23 @@ CREATE TABLE IF NOT EXISTS user_coupons (
     KEY idx_user_coupons_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 营销活动：DISCOUNT 折扣率 / NEW_USER 新客立减 / GIFT 满赠（赠品商品）
+CREATE TABLE IF NOT EXISTS marketing_activities (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    store_id BIGINT NOT NULL,
+    type VARCHAR(16) NOT NULL,
+    title VARCHAR(64) NOT NULL,
+    discount_rate DECIMAL(4,3) NOT NULL DEFAULT 0,
+    reduce_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+    threshold DECIMAL(10,2) NOT NULL DEFAULT 0,
+    gift_goods_id BIGINT NOT NULL DEFAULT 0,
+    start_time VARCHAR(32) NOT NULL,
+    end_time VARCHAR(32) NOT NULL,
+    status INT NOT NULL DEFAULT 1,
+    create_time VARCHAR(32) NOT NULL,
+    KEY idx_mkt_store (store_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS reviews (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     order_id BIGINT NOT NULL DEFAULT 0,
