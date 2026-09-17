@@ -2,10 +2,11 @@
  * 商户中心页面
  * 商户可查看自己的店铺列表、管理店铺、上架食物
  */
-import { StoreItem, GoodsItem, UserRole, User, Category, Address } from '../model/Models'
+import { StoreItem, GoodsItem, UserRole, User, Category, Address, Employee } from '../model/Models'
 import { fetchMerchantStoresApi, fetchMerchantGoodsApi, createMerchantStoreApi, updateMerchantStoreApi,
   updateMerchantGoodsApi, deleteMerchantGoodsApi,
-  fetchMerchantCategoriesApi, createMerchantCategoryApi, updateMerchantCategoryApi, deleteMerchantCategoryApi } from '../service/ApiService'
+  fetchMerchantCategoriesApi, createMerchantCategoryApi, updateMerchantCategoryApi, deleteMerchantCategoryApi,
+  fetchMerchantEmployeesApi, removeMerchantEmployeeApi } from '../service/ApiService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, formatSales } from '../common/Constants'
 import { promptCompat as promptAction } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
@@ -37,6 +38,9 @@ export struct MerchantCenterPage {
   @State showAddStore: boolean = false
   @State selectedStoreId: number = 0
   @State selectedStoreGoods: GoodsItem[] = []
+  @State storeEmployees: Employee[] = []
+  @State showEmployeeDialog: boolean = false
+  @State employeeStoreId: number = 0
   @State storeGoodsCounts: Record<string, number> = {}
   @StorageLink('addressList') merchantAddresses: Address[] = []
   @State storeAddressOptions: MerchantAddressOption[] = []
@@ -387,6 +391,11 @@ export struct MerchantCenterPage {
                 Text('编辑').fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
                   .padding({ left: SPACING.SM, right: SPACING.SM })
                   .onClick(() => { this.startEditStore(store) })
+                Text('员工')
+                  .fontSize(FONT_SIZE.MD).fontColor(COLORS.PRIMARY)
+                  .onClick(() => {
+                    promptAction.showToast({ message: '员工管理：可通过后端接口分配员工账号到本店', duration: 1800 })
+                  })
                 Text('管理 ›')
                   .fontSize(FONT_SIZE.MD).fontColor(COLORS.PRIMARY)
               }
