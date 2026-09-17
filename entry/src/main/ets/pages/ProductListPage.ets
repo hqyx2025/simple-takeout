@@ -26,6 +26,40 @@ class ProductListItem {
   }
 }
 
+/** 商品列表懒加载数据源（LazyForEach 要求实现 IDataSource）。 */
+class ProductDataSource implements IDataSource {
+  private items: ProductListItem[] = []
+  private listeners: DataChangeListener[] = []
+
+  setData(items: ProductListItem[]): void {
+    this.items = items
+    this.listeners.forEach((listener: DataChangeListener) => {
+      listener.onDataReloaded()
+    })
+  }
+
+  totalCount(): number {
+    return this.items.length
+  }
+
+  getData(index: number): ProductListItem {
+    return this.items[index]
+  }
+
+  registerDataChangeListener(listener: DataChangeListener): void {
+    if (this.listeners.indexOf(listener) < 0) {
+      this.listeners.push(listener)
+    }
+  }
+
+  unregisterDataChangeListener(listener: DataChangeListener): void {
+    const pos: number = this.listeners.indexOf(listener)
+    if (pos >= 0) {
+      this.listeners.splice(pos, 1)
+    }
+  }
+}
+
 @Entry
 @Component
 export struct ProductListPage {
@@ -36,6 +70,7 @@ export struct ProductListPage {
   @State categoryId: number = 0
   @State products: ProductListItem[] = []
   @State categoryStores: StoreItem[] = []
+  private dataSource: ProductDataSource = new ProductDataSource()
 
   aboutToAppear(): void {
     this.readRequest()
@@ -100,6 +135,7 @@ export struct ProductListPage {
     if (this.mode === ProductListMode.CATEGORY) {
       this.categoryStores = candidates.filter((store: StoreItem) => this.matchesCategory(store))
       this.products = []
+      this.dataSource.setData([])
       return
     }
     this.categoryStores = []
@@ -128,6 +164,7 @@ export struct ProductListPage {
       result.sort((left: ProductListItem, right: ProductListItem) => right.goods.sales - left.goods.sales)
     }
     this.products = result
+    this.dataSource.setData(result)
   }
 
   private matchesCategory(store: StoreItem): boolean {
@@ -296,7 +333,7 @@ export struct ProductListPage {
         EmptyState({ icon: '🍽️', title: '暂无符合条件的商品', description: '可以换个分类或查看附近全部商品' })
       } else {
         List({ space: SPACING.SM }) {
-          ForEach(this.products, (item: ProductListItem) => {
+          LazyForEach(this.dataSource, (item: ProductListItem) => {
             ListItem() {
               Row({ space: SPACING.MD }) {
                 if (item.goods.image !== '') {
