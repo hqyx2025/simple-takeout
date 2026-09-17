@@ -11,6 +11,7 @@ import com.example.takeout.dao.StoreDao;
 import com.example.takeout.model.Store;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.util.List;
 import java.util.Optional;
@@ -45,15 +46,42 @@ class InputBoundaryTest {
     @Test
     void createStoreRejectsOverlongNameAndNotice() {
         BizException nameError = assertThrows(BizException.class, () -> storeService.createStore(OWNER_ID,
-                "店".repeat(129), 1, 3, 20, "30分钟", "", "北京市海淀区", 39.9, 116.4, 0));
+                "店".repeat(129), 1, 3, 20, "30分钟", "", "北京市海淀区", 39.9, 116.4, 0, ""));
         assertEquals("店铺名称最多 128 个字符", nameError.getMessage());
         verify(storeDao, never()).insert(any(Store.class));
 
         when(storeDao.categoryExists(1)).thenReturn(true);
         BizException noticeError = assertThrows(BizException.class, () -> storeService.createStore(OWNER_ID,
-                "测试店", 1, 3, 20, "30分钟", "公".repeat(513), "北京市海淀区", 39.9, 116.4, 0));
+                "测试店", 1, 3, 20, "30分钟", "公".repeat(513), "北京市海淀区", 39.9, 116.4, 0, ""));
         assertEquals("店铺公告最多 512 个字符", noticeError.getMessage());
         verify(storeDao, never()).insert(any(Store.class));
+    }
+
+    /**
+     * 店铺照片：创建时要落库，编辑时为 null 表示不修改、为超长文本要按列宽挡住。
+     * 商户上传照片后用户端店铺详情/列表都靠这个字段展示，链路断了商户就会"传了看不到"。
+     */
+    @Test
+    void storeImagePersistsOnCreateAndUpdateWithLengthGuard() {
+        when(storeDao.categoryExists(1)).thenReturn(true);
+        storeService.createStore(OWNER_ID, "测试店", 1, 3, 20, "30分钟", "公告", "北京市海淀区",
+                39.9, 116.4, 0, "/uploads/20260917/shop.png");
+
+        ArgumentCaptor<Store> insertCaptor = ArgumentCaptor.forClass(Store.class);
+        verify(storeDao).insert(insertCaptor.capture());
+        assertEquals("/uploads/20260917/shop.png", insertCaptor.getValue().image());
+
+        when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore()));
+        storeService.updateStore(OWNER_ID, STORE_ID, new StoreService.StorePatch("测试店", 3, 20, "30分钟",
+                "公告", null, null, null, -1, 0, "/uploads/20260917/shop2.png"));
+        ArgumentCaptor<Store> updateCaptor = ArgumentCaptor.forClass(Store.class);
+        verify(storeDao).update(updateCaptor.capture());
+        assertEquals("/uploads/20260917/shop2.png", updateCaptor.getValue().image());
+
+        BizException imageError = assertThrows(BizException.class, () -> storeService.updateStore(OWNER_ID,
+                STORE_ID, new StoreService.StorePatch("测试店", 3, 20, "30分钟", "公告", null, null, null, -1, 0,
+                        "/uploads/" + "a".repeat(250) + ".png")));
+        assertEquals("店铺图片地址最多 255 个字符", imageError.getMessage());
     }
 
     @Test

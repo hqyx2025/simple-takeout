@@ -1105,14 +1105,20 @@ struct HomePage {
   StoreCard(store: StoreItem) {
     Row({ space: SPACING.MD }) {
       // 店铺图片占位
-      Column() {
-        Text(store.name.substring(0, 1))
-          .fontSize(28).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_WHITE)
+      if (store.image !== '') {
+        Image(merchantImageSource(store.image))
+          .alt(DEFAULT_MERCHANT_IMAGE)
+          .width(80).height(80).objectFit(ImageFit.Cover).borderRadius(BORDER_RADIUS.MD)
+      } else {
+        Column() {
+          Text(store.name.substring(0, 1))
+            .fontSize(28).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_WHITE)
+        }
+        .width(80).height(80)
+        .backgroundColor(accentFg(accentIndexFromText(store.name)))
+        .borderRadius(BORDER_RADIUS.MD)
+        .justifyContent(FlexAlign.Center)
       }
-      .width(80).height(80)
-      .backgroundColor(accentFg(accentIndexFromText(store.name)))
-      .borderRadius(BORDER_RADIUS.MD)
-      .justifyContent(FlexAlign.Center)
 
       Column({ space: SPACING.XS }) {
         Text(store.name)
@@ -1169,13 +1175,19 @@ struct RecommendedStoreCardHost {
 
   build() {
     Row({ space: SPACING.MD }) {
-      Column() {
-        Text(this.store.name.substring(0, 1)).fontSize(28).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_WHITE)
+      if (this.store.image !== '') {
+        Image(merchantImageSource(this.store.image))
+          .alt(DEFAULT_MERCHANT_IMAGE)
+          .width(76).height(76).objectFit(ImageFit.Cover).borderRadius(BORDER_RADIUS.MD)
+      } else {
+        Column() {
+          Text(this.store.name.substring(0, 1)).fontSize(28).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_WHITE)
+        }
+        .width(76).height(76)
+        .backgroundColor(accentFg(accentIndexFromText(this.store.name)))
+        .borderRadius(BORDER_RADIUS.MD)
+        .justifyContent(FlexAlign.Center)
       }
-      .width(76).height(76)
-      .backgroundColor(accentFg(accentIndexFromText(this.store.name)))
-      .borderRadius(BORDER_RADIUS.MD)
-      .justifyContent(FlexAlign.Center)
       Column({ space: SPACING.XS }) {
         Row() {
           Text(this.store.name).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
@@ -1217,6 +1229,8 @@ export struct StoreDetailContent {
   @State storeMinOrder: number = 0
   @State storeTags: string[] = []
   @State storeNotice: string = ''
+  // 店铺照片（商户上传的相对地址），用户端详情页顶部展示
+  @State storeImage: string = ''
   @State cartCount: number = 0
   @State cartTotal: number = 0
   // 商品行的「- 数量 +」取值依赖购物车，而 ForEach 的 key 用的是稳定的 goods.id：
@@ -1271,6 +1285,7 @@ export struct StoreDetailContent {
       this.storeMinOrder = 0
       this.storeTags = []
       this.storeNotice = ''
+      this.storeImage = ''
     }
     if (store) {
       this.storeName = store.name
@@ -1282,6 +1297,7 @@ export struct StoreDetailContent {
       this.storeMinOrder = store.minOrder
       this.storeTags = store.tags
       this.storeNotice = store.notice
+      this.storeImage = store.image ?? ''
     }
     this.isFav = isFavorited(this.storeId)
     this.storeReviews = []
@@ -1381,6 +1397,7 @@ export struct StoreDetailContent {
       this.storeMinOrder = store.minOrder
       this.storeTags = store.tags
       this.storeNotice = store.notice
+      this.storeImage = store.image ?? ''
     }
   }
 
@@ -1576,6 +1593,11 @@ export struct StoreDetailContent {
     Column() {
       // 店铺信息
       Column({ space: 6 }) {
+        // 店铺照片：方便用户确认门店（未上传时用默认占位图）
+        Image(merchantImageSource(this.storeImage))
+          .alt(DEFAULT_MERCHANT_IMAGE)
+          .width('100%').height(160).objectFit(ImageFit.Cover)
+          .borderRadius(BORDER_RADIUS.MD)
         Row() {
           Text(this.storeName)
             .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.MERCHANT)

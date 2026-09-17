@@ -461,6 +461,8 @@ interface MerchantStoreRequest {
   address: string
   latitude: number
   longitude: number
+  /** 店铺照片（上传接口返回的相对地址 /uploads/...），未上传为空串 */
+  image: string
 }
 
 interface MerchantStorePatch {
@@ -473,6 +475,8 @@ interface MerchantStorePatch {
   latitude: number
   longitude: number
   status: number
+  /** 店铺照片（null/缺省=不修改，本次统一传当前值） */
+  image: string
 }
 
 interface MerchantGoodsRequest {
@@ -1193,10 +1197,11 @@ export async function fetchMerchantGoodsApi(storeId: number): Promise<GoodsItem[
 
 export async function createMerchantStoreApi(name: string, categoryId: number, deliveryFee: number,
   minOrder: number, deliveryTime: string, notice: string, address: string,
-  latitude: number, longitude: number): Promise<StoreItem | null> {
+  latitude: number, longitude: number, image: string): Promise<StoreItem | null> {
   const req: MerchantStoreRequest = {
     name: name, categoryId: categoryId, deliveryFee: deliveryFee, minOrder: minOrder,
-    deliveryTime: deliveryTime, notice: notice, address: address, latitude: latitude, longitude: longitude
+    deliveryTime: deliveryTime, notice: notice, address: address, latitude: latitude, longitude: longitude,
+    image: image
   }
   const resp: ApiResponse<ServerStore> = await post<ServerStore>(API_CONFIG.ENDPOINTS['merchantStores'], req)
   return resp.code === 200 && resp.data !== null ? toStoreItem(resp.data) : null
@@ -1204,11 +1209,11 @@ export async function createMerchantStoreApi(name: string, categoryId: number, d
 
 export async function updateMerchantStoreApi(storeId: number, name: string, deliveryFee: number,
   minOrder: number, deliveryTime: string, notice: string, address: string,
-  latitude: number, longitude: number): Promise<StoreItem | null> {
+  latitude: number, longitude: number, image: string): Promise<StoreItem | null> {
   const req: MerchantStorePatch = {
     name: name, deliveryFee: deliveryFee, minOrder: minOrder,
     deliveryTime: deliveryTime, notice: notice, address: address,
-    latitude: latitude, longitude: longitude, status: -1
+    latitude: latitude, longitude: longitude, status: -1, image: image
   }
   const resp: ApiResponse<ServerStore> = await put<ServerStore>(`/api/merchant/stores/${storeId}`, req)
   return resp.code === 200 && resp.data !== null ? toStoreItem(resp.data) : null

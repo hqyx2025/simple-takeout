@@ -232,15 +232,21 @@ export struct ProductListPage {
   @Builder
   StoreResultCard(store: StoreItem) {
     Row({ space: SPACING.MD }) {
-      Text(store.name.substring(0, 1))
-        .width(56)
-        .height(56)
-        .fontSize(FONT_SIZE.XL)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(COLORS.PRIMARY)
-        .backgroundColor(COLORS.WARM_BG)
-        .borderRadius(BORDER_RADIUS.MD)
-        .textAlign(TextAlign.Center)
+      if (store.image !== '') {
+        Image(merchantImageSource(store.image))
+          .alt(DEFAULT_MERCHANT_IMAGE)
+          .width(56).height(56).objectFit(ImageFit.Cover).borderRadius(BORDER_RADIUS.MD)
+      } else {
+        Text(store.name.substring(0, 1))
+          .width(56)
+          .height(56)
+          .fontSize(FONT_SIZE.XL)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(COLORS.PRIMARY)
+          .backgroundColor(COLORS.WARM_BG)
+          .borderRadius(BORDER_RADIUS.MD)
+          .textAlign(TextAlign.Center)
+      }
       Column({ space: 4 }) {
         Text(store.name)
           .fontSize(FONT_SIZE.LG)

@@ -4,7 +4,7 @@
  * 支持取消收藏与点击跳转店铺（直接压栈独立 StoreDetailPage）
  */
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, accentFg, accentIndexFromText } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, accentFg, accentIndexFromText, merchantImageSource, DEFAULT_MERCHANT_IMAGE } from '../common/Constants'
 import { Favorite } from '../model/Models'
 import { getFavorites, toggleFavoriteRemote, syncFavoritesRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { EmptyState } from '../components/EmptyState'
@@ -117,16 +117,22 @@ export struct FavoriteListPage {
   @Builder
   FavoriteItemBuilder(item: Favorite) {
     Row() {
-      // 店铺首字母色块占位（不编造图片URL）
-      Text(this.getFirstChar(item.storeName))
-        .fontSize(FONT_SIZE.XXL)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(COLORS.TEXT_WHITE)
-        .backgroundColor(accentFg(accentIndexFromText(item.storeName)))
-        .width(56)
-        .height(56)
-        .borderRadius(BORDER_RADIUS.LG)
-        .textAlign(TextAlign.Center)
+      // 有店铺照片就显示照片，没有才用首字母色块占位
+      if (item.storeImage !== '') {
+        Image(merchantImageSource(item.storeImage))
+          .alt(DEFAULT_MERCHANT_IMAGE)
+          .width(56).height(56).objectFit(ImageFit.Cover).borderRadius(BORDER_RADIUS.LG)
+      } else {
+        Text(this.getFirstChar(item.storeName))
+          .fontSize(FONT_SIZE.XXL)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(COLORS.TEXT_WHITE)
+          .backgroundColor(accentFg(accentIndexFromText(item.storeName)))
+          .width(56)
+          .height(56)
+          .borderRadius(BORDER_RADIUS.LG)
+          .textAlign(TextAlign.Center)
+      }
 
       // 店铺信息
       Column({ space: SPACING.XS }) {

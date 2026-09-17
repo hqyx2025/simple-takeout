@@ -4,10 +4,11 @@
  */
 import { StoreItem, GoodsItem, UserRole, User, Category, Address, Employee } from '../model/Models'
 import { fetchMerchantStoresApi, fetchMerchantGoodsApi, createMerchantStoreApi, updateMerchantStoreApi,
-  updateMerchantGoodsApi, deleteMerchantGoodsApi,
+  updateMerchantGoodsApi, deleteMerchantGoodsApi, uploadImageApi,
   fetchMerchantCategoriesApi, createMerchantCategoryApi, updateMerchantCategoryApi, deleteMerchantCategoryApi,
   fetchMerchantEmployeesApi, removeMerchantEmployeeApi } from '../service/ApiService'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, formatSales, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, formatSales, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText, merchantImageSource, DEFAULT_MERCHANT_IMAGE } from '../common/Constants'
+import { photoAccessHelper } from '@kit.MediaLibraryKit'
 import { promptCompat as promptAction } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
 import { routerCompat as router } from '../common/UiNavigation'
@@ -58,6 +59,8 @@ export struct MerchantCenterPage {
   @State newStoreNotice: string = ''
   @State newStoreDeliveryFee: string = '3'
   @State newStoreMinOrder: string = '20'
+  // 店铺照片（上传接口返回的相对地址；空串表示未上传）
+  @State newStoreImage: string = ''
 
   // 商户分类管理（演进项，见大纲 8.3）
   @State merchantCategories: Category[] = []
@@ -72,6 +75,7 @@ export struct MerchantCenterPage {
   @State editStoreNotice: string = ''
   @State editStoreDeliveryFee: string = ''
   @State editStoreMinOrder: string = ''
+  @State editStoreImage: string = ''
   @State editingStoreId: number = 0
   @State savingStore: boolean = false
   @State creatingStore: boolean = false
@@ -217,11 +221,42 @@ export struct MerchantCenterPage {
     }
   }
 
+  /**
+   * 选择并上传店铺照片：成功后写入对应表单（相对 /uploads/ 地址）。
+   * @param forNew true=新建店铺表单，false=编辑店铺表单
+   */
+  private async pickStoreImage(forNew: boolean): Promise<void> {
+    try {
+      const picker: photoAccessHelper.PhotoViewPicker = new photoAccessHelper.PhotoViewPicker()
+      const options: photoAccessHelper.PhotoSelectOptions = new photoAccessHelper.PhotoSelectOptions()
+      options.MIMEType = photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE
+      options.maxSelectNumber = 1
+      const result: photoAccessHelper.PhotoSelectResult = await picker.select(options)
+      if (!result.photoUris || result.photoUris.length === 0) {
+        return
+      }
+      const uploaded = await uploadImageApi(result.photoUris[0], false)
+      if (uploaded !== null && uploaded.url !== '') {
+        if (forNew) {
+          this.newStoreImage = uploaded.url
+        } else {
+          this.editStoreImage = uploaded.url
+        }
+        promptAction.showToast({ message: '店铺照片已上传', duration: 1500 })
+      } else {
+        promptAction.showToast({ message: '照片上传失败，请重试', duration: 2200 })
+      }
+    } catch (err) {
+      promptAction.showToast({ message: '选择照片失败，请重试', duration: 2200 })
+    }
+  }
+
   async openAddStoreForm(): Promise<void> {
     if (this.merchantAddresses.length === 0) {
       await this.refreshMerchantAddresses()
     }
     this.creatingStore = false
+    this.newStoreImage = ''
     this.newStoreAddressId = this.getPreferredAddressId()
     this.rebuildStoreAddressOptions()
     this.newStoreAddressIndex = this.findOptionIndex(this.storeAddressOptions, this.newStoreAddressId)
@@ -363,15 +398,21 @@ export struct MerchantCenterPage {
           ForEach(this.myStores, (store: StoreItem) => {
             ListItem() {
               Row({ space: SPACING.MD }) {
-                Column() {
-                  Text(store.name.substring(0, 1))
-                    .fontSize(FONT_SIZE.TITLE).fontWeight(FontWeight.Bold)
-                    .fontColor(accentFg(accentIndexFromText(store.name)))
+                if (store.image !== '') {
+                  Image(merchantImageSource(store.image))
+                    .alt(DEFAULT_MERCHANT_IMAGE)
+                    .width(60).height(60).objectFit(ImageFit.Cover).borderRadius(BORDER_RADIUS.MD)
+                } else {
+                  Column() {
+                    Text(store.name.substring(0, 1))
+                      .fontSize(FONT_SIZE.TITLE).fontWeight(FontWeight.Bold)
+                      .fontColor(accentFg(accentIndexFromText(store.name)))
+                  }
+                  .width(60).height(60)
+                  .backgroundColor(accentBg(accentIndexFromText(store.name)))
+                  .borderRadius(BORDER_RADIUS.MD)
+                  .justifyContent(FlexAlign.Center)
                 }
-                .width(60).height(60)
-                .backgroundColor(accentBg(accentIndexFromText(store.name)))
-                .borderRadius(BORDER_RADIUS.MD)
-                .justifyContent(FlexAlign.Center)
 
                 Column({ space: SPACING.XS }) {
                   Text(store.name)
@@ -469,6 +510,20 @@ export struct MerchantCenterPage {
               TextInput({ placeholder: '请输入店铺公告，如：新店开业，欢迎光临', text: this.newStoreNotice })
                 .width('100%').height(44).onChange((v: string) => { this.newStoreNotice = v })
             }
+            Column({ space: SPACING.XS }) {
+              Text('店铺照片（选填，展示在用户端店铺详情页，方便顾客找到门店）')
+                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+              Row({ space: SPACING.MD }) {
+                Image(merchantImageSource(this.newStoreImage))
+                  .alt(DEFAULT_MERCHANT_IMAGE)
+                  .width(72).height(72).objectFit(ImageFit.Cover).borderRadius(BORDER_RADIUS.MD)
+                Button(this.newStoreImage === '' ? '＋ 上传照片' : '更换照片')
+                  .fontSize(FONT_SIZE.SM).height(36).borderRadius(BORDER_RADIUS.MD)
+                  .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.MERCHANT)
+                  .onClick(() => { this.pickStoreImage(true) })
+              }
+              .width('100%').alignItems(VerticalAlign.Center)
+            }
             Row({ space: SPACING.MD }) {
               Column({ space: SPACING.XS }) {
                 Text('配送费（元）')
@@ -557,6 +612,20 @@ export struct MerchantCenterPage {
                 .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
               TextInput({ placeholder: '请输入店铺公告，如：本店支持免配送费', text: this.editStoreNotice })
                 .width('100%').height(44).onChange((v: string) => { this.editStoreNotice = v })
+            }
+            Column({ space: SPACING.XS }) {
+              Text('店铺照片（选填，展示在用户端店铺详情页，方便顾客找到门店）')
+                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+              Row({ space: SPACING.MD }) {
+                Image(merchantImageSource(this.editStoreImage))
+                  .alt(DEFAULT_MERCHANT_IMAGE)
+                  .width(72).height(72).objectFit(ImageFit.Cover).borderRadius(BORDER_RADIUS.MD)
+                Button(this.editStoreImage === '' ? '＋ 上传照片' : '更换照片')
+                  .fontSize(FONT_SIZE.SM).height(36).borderRadius(BORDER_RADIUS.MD)
+                  .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.MERCHANT)
+                  .onClick(() => { this.pickStoreImage(false) })
+              }
+              .width('100%').alignItems(VerticalAlign.Center)
             }
             Row({ space: SPACING.MD }) {
               Column({ space: SPACING.XS }) {
@@ -850,7 +919,7 @@ export struct MerchantCenterPage {
       longitude = location.longitude
     }
     const created: StoreItem | null = await createMerchantStoreApi(name, 1, fee, minOrder, '30分钟',
-      this.newStoreNotice.trim() || '欢迎光临', address, latitude, longitude)
+      this.newStoreNotice.trim() || '欢迎光临', address, latitude, longitude, this.newStoreImage)
     if (created === null) {
       this.creatingStore = false
       promptAction.showToast({ message: '创建失败，请检查网络或登录状态' })
@@ -858,6 +927,7 @@ export struct MerchantCenterPage {
     }
     this.newStoreName = ''
     this.newStoreNotice = ''
+    this.newStoreImage = ''
     this.newStoreAddressId = 0
     this.newStoreAddressIndex = -1
     this.showAddStore = false
@@ -872,6 +942,7 @@ export struct MerchantCenterPage {
     this.editStoreNotice = store.notice
     this.editStoreDeliveryFee = store.deliveryFee.toString()
     this.editStoreMinOrder = store.minOrder.toString()
+    this.editStoreImage = store.image ?? ''
     this.editStoreAddressFallbackText = (store.address || '').trim()
     this.editStoreAddressFallbackLatitude = store.latitude ?? 0
     this.editStoreAddressFallbackLongitude = store.longitude ?? 0
@@ -937,7 +1008,8 @@ export struct MerchantCenterPage {
       longitude = location.longitude
     }
     const updated: StoreItem | null = await updateMerchantStoreApi(originalStore.id, name, fee, minOrder,
-      originalStore.deliveryTime, this.editStoreNotice.trim() || '欢迎光临', address, latitude, longitude)
+      originalStore.deliveryTime, this.editStoreNotice.trim() || '欢迎光临', address, latitude, longitude,
+      this.editStoreImage)
     if (updated === null) {
       this.savingStore = false
       promptAction.showToast({ message: '保存失败，请稍后重试' })

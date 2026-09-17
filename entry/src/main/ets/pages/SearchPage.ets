@@ -5,7 +5,7 @@ import { StoreItem } from '../model/Models'
 import { formatSales } from '../common/Constants'
 import { searchStoresRemote } from '../service/AppStorageManager'
 import { getSearchHistory, addSearchHistory, clearSearchHistory } from '../service/PreferencesHelper'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, accentFg, accentIndexFromText } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, accentFg, accentIndexFromText, merchantImageSource, DEFAULT_MERCHANT_IMAGE } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
 
@@ -254,17 +254,23 @@ export struct SearchPage {
   StoreCard(store: StoreItem) {
     Row({ space: SPACING.MD }) {
       // 店铺图片占位
-      Column() {
-        Text(store.name.substring(0, 1))
-          .fontSize(FONT_SIZE.TITLE)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.TEXT_WHITE)
+      if (store.image !== '') {
+        Image(merchantImageSource(store.image))
+          .alt(DEFAULT_MERCHANT_IMAGE)
+          .width(80).height(80).objectFit(ImageFit.Cover).borderRadius(BORDER_RADIUS.MD)
+      } else {
+        Column() {
+          Text(store.name.substring(0, 1))
+            .fontSize(FONT_SIZE.TITLE)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(COLORS.TEXT_WHITE)
+        }
+        .width(80)
+        .height(80)
+        .backgroundColor(accentFg(accentIndexFromText(store.name)))
+        .borderRadius(BORDER_RADIUS.MD)
+        .justifyContent(FlexAlign.Center)
       }
-      .width(80)
-      .height(80)
-      .backgroundColor(accentFg(accentIndexFromText(store.name)))
-      .borderRadius(BORDER_RADIUS.MD)
-      .justifyContent(FlexAlign.Center)
 
       Column({ space: SPACING.XS }) {
         Text(store.name)

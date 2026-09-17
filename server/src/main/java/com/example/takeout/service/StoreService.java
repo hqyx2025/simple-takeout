@@ -304,8 +304,11 @@ public class StoreService {
 
     public Store.StoreView createStore(long ownerId, String name, int categoryId, double deliveryFee,
                                        double minOrder, String deliveryTime, String notice,
-                                       String address, Double latitude, Double longitude, int deliveryRadius) {
+                                       String address, Double latitude, Double longitude, int deliveryRadius,
+                                       String image) {
         String safeName = requireMaxLength(normalizeRequired(name, "店铺名称不能为空"), 128, "店铺名称");
+        // 店铺照片：商户上传后返回的相对地址（/uploads/...），未上传为空串
+        String safeImage = requireMaxLength(image == null ? "" : image, 255, "店铺图片地址");
         validateCategory(categoryId);
         if (!Double.isFinite(deliveryFee) || deliveryFee < 0 || !Double.isFinite(minOrder) || minOrder < 0) {
             throw new BizException("配送费和起送价必须为非负数字");
@@ -318,7 +321,7 @@ public class StoreService {
             throw new BizException("店铺地址定位失败，请重新选择地址");
         }
         String now = LocalDateTime.now().format(FMT);
-        Store store = new Store(0, safeName, "", 4.5, 0, deliveryFee, minOrder,
+        Store store = new Store(0, safeName, safeImage, 4.5, 0, deliveryFee, minOrder,
                 deliveryTime == null || deliveryTime.isBlank() ? "30分钟"
                         : requireMaxLength(deliveryTime, 32, "配送时间"),
                 "0.0km", "[\"新店特惠\"]", requireMaxLength(notice, 512, "店铺公告"),
@@ -345,11 +348,13 @@ public class StoreService {
         Double nextLatitude = patch.address() == null ? store.latitude() : patch.latitude();
         Double nextLongitude = patch.address() == null ? store.longitude() : patch.longitude();
         int nextRadius = patch.deliveryRadius() < 0 ? store.deliveryRadius() : patch.deliveryRadius();
+        String nextImage = patch.image() == null ? store.image()
+                : requireMaxLength(patch.image(), 255, "店铺图片地址");
         if (!nextAddress.isBlank() && !validCoordinates(nextLatitude, nextLongitude)) {
             throw new BizException("店铺地址定位失败，请重新选择地址");
         }
         Store updated = new Store(store.id(), nextName,
-                store.image(), store.rating(), store.monthlySales(),
+                nextImage, store.rating(), store.monthlySales(),
                 patch.deliveryFee() < 0 ? store.deliveryFee() : patch.deliveryFee(),
                 patch.minOrder() < 0 ? store.minOrder() : patch.minOrder(),
                 nextDeliveryTime,
@@ -689,7 +694,7 @@ public class StoreService {
      */
     public record StorePatch(String name, double deliveryFee, double minOrder, String deliveryTime,
                              String notice, String address, Double latitude, Double longitude, int status,
-                             int deliveryRadius) {
+                             int deliveryRadius, String image) {
     }
 
     /**
