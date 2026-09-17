@@ -28,6 +28,48 @@ export function setPrivacyConsent(granted: boolean): void {
   }
 }
 
+// ==================== 页面标识（点击/操作日志上下文） ====================
+// 每条日志都带 [page=...]：只有一处维护页面标识，任一页面的点击/操作日志都能还原"用户在哪个页面做了什么"。
+let currentPage: string = 'unknown'
+let pageResolver: (() => string) | null = null
+
+/** 设置当前页面标识（统一规范成路由状态里的短页名，如 Index、CartPage）。 */
+export function setCurrentPage(page: string): void {
+  if (page === '') {
+    return
+  }
+  // 跳转时拿到的是 'pages/CartPage'，路由状态里是 'CartPage'：统一格式，避免日志里两种写法混用
+  currentPage = page.startsWith('pages/') ? page.substring('pages/'.length) : page
+}
+
+/** 最近一次已知的页面标识。 */
+export function getCurrentPage(): string {
+  return currentPage
+}
+
+/**
+ * 注册"实时页面解析器"（由 UiNavigation 注册，直接读 UIContext 路由状态）。
+ * 每次写日志解析一次：系统返回键、replaceUrl、冷启动都能拿到真实页面；
+ * 解析不到（非 UI 作用域/路由未就绪）时回退到最近一次 setCurrentPage 的值。
+ */
+export function setPageResolver(resolver: () => string): void {
+  pageResolver = resolver
+}
+
+function resolvePageName(): string {
+  if (pageResolver !== null) {
+    try {
+      const resolved: string = pageResolver()
+      if (resolved !== '') {
+        currentPage = resolved
+      }
+    } catch (e) {
+      // 路由未就绪：沿用上一次已知页面
+    }
+  }
+  return currentPage
+}
+
 // 格式化时间 YYYY-MM-DD HH:mm:ss.SSS
 function formatTime(): string {
   const date: Date = new Date()
@@ -165,7 +207,9 @@ function writeToFile(level: string, message: string): void {
 // 通用日志输出（控制台 + 文件）
 function log(level: string, tag: string, message: string): void {
   const safeMessage: string = redactSensitive(message)
-  const full: string = `[${LOG_TAG}][${level}][${tag}] ${safeMessage}`
+  // 每条日志都带当前页面标识，控制台与日志文件格式一致
+  const page: string = resolvePageName()
+  const full: string = `[${LOG_TAG}][${level}][${tag}][page=${page}] ${safeMessage}`
   if (level === 'Error') {
     console.error(full)
   } else if (level === 'Warn') {
@@ -173,7 +217,7 @@ function log(level: string, tag: string, message: string): void {
   } else {
     console.info(full)
   }
-  writeToFile(level, `[${tag}] ${safeMessage}`)
+  writeToFile(level, `[${tag}][page=${page}] ${safeMessage}`)
 }
 
 function redactSensitive(message: string): string {

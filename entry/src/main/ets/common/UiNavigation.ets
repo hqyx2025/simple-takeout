@@ -6,6 +6,7 @@
  */
 import { UIContext } from '@kit.ArkUI'
 import { navigationThrottle } from './NavigationThrottle'
+import { setCurrentPage, setPageResolver } from '../service/AppLogger'
 
 let cachedUiContext: UIContext | undefined = undefined
 
@@ -17,6 +18,27 @@ function resolveUiContext(): UIContext | undefined {
   }
   return cachedUiContext
 }
+
+/**
+ * 读取路由栈顶页面名（如 pages/CartPage）。
+ * 直接读 UIContext 路由状态，因此系统返回键、replaceUrl、冷启动都准确；
+ * 非 UI 作用域或路由未就绪时返回空串，由 AppLogger 回退到上一次已知页面。
+ */
+function readRouterPageName(): string {
+  const context: UIContext | undefined = resolveUiContext()
+  if (context === undefined) {
+    return ''
+  }
+  try {
+    const state = context.getRouter().getState()
+    return state.name ?? ''
+  } catch (_) {
+    return ''
+  }
+}
+
+// 注册给日志服务：每条日志写之前实时解析页面标识（点击/操作日志因此自动带上页面）。
+setPageResolver((): string => readRouterPageName())
 
 export interface RouterOptionsCompat {
   url: string
@@ -38,6 +60,7 @@ export function navigate(url: string): void {
   }
   try {
     context.getRouter().pushUrl({ url })
+    setCurrentPage(url)
   } catch (_) {
     // 页面销毁或路由栈异常时忽略导航请求，避免影响当前页面生命周期。
     navigationThrottle.reset()
@@ -85,6 +108,7 @@ class RouterCompat {
     if (context !== undefined) {
       try {
         context.getRouter().replaceUrl({ url: options.url })
+        setCurrentPage(options.url)
       } catch (_) {
         navigate(options.url)
       }

@@ -3,6 +3,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
 import { loadAllData } from '../service/DataPersistence';
 import { initLogger, setPrivacyConsent, logInfo } from '../service/AppLogger';
+import { registerClickLogging } from '../common/ClickLogger';
 import { User, UserRole } from '../model/Models';
 
 const DOMAIN = 0x0000;
@@ -67,6 +68,12 @@ export default class EntryAbility extends UIAbility {
         return;
       }
       hilog.info(DOMAIN, '测试标签', '内容加载成功。');
+      // 内容就绪后注册全局点击日志：之后每次用户点击都会记录当前页面标识
+      try {
+        registerClickLogging(stage.getMainWindowSync().getUIContext());
+      } catch (e) {
+        hilog.error(DOMAIN, '测试标签', '注册全局点击日志失败：%{public}s', JSON.stringify(e));
+      }
     });
   }
 
