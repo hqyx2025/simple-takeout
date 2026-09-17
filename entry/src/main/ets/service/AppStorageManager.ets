@@ -684,8 +684,8 @@ export async function cancelOrderRemote(orderId: number): Promise<boolean> {
 /**
  * 支付待付款订单：扣余额并流转到待接单，同时刷新订单与账户余额
  */
-export async function payOrderRemote(orderId: number): Promise<Order | null> {
-  const order: Order | null = await payOrderApi(orderId)
+export async function payOrderRemote(orderId: number, channel: string = 'BALANCE'): Promise<Order | null> {
+  const order: Order | null = await payOrderApi(orderId, channel)
   if (order !== null) {
     await syncUserOrdersFromServer()
     await syncCurrentUserFromServer()

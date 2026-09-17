@@ -20,6 +20,15 @@ class RefundReasonOption {
   }
 }
 
+class PayChannelOption {
+  code: string
+  label: string
+  constructor(code: string, label: string) {
+    this.code = code
+    this.label = label
+  }
+}
+
 @Entry
 @Component
 export struct OrderDetailPage {
@@ -36,6 +45,12 @@ export struct OrderDetailPage {
     new RefundReasonOption('WRONG_ITEM', '商品不符'),
     new RefundReasonOption('DONOT_WANT', '不想要了'),
     new RefundReasonOption('OTHER', '其他')
+  ]
+  @State payChannel: string = 'BALANCE'
+  private payChannelOptions: PayChannelOption[] = [
+    new PayChannelOption('BALANCE', '余额支付'),
+    new PayChannelOption('ALIPAY', '支付宝'),
+    new PayChannelOption('WECHAT', '微信支付')
   ]
   orderId: number = 0
   // 骑手配送动画状态
@@ -155,7 +170,7 @@ export struct OrderDetailPage {
       return
     }
     this.paying = true
-    const paid: Order | null = await payOrderRemote(this.order.id)
+    const paid: Order | null = await payOrderRemote(this.order.id, this.payChannel)
     this.paying = false
     if (paid === null) {
       const errorMessage: string = getLastRemoteErrorMessage()
@@ -843,6 +858,21 @@ export struct OrderDetailPage {
     // 可操作状态：0 待付款可支付/取消；1/2/3 可取消（现状口径：用户取消无商家确认、即时退款）；
     // 4 且托管未结算可确认收货；4 已结算后提供再来一单/去评价
     if (this.order!.status >= 0 && this.order!.status <= 4) {
+      if (this.order!.status === 0) {
+        Row({ space: SPACING.SM }) {
+          ForEach(this.payChannelOptions, (opt: PayChannelOption) => {
+            Text(opt.code === 'BALANCE' ? opt.label : `${opt.label}(模拟)`)
+              .fontSize(FONT_SIZE.XS)
+              .fontColor(this.payChannel === opt.code ? COLORS.TEXT_WHITE : COLORS.TEXT_PRIMARY)
+              .backgroundColor(this.payChannel === opt.code ? COLORS.PRIMARY : COLORS.TAG_BG)
+              .padding({ left: SPACING.SM, right: SPACING.SM, top: 4, bottom: 4 })
+              .borderRadius(BORDER_RADIUS.SM)
+              .onClick(() => { this.payChannel = opt.code })
+          }, (opt: PayChannelOption) => opt.code)
+        }
+        .width('100%')
+        .margin({ bottom: SPACING.MD })
+      }
       Row({ space: SPACING.MD }) {
         // 待付款：取消订单（未支付，仅释放库存与优惠券）
         if (this.order!.status === 0) {
