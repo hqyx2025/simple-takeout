@@ -270,6 +270,13 @@ public class StoreDao {
                 .toList();
     }
 
+    /** 单个套餐（含明细），供下单展开。 */
+    public Optional<Setmeal> findSetmeal(long setmealId) {
+        return jdbc.query("SELECT * FROM setmeals WHERE id = ?", SETMEAL_MAPPER, setmealId)
+                .stream().findFirst()
+                .map(s -> s.withItems(listSetmealItems(setmealId)));
+    }
+
     public long insertSetmeal(Setmeal s) {
         jdbc.update("INSERT INTO setmeals(store_id, name, description, price, original_price, image, status, create_time) VALUES(?,?,?,?,?,?,?,?)",
                 s.storeId(), s.name(), s.description(), s.price(), s.originalPrice(), s.image(), s.status(), s.createTime());

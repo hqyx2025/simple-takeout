@@ -3,6 +3,7 @@ package com.example.takeout.controller;
 import com.example.takeout.common.ApiResponse;
 import com.example.takeout.common.BizException;
 import com.example.takeout.model.Order;
+import com.example.takeout.model.SetmealOrder;
 import com.example.takeout.model.RefundRecord;
 import com.example.takeout.model.Review;
 import com.example.takeout.security.LoginRateLimiter;
@@ -46,7 +47,7 @@ public class OrderController {
         orderRateLimiter.recordAttempt("order", "u" + userId);
         return ApiResponse.ok(orderService.createOrder(userId, req.storeId(), req.items(),
                 req.addressId(), req.couponId(), req.remark(), req.checkoutGoodsIds(), req.expectTime(),
-                req.idempotencyKey()));
+                req.idempotencyKey(), req.setmeals()));
     }
 
     @GetMapping("/orders")
@@ -125,7 +126,8 @@ public class OrderController {
 
     public record CreateOrderRequest(long storeId, List<Order.OrderItem> items, long addressId,
                                      long couponId, String remark, List<Long> checkoutGoodsIds,
-                                     String expectTime, String idempotencyKey) {
+                                     String expectTime, String idempotencyKey,
+                                     List<SetmealOrder> setmeals) {
     }
 
     public record ReviewRequest(long goodsId, int rating, String content, List<String> tags,

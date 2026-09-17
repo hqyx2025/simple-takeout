@@ -19,6 +19,9 @@ import com.example.takeout.model.Goods;
 import com.example.takeout.model.GoodsSpec;
 import com.example.takeout.model.Order;
 import com.example.takeout.model.Seckill;
+import com.example.takeout.model.Setmeal;
+import com.example.takeout.model.SetmealItem;
+import com.example.takeout.model.SetmealOrder;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.User;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -126,6 +129,24 @@ class OrderServiceFlowTest {
         verify(storeDao).updateMonthlySales(STORE_ID, 1);
         verify(orderDao).insert(org.mockito.ArgumentMatchers.argThat(o ->
                 o.status() == 0 && o.payTime().isEmpty() && o.payAmount() == 13.0));
+    }
+
+    @Test
+    void setmealOrderExpandsComponentsAndChargesSetmealPrice() {
+        stubCommon(10, 0, 3);
+        when(storeDao.findSetmeal(500)).thenReturn(Optional.of(new Setmeal(500, STORE_ID, "双人套餐", "", 8, 13, "", 1, "",
+                List.of(new SetmealItem(1, 500, GOODS_ID, "组件菜", 1)))));
+        when(orderDao.insert(any(Order.class))).thenReturn(13L);
+        when(orderDao.findById(13)).thenReturn(Optional.of(storedOrder(13, 0, ITEMS, "")));
+
+        service.createOrder(USER_ID, STORE_ID, List.of(), ADDRESS_ID, 0, "", List.of(), "", "",
+                List.of(new SetmealOrder(500, 1)));
+
+        verify(goodsDao).deductStock(GOODS_ID, 1);
+        org.mockito.ArgumentCaptor<Order> captor = org.mockito.ArgumentCaptor.forClass(Order.class);
+        verify(orderDao).insert(captor.capture());
+        assertEquals(8.0, captor.getValue().goodsAmount(), 0.001);
+        assertEquals(11.0, captor.getValue().payAmount(), 0.001);
     }
 
     @Test
@@ -420,14 +441,14 @@ class OrderServiceFlowTest {
         // 同一 token 第二次提交：SET NX 失败 → 拒绝，且不进任何业务校验
         when(ops.setIfAbsent(anyString(), anyString(), any(java.time.Duration.class))).thenReturn(false);
         BizException dup = assertThrows(BizException.class, () -> svc.createOrder(USER_ID, STORE_ID,
-                List.of(item()), ADDRESS_ID, 0, "", List.of(), "", "key-1"));
+                List.of(item()), ADDRESS_ID, 0, "", List.of(), "", "key-1", List.of()));
         assertTrue(dup.getMessage().contains("请勿重复操作"), dup.getMessage());
         verify(orderDao, never()).insert(any(Order.class));
 
         // 首次提交但下单失败（空 items）：占位必须被释放，用户修正后可用同一 token 重试
         when(ops.setIfAbsent(anyString(), anyString(), any(java.time.Duration.class))).thenReturn(true);
         assertThrows(BizException.class, () -> svc.createOrder(USER_ID, STORE_ID,
-                List.of(), ADDRESS_ID, 0, "", List.of(), "", "key-2"));
+                List.of(), ADDRESS_ID, 0, "", List.of(), "", "key-2", List.of()));
         verify(redis).delete("takeout:idempotent:order:" + USER_ID + ":key-2");
     }
 
@@ -440,7 +461,7 @@ class OrderServiceFlowTest {
 
         // 类级 service 的 provider mock 未桩 getIfAvailable → 返回 null，等价 Redis 不可用
         Order.OrderView view = service.createOrder(USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "",
-                List.of(), "", "key-3");
+                List.of(), "", "key-3", List.of());
 
         assertEquals(13, view.id());
     }

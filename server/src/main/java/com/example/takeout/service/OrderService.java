@@ -26,6 +26,9 @@ import com.example.takeout.model.RefundRecord;
 import com.example.takeout.model.Review;
 import com.example.takeout.model.Rider;
 import com.example.takeout.model.Seckill;
+import com.example.takeout.model.Setmeal;
+import com.example.takeout.model.SetmealItem;
+import com.example.takeout.model.SetmealOrder;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.User;
 import com.example.takeout.service.mq.DomainEventPublisher;
@@ -139,7 +142,7 @@ public class OrderService {
     public Order.OrderView createOrder(long userId, long storeId, List<Order.OrderItem> items,
                                        long addressId, long couponId, String remark,
                                        List<Long> checkoutGoodsIds, String expectTime) {
-        return createOrder(userId, storeId, items, addressId, couponId, remark, checkoutGoodsIds, expectTime, "");
+        return createOrder(userId, storeId, items, addressId, couponId, remark, checkoutGoodsIds, expectTime, "", List.of());
     }
 
     /**
@@ -152,7 +155,7 @@ public class OrderService {
     public Order.OrderView createOrder(long userId, long storeId, List<Order.OrderItem> items,
                                        long addressId, long couponId, String remark,
                                        List<Long> checkoutGoodsIds, String expectTime,
-                                       String idempotencyKey) {
+                                       String idempotencyKey, List<SetmealOrder> setmeals) {
         StringRedisTemplate redis = null;
         String redisKey = null;
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -166,7 +169,7 @@ public class OrderService {
             }
         }
         try {
-            return doCreateOrder(userId, storeId, items, addressId, couponId, remark, checkoutGoodsIds, expectTime);
+            return doCreateOrder(userId, storeId, items, addressId, couponId, remark, checkoutGoodsIds, expectTime, setmeals);
         } catch (RuntimeException e) {
             if (redisKey != null) {
                 try {
@@ -181,8 +184,11 @@ public class OrderService {
 
     private Order.OrderView doCreateOrder(long userId, long storeId, List<Order.OrderItem> items,
                                           long addressId, long couponId, String remark,
-                                          List<Long> checkoutGoodsIds, String expectTime) {
-        if (items == null || items.isEmpty()) {
+                                          List<Long> checkoutGoodsIds, String expectTime,
+                                          List<SetmealOrder> setmeals) {
+        List<Order.OrderItem> orderItems = items == null ? List.of() : items;
+        List<SetmealOrder> setmealOrders = setmeals == null ? List.of() : setmeals;
+        if (orderItems.isEmpty() && setmealOrders.isEmpty()) {
             throw new BizException("订单商品不能为空");
         }
         Store store = storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
@@ -203,7 +209,7 @@ public class OrderService {
         double goodsAmount = 0;
         List<Order.OrderItem> normalizedItems = new ArrayList<>();
         List<StockHold> holds = new ArrayList<>();
-        for (Order.OrderItem item : items) {
+        for (Order.OrderItem item : orderItems) {
             if (item == null || item.quantity() <= 0) {
                 throw new BizException("商品数量必须大于 0");
             }
@@ -234,6 +240,30 @@ public class OrderService {
             normalizedItems.add(new Order.OrderItem(goods.id(), goods.name(), unitPrice, item.quantity(),
                     goods.image(), spec == null ? 0 : spec.id(), spec == null ? "" : spec.name(), seckillId));
             holds.add(new StockHold(goods.id(), spec == null ? 0 : spec.id(), item.quantity(), seckillId));
+        }
+        // 套餐（组合购）：展开为组件商品行，组件价按套餐价等比分配，组件库存照常扣减/取消回滚
+        for (SetmealOrder so : setmealOrders) {
+            if (so.quantity() <= 0) {
+                throw new BizException("套餐数量必须大于 0");
+            }
+            Setmeal setmeal = storeDao.findSetmeal(so.setmealId()).orElseThrow(() -> new BizException("套餐不存在"));
+            if (setmeal.storeId() != storeId) {
+                throw new BizException("套餐不属于该店铺");
+            }
+            if (setmeal.status() != 1) {
+                throw new BizException("套餐已下架");
+            }
+            int totalQty = setmeal.items().stream().mapToInt(SetmealItem::quantity).sum();
+            if (setmeal.items().isEmpty() || totalQty <= 0) {
+                throw new BizException("套餐配置错误，请联系商家");
+            }
+            goodsAmount += setmeal.price() * so.quantity();
+            double componentPrice = setmeal.price() / totalQty;
+            for (SetmealItem si : setmeal.items()) {
+                int qty = si.quantity() * so.quantity();
+                normalizedItems.add(new Order.OrderItem(si.goodsId(), si.goodsName(), componentPrice, qty, "", 0, "", 0));
+                holds.add(new StockHold(si.goodsId(), 0, qty, 0));
+            }
         }
         goodsAmount = round2(goodsAmount);
         double checkoutGoodsAmount = resolveCheckoutGoodsAmount(userId, storeId, checkoutGoodsIds, goodsAmount);
