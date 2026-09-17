@@ -20,7 +20,7 @@ param(
   [switch]$SkipInstall,
   [long]$StoreId = 1,
   [long]$GoodsId = 7,
-  [long]$AddressId = 27,
+  [long]$AddressId = 1,
   [string]$ApiBase = 'http://127.0.0.1:9000',
   [string]$Bundle = 'com.example.jiandanwaimai',
   [string]$Ability = 'EntryAbility'

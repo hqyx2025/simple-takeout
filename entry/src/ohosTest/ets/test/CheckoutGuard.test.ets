@@ -10,13 +10,21 @@
  */
 import { Driver, ON } from '@kit.TestKit'
 import { describe, it, expect } from '@ohos/hypium'
-import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText } from './UiTestHelper'
+import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, waitAny } from './UiTestHelper'
 
 export default function checkoutGuardTest() {
   describe('CheckoutGuard', () => {
     it('CheckoutGuard_cart_entry_reaches_checkout_page', 0, async () => {
       const driver: Driver = Driver.create()
       await launchAppUnderTest(driver)
+      const consent = await waitAny(driver, ['privacy-accept'], 8000)
+      if (isFound(consent)) {
+        await clickByIdOrText(driver, 'privacy-accept', '同意并继续')
+        await driver.delayMs(2000)
+      }
+      // 测试环境快捷登录：触发登录页 UI 登录后跳首页（loginRemote 只写登录态不跳页，会卡在登录页）
+      expect(await clickByIdOrText(driver, 'quick-login-user', '一键登录用户')).assertTrue()
+      await driver.delayMs(3000)
 
       // 购物车已收敛为底部 Tab（tab-2），不再是「我的」页里的购物车行
       expect(await clickByIdOrText(driver, 'tab-2', '购物车')).assertTrue()

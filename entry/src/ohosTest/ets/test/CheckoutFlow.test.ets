@@ -3,21 +3,21 @@
  *
  * 固定前置（由 scripts/device-checkout-regression.ps1 在跑用例前用后端接口布置）：
  *   - 已登录用户 13800138000；
- *   - 购物车只有一行：goodsId=282 / specId=0 / 数量 1（¥6.82，店铺 storeId=10，起送价 ¥17）。
+ *   - 购物车只有一行：goodsId=40 / specId=0 / 数量 1（¥6.53，店铺 storeId=2，起送价 ¥17）。
  *
  * 断言链（每一步都拿可核对的数字，不写"看起来正常"）：
- *   1. 购物车 Tab：凑单提示必须是「还差 ¥10.18 起送」、行数量为 1；
- *   2. 去结算：结算页实付必须是 ¥9.82（6.82 商品 + 3.00 配送费）；
+ *   1. 购物车 Tab：凑单提示必须是「还差 ¥10.47 起送」、行数量为 1；
+ *   2. 去结算：结算页实付必须是 ¥9.53（6.53 商品 + 3.00 配送费）；
  *   3. 低于起送价点「提交订单」：起送价以服务端为唯一权威（§11），服务端返回 400 并弹
  *      「提交订单失败」对话框（无订单产生、仍在结算页，不会跳到订单详情）；
  *      对应的服务端断言（POST /api/orders 共 2 次 = 拒绝 1 + 成功 1）由 host 脚本用 hilog 计数核对；
- *   4. 购物车 +2 件（数量 1→3，¥20.46 ≥ ¥17）：凑单提示必须消失；
+ *   4. 购物车 +2 件（数量 1→3，¥19.59 ≥ ¥17）：凑单提示必须消失；
  *   5. 再次提交：必须跳转订单详情、状态文案为「待付款」、出现「立即支付」按钮；
  *      对应服务端断言（多出恰好 1 笔 status=0 订单、余额不变、库存 −3）由 host 脚本核对。
  */
 import { Driver, ON, Component } from '@kit.TestKit'
 import { describe, it, expect } from '@ohos/hypium'
-import { isFound, requireComponent, launchAppUnderTest, findByIdOrText, clickByIdOrText } from './UiTestHelper'
+import { isFound, requireComponent, launchAppUnderTest, findByIdOrText, clickByIdOrText, waitAny } from './UiTestHelper'
 
 export default function checkoutFlowTest() {
   describe('CheckoutFlow', () => {
@@ -25,23 +25,34 @@ export default function checkoutFlowTest() {
       const driver: Driver = Driver.create()
       // 必须先把应用拉到前台：aa test 会把测试 Ability 的 Hello World 页盖在最上面
       await launchAppUnderTest(driver)
+      const consent = await waitAny(driver, ['privacy-accept'], 8000)
+      if (isFound(consent)) {
+        await clickByIdOrText(driver, 'privacy-accept', '同意并继续')
+        await driver.delayMs(2000)
+      }
+      // 若仍在登录页（本次会话首登）点快捷登录跳首页；已登录（前序用例落盘）则已在首页无需登录
+      const loginBtn = await waitAny(driver, ['quick-login-user'], 5000)
+      if (isFound(loginBtn)) {
+        expect(await clickByIdOrText(driver, 'quick-login-user', '一键登录用户')).assertTrue()
+        await driver.delayMs(3000)
+      }
 
       // ---------- 1. 购物车 Tab（已收敛为底部 tab-2，不再是「我的」页购物车行） ----------
       expect(await clickByIdOrText(driver, 'tab-2', '购物车')).assertTrue()
       await driver.delayMs(2500)
 
-      // ---------- 2. 购物车：凑单提示「还差 ¥10.18 起送」+ 行数量 1 ----------
+      // ---------- 2. 购物车：凑单提示「还差 ¥10.47 起送」+ 行数量 1 ----------
       const gapTip: Component = requireComponent(
         await driver.findComponent(ON.id('cart-bundle-gap')), 'cart-bundle-gap')
       const gapText: string = await gapTip.getText()
       console.info('[CheckoutFlow] gap tip = ' + gapText)
-      expect(gapText).assertEqual('还差 ¥10.18 起送')
+      expect(gapText).assertEqual('还差 ¥10.47 起送')
 
       const qtyBefore: Component = requireComponent(
-        await driver.findComponent(ON.id('cart-qty-282-0')), 'cart-qty-282-0')
+        await driver.findComponent(ON.id('cart-qty-40-0')), 'cart-qty-40-0')
       expect(await qtyBefore.getText()).assertEqual('1')
 
-      // ---------- 3. 去结算：实付 ¥9.82 ----------
+      // ---------- 3. 去结算：实付 ¥9.53 ----------
       expect(await clickByIdOrText(driver, 'cart-checkout', '去结算')).assertTrue()
       await driver.delayMs(2500)
 
@@ -49,7 +60,7 @@ export default function checkoutFlowTest() {
         await driver.findComponent(ON.id('checkout-pay-amount')), 'checkout-pay-amount')
       const payAmountLow: string = await payAmountComp.getText()
       console.info('[CheckoutFlow] pay amount (below min order) = ' + payAmountLow)
-      expect(payAmountLow).assertEqual('¥9.82')
+      expect(payAmountLow).assertEqual('¥9.53')
 
       // ---------- 4. 负路径：低于起送价提交 → 服务端 400 拒绝 + 「提交订单失败」对话框，无订单产生 ----------
       expect(await clickByIdOrText(driver, 'checkout-submit', '提交订单')).assertTrue()
@@ -71,13 +82,13 @@ export default function checkoutFlowTest() {
       await driver.delayMs(2500)
 
       // 每次点击都重新查找：行子树会随 cartRenderVersion 重建，旧句柄点第二次必然失效
-      expect(await clickByIdOrText(driver, 'cart-plus-282-0', '+')).assertTrue()
+      expect(await clickByIdOrText(driver, 'cart-plus-40-0', '+')).assertTrue()
       await driver.delayMs(2000)
-      expect(await clickByIdOrText(driver, 'cart-plus-282-0', '+')).assertTrue()
+      expect(await clickByIdOrText(driver, 'cart-plus-40-0', '+')).assertTrue()
       await driver.delayMs(2500)
 
       const qtyAfter: Component = requireComponent(
-        await driver.findComponent(ON.id('cart-qty-282-0')), 'cart-qty-282-0(after)')
+        await driver.findComponent(ON.id('cart-qty-40-0')), 'cart-qty-40-0(after)')
       const qtyText: string = await qtyAfter.getText()
       console.info('[CheckoutFlow] cart qty after +2 = ' + qtyText)
       expect(qtyText).assertEqual('3')
@@ -92,7 +103,7 @@ export default function checkoutFlowTest() {
       const payAmountComp2 = await driver.findComponent(ON.id('checkout-pay-amount'))
       const payAmountHigh: string = isFound(payAmountComp2) ? await payAmountComp2.getText() : ''
       console.info('[CheckoutFlow] pay amount (above min order) = ' + payAmountHigh)
-      expect(payAmountHigh).assertEqual('¥23.46')
+      expect(payAmountHigh).assertEqual('¥22.59')
 
       expect(await clickByIdOrText(driver, 'checkout-submit', '提交订单')).assertTrue()
 

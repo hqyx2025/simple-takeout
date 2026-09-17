@@ -24,7 +24,7 @@ param(
   [switch]$SkipInstall,
   [long]$StoreId = 1,
   [long]$GoodsId = 7,
-  [long]$AddressId = 27,
+  [long]$AddressId = 1,
   [string]$TestClass = 'ReviewFlow',
   [string]$ApiBase = 'http://127.0.0.1:9000',
   [string]$Bundle = 'com.example.jiandanwaimai',
@@ -80,6 +80,8 @@ $userLogin = Login '13800138000'
 $userToken = $userLogin.data.token
 $merchantLogin = Login '13600136000'
 $merchantToken = $merchantLogin.data.token
+$riderLogin = Login '13300133000'
+$riderToken = $riderLogin.data.token
 Write-Host ("  user balance before = {0}" -f $userLogin.data.user.balance)
 
 # 每次跑都要 pay 一笔，余额会持续减少（订单不会自动退款）；先测试充值保证 pay 不会因余额不足 400
@@ -96,10 +98,12 @@ Write-Host ("  order created id={0} status={1} payAmount={2}" -f $orderId, $crea
 
 $paid = (Invoke-Api 'POST' "/api/orders/$orderId/pay" $userToken '').data
 Write-Host ("  paid -> status={0}" -f $paid.status)
-foreach ($action in @('accept', 'deliver', 'complete')) {
-  $flow = (Invoke-Api 'PUT' "/api/merchant/orders/$orderId/$action" $merchantToken '').data
-  Write-Host ("  merchant {0} -> status={1}" -f $action, $flow.status)
-}
+Invoke-Api 'PUT' "/api/merchant/orders/$orderId/accept" $merchantToken '' | Out-Null
+Invoke-Api 'PUT' "/api/merchant/orders/$orderId/ready" $merchantToken '' | Out-Null
+Invoke-Api 'PUT' '/api/rider/status' $riderToken '{"online":1}' | Out-Null
+Invoke-Api 'POST' "/api/rider/orders/$orderId/grab" $riderToken '' | Out-Null
+Invoke-Api 'PUT' "/api/rider/orders/$orderId/pickup" $riderToken '' | Out-Null
+Invoke-Api 'PUT' "/api/rider/orders/$orderId/deliver" $riderToken '' | Out-Null
 $confirmed = (Invoke-Api 'PUT' "/api/orders/$orderId/confirm" $userToken '').data
 Write-Host ("  user confirm -> status={0} escrow={1} reviewed={2}" -f $confirmed.status, $confirmed.escrowStatus, $confirmed.reviewed)
 
@@ -163,24 +167,8 @@ Write-Host ("  app log lines containing 'upload' = {0}" -f $appUploadLogs)
 
 # ---------- 6. host-side checks ----------
 Write-Host '=== [6/6] host-side checks ===' -ForegroundColor Cyan
-$uploadsAfter = Count-Uploads
-$newest = $null
-if (Test-Path $uploadDir) {
-  $newest = Get-ChildItem $uploadDir -Recurse -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-}
-Check 'upload-file-created' ($uploadsAfter -eq $uploadsBefore + 1) ("uploads {0} -> {1}" -f $uploadsBefore, $uploadsAfter)
-if ($null -ne $newest) {
-  Write-Host ("  newest upload: {0} ({1} bytes)" -f $newest.FullName, $newest.Length)
-  Check 'upload-file-non-empty' ($newest.Length -gt 0) ("{0} bytes" -f $newest.Length)
-  $rel = $newest.FullName.Substring($uploadDir.Length).Replace('\', '/')
-  $url = "$ApiBase/uploads$rel"
-  try {
-    $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 15
-    Check 'upload-url-reachable' ($resp.StatusCode -eq 200 -and $resp.RawContentLength -gt 0) ("GET {0} -> {1}, {2} bytes" -f $url, $resp.StatusCode, $resp.RawContentLength)
-  } catch {
-    Check 'upload-url-reachable' $false ("GET {0} failed: {1}" -f $url, $_.Exception.Message)
-  }
-}
+# 图片上传结果改由 review 返回的 image url 判定（后面的 review-image-url-ok），
+# 不再依赖 host 侧 uploads 目录：docker 部署下该目录是容器命名卷 uploads-data，与宿主本机目录不互通。
 
 $orderAfter = (Invoke-Api 'GET' "/api/orders/$orderId" $userToken '').data
 Check 'order-marked-reviewed' ([int]$orderAfter.reviewed -eq 1) ("order {0} reviewed={1}" -f $orderId, $orderAfter.reviewed)

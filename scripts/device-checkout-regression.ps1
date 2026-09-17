@@ -1,4 +1,4 @@
-﻿ <#
+ <#
 .SYNOPSIS
   Device regression driver for the checkout flow: min-order guard (negative path) + pending-payment order (positive path).
 
@@ -6,11 +6,11 @@
   Prepares a fixed fixture through the backend API, runs the on-device UiTest class CheckoutFlow,
   then prints host-side numbers for every claim the case makes:
 
-    fixture   cart contains exactly one row: goodsId 282 / specId 0 / qty 1 (6.82 yuan, storeId 10, minOrder 17)
-    expected  pay amounts 9.82 (below min order) and 23.46 (qty 3, above min order)
+    fixture   cart contains exactly one row: goodsId 40 / specId 0 / qty 1 (6.53 yuan, storeId 2, minOrder 17)
+    expected  pay amounts 9.53 (below min order) and 22.59 (qty 3, above min order)
     checks    app-side POST /api/orders count >= 1 (exact 2 unobservable under hilog flood;
               min-order is server-authoritative per AGENTS.md section 11, below-min submit is rejected 400),
-              exactly one new order, status == 0 (pending payment), payAmount == 23.46,
+              exactly one new order, status == 0 (pending payment), payAmount == 22.59,
               balance unchanged (creation does not debit), goods stock -3, cart emptied
 
   Deliberately avoids the traps listed in section 8 of md/设备实测进展与待办.md:
@@ -31,7 +31,7 @@ param(
   [switch]$SkipInstall,
   # Also run the CheckoutGuard class first (cart entry -> checkout page contract) with the same fixture.
   [switch]$WithGuard,
-  [int]$GoodsId = 282,
+  [int]$GoodsId = 40,
   [int]$SpecId = 0,
   [string]$TestClass = 'CheckoutFlow',
   [string]$ApiBase = 'http://127.0.0.1:9000',
@@ -212,8 +212,8 @@ Write-Host ("  after: orders={0} balance={1} goods{2} stock={3} cartRows={4}" -f
 Check 'exactly-one-new-order' ($ordersAfter.Count -eq $ordersBefore + 1) `
   ("orders {0} -> {1}" -f $ordersBefore, $ordersAfter.Count)
 Check 'new-order-pending-payment' ([int]$newOrder.status -eq 0) ("status={0} (0 = pending payment)" -f $newOrder.status)
-Check 'new-order-pay-amount' ([math]::Abs([double]$newOrder.payAmount - 23.46) -lt 0.005) `
-  ("payAmount={0} (expected 23.46 = 6.82*3 + 3.00 delivery)" -f $newOrder.payAmount)
+Check 'new-order-pay-amount' ([math]::Abs([double]$newOrder.payAmount - 22.59) -lt 0.005) `
+  ("payAmount={0} (expected 22.59 = 6.53*3 + 3.00 delivery)" -f $newOrder.payAmount)
 Check 'balance-unchanged-on-create' ([math]::Abs($balanceAfter - $balanceBefore) -lt 0.005) `
   ("balance {0} -> {1} (order creation must not debit)" -f $balanceBefore, $balanceAfter)
 Check 'stock-decremented-by-3' (($stockBefore - $stockAfter) -eq 3) `

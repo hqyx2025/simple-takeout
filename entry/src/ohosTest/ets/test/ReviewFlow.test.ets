@@ -24,8 +24,8 @@
 import { Driver, ON, Component, abilityDelegatorRegistry } from '@kit.TestKit'
 import { fileIo } from '@kit.CoreFileKit'
 import { describe, it, expect } from '@ohos/hypium'
-import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, scrollToIdOrText, scrollUntilVisible, clickComponentCenter, logComponentsAt } from './UiTestHelper'
-import { loginRemote, syncUserOrdersFromServer, uploadReviewImageRemote, submitReviewRemote, syncStoreReviewsRemote } from '../../../main/ets/service/AppStorageManager'
+import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, scrollToIdOrText, scrollUntilVisible, clickComponentCenter, logComponentsAt, waitAny } from './UiTestHelper'
+import { syncUserOrdersFromServer, uploadReviewImageRemote, submitReviewRemote, syncStoreReviewsRemote } from '../../../main/ets/service/AppStorageManager'
 import { Order } from '../../../main/ets/model/Models'
 
 /** 店铺 1 在搜索结果里的店铺名（用于兜底文案匹配）。 */
@@ -80,9 +80,19 @@ export default function reviewFlowTest() {
     it('ReviewFlow_contract_upload_submit_render_preview', 0, async () => {
       const driver: Driver = Driver.create()
       await launchAppUnderTest(driver)
+      const consent = await waitAny(driver, ['privacy-accept'], 8000)
+      if (isFound(consent)) {
+        await clickByIdOrText(driver, 'privacy-accept', '同意并继续')
+        await driver.delayMs(2000)
+      }
+      // 若仍在登录页（本次首登）点快捷登录跳首页；已登录则已在首页
+      const loginBtn = await waitAny(driver, ['quick-login-user'], 5000)
+      if (isFound(loginBtn)) {
+        expect(await clickByIdOrText(driver, 'quick-login-user', '一键登录用户')).assertTrue()
+        await driver.delayMs(3000)
+      }
 
       // ---------- 1. 用应用自身数据找到可评价订单，并从界面走到评价页 ----------
-      await loginRemote('13800138000', '123456')
       const order: Order | null = await findReviewableOrder()
       expect(order !== null).assertTrue()
       if (order === null) {
