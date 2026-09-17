@@ -6,6 +6,7 @@ import com.example.takeout.model.Goods;
 import com.example.takeout.model.GoodsSpec;
 import com.example.takeout.model.MarketingActivity;
 import com.example.takeout.model.Seckill;
+import com.example.takeout.model.Setmeal;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.SpecialGoods;
 import com.example.takeout.service.StoreService;
@@ -52,6 +53,38 @@ public class StoreController {
     @GetMapping("/stores/{storeId}/activities")
     public ApiResponse<List<MarketingActivity>> storeActivities(@PathVariable long storeId) {
         return ApiResponse.ok(storeService.listStoreActivities(storeId));
+    }
+
+    @GetMapping("/stores/{storeId}/setmeals")
+    public ApiResponse<List<Setmeal>> storeSetmeals(@PathVariable long storeId) {
+        return ApiResponse.ok(storeService.listStoreSetmeals(storeId));
+    }
+
+    @GetMapping("/merchant/setmeals")
+    public ApiResponse<List<Setmeal>> merchantSetmeals(@RequestAttribute("userId") long userId,
+                                                       @RequestAttribute("role") int role,
+                                                       @RequestParam long storeId) {
+        requireMerchant(role);
+        return ApiResponse.ok(storeService.listMerchantSetmeals(userId, storeId));
+    }
+
+    @PostMapping("/merchant/setmeals")
+    public ApiResponse<Setmeal> createSetmeal(@RequestAttribute("userId") long userId,
+                                              @RequestAttribute("role") int role,
+                                              @RequestParam long storeId,
+                                              @RequestBody StoreService.SetmealInput input) {
+        requireMerchant(role);
+        return ApiResponse.ok(storeService.createSetmeal(userId, storeId, input));
+    }
+
+    @DeleteMapping("/merchant/setmeals/{setmealId}")
+    public ApiResponse<Void> deleteSetmeal(@RequestAttribute("userId") long userId,
+                                           @RequestAttribute("role") int role,
+                                           @RequestParam long storeId,
+                                           @PathVariable long setmealId) {
+        requireMerchant(role);
+        storeService.deleteMerchantSetmeal(userId, storeId, setmealId);
+        return ApiResponse.ok();
     }
 
     @GetMapping("/stores")

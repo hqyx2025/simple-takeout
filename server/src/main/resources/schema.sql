@@ -166,6 +166,29 @@ CREATE TABLE IF NOT EXISTS marketing_activities (
     KEY idx_mkt_store (store_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 套餐与组合购：套餐头 + 套餐明细（组件商品）
+CREATE TABLE IF NOT EXISTS setmeals (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    store_id BIGINT NOT NULL,
+    name VARCHAR(128) NOT NULL,
+    description VARCHAR(512) DEFAULT '',
+    price DECIMAL(10,2) NOT NULL DEFAULT 0,
+    original_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+    image VARCHAR(255) DEFAULT '',
+    status INT NOT NULL DEFAULT 1,
+    create_time VARCHAR(32) NOT NULL,
+    KEY idx_setmeal_store (store_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS setmeal_items (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    setmeal_id BIGINT NOT NULL,
+    goods_id BIGINT NOT NULL,
+    goods_name VARCHAR(128) NOT NULL,
+    quantity INT NOT NULL DEFAULT 1,
+    KEY idx_setmeal_item_setmeal (setmeal_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS reviews (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     order_id BIGINT NOT NULL DEFAULT 0,

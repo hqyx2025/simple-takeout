@@ -614,6 +614,7 @@ public class DataSeeder implements ApplicationRunner {
         seedDemoSpecs();
         seedDemoSeckills();
         seedMarketingActivities();
+        seedSetmeals();
     }
 
     /** 营销活动演示数据：第一家营业店铺 全套（8折/新客立减3/满50赠招牌菜），幂等。 */
@@ -644,6 +645,47 @@ public class DataSeeder implements ApplicationRunner {
                                          double reduce, double threshold, long gift, String start, String end) {
         jdbc.update("INSERT INTO marketing_activities(store_id, type, title, discount_rate, reduce_amount, threshold, gift_goods_id, start_time, end_time, status, create_time) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                 storeId, type, title, rate, reduce, threshold, gift, start, end, 1, start);
+    }
+
+    /** 套餐演示数据：第一家营业店铺用前两件商品组一个「双人套餐」，幂等。 */
+    private void seedSetmeals() {
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM setmeals", Integer.class);
+        if (count != null && count > 0) {
+            return;
+        }
+        List<java.util.Map<String, Object>> stores = jdbc.queryForList(
+                "SELECT id FROM stores WHERE status = 1 ORDER BY id LIMIT 1");
+        if (stores.isEmpty()) {
+            return;
+        }
+        long storeId = ((Number) stores.get(0).get("id")).longValue();
+        List<java.util.Map<String, Object>> goods = jdbc.queryForList(
+                "SELECT id, name, price, image FROM goods WHERE store_id = ? AND status = 1 ORDER BY id LIMIT 2", storeId);
+        if (goods.size() < 2) {
+            return;
+        }
+        long g0 = ((Number) goods.get(0).get("id")).longValue();
+        long g1 = ((Number) goods.get(1).get("id")).longValue();
+        double p0 = ((Number) goods.get(0).get("price")).doubleValue();
+        double p1 = ((Number) goods.get(1).get("price")).doubleValue();
+        String img = (String) goods.get(0).get("image");
+        String now = now();
+        long setId = insertSetmealHeader(storeId, "超值双人套餐", "招牌组合，两份更划算",
+                round2(p0 + p1 - 3), round2(p0 + p1), img, now);
+        insertSetmealItemRow(setId, g0, (String) goods.get(0).get("name"), 1);
+        insertSetmealItemRow(setId, g1, (String) goods.get(1).get("name"), 1);
+        log.info("已为店铺 {} 补充套餐演示数据（setmeal_id={}）", storeId, setId);
+    }
+
+    private long insertSetmealHeader(long storeId, String name, String desc, double price, double orig, String img, String now) {
+        jdbc.update("INSERT INTO setmeals(store_id, name, description, price, original_price, image, status, create_time) VALUES(?,?,?,?,?,?,1,?)",
+                storeId, name, desc, price, orig, img, now);
+        return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+    }
+
+    private void insertSetmealItemRow(long setmealId, long goodsId, String name, int qty) {
+        jdbc.update("INSERT INTO setmeal_items(setmeal_id, goods_id, goods_name, quantity) VALUES(?,?,?,?)",
+                setmealId, goodsId, name, qty);
     }
 
     /** 为 3 个招牌商品补「标准份/大份/双人份」规格，用于演示多规格点单。 */

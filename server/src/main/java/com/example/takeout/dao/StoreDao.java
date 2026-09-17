@@ -2,6 +2,8 @@ package com.example.takeout.dao;
 
 import com.example.takeout.model.Category;
 import com.example.takeout.model.MarketingActivity;
+import com.example.takeout.model.Setmeal;
+import com.example.takeout.model.SetmealItem;
 import com.example.takeout.model.Store;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -53,6 +55,27 @@ public class StoreDao {
             rs.getString("end_time"),
             rs.getInt("status"),
             rs.getString("create_time")
+    );
+
+    private static final RowMapper<Setmeal> SETMEAL_MAPPER = (rs, i) -> new Setmeal(
+            rs.getLong("id"),
+            rs.getLong("store_id"),
+            rs.getString("name"),
+            rs.getString("description"),
+            rs.getDouble("price"),
+            rs.getDouble("original_price"),
+            rs.getString("image"),
+            rs.getInt("status"),
+            rs.getString("create_time"),
+            List.of()
+    );
+
+    private static final RowMapper<SetmealItem> SETMEAL_ITEM_MAPPER = (rs, i) -> new SetmealItem(
+            rs.getLong("id"),
+            rs.getLong("setmeal_id"),
+            rs.getLong("goods_id"),
+            rs.getString("goods_name"),
+            rs.getInt("quantity")
     );
 
     private static final RowMapper<Category> CATEGORY_MAPPER = (rs, i) -> new Category(
@@ -235,5 +258,35 @@ public class StoreDao {
                 a.storeId(), a.type(), a.title(), a.discountRate(), a.reduceAmount(), a.threshold(),
                 a.giftGoodsId(), a.startTime(), a.endTime(), a.status(), a.createTime());
         return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+    }
+
+    // ============ 套餐与组合购 ============
+
+    /** 套餐列表（activeOnly=true 只返上架套餐；items 逐套餐补齐，店铺套餐量级小）。 */
+    public List<Setmeal> listSetmealsByStore(long storeId, boolean activeOnly) {
+        String sql = "SELECT * FROM setmeals WHERE store_id = ?" + (activeOnly ? " AND status = 1" : "") + " ORDER BY id DESC";
+        return jdbc.query(sql, SETMEAL_MAPPER, storeId).stream()
+                .map(s -> s.withItems(listSetmealItems(s.id())))
+                .toList();
+    }
+
+    public long insertSetmeal(Setmeal s) {
+        jdbc.update("INSERT INTO setmeals(store_id, name, description, price, original_price, image, status, create_time) VALUES(?,?,?,?,?,?,?,?)",
+                s.storeId(), s.name(), s.description(), s.price(), s.originalPrice(), s.image(), s.status(), s.createTime());
+        long id = jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+        for (SetmealItem item : s.items()) {
+            jdbc.update("INSERT INTO setmeal_items(setmeal_id, goods_id, goods_name, quantity) VALUES(?,?,?,?)",
+                    id, item.goodsId(), item.goodsName(), item.quantity());
+        }
+        return id;
+    }
+
+    public void deleteSetmeal(long setmealId) {
+        jdbc.update("DELETE FROM setmeal_items WHERE setmeal_id = ?", setmealId);
+        jdbc.update("DELETE FROM setmeals WHERE id = ?", setmealId);
+    }
+
+    private List<SetmealItem> listSetmealItems(long setmealId) {
+        return jdbc.query("SELECT * FROM setmeal_items WHERE setmeal_id = ? ORDER BY id", SETMEAL_ITEM_MAPPER, setmealId);
     }
 }

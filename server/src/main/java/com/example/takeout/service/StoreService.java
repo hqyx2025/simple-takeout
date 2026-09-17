@@ -10,6 +10,8 @@ import com.example.takeout.model.Goods;
 import com.example.takeout.model.GoodsSpec;
 import com.example.takeout.model.MarketingActivity;
 import com.example.takeout.model.Seckill;
+import com.example.takeout.model.Setmeal;
+import com.example.takeout.model.SetmealItem;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.SpecialGoods;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -58,6 +60,49 @@ public class StoreService {
     /** 店铺当前生效的营销活动（折扣/新客立减/满赠），供前端展示。 */
     public List<MarketingActivity> listStoreActivities(long storeId) {
         return storeDao.listActiveMarketingActivities(storeId, LocalDateTime.now().format(FMT));
+    }
+
+    // ============ 套餐与组合购 ============
+
+    public List<Setmeal> listStoreSetmeals(long storeId) {
+        return storeDao.listSetmealsByStore(storeId, true);
+    }
+
+    public List<Setmeal> listMerchantSetmeals(long ownerId, long storeId) {
+        requireOwned(ownerId, storeId);
+        return storeDao.listSetmealsByStore(storeId, false);
+    }
+
+    public Setmeal createSetmeal(long ownerId, long storeId, SetmealInput input) {
+        requireOwned(ownerId, storeId);
+        String name = requireMaxLength(normalizeRequired(input.name(), "套餐名称不能为空"), 128, "套餐名称");
+        String desc = requireMaxLength(input.description() == null ? "" : input.description(), 512, "套餐描述");
+        if (!Double.isFinite(input.price()) || input.price() < 0
+                || !Double.isFinite(input.originalPrice()) || input.originalPrice() < 0) {
+            throw new BizException("套餐价格必须为非负数字");
+        }
+        if (input.items() == null || input.items().isEmpty()) {
+            throw new BizException("套餐必须包含商品");
+        }
+        long id = storeDao.insertSetmeal(new Setmeal(0, storeId, name, desc, input.price(), input.originalPrice(),
+                input.image() == null ? "" : input.image(), 1, LocalDateTime.now().format(FMT), input.items()));
+        return storeDao.listSetmealsByStore(storeId, false).stream()
+                .filter(s -> s.id() == id)
+                .findFirst()
+                .orElseThrow(() -> new BizException("套餐创建失败"));
+    }
+
+    public void deleteMerchantSetmeal(long ownerId, long storeId, long setmealId) {
+        requireOwned(ownerId, storeId);
+        boolean exists = storeDao.listSetmealsByStore(storeId, false).stream().anyMatch(s -> s.id() == setmealId);
+        if (!exists) {
+            throw new BizException("套餐不存在或不属于该店铺");
+        }
+        storeDao.deleteSetmeal(setmealId);
+    }
+
+    public record SetmealInput(String name, String description, double price, double originalPrice,
+                               String image, List<SetmealItem> items) {
     }
 
     public List<Store.StoreView> listStores(Integer categoryId) {
