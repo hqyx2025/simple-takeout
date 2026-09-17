@@ -8,7 +8,7 @@ import { fetchRecommendedStoresApi, fetchSpecialGoodsApi, fetchStoreMerchantCate
 import { LoginPage } from './LoginPage'
 import { AssistantPage } from './AssistantPage'
 import { CartPage } from './CartPage'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, formatSales } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, formatSales, merchantImageSource, DEFAULT_MERCHANT_IMAGE } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
 import { RatingStars } from '../components/RatingStars'
 import { ConfirmDialog } from '../components/ConfirmDialog'
@@ -1688,13 +1688,11 @@ export struct StoreDetailContent {
             ForEach(this.filteredGoodsList, (goods: GoodsItem) => {
             ListItem() {
             Row({ space: SPACING.MD }) {
-                // 商品图片
-                Column() {
-                  Text(goods.name.substring(0, 2))
-                    .fontSize(16).fontColor(COLORS.TEXT_HINT)
-                }
-                .width(90).height(90).backgroundColor(COLORS.BG_PRIMARY).borderRadius(BORDER_RADIUS.MD)
-                .justifyContent(FlexAlign.Center)
+                // 商品图片：商户上传图拼 API 基址，无图/加载失败回退默认占位图
+                Image(merchantImageSource(goods.image))
+                  .alt(DEFAULT_MERCHANT_IMAGE)
+                  .width(90).height(90).objectFit(ImageFit.Cover).borderRadius(BORDER_RADIUS.MD)
+                  .backgroundColor(COLORS.BG_PRIMARY)
 
                 // 商品信息
                 Column({ space: SPACING.XS }) {

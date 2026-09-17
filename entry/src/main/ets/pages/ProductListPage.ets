@@ -3,7 +3,7 @@
  */
 import { Address, GoodsItem, StoreItem } from '../model/Models'
 import { getAllStoresList, getGoodsForStore, syncStoresFromServer, syncGoodsFromServer } from '../service/AppStorageManager'
-import { API_CONFIG, COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, merchantImageSource, DEFAULT_MERCHANT_IMAGE } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
@@ -340,13 +340,12 @@ export struct ProductListPage {
           LazyForEach(this.dataSource, (item: ProductListItem) => {
             ListItem() {
               Row({ space: SPACING.MD }) {
-                if (item.goods.image !== '') {
-                  Image(item.goods.image.startsWith('/') ? API_CONFIG.BASE_URL + item.goods.image : item.goods.image)
-                    .width(72)
-                    .height(72)
-                    .objectFit(ImageFit.Cover)
-                    .borderRadius(BORDER_RADIUS.MD)
-                }
+                Image(merchantImageSource(item.goods.image))
+                  .alt(DEFAULT_MERCHANT_IMAGE)
+                  .width(72)
+                  .height(72)
+                  .objectFit(ImageFit.Cover)
+                  .borderRadius(BORDER_RADIUS.MD)
                 Column({ space: SPACING.SM }) {
                 Row() {
                   Text(item.goods.name)

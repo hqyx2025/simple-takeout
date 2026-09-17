@@ -5,7 +5,7 @@
  * 「我的」页的购物车入口已删除，因此这里不再需要 showNavBar 开关与路由返回。
  */
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, merchantImageSource, DEFAULT_MERCHANT_IMAGE } from '../common/Constants'
 import { CartItem, BundleInfo, GoodsItem } from '../model/Models'
 import { deleteCartItemRemote, deleteCartItemsRemote, refreshCartFromServer, updateCartItemQuantityRemote, fetchBundleRemote } from '../service/AppStorageManager'
 import { EmptyState } from '../components/EmptyState'
@@ -473,21 +473,12 @@ export struct CartPage {
           .textAlign(TextAlign.Center)
           .onClick(() => { this.toggleSelected(item) })
       }
-      if (item.goods.image !== '') {
-        Image(item.goods.image)
-          .width(64)
-          .height(64)
-          .borderRadius(BORDER_RADIUS.MD)
-          .objectFit(ImageFit.Cover)
-      } else {
-        Text('🍽️')
-          .width(64)
-          .height(64)
-          .fontSize(FONT_SIZE.XXL)
-          .textAlign(TextAlign.Center)
-          .backgroundColor(COLORS.TAG_BG)
-          .borderRadius(BORDER_RADIUS.MD)
-      }
+      Image(merchantImageSource(item.goods.image))
+        .alt(DEFAULT_MERCHANT_IMAGE)
+        .width(64)
+        .height(64)
+        .borderRadius(BORDER_RADIUS.MD)
+        .objectFit(ImageFit.Cover)
       Column({ space: SPACING.XS }) {
         Text(item.goods.name)
           .fontSize(FONT_SIZE.LG)

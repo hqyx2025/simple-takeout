@@ -4,7 +4,7 @@
  */
 import { SpecialGoodsItem, StoreItem } from '../model/Models'
 import { fetchRankGoodsRemote, fetchRankStoresRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
-import { API_CONFIG, COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, formatSales } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, formatSales, merchantImageSource, DEFAULT_MERCHANT_IMAGE } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { RatingStars } from '../components/RatingStars'
 import { EmptyState } from '../components/EmptyState'
@@ -191,13 +191,12 @@ export struct RankingPage {
   GoodsRankItem(item: SpecialGoodsItem, rank: number) {
     Row({ space: SPACING.MD }) {
       this.RankBadge(rank)
-      if (item.goods.image !== '') {
-        Image(item.goods.image.startsWith('/') ? API_CONFIG.BASE_URL + item.goods.image : item.goods.image)
-          .width(64)
-          .height(64)
-          .objectFit(ImageFit.Cover)
-          .borderRadius(BORDER_RADIUS.MD)
-      }
+      Image(merchantImageSource(item.goods.image))
+        .alt(DEFAULT_MERCHANT_IMAGE)
+        .width(64)
+        .height(64)
+        .objectFit(ImageFit.Cover)
+        .borderRadius(BORDER_RADIUS.MD)
       Column({ space: SPACING.XS }) {
         Text(item.goods.name)
           .fontSize(FONT_SIZE.LG)

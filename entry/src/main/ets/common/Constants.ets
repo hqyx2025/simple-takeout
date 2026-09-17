@@ -161,3 +161,26 @@ export class AMAP_CONFIG {
   // 网络请求超时（毫秒）
   static readonly TIMEOUT: number = 10000
 }
+
+/**
+ * 商户上传图片的默认占位图。
+ * 资源位置：entry/src/main/resources/rawfile/images/default/merchant_goods_default.png
+ * 图片资源的目录约定与新增流程见 md/图片资源规范.md。
+ */
+export const DEFAULT_MERCHANT_IMAGE: Resource = $rawfile('images/default/merchant_goods_default.png')
+
+/**
+ * 商户上传图片地址 → 可渲染的图片来源。
+ * 后端返回的是相对地址（/uploads/yyyyMMdd/xxx.png），必须拼 API 基址；
+ * 地址为空（菜品没传图）时回退默认占位图，避免用户端出现空白/破图。
+ */
+export function merchantImageSource(image: string | undefined): ResourceStr {
+  const url: string = (image ?? '').trim()
+  if (url === '') {
+    return DEFAULT_MERCHANT_IMAGE
+  }
+  if (url.indexOf('http://') === 0 || url.indexOf('https://') === 0) {
+    return url
+  }
+  return url.startsWith('/') ? API_CONFIG.BASE_URL + url : url
+}

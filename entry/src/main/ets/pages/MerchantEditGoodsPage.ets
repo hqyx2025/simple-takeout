@@ -2,7 +2,7 @@
 import { Category, GoodsItem, GoodsSpec, User, UserRole } from '../model/Models'
 import { fetchMerchantCategoriesApi, fetchMerchantGoodsApi, updateMerchantGoodsApi, uploadImageApi } from '../service/ApiService'
 import { getLastRemoteErrorMessage, updateGoodsSpecsRemote } from '../service/AppStorageManager'
-import { API_CONFIG, COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, merchantImageSource, DEFAULT_MERCHANT_IMAGE } from '../common/Constants'
 import { photoAccessHelper } from '@kit.MediaLibraryKit'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 
@@ -562,10 +562,9 @@ export struct MerchantEditGoodsPage {
           Column({ space: SPACING.XS }) {
             this.FieldLabel('商品图片', false)
             Row({ space: SPACING.MD }) {
-              if (this.image !== '') {
-                Image(this.image.startsWith('/') ? API_CONFIG.BASE_URL + this.image : this.image)
-                  .width(72).height(72).objectFit(ImageFit.Cover).borderRadius(BORDER_RADIUS.MD)
-              }
+              Image(merchantImageSource(this.image))
+                .alt(DEFAULT_MERCHANT_IMAGE)
+                .width(72).height(72).objectFit(ImageFit.Cover).borderRadius(BORDER_RADIUS.MD)
               Button(this.image === '' ? '＋ 上传图片' : '更换图片')
                 .fontSize(FONT_SIZE.SM).height(36).borderRadius(BORDER_RADIUS.MD)
                 .onClick(() => { this.pickImage() })
