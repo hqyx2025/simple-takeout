@@ -98,6 +98,8 @@ export function logout(): void {
   AppStorage.setOrCreate<Address[]>('addressList', [])
   AppStorage.setOrCreate<Address | null>('currentAddress', null)
   AppStorage.setOrCreate<GeoPosition | null>('lastLocationPosition', null)
+  // 退出登录同步关掉位置上报，否则定时器里的接口调用会触发 401 → 不清登录态的死循环
+  stopRiderLocationTimer()
   // 券与订单也必须清：否则换账号登录后会继承上一账号的已选优惠券，
   // 带着别人的 couponId 提交，后端查不到该券 → 下单必然失败
   AppStorage.setOrCreate<Coupon | null>('selectedCoupon', null)
@@ -956,6 +958,31 @@ export async function reportRiderLocationRemote(): Promise<boolean> {
   } catch (err) {
     logWarn('Rider', `骑手位置上报异常：${JSON.stringify(err)}`)
     return false
+  }
+}
+
+// ============ 配送途中全局位置上报 ============
+// 骑手接单后需要持续上报位置，不能因为切页就中断（例如从"抢单大厅"切到"我的配送单"时）。
+// 这里维护模块级定时器，与页面生命周期脱钩，只在无配送中订单或退出登录时停止。
+let riderLocationTimer: number = -1
+
+/** 开启配送途中实时定位（接单后 / 有配送中订单时调用；重复调用幂等，立刻补一次上报）。 */
+export function startRiderLocationTimer(intervalMs: number = 30000): void {
+  if (riderLocationTimer >= 0) {
+    return
+  }
+  riderLocationTimer = setInterval(() => { reportRiderLocationRemote() }, intervalMs)
+  logInfo('Rider', `开始配送途中位置定时上报（每 ${intervalMs / 1000} 秒一次）`)
+  // 接单/取餐后立刻补一次，不等第一个周期
+  reportRiderLocationRemote()
+}
+
+/** 停止配送途中位置上报（名下无配送中订单 / 退出登录时调用）。 */
+export function stopRiderLocationTimer(): void {
+  if (riderLocationTimer >= 0) {
+    clearInterval(riderLocationTimer)
+    riderLocationTimer = -1
+    logInfo('Rider', '已无配送中订单，停止位置定时上报')
   }
 }
 
