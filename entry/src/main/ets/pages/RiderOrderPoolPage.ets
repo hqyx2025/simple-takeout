@@ -4,7 +4,7 @@
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { Order, Rider } from '../model/Models'
-import { syncRiderPoolRemote, grabOrderRemote, getLastRemoteErrorMessage, fetchRiderProfileRemote, reportRiderLocationRemote } from '../service/AppStorageManager'
+import { syncRiderPoolRemote, grabOrderRemote, getLastRemoteErrorMessage, fetchRiderProfileRemote, reportRiderLocationRemote, startRiderLocationTimer } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
 
 @Entry
@@ -63,11 +63,11 @@ export struct RiderOrderPoolPage {
     const ok: boolean = await grabOrderRemote(order.id)
     this.grabbing = false
     if (ok) {
-      // 接单时定位一次：让平台/商户看到骑手当前所在位置（配送途中的实时上报在"我的配送单"里）
-      const reported: boolean = await reportRiderLocationRemote()
-      logInfo('Rider', `抢单成功后定位上报：${reported ? '成功' : '失败（不影响抢单）'}`)
+      // 接单时定位一次 + 启动全局定时器（切页不中断）+ 直接跳转配送单页
+      reportRiderLocationRemote()
+      startRiderLocationTimer()
       promptAction.showToast({ message: '抢单成功，请及时取餐', duration: 1500 })
-      await this.loadPool()
+      router.replaceUrl({ url: 'pages/RiderOrdersPage' })
     } else {
       // 抢单失败可能因为被抢走、未上线、账号停用等，优先展示后端原因，避免全部误报成"手慢了"
       const errorMessage: string = getLastRemoteErrorMessage()
