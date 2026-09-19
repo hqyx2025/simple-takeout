@@ -34,8 +34,15 @@
     --mode module -p module=entry@default -p product=default -p requiredDeviceType=phone assembleHap --analyze=normal --parallel --incremental --daemon
   ```
   构建日志：`.hvigor/outputs/build-logs/build.log`；判断成功要看日志里的 `BUILD SUCCESSFUL` 并确认 `entry/build/default/outputs/default/*.hap` 时间戳已更新（流水线里 `Select-String` 会吞掉退出码，别只看 `$LASTEXITCODE`）
-- 后端测试：`mvn -f server/pom.xml test`（**169 个测试**，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格/资金与状态并发边界/文本列宽边界/**秒杀一人一单（seckill_orders 唯一键 + INSERT IGNORE 防重 + 回滚释放）**、缓存穿透/击穿/雪崩防护与领域事件 Outbox 语义、AI 助手意图路由、**登录限流与 token 吊销（jti 黑名单 + 改密即失效 + 禁用账号存量 token 立即失效）**、**下单防重 idempotencyKey（Redis SET NX，失败释放占位、Redis 挂了跳过）**、**下单接口限流（LoginRateLimiter.order 按账号 10/60s）**、**待付款订单支付时限秒级显式检查（payOrder 扣款前判 payDeadline）**、**管理端商品分页（LIMIT/OFFSET + count 同套筛选）**、**收货地址上限 20 个（addAddress 拦第 21 个）**、**停用骑手服务层拒绝抢单/取餐/送达**、**搜索不逐店查商品（N+1 契约）**、**平台统计口径（订单数与成交额同步排除 5/6）**，以及**骑手待取餐池 SQL 契约**与骑手配送闭环）
+- 后端测试：`mvn -f server/pom.xml test`（**221 个测试**，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格/资金与状态并发边界/文本列宽边界/**秒杀一人一单（seckill_orders 唯一键 + INSERT IGNORE 防重 + 回滚释放）**、缓存穿透/击穿/雪崩防护与领域事件 Outbox 语义、AI 助手意图路由、**登录限流与 token 吊销（jti 黑名单 + 改密即失效 + 禁用账号存量 token 立即失效）**、**下单防重 idempotencyKey（Redis SET NX，失败释放占位、Redis 挂了跳过）**、**下单接口限流（LoginRateLimiter.order 按账号 10/60s）**、**待付款订单支付时限秒级显式检查（payOrder 扣款前判 payDeadline）**、**管理端商品分页（LIMIT/OFFSET + count 同套筛选）**、**收货地址上限 20 个（addAddress 拦第 21 个）**、**停用骑手服务层拒绝抢单/取餐/送达**、**搜索不逐店查商品（N+1 契约）**、**平台统计口径（订单数与成交额同步排除 5/6）**，以及**骑手待取餐池 SQL 契约**与骑手配送闭环、**多实例分布式基线（Outbox 行级认领 SQL 契约 / 雪花订单号唯一性 + 冲突重试 / 调度锁 fail-open / traceId 贯穿与 MDC 清理）**）
 - 一键容器化环境：`docker compose up -d --build`（app + MySQL 8.4 + Redis 7，含健康检查与启动依赖顺序）；只起基础设施（本机用 Maven 跑后端）用 `docker compose up -d mysql redis`。注意 compose 的 MySQL 映射到宿主 **3307**（避开本机 MySQL84 的 3306）
+- **多实例（水平扩展）运行**：应用无状态，可直接起多个实例连同一套 MySQL + Redis。同机多实例示例（避免占用 9000）：
+  ```powershell
+  mvn -f server/pom.xml spring-boot:run "-Dspring-boot.run.arguments=--server.port=9001"
+  mvn -f server/pom.xml spring-boot:run "-Dspring-boot.run.arguments=--server.port=9002"
+  ```
+  容器同理用 `docker compose up -d --scale app=3`（需自行解决端口映射冲突或改走网关）。**多实例安全性由四处保证**：① Outbox 中继用 `FOR UPDATE SKIP LOCKED` 行级认领（同一事件只被一个实例搬运，崩溃后租约过期由其他实例接手）；② Redis Stream 消费者名带实例 ID（每实例是独立消费者，互不抢消息）；③ 定时任务用 `SchedulerLock`（Redis 锁；**Redis 不可用时 fail-open 放行**，因为任务本身幂等/条件更新）；④ 订单号用雪花 ID（时间戳+workerId+序列号，workerId 由实例标识派生）。相关配置：`takeout.mq.claim-lease-ms`(30000)、`takeout.job.lock-enabled`(true)、`takeout.job.timeout-lock-ttl-ms`(120000)、`takeout.job.cleanup-lock-ttl-ms`(300000)
+- **链路追踪**：网关/上游传 `X-Request-Id` 则沿用、没有则生成，值写入日志 MDC（logback pattern 已含 `%X{traceId}`）并回写响应头。排查一次请求时直接 `grep <traceId> logs/app.log`
 - 后端测试与运行都要求 `JAVA_HOME` 指向 **JDK 25**；`server/Dockerfile` 的构建阶段也必须是 JDK 25，否则 `maven.compiler.release=25` 直接编译失败
 - Release 打包（**当前范围外，可选工具**）：`scripts/enable-release-signing.ps1`（接入发布证书）→ `scripts/build-release.ps1`（签名包）→ `scripts/release-check.ps1 [-Build]`（上架体检，输出 `md/上架体检报告.md`，该报告为生成物不入库）；详见 `md/上架体检与Release签名.md`。日常开发只需 debug 构建，不必碰这一套。
 - **注意**：PowerShell 5.x 不支持 `&&`，连续命令必须分开执行；`git commit` 不支持 heredoc，长提交信息先写文件再 `git commit -F <file>`
@@ -49,7 +56,7 @@
 - **JWT**：`TAKEOUT_JWT_SECRET` 环境变量，`expire-hours: 72`；无刷新令牌（每 72 小时重新登录的体验取舍已接受）。**登录态可吊销**：`POST /api/auth/logout` 把当前 token 的 jti 记入 `token_blacklist`（落**数据库**而非 Redis——Redis 挂了登出也必须生效），`PUT /api/auth/password` 改密写 `users.password_changed_at` 使所有早于此刻签发的 token 失效，**管理端禁用账号（`users.status=0`）使其存量 token 立即失效**；三处校验都收口在 `AuthInterceptor`（唯一认证入口，新增接口不会漏挂），token 载荷含 `jti` 与 `pwdAt`
 - **下单防重（idempotencyKey）**：`POST /api/orders` 请求体可带 `idempotencyKey`（前端结算页每页面实例生成一次 `submitKey`，多店结算按 `-storeId` 派生）；服务端 Redis `SET NX`（key `takeout:idempotent:order:<userId>:<key>`，TTL 5 分钟）拦截连点/网络重放，**下单失败会释放占位**允许同 token 重试，**Redis 不可用时跳过校验**（与登录限流同口径：加固不能变成下单不可用）；旧客户端不传该字段则完全不受影响
 - **登录/注册/下单限流**：`takeout.security.rate-limit.enabled`（环境变量 `TAKEOUT_RATE_LIMIT_ENABLED`，默认 true）。计数存 Redis（key `takeout:rl:<action>:<ip>`；login 10 次/60 秒、register 5 次/小时，**order 按账号 10 次/60 秒**——多店结算一次连续提交 N 笔故放宽到 10，identifier 用 `u<userId>`），超限封该 IP/账号，**Redis 不可用时一律放行**（限流是加固，不能变成登录/下单不可用）；超限抛 `BizException(429, …)`，`GlobalExceptionHandler` 映射为 HTTP 429
-- **日志**：按天分文件 `app-YYYY-MM-DD.log`，单文件 2MB 轮转压缩归档（zip）；同时输出控制台 + `filesDir/log/app.log`；密码/JWT/手机号完整值禁止入日志
+- **日志**：`server/src/main/resources/logback-spring.xml` 配置——按天分文件 `app-%d{yyyy-MM-dd}.%i.log.zip`（工作目录 `logs/app.log` 为当前文件），单文件 2MB 轮转、归档压缩、保留 30 天；同时输出控制台。**每条日志带 `traceId`**（MDC 键 `traceId`）；目录可用 `TAKEOUT_LOG_DIR` 覆盖，级别用 `TAKEOUT_LOG_LEVEL`/`TAKEOUT_LOG_ROOT_LEVEL`。密码/JWT/手机号完整值禁止入日志
 - **高德 Key**（双 Key 概念）：`AMAP_CONFIG.MAP_JS_KEY`（Web端 JS API 类型，`a0373d4b39b6524b7f80e825339e7a28`，需同步修改 `resources/rawfile/amap_map.html` 中 AMAP_KEY）；2021 年后 Key 需配置安全密钥 jscode
 - **订单支付时限**：`takeout.order.pay-timeout-minutes`（环境变量 `TAKEOUT_PAY_TIMEOUT_MINUTES`，默认 15 分钟）；超时扫描间隔 `takeout.order.timeout-scan-ms`（默认 60 秒，启动 30 秒后首扫）
 - **评价图片存储**：`takeout.upload.dir`（环境变量 `TAKEOUT_UPLOAD_DIR`，默认工作目录下 `uploads/`），按天分目录，通过 `/uploads/**` 静态访问（该路径**不需要 JWT**，图片本身是公开资源）；单张 ≤5MB，仅 jpg/png/webp/gif；`server/uploads/` 已在 .gitignore 中忽略
@@ -226,7 +233,7 @@
 - ~~`AdminStatsDao` 的 today_orders 含已取消订单，today_gmv 排除 5/6~~ **已统一口径**：订单数与成交额**同时排除已取消(5)/退款中(6)**；`today_orders` 补上排除条件，近7日趋势的 `order_count` 从 `COUNT(*)` 改为 `COUNT(CASE WHEN status NOT IN (5,6) THEN 1 END)`（同一个漏网字段）。`total_orders` 是"累计下单数"的展示口径，**故意含全部状态**，不要顺手改掉。契约由 `AdminStatsDaoSqlTest` 钉住。
 - ~~前端兜底口径不统一~~ **已修**：`BalancePage` 的 `this.balance = user.balance` 与充值回写都改为 `Number.isFinite(x) ? x : 0`；`CheckoutPage` 的 `selectedCoupon.amount.toFixed(2)` 同样加兜底（缺字段会渲染成 `¥NaN`）。
 - Banner `PUT` 是"null 覆盖为空串"语义（非 PATCH），只改 sort 会把 title/subtitle 清空。**现状已缓解**：`ContentService.updateBanner` 会拒绝空标题，且管理端界面只有 Banner 的新增/上下架/删除、**没有编辑入口**，该路径只能被直接调 API 触发；真要支持部分更新需改成 PATCH 语义。
-- ~~Outbox 去重键为"先查后写"（单实例安全）；多实例部署需改回原子 `setIfAbsent` + 行级认领。~~ **已修复消费端**：`DomainEventConsumer` 改用 `setIfAbsent` 原子抢占去重键（短 TTL 5 分钟作处理中锁，成功后延长到 `dedupHours`），抢占失败直接 ACK 跳过。Outbox 中继 `listPending` 加 `ponytail:` 注释说明多实例行级认领升级路径（`SELECT ... FOR UPDATE SKIP LOCKED`），当前消费端去重已保证重复投递不会重复处理。
+- ~~Outbox 去重键为"先查后写"（单实例安全）；多实例部署需改回原子 `setIfAbsent` + 行级认领。~~ **已修复消费端**：`DomainEventConsumer` 改用 `setIfAbsent` 原子抢占去重键（短 TTL 5 分钟作处理中锁，成功后延长到 `dedupHours`），抢占失败直接 ACK 跳过。**中继端也已补齐**：`OutboxEventDao.claimPending` 改为 `SELECT ... FOR UPDATE SKIP LOCKED` 事务内行级认领并盖 `owner`/`lease_until` 戳，多实例不再重复搬运；认领后崩溃的行在租约（`takeout.mq.claim-lease-ms`，默认 30s）过期后由其他实例接手，`markRetry` 会主动释放租约。真实 MySQL 8.4 已实测两并发事务认领到**不相交**行集（A 拿 {1,2,3} 时 B 拿 {4,5,6}），租约四场景（未过期不可再认领 / 过期可重新认领 / 重试即释放 / 已投递永不认领）全部验证通过。
 - ~~前端支付倒计时用设备本地时间推算，未使用服务端时区（可下发 `payDeadlineEpochMs` 收敛）。~~ **已修复**：后端在 `OrderView` 中增加 `payDeadlineEpochMs` 字段（服务端计算的毫秒时间戳），前端 `computePayRemain()` 直接用该时间戳减去 `Date.now()`，避免解析字符串时的时区问题。
 - 骑手为自助注册即开通（`role=3` 自动建档 status=1，无需平台审核）。
 - ~~`MerchantStatsPage` 无法区分"同步失败"与"真的没有订单"（都是 ¥0.00 / 0 单）。~~ **已缓解**：`refreshRemoteStats` 加 try/catch 捕获网络/后端错误，`loadError` 标记驱动一条浅红背景横幅「数据加载失败，以下数据可能不准确」+「重试」按钮；成功时自动清除。
