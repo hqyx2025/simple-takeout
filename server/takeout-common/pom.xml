@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  共享契约层（Phase 3）。
+
+  装什么：领域模型、统一响应/异常、通用工具（实例标识、雪花 ID、traceId、调度锁）、
+  热点缓存设施、鉴权组件。这些被 app 与 catalog 等多个服务共用。
+
+  为什么要有这一层：微服务拆分的前提是「共享契约」与「业务实现」分离。
+  没有它，catalog 服务要么复制一份模型（双份定义必然漂移），要么反向依赖 app（方向错误）。
+
+  关键做法：**保持包名 `com.example.takeout.*` 不变，只改物理位置**。
+  Java 的包名与文件路径无关，因此所有既有 import 语句无需修改 —— 这把
+  「30+ 个文件跨模块搬迁」的风险从"改一堆 import"降到"零 import 改动"。
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.example</groupId>
+    <artifactId>takeout-parent</artifactId>
+    <version>1.0.0</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>takeout-common</artifactId>
+  <version>1.0.0</version>
+  <name>takeout-common</name>
+  <description>共享契约层：领域模型、统一响应/异常、通用工具、缓存与鉴权设施</description>
+
+  <dependencies>
+    <!-- 统一响应与全局异常处理器需要 Web 类型（@RestControllerAdvice 等） -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <!-- 鉴权组件（AuthInterceptor/JwtUtil）与数据访问工具需要 JDBC -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-jdbc</artifactId>
+    </dependency>
+
+    <!-- 缓存设施、调度锁需要 Redis -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-redis</artifactId>
+    </dependency>
+
+    <!-- JWT -->
+    <dependency>
+      <groupId>io.jsonwebtoken</groupId>
+      <artifactId>jjwt-api</artifactId>
+      <version>0.12.6</version>
+    </dependency>
+    <dependency>
+      <groupId>io.jsonwebtoken</groupId>
+      <artifactId>jjwt-impl</artifactId>
+      <version>0.12.6</version>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.jsonwebtoken</groupId>
+      <artifactId>jjwt-jackson</artifactId>
+      <version>0.12.6</version>
+      <scope>runtime</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+</project>

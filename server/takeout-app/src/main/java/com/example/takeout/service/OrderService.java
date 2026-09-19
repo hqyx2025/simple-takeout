@@ -169,9 +169,21 @@ public class OrderService {
             redis = redisProvider.getIfAvailable();
             if (redis != null) {
                 redisKey = "takeout:idempotent:order:" + userId + ":" + idempotencyKey.trim();
-                Boolean first = redis.opsForValue().setIfAbsent(redisKey, "1", Duration.ofMinutes(5));
-                if (Boolean.FALSE.equals(first)) {
-                    throw new BizException("订单正在提交中，请勿重复操作");
+                try {
+                    Boolean first = redis.opsForValue().setIfAbsent(redisKey, "1", Duration.ofMinutes(5));
+                    if (Boolean.FALSE.equals(first)) {
+                        throw new BizException("订单正在提交中，请勿重复操作");
+                    }
+                } catch (BizException e) {
+                    // 真·重复提交：必须抛给用户，不能被下面的 Redis 降级吞掉
+                    throw e;
+                } catch (RuntimeException e) {
+                    // Redis 不可用（连接被拒/超时）：跳过防重校验，让下单继续。
+                    // getIfAvailable() 只判断「bean 是否存在」，不代表「真能连上」——
+                    // 少了这层保护，Redis 一挂下单就直接 500，与既有口径
+                    //（「加固不能变成下单不可用」，见 AGENTS.md §4）相违背。
+                    log.warn("[下单防重] Redis 不可用，跳过防重校验 userId={} key={}", userId, idempotencyKey, e);
+                    redisKey = null;
                 }
             }
         }

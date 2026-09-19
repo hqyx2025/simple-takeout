@@ -37,6 +37,7 @@
   </properties>
 
   <modules>
+    <module>takeout-common</module>
     <module>takeout-app</module>
     <module>takeout-gateway</module>
   </modules>
