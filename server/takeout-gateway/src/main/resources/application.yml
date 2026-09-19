@@ -1,0 +1,66 @@
+server:
+  # 对外端口：与拆分前完全一致（前端 BASE_URL 指向 :9000，零改动）
+  port: ${TAKEOUT_GATEWAY_PORT:9000}
+
+spring:
+  application:
+    name: takeout-gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          # ===== 可信代理白名单（决定 X-Forwarded-* 是否透传）=====
+          #
+          # Spring Cloud Gateway 4.3.x 的默认行为是**不信任**来源 IP：
+          # 若请求的直接来源不在白名单内，它会用 RemoveXForwardedHeadersFilter
+          # 把 X-Forwarded-* 全部**剔除**（实测字节码含
+          # "Remote address not trusted. pattern ... remote address ..."）。
+          #
+          # 这是安全默认（防客户端伪造 XFF 绕过限流），但也意味着：不配置白名单时，
+          # 后端 LoginRateLimiter.clientIp() 读不到 XFF，只能退化用 getRemoteAddr()
+          # =「网关地址」→ **全站用户共用一个限流桶**，一个人触发封禁会让所有人登录失败。
+          #
+          # 因此必须显式声明：谁是我们信任的、会替我们如实填写 XFF 的上游。
+          # 当前拓扑是「客户端 → 网关 → 应用」，网关自己就是最外层入口，
+          # 需要信任的是**直连网关的客户端来源**（含反向代理部署场景）。
+          #
+          # ponytail: 用 0.0.0.0/0 覆盖全部来源。生产若在网关前还有一层可信代理
+          # （Nginx/SLB），应把这里收窄成那层代理的网段，避免客户端伪造 XFF。
+          #
+          # 注意：该属性是**正则表达式**，用来匹配「直连网关的远端地址字符串」，
+          # 不是 CIDR 网段——写成 "0.0.0.0/0" 匹配不上 "127.0.0.1"，配置会静默失效（实测踩过）。
+          # 这里的 .* 表示信任全部直连来源。
+          trusted-proxies: ".*"
+          # 透传真实客户端 IP。经此配置后由网关如实注入 XFF。
+          x-forwarded:
+            enabled: true
+            # for 部分（客户端 IP）：限流依赖它，必须开启
+            for-enabled: true
+            # **覆写**而非追加（for-append=false）。
+            #
+            # 为什么必须覆写：网关是信任边界。若用追加语义，客户端自带的
+            # `X-Forwarded-For: 1.2.3.4`（伪造）会被保留在**列表最前**，
+            # 而后端 LoginRateLimiter.clientIp() 取的是 split(",")[0] ——
+            # 于是攻击者每换一个伪造 IP 就能重置限流桶，**无限绕过登录限流**（实测复现）。
+            # 覆写后该头只含网关亲眼所见的一个地址，客户端无法注入。
+            for-append: false
+            # host / port / proto：一并透传，便于后端正确拼装外部访问地址与协议
+            host-enabled: true
+            port-enabled: true
+            proto-enabled: true
+          routes:
+            # 全部 API 路由到后端应用（Phase 2 只有一个后端；Phase 3 起按域细分）
+            - id: takeout-app-api
+              uri: ${TAKEOUT_APP_URI:http://127.0.0.1:9000}
+              predicates:
+                - Path=/api/**
+            # 评价图片等静态资源：不需要 JWT，但必须能被前端访问到，故一并转发
+            - id: takeout-app-uploads
+              uri: ${TAKEOUT_APP_URI:http://127.0.0.1:9000}
+              predicates:
+                - Path=/uploads/**
+
+logging:
+  level:
+    # 只开网关自身的路由日志；转发细节开 DEBUG 会淹没业务日志
+    org.springframework.cloud.gateway: INFO

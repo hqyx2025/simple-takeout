@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  API 网关（Phase 2）。
+
+  职责边界（刻意克制）：只做**路由 + 透传**，不校验业务、不聚合响应。
+  - 外部契约不变：监听 9000，与拆分前完全一致，前端 HAP 零改动
+  - 鉴权仍由各服务的 AuthInterceptor 独占（网关不把鉴权变成唯一防线）
+  - 用 WebFlux 版网关（响应式，非阻塞转发）
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.example</groupId>
+    <artifactId>takeout-parent</artifactId>
+    <version>1.0.0</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>takeout-gateway</artifactId>
+  <version>1.0.0</version>
+  <name>takeout-gateway</name>
+  <description>API 网关：/api/** 与 /uploads/** 反向代理（保持 :9000 契约不变）</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-gateway-server-webflux</artifactId>
+    </dependency>
+
+    <!-- 测试：配置契约测试直接解析 application.yml（不启动 Spring 上下文） -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>

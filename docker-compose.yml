@@ -73,9 +73,13 @@ services:
       TAKEOUT_REDIS_PORT: 6379
       TAKEOUT_JWT_SECRET: ${TAKEOUT_JWT_SECRET:-simple-takeout-jwt-secret-key-please-change-2026}
       TAKEOUT_CACHE_ENABLED: "true"
+      # 应用在容器内监听 9000；对外由 gateway 暴露同一个 9000（外部契约不变）
+      TAKEOUT_APP_PORT: "9000"
       TZ: Asia/Shanghai
     ports:
-      - "${TAKEOUT_APP_PORT:-9000}:9000"
+      # 仅用于直连调试（可选）：宿主 9100 → 应用 9000。
+      # 正式入口是 gateway 的 9000，两者 API 完全一致。
+      - "${TAKEOUT_APP_DEBUG_PORT:-9100}:9000"
     volumes:
       # 评价图片持久化，容器重建不丢
       - uploads-data:/app/uploads
@@ -86,6 +90,34 @@ services:
       timeout: 8s
       retries: 12
       start_period: 60s
+
+  # API 网关：对外唯一入口，保持 :9000 契约与拆分前完全一致（前端 HAP 零改动）。
+  # 与应用共用同一镜像，只换启动的 jar。
+  gateway:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    image: takeout-server:latest
+    container_name: takeout-gateway
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      # 网关监听容器内 9000；转发目标用服务名 app
+      TAKEOUT_GATEWAY_PORT: "9000"
+      TAKEOUT_APP_URI: http://app:9000
+      TZ: Asia/Shanghai
+    ports:
+      # 对外契约端口：与拆分前一致
+      - "${TAKEOUT_APP_PORT:-9000}:9000"
+    healthcheck:
+      test: ["CMD", "java", "-cp", "/app", "healthcheck", "127.0.0.1", "9000"]
+      interval: 10s
+      timeout: 8s
+      retries: 12
+      start_period: 40s
+    command: ["java", "-jar", "/app/takeout-gateway.jar"]
 
 volumes:
   mysql-data:

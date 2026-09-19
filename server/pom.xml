@@ -1,7 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  简单外卖后端 · Maven 聚合根。
+
+  设计取舍：聚合 POM 用 <modules> 聚合各服务，**且不设 packaging=jar 之外的构建**，
+  目的是让 `mvn -f server/pom.xml test` 这条既有命令**继续有效**——它会自动跑到所有
+  子模块的测试（现有 221 个用例全部保留在 takeout-app 中），无需改成 `-pl takeout-app`。
+  只有 `spring-boot:run` 这类需要指定单一应用的命令才需要 `-pl takeout-app`。
+
+  为什么保留 server/pom.xml 这个路径而不是挪到别处：AGENTS.md、README、Dockerfile、
+  docker-compose 与各脚本都引用它；路径不变 = 零外部改动。
+-->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
@@ -12,83 +23,34 @@
   </parent>
 
   <groupId>com.example</groupId>
-  <artifactId>takeout-server</artifactId>
+  <artifactId>takeout-parent</artifactId>
   <version>1.0.0</version>
+  <packaging>pom</packaging>
   <name>simple-takeout-server</name>
-  <description>简单外卖后端服务（Spring Boot 3.5 + Java 25 + MySQL 8.4 + Redis 7）</description>
+  <description>简单外卖后端：Maven 聚合根（单体过渡承载 + 微服务拆分）</description>
 
   <properties>
     <java.version>25</java.version>
     <maven.compiler.release>25</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <spring-cloud.version>2025.0.3</spring-cloud.version>
   </properties>
 
-  <dependencies>
-    <!-- Web -->
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-web</artifactId>
-    </dependency>
+  <modules>
+    <module>takeout-app</module>
+    <module>takeout-gateway</module>
+  </modules>
 
-    <!-- JDBC -->
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-jdbc</artifactId>
-    </dependency>
-
-    <!-- 购物车数据层：按需求使用 MyBatis-Plus，与现有 JdbcTemplate DAO 并存 -->
-    <dependency>
-      <groupId>com.baomidou</groupId>
-      <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
-      <version>3.5.12</version>
-    </dependency>
-
-    <!-- Redis：热点数据缓存（首页店铺/分类/商品/秒杀/Banner/公告等） -->
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-data-redis</artifactId>
-    </dependency>
-
-    <!-- MySQL 驱动 -->
-    <dependency>
-      <groupId>com.mysql</groupId>
-      <artifactId>mysql-connector-j</artifactId>
-      <scope>runtime</scope>
-    </dependency>
-
-    <!-- JWT -->
-    <dependency>
-      <groupId>io.jsonwebtoken</groupId>
-      <artifactId>jjwt-api</artifactId>
-      <version>0.12.6</version>
-    </dependency>
-    <dependency>
-      <groupId>io.jsonwebtoken</groupId>
-      <artifactId>jjwt-impl</artifactId>
-      <version>0.12.6</version>
-      <scope>runtime</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.jsonwebtoken</groupId>
-      <artifactId>jjwt-jackson</artifactId>
-      <version>0.12.6</version>
-      <scope>runtime</scope>
-    </dependency>
-
-    <!-- 测试 -->
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-test</artifactId>
-      <scope>test</scope>
-    </dependency>
-  </dependencies>
-
-  <build>
-    <plugins>
-      <plugin>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-maven-plugin</artifactId>
-      </plugin>
-    </plugins>
-  </build>
+  <dependencyManagement>
+    <dependencies>
+      <!-- Spring Cloud BOM：已实测与 Boot 3.5.4 + Java 25 兼容（见 spec Phase 2 冒烟记录） -->
+      <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-dependencies</artifactId>
+        <version>${spring-cloud.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 </project>
