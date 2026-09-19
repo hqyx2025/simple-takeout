@@ -75,6 +75,8 @@ takeout:
     relay-scan-ms: ${TAKEOUT_MQ_RELAY_SCAN_MS:2000}
     relay-initial-ms: 10000
     outbox-batch-size: ${TAKEOUT_MQ_BATCH_SIZE:100}
+    # 多实例行级认领的租约时长（毫秒）：认领后实例崩溃，该行要等租约过期才被其他实例接手
+    claim-lease-ms: ${TAKEOUT_MQ_CLAIM_LEASE_MS:30000}
     # 单条事件最大投递重试次数，超过后保留记录但不再重试（便于排查）
     max-retry: ${TAKEOUT_MQ_MAX_RETRY:10}
     # 已投递事件的保留小时数与清理间隔
@@ -92,6 +94,14 @@ takeout:
     # 超时扫描间隔与首次延迟（毫秒）
     timeout-scan-ms: 60000
     timeout-scan-initial-ms: 30000
+  job:
+    # 定时任务单实例调度锁总开关。仅消除多实例重复扫描的浪费，不承担正确性
+    # （正确性由条件更新与 Outbox 租约保证）；Redis 不可用时一律放行执行（fail-open）
+    lock-enabled: ${TAKEOUT_JOB_LOCK_ENABLED:true}
+    # 超时扫描锁 TTL（毫秒）
+    timeout-lock-ttl-ms: ${TAKEOUT_JOB_TIMEOUT_LOCK_TTL_MS:120000}
+    # Outbox 清理锁 TTL（毫秒）
+    cleanup-lock-ttl-ms: ${TAKEOUT_JOB_CLEANUP_LOCK_TTL_MS:300000}
   upload:
     # 评价图片本地存储目录（相对启动工作目录）；通过 /uploads/** 对外访问
     dir: ${TAKEOUT_UPLOAD_DIR:uploads}

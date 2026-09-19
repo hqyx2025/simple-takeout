@@ -1,5 +1,6 @@
 package com.example.takeout.service.mq;
 
+import com.example.takeout.common.InstanceId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -37,7 +38,15 @@ public class DomainEventConsumer {
     private static final Logger log = LoggerFactory.getLogger(DomainEventConsumer.class);
 
     private static final String GROUP = "takeout-consumers";
-    private static final String CONSUMER_NAME = "consumer-1";
+
+    /**
+     * 消费者名必须「每实例不同」。
+     *
+     * <p>Redis Stream 消费组按消费者名区分成员：所有实例都叫 {@code consumer-1} 时，
+     * 消费组会把它们当成<b>同一个消费者</b>——消息在实例间互相抢占，实例各自还没法
+     * 追踪自己的未 ACK 消息（PENDING 列表混在一起）。带上实例标识后每个实例是独立成员。</p>
+     */
+    private final String consumerName = "consumer-" + InstanceId.current();
 
     /** 幂等去重键前缀。 */
     private static final String DEDUP_PREFIX = "takeout:event:consumed:";
@@ -71,7 +80,7 @@ public class DomainEventConsumer {
         try {
             ensureGroup(redis);
             List<MapRecord<String, Object, Object>> records = redis.opsForStream().read(
-                    Consumer.from(GROUP, CONSUMER_NAME),
+                    Consumer.from(GROUP, consumerName),
                     StreamReadOptions.empty().count(batchSize),
                     StreamOffset.create(DomainEventPublisher.STREAM_KEY, ReadOffset.lastConsumed()));
             if (records == null || records.isEmpty()) {

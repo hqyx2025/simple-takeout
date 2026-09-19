@@ -55,6 +55,10 @@ public class SchemaMigration implements ApplicationRunner {
         addColumnIfMissing("riders", "latitude", "DOUBLE DEFAULT NULL");
         addColumnIfMissing("riders", "longitude", "DOUBLE DEFAULT NULL");
         addColumnIfMissing("riders", "location_address", "VARCHAR(255) NOT NULL DEFAULT ''");
+        // Outbox 多实例行级认领：owner=认领者实例 ID，lease_until=租约到期 epoch 毫秒。
+        // 默认 0 让存量行（老库补列后）立刻可被认领，不会因补列而滞留。
+        addColumnIfMissing("outbox_events", "owner", "VARCHAR(64) NOT NULL DEFAULT ''");
+        addColumnIfMissing("outbox_events", "lease_until", "BIGINT NOT NULL DEFAULT 0");
         rebuildCartUniqueKey();
     }
 

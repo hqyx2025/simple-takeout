@@ -359,6 +359,9 @@ CREATE TABLE IF NOT EXISTS seckill_orders (
 
 -- 事务性 Outbox：领域事件与业务数据同事务落库，再由中继任务投递到 Redis Stream。
 -- status：0 待投递 / 1 已投递；retry_count 用于限制投递重试次数。
+-- owner/lease_until：多实例行级认领（SELECT ... FOR UPDATE SKIP LOCKED）。
+--   owner = 认领者实例 ID（仅诊断用）；lease_until = 租约到期 epoch 毫秒，
+--   0 表示未认领；认领后崩溃的行在租约过期后可由任意实例重新认领。
 CREATE TABLE IF NOT EXISTS outbox_events (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     event_type VARCHAR(64) NOT NULL,
@@ -366,8 +369,11 @@ CREATE TABLE IF NOT EXISTS outbox_events (
     payload TEXT,
     status INT NOT NULL DEFAULT 0,
     retry_count INT NOT NULL DEFAULT 0,
+    owner VARCHAR(64) NOT NULL DEFAULT '',
+    lease_until BIGINT NOT NULL DEFAULT 0,
     create_time VARCHAR(32) NOT NULL,
     KEY idx_outbox_pending (status, id),
+    KEY idx_outbox_claim (status, lease_until, id),
     KEY idx_outbox_order (order_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
