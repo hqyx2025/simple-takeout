@@ -162,13 +162,18 @@ docker compose down -v           # 停止并清空数据库数据
 
 ```bash
 # 确保 JAVA_HOME 指向 JDK 25，在仓库根目录执行
-mvn -f server/pom.xml spring-boot:run
+# 多模块工程：聚合根为 server/pom.xml（含 takeout-common / takeout-app / takeout-gateway）
+mvn -f server/pom.xml -pl takeout-app spring-boot:run
 
-# 运行后端测试
+# 运行后端测试（命令不变：聚合根会自动跑全部模块的测试）
 mvn -f server/pom.xml test
+
+# 单独启动网关（默认监听 9000，转发到 ${TAKEOUT_APP_URI:-http://127.0.0.1:9000}）
+mvn -f server/pom.xml -pl takeout-gateway spring-boot:run
 ```
 
 - 服务端口：**9000**（非 8080）
+- 与网关同机同跑时，用 `--server.port=9100` 或 `TAKEOUT_APP_PORT=9100` 把应用挪开，由网关占住对外的 9000
 
 运行 App：
 
@@ -291,7 +296,7 @@ Release 构建需要签名与证书：参考 `signing/release-signing.template.j
 | [md/上架体检与Release签名.md](md/上架体检与Release签名.md) | Release 签名与上架前质量自检 |
 | [md/图片资源规范.md](md/图片资源规范.md) | 图片资源目录约定（静态图/上传图位置、命名、统一引用方式与默认占位图） |
 | [md/archive/未完成.txt](md/archive/未完成.txt) | 尚未完成的质量项记录 |
-| [md/archive/](md/archive) | 历史会话记录归档（2026-08-20 ~ 2026-09-16） |
+| [md/archive/](md/archive) | 历史会话记录归档（2026-08-20 ~ 2026-09-19） |
 | [AGENTS.md](AGENTS.md) | AI 编码助手项目记忆：技术栈、构建、业务口径、陷阱清单、提交规范 |
 | [.agents/skills/specs](.agents/skills/specs) | 功能规格与验收清单（开发/验收依据） |
 
