@@ -32,15 +32,14 @@
   - [x] SubTask 4.5: 全量测试 **225 passed / 0 failed**（app 221 + gateway 4）；端到端经网关登录 200 且 traceId 贯通
   - [x] SubTask 4.6（实测新增）: 修复网关两个安全缺陷——XFF 被整体剔除（全站共用限流桶）、客户端伪造 XFF 绕过限流；各留契约测试并「先红后绿」验证
   - [x] SubTask 4.7（实测新增）: `Dockerfile` 改双 jar 镜像并修正多模块 COPY 路径；`docker-compose.yml` 增 gateway 服务（对外 9000 由网关暴露，app 另映射 9100 直连调试）
-- [ ] Task 5: Phase 3 抽 `catalog-service`
-  - [ ] SubTask 5.1: 迁移 stores/goods/goods_specs/categories/banners/announcements 及缓存与商户端相关接口
-  - [ ] SubTask 5.2: 网关前缀路由切换；过渡期共享 `takeout` 库
-  - [ ] SubTask 5.3: 契约测试（catalog 接口 + 缓存三防护不回归）
-  - [ ] SubTask 5.4: `rider-chain-regression.ps1` 全绿 + HAP 不重建回归
-- [ ] Task 6: Phase 4 抽 `account-service`
-  - [ ] SubTask 6.1: 迁移 users/auth/token_blacklist/addresses/favorites
-  - [ ] SubTask 6.2: 鉴权回归（登出吊销、改密失效、禁用账号即时失效）
-  - [ ] SubTask 6.3: 路由切换 + 全量回归
+- [x] Task 5: Phase 3 · **方案 C（用户拍板）——共享契约层先行，catalog 外拆移交 Phase 5**
+  - [x] SubTask 5.1: 新增 `takeout-common` 共享契约层（model/dao/security/common 共 66 文件），**保持包名不变只改物理位置**（零 import 改动）
+  - [x] SubTask 5.2: 中途纠错——把误并入 common 的 trade 域组件（`CartItemMapper`/`CartItemEntity`）移回 app
+  - [x] SubTask 5.3: 删除空骨架 `takeout-catalog-service`（只含 pom + 启动类，会误导）与零引用接口 `StoreQueryPort`
+  - [x] SubTask 5.4: 修复真实验证时发现的**既有缺陷**——Redis 挂掉时下单 500（违背 AGENTS.md §4 契约），含先红后绿验证
+  - [x] SubTask 5.5: 端到端验收：全量 228 绿 + 真实进程启动 + 登录/浏览/下单全通
+  - [ ] ⏭ **catalog 服务外拆移交 Phase 5**（理由见 `phase3-catalog-split.md` §1：抽 catalog 会破坏下单原子性，需先有 Saga）
+- [ ] Task 6: Phase 4 抽 `account-service` —— **未执行**（依赖 Phase 3 的外拆结论，同 Phase 5 一起评估）
 - [ ] Task 7: Phase 5 抽 `trade-service` + Saga/TCC（最难，可放弃）
   - [ ] SubTask 7.1: 迁移 orders/cart/coupons/seckills/refunds/payment/marketing_activities/reviews
   - [ ] SubTask 7.2: `saga_transactions` 表 + 编排器 + `/internal/**` 预留接口（stock/coupon/seckill/balance）

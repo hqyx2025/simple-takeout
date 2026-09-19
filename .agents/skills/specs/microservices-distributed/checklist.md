@@ -42,10 +42,14 @@
   - `trusted-proxies` 必须能匹配直连地址且不得写成 CIDR —— 否则网关剔除 XFF → **全站共用一个限流桶**（已实测复现并修复）
   - 两条均有契约测试守护，且做过「先红后绿」验证
 
-### Phase 3（catalog）
-- [ ] 🔴 缓存穿透/击穿/雪崩三防护用例不回归
-- [ ] 🔴 价格/库存一致性：下单取价与扣减以 catalog 为权威
-- [ ] 🔴 超距/起送价/配送半径判定不回退
+### Phase 3（catalog）—— ⏭ 按方案 C 调整：外拆移交 Phase 5
+- [x] 🔴 缓存穿透/击穿/雪崩三防护用例不回归（全量 228 绿，含 `HotDataCacheServiceTest`）
+- [x] 🔴 价格/库存一致性：下单取价与扣减仍在同一本地事务内（端到端实测库存 966→965）
+- [x] 🔴 超距/起送价/配送半径判定不回退（`StoreDeliveryRadiusTest`/`StoreDistanceTest` 全绿）
+- [x] 🔴 **新增**：`takeout-common` 拆分后真实进程可启动、Spring 装配完好（`Started ... in 2.177s`）
+- [x] 🔴 **新增**：Redis 不可用时下单降级契约（真机实测 200，修复前 500）
+- [ ] ⏭ **catalog 服务外拆**未执行——理由：抽 catalog 会把下单的 6 个 `@Transactional` 内写操作
+      变成跨进程调用，破坏原子性；需先有 Saga/TCC 设计（Phase 5）。详见 `phase3-catalog-split.md` §1
 
 ### Phase 4（account）
 - [ ] 🔴 登出吊销 / 改密旧 token 失效 / 禁用账号即时失效三处不回归

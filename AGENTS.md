@@ -27,12 +27,18 @@
 ## 3. 构建与运行
 
 - 后端启动：先设 `JAVA_HOME` 指向 JDK 25.0.2，再 `mvn -f server/pom.xml spring-boot:run`（端口 9000，**非 8080**）
-  - **多模块后（Phase 2 起）**：`server/pom.xml` 是聚合根（parent + modules）。因此
-    - `mvn -f server/pom.xml test` **命令不变**，会自动跑全部模块的测试（app 的 221 + gateway 的 4）
+  - **多模块后（Phase 2 起）**：`server/pom.xml` 是聚合根（parent + modules），模块为
+    `takeout-common`（共享契约层：model/dao/security/通用工具）、`takeout-app`（单体应用）、
+    `takeout-gateway`（API 网关）。因此
+    - `mvn -f server/pom.xml test` **命令不变**，会自动跑全部模块的测试（当前 228 个）
     - `mvn -f server/pom.xml spring-boot:run` 需指定模块：`mvn -f server/pom.xml -pl takeout-app spring-boot:run`
+    - 单模块跑测试需带 `-am`（否则找不到 takeout-common 构件），如
+      `mvn -f server/pom.xml -pl takeout-app -am test -Dtest=XxxTest -Dsurefire.failIfNoSpecifiedTests=false`
     - 网关单独启动：`mvn -f server/pom.xml -pl takeout-gateway spring-boot:run`（默认监听 9000，转发到 `${TAKEOUT_APP_URI:-http://127.0.0.1:9000}`）
     - 应用端口可用 `TAKEOUT_APP_PORT` 覆盖（默认仍 9000）。与网关同机同跑时把应用挪开，如
       `--server.port=9100` 或 `TAKEOUT_APP_PORT=9100`，再由网关占住对外的 9000
+    - **迁移共享代码时保持包名不变、只改物理位置**：Java 包名与路径无关，因此跨模块搬迁零 import 改动——
+      这是 200+ 用例在搬迁后仍全绿的原因（Phase 3 实测）
 - 前端构建（本机工具链在 `C:\Program Files\Huawei\DevEco Studio`）：
   ```powershell
   $env:DEVECO_SDK_HOME="C:\Program Files\Huawei\DevEco Studio\sdk"
@@ -40,7 +46,7 @@
     --mode module -p module=entry@default -p product=default -p requiredDeviceType=phone assembleHap --analyze=normal --parallel --incremental --daemon
   ```
   构建日志：`.hvigor/outputs/build-logs/build.log`；判断成功要看日志里的 `BUILD SUCCESSFUL` 并确认 `entry/build/default/outputs/default/*.hap` 时间戳已更新（流水线里 `Select-String` 会吞掉退出码，别只看 `$LASTEXITCODE`）
-- 后端测试：`mvn -f server/pom.xml test`（**225 个测试** = takeout-app 221 + takeout-gateway 4，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格/资金与状态并发边界/文本列宽边界/**秒杀一人一单（seckill_orders 唯一键 + INSERT IGNORE 防重 + 回滚释放）**、缓存穿透/击穿/雪崩防护与领域事件 Outbox 语义、AI 助手意图路由、**登录限流与 token 吊销（jti 黑名单 + 改密即失效 + 禁用账号存量 token 立即失效）**、**下单防重 idempotencyKey（Redis SET NX，失败释放占位、Redis 挂了跳过）**、**下单接口限流（LoginRateLimiter.order 按账号 10/60s）**、**待付款订单支付时限秒级显式检查（payOrder 扣款前判 payDeadline）**、**管理端商品分页（LIMIT/OFFSET + count 同套筛选）**、**收货地址上限 20 个（addAddress 拦第 21 个）**、**停用骑手服务层拒绝抢单/取餐/送达**、**搜索不逐店查商品（N+1 契约）**、**平台统计口径（订单数与成交额同步排除 5/6）**，以及**骑手待取餐池 SQL 契约**与骑手配送闭环、**多实例分布式基线（Outbox 行级认领 SQL 契约 / 雪花订单号唯一性 + 冲突重试 / 调度锁 fail-open / traceId 贯穿与 MDC 清理）**、**网关 X-Forwarded 安全契约（覆写语义 + trusted-proxies 匹配 + 路由覆盖 + 端口契约）**）
+- 后端测试：`mvn -f server/pom.xml test`（**228 个测试** = takeout-app 224 + takeout-gateway 4，覆盖越权/幂等/状态机/待付款支付/超时取消/多规格/资金与状态并发边界/文本列宽边界/**秒杀一人一单（seckill_orders 唯一键 + INSERT IGNORE 防重 + 回滚释放）**、缓存穿透/击穿/雪崩防护与领域事件 Outbox 语义、AI 助手意图路由、**登录限流与 token 吊销（jti 黑名单 + 改密即失效 + 禁用账号存量 token 立即失效）**、**下单防重 idempotencyKey（Redis SET NX，失败释放占位、Redis 挂了跳过）**、**下单接口限流（LoginRateLimiter.order 按账号 10/60s）**、**待付款订单支付时限秒级显式检查（payOrder 扣款前判 payDeadline）**、**管理端商品分页（LIMIT/OFFSET + count 同套筛选）**、**收货地址上限 20 个（addAddress 拦第 21 个）**、**停用骑手服务层拒绝抢单/取餐/送达**、**搜索不逐店查商品（N+1 契约）**、**平台统计口径（订单数与成交额同步排除 5/6）**，以及**骑手待取餐池 SQL 契约**与骑手配送闭环、**多实例分布式基线（Outbox 行级认领 SQL 契约 / 雪花订单号唯一性 + 冲突重试 / 调度锁 fail-open / traceId 贯穿与 MDC 清理）**、**网关 X-Forwarded 安全契约（覆写语义 + trusted-proxies 匹配 + 路由覆盖 + 端口契约）**、**下单防重 Redis 降级契约（连接被拒/超时均放行，但重复提交仍被拦）**）
 - 一键容器化环境：`docker compose up -d --build`（**gateway + app** + MySQL 8.4 + Redis 7，含健康检查与启动依赖顺序）；只起基础设施（本机用 Maven 跑后端）用 `docker compose up -d mysql redis`。注意 compose 的 MySQL 映射到宿主 **3307**（避开本机 MySQL84 的 3306）
   - 拓扑（Phase 2 起）：对外 `:9000` → **gateway** 容器 → `app:9000`。应用另映射宿主 **9100** 供直连调试（不经网关，接口一致）
   - **网关是信任边界，两处配置不可随意改**（都有契约测试守护，见 `takeout-gateway` 的 `GatewayXForwardedConfigTest`）：
