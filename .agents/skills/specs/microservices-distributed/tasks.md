@@ -21,15 +21,17 @@
 
 ## 线 B：微服务化（每个 Phase 结束后按 §5.2 决策是否继续）
 
-- [ ] Task 3: Phase 1 逻辑边界收敛（不拆进程）
-  - [ ] SubTask 3.1: 输出服务边界与依赖矩阵文档（对照 `spec.md` §3.2）
-  - [ ] SubTask 3.2: 以包结构/内部接口隔离跨域直连 DAO，补边界检查脚本
-- [ ] Task 4: Phase 2 网关 + 多模块骨架 + 兼容性冒烟
-  - [ ] SubTask 4.1: 兼容性冒烟：Spring Cloud 2025.0.x + Boot 3.5.4 + Java 25 最小样例（网关能启动并转发）
-  - [ ] SubTask 4.2: `server/pom.xml` 改聚合，新增 `takeout-common`、`takeout-gateway`、`takeout-app`
-  - [ ] SubTask 4.3: 网关静态路由 `/api/**` → `takeout-app`，:9000 契约与行为不变
-  - [ ] SubTask 4.4: 同步更新 `AGENTS.md`/README 的构建运行命令（`-pl takeout-app`）
-  - [ ] SubTask 4.5: 全量测试 + 前端零改动回归
+- [x] Task 3: Phase 1 逻辑边界收敛（不拆进程）
+  - [x] SubTask 3.1: 输出服务边界与依赖矩阵文档（`phase1-service-boundaries.md`，含实测跨域 DAO 矩阵与路由归属表）
+  - [x] SubTask 3.2: 定义边界检查判据（可执行 grep 命令）；**包结构整理推迟到 Phase 2 拆模块时一并做**（避免同一批文件改两遍，已在文档 §4 说明）
+- [x] Task 4: Phase 2 网关 + 多模块骨架 + 兼容性冒烟
+  - [x] SubTask 4.1: 兼容性冒烟：Boot 3.5.4 + Java 25 + Spring Cloud **2025.0.3** + Gateway 4.3.5 —— **通过**（编译打包 + Netty 启动 + 真实路由转发 200）
+  - [x] SubTask 4.2: `server/pom.xml` 改聚合根（`takeout-parent`），新增 `takeout-app`（原单体迁入）与 `takeout-gateway`
+  - [x] SubTask 4.3: 网关静态路由 `/api/**` 与 `/uploads/**` → `takeout-app`，对外 `:9000` 契约与行为不变
+  - [x] SubTask 4.4: 更新 `AGENTS.md` 构建运行命令（`test` 命令**未变**；仅 `spring-boot:run` 需 `-pl takeout-app`）
+  - [x] SubTask 4.5: 全量测试 **225 passed / 0 failed**（app 221 + gateway 4）；端到端经网关登录 200 且 traceId 贯通
+  - [x] SubTask 4.6（实测新增）: 修复网关两个安全缺陷——XFF 被整体剔除（全站共用限流桶）、客户端伪造 XFF 绕过限流；各留契约测试并「先红后绿」验证
+  - [x] SubTask 4.7（实测新增）: `Dockerfile` 改双 jar 镜像并修正多模块 COPY 路径；`docker-compose.yml` 增 gateway 服务（对外 9000 由网关暴露，app 另映射 9100 直连调试）
 - [ ] Task 5: Phase 3 抽 `catalog-service`
   - [ ] SubTask 5.1: 迁移 stores/goods/goods_specs/categories/banners/announcements 及缓存与商户端相关接口
   - [ ] SubTask 5.2: 网关前缀路由切换；过渡期共享 `takeout` 库

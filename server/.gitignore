@@ -14,5 +14,7 @@ data/
 *.iml
 .vscode/
 
-# 日志
+# 日志（logback 按天分文件 + 2MB 轮转，归档为 .zip）
 *.log
+logs/
+*.log.zip

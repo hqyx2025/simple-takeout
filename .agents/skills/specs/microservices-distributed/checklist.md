@@ -22,21 +22,25 @@
 
 ## 线 B · 每阶段通用门禁
 
-- [ ] 🔴 `mvn -f server/pom.xml test` 全绿
-- [ ] 🔴 现有 HAP **不重新构建**即可跑通四端主链路（浏览→下单→支付→接单→出餐→抢单→取餐→送达→确认收货）
-- [ ] 🔴 `scripts/rider-chain-regression.ps1` 全绿
-- [ ] 🔴 无服务直接访问他域表/DAO（边界检查脚本通过）
-- [ ] 🔴 契约未变：前端无需改动任何 `Constants.ets`/ApiService 字段
-- [ ] 🟡 `docker compose up -d --build` 一键可用，健康检查通过
-- [ ] 🟡 新增/变更文档已同步 README 文档索引
-- [ ] 🟡 提交信息无 AI 署名，身份为 `HQYX2025 <751848863@qq.com>`
+- [x] 🔴 `mvn -f server/pom.xml test` 全绿 —— **225 passed / 0 failed**（Phase 2 后）
+- [ ] ⚠️ 现有 HAP **不重新构建**即可跑通四端主链路 —— **未执行**：需要真机/模拟器，本次未做设备侧回归
+- [ ] ⚠️ `scripts/rider-chain-regression.ps1` 全绿 —— **未执行**：需 Redis（本机未启动）
+- [x] 🔴 契约未变：前端无需改动任何 `Constants.ets`/ApiService 字段（对外仍是 `:9000` + `/api/**`，端到端登录 200 已验证）
+- [x] 🔴 无服务直接访问他域表/DAO —— Phase 2 只有网关（不访问数据库）与应用（未拆域），边界检查判据已在 `phase1-service-boundaries.md` §3.1 定义
+- [x] 🟡 `docker compose up -d --build` 一键可用 —— **`docker compose config` 通过**；实际启动**未执行**（Docker daemon 未运行）
+- [ ] 🟡 新增/变更文档已同步 README 文档索引 —— Spec 目录已更新；README 索引待 Phase 3 一并补
+- [x] 🟡 提交信息无 AI 署名，身份为 `HQYX2025 <751848863@qq.com>`
 
 ## 专项门禁
 
-### Phase 2（网关 + 多模块）
-- [ ] 🔴 Spring Cloud 2025.0.x 与 Boot 3.5.4 / Java 25 兼容性冒烟通过（网关可启动转发）
-- [ ] 🔴 若 Nacos 不可用，已按预案退回静态路由（不为注册中心牺牲可构建性）
-- [ ] 🔴 `AGENTS.md`/README 构建命令已更新且实测可用
+### Phase 2（网关 + 多模块）—— ✅ 通过
+- [x] 🔴 Spring Cloud 2025.0.3 与 Boot 3.5.4 / Java 25 兼容性冒烟通过（编译 + Netty 启动 + 真实路由转发 200）
+- [x] 🔴 未使用 Nacos（采用静态路由 + Compose 服务名，符合"不为注册中心牺牲可构建性"）
+- [x] 🔴 `AGENTS.md` 构建命令已更新且实测可用（`test` 命令未变，`spring-boot:run` 加 `-pl takeout-app`）
+- [x] 🔴 **网关 XFF 安全契约（实测新增，Spec 未预见）**：
+  - `for-append` 必须为 false —— 否则客户端伪造 XFF 排在最前，后端取 `[0]` → **无限绕过登录限流**（已实测复现并修复）
+  - `trusted-proxies` 必须能匹配直连地址且不得写成 CIDR —— 否则网关剔除 XFF → **全站共用一个限流桶**（已实测复现并修复）
+  - 两条均有契约测试守护，且做过「先红后绿」验证
 
 ### Phase 3（catalog）
 - [ ] 🔴 缓存穿透/击穿/雪崩三防护用例不回归

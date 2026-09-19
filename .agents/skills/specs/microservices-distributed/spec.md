@@ -238,10 +238,13 @@ payOrder(sagaId):
 
 ### 线 B：微服务化（Strangler，逐阶段可停）
 
-- **Phase 1 — 逻辑边界收敛（不拆进程）**：按 §3.2 把包结构与依赖理清（禁止跨域 DAO 直连，先用"内部服务接口"隔离），为后续外拆铺路。产出边界文档与依赖矩阵。
-- **Phase 2 — 网关 + 多模块骨架**：`server/` 改 Maven 聚合；新增 `takeout-common`、`takeout-gateway`、`takeout-app`（现单体过渡承载）。网关静态路由到 `takeout-app`，**外部行为/端口/前端零变化**。
-  - ⚠️ 兼容性冒烟：Spring Cloud 2025.0.x + Boot 3.5.4 + Java 25（见 3.3）。
-  - ⚠️ 文档命令变更：`mvn -f server/pom.xml spring-boot:run` → `mvn -f server/pom.xml -pl takeout-app spring-boot:run`，需同步 `AGENTS.md`/README（属于批准的文档修改）。
+- **Phase 1 — 逻辑边界收敛（不拆进程）** —— **已完成**：产出 `phase1-service-boundaries.md`（实测跨域 DAO 依赖矩阵 + 路由归属表）。**包结构整理刻意推迟到 Phase 2**，避免同一批文件改两遍。
+- **Phase 2 — 网关 + 多模块骨架** —— **已完成**（详见 `phase2-gateway.md`）：`server/` 改 Maven 聚合（`takeout-parent` + `takeout-app` + `takeout-gateway`）；网关静态路由 `/api/**` 与 `/uploads/**`，**外部行为/端口/前端零变化**；全量 225 测试绿。
+  - ✅ **兼容性冒烟通过**：Boot 3.5.4 + Java 25 + Spring Cloud **2025.0.3** + Gateway 4.3.5（编译 + Netty 启动 + 真实路由转发 200）。
+  - ✅ **文档命令变更最小化**：`mvn -f server/pom.xml test` **命令不变**（聚合自动跑全模块）；仅 `spring-boot:run` 需加 `-pl takeout-app`。
+  - ⚠️ **实测发现两个 Spec 未预见的安全缺陷**（已修复 + 契约测试守护）：
+    ① 默认配置下网关**剔除** X-Forwarded-*（`trusted-proxies` 是正则非 CIDR）→ 后端只能看到网关 IP，**全站共用一个限流桶**；
+    ② `for-append=true` 时客户端**伪造 XFF** 排在最前，后端取 `split(",")[0]` → **无限绕过登录限流**。已改为覆写语义。
 - **Phase 3 — 抽 `catalog-service`（收益最大、耦合最小）**：迁移 stores/goods/specs/categories/banners/announcements 及其缓存；网关把对应前缀路由过去；**过渡期共享 `takeout` 库**。
   - **验收**：`rider-chain-regression.ps1` 全绿（订单需调 catalog 取价/扣库存）；前端 HAP 不重新构建也能正常浏览下单。
 - **Phase 4 — 抽 `account-service`**：users/auth/token_blacklist/addresses/favorites 迁移；balance 暂留，或一并迁移并进入 Phase 5 的 TCC。
@@ -271,7 +274,9 @@ payOrder(sagaId):
 | --- | --- | --- | --- | --- |
 | X1 | 大纲 §17.1「不批准强制迁移/引入…，只有用户批准才允许落地」 | 未引入 Spring Cloud/网关 | 明确列出新增依赖栈，等评审批准后再加 | ✅ 是 |
 | X2 | `md/Redis缓存与异步事件架构.md` §7 与 `createOrder` 单事务决策 | 下单保持同步本地事务，Saga 标注"风险较高" | 线 A/Phase 2~4 不动下单；Phase 5 才引入 Saga，且单独评审 | ✅ 是（仅 Phase 5） |
-| X3 | `AGENTS.md` 构建命令 `mvn -f server/pom.xml spring-boot:run` | 单模块 | 多模块后改 `-pl takeout-app`；同步更新 `AGENTS.md`/README | ✅ 是 |
+| X3 | `AGENTS.md` 构建命令 `mvn -f server/pom.xml spring-boot:run` | 单模块 | 多模块后 `test` 命令**保持不变**（聚合自动跑全模块），仅 `spring-boot:run` 改 `-pl takeout-app`；已同步 `AGENTS.md` | ✅ 已批准并落地 |
+| X7 | 网关 XFF 信任边界（**实测新增，Spec 未预见**） | 无网关时 `clientIp()` 读客户端直连地址 | 网关必须 `for-append: false`（覆写）+ `trusted-proxies` 匹配直连地址；否则限流失效或可被绕过 | ✅ 已修复 + 契约测试 |
+| X8 | `Dockerfile` 的 `COPY pom.xml`/`COPY src` 路径 | 单模块布局 | 多模块后改为双 jar 镜像 + 正确的模块路径；compose 增 `gateway` 服务，对外 9000 由网关暴露 | ✅ 已落地 |
 | X4 | `/uploads/**` 应用本地磁盘 | Compose 命名卷 | 多实例下共享同一卷；拆服务时明确归属或迁对象存储 | 提示 |
 | X5 | 多实例 Outbox 认领 | 文档已留 ponytail 升级路径 | Phase 0 直接实现 `SKIP LOCKED` | 否（既定方向） |
 | X6 | 购物车 MyBatis-Plus、其余 JdbcTemplate 并存 | `AGENTS.md` 已授权 | 保持不变，不借机迁移 | 否 |
