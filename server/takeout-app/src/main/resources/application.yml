@@ -1,6 +1,8 @@
 server:
   # 8080 位于 Windows 当前排除端口范围（8005-8104）内，改用未排除的 9000
-  port: 9000
+  # 默认值不变：单跑应用（本机开发、既有脚本、compose）仍是 9000。
+  # 与网关同机同跑时把应用挪开（如 TAKEOUT_APP_PORT=9100），由网关占住对外的 9000。
+  port: ${TAKEOUT_APP_PORT:9000}
 
 spring:
   application:
