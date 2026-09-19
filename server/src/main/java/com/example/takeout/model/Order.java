@@ -41,6 +41,18 @@ public record Order(
                 discount, payAmount, remark, reviewed, escrowStatus, createTime, payTime, acceptTime,
                 deliverTime, completeTime, expectTime, couponId, "DELIVERY");
     }
+
+    /**
+     * 替换订单号（其余字段不变）。
+     *
+     * <p>用于订单号唯一键冲突时的重试：雪花 ID 在 workerId 碰撞等极端情况下仍可能重复，
+     * 此时换一个订单号重试一次即可，不必让用户看到「下单失败」。</p>
+     */
+    public Order withOrderNo(String newOrderNo) {
+        return new Order(id, newOrderNo, userId, storeId, storeName, status, items, address, goodsAmount,
+                deliveryFee, discount, payAmount, remark, reviewed, escrowStatus, createTime,
+                payTime, acceptTime, deliverTime, completeTime, expectTime, couponId, deliveryType);
+    }
     /**
      * 订单商品项（对应客户端 CartItem 结构；多规格下单记录 specId/specName 规格快照，
      * 秒杀下单记录 seckillId 以便取消时归还秒杀名额）

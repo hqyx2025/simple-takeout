@@ -1,6 +1,7 @@
 package com.example.takeout.service;
 
 import com.example.takeout.common.BizException;
+import com.example.takeout.common.OrderIdGenerator;
 import com.example.takeout.dao.AddressDao;
 import com.example.takeout.dao.CouponDao;
 import com.example.takeout.dao.GoodsDao;
@@ -38,7 +39,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,6 +64,8 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 @Service
 public class OrderService {
+
+    private static final Logger log = LoggerFactory.getLogger(OrderService.class);
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -355,7 +361,7 @@ public class OrderService {
                 goodsAmount, deliveryFee, discount, payAmount,
                 remark == null ? "" : requireMaxLength(remark, 255, "订单备注"), 0, 0, now, "", "", "", "", normalizedExpect,
                 appliedCoupon == null ? 0 : appliedCoupon.id(), normalizedDeliveryType);
-        long id = orderDao.insert(order);
+        long id = insertOrderWithUniqueRetry(order);
         // 一人一单：下单登记秒杀参与记录，唯一键(user_id, seckill_id)拦截跨单重复；重复则回滚整单
         for (StockHold hold : holds) {
             if (hold.seckillId() > 0 && !seckillDao.joinOnce(userId, hold.seckillId(), id, now)) {
@@ -1059,8 +1065,44 @@ public class OrderService {
     }
 
     private String genOrderNo() {
-        return LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
-                + ThreadLocalRandom.current().nextInt(1000, 9999);
+        return OrderIdGenerator.nextOrderNo();
+    }
+
+    /**
+     * 落库订单，遇订单号唯一键冲突换号重试一次。
+     *
+     * <p>雪花 ID 由「时间戳+workerId+序列号」保证不重复，但 workerId 是从实例标识哈希派生的
+     * （见 {@code SnowflakeIdGenerator.workerIdFrom}），两个实例理论上有撞号可能。撞号时的唯一表现
+     * 就是 {@code orders.order_no} 的 UNIQUE 约束报错。这里换一个订单号重试一次即可——
+     * 重试仍失败说明是别的问题，原样抛出交给上层处理。</p>
+     *
+     * <p><b>注意</b>：本方法必须在事务内调用，且重试仅针对本行 INSERT。MySQL 的唯一键冲突
+     * 只回滚该语句，不影响同事务内已完成的库存扣减与秒杀名额占用。</p>
+     */
+    private long insertOrderWithUniqueRetry(Order order) {
+        try {
+            return orderDao.insert(order);
+        } catch (DuplicateKeyException e) {
+            if (!isOrderNoDuplicate(e)) {
+                throw e;
+            }
+            log.warn("[下单] 订单号冲突，换号重试一次 orderNo={} workerId={}",
+                    order.orderNo(), OrderIdGenerator.workerId());
+            try {
+                return orderDao.insert(order.withOrderNo(genOrderNo()));
+            } catch (DuplicateKeyException retryFailure) {
+                // 连续两次撞号已不是概率问题，直接失败让上层/用户重试，避免掩盖真实故障
+                log.warn("[下单] 换号重试仍冲突 orderNo={} workerId={}",
+                        order.orderNo(), OrderIdGenerator.workerId());
+                throw new BizException("订单号生成冲突，请重试");
+            }
+        }
+    }
+
+    /** 判断唯一键冲突是否来自 order_no（而非同事务其他表的唯一键）。 */
+    private boolean isOrderNoDuplicate(DuplicateKeyException e) {
+        String message = e.getMostSpecificCause().getMessage();
+        return message != null && message.toLowerCase().contains("order_no");
     }
 
     private static double round2(double v) {

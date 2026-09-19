@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  日志配置。
+  说明：AGENTS.md §4 记载「按天分文件 app-YYYY-MM-DD.log、单文件 2MB 轮转压缩」，
+  但仓库此前从未有 logback 配置文件（logging 只走 Spring Boot 默认的控制台输出）。
+  此处补齐该能力，并把 traceId 写进日志 pattern —— 没有 pattern 里的 %X{traceId}，
+  拦截器注入 MDC 的值不会被打印，链路追踪形同虚设。
+
+  输出目标：
+    1) 控制台（开发/容器 docker logs 可见）
+    2) 文件 ${LOG_DIR}/app-YYYY-MM-DD.log，按天切分、单文件 2MB 轮转、归档 zip
+  可用环境变量覆盖：TAKEOUT_LOG_DIR / TAKEOUT_LOG_LEVEL / TAKEOUT_LOG_ROOT_LEVEL
+-->
+<configuration>
+    <property name="LOG_DIR" value="${TAKEOUT_LOG_DIR:-logs}"/>
+    <property name="LOG_LEVEL" value="${TAKEOUT_LOG_LEVEL:-INFO}"/>
+    <property name="ROOT_LEVEL" value="${TAKEOUT_LOG_ROOT_LEVEL:-INFO}"/>
+
+    <!-- 控制台：带 traceId，便于本地联调时一眼串起一次请求 -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-}] %logger{36} - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- 按天分文件 + 单文件 2MB 轮转 + 归档压缩 -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/app.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/app-%d{yyyy-MM-dd}.%i.log.zip</fileNamePattern>
+            <maxFileSize>2MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>500MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-}] %logger{36} - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <logger name="com.example.takeout" level="${LOG_LEVEL}"/>
+    <logger name="org.springframework.jdbc.core" level="WARN"/>
+    <logger name="org.springframework.web" level="WARN"/>
+
+    <root level="${ROOT_LEVEL}">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </root>
+</configuration>
