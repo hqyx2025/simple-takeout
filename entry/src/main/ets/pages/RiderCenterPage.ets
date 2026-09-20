@@ -8,6 +8,7 @@ import { fetchRiderProfileRemote, logout, setRiderStatusRemote, reportRiderLocat
 import { updateRiderRadiusApi, updateRiderLocationApi } from '../service/ApiService'
 import { joinAddressParts } from '../service/LocationService'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { ChangePasswordDialog } from '../components/ChangePasswordDialog'
 import { logInfo } from '../service/AppLogger'
 
 /** 骑手配送半径的软阈值（公里）：低于/高于会先弹确认框，服务端仍接受 */
@@ -28,6 +29,7 @@ export struct RiderCenterPage {
   @State updatingLocation: boolean = false
   @State showRadiusConfirm: boolean = false
   @State showLogoutConfirm: boolean = false
+  @State showChangePwd: boolean = false
   @State radiusConfirmText: string = ''
   @State pendingRadiusMeters: number = 0
 
@@ -233,6 +235,14 @@ export struct RiderCenterPage {
                 .fontSize(FONT_SIZE.SM)
                 .fontColor(this.rider!.online === 1 ? COLORS.SUCCESS : COLORS.TEXT_HINT)
                 .id('rider-online-status')
+              // 资料卡内改密入口：与用户端的"我的 → 修改密码"对等
+              Row({ space: SPACING.XS }) {
+                Text('🔑').fontSize(FONT_SIZE.SM)
+                Text('修改密码').fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
+              }
+              .margin({ top: SPACING.SM })
+              .id('rider-change-pwd')
+              .onClick(() => { this.showChangePwd = true })
             }
             .width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
           }
@@ -346,6 +356,17 @@ export struct RiderCenterPage {
       }
     }
     .width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)
+
+      if (this.showChangePwd) {
+        ChangePasswordDialog({
+          onSuccess: () => {
+            this.showChangePwd = false
+            logout()
+            router.replaceUrl({ url: 'pages/Index' })
+          },
+          onClose: () => { this.showChangePwd = false }
+        })
+      }
 
       if (this.showLogoutConfirm) {
         ConfirmDialog({

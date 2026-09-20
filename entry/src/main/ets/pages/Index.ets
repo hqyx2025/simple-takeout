@@ -12,6 +12,7 @@ import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrder
 import { EmptyState } from '../components/EmptyState'
 import { RatingStars } from '../components/RatingStars'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { ChangePasswordDialog } from '../components/ChangePasswordDialog'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { initLogger, logInfo, logError, setPrivacyConsent } from '../service/AppLogger'
 import { savePrivacyConsent } from '../service/DataPersistence'
@@ -2112,6 +2113,7 @@ export struct StoreDetailContent {
 @Component
 struct ProfileMainPage {
   @State showRechargeDialog: boolean = false
+  @State showChangePwd: boolean = false
   @State rechargeAmount: string = ''
   @State recharging: boolean = false
   @Prop @Watch('onRefreshTokenChange') refreshToken: number = 0
@@ -2347,6 +2349,7 @@ struct ProfileMainPage {
           this.ProfileMenuRow('❤️', '我的收藏', () => { router.pushUrl({ url: 'pages/FavoriteListPage' }) })
           this.ProfileMenuRow('📞', '联系客服', () => { router.pushUrl({ url: 'pages/ContactCustomerServicePage' }) })
           this.ProfileMenuRow('⚙️', '设置', () => { router.pushUrl({ url: 'pages/SettingsPage' }) })
+          this.ProfileMenuRow('🔑', '修改密码', () => { this.showChangePwd = true })
         }
         .width('100%')
         .padding({ top: SPACING.SM })
@@ -2409,6 +2412,12 @@ struct ProfileMainPage {
 
       if (this.showRechargeDialog) {
         this.RechargeDialog()
+      }
+      if (this.showChangePwd) {
+        ChangePasswordDialog({
+          onSuccess: () => { this.showChangePwd = false; logout(); router.replaceUrl({ url: 'pages/Index' }) },
+          onClose: () => { this.showChangePwd = false }
+        })
       }
     }
     .width('100%').height('100%')
