@@ -27,8 +27,12 @@ export struct PageHeader {
   @Prop actionLabel: string = ''
   /** 是否显示返回键；false 时用同尺寸透明占位保持标题居中（Tab 内嵌页） */
   @Prop showBack: boolean = true
+  /** 返回键文本：默认 '‹ 返回'；部分页 UiTest 依赖 '‹' 文本兜底锚点（OrderDetailPage/SearchPage） */
+  @Prop backText: string = '‹ 返回'
   /** 返回键 UiTest 锚点 id（透传原页面 .id('xxx-back')，保设备回归） */
   @Prop backId: string = ''
+  /** 顶部安全区 padding（默认 30；部分页面原值 40） */
+  @Prop topPadding: number = 30
   /** 返回回调（showBack=true 时生效） */
   onBack: () => void = (): void => {}
   /** 右侧动作回调 */
@@ -37,8 +41,8 @@ export struct PageHeader {
 
   @Builder
   backButton() {
-    // 保持 Text('‹ 返回') 而非图标：UiTest clickByIdOrText 的文本兜底锚点依赖 '‹ 返回' 字符串
-    Text('‹ 返回')
+    // 保持 Text 而非图标：UiTest clickByIdOrText 的文本兜底锚点依赖 backText 字符串
+    Text(this.backText)
       .id(this.backId)
       .fontSize(FONT_SIZE.MD)
       .fontColor(COLORS.TEXT_PRIMARY)
@@ -68,6 +72,7 @@ export struct PageHeader {
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .width('100%')
+          .textAlign(TextAlign.Center)
         if (this.subtitle !== '') {
           Text(this.subtitle)
             .fontSize(FONT_SIZE.SM)
@@ -75,9 +80,10 @@ export struct PageHeader {
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
             .width('100%')
+            .textAlign(TextAlign.Center)
         }
       }
-      .alignItems(HorizontalAlign.Start)
+      .alignItems(HorizontalAlign.Center)
       .layoutWeight(1)
 
       if (this.actionLabel !== '') {
@@ -94,7 +100,7 @@ export struct PageHeader {
     }
     .width('100%')
     .height(56)
-    .padding({ left: SPACING.LG, right: SPACING.LG, top: 30 })
+    .padding({ left: SPACING.LG, right: SPACING.LG, top: this.topPadding })
     .backgroundColor(COLORS.BG_WHITE)
   }
 }

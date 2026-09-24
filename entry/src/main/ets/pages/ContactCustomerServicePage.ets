@@ -4,6 +4,7 @@
  */
 import { routerCompat as router, promptCompat as promptAction } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { PageHeader } from '../components/PageHeader'
 
 const FAQ_QUESTIONS: string[] = [
   '\u5982\u4f55\u4fee\u6539\u6536\u8d27\u5730\u5740\uff1f',
@@ -38,26 +39,7 @@ export struct ContactCustomerServicePage {
 
   build() {
     Column() {
-      Row() {
-        Text('\u2039 \u8fd4\u56de')
-          .fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.TEXT_PRIMARY)
-          .onClick(() => { router.back() })
-        Text('\u8054\u7cfb\u5ba2\u670d')
-          .fontSize(FONT_SIZE.XL)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.TEXT_PRIMARY)
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-        Text(' ')
-          .fontSize(FONT_SIZE.MD)
-          .width(28)
-      }
-      .width('100%')
-      .height(56)
-      .padding({ left: SPACING.LG, right: SPACING.LG })
-      .backgroundColor(COLORS.BG_WHITE)
-      .alignItems(VerticalAlign.Center)
+      PageHeader({ title: '联系客服', onBack: () => { router.back() } })
 
       Scroll() {
         Column({ space: SPACING.MD }) {

@@ -5,6 +5,7 @@
 import { Address } from '../model/Models'
 import { addAddressRemote, deleteAddressRemote, updateAddressRemote, setDefaultAddressRemote, syncAddressesRemote, deduplicateAddresses, isLoggedIn, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { PageHeader } from '../components/PageHeader'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { common } from '@kit.AbilityKit'
 import { GeoPosition, getCurrentPosition, reverseGeocodePosition } from '../service/LocationService'
@@ -94,26 +95,7 @@ export struct AddressListPage {
       // 主内容
       Column() {
         // 顶部导航栏
-        Row() {
-          Text('‹')
-            .fontSize(FONT_SIZE.XXL)
-            .fontColor(COLORS.TEXT_PRIMARY)
-            .onClick(() => { this.onBack() })
-          Text('收货地址')
-            .fontSize(FONT_SIZE.XL)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(COLORS.TEXT_PRIMARY)
-            .layoutWeight(1)
-            .textAlign(TextAlign.Center)
-          // 占位以保持标题居中
-          Text('‹')
-            .fontSize(FONT_SIZE.XXL)
-            .fontColor(Color.Transparent)
-        }
-        .width('100%')
-        .height(56)
-        .padding({ left: SPACING.LG, right: SPACING.LG })
-        .backgroundColor(COLORS.BG_WHITE)
+        PageHeader({ title: '收货地址', backText: '‹', onBack: () => { this.onBack() } })
 
         // 地址列表 / 空状态
         if (this.addressList.length === 0) {

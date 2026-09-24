@@ -12,6 +12,7 @@ import { addAddressRemoteAndGet, isLoggedIn } from '../service/AppStorageManager
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { AddressSearchResult, GeoPosition, getCurrentPosition, reverseGeocodePosition, searchAddress } from '../service/LocationService'
 import { EmptyState } from '../components/EmptyState'
+import { PageHeader } from '../components/PageHeader'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { common } from '@kit.AbilityKit'
 import { webview } from '@kit.ArkWeb'
@@ -443,25 +444,7 @@ export struct LocationPage {
     Stack() {
       Column() {
       // 顶部导航栏
-      Row() {
-        Text('‹ 返回')
-          .fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.TEXT_PRIMARY)
-          .onClick(() => { router.back() })
-        Text('选择位置')
-          .fontSize(FONT_SIZE.XL)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.TEXT_PRIMARY)
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-        Text(' ')
-          .fontSize(FONT_SIZE.MD)
-          .width(28)
-      }
-      .width('100%')
-      .height(56)
-      .padding({ left: SPACING.LG, right: SPACING.LG })
-      .backgroundColor(COLORS.BG_WHITE)
+      PageHeader({ title: '选择位置', onBack: () => { router.back() } })
 
       // 地图区域：拖动/缩放地图，中心图标即所选位置
       Stack() {

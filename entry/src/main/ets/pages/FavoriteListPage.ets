@@ -8,6 +8,7 @@ import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, accentFg, acce
 import { Favorite } from '../model/Models'
 import { getFavorites, toggleFavoriteRemote, syncFavoritesRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { EmptyState } from '../components/EmptyState'
+import { PageHeader } from '../components/PageHeader'
 import { logInfo } from '../service/AppLogger'
 
 // 收藏列表懒加载数据源（实现 IDataSource）
@@ -66,27 +67,7 @@ export struct FavoriteListPage {
   build() {
     Column() {
       // 顶部导航栏
-      Row() {
-        Text('‹ 返回')
-          .fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.TEXT_PRIMARY)
-          .onClick(() => { router.back() })
-        Text('我的收藏')
-          .fontSize(FONT_SIZE.XL)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.TEXT_PRIMARY)
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-        // 占位以保持标题居中
-        Text(' ')
-          .fontSize(FONT_SIZE.MD)
-          .width(28)
-      }
-      .width('100%')
-      .height(56)
-      .padding({ left: SPACING.LG, right: SPACING.LG })
-      .backgroundColor(COLORS.BG_WHITE)
-      .alignItems(VerticalAlign.Center)
+      PageHeader({ title: '我的收藏', onBack: () => { router.back() } })
 
       // 内容区
       if (!this.loggedIn) {

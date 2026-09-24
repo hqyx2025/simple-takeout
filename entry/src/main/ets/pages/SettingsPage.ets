@@ -6,6 +6,7 @@ import { CartItem } from '../model/Models'
 import { logout, changePasswordRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { PageHeader } from '../components/PageHeader'
 import { logInfo } from '../service/AppLogger'
 import { routerCompat as router, promptCompat as promptAction } from '../common/UiNavigation'
 
@@ -106,25 +107,7 @@ export struct SettingsPage {
       // 主内容
       Column() {
         // 导航栏
-        Row() {
-          Text('‹ 返回')
-            .fontSize(FONT_SIZE.MD)
-            .fontColor(COLORS.TEXT_PRIMARY)
-            .onClick(() => { this.onBack() })
-          Text('设置')
-            .fontSize(FONT_SIZE.XL)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(COLORS.TEXT_PRIMARY)
-            .layoutWeight(1)
-            .textAlign(TextAlign.Center)
-          Text(' ')
-            .fontSize(FONT_SIZE.MD)
-            .width(28) // 占位，保持标题居中
-        }
-        .width('100%')
-        .height(56)
-        .padding({ left: SPACING.LG, right: SPACING.LG })
-        .backgroundColor(COLORS.BG_WHITE)
+        PageHeader({ title: '设置', onBack: () => { this.onBack() } })
 
         // 设置项列表
         Column() {

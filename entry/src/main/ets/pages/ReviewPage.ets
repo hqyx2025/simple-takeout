@@ -8,6 +8,7 @@ import { API_CONFIG, COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, REVIEW_TAGS } fr
 import { CartItem, Order, Review, User } from '../model/Models'
 import { getCurrentUser, submitReviewRemote, syncStoreReviewsRemote, syncUserOrdersFromServer, uploadReviewImageRemote } from '../service/AppStorageManager'
 import { logInfo, logWarn } from '../service/AppLogger'
+import { PageHeader } from '../components/PageHeader'
 import { photoAccessHelper } from '@kit.MediaLibraryKit'
 
 /** 图文评价最多上传的图片数量 */
@@ -314,27 +315,7 @@ export struct ReviewPage {
   build() {
     Column() {
       // 导航栏
-      Row() {
-        Text('‹ 返回')
-          .fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.TEXT_PRIMARY)
-          .id('review-back')
-          .onClick(() => { router.back() })
-        Text('订单评价')
-          .fontSize(FONT_SIZE.XL)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.TEXT_PRIMARY)
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-        Text(' ')
-          .fontSize(FONT_SIZE.MD)
-          .width(28)
-      }
-      .width('100%')
-      .height(56)
-      .padding({ left: SPACING.LG, right: SPACING.LG })
-      .backgroundColor(COLORS.BG_WHITE)
-      .alignItems(VerticalAlign.Center)
+      PageHeader({ title: '订单评价', backId: 'review-back', onBack: () => { router.back() } })
 
       if (!this.loggedIn) {
         Column() {

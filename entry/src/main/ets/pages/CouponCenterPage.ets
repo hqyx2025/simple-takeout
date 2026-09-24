@@ -6,6 +6,7 @@ import { Coupon } from '../model/Models'
 import { claimCouponRemote, syncCouponsRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR } from '../common/Constants'
 import { logInfo } from '../service/AppLogger'
+import { PageHeader } from '../components/PageHeader'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 
 // Tab项 - 使用class避免无类型对象字面量
@@ -52,25 +53,7 @@ export struct CouponCenterPage {
   build() {
     Column() {
       // 导航栏
-      Row() {
-        Text('‹ 返回')
-          .width(80)
-          .fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.TEXT_PRIMARY)
-          .onClick(() => { this.onBack() })
-        Text('优惠券中心')
-          .layoutWeight(1)
-          .fontSize(FONT_SIZE.XL)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.TEXT_PRIMARY)
-          .textAlign(TextAlign.Center)
-        Text('')
-          .width(80)
-      }
-      .width('100%')
-      .height(56)
-      .padding({ left: SPACING.LG, right: SPACING.LG, top: 40 })
-      .backgroundColor(COLORS.BG_WHITE)
+      PageHeader({ title: '优惠券中心', topPadding: 40, onBack: () => { this.onBack() } })
 
       // Tab切换
       Row({ space: 0 }) {

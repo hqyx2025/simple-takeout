@@ -16,6 +16,7 @@ import { BankCard, User } from '../model/Models'
 import { fetchBankCardsApi, fetchCurrentUserApi } from '../service/ApiService'
 import { rechargeBalanceRemote } from '../service/AppStorageManager'
 import { EmptyState } from '../components/EmptyState'
+import { PageHeader } from '../components/PageHeader'
 import { logInfo } from '../service/AppLogger'
 
 @Entry
@@ -88,27 +89,7 @@ export struct BalancePage {
     Stack() {
       Column() {
         // 顶部导航
-        Row() {
-          Text('‹ 返回')
-            .id('balance-back')
-            .fontSize(FONT_SIZE.MD)
-            .fontColor(COLORS.TEXT_PRIMARY)
-            .onClick(() => { router.back() })
-          Text('我的钱包')
-            .fontSize(FONT_SIZE.XL)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(COLORS.TEXT_PRIMARY)
-            .layoutWeight(1)
-            .textAlign(TextAlign.Center)
-          Text(' ')
-            .fontSize(FONT_SIZE.MD)
-            .width(28)
-        }
-        .width('100%')
-        .height(56)
-        .padding({ left: SPACING.LG, right: SPACING.LG })
-        .backgroundColor(COLORS.BG_WHITE)
-        .alignItems(VerticalAlign.Center)
+        PageHeader({ title: '我的钱包', backId: 'balance-back', onBack: () => { router.back() } })
 
         if (!this.loggedIn) {
           EmptyState({ icon: '🔒', title: '暂无登录', description: '请登录后查看钱包' })

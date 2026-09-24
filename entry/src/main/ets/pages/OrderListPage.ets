@@ -8,6 +8,7 @@ import { CartItem, Order } from '../model/Models'
 import { syncUserOrdersFromServer, confirmOrderRemote, cancelOrderRemote, payOrderRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, MODULE_COLOR, MODULE_BG } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
+import { PageHeader } from '../components/PageHeader'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
 
@@ -159,18 +160,7 @@ struct OrderListPage {
   build() {
     Column() {
       // 导航栏：独立路由页必须自带返回
-      Row() {
-        Text('‹ 返回')
-          .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
-          .onClick(() => { router.back() })
-        Text('我的订单')
-          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
-          .layoutWeight(1).textAlign(TextAlign.Center)
-        Text('   ').fontSize(FONT_SIZE.MD)
-      }
-      .width('100%').height(56)
-      .padding({ left: SPACING.LG, right: SPACING.LG, top: 30 })
-      .backgroundColor(COLORS.BG_WHITE)
+      PageHeader({ title: '我的订单', backId: 'order-list-back', onBack: () => { router.back() } })
 
       Scroll() {
         Row({ space: 0 }) {

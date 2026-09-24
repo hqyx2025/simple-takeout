@@ -5,6 +5,7 @@ import { Address, GoodsItem, StoreItem } from '../model/Models'
 import { getAllStoresList, getGoodsForStore, syncStoresFromServer, syncGoodsFromServer } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, merchantImageSource, DEFAULT_MERCHANT_IMAGE, accentBg, accentFg } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
+import { PageHeader } from '../components/PageHeader'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
 
@@ -278,32 +279,11 @@ export struct ProductListPage {
 
   build() {
     Column() {
-      Row() {
-        Text('‹ 返回')
-          .fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.TEXT_PRIMARY)
-          .onClick(() => { router.back() })
-        Column({ space: 2 }) {
-          Text(this.title)
-            .fontSize(FONT_SIZE.XL)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(COLORS.TEXT_PRIMARY)
-          Text(this.getLocationText())
-            .fontSize(FONT_SIZE.XS)
-            .fontColor(COLORS.TEXT_HINT)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-        }
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Center)
-        Text(' ')
-          .fontSize(FONT_SIZE.MD)
-          .width(28)
-      }
-      .width('100%')
-      .height(56)
-      .padding({ left: SPACING.LG, right: SPACING.LG })
-      .backgroundColor(COLORS.BG_WHITE)
+      PageHeader({
+        title: this.title,
+        subtitle: this.getLocationText(),
+        onBack: () => { router.back() }
+      })
 
       if (!this.loggedIn) {
         EmptyState({ icon: '🔒', title: '暂无登录', description: '请登录后查看商品' })

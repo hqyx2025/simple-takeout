@@ -6,6 +6,7 @@
 import { StoreDetailContent } from './Index'
 import { LoginPage } from './LoginPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { PageHeader } from '../components/PageHeader'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { GoodsItem, GoodsSpec, CartItem } from '../model/Models'
 import { addCartItemRemote, getLastRemoteErrorMessage, refreshCartFromServer } from '../service/AppStorageManager'
@@ -312,25 +313,7 @@ export struct StoreDetailPage {
   build() {
     Stack() {
       Column() {
-        Row() {
-          Text('‹ 返回')
-            .fontSize(FONT_SIZE.MD)
-            .fontColor(COLORS.TEXT_PRIMARY)
-            .onClick(() => { this.goBack() })
-          Text(this.storeName || '店铺详情')
-            .fontSize(FONT_SIZE.XL)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(COLORS.TEXT_PRIMARY)
-            .layoutWeight(1)
-            .textAlign(TextAlign.Center)
-          Text(' ')
-            .fontSize(FONT_SIZE.MD)
-            .width(28)
-        }
-        .width('100%')
-        .height(56)
-        .padding({ left: SPACING.LG, right: SPACING.LG })
-        .backgroundColor(COLORS.BG_WHITE)
+        PageHeader({ title: this.storeName || '店铺详情', onBack: () => { this.goBack() } })
 
         if (this.storeId > 0) {
           StoreDetailContent({

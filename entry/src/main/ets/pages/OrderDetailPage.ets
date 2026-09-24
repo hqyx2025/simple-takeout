@@ -8,6 +8,7 @@ import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrder
 import { Order, CartItem, DeliveryStep } from '../model/Models'
 import { cancelOrderRemote, confirmOrderRemote, applyRefundRemote, addCartItemRemote, fetchOrderDetailRemote, getLastRemoteErrorMessage, syncCartRemote, payOrderRemote } from '../service/AppStorageManager'
 import { OrderStatusTimeline } from '../components/OrderStatusTimeline'
+import { PageHeader } from '../components/PageHeader'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { logInfo } from '../service/AppLogger'
 
@@ -252,31 +253,7 @@ export struct OrderDetailPage {
     Stack() {
       Column() {
         // 导航栏
-        Row() {
-          Text('‹')
-            .fontSize(28)
-            .fontColor(COLORS.TEXT_PRIMARY)
-            // 与搜索页返回键同一个可用性问题：只有字形大小、没有触控区域，实际可点面积低于 40×40 基线
-            .width(40)
-            .height(40)
-            .textAlign(TextAlign.Center)
-            .id('order-detail-back')
-            .onClick(() => { router.back() })
-          Text('订单详情')
-            .fontSize(FONT_SIZE.XL)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(COLORS.TEXT_PRIMARY)
-            .layoutWeight(1)
-            .textAlign(TextAlign.Center)
-          Text(' ')
-            .fontSize(28)
-            .width(40)
-        }
-        .width('100%')
-        .height(56)
-        .padding({ left: SPACING.LG, right: SPACING.LG })
-        .backgroundColor(COLORS.BG_WHITE)
-        .alignItems(VerticalAlign.Center)
+        PageHeader({ title: '订单详情', backText: '‹', backId: 'order-detail-back', onBack: () => { router.back() } })
 
         if (this.order === null) {
           Column({ space: SPACING.SM }) {

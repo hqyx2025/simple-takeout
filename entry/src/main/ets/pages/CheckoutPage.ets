@@ -8,6 +8,7 @@ import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { CartItem, Order, Address, Coupon, StoreItem } from '../model/Models'
 import { createOrderRemote, deleteCartItemRemote, syncCartRemote, getAllStoresList, syncCouponsRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { LoadingIndicator } from '../components/LoadingIndicator'
+import { PageHeader } from '../components/PageHeader'
 import { logInfo } from '../service/AppLogger'
 import { calculatePayAmount } from '../service/OrderCalculations'
 import { webview } from '@kit.ArkWeb'
@@ -375,27 +376,7 @@ export struct CheckoutPage {
 
   @Builder
   NavBar() {
-    Row() {
-      Text('‹ 返回')
-        .fontSize(FONT_SIZE.MD)
-        .fontColor(COLORS.TEXT_PRIMARY)
-        .id('checkout-back')
-        .onClick(() => { router.back() })
-      Text('确认订单')
-        .fontSize(FONT_SIZE.XL)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(COLORS.TEXT_PRIMARY)
-        .layoutWeight(1)
-        .textAlign(TextAlign.Center)
-      Text(' ')
-        .fontSize(FONT_SIZE.MD)
-        .width(28)
-    }
-    .width('100%')
-    .height(56)
-    .padding({ left: SPACING.LG, right: SPACING.LG })
-    .backgroundColor(COLORS.BG_WHITE)
-    .alignItems(VerticalAlign.Center)
+    PageHeader({ title: '确认订单', backId: 'checkout-back', onBack: () => { router.back() } })
   }
 
   @Builder
