@@ -7,6 +7,7 @@ import { ApiResponse, get, post, put, del } from '../service/HttpClient'
 import { COLORS, COLORS_PRIMARY_HEX, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentIndexFromText } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { PageHeader } from '../components/PageHeader'
 import { logInfo } from '../service/AppLogger'
 
 interface AdminCategoryRequest {
@@ -98,17 +99,15 @@ export struct AdminCategoryPage {
     Stack() {
       Column() {
         // 顶部导航栏
-        Row() {
-          Text('‹ 返回')
-            .fontSize(FONT_SIZE.MD)
-            .fontColor(MODULE_COLOR.ADMIN)
-            .onClick(() => { router.back() })
-          Text('分类管理')
-            .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.ADMIN).layoutWeight(1).textAlign(TextAlign.Center)
-          Button('刷新').height(32).fontSize(FONT_SIZE.SM).onClick(() => { this.refresh() })
-        }
-        .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 })
-        .backgroundColor(MODULE_BG.ADMIN)
+        PageHeader({
+          title: '分类管理',
+          backId: 'admin-category-back',
+          headerBgColor: MODULE_BG.ADMIN,
+          actionColor: MODULE_COLOR.ADMIN,
+          actionLabel: '刷新',
+          onBack: () => { router.back() },
+          onAction: () => { this.refresh() }
+        })
 
         // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
         List({ space: SPACING.MD }) {

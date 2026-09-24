@@ -9,6 +9,7 @@ import { ApiResponse, get } from '../service/HttpClient'
 import { fetchAdminRefundsApi } from '../service/ApiService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
+import { PageHeader } from '../components/PageHeader'
 import { logInfo } from '../service/AppLogger'
 
 interface AdminStore {
@@ -135,17 +136,19 @@ export struct AdminCenterPage {
 
   build() {
     Column() {
-      Row() {
-        Text('退出').fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.ADMIN).onClick(() => {
+      PageHeader({
+        title: '平台管理',
+        backText: '退出',
+        backId: 'admin-center-logout',
+        headerBgColor: MODULE_BG.ADMIN,
+        actionColor: MODULE_COLOR.ADMIN,
+        actionLabel: this.loading ? '加载中…' : '刷新',
+        onBack: () => {
           logout()
           router.replaceUrl({ url: 'pages/Index' })
-        })
-        Text('平台管理').fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.ADMIN).layoutWeight(1)
-        Button(this.loading ? '加载中…' : '刷新').height(32).fontSize(FONT_SIZE.SM)
-          .onClick(() => { this.refresh() })
-      }
-      .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 })
-      .backgroundColor(MODULE_BG.ADMIN)
+        },
+        onAction: () => { this.refresh() }
+      })
 
       // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一块内容不在顶部
       List({ space: SPACING.MD }) {

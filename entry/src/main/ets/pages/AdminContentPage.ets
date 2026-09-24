@@ -9,6 +9,7 @@ import {
   syncAdminAnnouncementsRemote, updateAnnouncementStatusRemote, deleteAnnouncementRemote, createAnnouncementRemote
 } from '../service/AppStorageManager'
 import { StatusBadge } from '../components/StatusBadge'
+import { PageHeader } from '../components/PageHeader'
 import { logInfo } from '../service/AppLogger'
 
 @Entry
@@ -100,19 +101,15 @@ export struct AdminContentPage {
   build() {
     Stack() {
       Column() {
-        Row() {
-          Text('‹ 返回')
-            .fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.ADMIN)
-            .onClick(() => { router.back() })
-          Text('内容管理')
-            .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.ADMIN)
-            .layoutWeight(1).textAlign(TextAlign.Center)
-          Text('刷新')
-            .fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.ADMIN)
-            .onClick(() => { this.loadAll() })
-        }
-        .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG })
-        .backgroundColor(MODULE_BG.ADMIN)
+        PageHeader({
+          title: '内容管理',
+          backId: 'admin-content-back',
+          headerBgColor: MODULE_BG.ADMIN,
+          actionColor: MODULE_COLOR.ADMIN,
+          actionLabel: '刷新',
+          onBack: () => { router.back() },
+          onAction: () => { this.loadAll() }
+        })
 
         if (this.loading) {
           Column() {

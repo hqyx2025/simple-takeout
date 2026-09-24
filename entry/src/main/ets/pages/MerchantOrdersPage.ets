@@ -8,6 +8,7 @@ import { Order, CartItem, User, UserRole } from '../model/Models'
 import { getCurrentUser, getMerchantOrders, merchantActionRemote, syncMerchantOrdersFromServer } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
+import { PageHeader } from '../components/PageHeader'
 
 // 状态Tab项（使用 class + static create 避免 arkts-no-untyped-obj-literals）
 class OrderStatusTab {
@@ -105,27 +106,13 @@ export struct MerchantOrdersPage {
   build() {
     Column() {
       // 顶部导航栏：标题 + 返回按钮
-      Row() {
-        Text('‹ 返回')
-          .fontSize(FONT_SIZE.BIG_TITLE)
-          .fontColor(MODULE_COLOR.MERCHANT)
-          .id('merchant-orders-back')
-          .onClick(() => { router.back() })
-        Text('订单管理')
-          .fontSize(FONT_SIZE.XL)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(MODULE_COLOR.MERCHANT)
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-        Text(' ')
-          .fontSize(28)
-          .width(28)
-      }
-      .width('100%')
-      .height(56)
-      .padding({ left: SPACING.LG, right: SPACING.LG })
-      .backgroundColor(MODULE_BG.MERCHANT)
-      .alignItems(VerticalAlign.Center)
+      PageHeader({
+        title: '订单管理',
+        backId: 'merchant-orders-back',
+        headerBgColor: MODULE_BG.MERCHANT,
+        actionColor: MODULE_COLOR.MERCHANT,
+        onBack: () => { router.back() }
+      })
 
       // 状态Tab栏（横向滚动）
       Scroll() {

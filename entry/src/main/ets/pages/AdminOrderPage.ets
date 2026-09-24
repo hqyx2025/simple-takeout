@@ -8,6 +8,7 @@ import { ApiResponse, get, put } from '../service/HttpClient'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { PageHeader } from '../components/PageHeader'
 import { logInfo } from '../service/AppLogger'
 import { adminOrderActionApi } from '../service/ApiService'
 
@@ -143,17 +144,15 @@ export struct AdminOrderPage {
   build() {
     Column() {
       // 顶部导航栏
-      Row() {
-        Text('‹ 返回')
-          .fontSize(FONT_SIZE.MD)
-          .fontColor(MODULE_COLOR.ADMIN)
-          .onClick(() => { router.back() })
-        Text('订单管理')
-          .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.ADMIN).layoutWeight(1).textAlign(TextAlign.Center)
-        Button('刷新').height(32).fontSize(FONT_SIZE.SM).onClick(() => { this.refresh() })
-      }
-      .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 })
-      .backgroundColor(MODULE_BG.ADMIN)
+      PageHeader({
+        title: '订单管理',
+        backId: 'admin-order-back',
+        headerBgColor: MODULE_BG.ADMIN,
+        actionColor: MODULE_COLOR.ADMIN,
+        actionLabel: '刷新',
+        onBack: () => { router.back() },
+        onAction: () => { this.refresh() }
+      })
 
       // 状态筛选 Tab
       Scroll() {

@@ -33,6 +33,10 @@ export struct PageHeader {
   @Prop backId: string = ''
   /** 顶部安全区 padding（默认 30；部分页面原值 40） */
   @Prop topPadding: number = 30
+  /** 标题栏背景色（默认 COLORS.BG_WHITE；Admin/Merchant 端用 MODULE_BG.ADMIN/MODULE_BG.MERCHANT 等） */
+  @Prop headerBgColor: Resource = COLORS.BG_WHITE
+  /** 右侧动作文字颜色（默认主题橙；Admin/Merchant 端传 MODULE_COLOR.ADMIN/MODULE_COLOR.MERCHANT 保持模块色调） */
+  @Prop actionColor: Resource = COLORS.PRIMARY
   /** 返回回调（showBack=true 时生效） */
   onBack: () => void = (): void => {}
   /** 右侧动作回调 */
@@ -91,7 +95,7 @@ export struct PageHeader {
           .buttonStyle(ButtonStyleMode.NORMAL)
           .attributeModifier(this.softPress)
           .fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.PRIMARY)
+          .fontColor(this.actionColor)
           .height(40)
           .padding({ left: SPACING.MD, right: SPACING.MD })
           .backgroundColor(Color.Transparent)
@@ -101,6 +105,6 @@ export struct PageHeader {
     .width('100%')
     .height(56)
     .padding({ left: SPACING.LG, right: SPACING.LG, top: this.topPadding })
-    .backgroundColor(COLORS.BG_WHITE)
+    .backgroundColor(this.headerBgColor)
   }
 }

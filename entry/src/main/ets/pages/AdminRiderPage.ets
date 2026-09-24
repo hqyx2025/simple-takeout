@@ -6,6 +6,7 @@ import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, acc
 import { Rider } from '../model/Models'
 import { syncAdminRidersRemote, updateRiderStatusRemote } from '../service/AppStorageManager'
 import { StatusBadge } from '../components/StatusBadge'
+import { PageHeader } from '../components/PageHeader'
 import { logInfo } from '../service/AppLogger'
 
 @Entry
@@ -55,19 +56,15 @@ export struct AdminRiderPage {
 
   build() {
     Column() {
-      Row() {
-        Text('‹ 返回')
-          .fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.ADMIN)
-          .onClick(() => { router.back() })
-        Text('骑手管理')
-          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.ADMIN)
-          .layoutWeight(1).textAlign(TextAlign.Center)
-        Text('刷新')
-          .fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.ADMIN)
-          .onClick(() => { this.loadRiders() })
-      }
-      .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG })
-      .backgroundColor(MODULE_BG.ADMIN)
+      PageHeader({
+        title: '骑手管理',
+        backId: 'admin-rider-back',
+        headerBgColor: MODULE_BG.ADMIN,
+        actionColor: MODULE_COLOR.ADMIN,
+        actionLabel: '刷新',
+        onBack: () => { router.back() },
+        onAction: () => { this.loadRiders() }
+      })
 
       Row({ space: SPACING.MD }) {
         Text('状态').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)

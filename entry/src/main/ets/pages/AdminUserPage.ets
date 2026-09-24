@@ -3,6 +3,7 @@ import { AdminUser, User, UserRole } from '../model/Models'
 import { fetchAdminUsersApi, updateAdminUserStatusApi } from '../service/ApiService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { StatusBadge } from '../components/StatusBadge'
+import { PageHeader } from '../components/PageHeader'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 
 @Entry
@@ -58,12 +59,15 @@ export struct AdminUserPage {
 
   build() {
     Column() {
-      Row() {
-        Text('返回').fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.ADMIN).onClick(() => { router.back() })
-        Text('用户管理').fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.ADMIN).layoutWeight(1).textAlign(TextAlign.Center)
-        Button(this.loading ? '加载中' : '刷新').height(32).fontSize(FONT_SIZE.SM)
-          .onClick(() => { this.refresh() })
-      }.width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 }).backgroundColor(MODULE_BG.ADMIN)
+      PageHeader({
+        title: '用户管理',
+        backId: 'admin-user-back',
+        headerBgColor: MODULE_BG.ADMIN,
+        actionColor: MODULE_COLOR.ADMIN,
+        actionLabel: this.loading ? '加载中' : '刷新',
+        onBack: () => { router.back() },
+        onAction: () => { this.refresh() }
+      })
 
       Row({ space: SPACING.SM }) {
         TextInput({ placeholder: '搜索姓名或手机号', text: this.keyword }).layoutWeight(1).height(40)

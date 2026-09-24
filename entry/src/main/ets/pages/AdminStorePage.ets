@@ -6,6 +6,7 @@ import { User, UserRole } from '../model/Models'
 import { ApiResponse, get, put } from '../service/HttpClient'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { StatusBadge } from '../components/StatusBadge'
+import { PageHeader } from '../components/PageHeader'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
 
@@ -97,17 +98,15 @@ export struct AdminStorePage {
   build() {
     Column() {
       // 顶部导航栏
-      Row() {
-        Text('‹ 返回')
-          .fontSize(FONT_SIZE.MD)
-          .fontColor(MODULE_COLOR.ADMIN)
-          .onClick(() => { router.back() })
-        Text('店铺管理')
-          .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.ADMIN).layoutWeight(1).textAlign(TextAlign.Center)
-        Button('刷新').height(32).fontSize(FONT_SIZE.SM).onClick(() => { this.refresh() })
-      }
-      .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG, top: 30 })
-      .backgroundColor(MODULE_BG.ADMIN)
+      PageHeader({
+        title: '店铺管理',
+        backId: 'admin-store-back',
+        headerBgColor: MODULE_BG.ADMIN,
+        actionColor: MODULE_COLOR.ADMIN,
+        actionLabel: '刷新',
+        onBack: () => { router.back() },
+        onAction: () => { this.refresh() }
+      })
 
       Row({ space: SPACING.MD }) {
         Text('状态').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)

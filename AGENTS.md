@@ -112,6 +112,7 @@
 - `import` 语句必须集中在文件顶部，混在声明之后虽合法但易被误改
 - 所有 `.ps1` 脚本必须带 **UTF-8 BOM**（否则 PowerShell 5.1 按 ANSI 解析中文导致语法错误）
 - 遵循 `.agents/skills/specs/` 文档作为功能开发与验收依据
+- **页面标题栏统一用 `components/PageHeader.ets`**（Wave 2/4 收敛）：用户端 15 页 + 管理端 12 页 + 商户端订单页已替换。约定：标题文字逐字保留（设备 UiTest 用 `ON.text(标题)` 断言）、返回键 `backId` 透传保回归、Admin 端传 `headerBgColor: MODULE_BG.ADMIN` + `actionColor: MODULE_COLOR.ADMIN`（刷新/新增等动作按钮）、Merchant 端传 `MODULE_BG.MERCHANT`/`MODULE_COLOR.MERCHANT`。**新增页面必须用 PageHeader，禁止手写 Row+Text header**；特殊复合栏（如 SearchPage 的「返回+搜索框+搜索按钮」）因 PageHeader 无内容插槽而保留原结构，但动作元素尽量加 `SoftPressModifier` 轻按反馈。管理端 header 左侧只放返回，不放退出（退出统一放页面底部，见 `#rider-logout` 教训）。
 
 ## 8. 经验教训（陷阱清单）
 
