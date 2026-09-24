@@ -17,6 +17,9 @@ import { promptCompat as promptAction, routerCompat as router } from '../common/
 import { initLogger, logInfo, logError, setPrivacyConsent } from '../service/AppLogger'
 import { savePrivacyConsent } from '../service/DataPersistence'
 import { loadAllData, saveAllData } from '../service/DataPersistence'
+import { BreakpointSystem } from '../common/utils/BreakpointSystem'
+import { FloatingTabBarTheme } from '../common/theme/FloatingTabBarTheme'
+import { common } from '@kit.AbilityKit'
 
 // 定义快捷入口和订单Tab的数据类型，解决 arkts-no-untyped-obj-literals 错误
 class QuickEntryItem {
@@ -29,6 +32,19 @@ class QuickEntryItem {
     item.icon = icon
     item.title = title
     item.color = color
+    return item
+  }
+}
+
+/** 侧边栏导航条目（避免 arkts-no-obj-literals-as-types）。 */
+class SidebarItem {
+  title: string = ''
+  index: number = 0
+
+  static create(title: string, index: number): SidebarItem {
+    let item = new SidebarItem()
+    item.title = title
+    item.index = index
     return item
   }
 }
@@ -72,7 +88,9 @@ struct Index {
   @State showLocationLoginConfirm: boolean = false
   // 管理端跳转占位：管理端不渲染主页（定位/购物车/订单等 C 端功能），直接进入平台管理页
   @State adminRedirecting: boolean = false
+  @State isWide: boolean = false
   private tabsController: TabsController = new TabsController()
+  private breakpointSystem: BreakpointSystem = new BreakpointSystem()
 
   aboutToAppear() {
     // 初始化全局数据
@@ -90,6 +108,9 @@ struct Index {
     this.sanitizeAppData()
     // 管理端守卫：已登录的管理端不渲染主页，直接跳转平台管理页
     this.guardAdminRole()
+    this.breakpointSystem.register(this.getUIContext().getHostContext() as common.UIAbilityContext, (breakpoint: string): void => {
+      this.isWide = this.breakpointSystem.isWideForLayout()
+    })
   }
 
   private guardAdminRole(): void {
@@ -252,51 +273,11 @@ struct Index {
         .backgroundColor(COLORS.BG_PRIMARY)
       } else {
       if (!this.showLogin) {
-      Tabs({ controller: this.tabsController, barPosition: BarPosition.End }) {
-      // 首页Tab（含原「发现」的附近推荐板块）
-      TabContent() {
-        HomePage({
-          onStoreClick: (store: StoreItem) => {
-            this.showStoreDetail(store.id, store.name)
-          },
-          onNavigateLogin: () => { this.showLogin = true },
-          onNavigateLocationLogin: () => { this.showLocationLoginConfirm = true }
-        })
-      }.tabBar(this.tabBuilder('首页', 0))
-
-      // AI 智能助手Tab（原「发现」位置）
-      TabContent() {
-        AssistantPage()
-      }.tabBar(this.tabBuilder('AI助手', 1))
-
-      // 购物车Tab：购物车已收敛为底部标签，不再是独立路由页
-      TabContent() {
-        CartPage()
-      }.tabBar(this.tabBuilder('购物车', 2))
-
-      // 我的Tab
-      TabContent() {
-        ProfileMainPage({
-          refreshToken: this.profileRefreshToken,
-          onNavigateLogin: () => { this.showLogin = true }
-        })
-      }.tabBar(this.tabBuilder('我的', 3))
-    }
-    .barHeight(50)
-    .barBackgroundColor(COLORS.BG_WHITE)
-    .onChange((index: number) => {
-      this.currentTab = index
-      // 「我的」Tab 的余额/订单计数需要在每次切回时重新读取，否则显示旧值
-      if (index === 3) {
-        this.profileRefreshToken += 1
+      if (this.isWide) {
+        this.wideLayout()
+      } else {
+        this.mainTabs()
       }
-      logInfo('Page', `首页 Tab 切换 index=${index}`)
-    })
-    .scrollable(false)
-    .animationDuration(0)
-    .width('100%')
-      .height('100%')
-      .backgroundColor(COLORS.BG_PRIMARY)
 
       }
 
@@ -353,6 +334,150 @@ struct Index {
   }
 
   @Builder
+  wideLayout() {
+    SideBarContainer(SideBarContainerType.Embed) {
+      Column() {
+        Column({ space: SPACING.MD }) {
+          SymbolGlyph($r('sys.symbol.house'))
+            .fontSize(24)
+            .fontColor([COLORS.PRIMARY])
+            .width(40).height(40)
+            .backgroundColor(COLORS.BG_CARD)
+            .borderRadius(20)
+          Text('简单外卖')
+            .fontSize(FONT_SIZE.LG)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(COLORS.TEXT_PRIMARY)
+            .maxLines(1)
+        }
+        .width('100%')
+        .padding({ top: SPACING.XL, bottom: SPACING.LG })
+
+        Divider().color(COLORS.DIVIDER).margin({ bottom: SPACING.MD })
+
+        ForEach([
+          SidebarItem.create('首页', 0),
+          SidebarItem.create('AI助手', 1),
+          SidebarItem.create('我的', 3)
+        ], (item: SidebarItem) => {
+          Button({ type: ButtonType.Normal }) {
+            Row({ space: SPACING.MD }) {
+              Text(this.currentTab === item.index ? '•' : '  ')
+                .fontSize(FONT_SIZE.XL)
+                .fontColor(COLORS.PRIMARY)
+                .width(20)
+              Text(item.title)
+                .fontSize(FONT_SIZE.LG)
+                .fontColor(this.currentTab === item.index ? COLORS.PRIMARY : COLORS.TEXT_PRIMARY)
+                .fontWeight(this.currentTab === item.index ? FontWeight.Bold : FontWeight.Normal)
+            }
+            .width('100%')
+          }
+          .width('100%')
+          .height(44)
+          .buttonStyle(ButtonStyleMode.NORMAL)
+          .backgroundColor(this.currentTab === item.index ? COLORS.BG_CARD : Color.Transparent)
+          .borderRadius(12)
+          .onClick(() => { this.switchTab(item.index) })
+        }, (item: SidebarItem) => item.title)
+      }
+      .width('100%')
+      .height('100%')
+      .padding(SPACING.SM)
+      .backgroundColor(COLORS.BG_PRIMARY)
+
+      Column() {
+        this.tabContent()
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(COLORS.BG_PRIMARY)
+    }
+    .showSideBar(true)
+    .showControlButton(false)
+    .sideBarWidth(200)
+    .divider({ strokeWidth: 0, color: Color.Transparent })
+    .width('100%')
+    .height('100%')
+  }
+
+  @Builder
+  mainTabs() {
+    Tabs({ controller: this.tabsController, barPosition: BarPosition.End }) {
+      TabContent() {
+        HomePage({
+          onStoreClick: (store: StoreItem) => {
+            this.showStoreDetail(store.id, store.name)
+          },
+          onNavigateLogin: () => { this.showLogin = true },
+          onNavigateLocationLogin: () => { this.showLocationLoginConfirm = true }
+        })
+      }.tabBar(this.tabBuilder('首页', 0))
+
+      TabContent() {
+        AssistantPage()
+      }.tabBar(this.tabBuilder('AI助手', 1))
+
+      TabContent() {
+        CartPage()
+      }.tabBar(this.tabBuilder('购物车', 2))
+
+      TabContent() {
+        ProfileMainPage({
+          refreshToken: this.profileRefreshToken,
+          onNavigateLogin: () => { this.showLogin = true }
+        })
+      }.tabBar(this.tabBuilder('我的', 3))
+    }
+    .barHeight(50)
+    .barBackgroundColor(COLORS.BG_WHITE)
+    .onChange((index: number) => {
+      this.currentTab = index
+      if (index === 3) {
+        this.profileRefreshToken += 1
+      }
+      logInfo('Page', `首页 Tab 切换 index=${index}`)
+    })
+    .scrollable(false)
+    .animationDuration(0)
+    .width('100%')
+    .height('100%')
+    .backgroundColor(COLORS.BG_PRIMARY)
+  }
+
+  /** 切换 Tab 并刷新小部件 */
+  private switchTab(index: number): void {
+    if (this.currentTab === index) {
+      return
+    }
+    this.currentTab = index
+    if (index === 3) {
+      this.profileRefreshToken += 1
+    }
+    this.tabsController.changeIndex(index)
+  }
+
+  @Builder
+  tabContent() {
+    if (this.currentTab === 0) {
+      HomePage({
+        onStoreClick: (store: StoreItem) => { this.showStoreDetail(store.id, store.name) },
+        onNavigateLogin: () => { this.showLogin = true },
+        onNavigateLocationLogin: () => { this.showLocationLoginConfirm = true }
+      })
+    } else if (this.currentTab === 1) {
+      AssistantPage()
+    } else if (this.currentTab === 2) {
+      CartPage()
+    } else {
+      ProfileMainPage({
+        refreshToken: this.profileRefreshToken,
+        onNavigateLogin: () => { this.showLogin = true }
+      })
+    }
+  }
+
+  @Builder
   tabBuilder(title: string, targetIndex: number) {
     Column({ space: 2 }) {
       Text(title)
@@ -369,6 +494,10 @@ struct Index {
       this.currentTab = targetIndex
       this.tabsController.changeIndex(targetIndex)
     })
+  }
+
+  aboutToDisappear() {
+    this.breakpointSystem.unregister()
   }
 }
 
