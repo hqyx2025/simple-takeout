@@ -11,7 +11,7 @@ export struct StatusBadge {
   @Prop mode: string = 'primary'
   @Prop small: boolean = false
 
-  private bg(): string {
+  private bg(): ResourceColor {
     switch (this.mode) {
       case 'success': return COLORS.SUCCESS_LIGHT
       case 'warning': return COLORS.WARNING_LIGHT
@@ -21,7 +21,7 @@ export struct StatusBadge {
     }
   }
 
-  private fg(): string {
+  private fg(): ResourceColor {
     switch (this.mode) {
       case 'success': return COLORS.SUCCESS
       case 'warning': return COLORS.WARNING

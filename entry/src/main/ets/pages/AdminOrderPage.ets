@@ -101,7 +101,7 @@ export struct AdminOrderPage {
     return '托管中'
   }
 
-  private getEscrowColor(escrowStatus?: number): string {
+  private getEscrowColor(escrowStatus?: number): ResourceColor {
     if (escrowStatus === 1) {
       return COLORS.SUCCESS
     }

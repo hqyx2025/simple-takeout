@@ -2,6 +2,7 @@
  * 商户收入统计页
  * 展示今日 / 本周 / 累计收入与订单数据，以及账户余额
  */
+import { ColorMetrics } from '@kit.ArkUI';
 import { routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusColor, MODULE_COLOR, MODULE_BG, accentBg, accentFg } from '../common/Constants'
 import { MerchantStatsData, User, UserRole } from '../model/Models'
@@ -307,7 +308,7 @@ export struct MerchantStatsPage {
     }
 
     // 绘制横向网格线与Y轴刻度
-    ctx.strokeStyle = COLORS.DIVIDER
+    ctx.strokeStyle = ColorMetrics.resourceColor(COLORS.DIVIDER).color
     ctx.lineWidth = 1
     ctx.font = '10px sans-serif'
     for (let i = 0; i <= 4; i++) {
@@ -317,12 +318,12 @@ export struct MerchantStatsPage {
       ctx.lineTo(width - 10, y)
       ctx.stroke()
       const label: number = Math.round(maxRevenue * (4 - i) / 4)
-      ctx.fillStyle = COLORS.TEXT_HINT
+      ctx.fillStyle = ColorMetrics.resourceColor(COLORS.TEXT_HINT).color
       ctx.fillText(`${label}`, 2, y + 3)
     }
 
     // 绘制折线
-    ctx.strokeStyle = MODULE_COLOR.MERCHANT
+    ctx.strokeStyle = ColorMetrics.resourceColor(MODULE_COLOR.MERCHANT).color
     ctx.lineWidth = 2
     ctx.beginPath()
     for (let i = 0; i < this.weekRevenue.length; i++) {
@@ -340,12 +341,12 @@ export struct MerchantStatsPage {
     for (let i = 0; i < this.weekRevenue.length; i++) {
       const x: number = paddingLeft + chartW * i / (this.weekRevenue.length - 1)
       const y: number = paddingTop + chartH - chartH * this.weekRevenue[i] / maxRevenue
-      ctx.fillStyle = MODULE_COLOR.MERCHANT
+      ctx.fillStyle = ColorMetrics.resourceColor(MODULE_COLOR.MERCHANT).color
       ctx.beginPath()
       ctx.arc(x, y, 3, 0, 2 * Math.PI)
       ctx.fill()
 
-      ctx.fillStyle = COLORS.TEXT_HINT
+      ctx.fillStyle = ColorMetrics.resourceColor(COLORS.TEXT_HINT).color
       ctx.font = '9px sans-serif'
       let label: string = ''
       if (i < this.weekLabels.length) {
@@ -379,7 +380,7 @@ export struct MerchantStatsPage {
 
     const barCount: number = this.todayStatus.length
     const barW: number = (width - 24 - 12 * (barCount - 1)) / barCount
-    const colors: string[] = [
+    const colors: ResourceColor[] = [
       getOrderStatusColor(1),
       getOrderStatusColor(2),
       getOrderStatusColor(3),
@@ -394,17 +395,17 @@ export struct MerchantStatsPage {
       const y: number = paddingTop + chartH - barH
 
       // 柱子
-      ctx.fillStyle = colors[i]
+      ctx.fillStyle = ColorMetrics.resourceColor(colors[i]).color
       ctx.fillRect(x, y, barW, barH)
 
       // 数值
       if (this.todayStatus[i] > 0) {
-        ctx.fillStyle = COLORS.TEXT_PRIMARY
+        ctx.fillStyle = ColorMetrics.resourceColor(COLORS.TEXT_PRIMARY).color
         ctx.fillText(`${this.todayStatus[i]}`, x + barW / 2 - 4, y - 4)
       }
 
       // 底部标签
-      ctx.fillStyle = COLORS.TEXT_HINT
+      ctx.fillStyle = ColorMetrics.resourceColor(COLORS.TEXT_HINT).color
       const label: string = this.statusLabels[i]
       ctx.fillText(label, x + barW / 2 - label.length * 5, height - 6)
     }

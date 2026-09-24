@@ -119,7 +119,7 @@ export struct AdminCenterPage {
   }
 
   /** 入口卡片主题色：每个后台模块一个 MODULE_COLOR，标题/徽标/箭头统一取它。 */
-  private entryThemeColor(title: string): string {
+  private entryThemeColor(title: string): ResourceColor {
     if (title === '分类管理') { return MODULE_COLOR.RANKING }
     if (title === '店铺管理') { return MODULE_COLOR.MERCHANT }
     if (title === '员工管理') { return MODULE_COLOR.MINE }

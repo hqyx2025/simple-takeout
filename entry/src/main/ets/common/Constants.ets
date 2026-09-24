@@ -2,34 +2,42 @@
  * 全局常量定义
  */
 
+// 品牌主色（业务数据用途的稳定 hex，不随深浅色变化）。
+// 如分类展示色传给后端存储、Canvas 需要字符串色的场景使用。
+export const COLORS_PRIMARY_HEX: string = '#FF6B35'
+
 // 主题颜色 - 使用 class 避免 arkts-no-untyped-obj-literals
+// 颜色已主题化为 app.color.* 双态资源（resources/base + resources/dark），
+// 类型为 Resource 以便随系统深浅色自动切换；渲染属性（fontColor/backgroundColor 等
+// ResourceColor 参数）直接传入即兼容，Canvas/API 等需要 string 的场景用
+// ColorMetrics.resourceColor(X).color 运行时解析。
 export class COLORS {
-  static readonly PRIMARY: string = '#FF6B35'
-  static readonly PRIMARY_LIGHT: string = '#FF8C5A'
-  static readonly PRIMARY_DARK: string = '#E55A2B'
-  static readonly SECONDARY: string = '#FFD700'
-  static readonly TEXT_PRIMARY: string = '#333333'
-  static readonly TEXT_SECONDARY: string = '#666666'
-  static readonly TEXT_HINT: string = '#999999'
-  static readonly TEXT_WHITE: string = '#FFFFFF'
-  static readonly BG_PRIMARY: string = '#F5F5F5'
-  static readonly BG_WHITE: string = '#FFFFFF'
-  static readonly BG_CARD: string = '#FFFFFF'
-  static readonly DIVIDER: string = '#EEEEEE'
-  static readonly SUCCESS: string = '#4CAF50'
-  static readonly WARNING: string = '#FF9800'
-  static readonly ERROR: string = '#F44336'
-  static readonly TAG_BG: string = '#FFF3E0'
-  static readonly TAG_TEXT: string = '#FF6B35'
-  static readonly PRICE_RED: string = '#FF3B30'
-  static readonly TAB_ACTIVE: string = '#FF6B35'
-  static readonly TAB_INACTIVE: string = '#999999'
+  static readonly PRIMARY: Resource = $r('app.color.primary')
+  static readonly PRIMARY_LIGHT: Resource = $r('app.color.primary_light')
+  static readonly PRIMARY_DARK: Resource = $r('app.color.primary_dark')
+  static readonly SECONDARY: Resource = $r('app.color.secondary')
+  static readonly TEXT_PRIMARY: Resource = $r('app.color.text_primary')
+  static readonly TEXT_SECONDARY: Resource = $r('app.color.text_secondary')
+  static readonly TEXT_HINT: Resource = $r('app.color.text_hint')
+  static readonly TEXT_WHITE: Resource = $r('app.color.text_white')
+  static readonly BG_PRIMARY: Resource = $r('app.color.bg_primary')
+  static readonly BG_WHITE: Resource = $r('app.color.bg_white')
+  static readonly BG_CARD: Resource = $r('app.color.bg_card')
+  static readonly DIVIDER: Resource = $r('app.color.divider')
+  static readonly SUCCESS: Resource = $r('app.color.success')
+  static readonly WARNING: Resource = $r('app.color.warning')
+  static readonly ERROR: Resource = $r('app.color.error')
+  static readonly TAG_BG: Resource = $r('app.color.tag_bg')
+  static readonly TAG_TEXT: Resource = $r('app.color.tag_text')
+  static readonly PRICE_RED: Resource = $r('app.color.price_red')
+  static readonly TAB_ACTIVE: Resource = $r('app.color.tab_active')
+  static readonly TAB_INACTIVE: Resource = $r('app.color.tab_inactive')
   // 通用浅底色 / 遮罩 / 状态浅底色（新增，统一原来散落各处的硬编码色）
-  static readonly WARM_BG: string = '#FFF3E8'
-  static readonly OVERLAY: string = 'rgba(0,0,0,0.5)'
-  static readonly ERROR_LIGHT: string = '#FFF0F0'
-  static readonly SUCCESS_LIGHT: string = '#E8F5E9'
-  static readonly WARNING_LIGHT: string = '#FFF7E6'
+  static readonly WARM_BG: Resource = $r('app.color.warm_bg')
+  static readonly OVERLAY: Resource = $r('app.color.overlay')
+  static readonly ERROR_LIGHT: Resource = $r('app.color.error_light')
+  static readonly SUCCESS_LIGHT: Resource = $r('app.color.success_light')
+  static readonly WARNING_LIGHT: Resource = $r('app.color.warning_light')
 }
 
 // 间距
@@ -78,15 +86,15 @@ export function getOrderStatusText(status: number, escrowStatus?: number): strin
 }
 
 // 订单状态颜色（status=4 时按托管状态区分，待确认用橙色醒目标识）
-export function getOrderStatusColor(status: number, escrowStatus?: number): string {
-  if (status === 0) { return '#FF6B35' }
-  if (status === 1) { return '#FF9800' }
-  if (status === 2) { return '#2196F3' }
-  if (status === 3) { return '#4CAF50' }
-  if (status === 4) { return (escrowStatus ?? 0) === 1 ? '#999999' : '#FF9800' }
-  if (status === 5) { return '#999999' }
-  if (status === 6) { return '#F44336' }
-  return '#999999'
+export function getOrderStatusColor(status: number, escrowStatus?: number): ResourceColor {
+  if (status === 0) { return $r('app.color.primary') }
+  if (status === 1) { return $r('app.color.warning') }
+  if (status === 2) { return $r('app.color.module_search') }
+  if (status === 3) { return $r('app.color.success') }
+  if (status === 4) { return (escrowStatus ?? 0) === 1 ? $r('app.color.text_hint') : $r('app.color.warning') }
+  if (status === 5) { return $r('app.color.text_hint') }
+  if (status === 6) { return $r('app.color.error') }
+  return $r('app.color.text_hint')
 }
 
 // 评价标签
@@ -190,59 +198,61 @@ export function merchantImageSource(image: string | undefined): ResourceStr {
  * 用途：模块标题、模块图标底、分区强调色，避免整屏只有白底 + 灰字（"很多空白"的观感来源之一）。
  */
 export class MODULE_COLOR {
-  static readonly HOME: string = '#FF6B35'
-  static readonly SECKILL: string = '#FF3B30'
-  static readonly NEARBY: string = '#2F80ED'
-  static readonly SPECIAL: string = '#F2994A'
-  static readonly RANKING: string = '#8E44AD'
-  static readonly COUPON: string = '#E0526E'
-  static readonly CART: string = '#27AE60'
-  static readonly ORDER: string = '#2D9CDB'
-  static readonly MINE: string = '#00838F'
-  static readonly SEARCH: string = '#2196F3'
-  static readonly FAVORITE: string = '#D6455D'
-  static readonly REVIEW: string = '#9B51E0'
-  static readonly MERCHANT: string = '#B25E39'
-  static readonly RIDER: string = '#0F9D58'
-  static readonly ADMIN: string = '#5B6B8C'
+  static readonly HOME: Resource = $r('app.color.module_home')
+  static readonly SECKILL: Resource = $r('app.color.module_seckill')
+  static readonly NEARBY: Resource = $r('app.color.module_nearby')
+  static readonly SPECIAL: Resource = $r('app.color.module_special')
+  static readonly RANKING: Resource = $r('app.color.module_ranking')
+  static readonly COUPON: Resource = $r('app.color.module_coupon')
+  static readonly CART: Resource = $r('app.color.module_cart')
+  static readonly ORDER: Resource = $r('app.color.module_order')
+  static readonly MINE: Resource = $r('app.color.module_mine')
+  static readonly SEARCH: Resource = $r('app.color.module_search')
+  static readonly FAVORITE: Resource = $r('app.color.module_favorite')
+  static readonly REVIEW: Resource = $r('app.color.module_review')
+  static readonly MERCHANT: Resource = $r('app.color.module_merchant')
+  static readonly RIDER: Resource = $r('app.color.module_rider')
+  static readonly ADMIN: Resource = $r('app.color.module_admin')
 }
 
 /** 模块浅底色：与 MODULE_COLOR 一一配对，用于模块标题条/分区卡片背景。 */
 export class MODULE_BG {
-  static readonly HOME: string = '#FFF3E8'
-  static readonly SECKILL: string = '#FFEDEA'
-  static readonly NEARBY: string = '#EAF2FE'
-  static readonly SPECIAL: string = '#FFF4E5'
-  static readonly RANKING: string = '#F3EBFA'
-  static readonly COUPON: string = '#FDECEF'
-  static readonly CART: string = '#EAF7EF'
-  static readonly ORDER: string = '#E9F4FC'
-  static readonly MINE: string = '#E6F3F4'
-  static readonly SEARCH: string = '#E9F3FE'
-  static readonly FAVORITE: string = '#FCEAEE'
-  static readonly REVIEW: string = '#F4EBFC'
-  static readonly MERCHANT: string = '#F7EDE7'
-  static readonly RIDER: string = '#E8F6EE'
-  static readonly ADMIN: string = '#EDF0F6'
+  static readonly HOME: Resource = $r('app.color.module_bg_home')
+  static readonly SECKILL: Resource = $r('app.color.module_bg_seckill')
+  static readonly NEARBY: Resource = $r('app.color.module_bg_nearby')
+  static readonly SPECIAL: Resource = $r('app.color.module_bg_special')
+  static readonly RANKING: Resource = $r('app.color.module_bg_ranking')
+  static readonly COUPON: Resource = $r('app.color.module_bg_coupon')
+  static readonly CART: Resource = $r('app.color.module_bg_cart')
+  static readonly ORDER: Resource = $r('app.color.module_bg_order')
+  static readonly MINE: Resource = $r('app.color.module_bg_mine')
+  static readonly SEARCH: Resource = $r('app.color.module_bg_search')
+  static readonly FAVORITE: Resource = $r('app.color.module_bg_favorite')
+  static readonly REVIEW: Resource = $r('app.color.module_bg_review')
+  static readonly MERCHANT: Resource = $r('app.color.module_bg_merchant')
+  static readonly RIDER: Resource = $r('app.color.module_bg_rider')
+  static readonly ADMIN: Resource = $r('app.color.module_bg_admin')
 }
 
 /** 逐项取色的浅色底 / 前景色板（成对），让相邻卡片、图标底颜色不相同。 */
 export class ACCENT {
-  static readonly BG: string[] = ['#FFE3D3', '#FFE0E6', '#E3EEFF', '#E4F6E9',
-    '#FFF3D6', '#EFE4FB', '#DFF3F5', '#FCE6DC']
-  static readonly FG: string[] = ['#E55A2B', '#D6455D', '#2F80ED', '#27AE60',
-    '#C99A05', '#8E44AD', '#00838F', '#B25E39']
+  static readonly BG: Resource[] = [$r('app.color.accent_bg_0'), $r('app.color.accent_bg_1'), $r('app.color.accent_bg_2'),
+    $r('app.color.accent_bg_3'), $r('app.color.accent_bg_4'), $r('app.color.accent_bg_5'),
+    $r('app.color.accent_bg_6'), $r('app.color.accent_bg_7')]
+  static readonly FG: Resource[] = [$r('app.color.accent_fg_0'), $r('app.color.accent_fg_1'), $r('app.color.accent_fg_2'),
+    $r('app.color.accent_fg_3'), $r('app.color.accent_fg_4'), $r('app.color.accent_fg_5'),
+    $r('app.color.accent_fg_6'), $r('app.color.accent_fg_7')]
 }
 
 /** 第 index 项的浅色底（确定性轮转，不用随机数，避免每次渲染跳色）。 */
-export function accentBg(index: number): string {
-  const list: string[] = ACCENT.BG
+export function accentBg(index: number): Resource {
+  const list: Resource[] = ACCENT.BG
   return list[Math.abs(index) % list.length]
 }
 
 /** 第 index 项的前景色（与 accentBg 成对，保证对比度）。 */
-export function accentFg(index: number): string {
-  const list: string[] = ACCENT.FG
+export function accentFg(index: number): Resource {
+  const list: Resource[] = ACCENT.FG
   return list[Math.abs(index) % list.length]
 }
 

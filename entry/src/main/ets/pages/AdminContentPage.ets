@@ -2,7 +2,7 @@
  * 管理端内容管理（演进项已落地）：首页轮播 Banner 与平台公告
  */
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
+import { COLORS, COLORS_PRIMARY_HEX, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { Banner, Announcement } from '../model/Models'
 import {
   syncAdminBannersRemote, updateBannerStatusRemote, deleteBannerRemote, createBannerRemote,
@@ -19,7 +19,7 @@ export struct AdminContentPage {
   @State loading: boolean = false
   @State showBannerDialog: boolean = false
   @State bannerTitle: string = ''
-  @State bannerColor: string = MODULE_COLOR.HOME
+  @State bannerColor: string = COLORS_PRIMARY_HEX
   @State showAnnouncementDialog: boolean = false
   @State announcementTitle: string = ''
   @State announcementContent: string = ''

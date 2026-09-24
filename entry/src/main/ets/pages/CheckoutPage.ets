@@ -189,7 +189,7 @@ export struct CheckoutPage {
     this.showCouponDialog = false
   }
 
-  private couponRowBg(coupon: Coupon | null): string {
+  private couponRowBg(coupon: Coupon | null): ResourceColor {
     if (coupon !== null) {
       return this.selectedCoupon !== null && this.selectedCoupon.id === coupon.id ? COLORS.TAG_BG : COLORS.BG_PRIMARY
     }

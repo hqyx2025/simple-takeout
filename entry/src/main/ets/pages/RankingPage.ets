@@ -71,7 +71,7 @@ export struct RankingPage {
   }
 
   /** 名次徽章底色：前三名用金/银/铜强调色，其余用中性底色 */
-  private rankBadgeColor(rank: number): string {
+  private rankBadgeColor(rank: number): ResourceColor {
     if (rank === 1) {
       return COLORS.SECONDARY
     }
@@ -84,7 +84,7 @@ export struct RankingPage {
     return COLORS.BG_PRIMARY
   }
 
-  private rankTextColor(rank: number): string {
+  private rankTextColor(rank: number): ResourceColor {
     if (rank === 1) {
       return COLORS.TEXT_PRIMARY
     }
@@ -127,7 +127,7 @@ export struct RankingPage {
   }
 
   /** 每个榜单一种模块色，避免两个 Tab 完全同色。 */
-  private tabColor(index: number): string {
+  private tabColor(index: number): ResourceColor {
     return index === 0 ? MODULE_COLOR.NEARBY : MODULE_COLOR.SPECIAL
   }
 

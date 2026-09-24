@@ -22,9 +22,9 @@ import { loadAllData, saveAllData } from '../service/DataPersistence'
 class QuickEntryItem {
   icon: string = ''
   title: string = ''
-  color: string = ''
+  color: ResourceColor = ''
 
-  static create(icon: string, title: string, color: string): QuickEntryItem {
+  static create(icon: string, title: string, color: ResourceColor): QuickEntryItem {
     let item = new QuickEntryItem()
     item.icon = icon
     item.title = title
@@ -345,7 +345,7 @@ struct Index {
   }
 
   /** 底部 4 个 Tab 各用一种模块色：一眼看出当前在哪个模块。 */
-  private tabColor(targetIndex: number): string {
+  private tabColor(targetIndex: number): ResourceColor {
     if (targetIndex === 0) { return MODULE_COLOR.HOME }
     if (targetIndex === 1) { return MODULE_COLOR.REVIEW }
     if (targetIndex === 2) { return MODULE_COLOR.CART }

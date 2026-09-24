@@ -1,4 +1,5 @@
 /** 平台经营统计：订单、GMV、托管资金与热销商品。 */
+import { ColorMetrics } from '@kit.ArkUI';
 import { AdminHotGoods, AdminOrderStatusCount, AdminStatisticsData, AdminTopStore, AdminTrendPoint, User, UserRole } from '../model/Models'
 import { fetchAdminDashboardApi, fetchAdminOrderTrendApi, fetchAdminStatisticsApi } from '../service/ApiService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
@@ -231,7 +232,7 @@ export struct AdminStatisticsPage {
       maxCount = 1
     }
 
-    ctx.strokeStyle = COLORS.DIVIDER
+    ctx.strokeStyle = ColorMetrics.resourceColor(COLORS.DIVIDER).color
     ctx.lineWidth = 1
     ctx.font = '10px sans-serif'
     for (let i = 0; i <= 4; i++) {
@@ -241,11 +242,11 @@ export struct AdminStatisticsPage {
       ctx.lineTo(width - 10, y)
       ctx.stroke()
       const label: number = Math.round(maxCount * (4 - i) / 4)
-      ctx.fillStyle = COLORS.TEXT_HINT
+      ctx.fillStyle = ColorMetrics.resourceColor(COLORS.TEXT_HINT).color
       ctx.fillText(`${label}`, 2, y + 3)
     }
 
-    ctx.strokeStyle = MODULE_COLOR.ADMIN
+    ctx.strokeStyle = ColorMetrics.resourceColor(MODULE_COLOR.ADMIN).color
     ctx.lineWidth = 2
     ctx.beginPath()
     for (let i = 0; i < this.trend.length; i++) {
@@ -262,11 +263,11 @@ export struct AdminStatisticsPage {
     for (let i = 0; i < this.trend.length; i++) {
       const x: number = paddingLeft + chartW * i / (this.trend.length - 1)
       const y: number = paddingTop + chartH - chartH * this.trend[i].orderCount / maxCount
-      ctx.fillStyle = MODULE_COLOR.ADMIN
+      ctx.fillStyle = ColorMetrics.resourceColor(MODULE_COLOR.ADMIN).color
       ctx.beginPath()
       ctx.arc(x, y, 3, 0, 2 * Math.PI)
       ctx.fill()
-      ctx.fillStyle = COLORS.TEXT_HINT
+      ctx.fillStyle = ColorMetrics.resourceColor(COLORS.TEXT_HINT).color
       ctx.font = '9px sans-serif'
       const label: string = this.trend[i].date.length > 10 ? this.trend[i].date.substring(5, 10) : this.trend[i].date
       ctx.fillText(label, x - 12, height - 6)

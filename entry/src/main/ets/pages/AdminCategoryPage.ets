@@ -4,7 +4,7 @@
  */
 import { User, UserRole, Category } from '../model/Models'
 import { ApiResponse, get, post, put, del } from '../service/HttpClient'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentIndexFromText } from '../common/Constants'
+import { COLORS, COLORS_PRIMARY_HEX, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentIndexFromText } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { logInfo } from '../service/AppLogger'
@@ -54,7 +54,7 @@ export struct AdminCategoryPage {
       promptAction.showToast({ message: '请输入分类名称', duration: 1500 })
       return
     }
-    const req: AdminCategoryRequest = { name: name, icon: '🍱', color: COLORS.PRIMARY }
+    const req: AdminCategoryRequest = { name: name, icon: '🍱', color: COLORS_PRIMARY_HEX }
     const resp: ApiResponse<Category> = await post<Category>('/api/admin/categories', req)
     if (resp.code === 200) {
       this.newCategoryName = ''
