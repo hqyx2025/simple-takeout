@@ -38,6 +38,8 @@ export class COLORS {
   static readonly ERROR_LIGHT: Resource = $r('app.color.error_light')
   static readonly SUCCESS_LIGHT: Resource = $r('app.color.success_light')
   static readonly WARNING_LIGHT: Resource = $r('app.color.warning_light')
+  /** 中性灰徽章底：与页面背景/BG_PRIMARY 区分，深浅色下灰色标签均可见 */
+  static readonly STATUS_GRAY_BG: Resource = $r('app.color.status_gray_bg')
 }
 
 // 间距

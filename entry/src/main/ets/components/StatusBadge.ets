@@ -16,7 +16,7 @@ export struct StatusBadge {
       case 'success': return COLORS.SUCCESS_LIGHT
       case 'warning': return COLORS.WARNING_LIGHT
       case 'error': return COLORS.ERROR_LIGHT
-      case 'gray': return COLORS.BG_PRIMARY
+      case 'gray': return COLORS.STATUS_GRAY_BG
       default: return COLORS.TAG_BG
     }
   }

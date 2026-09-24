@@ -40,7 +40,7 @@ export struct ConfirmDialog {
             .height(44)
             .fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.TEXT_SECONDARY)
-            .backgroundColor('#F5F5F5')
+            .backgroundColor(COLORS.BG_PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
             .type(ButtonType.Capsule)
             .onClick(() => { this.onCancel() })

@@ -27,6 +27,7 @@
     { "name": "error_light", "value": "#FFF0F0" },
     { "name": "success_light", "value": "#E8F5E9" },
     { "name": "warning_light", "value": "#FFF7E6" },
+    { "name": "status_gray_bg", "value": "#EEEEEE" },
 
     { "name": "module_home", "value": "#FF6B35" },
     { "name": "module_seckill", "value": "#FF3B30" },
