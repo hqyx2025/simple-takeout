@@ -1088,7 +1088,7 @@ struct HomePage {
 
           // 特价商品列表由后端数据库返回
           if (!this.loggedIn) {
-            EmptyState({ icon: '🔒', title: '登录后查看特价团购', description: '商家上新的特价商品会展示在这里' })
+            EmptyState({ iconGlyph: $r('sys.symbol.lock'), title: '登录后查看特价团购', description: '商家上新的特价商品会展示在这里' })
           } else if (this.isRefreshing && this.specialGoods.length === 0) {
             EmptyState({ icon: '⏳', title: '正在加载特价商品', description: '请稍候，正在读取最新团购数据' })
           } else if (this.specialGoods.length === 0) {
@@ -2496,7 +2496,8 @@ struct ProfileMainPage {
 
         if (this.loggedIn && this.user.role === UserRole.MERCHANT) {
           Column() {
-            Text('🏪 商户管理入口')
+            SymbolGlyph($r('sys.symbol.store')).fontSize(FONT_SIZE.MD)
+              Text(' 商户管理入口')
               .fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold)
               .fontColor(COLORS.PRIMARY)
               .width('100%')

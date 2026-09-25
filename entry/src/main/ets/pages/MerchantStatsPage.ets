@@ -257,11 +257,10 @@ export struct MerchantStatsPage {
   StatusChartCard() {
     Column({ space: SPACING.MD }) {
       Row() {
-        Text('📊')
+        SymbolGlyph($r('sys.symbol.square_grid_2x2'))
           .fontSize(FONT_SIZE.MD)
           .width(28)
           .height(28)
-          .textAlign(TextAlign.Center)
           .backgroundColor(accentBg(1))
           .borderRadius(BORDER_RADIUS.SM)
         Text('今日订单状态分布')
@@ -479,11 +478,10 @@ export struct MerchantStatsPage {
   CumulativeCard() {
     Column({ space: SPACING.MD }) {
       Row() {
-        Text('🏆')
+        SymbolGlyph($r('sys.symbol.star_trophy'))
           .fontSize(FONT_SIZE.MD)
           .width(28)
           .height(28)
-          .textAlign(TextAlign.Center)
           .backgroundColor(accentBg(3))
           .borderRadius(BORDER_RADIUS.SM)
         Text('累计数据')
@@ -531,11 +529,10 @@ export struct MerchantStatsPage {
   InfoCard() {
     Column({ space: SPACING.SM }) {
       Row() {
-        Text('💰')
+        SymbolGlyph($r('sys.symbol.wallet'))
           .fontSize(FONT_SIZE.MD)
           .width(28)
           .height(28)
-          .textAlign(TextAlign.Center)
           .backgroundColor(accentBg(4))
           .borderRadius(BORDER_RADIUS.SM)
         Text('账户余额')
@@ -555,7 +552,8 @@ export struct MerchantStatsPage {
         .margin({ top: SPACING.XS, bottom: SPACING.XS })
 
       Row() {
-        Text('💡 收入统计仅包含已结算订单（用户确认收货后到账）')
+        SymbolGlyph($r('sys.symbol.lightbulb')).fontSize(FONT_SIZE.SM)
+        Text(' 收入统计仅包含已结算订单（用户确认收货后到账）')
           .fontSize(FONT_SIZE.SM)
           .fontColor(COLORS.TEXT_HINT)
       }

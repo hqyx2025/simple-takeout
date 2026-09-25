@@ -442,8 +442,7 @@ export struct CheckoutPage {
   StoreAndItemsCard() {
     Column({ space: SPACING.SM }) {
       Row() {
-        Text('🏪')
-          .fontSize(FONT_SIZE.LG)
+        SymbolGlyph($r('sys.symbol.store')).fontSize(FONT_SIZE.LG)
         Text(this.checkoutStoreId > 0 && this.storeInfo !== null ? this.storeInfo.name : '\u5168\u90e8\u5e97\u94fa\u5546\u54c1')
           .fontSize(FONT_SIZE.LG)
           .fontWeight(FontWeight.Bold)
@@ -706,9 +705,9 @@ export struct CheckoutPage {
             .fontWeight(FontWeight.Bold)
             .fontColor(COLORS.TEXT_PRIMARY)
             .layoutWeight(1)
-          Text('✕')
+          SymbolGlyph($r('sys.symbol.xmark'))
             .fontSize(FONT_SIZE.LG)
-            .fontColor(COLORS.TEXT_HINT)
+            .fontColor([COLORS.TEXT_HINT])
             .onClick(() => { this.showCouponDialog = false })
         }
         .width('100%')

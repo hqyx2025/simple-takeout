@@ -319,7 +319,7 @@ export struct ReviewPage {
 
       if (!this.loggedIn) {
         Column() {
-          Text('🔒').fontSize(60).margin({ top: 100 })
+          SymbolGlyph($r('sys.symbol.lock')).fontSize(60).margin({ top: 100 })
           Text('暂无登录').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.LG })
           Text('请登录后查看和提交评价').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.SM })
         }
@@ -394,8 +394,7 @@ export struct ReviewPage {
   StoreInfoCard() {
     Column({ space: SPACING.SM }) {
       Row() {
-        Text('🏪')
-          .fontSize(FONT_SIZE.LG)
+        SymbolGlyph($r('sys.symbol.store')).fontSize(FONT_SIZE.LG)
         Text(this.order!.storeName)
           .fontSize(FONT_SIZE.LG)
           .fontWeight(FontWeight.Bold)

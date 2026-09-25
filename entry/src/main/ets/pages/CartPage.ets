@@ -351,7 +351,7 @@ export struct CartPage {
       .alignItems(VerticalAlign.Center)
 
       if (!this.loggedIn) {
-        EmptyState({ icon: '🔒', title: '暂无登录', description: '请登录后查看购物车' })
+        EmptyState({ iconGlyph: $r('sys.symbol.lock'), title: '暂无登录', description: '请登录后查看购物车' })
       } else if (this.getCurrentCartItems().length === 0) {
         EmptyState({ icon: '🛒', title: '购物车是空的', description: '去首页挑选喜欢的商品吧' })
       } else {

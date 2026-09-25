@@ -257,7 +257,7 @@ export struct RankingPage {
   @Builder
   ErrorView(reason: string) {
     Column({ space: SPACING.MD }) {
-      Text('📡')
+      SymbolGlyph($r('sys.symbol.dot_radiowaves'))
         .fontSize(52)
       Text(`榜单加载失败：${reason}`)
         .fontSize(FONT_SIZE.MD)

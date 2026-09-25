@@ -99,7 +99,7 @@ export struct RiderOrderPoolPage {
         }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
       } else if (this.orders.length === 0) {
         Column({ space: SPACING.SM }) {
-          Text('🛵').fontSize(60).margin({ top: 40 })
+          SymbolGlyph($r('sys.symbol.express_delivery')).fontSize(60).margin({ top: 40 })
           Text(this.needsLocation() ? '请先设置接单位置' : '暂无待抢订单')
             .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
           Text(this.needsLocation()

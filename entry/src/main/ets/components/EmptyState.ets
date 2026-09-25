@@ -6,15 +6,25 @@ import { COLORS, SPACING, FONT_SIZE } from '../common/Constants'
 
 @Component
 export struct EmptyState {
+  /** 兼容旧调用：emoji/文本图标（仅当 iconGlyph 未传时使用） */
   icon: string = '📭'
+  /** 系统符号图标（优先）；传入时用 SymbolGlyph 渲染而非 Text */
+  iconGlyph: Resource | null = null
   title: string = '暂无数据'
   description: string = ''
 
   build() {
     Column({ space: SPACING.SM }) {
-      Text(this.icon)
-        .fontSize(60)
-        .margin({ top: 80 })
+      if (this.iconGlyph !== null) {
+        SymbolGlyph(this.iconGlyph)
+          .fontSize(60)
+          .fontColor([COLORS.TEXT_HINT])
+          .margin({ top: 80 })
+      } else {
+        Text(this.icon)
+          .fontSize(60)
+          .margin({ top: 80 })
+      }
       Text(this.title)
         .fontSize(FONT_SIZE.LG)
         .fontColor(COLORS.TEXT_HINT)

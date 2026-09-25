@@ -176,11 +176,11 @@ export struct RiderCenterPage {
   build() {
     Stack() {
     Column() {
-      PageHeader({ title: '🛵 骑手中心', showBack: false, headerBgColor: MODULE_BG.RIDER, titleColor: MODULE_COLOR.RIDER })
+      PageHeader({ title: '骑手中心', showBack: false, headerBgColor: MODULE_BG.RIDER, titleColor: MODULE_COLOR.RIDER })
 
       if (!this.loggedIn) {
         Column() {
-          Text('🔒').fontSize(60).margin({ top: 80 })
+          SymbolGlyph($r('sys.symbol.lock')).fontSize(60).margin({ top: 80 })
           Text('请使用骑手账号登录').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
         }
         .layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
@@ -191,7 +191,7 @@ export struct RiderCenterPage {
         .layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
       } else if (this.rider === null) {
         Column() {
-          Text('⚠️').fontSize(60).margin({ top: 80 })
+          SymbolGlyph($r('sys.symbol.exclamationmark_circle')).fontSize(60).margin({ top: 80 })
           Text('骑手档案加载失败').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
         }
         .layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
@@ -223,7 +223,7 @@ export struct RiderCenterPage {
                 .id('rider-online-status')
               // 资料卡内改密入口：与用户端的"我的 → 修改密码"对等
               Row({ space: SPACING.XS }) {
-                Text('🔑').fontSize(FONT_SIZE.SM)
+                SymbolGlyph($r('sys.symbol.key')).fontSize(FONT_SIZE.SM)
                 Text('修改密码').fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
               }
               .margin({ top: SPACING.SM })

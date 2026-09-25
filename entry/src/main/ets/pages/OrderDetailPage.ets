@@ -545,7 +545,8 @@ export struct OrderDetailPage {
   RiderTracking() {
     Column({ space: SPACING.SM }) {
       Row() {
-        Text('🛵 骑手配送中')
+        SymbolGlyph($r('sys.symbol.express_delivery')).fontSize(18)
+        Text(' 骑手配送中')
           .fontSize(FONT_SIZE.MD)
           .fontWeight(FontWeight.Bold)
           .fontColor(COLORS.PRIMARY)
@@ -573,7 +574,7 @@ export struct OrderDetailPage {
           .backgroundColor(COLORS.PRIMARY)
 
         // 骑手图标（沿轨道移动）
-        Text('🛵')
+        SymbolGlyph($r('sys.symbol.express_delivery'))
           .fontSize(20)
           .translate({ x: this.riderProgress * (this.trackWidth - 30) })
           .animation({ duration: 250, curve: Curve.Linear })
@@ -599,8 +600,7 @@ export struct OrderDetailPage {
   StoreAndItemsCard() {
     Column({ space: SPACING.SM }) {
       Row() {
-        Text('🏪')
-          .fontSize(FONT_SIZE.LG)
+        SymbolGlyph($r('sys.symbol.store')).fontSize(FONT_SIZE.LG)
         Text(this.order!.storeName)
           .fontSize(FONT_SIZE.LG)
           .fontWeight(FontWeight.Bold)
@@ -685,7 +685,8 @@ export struct OrderDetailPage {
       // 配送骑手（配送中及之后由后端返回）
       if (this.order!.riderName !== undefined && this.order!.riderName !== '') {
         Row() {
-          Text('🛵 配送骑手')
+          SymbolGlyph($r('sys.symbol.express_delivery')).fontSize(18)
+          Text(' 配送骑手')
             .fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.TEXT_SECONDARY)
           Text(`${this.order!.riderName} ${this.order!.riderPhone}`)

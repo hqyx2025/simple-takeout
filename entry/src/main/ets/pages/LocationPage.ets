@@ -630,7 +630,7 @@ export struct LocationPage {
               .divider({ strokeWidth: 0 })
               .scrollBar(BarState.Off)
             } else if (this.searched) {
-              EmptyState({ icon: '🔍', title: '未找到相关地点', description: '换个关键词再试试' })
+              EmptyState({ iconGlyph: $r('sys.symbol.magnifyingglass'), title: '未找到相关地点', description: '换个关键词再试试' })
             }
           }
           .width('100%')

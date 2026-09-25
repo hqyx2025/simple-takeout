@@ -109,7 +109,7 @@ export struct RiderOrdersPage {
         }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
       } else if (this.orders.length === 0) {
         Column() {
-          Text('🛵').fontSize(60).margin({ top: 40 })
+          SymbolGlyph($r('sys.symbol.express_delivery')).fontSize(60).margin({ top: 40 })
           Text('暂无配送单').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
         }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
       } else {

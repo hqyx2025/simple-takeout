@@ -375,7 +375,7 @@ export struct MerchantCenterPage {
     Stack() {
       Column() {
         // 顶部
-        PageHeader({ title: '🏪 商户中心', backText: '‹', backId: 'merchant-center-back', titleColor: MODULE_COLOR.MERCHANT, headerBgColor: MODULE_BG.MERCHANT, actionLabel: this.user.username, onAction: () => {}, onBack: () => { router.back() } })
+        PageHeader({ title: '商户中心', backText: '‹', backId: 'merchant-center-back', titleColor: MODULE_COLOR.MERCHANT, headerBgColor: MODULE_BG.MERCHANT, actionLabel: this.user.username, onAction: () => {}, onBack: () => { router.back() } })
 
         // 统计概览
         Row() {

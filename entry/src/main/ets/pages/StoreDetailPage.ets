@@ -203,8 +203,8 @@ export struct SpecSelectDialog {
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start)
 
-        Text('✕')
-          .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT)
+        SymbolGlyph($r('sys.symbol.xmark'))
+          .fontSize(FONT_SIZE.LG).fontColor([COLORS.TEXT_HINT])
           .padding(SPACING.XS)
           .onClick(() => { this.closeDialog() })
       }

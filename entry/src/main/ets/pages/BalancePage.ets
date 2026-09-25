@@ -92,7 +92,7 @@ export struct BalancePage {
         PageHeader({ title: '我的钱包', backId: 'balance-back', onBack: () => { router.back() } })
 
         if (!this.loggedIn) {
-          EmptyState({ icon: '🔒', title: '暂无登录', description: '请登录后查看钱包' })
+          EmptyState({ iconGlyph: $r('sys.symbol.lock'), title: '暂无登录', description: '请登录后查看钱包' })
         } else {
           Scroll() {
             Column({ space: SPACING.MD }) {

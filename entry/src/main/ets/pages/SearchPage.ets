@@ -218,7 +218,7 @@ export struct SearchPage {
   @Builder
   EmptyResult() {
     Column() {
-      Text('🔍')
+      SymbolGlyph($r('sys.symbol.magnifyingglass'))
         .fontSize(60)
       Text('没有找到相关店铺')
         .fontSize(FONT_SIZE.LG)
@@ -240,7 +240,7 @@ export struct SearchPage {
   @Builder
   EmptyLoginResult() {
     Column() {
-      Text('🔒').fontSize(60)
+      SymbolGlyph($r('sys.symbol.lock')).fontSize(60)
       Text('暂无登录').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
       Text('请登录后搜索店铺').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.SM })
     }

@@ -400,8 +400,8 @@ export struct MerchantAddGoodsPage {
         .onChange((value: string) => { this.setSpecStock(index, value) })
 
       Column() {
-        Text('✕')
-          .fontSize(FONT_SIZE.SM).fontColor(COLORS.ERROR)
+        SymbolGlyph($r('sys.symbol.xmark'))
+          .fontSize(FONT_SIZE.SM).fontColor([COLORS.ERROR])
       }
       .width(30).height(40)
       .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
@@ -419,9 +419,9 @@ export struct MerchantAddGoodsPage {
   SpecSection() {
     Column({ space: SPACING.SM }) {
       Row() {
-        Text('🧾')
+        SymbolGlyph($r('sys.symbol.doc_plaintext'))
           .fontSize(FONT_SIZE.MD)
-          .width(28).height(28).textAlign(TextAlign.Center)
+          .width(28).height(28)
           .backgroundColor(accentBg(2))
           .borderRadius(BORDER_RADIUS.SM)
         Column({ space: SPACING.XS }) {
@@ -476,9 +476,9 @@ export struct MerchantAddGoodsPage {
 
           Column({ space: SPACING.MD }) {
             Row() {
-              Text('📝')
+              SymbolGlyph($r('sys.symbol.doc_text'))
                 .fontSize(FONT_SIZE.MD)
-                .width(28).height(28).textAlign(TextAlign.Center)
+                .width(28).height(28)
                 .backgroundColor(accentBg(1))
                 .borderRadius(BORDER_RADIUS.SM)
               Text('基本信息')

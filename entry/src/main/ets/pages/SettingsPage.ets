@@ -112,26 +112,26 @@ export struct SettingsPage {
         // 设置项列表
         Column() {
           // 清除缓存
-          this.SettingItem('🗑', '清除缓存', this.cacheSize, false, () => {
+          this.SettingItem($r('sys.symbol.trash'), '清除缓存', this.cacheSize, false, () => {
             this.clearCache()
           })
 
           // 退出登录（仅登录时显示）
           if (this.loggedIn) {
             // 修改密码
-            this.SettingItem('🔑', '修改密码', '', false, () => {
+            this.SettingItem($r('sys.symbol.key'), '修改密码', '', false, () => {
               this.openPwdDialog()
             })
-            this.SettingItem('🚪', '退出登录', '', true, () => {
+            this.SettingItem($r('sys.symbol.door_service'), '退出登录', '', true, () => {
               this.showLogoutConfirm = true
             })
           }
 
           // 关于我们
-          this.SettingItem('ℹ️', '关于我们', '', false, () => {
+          this.SettingItem($r('sys.symbol.info_circle'), '关于我们', '', false, () => {
             this.showAbout = true
           })
-          this.SettingItem('🔒', '隐私政策', '', false, () => {
+          this.SettingItem($r('sys.symbol.lock'), '隐私政策', '', false, () => {
             router.pushUrl({ url: 'pages/PrivacyPolicyPage' })
           })
         }
@@ -307,9 +307,9 @@ export struct SettingsPage {
   }
 
   @Builder
-  SettingItem(icon: string, title: string, value: string, isDanger: boolean, onClick: () => void) {
+  SettingItem(iconGlyph: Resource, title: string, value: string, isDanger: boolean, onClick: () => void) {
     Row({ space: SPACING.MD }) {
-      Text(icon).fontSize(20)
+      SymbolGlyph(iconGlyph).fontSize(20)
       Text(title)
         .fontSize(FONT_SIZE.LG)
         .fontColor(isDanger ? COLORS.ERROR : COLORS.TEXT_PRIMARY)
