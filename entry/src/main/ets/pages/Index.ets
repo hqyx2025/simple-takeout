@@ -356,8 +356,9 @@ struct Index {
         Divider().color(COLORS.DIVIDER).margin({ bottom: SPACING.MD })
 
         ForEach([
-          SidebarItem.create('首页', 0),
+SidebarItem.create('首页', 0),
           SidebarItem.create('AI助手', 1),
+          SidebarItem.create('购物车', 2),
           SidebarItem.create('我的', 3)
         ], (item: SidebarItem) => {
           Button({ type: ButtonType.Normal }) {
