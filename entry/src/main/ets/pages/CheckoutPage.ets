@@ -398,8 +398,8 @@ export struct CheckoutPage {
   @Builder
   AddressCard() {
     Row() {
-      Text('📍')
-        .fontSize(FONT_SIZE.XL)
+SymbolGlyph($r('sys.symbol.location_right_fill'))
+          .fontSize(FONT_SIZE.XL)
       if (this.currentAddress !== null) {
         Column({ space: SPACING.XS }) {
           Row() {

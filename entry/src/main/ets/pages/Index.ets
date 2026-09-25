@@ -23,11 +23,11 @@ import { common } from '@kit.AbilityKit'
 
 // 定义快捷入口和订单Tab的数据类型，解决 arkts-no-untyped-obj-literals 错误
 class QuickEntryItem {
-  icon: string = ''
+  icon: Resource = $r('sys.symbol.questionmark_circle')
   title: string = ''
   color: ResourceColor = ''
 
-  static create(icon: string, title: string, color: ResourceColor): QuickEntryItem {
+  static create(icon: Resource, title: string, color: ResourceColor): QuickEntryItem {
     let item = new QuickEntryItem()
     item.icon = icon
     item.title = title
@@ -938,17 +938,16 @@ struct HomePage {
           // 快捷入口
           Row({ space: SPACING.XL }) {
             ForEach([
-              QuickEntryItem.create('⏰', '限时抢购', COLORS.PRIMARY),
-              QuickEntryItem.create('❤️', '收藏夹', COLORS.PRICE_RED),
-              QuickEntryItem.create('🎫', '领券中心', COLORS.WARNING),
-              QuickEntryItem.create('🏆', '排行榜', COLORS.SUCCESS),
+              QuickEntryItem.create($r('sys.symbol.alarm'), '限时抢购', COLORS.PRIMARY),
+              QuickEntryItem.create($r('sys.symbol.heart_fill'), '收藏夹', COLORS.PRICE_RED),
+              QuickEntryItem.create($r('sys.symbol.ticket_fill'), '领券中心', COLORS.WARNING),
+              QuickEntryItem.create($r('sys.symbol.star_trophy'), '排行榜', COLORS.SUCCESS),
             ], (item: QuickEntryItem) => {
-              Column({ space: SPACING.XS }) {
-                Text(item.icon)
-                  .width(40).height(40).fontSize(18)
+Column({ space: SPACING.XS }) {
+                SymbolGlyph(item.icon).fontSize(18)
+                  .width(40).height(40)
                   .backgroundColor(item.color)
                   .borderRadius(BORDER_RADIUS.LG)
-                  .textAlign(TextAlign.Center)
                 Text(item.title)
                   .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
               }
@@ -1744,8 +1743,8 @@ export struct StoreDetailContent {
           Text(this.storeName)
             .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.MERCHANT)
             .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-          Text(this.isFav ? '❤️' : '🤍')
-            .fontSize(24)
+SymbolGlyph(this.isFav ? $r('sys.symbol.heart_fill') : $r('sys.symbol.heart'))
+.fontSize(24)
             .onClick(async () => {
               if (!isLoggedIn()) {
                 promptAction.showToast({
@@ -2454,10 +2453,10 @@ struct ProfileMainPage {
 
         // 订单快捷入口
         Row() {
-          this.ProfileOrderEntry('⏳', '待付款', 0)
-          this.ProfileOrderEntry('📋', '待接单', 1)
-          this.ProfileOrderEntry('🚴', '配送中', 3)
-          this.ProfileOrderEntry('✅', '已完成', 4)
+          this.ProfileOrderEntry($r('sys.symbol.hourglass'), '待付款', 0)
+          this.ProfileOrderEntry($r('sys.symbol.doc_text'), '待接单', 1)
+          this.ProfileOrderEntry($r('sys.symbol.bicycle'), '配送中', 3)
+          this.ProfileOrderEntry($r('sys.symbol.checkmark'), '已完成', 4)
         }
         .width('100%').padding(SPACING.LG)
         .margin({ top: SPACING.SM })
@@ -2622,10 +2621,10 @@ struct ProfileMainPage {
   }
 
   @Builder
-  ProfileOrderEntry(icon: string, title: string, status: number) {
+  ProfileOrderEntry(iconGlyph: Resource, title: string, status: number) {
     Column({ space: SPACING.XS }) {
-      Text(icon).fontSize(24)
-        .width(44).height(44).textAlign(TextAlign.Center)
+      SymbolGlyph(iconGlyph).fontSize(24)
+        .width(44).height(44)
         .backgroundColor(accentBg(accentIndexFromText(title)))
         .borderRadius(BORDER_RADIUS.CIRCLE)
       Text(title).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
