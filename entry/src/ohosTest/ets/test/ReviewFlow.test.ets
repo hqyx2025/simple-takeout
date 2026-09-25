@@ -24,7 +24,7 @@
 import { Driver, ON, Component, abilityDelegatorRegistry } from '@kit.TestKit'
 import { fileIo } from '@kit.CoreFileKit'
 import { describe, it, expect } from '@ohos/hypium'
-import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, scrollToIdOrText, scrollUntilVisible, clickComponentCenter, logComponentsAt, waitAny } from './UiTestHelper'
+import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, scrollToIdOrText, scrollUntilVisible, clickComponentCenter, logComponentsAt, waitAny, openQuickLoginDialog } from './UiTestHelper'
 import { syncUserOrdersFromServer, uploadReviewImageRemote, submitReviewRemote, syncStoreReviewsRemote } from '../../../main/ets/service/AppStorageManager'
 import { Order } from '../../../main/ets/model/Models'
 
@@ -86,8 +86,9 @@ export default function reviewFlowTest() {
         await driver.delayMs(2000)
       }
       // 若仍在登录页（本次首登）点快捷登录跳首页；已登录则已在首页
-      const loginBtn = await waitAny(driver, ['quick-login-user'], 5000)
+      const loginBtn = await waitAny(driver, ['version-text'], 5000)
       if (isFound(loginBtn)) {
+        await openQuickLoginDialog(driver)
         expect(await clickByIdOrText(driver, 'quick-login-user', '一键登录用户')).assertTrue()
         await driver.delayMs(3000)
       }

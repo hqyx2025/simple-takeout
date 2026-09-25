@@ -17,7 +17,7 @@
  */
 import { Driver, ON, Component } from '@kit.TestKit'
 import { describe, it, expect } from '@ohos/hypium'
-import { isFound, requireComponent, launchAppUnderTest, findByIdOrText, clickByIdOrText, waitAny } from './UiTestHelper'
+import { isFound, requireComponent, launchAppUnderTest, findByIdOrText, clickByIdOrText, waitAny, openQuickLoginDialog } from './UiTestHelper'
 
 export default function checkoutFlowTest() {
   describe('CheckoutFlow', () => {
@@ -31,8 +31,9 @@ export default function checkoutFlowTest() {
         await driver.delayMs(2000)
       }
       // 若仍在登录页（本次会话首登）点快捷登录跳首页；已登录（前序用例落盘）则已在首页无需登录
-      const loginBtn = await waitAny(driver, ['quick-login-user'], 5000)
+      const loginBtn = await waitAny(driver, ['version-text'], 5000)
       if (isFound(loginBtn)) {
+        await openQuickLoginDialog(driver)
         expect(await clickByIdOrText(driver, 'quick-login-user', '一键登录用户')).assertTrue()
         await driver.delayMs(3000)
       }

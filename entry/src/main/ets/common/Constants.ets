@@ -129,6 +129,11 @@ export class ORDER_TIMELINE {
   }
 }
 
+// 应用元信息常量
+export class APP_CONFIG {
+  static readonly VERSION: string = '1.0.0'
+}
+
 // API端点常量
 // BASE_URL：模拟器访问宿主机用 10.0.2.2；真机联调改为电脑局域网 IP，如 http://192.168.1.100:9000
 export class API_CONFIG {

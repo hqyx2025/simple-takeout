@@ -12,7 +12,7 @@
  */
 import { Driver, ON } from '@kit.TestKit'
 import { describe, it, expect } from '@ohos/hypium'
-import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, waitAny } from './UiTestHelper'
+import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, waitAny, openQuickLoginDialog } from './UiTestHelper'
 
 export default function locationFlowTest() {
   describe('LocationFlow', () => {
@@ -27,10 +27,11 @@ export default function locationFlowTest() {
         await driver.delayMs(3000)
       }
 
-      // 登录页 → 一键登录用户（已登录则直接跳过）
-      const quickUser = await driver.findComponent(ON.id('quick-login-user'))
+      // 登录页 → 先打开弹窗再一键登录用户（已登录则直接跳过）
+      const quickUser = await driver.findComponent(ON.id('version-text'))
       if (isFound(quickUser)) {
         console.info('[LocationFlow] guest state -> quick login as user')
+        await openQuickLoginDialog(driver)
         expect(await clickByIdOrText(driver, 'quick-login-user', '一键登录用户')).assertTrue()
         await driver.delayMs(6000)
       } else {

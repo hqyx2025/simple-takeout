@@ -283,3 +283,25 @@ export async function waitAny(driver: Driver, ids: string[], timeoutMs: number):
   }
   return null
 }
+
+/**
+ * 点击版本号文本 3+ 次，打开快捷登录选择弹窗。
+ * 返回 true 表示弹窗已打开；false 表示版本号文本不存在（可能已登录）。
+ */
+export async function openQuickLoginDialog(driver: Driver): Promise<boolean> {
+  const versionText = await driver.findComponent(ON.id('version-text'))
+  if (!isFound(versionText)) {
+    return false
+  }
+  // 点 4 次确保 ≥3 次命中（不同指纹/状态可能漏掉一次）
+  for (let tap = 0; tap < 4; tap++) {
+    await driver.delayMs(400)
+    try {
+      await (versionText as Component).click()
+    } catch (err) {
+      console.info('[UiTest] versionText click failed tap=' + tap + ': ' + (err as Error).message)
+    }
+  }
+  await driver.delayMs(1000)
+  return true
+}

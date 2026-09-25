@@ -11,7 +11,7 @@
  */
 import { Driver, ON, Component } from '@kit.TestKit'
 import { describe, it, expect } from '@ohos/hypium'
-import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, clickComponentCenter, scrollUntilVisible, waitAny } from './UiTestHelper'
+import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, clickComponentCenter, scrollUntilVisible, waitAny, openQuickLoginDialog } from './UiTestHelper'
 import { loginRemote, fetchRiderProfileRemote, syncRiderPoolRemote, syncRiderOrdersRemote } from '../../../main/ets/service/AppStorageManager'
 import { Order, Rider } from '../../../main/ets/model/Models'
 
@@ -47,6 +47,7 @@ export default function riderFlowTest() {
         expect(await clickByIdOrText(driver, 'privacy-accept', '同意并继续')).assertTrue()
         await driver.delayMs(3000)
       }
+      await openQuickLoginDialog(driver)
       expect(await clickByIdOrText(driver, 'quick-login-rider', '一键登录骑手')).assertTrue()
       await driver.delayMs(8000)
 

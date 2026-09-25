@@ -9,7 +9,7 @@
  */
 import { Driver, ON } from '@kit.TestKit'
 import { describe, it, expect } from '@ohos/hypium'
-import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, scrollAndClick, scrollUntilVisible, waitAny } from './UiTestHelper'
+import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, scrollAndClick, scrollUntilVisible, waitAny, openQuickLoginDialog } from './UiTestHelper'
 
 /** 模块入口：入口 id 后缀（页面名）+ 该页标题文案。 */
 class AdminModule {
@@ -44,6 +44,7 @@ export default function adminFlowTest() {
         expect(await clickByIdOrText(driver, 'privacy-accept', '同意并继续')).assertTrue()
         await driver.delayMs(3000)
       }
+      await openQuickLoginDialog(driver)
       expect(await clickByIdOrText(driver, 'quick-login-admin', '一键登录管理端')).assertTrue()
       await driver.delayMs(8000)
 

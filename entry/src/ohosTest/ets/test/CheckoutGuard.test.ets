@@ -10,7 +10,7 @@
  */
 import { Driver, ON } from '@kit.TestKit'
 import { describe, it, expect } from '@ohos/hypium'
-import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, waitAny } from './UiTestHelper'
+import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, waitAny, openQuickLoginDialog } from './UiTestHelper'
 
 export default function checkoutGuardTest() {
   describe('CheckoutGuard', () => {
@@ -22,7 +22,8 @@ export default function checkoutGuardTest() {
         await clickByIdOrText(driver, 'privacy-accept', '同意并继续')
         await driver.delayMs(2000)
       }
-      // 测试环境快捷登录：触发登录页 UI 登录后跳首页（loginRemote 只写登录态不跳页，会卡在登录页）
+      // 测试环境快捷登录：先打开弹窗再选身份（已登录则直接跳过）
+      await openQuickLoginDialog(driver)
       expect(await clickByIdOrText(driver, 'quick-login-user', '一键登录用户')).assertTrue()
       await driver.delayMs(3000)
 

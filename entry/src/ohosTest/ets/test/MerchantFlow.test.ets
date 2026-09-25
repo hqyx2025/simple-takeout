@@ -20,7 +20,7 @@
  */
 import { Driver, ON, Component } from '@kit.TestKit'
 import { describe, it, expect } from '@ohos/hypium'
-import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, scrollUntilVisible, scrollAndClick, waitAny } from './UiTestHelper'
+import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, scrollUntilVisible, scrollAndClick, waitAny, openQuickLoginDialog } from './UiTestHelper'
 import { loginRemote, syncMerchantOrdersFromServer, getMerchantOrders } from '../../../main/ets/service/AppStorageManager'
 import { Order, User } from '../../../main/ets/model/Models'
 
@@ -67,6 +67,7 @@ export default function merchantFlowTest() {
         expect(await clickByIdOrText(driver, 'privacy-accept', '同意并继续')).assertTrue()
         await driver.delayMs(3000)
       }
+      await openQuickLoginDialog(driver)
       expect(await clickByIdOrText(driver, 'quick-login-merchant', '一键登录商户')).assertTrue()
       await driver.delayMs(8000)
 

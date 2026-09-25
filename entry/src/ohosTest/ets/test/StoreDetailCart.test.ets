@@ -20,7 +20,7 @@
  */
 import { Driver, ON, Component } from '@kit.TestKit'
 import { describe, it, expect } from '@ohos/hypium'
-import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, scrollUntilVisible } from './UiTestHelper'
+import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, scrollUntilVisible, openQuickLoginDialog } from './UiTestHelper'
 
 const STORE_ID: number = 2
 const STORE_NAME: string = '星巴克咖啡'
@@ -51,10 +51,14 @@ export default function storeDetailCartTest() {
       let home = await driver.waitForComponent(ON.id('home-search-entry'), 8000)
       if (!isFound(home)) {
         console.info('[StoreDetailCart] not on home, trying quick login')
-        const quick = await driver.waitForComponent(ON.id('quick-login-user'), 10000)
+        const quick = await driver.waitForComponent(ON.id('version-text'), 10000)
         if (isFound(quick)) {
-          await (quick as Component).click()
-          await driver.delayMs(4000)
+          await openQuickLoginDialog(driver)
+          const userBtn = await driver.waitForComponent(ON.id('quick-login-user'), 5000)
+          if (isFound(userBtn)) {
+            await (userBtn as Component).click()
+            await driver.delayMs(4000)
+          }
         }
         home = await driver.waitForComponent(ON.id('home-search-entry'), 10000)
       }

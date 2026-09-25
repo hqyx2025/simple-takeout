@@ -5,7 +5,7 @@
 import { UserRole } from '../model/Models'
 import { loginRemote, registerRemote, logout, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { logInfo, logWarn } from '../service/AppLogger'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { APP_CONFIG, COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { promptCompat as promptAction } from '../common/UiNavigation'
 
 @Component
@@ -18,7 +18,18 @@ export struct LoginPage {
   @State errorMsg: string = ''
   @State tipMsg: string = ''
   @State submitting: boolean = false
+  @State versionClickCount: number = 0
   onLoginSuccess: () => void = () => {}
+  private quickLoginDialog: CustomDialogController = new CustomDialogController({
+    builder: QuickLoginDialog({
+      onSelectLogin: (phone: string, role: UserRole): void => {
+        this.quickLogin(phone, role)
+      }
+    }),
+    autoCancel: true,
+    alignment: DialogAlignment.Bottom,
+    customStyle: true
+  })
 
   build() {
     Scroll() {
@@ -255,52 +266,24 @@ export struct LoginPage {
           }
         })
 
-      // 测试环境快捷登录：直接使用预置账号完成登录，无需手动填写手机号和密码
+      // 版本号（点击3次触发快捷登录选择弹窗）
       if (this.isLoginMode) {
-        Row({ space: SPACING.MD }) {
-          Button('一键登录用户')
-            .layoutWeight(1)
-            .height(40)
-            .fontSize(FONT_SIZE.SM)
-            .fontColor(COLORS.PRIMARY)
-            .backgroundColor(COLORS.WARM_BG)
-            .borderRadius(BORDER_RADIUS.ROUND)
-            .type(ButtonType.Capsule)
-            .id('quick-login-user')
-            .onClick(() => { this.quickLogin('13800138000', UserRole.CUSTOMER) })
-          Button('一键登录商户')
-            .layoutWeight(1)
-            .height(40)
-            .fontSize(FONT_SIZE.SM)
-            .fontColor(COLORS.PRIMARY)
-            .backgroundColor(COLORS.WARM_BG)
-            .borderRadius(BORDER_RADIUS.ROUND)
-            .type(ButtonType.Capsule)
-            .id('quick-login-merchant')
-            .onClick(() => { this.quickLogin('13600136000', UserRole.MERCHANT) })
-          Button('一键登录管理端')
-            .layoutWeight(1)
-            .height(40)
-            .fontSize(FONT_SIZE.SM)
-            .fontColor(COLORS.PRIMARY)
-            .backgroundColor(COLORS.WARM_BG)
-            .borderRadius(BORDER_RADIUS.ROUND)
-            .type(ButtonType.Capsule)
-            .id('quick-login-admin')
-            .onClick(() => { this.quickLogin('13100131000', UserRole.ADMIN) })
-          Button('一键登录骑手端')
-            .layoutWeight(1)
-            .height(40)
-            .fontSize(FONT_SIZE.SM)
-            .fontColor(COLORS.PRIMARY)
-            .backgroundColor(COLORS.WARM_BG)
-            .borderRadius(BORDER_RADIUS.ROUND)
-            .type(ButtonType.Capsule)
-            .id('quick-login-rider')
-            .onClick(() => { this.quickLogin('13300133000', UserRole.RIDER) })
+        Column() {
+          Text('v' + APP_CONFIG.VERSION)
+            .fontSize(FONT_SIZE.XS)
+            .fontColor(COLORS.TEXT_HINT)
+            .id('version-text')
+            .onClick(() => {
+              this.versionClickCount = this.versionClickCount + 1
+              if (this.versionClickCount >= 3) {
+                this.versionClickCount = 0
+                this.quickLoginDialog.open()
+              }
+            })
         }
         .width('100%')
-        .margin({ top: SPACING.MD })
+        .alignItems(HorizontalAlign.Center)
+        .margin({ top: SPACING.LG })
       }
 
       // 切换登录/注册
@@ -365,5 +348,72 @@ export struct LoginPage {
       ? 'ADMIN'
       : this.selectedRole === UserRole.MERCHANT ? 'MERCHANT'
       : this.selectedRole === UserRole.RIDER ? 'RIDER' : 'USER'
+  }
+}
+
+/**
+ * 快捷登录选择弹窗（点击版本号3次后触发）
+ */
+@CustomDialog
+export struct QuickLoginDialog {
+  controller?: CustomDialogController
+  onSelectLogin: (phone: string, role: UserRole) => void = () => {}
+
+  build() {
+    Column() {
+      // 标题栏
+      Row() {
+        Text('选择登录身份')
+          .fontSize(FONT_SIZE.LG)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(COLORS.TEXT_PRIMARY)
+        Blank()
+        Text('取消')
+          .fontSize(FONT_SIZE.MD)
+          .fontColor(COLORS.TEXT_HINT)
+          .onClick(() => {
+            if (this.controller !== undefined) {
+              this.controller.close()
+            }
+          })
+      }
+      .width('100%')
+      .padding({ left: SPACING.XL, right: SPACING.XL, top: SPACING.LG, bottom: SPACING.MD })
+
+      // 分隔线
+      Divider().color(COLORS.DIVIDER)
+
+      // 快捷登录按钮列表
+      Column({ space: SPACING.SM }) {
+        this.quickLoginButton('👤 用户点餐', '13800138000', UserRole.CUSTOMER, 'quick-login-user')
+        this.quickLoginButton('🏪 商户管理', '13600136000', UserRole.MERCHANT, 'quick-login-merchant')
+        this.quickLoginButton('🛠 管理端', '13100131000', UserRole.ADMIN, 'quick-login-admin')
+        this.quickLoginButton('🛵 骑手配送', '13300133000', UserRole.RIDER, 'quick-login-rider')
+      }
+      .width('100%')
+      .padding({ left: SPACING.XL, right: SPACING.XL, top: SPACING.MD, bottom: SPACING.XL })
+    }
+    .width('100%')
+    .backgroundColor(COLORS.BG_WHITE)
+    .borderRadius({ topLeft: BORDER_RADIUS.XL, topRight: BORDER_RADIUS.XL })
+  }
+
+  @Builder
+  quickLoginButton(label: string, phone: string, role: UserRole, id: string) {
+    Button(label)
+      .width('100%')
+      .height(48)
+      .fontSize(FONT_SIZE.LG)
+      .fontColor(COLORS.PRIMARY)
+      .backgroundColor(COLORS.WARM_BG)
+      .borderRadius(BORDER_RADIUS.ROUND)
+      .type(ButtonType.Capsule)
+      .id(id)
+      .onClick(() => {
+        this.onSelectLogin(phone, role)
+        if (this.controller !== undefined) {
+          this.controller.close()
+        }
+      })
   }
 }

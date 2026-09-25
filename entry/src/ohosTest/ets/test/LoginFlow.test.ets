@@ -11,7 +11,7 @@
  */
 import { Driver, ON } from '@kit.TestKit'
 import { describe, it, expect } from '@ohos/hypium'
-import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, waitAny } from './UiTestHelper'
+import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, waitAny, openQuickLoginDialog } from './UiTestHelper'
 
 export default function loginFlowTest() {
   describe('LoginFlow', () => {
@@ -34,7 +34,21 @@ export default function loginFlowTest() {
       requireComponent(await driver.findComponent(ON.id('login-password')), 'login-password')
       requireComponent(await driver.findComponent(ON.id('login-submit')), 'login-submit')
 
-      // 四个角色的一键登录入口必须都在（设备实测靠它快速切角色）
+      // 快捷登录入口已移入弹窗：点击版本号文本3次触发
+      //   第一步：确认版本号文本存在
+      const versionText = await driver.findComponent(ON.id('version-text'))
+      console.info('[LoginFlow] version-text found=' + isFound(versionText))
+      expect(isFound(versionText)).assertTrue()
+      //   第二步：点击版本号3次，弹出快捷登录对话框
+      if (versionText !== null && versionText !== undefined) {
+        // 4个指纹距离不同，点 4 次确保覆盖
+        for (let tap = 0; tap < 4; tap++) {
+          await driver.delayMs(500)
+          await versionText.click()
+        }
+        await driver.delayMs(1500)
+      }
+      //   第三步：弹窗内的四个快捷登录按钮现在应可见
       const quickIds: string[] = ['quick-login-user', 'quick-login-merchant', 'quick-login-admin', 'quick-login-rider']
       for (let i = 0; i < quickIds.length; i++) {
         const btn = await driver.findComponent(ON.id(quickIds[i]))
