@@ -329,7 +329,7 @@ export struct ReviewPage {
         .alignItems(HorizontalAlign.Center)
       } else if (this.order === null) {
         Column() {
-          Text('📦').fontSize(60).margin({ top: 100 })
+          SymbolGlyph($r('sys.symbol.gift')).fontSize(60).margin({ top: 100 })
           Text('订单不存在').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.LG })
         }
         .width('100%')

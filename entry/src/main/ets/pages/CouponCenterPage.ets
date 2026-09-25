@@ -79,13 +79,13 @@ export struct CouponCenterPage {
       List({ space: SPACING.MD }) {
         if (!this.loggedIn) {
           ListItem() {
-            this.EmptyView('🔒', '暂无登录', '请登录后查看优惠券')
+            this.EmptyView($r('sys.symbol.lock'), '暂无登录', '请登录后查看优惠券')
           }
         } else if (this.currentTab === 0) {
           // 可领取优惠券
           if (this.claimableCoupons.length === 0) {
             ListItem() {
-              this.EmptyView('🎁', '暂无可领取的优惠券', '')
+              this.EmptyView($r('sys.symbol.gift'), '暂无可领取的优惠券', '')
             }
           }
           ForEach(this.claimableCoupons, (coupon: Coupon) => {
@@ -97,7 +97,7 @@ export struct CouponCenterPage {
           // 我的优惠券（未使用的）
           if (this.unusedCoupons.length === 0) {
             ListItem() {
-              this.EmptyView('🎫', '暂无可用优惠券', '去"可领取"领取优惠券吧~')
+              this.EmptyView($r('sys.symbol.ticket_fill'), '暂无可用优惠券', '去"可领取"领取优惠券吧~')
             }
           }
           ForEach(this.unusedCoupons, (coupon: Coupon) => {
@@ -109,7 +109,7 @@ export struct CouponCenterPage {
           // 已使用
           if (this.usedCoupons.length === 0) {
             ListItem() {
-              this.EmptyView('📋', '暂无已使用优惠券', '')
+              this.EmptyView($r('sys.symbol.list_bullet_square'), '暂无已使用优惠券', '')
             }
           }
           ForEach(this.usedCoupons, (coupon: Coupon) => {
@@ -132,9 +132,9 @@ export struct CouponCenterPage {
 
   // 空视图
   @Builder
-  EmptyView(icon: string, title: string, desc: string) {
+  EmptyView(iconGlyph: Resource, title: string, desc: string) {
     Column({ space: SPACING.SM }) {
-      Text(icon)
+      SymbolGlyph(iconGlyph)
         .fontSize(60)
         .margin({ top: 80 })
       Text(title)

@@ -1005,9 +1005,8 @@ struct HomePage {
 
           // 附近推荐（原「发现」Tab 并入首页）：2 公里内、平台推荐位的店铺
           Row({ space: SPACING.SM }) {
-            Text('📍')
-              .fontSize(FONT_SIZE.MD)
-              .width(28).height(28).textAlign(TextAlign.Center)
+SymbolGlyph($r('sys.symbol.location_right_fill')).fontSize(FONT_SIZE.MD)
+              .width(28).height(28)
               .backgroundColor(MODULE_COLOR.NEARBY)
               .borderRadius(BORDER_RADIUS.SM)
             Text('附近推荐')

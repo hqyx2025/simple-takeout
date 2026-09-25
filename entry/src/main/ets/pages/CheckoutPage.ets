@@ -500,10 +500,9 @@ export struct CheckoutPage {
   @Builder
   CouponCard() {
     Row() {
-      Text('🎫')
-        .fontSize(FONT_SIZE.LG)
-      Text('优惠券')
-        .fontSize(FONT_SIZE.MD)
+SymbolGlyph($r('sys.symbol.ticket_fill')).fontSize(FONT_SIZE.MD)
+        Text('优惠券')
+          .fontSize(FONT_SIZE.MD)
         .fontColor(COLORS.TEXT_PRIMARY)
         .layoutWeight(1)
         .margin({ left: SPACING.SM })
@@ -705,9 +704,8 @@ export struct CheckoutPage {
             .fontWeight(FontWeight.Bold)
             .fontColor(COLORS.TEXT_PRIMARY)
             .layoutWeight(1)
-          SymbolGlyph($r('sys.symbol.xmark'))
+SymbolGlyph($r('sys.symbol.xmark'))
             .fontSize(FONT_SIZE.LG)
-            .fontColor([COLORS.TEXT_HINT])
             .onClick(() => { this.showCouponDialog = false })
         }
         .width('100%')

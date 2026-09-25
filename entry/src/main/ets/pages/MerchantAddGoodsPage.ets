@@ -401,7 +401,7 @@ export struct MerchantAddGoodsPage {
 
       Column() {
         SymbolGlyph($r('sys.symbol.xmark'))
-          .fontSize(FONT_SIZE.SM).fontColor([COLORS.ERROR])
+          .fontSize(FONT_SIZE.SM)
       }
       .width(30).height(40)
       .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)

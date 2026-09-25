@@ -306,7 +306,7 @@ export struct ProductListPage {
         }
       } else if (!this.hasLocation()) {
         Column({ space: SPACING.MD }) {
-          EmptyState({ icon: '📍', title: '请先选择配送位置', description: '定位后才能展示附近商品' })
+          EmptyState({ iconGlyph: $r('sys.symbol.location_right_fill'), title: '请先选择配送位置', description: '定位后才能展示附近商品' })
           Button('去选择位置')
             .height(44)
             .padding({ left: SPACING.XL, right: SPACING.XL })
@@ -322,7 +322,7 @@ export struct ProductListPage {
         .justifyContent(FlexAlign.Center)
         .alignItems(HorizontalAlign.Center)
       } else if (this.products.length === 0) {
-        EmptyState({ icon: '🍽️', title: '暂无符合条件的商品', description: '可以换个分类或查看附近全部商品' })
+        EmptyState({ iconGlyph: $r('sys.symbol.fork_knife_fill'), title: '暂无符合条件的商品', description: '可以换个分类或查看附近全部商品' })
       } else {
         List({ space: SPACING.SM }) {
           LazyForEach(this.dataSource, (item: ProductListItem, index: number) => {

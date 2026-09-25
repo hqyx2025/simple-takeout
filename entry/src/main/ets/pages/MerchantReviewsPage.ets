@@ -77,7 +77,7 @@ export struct MerchantReviewsPage {
           .alignItems(HorizontalAlign.Center)
         } else if (this.reviews.length === 0) {
           Column() {
-            Text('📝').fontSize(60).margin({ top: 40 })
+            SymbolGlyph($r('sys.symbol.doc_plaintext')).fontSize(60).margin({ top: 40 })
             Text('暂无评价')
               .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
           }

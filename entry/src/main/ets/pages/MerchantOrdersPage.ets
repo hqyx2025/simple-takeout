@@ -138,7 +138,7 @@ export struct MerchantOrdersPage {
       // 订单列表 / 空状态
       if (this.getFilteredOrders().length === 0) {
         Column() {
-          Text('📭').fontSize(32).margin({ top: 40 })
+          SymbolGlyph($r('sys.symbol.inbox')).fontSize(32).margin({ top: 40 })
           Text('暂无订单')
             .fontSize(FONT_SIZE.LG)
             .fontColor(COLORS.TEXT_HINT)
@@ -172,11 +172,11 @@ export struct MerchantOrdersPage {
     Column({ space: SPACING.SM }) {
       // 店铺名 + 订单状态
       Row() {
-        Text('🏪')
+        SymbolGlyph($r('sys.symbol.store'))
           .fontSize(FONT_SIZE.MD)
           .width(28)
           .height(28)
-          .textAlign(TextAlign.Center)
+.backgroundColor(accentBg(accentIndexFromText(order.storeName)))
           .backgroundColor(accentBg(accentIndexFromText(order.storeName)))
           .borderRadius(BORDER_RADIUS.SM)
         Text(order.storeName)

@@ -312,13 +312,13 @@ export struct RankingPage {
       if (this.loading) {
         LoadingIndicator({ text: '榜单加载中...' })
       } else if (!this.loggedIn) {
-        EmptyState({ icon: '🔒', title: '暂无登录', description: '请登录后查看榜单' })
-      } else if (this.currentTab === 0) {
-        this.RankHint('店铺榜按月销量排序，同销量时按评分排序（仅营业店铺）')
-        if (this.storeError !== '') {
-          this.ErrorView(this.storeError)
-        } else if (!Array.isArray(this.storeList) || this.storeList.length === 0) {
-          EmptyState({ icon: '🏆', title: '暂无店铺榜单', description: '暂时没有营业中的店铺数据' })
+EmptyState({ iconGlyph: $r('sys.symbol.lock'), title: '暂无登录', description: '请登录后查看榜单' })
+       } else if (this.currentTab === 0) {
+         this.RankHint('店铺榜按月销量排序，同销量时按评分排序（仅营业店铺）')
+         if (this.storeError !== '') {
+           this.ErrorView(this.storeError)
+         } else if (!Array.isArray(this.storeList) || this.storeList.length === 0) {
+           EmptyState({ iconGlyph: $r('sys.symbol.star_trophy'), title: '暂无店铺榜单', description: '暂时没有营业中的店铺数据' })
         } else {
           Refresh({ refreshing: this.refreshing }) {
             List({ space: SPACING.MD }) {

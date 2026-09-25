@@ -510,8 +510,8 @@ export struct MerchantCenterPage {
               Text('新建店铺')
                 .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.MERCHANT)
                 .layoutWeight(1).textAlign(TextAlign.Center)
-              Text('✕')
-                .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT)
+              SymbolGlyph($r('sys.symbol.xmark'))
+                .fontSize(FONT_SIZE.LG).fontColor([COLORS.TEXT_HINT])
                 .onClick(() => { this.showAddStore = false })
             }
             .width('100%')
@@ -649,8 +649,8 @@ export struct MerchantCenterPage {
               Text('编辑店铺')
                 .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.MERCHANT)
                 .layoutWeight(1).textAlign(TextAlign.Center)
-              Text('✕')
-                .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT)
+              SymbolGlyph($r('sys.symbol.xmark'))
+                .fontSize(FONT_SIZE.LG).fontColor([COLORS.TEXT_HINT])
                 .onClick(() => { this.showEditStore = false })
             }
             .width('100%')
@@ -764,8 +764,8 @@ export struct MerchantCenterPage {
             Row() {
               Text('分类管理')
                 .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.MERCHANT).layoutWeight(1)
-              Text('✕')
-                .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT)
+              SymbolGlyph($r('sys.symbol.xmark'))
+                .fontSize(FONT_SIZE.LG).fontColor([COLORS.TEXT_HINT])
                 .onClick(() => { this.showManageCategories = false })
             }
             .width('100%')
@@ -948,7 +948,7 @@ export struct MerchantCenterPage {
 
           if (this.selectedStoreGoods.length === 0) {
             Column() {
-              Text('📭').fontSize(50).margin({ top: 40 })
+              SymbolGlyph($r('sys.symbol.inbox')).fontSize(50).margin({ top: 40 })
               Text('暂无商品')
                 .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: 8 })
               Text('点击上方"添加商品"开始上架')

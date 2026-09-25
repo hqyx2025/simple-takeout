@@ -186,9 +186,9 @@ struct OrderListPage {
       .width('100%').backgroundColor(COLORS.BG_WHITE)
 
       if (!this.loggedIn) {
-        EmptyState({ icon: '🔒', title: '暂无登录', description: '请登录后查看订单' })
+        EmptyState({ iconGlyph: $r('sys.symbol.lock'), title: '暂无登录', description: '请登录后查看订单' })
       } else if (!Array.isArray(this.orderList) || this.orderList.length === 0) {
-        EmptyState({ icon: '📦', title: '暂无订单', description: '快去点一份美味吧' })
+        EmptyState({ iconGlyph: $r('sys.symbol.gift'), title: '暂无订单', description: '快去点一份美味吧' })
       } else {
         Refresh({ refreshing: this.isRefreshing }) {
           List({ space: SPACING.SM }) {

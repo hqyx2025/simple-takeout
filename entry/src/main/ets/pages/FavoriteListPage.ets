@@ -71,7 +71,7 @@ export struct FavoriteListPage {
 
       // 内容区
       if (!this.loggedIn) {
-        EmptyState({ icon: '🔒', title: '暂无登录', description: '请登录后查看收藏' })
+        EmptyState({ iconGlyph: $r('sys.symbol.lock'), title: '暂无登录', description: '请登录后查看收藏' })
       } else if (this.favoriteList.length === 0) {
         EmptyState({ icon: '💝', title: '暂无收藏店铺', description: '去首页收藏喜欢的店铺吧' })
       } else {

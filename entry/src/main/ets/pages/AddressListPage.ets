@@ -100,7 +100,7 @@ export struct AddressListPage {
         // 地址列表 / 空状态
         if (this.addressList.length === 0) {
           Column({ space: SPACING.SM }) {
-            Text('📭')
+            SymbolGlyph($r('sys.symbol.inbox'))
               .fontSize(60)
               .margin({ top: 80 })
             Text('暂无收货地址')
@@ -248,7 +248,8 @@ export struct AddressListPage {
                   .fontSize(FONT_SIZE.MD)
                   .fontColor(COLORS.TEXT_SECONDARY)
                 Blank()
-                Text(this.locatingCurrent ? '正在定位...' : '📍 定位选择当前位置')
+                SymbolGlyph($r('sys.symbol.location_right_fill')).fontSize(FONT_SIZE.MD)
+          Text(' 定位选择当前位置')
                   .fontSize(FONT_SIZE.SM)
                   .fontColor(this.locatingCurrent ? COLORS.TEXT_HINT : COLORS.PRIMARY)
                   .onClick(() => { this.fillCurrentLocation() })

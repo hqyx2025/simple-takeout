@@ -90,7 +90,7 @@ export struct AdminRiderPage {
         }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
       } else if (this.displayRiders.length === 0) {
         Column() {
-          Text('🛵').fontSize(60).margin({ top: 40 })
+          SymbolGlyph($r('sys.symbol.express_delivery')).fontSize(60).margin({ top: 40 })
           Text(this.statusFilter === -1 ? '暂无骑手' : '当前筛选条件下暂无骑手')
             .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
           Text('骑手通过「注册→选择骑手」开通').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.SM })
