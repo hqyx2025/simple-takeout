@@ -15,6 +15,7 @@ import { routerCompat as router } from '../common/UiNavigation'
 import { AddressSearchResult, searchAddress, joinAddressParts } from '../service/LocationService'
 import { syncAddressesRemote } from '../service/AppStorageManager'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { PageHeader } from '../components/PageHeader'
 
 /** 商户最远配送半径软阈值（公里）：低于/高于会先弹确认框，服务端仍接受 */
 const MERCHANT_RADIUS_DEFAULT_KM: number = 30
@@ -374,25 +375,7 @@ export struct MerchantCenterPage {
     Stack() {
       Column() {
         // 顶部
-        Row() {
-          Text('‹')
-            .fontSize(FONT_SIZE.XXL)
-            .fontColor(MODULE_COLOR.MERCHANT)
-            .onClick(() => { router.back() })
-          Text('🏪 商户中心')
-            .fontSize(FONT_SIZE.XXL)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(MODULE_COLOR.MERCHANT)
-            .layoutWeight(1)
-            .margin({ left: SPACING.MD })
-          Text(this.user.username)
-            .fontSize(FONT_SIZE.MD)
-            .fontColor(COLORS.TEXT_SECONDARY)
-        }
-        .width('100%')
-        .height(56)
-        .padding({ left: SPACING.LG, right: SPACING.LG, top: 26 })
-        .backgroundColor(MODULE_BG.MERCHANT)
+        PageHeader({ title: '🏪 商户中心', backText: '‹', backId: 'merchant-center-back', titleColor: MODULE_COLOR.MERCHANT, headerBgColor: MODULE_BG.MERCHANT, actionLabel: this.user.username, onAction: () => {}, onBack: () => { router.back() } })
 
         // 统计概览
         Row() {

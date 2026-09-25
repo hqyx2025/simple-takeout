@@ -10,6 +10,7 @@ import { joinAddressParts } from '../service/LocationService'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { ChangePasswordDialog } from '../components/ChangePasswordDialog'
 import { logInfo } from '../service/AppLogger'
+import { PageHeader } from '../components/PageHeader'
 
 /** 骑手配送半径的软阈值（公里）：低于/高于会先弹确认框，服务端仍接受 */
 const RIDER_RADIUS_DEFAULT_KM: number = 25
@@ -175,22 +176,7 @@ export struct RiderCenterPage {
   build() {
     Stack() {
     Column() {
-      Row() {
-        // 左上角保持留白：这里与其它页面的「‹ 返回」同位置，原先放"退出登录"导致从地图选点返回后
-        // 习惯性点左上角会直接退出到登录页（设备实测：点 (107,208) 即触发退出登录）
-        Text(' ').fontSize(FONT_SIZE.MD).width(28)
-        Text('🛵 骑手中心')
-          .fontSize(FONT_SIZE.XXL)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(MODULE_COLOR.RIDER)
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-        Text(' ').fontSize(FONT_SIZE.MD).width(28)
-      }
-      .width('100%')
-      .height(56)
-      .padding({ left: SPACING.LG, right: SPACING.LG })
-      .backgroundColor(MODULE_BG.RIDER)
+      PageHeader({ title: '🛵 骑手中心', showBack: false, headerBgColor: MODULE_BG.RIDER, titleColor: MODULE_COLOR.RIDER })
 
       if (!this.loggedIn) {
         Column() {

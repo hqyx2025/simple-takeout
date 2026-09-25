@@ -5,6 +5,7 @@ import { getLastRemoteErrorMessage, updateGoodsSpecsRemote } from '../service/Ap
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, merchantImageSource, DEFAULT_MERCHANT_IMAGE, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { photoAccessHelper } from '@kit.MediaLibraryKit'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
+import { PageHeader } from '../components/PageHeader'
 
 /** 多规格最多行数（超出时提示，不静默丢弃） */
 const MAX_SPEC_ROWS: number = 5
@@ -617,17 +618,7 @@ export struct MerchantEditGoodsPage {
 
   build() {
     Column() {
-      Row() {
-        Text('‹ 返回')
-          .fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.MERCHANT)
-          .onClick(() => { router.back() })
-        Text('编辑商品')
-          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold)
-          .fontColor(MODULE_COLOR.MERCHANT).layoutWeight(1).textAlign(TextAlign.Center)
-        Text(' ').width(28)
-      }
-      .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG })
-      .backgroundColor(MODULE_BG.MERCHANT).alignItems(VerticalAlign.Center)
+      PageHeader({ title: '编辑商品', backText: '‹ 返回', backId: 'merchant-edit-goods-back', titleColor: MODULE_COLOR.MERCHANT, headerBgColor: MODULE_BG.MERCHANT, onBack: () => { router.back() } })
 
       if (this.loading) {
         Column() {

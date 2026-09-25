@@ -6,6 +6,7 @@ import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, MODULE_C
 import { Order } from '../model/Models'
 import { syncRiderOrdersRemote, pickupOrderRemote, deliverOrderRemote, getLastRemoteErrorMessage, reportRiderLocationRemote, startRiderLocationTimer, stopRiderLocationTimer } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
+import { PageHeader } from '../components/PageHeader'
 
 @Entry
 @Component
@@ -100,19 +101,7 @@ export struct RiderOrdersPage {
 
   build() {
     Column() {
-      Row() {
-        Text('‹ 返回')
-          .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
-          .onClick(() => { router.back() })
-        Text('我的配送单')
-          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.RIDER)
-          .layoutWeight(1).textAlign(TextAlign.Center)
-        Text('刷新')
-          .fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.RIDER)
-          .onClick(() => { this.loadOrders() })
-      }
-      .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG })
-      .backgroundColor(MODULE_BG.RIDER)
+      PageHeader({ title: '我的配送单', backText: '‹ 返回', backId: 'rider-orders-back', titleColor: MODULE_COLOR.RIDER, headerBgColor: MODULE_BG.RIDER, actionLabel: '刷新', onAction: () => { this.loadOrders() }, onBack: () => { router.back() } })
 
       if (this.loading) {
         Column() {

@@ -41,6 +41,8 @@ export struct PageHeader {
   onBack: () => void = (): void => {}
   /** 右侧动作回调 */
   onAction: () => void = (): void => {}
+  /** 标题文字颜色（默认 COLORS.TEXT_PRIMARY；Rider/Merchant 端可传 MODULE_COLOR.RIDER/MERCHANT 保持模块色调） */
+  @Prop titleColor: Resource = COLORS.TEXT_PRIMARY
   private softPress: SoftPressModifier = new SoftPressModifier()
 
   @Builder
@@ -72,7 +74,7 @@ export struct PageHeader {
         Text(this.title)
           .fontSize(FONT_SIZE.XL)
           .fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.TEXT_PRIMARY)
+.fontColor(this.titleColor)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .width('100%')

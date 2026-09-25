@@ -6,6 +6,7 @@ import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, MODULE_C
 import { Order, Rider } from '../model/Models'
 import { syncRiderPoolRemote, grabOrderRemote, getLastRemoteErrorMessage, fetchRiderProfileRemote, reportRiderLocationRemote, startRiderLocationTimer } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
+import { PageHeader } from '../components/PageHeader'
 
 @Entry
 @Component
@@ -81,19 +82,7 @@ export struct RiderOrderPoolPage {
 
   build() {
     Column() {
-      Row() {
-        Text('‹ 返回')
-          .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
-          .onClick(() => { router.back() })
-        Text('抢单大厅')
-          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.RIDER)
-          .layoutWeight(1).textAlign(TextAlign.Center)
-        Text('刷新')
-          .fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.RIDER)
-          .onClick(() => { this.loadPool() })
-      }
-      .width('100%').height(56).padding({ left: SPACING.LG, right: SPACING.LG })
-      .backgroundColor(MODULE_BG.RIDER)
+      PageHeader({ title: '抢单大厅', backText: '‹ 返回', backId: 'rider-pool-back', titleColor: MODULE_COLOR.RIDER, headerBgColor: MODULE_BG.RIDER, actionLabel: '刷新', onAction: () => { this.loadPool() }, onBack: () => { router.back() } })
 
       if (this.rangeText() !== '') {
         Text(this.rangeText())

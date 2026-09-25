@@ -8,6 +8,7 @@ import { Review } from '../model/Models'
 import { syncMerchantReviewsRemote, replyReviewRemote } from '../service/AppStorageManager'
 import { RatingStars } from '../components/RatingStars'
 import { logInfo } from '../service/AppLogger'
+import { PageHeader } from '../components/PageHeader'
 
 @Entry
 @Component
@@ -65,25 +66,7 @@ export struct MerchantReviewsPage {
     Stack() {
       Column() {
         // 导航栏
-        Row() {
-          Text('‹ 返回')
-            .fontSize(FONT_SIZE.MD)
-            .fontColor(MODULE_COLOR.MERCHANT)
-            .onClick(() => { router.back() })
-          Text('评价管理')
-            .fontSize(FONT_SIZE.XL)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(MODULE_COLOR.MERCHANT)
-            .layoutWeight(1)
-            .textAlign(TextAlign.Center)
-          Text(' ')
-            .fontSize(FONT_SIZE.MD)
-            .width(28)
-        }
-        .width('100%')
-        .height(56)
-        .padding({ left: SPACING.LG, right: SPACING.LG })
-        .backgroundColor(MODULE_BG.MERCHANT)
+        PageHeader({ title: '评价管理', backText: '‹ 返回', backId: 'merchant-reviews-back', titleColor: MODULE_COLOR.MERCHANT, headerBgColor: MODULE_BG.MERCHANT, onBack: () => { router.back() } })
 
         if (this.loading) {
           Column() {
