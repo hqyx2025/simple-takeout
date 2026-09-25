@@ -469,10 +469,9 @@ export struct LocationPage {
 
         // 中心位置图标（固定在地图中间，跟随地图中心）
         Column() {
-          Text('📍')
+          SymbolGlyph($r('sys.symbol.location_right_fill'))
             .fontSize(32)
         }
-        .width(56)
         .height(56)
         .justifyContent(FlexAlign.Center)
       }
@@ -486,7 +485,7 @@ export struct LocationPage {
           // 当前位置卡片（显示地图中心解析出的地址）
           Column({ space: SPACING.SM }) {
             Row() {
-              Text('📍')
+              SymbolGlyph($r('sys.symbol.location_right_fill'))
                 .fontSize(FONT_SIZE.XL)
               Text('当前选择')
                 .fontSize(FONT_SIZE.LG)

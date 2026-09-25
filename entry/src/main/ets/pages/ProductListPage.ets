@@ -286,10 +286,10 @@ export struct ProductListPage {
       })
 
       if (!this.loggedIn) {
-        EmptyState({ icon: '🔒', title: '暂无登录', description: '请登录后查看商品' })
-      } else if (this.mode === ProductListMode.CATEGORY) {
-        if (this.categoryStores.length === 0) {
-          EmptyState({ icon: '🏪', title: '暂无该分类店铺', description: '当前分类暂时没有可展示的店铺' })
+EmptyState({ iconGlyph: $r('sys.symbol.lock'), title: '暂无登录', description: '请登录后查看商品' })
+       } else if (this.mode === ProductListMode.CATEGORY) {
+         if (this.categoryStores.length === 0) {
+           EmptyState({ iconGlyph: $r('sys.symbol.store'), title: '暂无该分类店铺', description: '当前分类暂时没有可展示的店铺' })
         } else {
           List({ space: SPACING.SM }) {
             ForEach(this.categoryStores, (store: StoreItem) => {

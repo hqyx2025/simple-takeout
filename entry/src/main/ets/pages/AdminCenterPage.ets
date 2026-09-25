@@ -31,13 +31,13 @@ interface AdminOrder {
 
 /** 入口卡片模型 */
 class AdminEntryItem {
-  icon: string = ''
+  icon: Resource = $r('sys.symbol.questionmark_circle')
   title: string = ''
   description: string = ''
   count: number = 0
   page: string = ''
 
-  static create(icon: string, title: string, description: string, count: number, page: string): AdminEntryItem {
+  static create(icon: Resource, title: string, description: string, count: number, page: string): AdminEntryItem {
     const item: AdminEntryItem = new AdminEntryItem()
     item.icon = icon
     item.title = title
@@ -105,16 +105,16 @@ export struct AdminCenterPage {
   /** 四个后台模块入口卡片（数据源提取为方法，避免 ForEach 字面量闭包捕获问题）。 */
   private getAdminEntries(): AdminEntryItem[] {
     const entries: AdminEntryItem[] = [
-      AdminEntryItem.create('📂', '分类管理', '平台分类的增删改', this.categories.length, 'pages/AdminCategoryPage'),
-      AdminEntryItem.create('🏪', '店铺管理', '营业状态与发现页推荐', this.stores.length, 'pages/AdminStorePage'),
-      AdminEntryItem.create('👥', '员工管理', '商户账号创建、编辑与停用', this.employees, 'pages/AdminEmployeePage'),
-      AdminEntryItem.create('🍽️', '商品监管', '搜索商品并强制上下架', 0, 'pages/AdminProductPage'),
-      AdminEntryItem.create('🧑‍💼', '用户管理', '查看用户和商户账号状态', 0, 'pages/AdminUserPage'),
-      AdminEntryItem.create('📦', '订单管理', '托管订单状态与退款', this.orders.length, 'pages/AdminOrderPage'),
-      AdminEntryItem.create('💰', '退款审批', '处理用户退款申请', this.getPendingRefundCount(), 'pages/AdminRefundPage'),
-      AdminEntryItem.create('📊', '平台统计', '查看平台订单、成交和热销商品', 0, 'pages/AdminStatisticsPage'),
-      AdminEntryItem.create('🛵', '骑手管理', '骑手列表与启用停用', 0, 'pages/AdminRiderPage'),
-      AdminEntryItem.create('🎨', '内容管理', '首页轮播与平台公告', 0, 'pages/AdminContentPage')
+      AdminEntryItem.create($r('sys.symbol.folder'), '分类管理', '平台分类的增删改', this.categories.length, 'pages/AdminCategoryPage'),
+      AdminEntryItem.create($r('sys.symbol.store'), '店铺管理', '营业状态与发现页推荐', this.stores.length, 'pages/AdminStorePage'),
+      AdminEntryItem.create($r('sys.symbol.person_2'), '员工管理', '商户账号创建、编辑与停用', this.employees, 'pages/AdminEmployeePage'),
+      AdminEntryItem.create($r('sys.symbol.fork_knife_fill'), '商品监管', '搜索商品并强制上下架', 0, 'pages/AdminProductPage'),
+      AdminEntryItem.create($r('sys.symbol.person'), '用户管理', '查看用户和商户账号状态', 0, 'pages/AdminUserPage'),
+      AdminEntryItem.create($r('sys.symbol.archivebox'), '订单管理', '托管订单状态与退款', this.orders.length, 'pages/AdminOrderPage'),
+      AdminEntryItem.create($r('sys.symbol.wallet'), '退款审批', '处理用户退款申请', this.getPendingRefundCount(), 'pages/AdminRefundPage'),
+      AdminEntryItem.create($r('sys.symbol.square_grid_2x2'), '平台统计', '查看平台订单、成交和热销商品', 0, 'pages/AdminStatisticsPage'),
+      AdminEntryItem.create($r('sys.symbol.express_delivery'), '骑手管理', '骑手列表与启用停用', 0, 'pages/AdminRiderPage'),
+      AdminEntryItem.create($r('sys.symbol.paintbrush_pointed_square'), '内容管理', '首页轮播与平台公告', 0, 'pages/AdminContentPage')
     ]
     return entries
   }
@@ -203,8 +203,8 @@ export struct AdminCenterPage {
   @Builder
   EntryCard(item: AdminEntryItem) {
     Row({ space: SPACING.MD }) {
-      Text(item.icon)
-        .width(44).height(44).textAlign(TextAlign.Center).fontSize(24)
+      SymbolGlyph(item.icon)
+        .width(44).height(44).fontSize(24)
         .backgroundColor(accentBg(accentIndexFromText(item.title)))
         .borderRadius(BORDER_RADIUS.MD)
       Column({ space: SPACING.XS }) {

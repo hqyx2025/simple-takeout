@@ -257,7 +257,7 @@ export struct OrderDetailPage {
 
         if (this.order === null) {
           Column({ space: SPACING.SM }) {
-            Text(this.loggedIn ? '📦' : '🔒').fontSize(60).margin({ top: 100 })
+            SymbolGlyph(this.loggedIn ? $r('sys.symbol.gift') : $r('sys.symbol.lock')).fontSize(60).margin({ top: 100 })
             Text(this.loggedIn ? '订单不存在' : '暂无登录')
               .fontSize(FONT_SIZE.LG)
               .fontColor(COLORS.TEXT_HINT)
@@ -419,10 +419,9 @@ export struct OrderDetailPage {
             .fontWeight(FontWeight.Bold)
             .fontColor(COLORS.TEXT_PRIMARY)
             .layoutWeight(1)
-          Text('✕')
-            .fontSize(FONT_SIZE.LG)
-            .fontColor(COLORS.TEXT_HINT)
-            .onClick(() => { this.showRefundDialog = false })
+SymbolGlyph($r('sys.symbol.xmark'))
+.fontSize(FONT_SIZE.LG)
+.onClick(() => { this.showRefundDialog = false })
         }
         .width('100%')
         .padding({ bottom: SPACING.MD })
@@ -511,7 +510,7 @@ export struct OrderDetailPage {
       // 待付款：支付倒计时提示（超时由后端自动取消）
       if (this.order!.status === 0) {
         Row() {
-          Text('⏰')
+          SymbolGlyph($r('sys.symbol.alarm'))
             .fontSize(FONT_SIZE.LG)
           Text(this.payRemainSeconds > 0
             ? `请在 ${this.payCountdownText()} 内完成支付，超时订单将自动取消`

@@ -2466,7 +2466,7 @@ struct ProfileMainPage {
 
         // 功能菜单
         Column() {
-          this.ProfileMenuRow('📍', '收货地址', () => {
+          this.ProfileMenuRow($r('sys.symbol.location_right_fill'), '收货地址', () => {
             if (!this.loggedIn) {
               promptAction.showToast({ message: '请先登录后管理收货地址', duration: 1500 })
               this.onNavigateLogin()
@@ -2474,10 +2474,10 @@ struct ProfileMainPage {
             }
             router.pushUrl({ url: 'pages/AddressListPage' })
           })
-          this.ProfileMenuRow('❤️', '我的收藏', () => { router.pushUrl({ url: 'pages/FavoriteListPage' }) })
-          this.ProfileMenuRow('📞', '联系客服', () => { router.pushUrl({ url: 'pages/ContactCustomerServicePage' }) })
-          this.ProfileMenuRow('⚙️', '设置', () => { router.pushUrl({ url: 'pages/SettingsPage' }) })
-          this.ProfileMenuRow('🔑', '修改密码', () => { this.showChangePwd = true })
+          this.ProfileMenuRow($r('sys.symbol.heart_fill'), '我的收藏', () => { router.pushUrl({ url: 'pages/FavoriteListPage' }) })
+          this.ProfileMenuRow($r('sys.symbol.phone_fill'), '联系客服', () => { router.pushUrl({ url: 'pages/ContactCustomerServicePage' }) })
+          this.ProfileMenuRow($r('sys.symbol.gearshape'), '设置', () => { router.pushUrl({ url: 'pages/SettingsPage' }) })
+          this.ProfileMenuRow($r('sys.symbol.key'), '修改密码', () => { this.showChangePwd = true })
         }
         .width('100%')
         .padding({ top: SPACING.SM })
@@ -2486,7 +2486,7 @@ struct ProfileMainPage {
 
         // 测试工具入口
         Column() {
-          this.ProfileMenuRow('💳', '测试充值余额', () => { this.openRechargeDialog() })
+          this.ProfileMenuRow($r('sys.symbol.creditcard'), '测试充值余额', () => { this.openRechargeDialog() })
         }
         .width('100%')
         .padding({ top: SPACING.SM })
@@ -2501,9 +2501,9 @@ struct ProfileMainPage {
               .fontColor(COLORS.PRIMARY)
               .width('100%')
               .padding({ left: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
-            this.ProfileMenuRow('📋', '店铺管理', () => { router.pushUrl({ url: 'pages/MerchantCenterPage' }) }, 'profile-merchant-center')
-            this.ProfileMenuRow('📊', '订单管理', () => { router.pushUrl({ url: 'pages/MerchantOrdersPage' }) }, 'profile-merchant-orders')
-            this.ProfileMenuRow('💰', '收入统计', () => { router.pushUrl({ url: 'pages/MerchantStatsPage' }) }, 'profile-merchant-stats')
+            this.ProfileMenuRow($r('sys.symbol.doc_text'), '店铺管理', () => { router.pushUrl({ url: 'pages/MerchantCenterPage' }) }, 'profile-merchant-center')
+            this.ProfileMenuRow($r('sys.symbol.square_grid_2x2'), '订单管理', () => { router.pushUrl({ url: 'pages/MerchantOrdersPage' }) }, 'profile-merchant-orders')
+            this.ProfileMenuRow($r('sys.symbol.wallet'), '收入统计', () => { router.pushUrl({ url: 'pages/MerchantStatsPage' }) }, 'profile-merchant-stats')
           }
           .width('100%')
           .padding({ top: SPACING.SM })
@@ -2518,7 +2518,7 @@ struct ProfileMainPage {
               .fontColor(COLORS.PRIMARY)
               .width('100%')
               .padding({ left: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
-            this.ProfileMenuRow('🗂', '平台分类、店铺与托管订单', () => {
+            this.ProfileMenuRow($r('sys.symbol.folder'), '平台分类、店铺与托管订单', () => {
               router.pushUrl({ url: 'pages/AdminCenterPage' })
             })
           }
@@ -2642,10 +2642,10 @@ struct ProfileMainPage {
   }
 
   @Builder
-  ProfileMenuRow(icon: string, title: string, action: () => void, rowId: string = '') {
+  ProfileMenuRow(iconGlyph: Resource, title: string, action: () => void, rowId: string = '') {
     Row({ space: SPACING.MD }) {
-      Text(icon).fontSize(18)
-        .width(36).height(36).textAlign(TextAlign.Center)
+      SymbolGlyph(iconGlyph).fontSize(18)
+        .width(36).height(36)
         .backgroundColor(accentBg(accentIndexFromText(title)))
         .borderRadius(BORDER_RADIUS.MD)
       Text(title).fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
