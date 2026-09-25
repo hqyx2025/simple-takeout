@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  简单外卖后端：Docker 构建期 Maven 仓库镜像配置。
+  容器内直连 Maven Central 会被 DNS 拦截（宿主机需走 Clash 代理，
+  而 JVM 进程不会继承代理），故统一走国内镜像。
+  实测：阿里云 CDN 到本机不稳（随机断流），改用腾讯云镜像。
+  依赖跨构建缓存由 Dockerfile 的 buildkit cache mount 提供。
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
+  <mirrors>
+    <mirror>
+      <id>tencent-maven-public</id>
+      <name>Tencent Cloud Maven Public Mirror</name>
+      <url>https://mirrors.cloud.tencent.com/nexus/repository/maven-public/</url>
+      <mirrorOf>*</mirrorOf>
+    </mirror>
+  </mirrors>
+</settings>

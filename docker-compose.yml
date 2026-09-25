@@ -117,7 +117,7 @@ services:
       timeout: 8s
       retries: 12
       start_period: 40s
-    command: ["java", "-jar", "/app/takeout-gateway.jar"]
+    entrypoint: ["java", "-jar", "/app/takeout-gateway.jar"]
 
 volumes:
   mysql-data:

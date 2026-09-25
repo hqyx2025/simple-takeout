@@ -10,18 +10,32 @@
 # command/entrypoint 启动不同角色即可（见 docker-compose.yml 的 app 与 gateway 服务）。
 
 # ---------- 构建阶段 ----------
+# 容器内直连 Maven Central 被 DNS 拦截（宿主机需 Clash 代理，而 JVM 进程
+# 不读 HTTP_PROXY 环境变量），故用国内镜像（腾讯云，见 docker/settings.xml）。
+# settings.xml 复制到 Maven 全局配置（/usr/share/maven/conf/settings.xml），
+# 不能放 /root/.m2/settings.xml——它与下方 buildkit cache mount 目标同路径，
+# cache 挂载会覆盖掉 COPY 进去的镜像配置（实测导致 Maven 直连 central 失败）。
+# Maven 依赖用 buildkit cache mount 跨构建持久化，避免每次全量重下、随机断流
+# 只补缺件即可；若需换镜像改 server/docker/settings.xml，仅构建期生效。
 FROM maven:3.9-eclipse-temurin-25 AS build
 WORKDIR /workspace
 
-# 先只拷 pom（聚合根 + 各模块）并预热依赖，源码变更时不必重新下载依赖（利用 Docker 层缓存）
+COPY docker/settings.xml /usr/share/maven/conf/settings.xml
+
+# 先只拷 pom（聚合根 + 各模块）并预热依赖，源码变更时不必重新下载依赖
+# （buildkit cache mount 持久化 /root/.m2，跨构建复用）
+# 注意：不能用 -pl/-am 限定模块——实测 -pl ... -am + dependency:go-offline 在
+# 聚合 reactor 下会静默卡死（timeout 124 复现），对整根预热则正常。
 COPY pom.xml .
+COPY takeout-common/pom.xml takeout-common/pom.xml
 COPY takeout-app/pom.xml takeout-app/pom.xml
 COPY takeout-gateway/pom.xml takeout-gateway/pom.xml
-RUN mvn -B -q -pl takeout-app,takeout-gateway -am dependency:go-offline || true
+RUN --mount=type=cache,target=/root/.m2 mvn -B -q dependency:go-offline || true
 
+COPY takeout-common/src ./takeout-common/src
 COPY takeout-app/src ./takeout-app/src
 COPY takeout-gateway/src ./takeout-gateway/src
-RUN mvn -B -q clean package -DskipTests
+RUN --mount=type=cache,target=/root/.m2 mvn -B -q clean package -DskipTests
 
 # 健康检查类在构建阶段编译（运行镜像是 JRE，没有 javac）
 COPY takeout-app/docker/healthcheck.java /workspace/healthcheck.java
