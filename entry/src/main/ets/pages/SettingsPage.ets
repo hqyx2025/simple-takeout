@@ -2,6 +2,7 @@
  * 设置页面
  * 包含：清除缓存、修改密码、退出登录、关于我们
  */
+import { AppMotion } from '../common/theme/AppMotion'
 import { CartItem } from '../model/Models'
 import { logout, changePasswordRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
@@ -13,6 +14,21 @@ import { routerCompat as router, promptCompat as promptAction } from '../common/
 @Entry
 @Component
 export struct SettingsPage {
+  pageTransition() {
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Push))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Pop))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Pop))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+  }
+
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State showAbout: boolean = false
   @State showLogoutConfirm: boolean = false

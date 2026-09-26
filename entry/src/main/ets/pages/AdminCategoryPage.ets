@@ -2,6 +2,7 @@
  * 管理端-分类管理页（大纲 9.4 平台分类管理）
  * 平台分类的增删改：新增、行内编辑（名称）、删除（后端校验有关联店铺时禁止删除）
  */
+import { AppMotion } from '../common/theme/AppMotion'
 import { User, UserRole, Category } from '../model/Models'
 import { ApiResponse, get, post, put, del } from '../service/HttpClient'
 import { COLORS, COLORS_PRIMARY_HEX, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentIndexFromText } from '../common/Constants'
@@ -19,6 +20,21 @@ interface AdminCategoryRequest {
 @Entry
 @Component
 export struct AdminCategoryPage {
+  pageTransition() {
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Push))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Pop))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Pop))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+  }
+
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @StorageLink('user') user: User = {
     id: 0, username: '未登录', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER,

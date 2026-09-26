@@ -1,4 +1,5 @@
 /** 管理端-员工账号管理：员工增删改中的新增、资料编辑和启停用。 */
+import { AppMotion } from '../common/theme/AppMotion'
 import { AdminEmployee, User, UserRole } from '../model/Models'
 import { createAdminEmployeeApi, fetchAdminEmployeesApi, updateAdminEmployeeApi, updateAdminEmployeeStatusApi } from '../service/ApiService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
@@ -10,6 +11,21 @@ import { logInfo } from '../service/AppLogger'
 @Entry
 @Component
 export struct AdminEmployeePage {
+  pageTransition() {
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Push))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Pop))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Pop))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+  }
+
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @StorageLink('user') user: User = {
     id: 0, username: '未登录', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER,

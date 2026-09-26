@@ -18,20 +18,20 @@ import { initLogger, logInfo, logError, setPrivacyConsent } from '../service/App
 import { savePrivacyConsent } from '../service/DataPersistence'
 import { loadAllData, saveAllData } from '../service/DataPersistence'
 import { BreakpointSystem } from '../common/utils/BreakpointSystem'
-import { FloatingTabBarTheme } from '../common/theme/FloatingTabBarTheme'
+import { HomeTheme } from '../common/theme/HomeTheme'
+import { SoftPressModifier } from '../common/theme/SoftPressModifier'
+import { AppMotion } from '../common/theme/AppMotion'
 import { common } from '@kit.AbilityKit'
 
 // 定义快捷入口和订单Tab的数据类型，解决 arkts-no-untyped-obj-literals 错误
 class QuickEntryItem {
-  icon: Resource = $r('sys.symbol.questionmark_circle')
+  icon: Resource = $r('app.media.home_bowl')
   title: string = ''
-  color: ResourceColor = ''
 
-  static create(icon: Resource, title: string, color: ResourceColor): QuickEntryItem {
+  static create(icon: Resource, title: string): QuickEntryItem {
     let item = new QuickEntryItem()
     item.icon = icon
     item.title = title
-    item.color = color
     return item
   }
 }
@@ -81,7 +81,9 @@ class StoreDataSource implements IDataSource {
 @Entry
 @Component
 struct Index {
+  @StorageLink('appReduceMotion') reduceMotion: boolean = false
   @State currentTab: number = 0
+  @State selectedTab: number = 0
   @State profileRefreshToken: number = 0
   @StorageLink('isLoggedIn') @Watch('onLoginStateChange') loggedIn: boolean = false
   @State showLogin: boolean = true
@@ -91,6 +93,17 @@ struct Index {
   @State isWide: boolean = false
   private tabsController: TabsController = new TabsController()
   private breakpointSystem: BreakpointSystem = new BreakpointSystem()
+
+  pageTransition() {
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) }).opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Push))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) }).opacity(0)
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Pop))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) }).opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Pop))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) }).opacity(0)
+  }
 
   aboutToAppear() {
     // 初始化全局数据
@@ -323,14 +336,17 @@ struct Index {
       }
       }
     }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(HomeTheme.SURFACE)
   }
 
-  /** 底部 4 个 Tab 各用一种模块色：一眼看出当前在哪个模块。 */
-  private tabColor(targetIndex: number): ResourceColor {
-    if (targetIndex === 0) { return MODULE_COLOR.HOME }
-    if (targetIndex === 1) { return MODULE_COLOR.REVIEW }
-    if (targetIndex === 2) { return MODULE_COLOR.CART }
-    return MODULE_COLOR.MINE
+  private tabIcon(targetIndex: number): Resource {
+    const selected: boolean = (this.isWide ? this.currentTab : this.selectedTab) === targetIndex
+    if (targetIndex === 0) { return selected ? $r('app.media.home_nav_home_active') : $r('app.media.home_nav_home') }
+    if (targetIndex === 1) { return selected ? $r('app.media.home_nav_assistant_active') : $r('app.media.home_nav_assistant') }
+    if (targetIndex === 2) { return selected ? $r('app.media.home_nav_cart_active') : $r('app.media.home_nav_cart') }
+    return selected ? $r('app.media.home_nav_profile_active') : $r('app.media.home_nav_profile')
   }
 
   @Builder
@@ -363,13 +379,12 @@ SidebarItem.create('首页', 0),
         ], (item: SidebarItem) => {
           Button({ type: ButtonType.Normal }) {
             Row({ space: SPACING.MD }) {
-              Text(this.currentTab === item.index ? '•' : '  ')
-                .fontSize(FONT_SIZE.XL)
-                .fontColor(COLORS.PRIMARY)
-                .width(20)
+              Image(this.tabIcon(item.index))
+                .width(HomeTheme.ICON).height(HomeTheme.ICON)
+                .accessibilityLevel('no')
               Text(item.title)
                 .fontSize(FONT_SIZE.LG)
-                .fontColor(this.currentTab === item.index ? COLORS.PRIMARY : COLORS.TEXT_PRIMARY)
+                .fontColor(this.currentTab === item.index ? HomeTheme.ACCENT : HomeTheme.TEXT)
                 .fontWeight(this.currentTab === item.index ? FontWeight.Bold : FontWeight.Normal)
             }
             .width('100%')
@@ -377,15 +392,17 @@ SidebarItem.create('首页', 0),
           .width('100%')
           .height(44)
           .buttonStyle(ButtonStyleMode.NORMAL)
-          .backgroundColor(this.currentTab === item.index ? COLORS.BG_CARD : Color.Transparent)
+          .backgroundColor(this.currentTab === item.index ? HomeTheme.SOFT : Color.Transparent)
           .borderRadius(12)
+          .attributeModifier(new SoftPressModifier())
+          .animation(AppMotion.pressAnimation())
           .onClick(() => { this.switchTab(item.index) })
         }, (item: SidebarItem) => item.title)
       }
       .width('100%')
       .height('100%')
       .padding(SPACING.SM)
-      .backgroundColor(COLORS.BG_PRIMARY)
+      .backgroundColor(HomeTheme.SURFACE)
 
       Column() {
         this.tabContent()
@@ -404,7 +421,7 @@ SidebarItem.create('首页', 0),
 
   @Builder
   mainTabs() {
-    Tabs({ controller: this.tabsController, barPosition: BarPosition.End }) {
+    Tabs({ controller: this.tabsController, barPosition: BarPosition.End, index: $$this.currentTab }) {
       TabContent() {
         HomePage({
           onStoreClick: (store: StoreItem) => {
@@ -430,20 +447,26 @@ SidebarItem.create('首页', 0),
         })
       }.tabBar(this.tabBuilder('我的', 3))
     }
-    .barHeight(50)
-    .barBackgroundColor(COLORS.BG_WHITE)
+    .barHeight(HomeTheme.TAB_HEIGHT)
+    .barBackgroundColor(HomeTheme.SURFACE)
+    .onAnimationStart((index: number, targetIndex: number) => {
+      // 只更新选中外观；提前修改 Tabs 的 index 会跳过原生切换动画。
+      this.selectedTab = targetIndex
+    })
     .onChange((index: number) => {
       this.currentTab = index
+      this.selectedTab = index
       if (index === 3) {
         this.profileRefreshToken += 1
       }
       logInfo('Page', `首页 Tab 切换 index=${index}`)
     })
     .scrollable(false)
-    .animationDuration(0)
+    .animationDuration(this.reduceMotion ? 0 : AppMotion.TAB)
+    .animationCurve(Curve.EaseOut)
     .width('100%')
     .height('100%')
-    .backgroundColor(COLORS.BG_PRIMARY)
+    .backgroundColor(HomeTheme.SURFACE)
   }
 
   /** 切换 Tab 并刷新小部件 */
@@ -452,6 +475,7 @@ SidebarItem.create('首页', 0),
       return
     }
     this.currentTab = index
+    this.selectedTab = index
     if (index === 3) {
       this.profileRefreshToken += 1
     }
@@ -480,19 +504,32 @@ SidebarItem.create('首页', 0),
 
   @Builder
   tabBuilder(title: string, targetIndex: number) {
-    Column({ space: 2 }) {
+    Column({ space: SPACING.XS }) {
+      Stack() {
+        Image(this.tabIcon(targetIndex))
+          .width(HomeTheme.ICON).height(HomeTheme.ICON)
+          .accessibilityLevel('no')
+      }
+      .width(52).height(30)
+      .backgroundColor(this.selectedTab === targetIndex ? HomeTheme.SOFT : Color.Transparent)
+      .borderRadius(15)
+      .scale({ x: this.selectedTab === targetIndex && !this.reduceMotion ? 1.04 : 1,
+        y: this.selectedTab === targetIndex && !this.reduceMotion ? 1.04 : 1 })
+      .animation({ duration: this.reduceMotion ? 0 : AppMotion.TAB, curve: Curve.EaseOut })
       Text(title)
-        .fontSize(10)
-        .fontColor(this.currentTab === targetIndex ? this.tabColor(targetIndex) : COLORS.TAB_INACTIVE)
-        .fontWeight(this.currentTab === targetIndex ? FontWeight.Bold : FontWeight.Normal)
+        .fontSize(FONT_SIZE.SM)
+        .fontColor(this.selectedTab === targetIndex ? HomeTheme.ACCENT : HomeTheme.MUTED)
+        .fontWeight(this.selectedTab === targetIndex ? FontWeight.Bold : FontWeight.Normal)
     }
     .width('100%')
     .height('100%')
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
+    .accessibilityGroup(true)
+    .accessibilityText(title)
+    .accessibilitySelected(this.selectedTab === targetIndex)
     .id(`tab-${targetIndex}`)
     .onClick(() => {
-      this.currentTab = targetIndex
       this.tabsController.changeIndex(targetIndex)
     })
   }
@@ -756,8 +793,30 @@ struct HomePage {
     return rowCount * 80
   }
 
-  private getCategoryIcon(category: Category): string {
-    return category.icon.trim() === '' || category.icon === '??' ? '🍔' : category.icon
+  // 仅映射展示资源；分类名称、ID、顺序和服务器 icon 字段保持原样。
+  private getCategoryIcon(category: Category): Resource {
+    const label: string = category.name + (category.icon ?? '')
+    if (label.includes('饮') || label.includes('茶') || label.includes('🧋')) { return $r('app.media.home_drink') }
+    if (label.includes('甜') || label.includes('糕') || label.includes('🍰')) { return $r('app.media.home_cake') }
+    if (label.includes('火锅') || label.includes('🍲')) { return $r('app.media.home_pot') }
+    if (label.includes('烧烤') || label.includes('🍢')) { return $r('app.media.home_skewer') }
+    if (label.includes('寿司') || label.includes('🍣')) { return $r('app.media.home_sushi') }
+    if (label.includes('快餐') || label.includes('🍟')) { return $r('app.media.home_fries') }
+    if (label.includes('美食') || label.includes('汉堡') || label.includes('🍔')) { return $r('app.media.home_burger') }
+    return $r('app.media.home_bowl')
+  }
+
+  @Builder
+  homeEmpty(icon: Resource, title: string, description: string) {
+    Column({ space: SPACING.SM }) {
+      Image(icon).width(HomeTheme.EMPTY_ICON).height(HomeTheme.EMPTY_ICON)
+        .accessibilityLevel('no')
+      Text(title).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Medium).fontColor(HomeTheme.TEXT)
+      Text(description).fontSize(FONT_SIZE.SM).fontColor(HomeTheme.MUTED).textAlign(TextAlign.Center)
+    }
+    .width('100%')
+    .padding({ top: SPACING.XXL, bottom: SPACING.XXL, left: SPACING.XL, right: SPACING.XL })
+    .alignItems(HorizontalAlign.Center)
   }
 
   private openProductList(mode: string, categoryId: number, title: string): void {
@@ -782,72 +841,55 @@ struct HomePage {
     // 弹窗若作为 Column 中 layoutWeight(1) 滚动区的兄弟节点，会被分配 0 高度而整块不渲染（历史 bug）。
     Stack() {
     Column() {
-      // 顶部地址栏 + 搜索
+      // 地址与搜索分行，窄屏时仍保留完整的触控区域。
       Column({ space: SPACING.SM }) {
-        // 地址(左) + 搜索(右) 并排，避免在 Column 中纵向堆叠
-        Row({ space: SPACING.MD }) {
-          // 地址
-          Row({ space: SPACING.XS }) {
-            Image($r('app.media.location_icon'))
-              .width(20)
-              .height(20)
-            if (this.currentAddress !== null) {
-              Text(this.getDisplayAddress())
-                .fontSize(FONT_SIZE.LG)
-                .fontColor(COLORS.TEXT_PRIMARY)
-                .fontWeight(FontWeight.Bold)
-                .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-              } else {
-                // 未定位：显示提示并引导用户去定位
-                Text('未定位，点击定位')
-                  .fontSize(FONT_SIZE.MD)
-                  .fontColor(COLORS.PRIMARY)
-                  .fontWeight(FontWeight.Bold)
-              }
-            Image($r('app.media.chevron_down_icon'))
-              .width(16)
-              .height(16)
+        Button({ type: ButtonType.Normal }) {
+          Row({ space: SPACING.SM }) {
+            Image($r('app.media.home_location')).width(HomeTheme.ICON).height(HomeTheme.ICON)
+              .accessibilityLevel('no')
+            Text(this.currentAddress !== null ? this.getDisplayAddress() : '未定位，点击定位')
+              .fontSize(FONT_SIZE.LG).fontColor(HomeTheme.TEXT).fontWeight(FontWeight.Bold)
+              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
+            Image($r('app.media.home_chevron')).width(HomeTheme.SMALL_ICON).height(HomeTheme.SMALL_ICON)
+              .accessibilityLevel('no')
           }
-          .id('home-location-entry')
-          .onClick(() => {
-            if (!this.loggedIn) {
-              this.onNavigateLocationLogin()
-              return
-            }
-            router.pushUrl({ url: 'pages/LocationPage' })
-          })
-          .constraintSize({ maxWidth: '46%' })
-
-          // 搜索
-          Row({ space: SPACING.XS }) {
-            Image($r('app.media.search_icon'))
-              .width(20)
-              .height(20)
-            // 首页搜索栏是「假输入框」：点击整行跳转搜索页。
-            // 不能用 TextInput——它会吞掉点击事件（聚焦自身而不冒泡到 Row 的 onClick），
-            // 导致首页搜索框点了没有任何反应（设备实测确认的缺陷）。
-            Text('搜索美食、店铺')
-              .fontSize(FONT_SIZE.MD)
-              .fontColor(COLORS.TEXT_HINT)
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-              .layoutWeight(1)
-          }
-          .padding({ left: SPACING.MD, right: SPACING.MD })
-          .height(32)
-          .backgroundColor(COLORS.BG_PRIMARY)
-          .borderRadius(BORDER_RADIUS.ROUND)
-          .layoutWeight(1)
-          .id('home-search-entry')
-          .onClick(() => { router.pushUrl({ url: 'pages/SearchPage' }) })
+          .width('100%')
         }
-        .width('100%')
-      }
+        .width('100%').height(HomeTheme.TOUCH_HEIGHT)
+        .padding(0).backgroundColor(Color.Transparent)
+        .attributeModifier(new SoftPressModifier())
+        .animation(AppMotion.pressAnimation())
+        .id('home-location-entry')
+        .onClick(() => {
+          if (!this.loggedIn) {
+            this.onNavigateLocationLogin()
+            return
+          }
+          router.pushUrl({ url: 'pages/LocationPage' })
+        })
 
+        // 保持可点击搜索入口，不用会吞掉路由点击的 TextInput。
+        Button({ type: ButtonType.Normal }) {
+          Row({ space: SPACING.SM }) {
+            Image($r('app.media.home_search')).width(HomeTheme.SEARCH_ICON).height(HomeTheme.SEARCH_ICON)
+              .accessibilityLevel('no')
+            Text('搜索美食、店铺')
+              .fontSize(FONT_SIZE.MD).fontColor(HomeTheme.MUTED)
+              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
+          }
+          .width('100%')
+        }
+        .width('100%').height(HomeTheme.SEARCH_HEIGHT)
+        .padding({ left: SPACING.LG, right: SPACING.LG })
+        .backgroundColor(HomeTheme.INPUT).borderRadius(HomeTheme.CONTROL_RADIUS)
+        .attributeModifier(new SoftPressModifier())
+        .animation(AppMotion.pressAnimation())
+        .id('home-search-entry')
+        .onClick(() => { router.pushUrl({ url: 'pages/SearchPage' }) })
+      }
       .width('100%')
-      .padding({ left: SPACING.LG, right: SPACING.LG, top: 40, bottom: SPACING.MD })
-      .backgroundColor(COLORS.BG_WHITE)
+      .padding({ left: SPACING.XL, right: SPACING.XL, top: SPACING.SM, bottom: SPACING.LG })
+      .backgroundColor(HomeTheme.SURFACE)
       .opacity(this.isHeaderVisible ? 1 : 0)
       .translate({ y: this.isHeaderVisible ? 0 : 8 })
       .animation({ duration: 260, curve: Curve.EaseInOut })
@@ -860,15 +902,20 @@ struct HomePage {
             ForEach(this.categories, (cat: Category, index: number) => {
               GridItem() {
                 Column({ space: SPACING.XS }) {
-                  Text(this.getCategoryIcon(cat))
-                    .fontSize(26)
-                    .width(46).height(46)
-                    .textAlign(TextAlign.Center)
-                    .backgroundColor(accentBg(index))
-                    .borderRadius(BORDER_RADIUS.LG)
+                  Stack() {
+                    Image(this.getCategoryIcon(cat))
+                      .width(HomeTheme.CATEGORY_SIZE - SPACING.SM * 2)
+                      .height(HomeTheme.CATEGORY_SIZE - SPACING.SM * 2)
+                      .accessibilityLevel('no')
+                  }
+                  .width(HomeTheme.CATEGORY_SIZE).height(HomeTheme.CATEGORY_SIZE)
+                  .backgroundColor(HomeTheme.SOFT)
+                  .borderRadius(HomeTheme.CONTROL_RADIUS)
                   Text(cat.name)
                     .fontSize(FONT_SIZE.SM)
-                    .fontColor(this.currentCategory === cat.id ? COLORS.PRIMARY : accentFg(index))
+                    .fontColor(this.currentCategory === cat.id ? HomeTheme.ACCENT : HomeTheme.TEXT)
+                    .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                    .width('100%').textAlign(TextAlign.Center)
                     .fontWeight(this.currentCategory === cat.id ? FontWeight.Bold : FontWeight.Normal)
                 }
                 .width('100%')
@@ -888,7 +935,7 @@ struct HomePage {
           .width('100%')
           .height(this.getCategoryGridHeight())
           .padding({ top: SPACING.MD, bottom: SPACING.SM })
-          .backgroundColor(COLORS.BG_WHITE)
+          .backgroundColor(HomeTheme.CARD)
           .margin({ top: SPACING.SM })
           .borderRadius({ topLeft: BORDER_RADIUS.LG, topRight: BORDER_RADIUS.LG })
 
@@ -927,7 +974,8 @@ struct HomePage {
           // 平台公告
           if (this.announcements.length > 0) {
             Row({ space: SPACING.SM }) {
-              Text('📢').fontSize(FONT_SIZE.MD)
+              Image($r('app.media.home_announcement')).width(HomeTheme.SEARCH_ICON).height(HomeTheme.SEARCH_ICON)
+                .accessibilityLevel('no')
               Text(this.announcements[0].title)
                 .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
                 .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -937,21 +985,29 @@ struct HomePage {
           }
 
           // 快捷入口
-          Row({ space: SPACING.XL }) {
+          Row({ space: SPACING.SM }) {
             ForEach([
-              QuickEntryItem.create($r('sys.symbol.alarm'), '限时抢购', COLORS.PRIMARY),
-              QuickEntryItem.create($r('sys.symbol.heart_fill'), '收藏夹', COLORS.PRICE_RED),
-              QuickEntryItem.create($r('sys.symbol.ticket_fill'), '领券中心', COLORS.WARNING),
-              QuickEntryItem.create($r('sys.symbol.star_trophy'), '排行榜', COLORS.SUCCESS),
+              QuickEntryItem.create($r('app.media.home_clock'), '限时抢购'),
+              QuickEntryItem.create($r('app.media.home_heart'), '收藏夹'),
+              QuickEntryItem.create($r('app.media.home_coupon'), '领券中心'),
+              QuickEntryItem.create($r('app.media.home_trophy'), '排行榜'),
             ], (item: QuickEntryItem) => {
-Column({ space: SPACING.XS }) {
-                SymbolGlyph(item.icon).fontSize(18)
-                  .width(40).height(40)
-                  .backgroundColor(item.color)
-                  .borderRadius(BORDER_RADIUS.LG)
+              Column({ space: SPACING.SM }) {
+                Stack() {
+                  Image(item.icon)
+                    .width(HomeTheme.ICON).height(HomeTheme.ICON)
+                    .accessibilityLevel('no')
+                }
+                .width(HomeTheme.ENTRY_SIZE).height(HomeTheme.ENTRY_SIZE)
+                .backgroundColor(HomeTheme.SOFT)
+                .borderRadius(HomeTheme.CONTROL_RADIUS)
                 Text(item.title)
-                  .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+                  .fontSize(FONT_SIZE.SM).fontColor(HomeTheme.TEXT)
+                  .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
               }
+              .layoutWeight(1)
+              .padding({ top: SPACING.SM, bottom: SPACING.SM })
+              .accessibilityGroup(true).accessibilityText(item.title)
               .alignItems(HorizontalAlign.Center)
               .onClick(() => {
                 if (item.title === '收藏夹') {
@@ -975,20 +1031,17 @@ Column({ space: SPACING.XS }) {
           // 限时秒杀：服务端时间窗口内的活动，倒计时结束或名额售罄后自动从列表消失
           if (this.seckills.length > 0) {
             Row({ space: SPACING.SM }) {
-              Text('⚡')
-                .fontSize(FONT_SIZE.MD)
-                .width(28).height(28).textAlign(TextAlign.Center)
-                .backgroundColor(MODULE_COLOR.SECKILL)
-                .borderRadius(BORDER_RADIUS.SM)
+              Image($r('app.media.home_bolt')).width(HomeTheme.ICON).height(HomeTheme.ICON)
+                .accessibilityLevel('no')
               Text('限时秒杀')
-                .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.SECKILL)
+                .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(HomeTheme.TEXT)
               Blank()
               Text('秒杀价下单自动生效')
                 .fontSize(FONT_SIZE.SM).fontColor(MODULE_COLOR.SECKILL)
             }
             .width('100%')
             .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.SM })
-            .backgroundColor(MODULE_BG.SECKILL)
+            .backgroundColor(HomeTheme.SURFACE)
 
             Scroll() {
               Row({ space: SPACING.SM }) {
@@ -1005,31 +1058,30 @@ Column({ space: SPACING.XS }) {
 
           // 附近推荐（原「发现」Tab 并入首页）：2 公里内、平台推荐位的店铺
           Row({ space: SPACING.SM }) {
-SymbolGlyph($r('sys.symbol.location_right_fill')).fontSize(FONT_SIZE.MD)
-              .width(28).height(28)
-              .backgroundColor(MODULE_COLOR.NEARBY)
-              .borderRadius(BORDER_RADIUS.SM)
+            Image($r('app.media.home_location')).width(HomeTheme.ICON).height(HomeTheme.ICON)
+              .accessibilityLevel('no')
             Text('附近推荐')
-              .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.NEARBY)
+              .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(HomeTheme.TEXT)
               .layoutWeight(1)
             Text('刷新')
-              .fontSize(FONT_SIZE.SM).fontColor(MODULE_COLOR.NEARBY)
+              .fontSize(FONT_SIZE.MD).fontColor(HomeTheme.ACCENT)
+              .height(HomeTheme.TOUCH_HEIGHT).padding({ left: SPACING.MD, right: SPACING.MD })
               .id('home-recommend-refresh')
               .onClick(() => { this.refreshRecommended() })
           }
           .width('100%')
           .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.SM })
-          .backgroundColor(MODULE_BG.NEARBY)
+          .backgroundColor(HomeTheme.SURFACE)
 
           if (!this.loggedIn) {
             Text('登录后查看平台推荐商户')
-              .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+              .fontSize(FONT_SIZE.SM).fontColor(HomeTheme.MUTED)
               .width('100%').textAlign(TextAlign.Center)
               .padding({ top: SPACING.SM, bottom: SPACING.SM })
           } else if (!this.hasRecommendLocation()) {
             Row({ space: SPACING.SM }) {
               Text('定位后可看到附近推荐商户')
-                .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).layoutWeight(1)
+                .fontSize(FONT_SIZE.SM).fontColor(HomeTheme.MUTED).layoutWeight(1)
               Button('去定位').height(32).fontSize(FONT_SIZE.SM)
                 .id('home-recommend-location')
                 .onClick(() => { router.pushUrl({ url: 'pages/LocationPage' }) })
@@ -1038,12 +1090,12 @@ SymbolGlyph($r('sys.symbol.location_right_fill')).fontSize(FONT_SIZE.MD)
             .padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
           } else if (this.recommendedLoading) {
             Text('正在查询附近推荐商户…')
-              .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+              .fontSize(FONT_SIZE.SM).fontColor(HomeTheme.MUTED)
               .width('100%').textAlign(TextAlign.Center)
               .padding({ top: SPACING.SM, bottom: SPACING.SM })
           } else if (this.recommendedStores.length === 0) {
             Text('暂无附近推荐商户，平台会按距离和营业状态持续更新')
-              .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+              .fontSize(FONT_SIZE.SM).fontColor(HomeTheme.MUTED)
               .width('100%').textAlign(TextAlign.Center)
               .padding({ top: SPACING.SM, bottom: SPACING.SM })
           } else {
@@ -1067,31 +1119,28 @@ SymbolGlyph($r('sys.symbol.location_right_fill')).fontSize(FONT_SIZE.MD)
 
           // 特价团购标题
           Row({ space: SPACING.SM }) {
-            Text('🏷️')
-              .fontSize(FONT_SIZE.MD)
-              .width(28).height(28).textAlign(TextAlign.Center)
-              .backgroundColor(MODULE_COLOR.SPECIAL)
-              .borderRadius(BORDER_RADIUS.SM)
+            Image($r('app.media.home_tag')).width(HomeTheme.ICON).height(HomeTheme.ICON)
+              .accessibilityLevel('no')
             Text('特价团购')
-              .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.SPECIAL)
+              .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(HomeTheme.TEXT)
             Blank()
             Text('查看全部 >')
               .fontSize(FONT_SIZE.SM).fontColor(MODULE_COLOR.SPECIAL)
           }
           .width('100%')
           .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.SM })
-          .backgroundColor(MODULE_BG.SPECIAL)
+          .backgroundColor(HomeTheme.SURFACE)
           .onClick(() => {
             this.openProductList('special', 0, '特价团购')
           })
 
           // 特价商品列表由后端数据库返回
           if (!this.loggedIn) {
-            EmptyState({ iconGlyph: $r('sys.symbol.lock'), title: '登录后查看特价团购', description: '商家上新的特价商品会展示在这里' })
+            this.homeEmpty($r('app.media.home_lock'), '登录后查看特价团购', '商家上新的特价商品会展示在这里')
           } else if (this.isRefreshing && this.specialGoods.length === 0) {
-            EmptyState({ icon: '⏳', title: '正在加载特价商品', description: '请稍候，正在读取最新团购数据' })
+            this.homeEmpty($r('app.media.home_clock'), '正在加载特价商品', '请稍候，正在读取最新团购数据')
           } else if (this.specialGoods.length === 0) {
-            EmptyState({ icon: '🛍️', title: '暂无特价商品', description: '商家上新特价商品后会展示在这里' })
+            this.homeEmpty($r('app.media.home_bag'), '暂无特价商品', '商家上新特价商品后会展示在这里')
           } else {
             Column({ space: SPACING.SM }) {
               ForEach(this.specialGoods, (item: SpecialGoodsItem) => {
@@ -1113,7 +1162,7 @@ SymbolGlyph($r('sys.symbol.location_right_fill')).fontSize(FONT_SIZE.MD)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(COLORS.BG_PRIMARY)
+    .backgroundColor(HomeTheme.SURFACE)
     }
     .width('100%')
     .height('100%')
@@ -1143,7 +1192,7 @@ SymbolGlyph($r('sys.symbol.location_right_fill')).fontSize(FONT_SIZE.MD)
           .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.PRICE_RED)
         if (item.originalPrice > item.price) {
           Text(`¥${item.originalPrice.toFixed(2)}`)
-            .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+            .fontSize(FONT_SIZE.XS).fontColor(HomeTheme.MUTED)
             .decoration({ type: TextDecorationType.LineThrough })
         }
       }
@@ -1152,7 +1201,7 @@ SymbolGlyph($r('sys.symbol.location_right_fill')).fontSize(FONT_SIZE.MD)
       // 抢购进度：已抢名额 / 总名额
       Row() {
         Text(`已抢 ${item.sold}/${item.quota}`)
-          .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+          .fontSize(FONT_SIZE.XS).fontColor(HomeTheme.MUTED)
         Blank()
         Text(`${this.seckillSoldPercent(item)}%`)
           .fontSize(FONT_SIZE.XS).fontColor(COLORS.PRICE_RED)
@@ -1170,7 +1219,7 @@ SymbolGlyph($r('sys.symbol.location_right_fill')).fontSize(FONT_SIZE.MD)
         .borderRadius(BORDER_RADIUS.SM)
 
       Text(item.storeName)
-        .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+        .fontSize(FONT_SIZE.XS).fontColor(HomeTheme.MUTED)
         .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         .width('100%')
     }
@@ -1215,12 +1264,12 @@ SymbolGlyph($r('sys.symbol.location_right_fill')).fontSize(FONT_SIZE.MD)
             .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRICE_RED)
           if (item.goods.originalPrice !== undefined && item.goods.originalPrice > item.goods.price) {
             Text(`¥${item.goods.originalPrice.toFixed(2)}`)
-              .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+              .fontSize(FONT_SIZE.SM).fontColor(HomeTheme.MUTED)
               .decoration({ type: TextDecorationType.LineThrough })
           }
         }
         Text(item.goods.description)
-          .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+          .fontSize(FONT_SIZE.XS).fontColor(HomeTheme.MUTED)
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
       }
       .layoutWeight(1).alignItems(HorizontalAlign.Start)
@@ -1286,7 +1335,7 @@ SymbolGlyph($r('sys.symbol.location_right_fill')).fontSize(FONT_SIZE.MD)
     }
     .width('100%')
     .padding(SPACING.MD)
-    .backgroundColor(COLORS.BG_WHITE)
+    .backgroundColor(HomeTheme.CARD)
     .borderRadius(BORDER_RADIUS.LG)
     .onClick(() => { this.onStoreClick(store) })
   }
@@ -2371,168 +2420,96 @@ struct ProfileMainPage {
   build() {
     Stack() {
       Refresh({ refreshing: this.isRefreshing }) {
-      Scroll() {
-      Column() {
-        // 头部用户信息
-        Column() {
-          Row({ space: SPACING.LG }) {
-            Column() {
-              Text(this.user.username.charAt(0))
-                .fontSize(24).fontColor(COLORS.TEXT_WHITE).fontWeight(FontWeight.Bold)
-            }
-            .width(60).height(60).backgroundColor('rgba(255,255,255,0.3)')
-            .borderRadius(BORDER_RADIUS.CIRCLE).justifyContent(FlexAlign.Center)
-            Column({ space: SPACING.XS }) {
-              Text(this.user.username)
-                .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_WHITE)
-              Text(this.loggedIn
-                ? (this.user.role === UserRole.ADMIN
-                  ? '管理端账户'
-                  : this.user.role === UserRole.MERCHANT ? '商户账户' : this.user.phone)
-                : '点击登录')
-                .fontSize(FONT_SIZE.MD).fontColor('rgba(255,255,255,0.8)')
-            }
-            .alignItems(HorizontalAlign.Start).layoutWeight(1)
-            if (this.loggedIn) {
-              Button('退出')
-                .height(32).fontSize(FONT_SIZE.SM)
-                .fontColor(COLORS.TEXT_WHITE).backgroundColor('rgba(255,255,255,0.3)')
-                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-                .onClick(() => {
-                  logout()
-                  this.loggedIn = false
+        Scroll() {
+          Column() {
+            Column({ space: 16 }) {
+              this.ProfileHeader()
+              this.ProfileAssets()
+              this.ProfileOrders()
+
+              Column() {
+                this.ProfileSectionTitle('常用服务')
+                this.ProfileMenuRow($r('app.media.home_location'), '收货地址', () => {
+                  if (!this.loggedIn) {
+                    promptAction.showToast({ message: '请先登录后管理收货地址', duration: 1500 })
+                    this.onNavigateLogin()
+                    return
+                  }
+                  router.pushUrl({ url: 'pages/AddressListPage' })
                 })
+                this.ProfileMenuRow($r('app.media.home_heart'), '我的收藏', () => {
+                  router.pushUrl({ url: 'pages/FavoriteListPage' })
+                })
+                this.ProfileMenuRow($r('app.media.profile_headset'), '联系客服', () => {
+                  router.pushUrl({ url: 'pages/ContactCustomerServicePage' })
+                })
+              }
+              .width('100%').padding({ top: 16, bottom: 4 })
+              .backgroundColor(HomeTheme.CARD).borderRadius(20)
+
+              Column() {
+                this.ProfileSectionTitle('账户设置')
+                this.ProfileMenuRow($r('app.media.profile_settings'), '设置', () => {
+                  router.pushUrl({ url: 'pages/SettingsPage' })
+                })
+                this.ProfileMenuRow($r('app.media.profile_key'), '修改密码', () => {
+                  this.showChangePwd = true
+                })
+                this.ProfileMenuRow($r('app.media.profile_wallet'), '测试充值余额', () => {
+                  this.openRechargeDialog()
+                })
+              }
+              .width('100%').padding({ top: 16, bottom: 4 })
+              .backgroundColor(HomeTheme.CARD).borderRadius(20)
+
+              if (this.loggedIn && this.user.role === UserRole.MERCHANT) {
+                Column() {
+                  this.ProfileSectionTitle('商户管理入口')
+                  this.ProfileMenuRow($r('app.media.profile_store'), '店铺管理', () => {
+                    router.pushUrl({ url: 'pages/MerchantCenterPage' })
+                  }, 'profile-merchant-center')
+                  this.ProfileMenuRow($r('app.media.profile_order'), '订单管理', () => {
+                    router.pushUrl({ url: 'pages/MerchantOrdersPage' })
+                  }, 'profile-merchant-orders')
+                  this.ProfileMenuRow($r('app.media.profile_chart'), '收入统计', () => {
+                    router.pushUrl({ url: 'pages/MerchantStatsPage' })
+                  }, 'profile-merchant-stats')
+                }
+                .width('100%').padding({ top: 16, bottom: 4 })
+                .backgroundColor(HomeTheme.CARD).borderRadius(20)
+              }
+              if (this.loggedIn && this.user.role === UserRole.ADMIN) {
+                Column() {
+                  this.ProfileSectionTitle('平台管理入口')
+                  this.ProfileMenuRow($r('app.media.profile_shield'), '平台分类、店铺与托管订单', () => {
+                    router.pushUrl({ url: 'pages/AdminCenterPage' })
+                  })
+                }
+                .width('100%').padding({ top: 16, bottom: 4 })
+                .backgroundColor(HomeTheme.CARD).borderRadius(20)
+              }
+              if (this.loggedIn) {
+                Button('退出', { type: ButtonType.Normal })
+                  .width('100%').height(48)
+                  .fontSize(14).fontColor(HomeTheme.MUTED)
+                  .backgroundColor(HomeTheme.CARD).borderRadius(16)
+                  .id('profile-logout')
+                  .attributeModifier(new SoftPressModifier())
+                  .animation(AppMotion.pressAnimation())
+                  .onClick(() => {
+                    logout()
+                    this.loggedIn = false
+                  })
+              }
             }
-          }.width('100%')
-          .onClick(() => {
-            if (!this.loggedIn) {
-              this.onNavigateLogin()
-            } else {
-              router.pushUrl({ url: 'pages/ProfileEditPage' })
-            }
-          })
-        }
-        .width('100%')
-        .padding({ left: SPACING.XL, right: SPACING.XL, top: 50, bottom: SPACING.XL })
-        .linearGradient({
-          direction: GradientDirection.RightBottom,
-          colors: [[COLORS.PRIMARY, 0.0], [COLORS.PRIMARY_LIGHT, 1.0]]
-        })
-        .borderRadius({ bottomLeft: BORDER_RADIUS.XL, bottomRight: BORDER_RADIUS.XL })
-
-        // 资产区域
-        Row() {
-          // 余额直接在 Builder 内读取页面状态，避免普通 Builder 参数保留充值前的快照。
-          this.BalanceAssetItem()
-          this.AssetItem((this.user.coupons || []).filter(c => !c.used).length.toString(), '优惠券', () => { router.pushUrl({ url: 'pages/CouponCenterPage' }) })
-          this.AssetItem((this.user.orders || []).length.toString(), '订单', () => {
-            AppStorage.setOrCreate<number>('orderFilterStatus', -1)
-            if (!this.loggedIn) {
-              promptAction.showToast({ message: '请先登录后查看订单', duration: 1500 })
-              this.onNavigateLogin()
-              return
-            }
-            router.pushUrl({ url: 'pages/OrderListPage' })
-          })
-        }
-        .width('100%').padding(SPACING.LG)
-        .margin({ top: SPACING.SM })
-        .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
-
-        // Row() {
-        //   Button(this.isRefreshing ? '\u540c\u6b65\u4e2d\u2026' : '\u7acb\u5373\u5237\u65b0')
-        //     .height(34).fontSize(FONT_SIZE.SM)
-        //     .fontColor(COLORS.PRIMARY).backgroundColor(COLORS.WARM_BG)
-        //     .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-        //     .enabled(!this.isRefreshing)
-        //     .onClick(() => { this.refreshProfileData() })
-        // }
-        // .width('100%').justifyContent(FlexAlign.End)
-        // .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
-        // .margin({ top: SPACING.SM })
-        // .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
-
-        // 订单快捷入口
-        Row() {
-          this.ProfileOrderEntry($r('sys.symbol.hourglass'), '待付款', 0)
-          this.ProfileOrderEntry($r('sys.symbol.doc_text'), '待接单', 1)
-          this.ProfileOrderEntry($r('sys.symbol.bicycle'), '配送中', 3)
-          this.ProfileOrderEntry($r('sys.symbol.checkmark'), '已完成', 4)
-        }
-        .width('100%').padding(SPACING.LG)
-        .margin({ top: SPACING.SM })
-        .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
-        .justifyContent(FlexAlign.SpaceAround)
-
-        // 功能菜单
-        Column() {
-          this.ProfileMenuRow($r('sys.symbol.location_right_fill'), '收货地址', () => {
-            if (!this.loggedIn) {
-              promptAction.showToast({ message: '请先登录后管理收货地址', duration: 1500 })
-              this.onNavigateLogin()
-              return
-            }
-            router.pushUrl({ url: 'pages/AddressListPage' })
-          })
-          this.ProfileMenuRow($r('sys.symbol.heart_fill'), '我的收藏', () => { router.pushUrl({ url: 'pages/FavoriteListPage' }) })
-          this.ProfileMenuRow($r('sys.symbol.phone_fill'), '联系客服', () => { router.pushUrl({ url: 'pages/ContactCustomerServicePage' }) })
-          this.ProfileMenuRow($r('sys.symbol.gearshape'), '设置', () => { router.pushUrl({ url: 'pages/SettingsPage' }) })
-          this.ProfileMenuRow($r('sys.symbol.key'), '修改密码', () => { this.showChangePwd = true })
-        }
-        .width('100%')
-        .padding({ top: SPACING.SM })
-        .margin({ top: SPACING.SM })
-        .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
-
-        // 测试工具入口
-        Column() {
-          this.ProfileMenuRow($r('sys.symbol.creditcard'), '测试充值余额', () => { this.openRechargeDialog() })
-        }
-        .width('100%')
-        .padding({ top: SPACING.SM })
-        .margin({ top: SPACING.SM })
-        .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
-
-        if (this.loggedIn && this.user.role === UserRole.MERCHANT) {
-          Column() {
-            SymbolGlyph($r('sys.symbol.store')).fontSize(FONT_SIZE.MD)
-              Text(' 商户管理入口')
-              .fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold)
-              .fontColor(COLORS.PRIMARY)
-              .width('100%')
-              .padding({ left: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
-            this.ProfileMenuRow($r('sys.symbol.doc_text'), '店铺管理', () => { router.pushUrl({ url: 'pages/MerchantCenterPage' }) }, 'profile-merchant-center')
-            this.ProfileMenuRow($r('sys.symbol.square_grid_2x2'), '订单管理', () => { router.pushUrl({ url: 'pages/MerchantOrdersPage' }) }, 'profile-merchant-orders')
-            this.ProfileMenuRow($r('sys.symbol.wallet'), '收入统计', () => { router.pushUrl({ url: 'pages/MerchantStatsPage' }) }, 'profile-merchant-stats')
+            .width('100%').constraintSize({ maxWidth: 680 })
           }
-          .width('100%')
-          .padding({ top: SPACING.SM })
-          .margin({ top: SPACING.SM })
-          .backgroundColor(COLORS.WARM_BG)
-          .borderRadius(BORDER_RADIUS.LG)
+          .width('100%').padding({ left: 16, right: 16, top: 20, bottom: 28 })
         }
-        if (this.loggedIn && this.user.role === UserRole.ADMIN) {
-          Column() {
-            Text('🛠 平台管理入口')
-              .fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold)
-              .fontColor(COLORS.PRIMARY)
-              .width('100%')
-              .padding({ left: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
-            this.ProfileMenuRow($r('sys.symbol.folder'), '平台分类、店铺与托管订单', () => {
-              router.pushUrl({ url: 'pages/AdminCenterPage' })
-            })
-          }
-          .width('100%')
-          .padding({ top: SPACING.SM })
-          .margin({ top: SPACING.SM })
-          .backgroundColor(COLORS.WARM_BG)
-          .borderRadius(BORDER_RADIUS.LG)
-        }
-      }
-    }
-    .scrollBar(BarState.Off)
-    .width('100%').height('100%')
-      .backgroundColor(COLORS.BG_PRIMARY)
+        .scrollBar(BarState.Off)
+        .align(Alignment.Top)
+        .width('100%').height('100%')
+        .backgroundColor(HomeTheme.SURFACE)
       }
       .onRefreshing(() => { this.refreshProfileData() })
       .refreshOffset(48)
@@ -2550,6 +2527,119 @@ struct ProfileMainPage {
       }
     }
     .width('100%').height('100%')
+    .backgroundColor(HomeTheme.SURFACE)
+  }
+
+  @Builder
+  ProfileHeader() {
+    Column({ space: 12 }) {
+      Text('我的')
+        .fontSize(28).fontWeight(FontWeight.Bold).fontColor(HomeTheme.TEXT)
+        .width('100%')
+      Button({ type: ButtonType.Normal }) {
+        Row({ space: 14 }) {
+          Column() {
+            if (this.loggedIn && this.user.username.length > 0) {
+              Text(this.user.username.charAt(0))
+                .fontSize(26).fontWeight(FontWeight.Bold).fontColor(HomeTheme.ACCENT)
+            } else {
+              Image($r('app.media.home_nav_profile')).width(30).height(30)
+                .accessibilityLevel('no')
+            }
+          }
+          .width(64).height(64).justifyContent(FlexAlign.Center)
+          .backgroundColor(HomeTheme.SOFT).borderRadius(22)
+          Column({ space: 7 }) {
+            Text(this.user.username)
+              .fontSize(22).fontWeight(FontWeight.Bold).fontColor(HomeTheme.TEXT)
+              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            Text(this.loggedIn
+              ? (this.user.role === UserRole.ADMIN
+                ? '管理端账户'
+                : this.user.role === UserRole.MERCHANT ? '商户账户' : this.user.phone)
+              : '点击登录')
+              .fontSize(13).fontColor(HomeTheme.MUTED)
+              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+          .alignItems(HorizontalAlign.Start).layoutWeight(1)
+          Image($r('app.media.home_chevron')).width(18).height(18)
+            .rotate({ angle: -90 })
+            .accessibilityLevel('no')
+        }
+        .width('100%').padding({ top: 8, bottom: 8 })
+      }
+      .width('100%').padding(0)
+      .backgroundColor(Color.Transparent).borderRadius(18)
+      .id('profile-account')
+      .attributeModifier(new SoftPressModifier())
+      .animation(AppMotion.pressAnimation())
+      .onClick(() => {
+        if (!this.loggedIn) {
+          this.onNavigateLogin()
+        } else {
+          router.pushUrl({ url: 'pages/ProfileEditPage' })
+        }
+      })
+    }
+    .width('100%')
+  }
+
+  @Builder
+  ProfileAssets() {
+    Row() {
+      // 直接读取当前页面状态，充值后余额保持可观察更新。
+      this.BalanceAssetItem()
+      Divider().vertical(true).height(32).strokeWidth(1).color(HomeTheme.INPUT)
+      this.AssetItem((this.user.coupons || []).filter(c => !c.used).length.toString(), '优惠券', () => {
+        router.pushUrl({ url: 'pages/CouponCenterPage' })
+      })
+      Divider().vertical(true).height(32).strokeWidth(1).color(HomeTheme.INPUT)
+      this.AssetItem((this.user.orders || []).length.toString(), '订单', () => {
+        this.openOrders(-1)
+      })
+    }
+    .width('100%').padding({ left: 4, right: 4, top: 10, bottom: 10 })
+    .backgroundColor(HomeTheme.CARD).borderRadius(20)
+  }
+
+  @Builder
+  ProfileOrders() {
+    Column({ space: 8 }) {
+      Row() {
+        Text('我的订单').fontSize(17).fontWeight(FontWeight.Bold).fontColor(HomeTheme.TEXT)
+        Blank()
+        Button({ type: ButtonType.Normal }) {
+          Row({ space: 3 }) {
+            Text('全部订单').fontSize(12).fontColor(HomeTheme.MUTED)
+            Image($r('app.media.home_chevron')).width(14).height(14)
+              .rotate({ angle: -90 })
+              .accessibilityLevel('no')
+          }
+        }
+        .height(44).padding({ left: 8, right: 0 })
+        .backgroundColor(Color.Transparent)
+        .attributeModifier(new SoftPressModifier())
+        .animation(AppMotion.pressAnimation())
+        .onClick(() => { this.openOrders(-1) })
+      }
+      .width('100%').padding({ left: 16, right: 16 })
+      Row() {
+        this.ProfileOrderEntry($r('app.media.home_clock'), '待付款', 0)
+        this.ProfileOrderEntry($r('app.media.profile_order'), '待接单', 1)
+        this.ProfileOrderEntry($r('app.media.profile_rider'), '配送中', 3)
+        this.ProfileOrderEntry($r('app.media.profile_complete'), '已完成', 4)
+      }
+      .width('100%').padding({ left: 6, right: 6 })
+    }
+    .width('100%').padding({ top: 4, bottom: 12 })
+    .backgroundColor(HomeTheme.CARD).borderRadius(20)
+  }
+
+  @Builder
+  ProfileSectionTitle(title: string) {
+    Text(title)
+      .fontSize(17).fontWeight(FontWeight.Bold).fontColor(HomeTheme.TEXT)
+      .width('100%').padding({ left: 16, right: 16, bottom: 6 })
   }
 
   @Builder
@@ -2558,46 +2648,35 @@ struct ProfileMainPage {
       Column({ space: SPACING.MD }) {
         Text('\u6d4b\u8bd5\u5145\u503c\u4f59\u989d')
           .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.TEXT_PRIMARY)
+          .fontColor(HomeTheme.TEXT)
         Text('\u5145\u503c\u91d1\u989d\u4f1a\u76f4\u63a5\u5199\u5165\u6570\u636e\u5e93\uff0c\u4ec5\u7528\u4e8e\u5f00\u53d1\u6d4b\u8bd5')
-          .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+          .fontSize(FONT_SIZE.SM).fontColor(HomeTheme.MUTED)
           .width('100%')
         Text('\u5145\u503c\u91d1\u989d\uff08\u5fc5\u586b\uff09')
-          .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+          .fontSize(FONT_SIZE.SM).fontColor(HomeTheme.MUTED)
           .width('100%')
         TextInput({ placeholder: '\u8bf7\u8f93\u5165\u91d1\u989d\uff0c\u5982\uff1a100', text: this.rechargeAmount })
-          .width('100%').height(44).type(InputType.Number)
-          .fontSize(FONT_SIZE.MD).backgroundColor(COLORS.BG_PRIMARY)
-          .borderRadius(BORDER_RADIUS.SM)
+          .width('100%').height(52).type(InputType.Number)
+          .fontSize(FONT_SIZE.MD).backgroundColor(HomeTheme.INPUT)
+          .borderRadius(14)
           .onChange((value: string) => { this.rechargeAmount = value })
         Row({ space: SPACING.SM }) {
           Button('\u53d6\u6d88')
-            .layoutWeight(1).height(42)
-            .backgroundColor(COLORS.BG_PRIMARY).fontColor(COLORS.TEXT_SECONDARY)
+            .layoutWeight(1).height(48)
+            .backgroundColor(HomeTheme.INPUT).fontColor(HomeTheme.MUTED)
             .onClick(() => { this.showRechargeDialog = false })
           Button(this.recharging ? '\u5145\u503c\u4e2d\u2026' : '\u786e\u8ba4\u5145\u503c')
-            .layoutWeight(1).height(42)
-            .backgroundColor(COLORS.PRIMARY).fontColor(COLORS.TEXT_WHITE)
+            .layoutWeight(1).height(48)
+            .backgroundColor(HomeTheme.ACCENT).fontColor($r('app.color.login_primary_text'))
             .onClick(() => { this.submitRecharge() })
         }.width('100%')
       }
-      .width('86%').padding(SPACING.XL)
-      .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+      .width('86%').constraintSize({ maxWidth: 460 }).padding(24)
+      .backgroundColor(HomeTheme.CARD).borderRadius(20)
     }
     .width('100%').height('100%')
     .backgroundColor(COLORS.OVERLAY)
     .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
-  }
-
-  @Builder
-  BalanceAssetItem() {
-    Column({ space: SPACING.XS }) {
-      Text(this.balanceDisplay)
-        .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRIMARY)
-      Text('余额').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
-    }
-    .layoutWeight(1).alignItems(HorizontalAlign.Center)
-    .onClick(() => { this.openBalancePage() })
   }
 
   /** 余额点击进钱包页（余额 + 已绑定银行卡）；未登录先引导登录。 */
@@ -2611,49 +2690,84 @@ struct ProfileMainPage {
   }
 
   @Builder
-  AssetItem(value: string, label: string, action: () => void) {
-    Column({ space: SPACING.XS }) {
-      Text(value).fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold)
-        .fontColor(accentFg(accentIndexFromText(label)))
-      Text(label).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+  BalanceAssetItem() {
+    Button({ type: ButtonType.Normal }) {
+      Column({ space: 7 }) {
+        Text(this.balanceDisplay)
+          .fontSize(22).fontWeight(FontWeight.Bold).fontColor(HomeTheme.ACCENT)
+          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+        Text('余额').fontSize(12).fontColor(HomeTheme.MUTED)
+      }
+      .width('100%').alignItems(HorizontalAlign.Center)
     }
-    .layoutWeight(1).alignItems(HorizontalAlign.Center)
+    .layoutWeight(1).height(72).padding({ left: 4, right: 4 })
+    .backgroundColor(Color.Transparent).borderRadius(14)
+    .attributeModifier(new SoftPressModifier())
+    .animation(AppMotion.pressAnimation())
+    .onClick(() => { this.openBalancePage() })
+  }
+
+  @Builder
+  AssetItem(value: string, label: string, action: () => void) {
+    Button({ type: ButtonType.Normal }) {
+      Column({ space: 7 }) {
+        Text(value).fontSize(22).fontWeight(FontWeight.Bold).fontColor(HomeTheme.TEXT)
+          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+        Text(label).fontSize(12).fontColor(HomeTheme.MUTED)
+      }
+      .width('100%').alignItems(HorizontalAlign.Center)
+    }
+    .layoutWeight(1).height(72).padding({ left: 4, right: 4 })
+    .backgroundColor(Color.Transparent).borderRadius(14)
+    .attributeModifier(new SoftPressModifier())
+    .animation(AppMotion.pressAnimation())
     .onClick(() => { action() })
   }
 
   @Builder
-  ProfileOrderEntry(iconGlyph: Resource, title: string, status: number) {
-    Column({ space: SPACING.XS }) {
-      SymbolGlyph(iconGlyph).fontSize(24)
-        .width(44).height(44)
-        .backgroundColor(accentBg(accentIndexFromText(title)))
-        .borderRadius(BORDER_RADIUS.CIRCLE)
-      Text(title).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
-    }
-    .onClick(() => {
-      AppStorage.setOrCreate<number>('orderFilterStatus', status)
-      if (!this.loggedIn) {
-        promptAction.showToast({ message: '请先登录后查看订单', duration: 1500 })
-        this.onNavigateLogin()
-        return
+  ProfileOrderEntry(icon: Resource, title: string, status: number) {
+    Button({ type: ButtonType.Normal }) {
+      Column({ space: 7 }) {
+        Image(icon).width(24).height(24).accessibilityLevel('no')
+        Text(title).fontSize(12).fontColor(HomeTheme.MUTED)
       }
-      router.pushUrl({ url: 'pages/OrderListPage' })
-    })
+      .width('100%').padding({ top: 8, bottom: 8 })
+    }
+    .layoutWeight(1).constraintSize({ minHeight: 64 }).padding(0)
+    .backgroundColor(Color.Transparent).borderRadius(14)
+    .attributeModifier(new SoftPressModifier())
+    .animation(AppMotion.pressAnimation())
+    .onClick(() => { this.openOrders(status) })
+  }
+
+  private openOrders(status: number): void {
+    AppStorage.setOrCreate<number>('orderFilterStatus', status)
+    if (!this.loggedIn) {
+      promptAction.showToast({ message: '请先登录后查看订单', duration: 1500 })
+      this.onNavigateLogin()
+      return
+    }
+    router.pushUrl({ url: 'pages/OrderListPage' })
   }
 
   @Builder
-  ProfileMenuRow(iconGlyph: Resource, title: string, action: () => void, rowId: string = '') {
-    Row({ space: SPACING.MD }) {
-      SymbolGlyph(iconGlyph).fontSize(18)
-        .width(36).height(36)
-        .backgroundColor(accentBg(accentIndexFromText(title)))
-        .borderRadius(BORDER_RADIUS.MD)
-      Text(title).fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
-      Text('›').fontSize(20).fontColor(COLORS.TEXT_HINT)
+  ProfileMenuRow(icon: Resource, title: string, action: () => void, rowId: string = '') {
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 12 }) {
+        Image(icon).width(22).height(22).accessibilityLevel('no')
+        Text(title).fontSize(16).fontColor(HomeTheme.TEXT).layoutWeight(1)
+          .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+        Image($r('app.media.home_chevron')).width(16).height(16)
+          .rotate({ angle: -90 })
+          .accessibilityLevel('no')
+      }
+      .width('100%').padding({ left: 16, right: 16, top: 16, bottom: 16 })
     }
-    .width('100%').height(52)
-    .padding({ left: SPACING.LG, right: SPACING.LG })
+    .width('100%').constraintSize({ minHeight: 56 }).padding(0)
+    .backgroundColor(Color.Transparent).borderRadius(14)
     .id(rowId)
+    .attributeModifier(new SoftPressModifier())
+    .animation(AppMotion.pressAnimation())
     .onClick(() => { action() })
   }
 }

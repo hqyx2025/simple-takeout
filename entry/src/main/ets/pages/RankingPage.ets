@@ -2,6 +2,7 @@
  * 榜单页：店铺榜（按月销量+评分排序）与菜品热销榜（跨店铺按累计销量排序）。
  * 数据全部来自后端榜单接口；名次徽章前三名使用强调色，点击条目进入店铺详情页。
  */
+import { AppMotion } from '../common/theme/AppMotion'
 import { SpecialGoodsItem, StoreItem } from '../model/Models'
 import { fetchRankGoodsRemote, fetchRankStoresRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, formatSales, merchantImageSource, DEFAULT_MERCHANT_IMAGE, MODULE_COLOR, MODULE_BG } from '../common/Constants'
@@ -18,6 +19,21 @@ const RANK_LIMIT: number = 20
 @Entry
 @Component
 export struct RankingPage {
+  pageTransition() {
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Push))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Pop))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Pop))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+  }
+
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State currentTab: number = 0
   @State storeList: StoreItem[] = []

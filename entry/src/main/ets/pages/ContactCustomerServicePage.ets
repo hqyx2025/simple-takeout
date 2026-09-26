@@ -2,6 +2,7 @@
  * 客服中心页面：提供客服说明、联系方式和常见问题。
  * 即时通讯等第三方能力暂未接入，页面先提供可用的本地客服指引。
  */
+import { AppMotion } from '../common/theme/AppMotion'
 import { routerCompat as router, promptCompat as promptAction } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { PageHeader } from '../components/PageHeader'
@@ -23,6 +24,21 @@ const FAQ_ANSWERS: string[] = [
 @Entry
 @Component
 export struct ContactCustomerServicePage {
+  pageTransition() {
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Push))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Pop))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Pop))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+  }
+
   @State expandedQuestion: number = -1
 
   private toggleQuestion(index: number): void {

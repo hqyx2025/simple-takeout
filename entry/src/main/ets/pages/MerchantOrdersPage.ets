@@ -3,6 +3,7 @@
  * 按状态Tab分类展示商户所有店铺订单
  * 支持接单(1→2)、出餐(2→3)、确认送达(3→4)状态流转
  */
+import { AppMotion } from '../common/theme/AppMotion'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { Order, CartItem, User, UserRole } from '../model/Models'
 import { getCurrentUser, getMerchantOrders, merchantActionRemote, syncMerchantOrdersFromServer } from '../service/AppStorageManager'
@@ -25,6 +26,21 @@ class OrderStatusTab {
 @Entry
 @Component
 export struct MerchantOrdersPage {
+  pageTransition() {
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Push))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Pop))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Pop))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+  }
+
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State currentStatus: number = -1
   @State allOrders: Order[] = []

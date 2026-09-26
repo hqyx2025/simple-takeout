@@ -3,12 +3,28 @@
  * 评价列表缩略图点击后进入本页查看大图；点击任意位置返回。
  * 图片地址通过 AppStorage('reviewPreviewUrl') 传递（与项目内 currentOrderId 等跨页传参方式一致）。
  */
+import { AppMotion } from '../common/theme/AppMotion'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, FONT_SIZE, SPACING } from '../common/Constants'
 
 @Entry
 @Component
 export struct ReviewImagePage {
+  pageTransition() {
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Push))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Pop))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Pop))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+  }
+
   @StorageLink('reviewPreviewUrl') imageUrl: string = ''
 
   aboutToAppear(): void {

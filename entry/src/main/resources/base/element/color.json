@@ -77,6 +77,28 @@
     { "name": "accent_fg_4", "value": "#C99A05" },
     { "name": "accent_fg_5", "value": "#8E44AD" },
     { "name": "accent_fg_6", "value": "#00838F" },
-    { "name": "accent_fg_7", "value": "#B25E39" }
+    { "name": "accent_fg_7", "value": "#B25E39" },
+
+    {"name": "login_page", "value": "#FFFCF8"},
+    {"name": "login_card", "value": "#FFFFFF"},
+    {"name": "login_text", "value": "#302B27"},
+    {"name": "login_muted", "value": "#75695F"},
+    {"name": "login_border", "value": "#E6DDD3"},
+    {"name": "login_input", "value": "#F7F3ED"},
+    {"name": "login_accent", "value": "#B94419"},
+    {"name": "login_accent_soft", "value": "#FFF0E6"},
+    {"name": "login_primary", "value": "#C74B1B"},
+    {"name": "login_primary_text", "value": "#FFFFFF"},
+    {"name": "login_error", "value": "#AD302B"},
+    {"name": "login_error_bg", "value": "#FFF0ED"},
+    {"name": "login_success", "value": "#286542"},
+    {"name": "login_success_bg", "value": "#EDF6EE"},
+    {"name": "home_surface", "value": "#FFFCF8"},
+    {"name": "home_card", "value": "#FFFFFF"},
+    {"name": "home_text", "value": "#302B27"},
+    {"name": "home_muted", "value": "#75695F"},
+    {"name": "home_accent", "value": "#B94419"},
+    {"name": "home_soft", "value": "#FFF0E6"},
+    {"name": "home_input", "value": "#F7F3ED"}
   ]
 }

@@ -2,6 +2,7 @@
  * 优惠券中心页面
  * 支持领取优惠券、查看我的优惠券（未使用/已使用）
  */
+import { AppMotion } from '../common/theme/AppMotion'
 import { Coupon } from '../model/Models'
 import { claimCouponRemote, syncCouponsRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR } from '../common/Constants'
@@ -24,6 +25,21 @@ class CouponTab {
 @Entry
 @Component
 export struct CouponCenterPage {
+  pageTransition() {
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Push))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Pop))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Pop))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+  }
+
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @StorageLink('couponList') couponList: Coupon[] = []
   @StorageLink('claimableCoupons') claimableCoupons: Coupon[] = []

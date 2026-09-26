@@ -2,6 +2,7 @@
  * 商户收入统计页
  * 展示今日 / 本周 / 累计收入与订单数据，以及账户余额
  */
+import { AppMotion } from '../common/theme/AppMotion'
 import { ColorMetrics } from '@kit.ArkUI';
 import { routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusColor, MODULE_COLOR, MODULE_BG, accentBg, accentFg } from '../common/Constants'
@@ -12,6 +13,21 @@ import { logInfo } from '../service/AppLogger'
 @Entry
 @Component
 export struct MerchantStatsPage {
+  pageTransition() {
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Push))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Pop))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Pop))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+  }
+
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State todayStats: MerchantStatsData = {
     todayOrders: 0,

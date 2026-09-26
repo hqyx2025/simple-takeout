@@ -3,6 +3,7 @@
  * 仅 ADMIN 可进入：平台分类/店铺/员工/订单/退款管理 + 数据概览
  * 各模块为独立页面，避免单页堆叠过长；退出登录后回到登录页
  */
+import { AppMotion } from '../common/theme/AppMotion'
 import { User, UserRole, Category, RefundRecord } from '../model/Models'
 import { logout } from '../service/AppStorageManager'
 import { ApiResponse, get } from '../service/HttpClient'
@@ -51,6 +52,21 @@ class AdminEntryItem {
 @Entry
 @Component
 export struct AdminCenterPage {
+  pageTransition() {
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Push))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Pop))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Pop))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+  }
+
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @StorageLink('user') user: User = {
     id: 0, username: '未登录', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER,
