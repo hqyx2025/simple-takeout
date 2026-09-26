@@ -104,38 +104,41 @@ export struct LoginPage {
           .fontColor(COLORS.TEXT_HINT)
           .width('100%')
           .margin({ bottom: 4 })
-        Flex({ wrap: FlexWrap.Wrap }) {
-          Text('👤 用户点餐')
-            .fontSize(FONT_SIZE.SM)
-            .fontColor(this.selectedRole === UserRole.CUSTOMER ? COLORS.PRIMARY : COLORS.TEXT_HINT)
-            .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-            .backgroundColor(this.selectedRole === UserRole.CUSTOMER ? COLORS.TAG_BG : COLORS.BG_PRIMARY)
-            .borderRadius(BORDER_RADIUS.ROUND)
-            .onClick(() => { this.selectedRole = UserRole.CUSTOMER })
-          SymbolGlyph($r('sys.symbol.store')).fontSize(FONT_SIZE.LG)
-          Text(' 商户管理')
-            .fontSize(FONT_SIZE.SM)
-            .fontColor(this.selectedRole === UserRole.MERCHANT ? COLORS.PRIMARY : COLORS.TEXT_HINT)
-            .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-            .backgroundColor(this.selectedRole === UserRole.MERCHANT ? COLORS.TAG_BG : COLORS.BG_PRIMARY)
-            .borderRadius(BORDER_RADIUS.ROUND)
-            .onClick(() => { this.selectedRole = UserRole.MERCHANT })
-          Text('🛠 管理端')
-            .fontSize(FONT_SIZE.SM)
-            .fontColor(this.selectedRole === UserRole.ADMIN ? COLORS.PRIMARY : COLORS.TEXT_HINT)
-            .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-            .backgroundColor(this.selectedRole === UserRole.ADMIN ? COLORS.TAG_BG : COLORS.BG_PRIMARY)
-            .borderRadius(BORDER_RADIUS.ROUND)
-            .onClick(() => { this.selectedRole = UserRole.ADMIN })
-          SymbolGlyph($r('sys.symbol.express_delivery')).fontSize(FONT_SIZE.LG)
-          Text(' 骑手配送')
-            .fontSize(FONT_SIZE.SM)
-            .fontColor(this.selectedRole === UserRole.RIDER ? COLORS.PRIMARY : COLORS.TEXT_HINT)
-            .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-            .backgroundColor(this.selectedRole === UserRole.RIDER ? COLORS.TAG_BG : COLORS.BG_PRIMARY)
-            .borderRadius(BORDER_RADIUS.ROUND)
-            .margin({ top: SPACING.XS })
-            .onClick(() => { this.selectedRole = UserRole.RIDER })
+        Column({ space: SPACING.SM }) {
+          Row({ space: SPACING.SM }) {
+            Text('👤 用户点餐')
+              .fontSize(FONT_SIZE.SM)
+              .fontColor(this.selectedRole === UserRole.CUSTOMER ? COLORS.PRIMARY : COLORS.TEXT_HINT)
+              .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+              .backgroundColor(this.selectedRole === UserRole.CUSTOMER ? COLORS.TAG_BG : COLORS.BG_PRIMARY)
+              .borderRadius(BORDER_RADIUS.ROUND)
+              .onClick(() => { this.selectedRole = UserRole.CUSTOMER })
+            Text('🏪 商户管理')
+              .fontSize(FONT_SIZE.SM)
+              .fontColor(this.selectedRole === UserRole.MERCHANT ? COLORS.PRIMARY : COLORS.TEXT_HINT)
+              .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+              .backgroundColor(this.selectedRole === UserRole.MERCHANT ? COLORS.TAG_BG : COLORS.BG_PRIMARY)
+              .borderRadius(BORDER_RADIUS.ROUND)
+              .onClick(() => { this.selectedRole = UserRole.MERCHANT })
+          }
+          .width('100%')
+          Row({ space: SPACING.SM }) {
+            Text('🛠 管理端')
+              .fontSize(FONT_SIZE.SM)
+              .fontColor(this.selectedRole === UserRole.ADMIN ? COLORS.PRIMARY : COLORS.TEXT_HINT)
+              .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+              .backgroundColor(this.selectedRole === UserRole.ADMIN ? COLORS.TAG_BG : COLORS.BG_PRIMARY)
+              .borderRadius(BORDER_RADIUS.ROUND)
+              .onClick(() => { this.selectedRole = UserRole.ADMIN })
+            Text('🛵 骑手配送')
+              .fontSize(FONT_SIZE.SM)
+              .fontColor(this.selectedRole === UserRole.RIDER ? COLORS.PRIMARY : COLORS.TEXT_HINT)
+              .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+              .backgroundColor(this.selectedRole === UserRole.RIDER ? COLORS.TAG_BG : COLORS.BG_PRIMARY)
+              .borderRadius(BORDER_RADIUS.ROUND)
+              .onClick(() => { this.selectedRole = UserRole.RIDER })
+          }
+          .width('100%')
         }
         .width('100%')
         .margin({ bottom: SPACING.LG })
@@ -266,26 +269,6 @@ export struct LoginPage {
           }
         })
 
-      // 版本号（点击3次触发快捷登录选择弹窗）
-      if (this.isLoginMode) {
-        Column() {
-          Text('v' + APP_CONFIG.VERSION)
-            .fontSize(FONT_SIZE.XS)
-            .fontColor(COLORS.TEXT_HINT)
-            .id('version-text')
-            .onClick(() => {
-              this.versionClickCount = this.versionClickCount + 1
-              if (this.versionClickCount >= 3) {
-                this.versionClickCount = 0
-                this.quickLoginDialog.open()
-              }
-            })
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Center)
-        .margin({ top: SPACING.LG })
-      }
-
       // 切换登录/注册
       Row({ space: SPACING.XS }) {
         Text(this.isLoginMode ? '还没有账号？' : '已有账号？')
@@ -306,6 +289,26 @@ export struct LoginPage {
           })
       }
       .margin({ top: SPACING.LG })
+
+      // 版本号（点击3次触发快捷登录选择弹窗）
+      if (this.isLoginMode) {
+        Column() {
+          Text('v' + APP_CONFIG.VERSION)
+            .fontSize(FONT_SIZE.XS)
+            .fontColor(COLORS.TEXT_HINT)
+            .id('version-text')
+            .onClick(() => {
+              this.versionClickCount = this.versionClickCount + 1
+              if (this.versionClickCount >= 3) {
+                this.versionClickCount = 0
+                this.quickLoginDialog.open()
+              }
+            })
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Center)
+        .margin({ top: SPACING.LG })
+      }
     }
     .width('100%')
     .padding({ left: SPACING.XL, right: SPACING.XL })
