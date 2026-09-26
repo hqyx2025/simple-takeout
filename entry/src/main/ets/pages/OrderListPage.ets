@@ -4,6 +4,7 @@
  * 历史上订单是首页底部 Tab 之一，现在底部只保留「首页 / AI 助手 / 我的」三个标签，
  * 订单改为从「我的」页的订单入口进入本页。
  */
+import { AppMotion } from '../common/theme/AppMotion'
 import { CartItem, Order } from '../model/Models'
 import { syncUserOrdersFromServer, confirmOrderRemote, cancelOrderRemote, payOrderRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, MODULE_COLOR, MODULE_BG } from '../common/Constants'
@@ -55,6 +56,21 @@ class OrderDataSource implements IDataSource {
 @Entry
 @Component
 struct OrderListPage {
+  pageTransition() {
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Push))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Pop))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Pop))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+  }
+
   // 注意：数据源必须在 @StorageLink+@Watch 字段之前声明，
   // 避免 @StorageLink 首次绑定时触发 @Watch 回调访问到未初始化的数据源
   private orderDataSource: OrderDataSource = new OrderDataSource()

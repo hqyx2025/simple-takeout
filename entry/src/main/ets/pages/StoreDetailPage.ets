@@ -3,6 +3,7 @@
  * 首页附近店、发现推荐、分类商品、搜索和收藏入口统一进入此页面。
  * 多规格 SKU：商品 specs 非空时必须先选规格再加购（后端要求 specId，否则返回 400）。
  */
+import { AppMotion } from '../common/theme/AppMotion'
 import { StoreDetailContent } from './Index'
 import { LoginPage } from './LoginPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
@@ -266,6 +267,21 @@ export struct SpecSelectDialog {
 @Entry
 @Component
 export struct StoreDetailPage {
+  pageTransition() {
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Push))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Pop))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Pop))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+  }
+
   @StorageLink('selectedStoreId') storeId: number = 0
   @StorageLink('selectedStoreName') storeName: string = ''
   @StorageLink('isLoggedIn') loggedIn: boolean = false

@@ -1,6 +1,7 @@
 /**
  * 搜索页 - 热门搜索、历史搜索、店铺搜索结果
  */
+import { AppMotion } from '../common/theme/AppMotion'
 import { StoreItem } from '../model/Models'
 import { formatSales } from '../common/Constants'
 import { searchStoresRemote } from '../service/AppStorageManager'
@@ -12,6 +13,21 @@ import { logInfo } from '../service/AppLogger'
 @Entry
 @Component
 export struct SearchPage {
+  pageTransition() {
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Push))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Pop))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Pop))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+  }
+
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State searchText: string = ''
   @State hotWords: string[] = []

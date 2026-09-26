@@ -36,18 +36,8 @@ export default function loginFlowTest() {
 
       // 快捷登录入口已移入弹窗：点击版本号文本3次触发
       //   第一步：确认版本号文本存在
-      const versionText = await driver.findComponent(ON.id('version-text'))
-      console.info('[LoginFlow] version-text found=' + isFound(versionText))
-      expect(isFound(versionText)).assertTrue()
-      //   第二步：点击版本号3次，弹出快捷登录对话框
-      if (versionText !== null && versionText !== undefined) {
-        // 4个指纹距离不同，点 4 次确保覆盖
-        for (let tap = 0; tap < 4; tap++) {
-          await driver.delayMs(500)
-          await versionText.click()
-        }
-        await driver.delayMs(1500)
-      }
+      //   第二步：先滚动至真实可见，再连续点击并确认弹窗已出现。
+      expect(await openQuickLoginDialog(driver)).assertTrue()
       //   第三步：弹窗内的四个快捷登录按钮现在应可见
       const quickIds: string[] = ['quick-login-user', 'quick-login-merchant', 'quick-login-admin', 'quick-login-rider']
       for (let i = 0; i < quickIds.length; i++) {

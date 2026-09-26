@@ -16,6 +16,7 @@
  */
 import { COLORS, SPACING, FONT_SIZE } from '../common/Constants'
 import { SoftPressModifier } from '../common/theme/SoftPressModifier'
+import { AppMotion } from '../common/theme/AppMotion'
 
 @Component
 export struct PageHeader {
@@ -96,6 +97,7 @@ export struct PageHeader {
         Button(this.actionLabel)
           .buttonStyle(ButtonStyleMode.NORMAL)
           .attributeModifier(this.softPress)
+          .animation(AppMotion.pressAnimation())
           .fontSize(FONT_SIZE.MD)
           .fontColor(this.actionColor)
           .height(40)

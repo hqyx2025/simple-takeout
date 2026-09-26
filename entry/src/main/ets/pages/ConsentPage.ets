@@ -4,6 +4,7 @@
  * 覆盖层依赖构建时机与状态缓存，实测中出现过"门禁生效但弹窗从不渲染"的静默故障
  * （首页数据被挡住、用户却看不到任何提示）。路由页是确定性的，且同意前完全不发起业务请求。
  */
+import { AppMotion } from '../common/theme/AppMotion'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { initLogger, setPrivacyConsent, logInfo } from '../service/AppLogger'
@@ -12,6 +13,21 @@ import { loadAllData, savePrivacyConsent, saveAllData } from '../service/DataPer
 @Entry
 @Component
 export struct ConsentPage {
+  pageTransition() {
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Push))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Pop))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Pop))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+  }
+
   @State submitting: boolean = false
 
   private async accept(): Promise<void> {

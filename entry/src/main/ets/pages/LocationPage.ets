@@ -7,6 +7,7 @@
  * 4. 支持关键词搜索地点并在地图上联动定位
  * 5. 与主页双向绑定：进入时回显已保存的定位地址，选择后写回主页配送地址
  */
+import { AppMotion } from '../common/theme/AppMotion'
 import { Address, User } from '../model/Models'
 import { addAddressRemoteAndGet, isLoggedIn } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
@@ -56,6 +57,21 @@ interface JavaScriptProxyOptions {
 @Entry
 @Component
 export struct LocationPage {
+  pageTransition() {
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Push))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Pop))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Pop))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+  }
+
   // Web 地图
   private webController: webview.WebviewController = new webview.WebviewController()
   private webBridge: LocationWebBridge = new LocationWebBridge()

@@ -2,6 +2,7 @@
  * 管理端-退款审批页（大纲 9.7 退款处理）
  * 用户申请退款（已送达订单）的审批：同意退款（escrow 0→2 + 退用户余额 + 回滚库存）或拒绝（订单恢复已送达）
  */
+import { AppMotion } from '../common/theme/AppMotion'
 import { User, UserRole, RefundRecord } from '../model/Models'
 import { fetchAdminRefundsApi, approveRefundApi, rejectRefundApi } from '../service/ApiService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg } from '../common/Constants'
@@ -13,6 +14,21 @@ import { logInfo } from '../service/AppLogger'
 @Entry
 @Component
 export struct AdminRefundPage {
+  pageTransition() {
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Push))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionEnter(AppMotion.pageEnter(RouteType.Pop))
+      .translate({ x: -AppMotion.distance(AppMotion.RETURN_OFFSET) })
+      .opacity(0)
+    PageTransitionExit(AppMotion.pageExit(RouteType.Pop))
+      .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
+      .opacity(0)
+  }
+
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @StorageLink('user') user: User = {
     id: 0, username: '未登录', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER,

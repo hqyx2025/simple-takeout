@@ -1,18 +1,22 @@
-import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
+import { AbilityConstant, Configuration, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
 import { loadAllData } from '../service/DataPersistence';
 import { initLogger, setPrivacyConsent, logInfo } from '../service/AppLogger';
 import { registerClickLogging } from '../common/ClickLogger';
 import { User, UserRole } from '../model/Models';
+import { AppMotion } from '../common/theme/AppMotion';
 
 const DOMAIN = 0x0000;
 
 export default class EntryAbility extends UIAbility {
   private mainWindowStage: window.WindowStage | null = null
+  private mainWindow: window.Window | null = null
+  private windowContentReady: boolean = false
   private persistenceLoaded: boolean = false
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
+    AppMotion.init()
     try {
       this.context.getApplicationContext().setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET);
     } catch (err) {
@@ -39,6 +43,7 @@ export default class EntryAbility extends UIAbility {
   }
 
   onDestroy(): void {
+    AppMotion.dispose()
     hilog.info(DOMAIN, '测试标签', '%{public}s', '破坏能力 Ability onDestroy');
   }
 
@@ -47,7 +52,36 @@ export default class EntryAbility extends UIAbility {
     hilog.info(DOMAIN, '测试标签', '%{public}s', 'Ability onWindowStageCreate');
 
     this.mainWindowStage = windowStage
+    this.mainWindow = windowStage.getMainWindowSync()
     this.loadMainContentIfReady()
+  }
+
+  // 保留系统安全区，让窗口底色延续到手势区域，不额外挤压 Tab 内容。
+  private updateWindowAppearance(): void {
+    if (this.mainWindow === null || !this.windowContentReady) {
+      return
+    }
+    try {
+      const surface: string = '#' + this.context.resourceManager.getColorByNameSync('home_surface')
+        .toString(16).padStart(8, '0')
+      const content: string = '#' + this.context.resourceManager.getColorByNameSync('home_text')
+        .toString(16).padStart(8, '0')
+      this.mainWindow.setWindowBackgroundColor(surface)
+      this.mainWindow.setWindowSystemBarProperties({
+        statusBarColor: surface,
+        navigationBarColor: surface,
+        statusBarContentColor: content,
+        navigationBarContentColor: content
+      }).catch(() => {
+        hilog.warn(DOMAIN, 'WindowAppearance', '当前窗口不支持系统栏配色，保留系统默认值');
+      })
+    } catch (_) {
+      hilog.warn(DOMAIN, 'WindowAppearance', '窗口配色暂不可用，保留系统安全区');
+    }
+  }
+
+  onConfigurationUpdate(newConfig: Configuration): void {
+    this.updateWindowAppearance()
   }
 
   private loadMainContentIfReady(): void {
@@ -68,6 +102,9 @@ export default class EntryAbility extends UIAbility {
         return;
       }
       hilog.info(DOMAIN, '测试标签', '内容加载成功。');
+      // Window 背景 API 必须在 loadContent 成功之后调用。
+      this.windowContentReady = true
+      this.updateWindowAppearance()
       // 内容就绪后注册全局点击日志：之后每次用户点击都会记录当前页面标识
       try {
         registerClickLogging(stage.getMainWindowSync().getUIContext());
@@ -78,11 +115,15 @@ export default class EntryAbility extends UIAbility {
   }
 
   onWindowStageDestroy(): void {
+    this.windowContentReady = false
+    this.mainWindow = null
     // Main window is destroyed, release UI related resources
     hilog.info(DOMAIN, '测试标签', '%{public}s', 'Ability onWindowStageDestroy');
   }
 
   onForeground(): void {
+    AppMotion.refresh()
+    this.updateWindowAppearance()
     // Ability has brought to foreground
     hilog.info(DOMAIN, '测试标签', '%{public}s', '前景能力');
   }

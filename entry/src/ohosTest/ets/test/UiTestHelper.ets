@@ -289,11 +289,12 @@ export async function waitAny(driver: Driver, ids: string[], timeoutMs: number):
  * 返回 true 表示弹窗已打开；false 表示版本号文本不存在（可能已登录）。
  */
 export async function openQuickLoginDialog(driver: Driver): Promise<boolean> {
-  const versionText = await driver.findComponent(ON.id('version-text'))
+  // 登录表单在窄屏、注册切换或大字体下可滚动，入口不一定在首屏。
+  const versionText = await scrollUntilVisible(driver, 'version-text', 5)
   if (!isFound(versionText)) {
     return false
   }
-  // 点 4 次确保 ≥3 次命中（不同指纹/状态可能漏掉一次）
+  // 一旦弹窗出现就停止，避免第四次点击落到已经打开的弹窗上。
   for (let tap = 0; tap < 4; tap++) {
     await driver.delayMs(400)
     try {
@@ -301,7 +302,11 @@ export async function openQuickLoginDialog(driver: Driver): Promise<boolean> {
     } catch (err) {
       console.info('[UiTest] versionText click failed tap=' + tap + ': ' + (err as Error).message)
     }
+    const quickButton = await driver.findComponent(ON.id('quick-login-user'))
+    if (isFound(quickButton)) {
+      return true
+    }
   }
   await driver.delayMs(1000)
-  return true
+  return isFound(await driver.findComponent(ON.id('quick-login-user')))
 }
