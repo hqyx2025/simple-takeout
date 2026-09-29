@@ -190,12 +190,30 @@ export async function loadAllData(): Promise<void> {
       if (key === 'privacyConsent') {
         continue
       }
+      // 配送地址须由本次登录的服务端响应确认；旧 GPS 坐标不代表当前设备位置。
+      if (key === 'addressList' || key === 'lastLocationPosition') {
+        if (key === 'addressList') {
+          AppStorage.setOrCreate<Address[]>('addressList', [])
+        } else {
+          AppStorage.setOrCreate<Object | null>('lastLocationPosition', null)
+        }
+        continue
+      }
+      if (key === 'currentAddress') {
+        AppStorage.setOrCreate<Address | null>('currentAddress', null)
+        AppStorage.setOrCreate<string>('addressSyncState', 'idle')
+      }
       const json: string = await prefs.get(key, '') as string
       if (json !== '') {
         try {
           const value: Object = JSON.parse(json)
           // 归一化：确保数据格式与模型一致，兼容旧版本数据
           const normalized: Object = normalizeData(key, value)
+          if (key === 'currentAddress') {
+            const previous: Address | null = normalized as Address | null
+            AppStorage.setOrCreate<number>('pendingAddressId', previous !== null && Number.isFinite(previous.id) ? previous.id : 0)
+            continue
+          }
           AppStorage.setOrCreate(key, normalized)
           if (key === 'authToken' && typeof normalized === 'string') {
             setAuthToken(normalized)
@@ -238,7 +256,7 @@ export async function saveAllData(): Promise<void> {
       const key: string = PERSISTENCE_KEYS[i]
       if (AppStorage.has(key)) {
         const value: Object = AppStorage.get<Object>(key) as Object
-        if (value !== undefined && value !== null) {
+        if (value !== undefined) {
           await prefs.put(key, JSON.stringify(value))
         }
       }

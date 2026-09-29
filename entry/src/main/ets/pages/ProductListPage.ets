@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 /**
  * 商品列表页：承接主页分类、附近商品和附近全部商品入口。
  */
@@ -287,10 +288,9 @@ export struct ProductListPage {
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
   }
 
   build() {
@@ -302,10 +302,10 @@ export struct ProductListPage {
       })
 
       if (!this.loggedIn) {
-EmptyState({ iconGlyph: $r('sys.symbol.lock'), title: '暂无登录', description: '请登录后查看商品' })
+EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', description: '请登录后查看商品' })
        } else if (this.mode === ProductListMode.CATEGORY) {
          if (this.categoryStores.length === 0) {
-           EmptyState({ iconGlyph: $r('sys.symbol.store'), title: '暂无该分类店铺', description: '当前分类暂时没有可展示的店铺' })
+           EmptyState({ icon: $r('app.media.login_store'), title: '暂无该分类店铺', description: '当前分类暂时没有可展示的店铺' })
         } else {
           List({ space: SPACING.SM }) {
             ForEach(this.categoryStores, (store: StoreItem) => {
@@ -322,15 +322,14 @@ EmptyState({ iconGlyph: $r('sys.symbol.lock'), title: '暂无登录', descriptio
         }
       } else if (!this.hasLocation()) {
         Column({ space: SPACING.MD }) {
-          EmptyState({ iconGlyph: $r('sys.symbol.location_right_fill'), title: '请先选择配送位置', description: '定位后才能展示附近商品' })
+          EmptyState({ icon: $r('app.media.home_location'), title: '请先选择配送位置', description: '定位后才能展示附近商品' })
           Button('去选择位置')
+            .attributeModifier(new AppButtonStyle())
             .height(44)
             .padding({ left: SPACING.XL, right: SPACING.XL })
-            .fontSize(FONT_SIZE.MD)
-            .fontColor(COLORS.TEXT_WHITE)
+            .fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
             .backgroundColor(COLORS.PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
-            .type(ButtonType.Capsule)
             .onClick(() => { this.goToLocation() })
         }
         .width('100%')
@@ -338,7 +337,7 @@ EmptyState({ iconGlyph: $r('sys.symbol.lock'), title: '暂无登录', descriptio
         .justifyContent(FlexAlign.Center)
         .alignItems(HorizontalAlign.Center)
       } else if (this.products.length === 0) {
-        EmptyState({ iconGlyph: $r('sys.symbol.fork_knife_fill'), title: '暂无符合条件的商品', description: '可以换个分类或查看附近全部商品' })
+        EmptyState({ icon: $r('app.media.home_bowl'), title: '暂无符合条件的商品', description: '可以换个分类或查看附近全部商品' })
       } else {
         List({ space: SPACING.SM }) {
           LazyForEach(this.dataSource, (item: ProductListItem, index: number) => {

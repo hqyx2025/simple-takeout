@@ -1,3 +1,4 @@
+import { PageHeader } from '../components/PageHeader'
 /**
  * 评价图片全屏预览页。
  * 评价列表缩略图点击后进入本页查看大图；点击任意位置返回。
@@ -45,15 +46,19 @@ export struct ReviewImagePage {
       Column()
         .width('100%')
         .height('100%')
-        .backgroundColor('#000000')
+        .backgroundColor(COLORS.BG_PRIMARY)
 
       if (this.imageUrl !== '') {
         Image(this.imageUrl)
           .width('100%')
-          .height('100%')
+          .height('78%')
           .objectFit(ImageFit.Contain)
           .id('review-image-preview')
       }
+
+      Column() {
+        PageHeader({ title: '评价图片', onBack: () => { this.close() } })
+      }.width('100%').align(Alignment.Top)
 
       Text('点击任意位置返回')
         .fontSize(FONT_SIZE.SM)

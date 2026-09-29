@@ -63,7 +63,7 @@ COPY --from=build /workspace/healthcheck.class /app/healthcheck.class
 RUN chown takeout:takeout /app/takeout-app.jar /app/takeout-gateway.jar /app/healthcheck.class
 
 USER takeout
-EXPOSE 9000
+EXPOSE 8087
 
 # 容器内通过服务名访问 MySQL 与 Redis（见 docker-compose.yml）
 # 默认启动应用；网关容器用 command 覆盖为启动网关

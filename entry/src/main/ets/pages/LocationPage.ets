@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppInputStyle } from '../common/theme/AppTheme'
 /**
  * 选择位置页面
  * 功能：
@@ -5,7 +6,7 @@
  * 2. 支持拖动/双指缩放选点，地图中心固定位置图标，中心即所选位置（JS内逆地理编码自动解析地址）
  * 3. 进入页面自动实时定位手机当前位置，地图中心移动到定位点
  * 4. 支持关键词搜索地点并在地图上联动定位
- * 5. 与主页双向绑定：进入时回显已保存的定位地址，选择后写回主页配送地址
+ * 5. 实时定位与配送地址分开；服务端保存成功后才更新主页配送地址
  */
 import { AppMotion } from '../common/theme/AppMotion'
 import { Address, User } from '../model/Models'
@@ -42,7 +43,7 @@ class SearchPlace {
 
 // JS桥对象（javaScriptProxy 要求 class 实例，回调由组件在 aboutToAppear 中赋值）
 class LocationWebBridge {
-  onCenterChanged: (lngStr: string, latStr: string, address: string) => void = () => {}
+  onCenterChanged: (lngStr: string, latStr: string, address: string, source: string) => void = () => {}
   onSearchResult: (jsonStr: string) => void = () => {}
 }
 
@@ -81,12 +82,7 @@ export struct LocationPage {
   @State currentAddressText: string = ''        // 地图中心/当前定位的地址文本
   @State currentPosition: GeoPosition | null = null  // 地图中心坐标（即用户选择的坐标）
   @State locateError: string = ''
-  @State hasNativeLocation: boolean = false
-  // 双向绑定：进入页面时主页已有的定位地址坐标
-  private savedPosition: GeoPosition | null = null
   private locationRequestId: number = 0
-  // 地图首次加载会回调默认中心；仅忽略该初始点，用户拖动后的新中心要立即生效
-  private initialMapPosition: GeoPosition | null = null
   // 搜索状态
   @State keyword: string = ''
   @State isSearching: boolean = false
@@ -96,7 +92,7 @@ export struct LocationPage {
   @State selectedPlace: SearchPlace | null = null
   @State showSavedDialog: boolean = false
   // 确认位置保存中标记，防止连点重复新增地址
-  private savingAddress: boolean = false
+  @State savingAddress: boolean = false
 
   aboutToAppear() {
     if (!isLoggedIn()) {
@@ -105,66 +101,37 @@ export struct LocationPage {
       return
     }
     // JS桥回调绑定（Web页面通过 window.ohosBridge 调用）
-    this.webBridge.onCenterChanged = (lngStr: string, latStr: string, address: string): void => {
-      this.onCenterChangedFromJs(lngStr, latStr, address)
+    this.webBridge.onCenterChanged = (lngStr: string, latStr: string, address: string, source: string): void => {
+      this.onCenterChangedFromJs(lngStr, latStr, address, source)
     }
     this.webBridge.onSearchResult = (jsonStr: string): void => {
       this.onSearchResultFromJs(jsonStr)
     }
-    // 双向绑定：读取主页已有的配送地址；即使后端地址没有经纬度，也要先回显已保存文本。
-    const saved: Address | null = AppStorage.get<Address>('currentAddress') ?? null
-    if (saved !== null) {
-      const savedText: string = `${saved.address} ${saved.detail}`.trim()
-      this.currentAddressText = savedText
-      if (saved.latitude !== undefined && saved.longitude !== undefined) {
-        this.savedPosition = { latitude: saved.latitude, longitude: saved.longitude }
-        this.currentPosition = this.savedPosition
-      }
-      logInfo('LocationPage', '回显已保存配送地址')
-    }
-    // 兼容用户仅完成定位但尚未确认地址的情况，优先回显本次会话最近一次定位结果。
-    if (this.savedPosition === null) {
-      const lastPosition: GeoPosition | undefined = AppStorage.get<GeoPosition>('lastLocationPosition')
-      if (lastPosition !== undefined && lastPosition !== null &&
-        lastPosition.latitude !== 0 && lastPosition.longitude !== 0) {
-        this.savedPosition = lastPosition
-        this.currentPosition = lastPosition
-        logInfo('LocationPage', '回显最近一次定位坐标')
-      }
-    }
-    // 实时定位手机当前位置
+    // 每次进入均请求实时位置，不把历史配送地址或旧 GPS 坐标当作当前定位。
     this.locateCurrent()
   }
 
-  // JS回调：地图中心坐标变化（拖动/缩放/定位联动触发）
-  private onCenterChangedFromJs(lngStr: string, latStr: string, address: string): void {
+  aboutToDisappear(): void {
+    this.locationRequestId += 1
+  }
+
+  // 默认地图中心不回传；手动选点取消尚未结束的 GPS，避免旧结果覆盖选择。
+  private onCenterChangedFromJs(lngStr: string, latStr: string, address: string, source: string): void {
     const lng: number = Number(lngStr)
     const lat: number = Number(latStr)
-    if (Number.isNaN(lng) || Number.isNaN(lat)) {
+    if (!Number.isFinite(lng) || !Number.isFinite(lat) || Math.abs(lng) > 180 || Math.abs(lat) > 90) {
       return
     }
-    // 定位请求进行中时只忽略地图首次加载的默认中心。
-    // 一旦中心坐标发生变化，说明用户已拖动地图（或正在回显已保存位置），应立即允许确认并停止等待系统定位。
-    if (this.locationRequestId > 0 && !this.hasNativeLocation && this.currentPosition === null) {
-      if (this.initialMapPosition === null) {
-        this.initialMapPosition = { latitude: lat, longitude: lng }
-        logInfo('LocationPage', `忽略地图默认中心，等待系统定位: ${lngStr}, ${latStr}`)
-        return
-      }
-      const initial: GeoPosition = this.initialMapPosition as GeoPosition
-      const initialDistance: number = Math.abs(initial.longitude - lng) + Math.abs(initial.latitude - lat)
-      if (initialDistance < 0.00001) {
-        return
-      }
-      this.locationRequestId = 0
+    if (source === 'manual') {
+      this.locationRequestId += 1
       this.isLocating = false
-      logInfo('LocationPage', '检测到地图中心已移动，使用用户手动选择的位置')
+    } else if (this.currentPosition === null ||
+      Math.abs(this.currentPosition.longitude - lng) + Math.abs(this.currentPosition.latitude - lat) >= 0.00001) {
+      return
     }
-    if (this.hasNativeLocation && this.currentPosition !== null) {
-      const distance: number = Math.abs(this.currentPosition.longitude - lng) + Math.abs(this.currentPosition.latitude - lat)
-      if (distance < 0.00001 && address === '') {
-        return
-      }
+    if (address === '' && this.currentPosition !== null &&
+      Math.abs(this.currentPosition.longitude - lng) + Math.abs(this.currentPosition.latitude - lat) < 0.00001) {
+      return
     }
     this.currentPosition = { latitude: lat, longitude: lng }
     if (this.selectedPlace !== null) {
@@ -216,6 +183,9 @@ export struct LocationPage {
     // 搜索成功后直接将首个地点定位到顶部已有地图组件，避免额外创建地图。
     // 用户仍可在下方结果列表中切换到其他地点。
     if (results.length > 0) {
+      this.locationRequestId += 1
+      this.isLocating = false
+      this.locateError = ''
       const first: SearchPlace = results[0]
       this.selectedPlace = first
       this.currentPosition = { latitude: first.latitude, longitude: first.longitude }
@@ -266,39 +236,38 @@ export struct LocationPage {
   }
 
   // 定位当前手机实时位置（成功后地图中心自动移动到定位点）
-  private async locateCurrent(): Promise<void> {
-    const requestId: number = Date.now()
-    this.locationRequestId = requestId
+  private async locateCurrent(fromSettings: boolean = false): Promise<void> {
+    const requestId: number = ++this.locationRequestId
     this.isLocating = true
     this.locateError = ''
+    this.currentPosition = null
+    this.currentAddressText = ''
+    this.selectedPlace = null
     try {
       const context: common.UIAbilityContext = this.getUIContext().getHostContext() as common.UIAbilityContext
-      const position: GeoPosition = await getCurrentPosition(context)
+      const position: GeoPosition = await getCurrentPosition(context, fromSettings)
       if (this.locationRequestId !== requestId) {
         return
       }
       this.currentPosition = position
-      AppStorage.setOrCreate<GeoPosition>('lastLocationPosition', position)
-      // 定位成功后立即持久化，用户即使暂未点击确认，下一次进入也能回显该位置。
-      saveAllData()
-      this.hasNativeLocation = true
-      this.currentAddressText = await reverseGeocodePosition(position)
+      const address: string = await reverseGeocodePosition(position)
+      if (this.locationRequestId !== requestId) {
+        return
+      }
+      this.currentAddressText = address
       if (this.isMapReady) {
         await this.moveMapCenter(position)
       }
-      logInfo('LocationPage', '定位当前位置成功')
+      logInfo('LocationPage', '实时定位完成')
     } catch (err) {
-      let msg: string = ''
-      if (err instanceof Error) {
-        msg = err.message
+      if (this.locationRequestId !== requestId) {
+        return
       }
-      this.locateError = msg !== '' ? msg : '定位失败，请拖动地图或手动搜索选择位置'
+      this.locateError = err instanceof Error ? err.message : '定位失败，请重试或手动选点'
+    } finally {
       if (this.locationRequestId === requestId) {
-        this.locationRequestId = 0
+        this.isLocating = false
       }
-    }
-    if (this.locationRequestId === requestId) {
-      this.isLocating = false
     }
   }
 
@@ -321,7 +290,7 @@ export struct LocationPage {
     this.isSearching = true
     this.searched = false
     promptAction.showToast({ message: `正在搜索“${kw}”…`, duration: 1200 })
-    const safeKw: string = kw.replace(/"/g, '').replace(/'/g, '')
+    const safeKw: string = JSON.stringify(kw)
     try {
       // 先走原生 HTTPS 地理编码，确保地址关键词（如“中关村”）能返回坐标。
       const nativeResults: AddressSearchResult[] = await searchAddress(kw)
@@ -334,7 +303,7 @@ export struct LocationPage {
         return
       }
       // 原生服务无结果时，继续使用地图 WebView 的 POI/输入提示兜底。
-      await this.webController.runJavaScript(`searchKeyword("${safeKw}")`)
+      await this.webController.runJavaScript(`searchKeyword(${safeKw})`)
     } catch (err) {
       this.isSearching = false
       promptAction.showToast({ message: '搜索失败，请检查网络或API Key配置', duration: 2000 })
@@ -343,6 +312,9 @@ export struct LocationPage {
 
   // 选中搜索结果：高亮并将地图中心移动到该地点（JS回调自动更新地址）
   private selectPlace(place: SearchPlace): void {
+    this.locationRequestId += 1
+    this.isLocating = false
+    this.locateError = ''
     this.selectedPlace = place
     this.currentPosition = { latitude: place.latitude, longitude: place.longitude }
     const placeAddress: string = place.district !== '' ? `${place.district} ${place.address}` : place.address
@@ -429,12 +401,20 @@ export struct LocationPage {
   // 保存配送地址后明确提示用户，并由用户确认是否返回首页。
   private async applyAddress(addressText: string, detail: string, pos: GeoPosition): Promise<void> {
     const user: User | undefined = AppStorage.get<User>('user')
+    const session: string = AppStorage.get<string>('authToken') ?? ''
     const name: string = user !== undefined && user !== null ? user.username : ''
     const phone: string = user !== undefined && user !== null ? user.phone : ''
     const fullAddress: string = `${addressText} ${detail}`.trim()
     const persistedAddress: Address | null = await addAddressRemoteAndGet(name, phone, fullAddress, true,
       pos.latitude, pos.longitude)
-    if (persistedAddress === null || persistedAddress.id <= 0) {
+    if (!isLoggedIn() || session !== (AppStorage.get<string>('authToken') ?? '')
+      || user?.id !== AppStorage.get<User>('user')?.id) {
+      return
+    }
+    if (persistedAddress === null) {
+      return
+    }
+    if (persistedAddress.id <= 0) {
       promptAction.showToast({ message: '定位地址保存失败，请稍后重试', duration: 1800 })
       return
     }
@@ -470,12 +450,10 @@ export struct LocationPage {
           .javaScriptProxy(this.getProxyOptions())
           .onPageEnd(() => {
             this.isMapReady = true
-            // 双向绑定：回显已有定位位置，否则使用本次实时定位结果
+            // 地图加载后只移动到本次实时定位或用户主动选择的位置
             // 高德 JS 地图在 Web 页面结束回调后还会延迟初始化，延迟调用避免 moveTo 落在 map=null 时被丢弃。
             setTimeout(() => {
-              if (this.savedPosition !== null) {
-                this.moveMapCenter(this.savedPosition)
-              } else if (this.currentPosition !== null) {
+              if (this.currentPosition !== null) {
                 this.moveMapCenter(this.currentPosition)
               }
             }, 500)
@@ -485,8 +463,8 @@ export struct LocationPage {
 
         // 中心位置图标（固定在地图中间，跟随地图中心）
         Column() {
-          SymbolGlyph($r('sys.symbol.location_right_fill'))
-            .fontSize(32)
+          Image($r('app.media.home_location'))
+            .width(32).height(32).objectFit(ImageFit.Contain)
         }
         .height(56)
         .justifyContent(FlexAlign.Center)
@@ -501,8 +479,8 @@ export struct LocationPage {
           // 当前位置卡片（显示地图中心解析出的地址）
           Column({ space: SPACING.SM }) {
             Row() {
-              SymbolGlyph($r('sys.symbol.location_right_fill'))
-                .fontSize(FONT_SIZE.XL)
+              Image($r('app.media.home_location'))
+                .width(24).height(24).objectFit(ImageFit.Contain)
               Text('当前选择')
                 .fontSize(FONT_SIZE.LG)
                 .fontWeight(FontWeight.Bold)
@@ -510,12 +488,12 @@ export struct LocationPage {
                 .margin({ left: SPACING.SM })
               Blank()
               Button('刷新地图')
+          .attributeModifier(new AppButtonStyle())
                 .height(32)
                 .fontSize(FONT_SIZE.SM)
                 .fontColor(COLORS.PRIMARY)
                 .backgroundColor(COLORS.BG_PRIMARY)
                 .borderRadius(BORDER_RADIUS.ROUND)
-                .type(ButtonType.Capsule)
                 .padding({ left: SPACING.SM, right: SPACING.SM })
                 .onClick(() => { this.refreshMap() })
             }
@@ -539,20 +517,23 @@ export struct LocationPage {
                 .fontSize(FONT_SIZE.MD)
                 .fontColor(COLORS.TEXT_SECONDARY)
                 .width('100%')
-              Button('重新定位')
+            } else {
+              Text(this.locateError !== '' ? this.locateError : '尚未获取当前位置，请定位或手动选点')
+                .fontSize(FONT_SIZE.MD)
+                .fontColor(COLORS.ERROR)
+                .width('100%')
+            }
+            if (!this.isLocating) {
+              Button(this.locateError.indexOf('权限') >= 0 ? '设置定位权限' : '重新定位')
+          .attributeModifier(new AppButtonStyle())
                 .width('100%')
                 .height(40)
                 .fontSize(FONT_SIZE.MD)
                 .fontColor(COLORS.PRIMARY)
                 .backgroundColor(COLORS.BG_PRIMARY)
                 .borderRadius(BORDER_RADIUS.ROUND)
-                .type(ButtonType.Capsule)
-                .onClick(() => { this.locateCurrent() })
-            } else {
-              Text(this.locateError !== '' ? this.locateError : '正在加载地图...')
-                .fontSize(FONT_SIZE.MD)
-                .fontColor(COLORS.ERROR)
-                .width('100%')
+                .id('location-relocate')
+                .onClick(() => { this.locateCurrent(this.locateError.indexOf('权限') >= 0) })
             }
           }
           .width('100%')
@@ -565,20 +546,17 @@ export struct LocationPage {
           Column({ space: SPACING.SM }) {
             Row({ space: SPACING.SM }) {
               TextInput({ placeholder: '搜索地点，如：中关村', text: this.keyword })
+          .attributeModifier(new AppInputStyle())
                 .layoutWeight(1)
-                .height(40)
-                .fontSize(FONT_SIZE.MD)
-                .backgroundColor(COLORS.BG_PRIMARY)
-                .borderRadius(BORDER_RADIUS.ROUND)
                 .onChange((value: string) => { this.keyword = value })
                 .onSubmit(() => { this.doSearch() })
               Button(this.isSearching ? '搜索中…' : '搜索')
+          .attributeModifier(new AppButtonStyle())
                 .height(40)
                 .fontSize(FONT_SIZE.MD)
-                .fontColor(COLORS.TEXT_WHITE)
+                .fontColor(COLORS.ON_PRIMARY)
                 .backgroundColor(COLORS.PRIMARY)
                 .borderRadius(BORDER_RADIUS.ROUND)
-                .type(ButtonType.Capsule)
                 .id('location-search')
                 .enabled(!this.isSearching)
                 .onClick(() => { this.doSearch() })
@@ -610,8 +588,8 @@ export struct LocationPage {
                 ForEach(this.searchResults, (place: SearchPlace) => {
                   ListItem() {
                     Row({ space: SPACING.SM }) {
-                      Text(this.selectedPlace === place ? '📍' : '📌')
-                        .fontSize(FONT_SIZE.MD)
+                      Image($r('app.media.home_location'))
+                        .width(20).height(20).objectFit(ImageFit.Contain)
                       Column({ space: 2 }) {
                         Text(place.name)
                           .fontSize(FONT_SIZE.MD)
@@ -645,7 +623,7 @@ export struct LocationPage {
               .divider({ strokeWidth: 0 })
               .scrollBar(BarState.Off)
             } else if (this.searched) {
-              EmptyState({ iconGlyph: $r('sys.symbol.magnifyingglass'), title: '未找到相关地点', description: '换个关键词再试试' })
+              EmptyState({ icon: $r('app.media.home_search'), title: '未找到相关地点', description: '换个关键词再试试' })
             }
           }
           .width('100%')
@@ -670,16 +648,17 @@ export struct LocationPage {
           .fontColor(this.currentPosition !== null ? COLORS.TEXT_SECONDARY : COLORS.TEXT_HINT)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Button('确认位置')
+        Button(this.savingAddress ? '正在保存…' : '确认位置')
+          .attributeModifier(new AppButtonStyle())
           .width('100%')
           .height(48)
           .fontSize(FONT_SIZE.LG)
           .fontWeight(FontWeight.Bold)
-          .fontColor(this.currentPosition !== null ? COLORS.TEXT_WHITE : COLORS.TEXT_HINT)
+          .fontColor(this.currentPosition !== null ? COLORS.ON_PRIMARY : COLORS.TEXT_HINT)
           .backgroundColor(this.currentPosition !== null ? COLORS.PRIMARY : COLORS.DIVIDER)
           .borderRadius(BORDER_RADIUS.ROUND)
-          .type(ButtonType.Capsule)
           .id('location-confirm')
+          .enabled(this.currentPosition !== null && !this.savingAddress && !this.isLocating)
           .onClick(() => { this.useCenterPosition() })
       }
       .width('100%')

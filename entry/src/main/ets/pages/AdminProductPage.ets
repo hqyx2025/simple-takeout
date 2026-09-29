@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /** 平台商品监管：搜索全部店铺商品、强制上下架和删除违规商品。 */
 import { AppMotion } from '../common/theme/AppMotion'
 import { AdminProduct, User, UserRole } from '../model/Models'
@@ -112,7 +113,7 @@ export struct AdminProductPage {
       PageHeader({
         title: '商品监管',
         backId: 'admin-product-back',
-        headerBgColor: MODULE_BG.ADMIN,
+        headerBgColor: COLORS.BG_PRIMARY,
         actionColor: MODULE_COLOR.ADMIN,
         actionLabel: this.loading ? '加载中' : '刷新',
         onBack: () => { router.back() },
@@ -121,20 +122,25 @@ export struct AdminProductPage {
 
       Row({ space: SPACING.SM }) {
         TextInput({ placeholder: '搜索商品名或店铺名', text: this.keyword })
-          .layoutWeight(1).height(40).onChange((value: string) => { this.keyword = value })
-        Button('搜索').height(40).fontSize(FONT_SIZE.SM).onClick(() => { this.refresh() })
+          .attributeModifier(new AppInputStyle())
+          .layoutWeight(1).onChange((value: string) => { this.keyword = value })
+        Button('搜索')
+          .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM).onClick(() => { this.refresh() })
       }.width('100%').padding(SPACING.LG).backgroundColor(MODULE_BG.ADMIN)
 
       Row({ space: SPACING.MD }) {
-        Button('全部').fontSize(FONT_SIZE.SM).backgroundColor(this.statusFilter === -1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
-          .fontColor(this.statusFilter === -1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = -1; this.refresh() })
-        Button('上架').fontSize(FONT_SIZE.SM).backgroundColor(this.statusFilter === 1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
-          .fontColor(this.statusFilter === 1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 1; this.refresh() })
-        Button('下架').fontSize(FONT_SIZE.SM).backgroundColor(this.statusFilter === 0 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
-          .fontColor(this.statusFilter === 0 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 0; this.refresh() })
+        Button('全部').height(44)
+          .attributeModifier(new AppButtonStyle()).fontSize(FONT_SIZE.SM).backgroundColor(this.statusFilter === -1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
+          .fontColor(this.statusFilter === -1 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.statusFilter = -1; this.refresh() })
+        Button('上架').height(44)
+          .attributeModifier(new AppButtonStyle()).fontSize(FONT_SIZE.SM).backgroundColor(this.statusFilter === 1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
+          .fontColor(this.statusFilter === 1 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.statusFilter = 1; this.refresh() })
+        Button('下架').height(44)
+          .attributeModifier(new AppButtonStyle()).fontSize(FONT_SIZE.SM).backgroundColor(this.statusFilter === 0 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
+          .fontColor(this.statusFilter === 0 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.statusFilter = 0; this.refresh() })
       }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
 
       // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在筛选行下方
@@ -153,6 +159,7 @@ export struct AdminProductPage {
         if (this.hasMore) {
           ListItem() {
             Button(this.loading ? '加载中…' : `加载更多（已显示 ${this.products.length}/${this.total}）`)
+              .attributeModifier(new AppButtonStyle())
               .width('100%').height(40).fontSize(FONT_SIZE.SM)
               .onClick(() => { this.loadMore() })
           }
@@ -192,11 +199,14 @@ export struct AdminProductPage {
         StatusBadge({ text: product.status === 1 ? '上架中' : '已下架', mode: product.status === 1 ? 'success' : 'gray' })
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       Row({ space: SPACING.XS }) {
-        Button(product.status === 1 ? '强制下架' : '强制上架').height(30).fontSize(FONT_SIZE.XS)
+        Button(product.status === 1 ? '强制下架' : '强制上架')
+          .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
           .onClick(() => { this.toggleStatus(product) })
-        Button('删除').height(30).fontSize(FONT_SIZE.XS).fontColor(COLORS.ERROR)
-          .onClick(() => { this.deletingId = product.id; this.showDeleteConfirm = true })
+        Button('删除')
+          .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS).fontColor(COLORS.ERROR)
+          .onClick(() => { this.deletingId = product.id; this.showDeleteConfirm = true }).backgroundColor(COLORS.ERROR_LIGHT)
       }
-    }.width('100%').padding(SPACING.MD).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
+    }
+      .attributeModifier(new AppCardStyle()).width('100%').padding(SPACING.MD)
   }
 }

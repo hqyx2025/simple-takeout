@@ -1,13 +1,17 @@
+import { AppButtonStyle, AppCardStyle, AppInputStyle, AppFilterStyle, AppRefreshStyle, AppTheme } from '../common/theme/AppTheme'
 /**
  * 主页面 - 简单外卖App
  * 包含：搜索栏、分类导航、店铺列表、店铺详情、购物车、订单列表、个人中心、底部Tab导航
  */
 import { Category, StoreItem, GoodsItem, GoodsSpec, SpecialGoodsItem, SeckillItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, Banner, Announcement, MarketingActivity, Setmeal, SetmealItem, SetmealOrder, createEmptyUser } from '../model/Models'
-import { addToCart, addCartItemRemote, updateCartItemQuantity, updateCartItemQuantityRemote, createOrderRemote, refreshCartFromServer, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCartRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncBannersRemote, syncAnnouncementsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, cancelOrderRemote, payOrderRemote, fetchSeckillsRemote, getLastRemoteErrorMessage, rechargeBalanceRemote, syncCurrentUserFromServer } from '../service/AppStorageManager'
+import { addCartItemRemote, updateCartItemQuantityRemote, createOrderRemote, refreshCartFromServer, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCartRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncBannersRemote, syncAnnouncementsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, cancelOrderRemote, payOrderRemote, fetchSeckillsRemote, getLastRemoteErrorMessage, rechargeBalanceRemote, syncCurrentUserFromServer } from '../service/AppStorageManager'
 import { fetchRecommendedStoresApi, fetchSpecialGoodsApi, fetchStoreMerchantCategoriesApi, fetchStoreDetailApi, fetchStoreActivitiesApi, fetchStoreSetmealsApi } from '../service/ApiService'
 import { LoginPage } from './LoginPage'
+import { CartAddAnimator, CartAddFlight } from '../components/CartAddFlight'
 import { AssistantPage } from './AssistantPage'
 import { CartPage } from './CartPage'
+import { AdaptiveTabBar } from '../components/AdaptiveTabBar'
+import { FloatingTabBarTheme } from '../common/theme/FloatingTabBarTheme'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, formatSales, merchantImageSource, DEFAULT_MERCHANT_IMAGE, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
 import { RatingStars } from '../components/RatingStars'
@@ -17,7 +21,6 @@ import { promptCompat as promptAction, routerCompat as router } from '../common/
 import { initLogger, logInfo, logError, setPrivacyConsent } from '../service/AppLogger'
 import { savePrivacyConsent } from '../service/DataPersistence'
 import { loadAllData, saveAllData } from '../service/DataPersistence'
-import { BreakpointSystem } from '../common/utils/BreakpointSystem'
 import { HomeTheme } from '../common/theme/HomeTheme'
 import { SoftPressModifier } from '../common/theme/SoftPressModifier'
 import { AppMotion } from '../common/theme/AppMotion'
@@ -35,20 +38,6 @@ class QuickEntryItem {
     return item
   }
 }
-
-/** 侧边栏导航条目（避免 arkts-no-obj-literals-as-types）。 */
-class SidebarItem {
-  title: string = ''
-  index: number = 0
-
-  static create(title: string, index: number): SidebarItem {
-    let item = new SidebarItem()
-    item.title = title
-    item.index = index
-    return item
-  }
-}
-
 
 // 店铺列表懒加载数据源（实现 IDataSource）
 class StoreDataSource implements IDataSource {
@@ -90,9 +79,8 @@ struct Index {
   @State showLocationLoginConfirm: boolean = false
   // 管理端跳转占位：管理端不渲染主页（定位/购物车/订单等 C 端功能），直接进入平台管理页
   @State adminRedirecting: boolean = false
-  @State isWide: boolean = false
+  @State pageVisible: boolean = true
   private tabsController: TabsController = new TabsController()
-  private breakpointSystem: BreakpointSystem = new BreakpointSystem()
 
   pageTransition() {
     PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
@@ -121,9 +109,7 @@ struct Index {
     this.sanitizeAppData()
     // 管理端守卫：已登录的管理端不渲染主页，直接跳转平台管理页
     this.guardAdminRole()
-    this.breakpointSystem.register(this.getUIContext().getHostContext() as common.UIAbilityContext, (breakpoint: string): void => {
-      this.isWide = this.breakpointSystem.isWideForLayout()
-    })
+
   }
 
   private guardAdminRole(): void {
@@ -209,6 +195,7 @@ struct Index {
   }
 
   onPageShow() {
+    this.pageVisible = true
     logInfo('Page', '首页 Index onPageShow')
     // 从购物车、结算页等子页面返回时，强制“我的”页重新读取购物车数量，避免 Tabs 子组件保留旧标题。
     this.profileRefreshToken += 1
@@ -245,6 +232,8 @@ struct Index {
   }
 
   // 打开独立店铺详情页，详情不再复用发现Tab
+  onPageHide(): void { this.pageVisible = false }
+
   private async showStoreDetail(storeId: number, storeName: string = ''): Promise<void> {
     AppStorage.setOrCreate<number>('selectedStoreId', storeId)
     if (storeName !== '') {
@@ -273,8 +262,7 @@ struct Index {
       if (this.adminRedirecting) {
         // 管理端跳转占位：不渲染主页/定位/购物车/订单等任何 C 端内容，仅显示过渡提示
         Column({ space: SPACING.MD }) {
-          Text('🛠️')
-            .fontSize(48)
+          Image($r('app.media.ui_tools')).width(48).height(48).objectFit(ImageFit.Contain)
           Text('正在进入平台管理…')
             .fontSize(FONT_SIZE.LG)
             .fontColor(COLORS.TEXT_SECONDARY)
@@ -286,11 +274,7 @@ struct Index {
         .backgroundColor(COLORS.BG_PRIMARY)
       } else {
       if (!this.showLogin) {
-      if (this.isWide) {
-        this.wideLayout()
-      } else {
-        this.mainTabs()
-      }
+      this.mainTabs()
 
       }
 
@@ -341,86 +325,9 @@ struct Index {
     .backgroundColor(HomeTheme.SURFACE)
   }
 
-  private tabIcon(targetIndex: number): Resource {
-    const selected: boolean = (this.isWide ? this.currentTab : this.selectedTab) === targetIndex
-    if (targetIndex === 0) { return selected ? $r('app.media.home_nav_home_active') : $r('app.media.home_nav_home') }
-    if (targetIndex === 1) { return selected ? $r('app.media.home_nav_assistant_active') : $r('app.media.home_nav_assistant') }
-    if (targetIndex === 2) { return selected ? $r('app.media.home_nav_cart_active') : $r('app.media.home_nav_cart') }
-    return selected ? $r('app.media.home_nav_profile_active') : $r('app.media.home_nav_profile')
-  }
-
-  @Builder
-  wideLayout() {
-    SideBarContainer(SideBarContainerType.Embed) {
-      Column() {
-        Column({ space: SPACING.MD }) {
-          SymbolGlyph($r('sys.symbol.house'))
-            .fontSize(24)
-            .fontColor([COLORS.PRIMARY])
-            .width(40).height(40)
-            .backgroundColor(COLORS.BG_CARD)
-            .borderRadius(20)
-          Text('简单外卖')
-            .fontSize(FONT_SIZE.LG)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(COLORS.TEXT_PRIMARY)
-            .maxLines(1)
-        }
-        .width('100%')
-        .padding({ top: SPACING.XL, bottom: SPACING.LG })
-
-        Divider().color(COLORS.DIVIDER).margin({ bottom: SPACING.MD })
-
-        ForEach([
-SidebarItem.create('首页', 0),
-          SidebarItem.create('AI助手', 1),
-          SidebarItem.create('购物车', 2),
-          SidebarItem.create('我的', 3)
-        ], (item: SidebarItem) => {
-          Button({ type: ButtonType.Normal }) {
-            Row({ space: SPACING.MD }) {
-              Image(this.tabIcon(item.index))
-                .width(HomeTheme.ICON).height(HomeTheme.ICON)
-                .accessibilityLevel('no')
-              Text(item.title)
-                .fontSize(FONT_SIZE.LG)
-                .fontColor(this.currentTab === item.index ? HomeTheme.ACCENT : HomeTheme.TEXT)
-                .fontWeight(this.currentTab === item.index ? FontWeight.Bold : FontWeight.Normal)
-            }
-            .width('100%')
-          }
-          .width('100%')
-          .height(44)
-          .buttonStyle(ButtonStyleMode.NORMAL)
-          .backgroundColor(this.currentTab === item.index ? HomeTheme.SOFT : Color.Transparent)
-          .borderRadius(12)
-          .attributeModifier(new SoftPressModifier())
-          .animation(AppMotion.pressAnimation())
-          .onClick(() => { this.switchTab(item.index) })
-        }, (item: SidebarItem) => item.title)
-      }
-      .width('100%')
-      .height('100%')
-      .padding(SPACING.SM)
-      .backgroundColor(HomeTheme.SURFACE)
-
-      Column() {
-        this.tabContent()
-      }
-      .width('100%')
-      .height('100%')
-      .backgroundColor(COLORS.BG_PRIMARY)
-    }
-    .showSideBar(true)
-    .showControlButton(false)
-    .sideBarWidth(200)
-    .divider({ strokeWidth: 0, color: Color.Transparent })
-    .width('100%')
-    .height('100%')
-  }
-
   @Builder
   mainTabs() {
+    Stack({ alignContent: Alignment.Bottom }) {
     Tabs({ controller: this.tabsController, barPosition: BarPosition.End, index: $$this.currentTab }) {
       TabContent() {
         HomePage({
@@ -430,24 +337,26 @@ SidebarItem.create('首页', 0),
           onNavigateLogin: () => { this.showLogin = true },
           onNavigateLocationLogin: () => { this.showLocationLoginConfirm = true }
         })
-      }.tabBar(this.tabBuilder('首页', 0))
+      }
 
       TabContent() {
-        AssistantPage()
-      }.tabBar(this.tabBuilder('AI助手', 1))
+        Column() {
+          AssistantPage()
+        }.width('100%').height('100%').padding({ bottom: FloatingTabBarTheme.CONTENT_INSET })
+      }
 
       TabContent() {
         CartPage()
-      }.tabBar(this.tabBuilder('购物车', 2))
+      }
 
       TabContent() {
         ProfileMainPage({
           refreshToken: this.profileRefreshToken,
           onNavigateLogin: () => { this.showLogin = true }
         })
-      }.tabBar(this.tabBuilder('我的', 3))
+      }
     }
-    .barHeight(HomeTheme.TAB_HEIGHT)
+    .barHeight(0)
     .barBackgroundColor(HomeTheme.SURFACE)
     .onAnimationStart((index: number, targetIndex: number) => {
       // 只更新选中外观；提前修改 Tabs 的 index 会跳过原生切换动画。
@@ -467,81 +376,18 @@ SidebarItem.create('首页', 0),
     .width('100%')
     .height('100%')
     .backgroundColor(HomeTheme.SURFACE)
+    AdaptiveTabBar({ selected: this.selectedTab, active: this.pageVisible,
+      onSelect: (index: number) => { this.tabsController.changeIndex(index) } })
+    }.width('100%').height('100%')
   }
 
-  /** 切换 Tab 并刷新小部件 */
-  private switchTab(index: number): void {
-    if (this.currentTab === index) {
-      return
-    }
-    this.currentTab = index
-    this.selectedTab = index
-    if (index === 3) {
-      this.profileRefreshToken += 1
-    }
-    this.tabsController.changeIndex(index)
-  }
-
-  @Builder
-  tabContent() {
-    if (this.currentTab === 0) {
-      HomePage({
-        onStoreClick: (store: StoreItem) => { this.showStoreDetail(store.id, store.name) },
-        onNavigateLogin: () => { this.showLogin = true },
-        onNavigateLocationLogin: () => { this.showLocationLoginConfirm = true }
-      })
-    } else if (this.currentTab === 1) {
-      AssistantPage()
-    } else if (this.currentTab === 2) {
-      CartPage()
-    } else {
-      ProfileMainPage({
-        refreshToken: this.profileRefreshToken,
-        onNavigateLogin: () => { this.showLogin = true }
-      })
-    }
-  }
-
-  @Builder
-  tabBuilder(title: string, targetIndex: number) {
-    Column({ space: SPACING.XS }) {
-      Stack() {
-        Image(this.tabIcon(targetIndex))
-          .width(HomeTheme.ICON).height(HomeTheme.ICON)
-          .accessibilityLevel('no')
-      }
-      .width(52).height(30)
-      .backgroundColor(this.selectedTab === targetIndex ? HomeTheme.SOFT : Color.Transparent)
-      .borderRadius(15)
-      .scale({ x: this.selectedTab === targetIndex && !this.reduceMotion ? 1.04 : 1,
-        y: this.selectedTab === targetIndex && !this.reduceMotion ? 1.04 : 1 })
-      .animation({ duration: this.reduceMotion ? 0 : AppMotion.TAB, curve: Curve.EaseOut })
-      Text(title)
-        .fontSize(FONT_SIZE.SM)
-        .fontColor(this.selectedTab === targetIndex ? HomeTheme.ACCENT : HomeTheme.MUTED)
-        .fontWeight(this.selectedTab === targetIndex ? FontWeight.Bold : FontWeight.Normal)
-    }
-    .width('100%')
-    .height('100%')
-    .justifyContent(FlexAlign.Center)
-    .alignItems(HorizontalAlign.Center)
-    .accessibilityGroup(true)
-    .accessibilityText(title)
-    .accessibilitySelected(this.selectedTab === targetIndex)
-    .id(`tab-${targetIndex}`)
-    .onClick(() => {
-      this.tabsController.changeIndex(targetIndex)
-    })
-  }
-
-  aboutToDisappear() {
-    this.breakpointSystem.unregister()
-  }
 }
 
 // ===================== 首页 =====================
 @Component
 struct HomePage {
+  @StorageLink('appReduceMotion') reduceMotion: boolean = false
+  @State bannerVisible: boolean = false
   @StorageLink('categoryList') categories: Category[] = []
   @StorageLink('isLoggedIn') @Watch('onLoginStateChange') loggedIn: boolean = false
   @State specialGoods: SpecialGoodsItem[] = []
@@ -556,6 +402,7 @@ struct HomePage {
   @State currentCategory: number = 0
   @State isRefreshing: boolean = false
   @StorageLink('currentAddress') @Watch('onCurrentAddressChange') currentAddress: Address | null = null
+  @StorageLink('addressSyncState') addressSyncState: string = 'idle'
   @State isHeaderVisible: boolean = false
   // 附近推荐（原「发现」Tab 的能力，现并入首页）：进入首页与定位变化时刷新
   @State recommendedStores: StoreItem[] = []
@@ -847,7 +694,9 @@ struct HomePage {
           Row({ space: SPACING.SM }) {
             Image($r('app.media.home_location')).width(HomeTheme.ICON).height(HomeTheme.ICON)
               .accessibilityLevel('no')
-            Text(this.currentAddress !== null ? this.getDisplayAddress() : '未定位，点击定位')
+            Text(this.currentAddress !== null ? '配送至 ' + this.getDisplayAddress()
+              : this.addressSyncState === 'failed' ? '地址未同步，点击选择'
+              : this.addressSyncState === 'loading' ? '正在同步配送地址…' : '选择配送地址')
               .fontSize(FONT_SIZE.LG).fontColor(HomeTheme.TEXT).fontWeight(FontWeight.Bold)
               .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
             Image($r('app.media.home_chevron')).width(HomeTheme.SMALL_ICON).height(HomeTheme.SMALL_ICON)
@@ -855,9 +704,9 @@ struct HomePage {
           }
           .width('100%')
         }
+          .attributeModifier(new AppButtonStyle())
         .width('100%').height(HomeTheme.TOUCH_HEIGHT)
         .padding(0).backgroundColor(Color.Transparent)
-        .attributeModifier(new SoftPressModifier())
         .animation(AppMotion.pressAnimation())
         .id('home-location-entry')
         .onClick(() => {
@@ -879,10 +728,10 @@ struct HomePage {
           }
           .width('100%')
         }
+          .attributeModifier(new AppButtonStyle())
         .width('100%').height(HomeTheme.SEARCH_HEIGHT)
         .padding({ left: SPACING.LG, right: SPACING.LG })
         .backgroundColor(HomeTheme.INPUT).borderRadius(HomeTheme.CONTROL_RADIUS)
-        .attributeModifier(new SoftPressModifier())
         .animation(AppMotion.pressAnimation())
         .id('home-search-entry')
         .onClick(() => { router.pushUrl({ url: 'pages/SearchPage' }) })
@@ -891,10 +740,10 @@ struct HomePage {
       .padding({ left: SPACING.XL, right: SPACING.XL, top: SPACING.SM, bottom: SPACING.LG })
       .backgroundColor(HomeTheme.SURFACE)
       .opacity(this.isHeaderVisible ? 1 : 0)
-      .translate({ y: this.isHeaderVisible ? 0 : 8 })
-      .animation({ duration: 260, curve: Curve.EaseInOut })
+      .translate({ y: this.isHeaderVisible || this.reduceMotion ? 0 : 8 })
+      .animation({ duration: this.reduceMotion ? 0 : AppMotion.ENTER, curve: Curve.EaseOut })
 
-      Refresh({ refreshing: this.isRefreshing }) {
+      Refresh({ refreshing: $$this.isRefreshing }) {
         Scroll() {
           Column() {
             // 分类导航
@@ -939,37 +788,26 @@ struct HomePage {
           .margin({ top: SPACING.SM })
           .borderRadius({ topLeft: BORDER_RADIUS.LG, topRight: BORDER_RADIUS.LG })
 
-          // Banner（服务端内容管理数据，为空时回退到默认轮播）
-          Swiper() {
-            if (this.banners.length === 0) {
-              Text('新人专享 满20减15')
-                .width('100%').height(120).fontSize(FONT_SIZE.XL)
-                .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRIMARY)
-                .borderRadius(BORDER_RADIUS.MD).textAlign(TextAlign.Center)
-              Text('限时秒杀 全场8折')
-                .width('100%').height(120).fontSize(FONT_SIZE.XL)
-                .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRICE_RED)
-                .borderRadius(BORDER_RADIUS.MD).textAlign(TextAlign.Center)
-            } else {
+          // 参考 sample_in_harmonyos BannerCard：仅可见且有多项时自动播放。
+          if (this.banners.length > 0) {
+            Swiper() {
               ForEach(this.banners, (banner: Banner) => {
-                Column({ space: SPACING.XS }) {
-                  Text(banner.title)
-                    .fontSize(FONT_SIZE.XL).fontColor(COLORS.TEXT_WHITE).fontWeight(FontWeight.Bold)
-                  if (banner.subtitle !== '') {
-                    Text(banner.subtitle).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_WHITE)
-                  }
-                }
-                .width('100%').height(120)
-                .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
-                .backgroundColor(banner.color)
-                .borderRadius(BORDER_RADIUS.MD)
+                this.BannerCard(banner)
               }, (banner: Banner) => banner.id.toString())
             }
+            .indicator(this.banners.length > 1 ? Indicator.dot()
+              .itemWidth(6).itemHeight(6).selectedItemWidth(18).selectedItemHeight(6)
+              .color(AppTheme.BORDER).selectedColor(AppTheme.ACCENT).bottom(0) : false)
+            .autoPlay(this.bannerVisible && !this.reduceMotion && this.banners.length > 1)
+            .interval(5000).loop(this.banners.length > 1)
+            .duration(this.reduceMotion ? 0 : AppMotion.ENTER)
+            .itemSpace(SPACING.SM).prevMargin(SPACING.LG).nextMargin(SPACING.LG)
+            .width('100%').height(160)
+            .margin({ top: SPACING.SM })
+            .onVisibleAreaChange([0, 0.5], (visible: boolean, ratio: number) => {
+              this.bannerVisible = visible && ratio >= 0.5
+            })
           }
-          .indicator(true).autoPlay(true).interval(3000).loop(true)
-          .width('100%')
-          .padding({ left: SPACING.LG, right: SPACING.LG })
-          .margin({ top: SPACING.SM })
 
           // 平台公告
           if (this.announcements.length > 0) {
@@ -1082,7 +920,8 @@ struct HomePage {
             Row({ space: SPACING.SM }) {
               Text('定位后可看到附近推荐商户')
                 .fontSize(FONT_SIZE.SM).fontColor(HomeTheme.MUTED).layoutWeight(1)
-              Button('去定位').height(32).fontSize(FONT_SIZE.SM)
+              Button('去定位')
+                .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM)
                 .id('home-recommend-location')
                 .onClick(() => { router.pushUrl({ url: 'pages/LocationPage' }) })
             }
@@ -1150,6 +989,7 @@ struct HomePage {
             .width('100%')
             .padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.LG })
           }
+          Blank().height(FloatingTabBarTheme.CONTENT_INSET)
           }
         }
         .width('100%')
@@ -1157,7 +997,7 @@ struct HomePage {
         .scrollBar(BarState.Off)
       }
       .layoutWeight(1)
-      .pullToRefresh(true)
+      .attributeModifier(new AppRefreshStyle())
       .onRefreshing(() => { this.refreshHomeData() })
     }
     .width('100%')
@@ -1166,6 +1006,32 @@ struct HomePage {
     }
     .width('100%')
     .height('100%')
+  }
+
+  @Builder
+  BannerCard(banner: Banner) {
+    Column() {
+      Row({ space: SPACING.MD }) {
+        Column({ space: SPACING.SM }) {
+          Text(banner.title).fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold)
+            .fontColor(AppTheme.TEXT).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+          if (banner.subtitle !== '') {
+            Text(banner.subtitle).fontSize(FONT_SIZE.SM).fontColor(AppTheme.MUTED)
+              .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+        if (banner.image !== '') {
+          Image(merchantImageSource(banner.image)).alt(DEFAULT_MERCHANT_IMAGE)
+            .width(88).height(88).objectFit(ImageFit.Cover).borderRadius(AppTheme.CONTROL_RADIUS)
+        } else {
+          Image($r('app.media.home_bowl')).width(56).height(56).objectFit(ImageFit.Contain)
+            .accessibilityLevel('no')
+        }
+      }
+      .width('100%').height(136).padding(SPACING.LG)
+      .backgroundColor(AppTheme.ACCENT_SOFT).borderRadius(AppTheme.CARD_RADIUS)
+      .border({ width: 1, color: AppTheme.BORDER })
+    }.width('100%').height(160)
   }
 
   private openSpecialStore(item: SpecialGoodsItem): void {
@@ -1213,7 +1079,7 @@ struct HomePage {
         ? `距结束 ${this.seckillCountdown(item)}`
         : '本场已结束')
         .fontSize(FONT_SIZE.XS)
-        .fontColor(COLORS.TEXT_WHITE)
+        .fontColor(COLORS.ON_PRIMARY)
         .backgroundColor(COLORS.PRICE_RED)
         .padding({ left: SPACING.XS, right: SPACING.XS, top: 1, bottom: 1 })
         .borderRadius(BORDER_RADIUS.SM)
@@ -1252,7 +1118,7 @@ struct HomePage {
             .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
             .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           Text('特价')
-            .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_WHITE)
+            .fontSize(FONT_SIZE.XS).fontColor(COLORS.ON_PRIMARY)
             .backgroundColor(COLORS.PRICE_RED)
             .padding({ left: 6, right: 6, top: 2, bottom: 2 }).borderRadius(BORDER_RADIUS.ROUND)
         }
@@ -1290,7 +1156,7 @@ struct HomePage {
       } else {
         Column() {
           Text(store.name.substring(0, 1))
-            .fontSize(28).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_WHITE)
+            .fontSize(28).fontWeight(FontWeight.Bold).fontColor(COLORS.ON_PRIMARY)
         }
         .width(80).height(80)
         .backgroundColor(accentFg(accentIndexFromText(store.name)))
@@ -1371,7 +1237,7 @@ struct RecommendedStoreCardHost {
           .width(76).height(76).objectFit(ImageFit.Cover).borderRadius(BORDER_RADIUS.MD)
       } else {
         Column() {
-          Text(this.store.name.substring(0, 1)).fontSize(28).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_WHITE)
+          Text(this.store.name.substring(0, 1)).fontSize(28).fontWeight(FontWeight.Bold).fontColor(COLORS.ON_PRIMARY)
         }
         .width(76).height(76)
         .backgroundColor(accentFg(accentIndexFromText(this.store.name)))
@@ -1398,14 +1264,15 @@ struct RecommendedStoreCardHost {
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
       }.layoutWeight(1).alignItems(HorizontalAlign.Start)
     }
-    .width('100%').padding(SPACING.MD).backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG).onClick(() => { this.onStoreClick(this.store) })
+      .attributeModifier(new AppCardStyle())
+    .width('100%').padding(SPACING.MD).onClick(() => { this.onStoreClick(this.store) })
   }
 }
 
 // ===================== 店铺详情 =====================
 @Component
 export struct StoreDetailContent {
+  @Prop @Watch('onPageVisibilityChange') pageVisible: boolean = true
   // 收藏页/搜索页返回后，父组件会复用详情组件实例；使用 @Prop + @Watch
   // 确保切换店铺时重新加载商品、评分和店铺信息，避免标题与内容错位。
   @Prop @Watch('onStoreIdChange') storeId: number = 0
@@ -1427,6 +1294,9 @@ export struct StoreDetailContent {
   // ArkUI 按 key 复用列表项，键不变就不重建，于是点「+」后数字不更新/不显示。
   // 把本版本号拼进 ForEach key 强制重建（与购物车 cartRenderVersion 同一套路）。
   @State goodsRenderVersion: number = 0
+  private cartAnimator: CartAddAnimator = new CartAddAnimator()
+  private active: boolean = false
+  @State cartPulse: number = 1
   private cartOperationQueue: Promise<void> = Promise.resolve()
   @State isFav: boolean = false
   @State goodsLoading: boolean = false
@@ -1440,7 +1310,7 @@ export struct StoreDetailContent {
   @StorageLink('categoryList') categoryList: Category[] = []
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   onNavigateLogin: () => void = () => {}
-  // 多规格菜品：由页面层打开选规格弹窗（弹窗需要 CustomDialogController，只能挂在页面组件上）
+  // 多规格菜品：由页面层打开原生半屏规格面板。
   onSelectSpecGoods: (goods: GoodsItem) => void = () => {}
   // 本店进行中的秒杀（商品卡片标出秒杀价）
   @State storeSeckills: SeckillItem[] = []
@@ -1449,7 +1319,19 @@ export struct StoreDetailContent {
   @State storeSetmeals: Setmeal[] = []
 
   aboutToAppear() {
+    this.active = true
     this.loadStoreData()
+  }
+
+  aboutToDisappear(): void {
+    this.active = false
+  }
+
+  onPageVisibilityChange(): void {
+    this.active = this.pageVisible
+    if (!this.pageVisible) {
+      this.cartAnimator.cancel()
+    }
   }
 
   onStoreIdChange(): void {
@@ -1672,7 +1554,35 @@ export struct StoreDetailContent {
       this.onSelectSpecGoods(goods)
       return
     }
-    this.changeGoodsQuantity(goods, 1)
+    if (!isLoggedIn()) {
+      this.onNavigateLogin()
+      return
+    }
+    if ((goods.stock ?? 1) <= 0) {
+      promptAction.showToast({ message: '该商品已售罄', duration: 1600 })
+      return
+    }
+    const storeId: number = this.storeId
+    const session: string = AppStorage.get<string>('authToken') ?? ''
+    this.enqueueCartOperation(async (): Promise<void> => {
+      if (!this.active || storeId !== this.storeId || session !== (AppStorage.get<string>('authToken') ?? '')) {
+        return
+      }
+      const landed: boolean = await this.cartAnimator.play(`goods-plus-${goods.id}`)
+      if (!landed || !this.active || storeId !== this.storeId || session !== (AppStorage.get<string>('authToken') ?? '')) {
+        return
+      }
+      const item: CartItem = { goods: goods, quantity: 1, storeId: storeId, storeName: this.storeName }
+      const ok: boolean = await addCartItemRemote(item)
+      if (ok && this.active) {
+        this.getUIContext().animateTo({ duration: AppMotion.duration(120), curve: Curve.EaseOut }, () => {
+          this.cartPulse = 1.12
+        })
+        this.getUIContext().animateTo({ delay: AppMotion.duration(120), duration: AppMotion.duration(180), curve: Curve.EaseOut }, () => {
+          this.cartPulse = 1
+        })
+      }
+    })
   }
 
   // 该菜品是否是多规格菜品（specs 非空）
@@ -1728,29 +1638,6 @@ export struct StoreDetailContent {
     })
   }
 
-  private async legacyAddGoodsToCart(goods: GoodsItem): Promise<void> {
-    const item: CartItem = { goods: goods, quantity: 1, storeId: this.storeId, storeName: this.storeName }
-    addToCart(item)
-    this.updateCartInfo()
-    const ok: boolean = await addCartItemRemote(item)
-    if (!ok) {
-      await syncCartRemote()
-      this.updateCartInfo()
-      promptAction.showToast({ message: '加入购物车失败，请稍后重试', duration: 2200 })
-    }
-  }
-
-  private async legacyChangeGoodsQuantity(goods: GoodsItem, quantity: number): Promise<void> {
-    updateCartItemQuantity(goods.id, this.storeId, quantity)
-    this.updateCartInfo()
-    const ok: boolean = await updateCartItemQuantityRemote(goods.id, quantity)
-    if (!ok) {
-      await syncCartRemote()
-      this.updateCartInfo()
-      promptAction.showToast({ message: '修改购物车失败，请稍后重试', duration: 2200 })
-    }
-  }
-
   // 按当前分类筛选商品，并显式保存结果，避免 ArkUI 渲染期间计算 getter 时序异常
   private updateFilteredGoods(): void {
     const onShelfGoods: GoodsItem[] = this.goodsList.filter(g => g.isOnShelf !== false)
@@ -1771,6 +1658,19 @@ export struct StoreDetailContent {
     })
   }
 
+  @Builder
+  CategoryFilter(catName: string) {
+    Button(catName)
+      .attributeModifier(new AppFilterStyle(this.currentCat === catName))
+      .animation(AppMotion.pressAnimation())
+      .accessibilitySelected(this.currentCat === catName)
+      .id(`goods-cat-${catName}`)
+      .onClick(() => {
+        this.currentCat = catName
+        this.updateFilteredGoods()
+      })
+  }
+
   // 生成评分星星字符串
   getStars(rating: number): string {
     let stars: string = ''
@@ -1780,21 +1680,23 @@ export struct StoreDetailContent {
     return stars
   }
 
-  build() {
+  @Builder
+  StoreIntro() {
     Column() {
       // 店铺信息
       Column({ space: 6 }) {
-        // 店铺照片：方便用户确认门店（未上传时用默认占位图）
-        Image(merchantImageSource(this.storeImage))
-          .alt(DEFAULT_MERCHANT_IMAGE)
-          .width('100%').height(160).objectFit(ImageFit.Cover)
-          .borderRadius(BORDER_RADIUS.MD)
+        Row({ space: SPACING.MD }) {
+          Image(merchantImageSource(this.storeImage))
+            .alt(DEFAULT_MERCHANT_IMAGE)
+            .width(84).height(84).objectFit(ImageFit.Contain)
+            .backgroundColor(AppTheme.INPUT).borderRadius(AppTheme.CONTROL_RADIUS)
+            .id('store-header-image')
+          Column({ space: 6 }) {
         Row() {
           Text(this.storeName)
             .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.MERCHANT)
             .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-SymbolGlyph(this.isFav ? $r('sys.symbol.heart_fill') : $r('sys.symbol.heart'))
-.fontSize(24)
+          Image(this.isFav ? $r('app.media.ui_heart_active') : $r('app.media.home_heart')).width(24).height(24).objectFit(ImageFit.Contain)
             .onClick(async () => {
               if (!isLoggedIn()) {
                 promptAction.showToast({
@@ -1818,16 +1720,18 @@ SymbolGlyph(this.isFav ? $r('sys.symbol.heart_fill') : $r('sys.symbol.heart'))
             })
         }
         .width('100%')
-        Row({ space: SPACING.MD }) {
+        Row({ space: SPACING.SM }) {
           Text(`${this.storeRating}分`).fontSize(FONT_SIZE.MD).fontColor(COLORS.PRIMARY).fontWeight(FontWeight.Bold)
-          Text(`月售${formatSales(this.storeMonthlySales)}`).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_SECONDARY)
-          Text(`配送${this.storeDeliveryTime}`).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_SECONDARY)
+          Text(`月售${formatSales(this.storeMonthlySales)}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+          Text(`配送${this.storeDeliveryTime}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
         }
-        Row({ space: SPACING.MD }) {
+        Row({ space: SPACING.SM }) {
           Text(`配送费¥${this.storeDeliveryFee}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
           Text(`${this.storeMinOrder}元起送`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
           Text(this.storeDistance).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
         }
+          }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+        }.width('100%').alignItems(VerticalAlign.Center)
         Row({ space: 6 }) {
           ForEach(this.storeTags, (tag: string) => {
             Text(tag).fontSize(FONT_SIZE.XS).fontColor(COLORS.TAG_TEXT)
@@ -1843,7 +1747,9 @@ SymbolGlyph(this.isFav ? $r('sys.symbol.heart_fill') : $r('sys.symbol.heart'))
       }
       .width('100%')
       .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.MD })
-      .backgroundColor(MODULE_BG.MERCHANT).margin({ top: SPACING.SM })
+      .alignItems(HorizontalAlign.Start)
+      .backgroundColor(AppTheme.CARD)
+      .border({ width: { bottom: 1 }, color: AppTheme.BORDER })
 
       if (this.storeActivities.length > 0) {
         Column({ space: SPACING.XS }) {
@@ -1882,33 +1788,35 @@ SymbolGlyph(this.isFav ? $r('sys.symbol.heart_fill') : $r('sys.symbol.heart'))
         .width('100%').padding(SPACING.LG).backgroundColor(MODULE_BG.SPECIAL).margin({ top: SPACING.SM })
       }
 
+    }.width('100%')
+  }
+
+  @Builder
+  CategoryBar() {
       // 分类Tab
       Scroll() {
         Row({ space: SPACING.SM }) {
           ForEach(this.goodsCats, (catName: string, index: number) => {
-            Text(catName)
-              .fontSize(FONT_SIZE.MD)
-              .fontColor(this.currentCat === catName ? COLORS.TEXT_WHITE : accentFg(index))
-              .backgroundColor(this.currentCat === catName ? accentFg(index) : accentBg(index))
-              .padding({ left: 12, right: 12, top: 4, bottom: 4 })
-              .borderRadius(BORDER_RADIUS.ROUND)
-              .height(28)
-              .id(`goods-cat-${catName}`)
-              .onClick(() => {
-                this.currentCat = catName
-                this.updateFilteredGoods()
-              })
+            this.CategoryFilter(catName)
           }, (catName: string) => catName)
         }
-        .padding({ left: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
+        .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
       }
       .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
+      .align(Alignment.Start)
       .width('100%').backgroundColor(COLORS.BG_WHITE)
 
-      // 商品列表
-      Column() {
-        // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
-        List() {
+  }
+
+  build() {
+    Stack({ alignContent: Alignment.TopStart }) {
+    Column() {
+      // 店铺介绍与活动跟随列表滚动；原生分组表头吸顶，底部操作区独立。
+      List() {
+        ListItem() {
+          this.StoreIntro()
+        }
+        ListItemGroup({ header: this.CategoryBar() }) {
           if (this.goodsLoading) {
             ListItem() {
               Text('正在加载商品…')
@@ -1934,7 +1842,7 @@ SymbolGlyph(this.isFav ? $r('sys.symbol.heart_fill') : $r('sys.symbol.heart'))
                 .id(`goods-count-${this.filteredGoodsList.length}`)
                 .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
                 .width('100%')
-                .padding({ top: SPACING.SM, bottom: SPACING.SM })
+                .padding({ left: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
             }
             ForEach(this.filteredGoodsList, (goods: GoodsItem) => {
             ListItem() {
@@ -1942,7 +1850,7 @@ SymbolGlyph(this.isFav ? $r('sys.symbol.heart_fill') : $r('sys.symbol.heart'))
                 // 商品图片：商户上传图拼 API 基址，无图/加载失败回退默认占位图
                 Image(merchantImageSource(goods.image))
                   .alt(DEFAULT_MERCHANT_IMAGE)
-                  .width(90).height(90).objectFit(ImageFit.Cover).borderRadius(BORDER_RADIUS.MD)
+                  .width(80).height(80).objectFit(ImageFit.Contain).borderRadius(BORDER_RADIUS.MD)
                   .backgroundColor(COLORS.BG_PRIMARY)
 
                 // 商品信息
@@ -1967,7 +1875,7 @@ SymbolGlyph(this.isFav ? $r('sys.symbol.heart_fill') : $r('sys.symbol.heart'))
                     // 限时秒杀：下单时后端自动按秒杀价结算
                     if (this.getSeckillPrice(goods.id) > 0) {
                       Text('⚡限时秒杀')
-                        .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_WHITE)
+                        .fontSize(FONT_SIZE.XS).fontColor(COLORS.ON_PRIMARY)
                         .backgroundColor(COLORS.PRICE_RED)
                         .padding({ left: SPACING.XS, right: SPACING.XS, top: 1, bottom: 1 })
                         .borderRadius(BORDER_RADIUS.SM)
@@ -1975,7 +1883,7 @@ SymbolGlyph(this.isFav ? $r('sys.symbol.heart_fill') : $r('sys.symbol.heart'))
                   }
                   Text(goods.description)
                     .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
-                    .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+                    .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                   this.GoodsReviewSummary(goods)
                   Row({ space: SPACING.XS }) {
                     Text(`月售${formatSales(goods.sales)}`).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
@@ -1993,9 +1901,10 @@ SymbolGlyph(this.isFav ? $r('sys.symbol.heart_fill') : $r('sys.symbol.heart'))
                 }
                 .layoutWeight(1).alignItems(HorizontalAlign.Start)
               }
-              .width('100%').padding(SPACING.MD)
-              .backgroundColor(accentBg(accentIndexFromText(goods.name)))
-              .borderRadius(BORDER_RADIUS.MD)
+              .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
+              .alignItems(VerticalAlign.Top)
+              .backgroundColor(AppTheme.CARD)
+              .border({ width: { bottom: 1 }, color: AppTheme.BORDER })
               }
             }, (item: GoodsItem) => `${this.goodsRenderVersion}-${item.id}`)
           }
@@ -2005,17 +1914,19 @@ SymbolGlyph(this.isFav ? $r('sys.symbol.heart_fill') : $r('sys.symbol.heart'))
             this.ReviewsSection()
           }
         }
-        .width('100%')
-        .scrollBar(BarState.Off)
-        .layoutWeight(1)
-        .padding({ bottom: SPACING.XL })
-
-        // 购物车栏
-        this.CartBar()
       }
-      .layoutWeight(1)
+      .width('100%').layoutWeight(1)
+      .id('store-detail-list')
+      .sticky(StickyStyle.Header)
+      .edgeEffect(EdgeEffect.Spring)
+      .scrollBar(BarState.Off)
+      .padding({ bottom: SPACING.XL })
+
+      this.CartBar()
     }
-    .width('100%').layoutWeight(1)
+    .width('100%').height('100%')
+    CartAddFlight({ animator: this.cartAnimator })
+    }.width('100%').height('100%').id('store-detail-content')
   }
 
   // 商品卡片价格：限时秒杀价优先，多规格菜品显示「¥最低规格价 起」
@@ -2037,7 +1948,7 @@ SymbolGlyph(this.isFav ? $r('sys.symbol.heart_fill') : $r('sys.symbol.heart'))
       if (this.hasSpecs(goods)) {
         // 多规格菜品：规格价与规格库存各不相同，统一走选规格弹窗（后端要求 specId）
         Text('选规格')
-          .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_WHITE)
+          .fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)
           .backgroundColor(COLORS.PRIMARY)
           .borderRadius(BORDER_RADIUS.ROUND)
           .padding({ left: SPACING.SM, right: SPACING.SM, top: SPACING.XS, bottom: SPACING.XS })
@@ -2046,16 +1957,16 @@ SymbolGlyph(this.isFav ? $r('sys.symbol.heart_fill') : $r('sys.symbol.heart'))
           })
       } else {
         if (this.getQty(goods.id) > 0) {
-          Text('-').id(`goods-minus-${goods.id}`).width(24).height(24).fontSize(16).fontColor(COLORS.TEXT_WHITE)
+          Text('-').id(`goods-minus-${goods.id}`).width(32).height(32).fontSize(16).fontColor(COLORS.ON_PRIMARY)
             .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.CIRCLE)
             .textAlign(TextAlign.Center).onClick(() => {
               this.changeGoodsQuantity(goods, -1)
             })
           Text(this.getQty(goods.id).toString()).id(`goods-qty-${goods.id}`)
-            .width(28).height(24).fontSize(FONT_SIZE.MD)
+            .width(28).height(32).fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.TEXT_PRIMARY).textAlign(TextAlign.Center)
         }
-        Text('+').id(`goods-plus-${goods.id}`).width(24).height(24).fontSize(16).fontColor(COLORS.TEXT_WHITE)
+        Text('+').id(`goods-plus-${goods.id}`).width(32).height(32).fontSize(16).fontColor(COLORS.ON_PRIMARY)
           .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.CIRCLE)
           .textAlign(TextAlign.Center).onClick(() => {
             this.addGoodsToCart(goods)
@@ -2099,7 +2010,7 @@ SymbolGlyph(this.isFav ? $r('sys.symbol.heart_fill') : $r('sys.symbol.heart'))
   @Builder
   GoodsReviewSummary(goods: GoodsItem) {
     Row({ space: SPACING.SM }) {
-      Text(`商品评价${this.getGoodsReviews(goods.id).length}条`)
+      Text(`评价${this.getGoodsReviews(goods.id).length}条`)
         .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
       if (this.getGoodsReviews(goods.id).length > 0) {
         Text(this.getGoodsReviews(goods.id)[0].content || '用户已评价')
@@ -2109,11 +2020,11 @@ SymbolGlyph(this.isFav ? $r('sys.symbol.heart_fill') : $r('sys.symbol.heart'))
         Text('暂无商品评价').fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).layoutWeight(1)
       }
       Button(this.hasReviewedGoods(goods.id) ? '已评价' : (this.canReviewGoods(goods.id) ? '去评价' : '评价'))
-        .height(26).fontSize(FONT_SIZE.XS)
-        .fontColor(this.hasReviewedGoods(goods.id) ? COLORS.TEXT_SECONDARY : (this.canReviewGoods(goods.id) ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY))
+        .height(24).padding({ left: 6, right: 6 }).fontSize(FONT_SIZE.XS)
+        .fontColor(this.hasReviewedGoods(goods.id) ? COLORS.TEXT_SECONDARY : (this.canReviewGoods(goods.id) ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY))
         .backgroundColor(this.hasReviewedGoods(goods.id) ? COLORS.TEXT_HINT : (this.canReviewGoods(goods.id) ? COLORS.PRIMARY : COLORS.BG_PRIMARY))
         .enabled(!this.hasReviewedGoods(goods.id))
-        .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+        .borderRadius(BORDER_RADIUS.ROUND)
         .onClick(() => {
           if (!this.hasReviewedGoods(goods.id)) {
             this.openGoodsReview(goods.id)
@@ -2126,31 +2037,34 @@ SymbolGlyph(this.isFav ? $r('sys.symbol.heart_fill') : $r('sys.symbol.heart'))
   CartBar() {
     Row() {
       Stack() {
-        Text('🛒').width(50).height(50).fontSize(24)
-          .backgroundColor(MODULE_COLOR.CART).borderRadius(BORDER_RADIUS.ROUND)
-          .textAlign(TextAlign.Center)
+        Image($r('app.media.home_nav_cart')).objectFit(ImageFit.Contain).width(50).height(50)
+          .backgroundColor(COLORS.TAG_BG).padding(12).borderRadius(BORDER_RADIUS.ROUND)
         if (this.cartCount > 0) {
           Text(this.cartCount.toString())
-            .fontSize(10).fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.PRICE_RED)
+            .fontSize(10).fontColor(COLORS.ON_PRIMARY).backgroundColor(COLORS.PRICE_RED)
             .borderRadius(BORDER_RADIUS.CIRCLE).textAlign(TextAlign.Center)
             .width(18).height(18)
         }
       }
       .alignContent(Alignment.TopEnd)
+      .id('store-cart-target')
+      .scale({ x: this.cartPulse, y: this.cartPulse })
       Column({ space: 2 }) {
         Row({ space: 2 }) {
-          Text('¥').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_WHITE)
-          Text(this.cartTotal.toFixed(2)).fontSize(FONT_SIZE.XL).fontColor(COLORS.TEXT_WHITE).fontWeight(FontWeight.Bold)
+          Text('¥').fontSize(FONT_SIZE.SM).fontColor(COLORS.PRICE_RED)
+          Text(this.cartTotal.toFixed(2)).id('store-cart-total').fontSize(FONT_SIZE.XL).fontColor(COLORS.PRICE_RED).fontWeight(FontWeight.Bold)
         }
         Text(`另需配送费¥${this.storeDeliveryFee}`).fontSize(FONT_SIZE.XS)
-          .fontColor('rgba(255,255,255,0.7)')
+          .fontColor(COLORS.TEXT_SECONDARY)
       }
       .margin({ left: SPACING.SM }).alignItems(HorizontalAlign.Start)
       Blank()
       Button(this.cartCount > 0 ? `去结算(${this.cartCount})` : '去购物')
-        .height(40).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_WHITE)
-        .backgroundColor(this.cartCount > 0 ? MODULE_COLOR.CART : COLORS.TEXT_SECONDARY)
-        .borderRadius({ topRight: BORDER_RADIUS.LG, bottomRight: BORDER_RADIUS.LG })
+        .attributeModifier(new AppButtonStyle())
+        .height(40).fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
+        .backgroundColor(COLORS.PRIMARY)
+        .borderRadius(BORDER_RADIUS.ROUND)
+        .id('store-checkout')
         .width(100)
         .onClick(() => {
           if (this.cartCount > 0) {
@@ -2161,9 +2075,10 @@ SymbolGlyph(this.isFav ? $r('sys.symbol.heart_fill') : $r('sys.symbol.heart'))
           }
         })
     }
-    .width('100%').height(56)
+    .width('100%').height(72)
     .padding({ left: SPACING.LG, right: SPACING.SM })
-    .backgroundColor(COLORS.TEXT_PRIMARY)
+    .backgroundColor(COLORS.BG_CARD)
+    .border({ width: { top: 1 }, color: COLORS.DIVIDER })
   }
 
   @Builder
@@ -2242,10 +2157,9 @@ SymbolGlyph(this.isFav ? $r('sys.symbol.heart_fill') : $r('sys.symbol.heart'))
               .borderRadius(BORDER_RADIUS.SM)
             }
           }
+            .attributeModifier(new AppCardStyle())
           .width('100%')
           .padding(SPACING.MD)
-          .backgroundColor(COLORS.BG_WHITE)
-          .borderRadius(BORDER_RADIUS.MD)
         }, (review: Review) => review.id.toString())
       }
     }
@@ -2490,11 +2404,11 @@ struct ProfileMainPage {
               }
               if (this.loggedIn) {
                 Button('退出', { type: ButtonType.Normal })
+                  .attributeModifier(new AppButtonStyle())
                   .width('100%').height(48)
                   .fontSize(14).fontColor(HomeTheme.MUTED)
                   .backgroundColor(HomeTheme.CARD).borderRadius(16)
                   .id('profile-logout')
-                  .attributeModifier(new SoftPressModifier())
                   .animation(AppMotion.pressAnimation())
                   .onClick(() => {
                     logout()
@@ -2504,7 +2418,7 @@ struct ProfileMainPage {
             }
             .width('100%').constraintSize({ maxWidth: 680 })
           }
-          .width('100%').padding({ left: 16, right: 16, top: 20, bottom: 28 })
+          .width('100%').padding({ left: 16, right: 16, top: 20, bottom: FloatingTabBarTheme.CONTENT_INSET + 16 })
         }
         .scrollBar(BarState.Off)
         .align(Alignment.Top)
@@ -2512,8 +2426,7 @@ struct ProfileMainPage {
         .backgroundColor(HomeTheme.SURFACE)
       }
       .onRefreshing(() => { this.refreshProfileData() })
-      .refreshOffset(48)
-      .pullToRefresh(true)
+      .attributeModifier(new AppRefreshStyle())
       .width('100%').height('100%')
 
       if (this.showRechargeDialog) {
@@ -2568,10 +2481,10 @@ struct ProfileMainPage {
         }
         .width('100%').padding({ top: 8, bottom: 8 })
       }
+        .attributeModifier(new AppButtonStyle())
       .width('100%').padding(0)
       .backgroundColor(Color.Transparent).borderRadius(18)
       .id('profile-account')
-      .attributeModifier(new SoftPressModifier())
       .animation(AppMotion.pressAnimation())
       .onClick(() => {
         if (!this.loggedIn) {
@@ -2616,9 +2529,9 @@ struct ProfileMainPage {
               .accessibilityLevel('no')
           }
         }
+          .attributeModifier(new AppButtonStyle())
         .height(44).padding({ left: 8, right: 0 })
         .backgroundColor(Color.Transparent)
-        .attributeModifier(new SoftPressModifier())
         .animation(AppMotion.pressAnimation())
         .onClick(() => { this.openOrders(-1) })
       }
@@ -2656,18 +2569,19 @@ struct ProfileMainPage {
           .fontSize(FONT_SIZE.SM).fontColor(HomeTheme.MUTED)
           .width('100%')
         TextInput({ placeholder: '\u8bf7\u8f93\u5165\u91d1\u989d\uff0c\u5982\uff1a100', text: this.rechargeAmount })
-          .width('100%').height(52).type(InputType.Number)
-          .fontSize(FONT_SIZE.MD).backgroundColor(HomeTheme.INPUT)
-          .borderRadius(14)
+          .attributeModifier(new AppInputStyle())
+          .width('100%').type(InputType.Number)
           .onChange((value: string) => { this.rechargeAmount = value })
         Row({ space: SPACING.SM }) {
           Button('\u53d6\u6d88')
+            .attributeModifier(new AppButtonStyle())
             .layoutWeight(1).height(48)
             .backgroundColor(HomeTheme.INPUT).fontColor(HomeTheme.MUTED)
             .onClick(() => { this.showRechargeDialog = false })
           Button(this.recharging ? '\u5145\u503c\u4e2d\u2026' : '\u786e\u8ba4\u5145\u503c')
+            .attributeModifier(new AppButtonStyle())
             .layoutWeight(1).height(48)
-            .backgroundColor(HomeTheme.ACCENT).fontColor($r('app.color.login_primary_text'))
+            .backgroundColor(HomeTheme.ACCENT).fontColor($r('app.color.on_primary'))
             .onClick(() => { this.submitRecharge() })
         }.width('100%')
       }
@@ -2700,9 +2614,9 @@ struct ProfileMainPage {
       }
       .width('100%').alignItems(HorizontalAlign.Center)
     }
+      .attributeModifier(new AppButtonStyle())
     .layoutWeight(1).height(72).padding({ left: 4, right: 4 })
     .backgroundColor(Color.Transparent).borderRadius(14)
-    .attributeModifier(new SoftPressModifier())
     .animation(AppMotion.pressAnimation())
     .onClick(() => { this.openBalancePage() })
   }
@@ -2717,9 +2631,9 @@ struct ProfileMainPage {
       }
       .width('100%').alignItems(HorizontalAlign.Center)
     }
+      .attributeModifier(new AppButtonStyle())
     .layoutWeight(1).height(72).padding({ left: 4, right: 4 })
     .backgroundColor(Color.Transparent).borderRadius(14)
-    .attributeModifier(new SoftPressModifier())
     .animation(AppMotion.pressAnimation())
     .onClick(() => { action() })
   }
@@ -2733,9 +2647,9 @@ struct ProfileMainPage {
       }
       .width('100%').padding({ top: 8, bottom: 8 })
     }
+      .attributeModifier(new AppButtonStyle())
     .layoutWeight(1).constraintSize({ minHeight: 64 }).padding(0)
     .backgroundColor(Color.Transparent).borderRadius(14)
-    .attributeModifier(new SoftPressModifier())
     .animation(AppMotion.pressAnimation())
     .onClick(() => { this.openOrders(status) })
   }
@@ -2763,10 +2677,10 @@ struct ProfileMainPage {
       }
       .width('100%').padding({ left: 16, right: 16, top: 16, bottom: 16 })
     }
+      .attributeModifier(new AppButtonStyle())
     .width('100%').constraintSize({ minHeight: 56 }).padding(0)
     .backgroundColor(Color.Transparent).borderRadius(14)
     .id(rowId)
-    .attributeModifier(new SoftPressModifier())
     .animation(AppMotion.pressAnimation())
     .onClick(() => { action() })
   }

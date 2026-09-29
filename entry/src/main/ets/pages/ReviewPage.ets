@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle, AppTextAreaStyle } from '../common/theme/AppTheme'
 /**
  * 评价页
  * 对已完成订单进行评价：星级评分、标签选择、文字评价、图文评价（选图 → 上传 → 预览 → 删除）
@@ -335,7 +336,7 @@ export struct ReviewPage {
 
       if (!this.loggedIn) {
         Column() {
-          SymbolGlyph($r('sys.symbol.lock')).fontSize(60).margin({ top: 100 })
+          Image($r('app.media.login_lock')).width(60).height(60).objectFit(ImageFit.Contain).margin({ top: 100 })
           Text('暂无登录').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.LG })
           Text('请登录后查看和提交评价').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.SM })
         }
@@ -345,7 +346,7 @@ export struct ReviewPage {
         .alignItems(HorizontalAlign.Center)
       } else if (this.order === null) {
         Column() {
-          SymbolGlyph($r('sys.symbol.gift')).fontSize(60).margin({ top: 100 })
+          Image($r('app.media.ui_gift')).width(60).height(60).objectFit(ImageFit.Contain).margin({ top: 100 })
           Text('订单不存在').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.LG })
         }
         .width('100%')
@@ -386,13 +387,12 @@ export struct ReviewPage {
         // 底部提交按钮
         Row() {
           Button('提交评价')
+            .attributeModifier(new AppButtonStyle())
             .width('100%')
             .height(48)
-            .fontSize(FONT_SIZE.LG)
-            .fontColor(COLORS.TEXT_WHITE)
+            .fontSize(FONT_SIZE.LG).fontColor(COLORS.ON_PRIMARY)
             .backgroundColor(COLORS.PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
-            .type(ButtonType.Capsule)
             .id('review-submit')
             .onClick(() => { this.submitReview() })
         }
@@ -410,7 +410,7 @@ export struct ReviewPage {
   StoreInfoCard() {
     Column({ space: SPACING.SM }) {
       Row() {
-        SymbolGlyph($r('sys.symbol.store')).fontSize(FONT_SIZE.LG)
+        Image($r('app.media.login_store')).width(FONT_SIZE.LG).height(FONT_SIZE.LG).objectFit(ImageFit.Contain)
         Text(this.order!.storeName)
           .fontSize(FONT_SIZE.LG)
           .fontWeight(FontWeight.Bold)
@@ -425,10 +425,9 @@ export struct ReviewPage {
         .fontColor(COLORS.TEXT_SECONDARY)
         .width('100%')
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
   }
 
   @Builder
@@ -446,7 +445,7 @@ export struct ReviewPage {
             ForEach(this.order.items, (item: CartItem) => {
               Text(item.goods.name)
                 .fontSize(FONT_SIZE.MD)
-                .fontColor(this.selectedGoodsId === item.goods.id ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
+                .fontColor(this.selectedGoodsId === item.goods.id ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
                 .backgroundColor(this.selectedGoodsId === item.goods.id ? COLORS.PRIMARY : COLORS.TAG_BG)
                 .padding({ left: SPACING.MD, right: SPACING.MD, top: SPACING.SM, bottom: SPACING.SM })
                 .margin({ right: SPACING.SM, bottom: SPACING.SM })
@@ -456,8 +455,8 @@ export struct ReviewPage {
           }.width('100%')
         }
       }
-      .width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE)
-      .borderRadius(BORDER_RADIUS.LG)
+        .attributeModifier(new AppCardStyle())
+      .width('100%').padding(SPACING.LG)
     }
   }
 
@@ -488,10 +487,9 @@ export struct ReviewPage {
         .fontColor(this.rating === 0 ? COLORS.TEXT_HINT : COLORS.PRIMARY)
         .fontWeight(FontWeight.Bold)
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
     .alignItems(HorizontalAlign.Center)
   }
 
@@ -512,17 +510,16 @@ export struct ReviewPage {
             .margin({ right: SPACING.SM, bottom: SPACING.SM })
             .borderRadius(BORDER_RADIUS.ROUND)
             .backgroundColor(this.isTagSelected(tag) ? COLORS.PRIMARY : COLORS.TAG_BG)
-            .fontColor(this.isTagSelected(tag) ? COLORS.TEXT_WHITE : COLORS.TAG_TEXT)
+            .fontColor(this.isTagSelected(tag) ? COLORS.ON_PRIMARY : COLORS.TAG_TEXT)
             .id(`review-tag-${index}`)
             .onClick(() => { this.toggleTag(tag) })
         }, (tag: string) => tag)
       }
       .width('100%')
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
   }
 
   @Builder
@@ -540,10 +537,9 @@ export struct ReviewPage {
       Toggle({ type: ToggleType.Switch, isOn: this.anonymous })
         .onChange((isOn: boolean) => { this.anonymous = isOn })
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
   }
 
   @Builder
@@ -562,23 +558,19 @@ export struct ReviewPage {
       .width('100%')
 
       TextArea({ placeholder: '请写下您对本次订餐的评价...' })
+        .attributeModifier(new AppTextAreaStyle())
         .width('100%')
         .height(120)
         .maxLength(200)
-        .fontSize(FONT_SIZE.MD)
-        .fontColor(COLORS.TEXT_PRIMARY)
-        .borderRadius(BORDER_RADIUS.MD)
-        .backgroundColor(COLORS.BG_PRIMARY)
         .padding(SPACING.MD)
         .id('review-content')
         .onChange((value: string) => {
           this.content = value
         })
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
   }
 
   // ============ 图文评价卡片 ============
@@ -621,10 +613,9 @@ export struct ReviewPage {
         .width('100%')
         .id('review-image-hint')
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
   }
 
   /** 已上传图片缩略图：整格铺满 + 右上角删除按钮。 */

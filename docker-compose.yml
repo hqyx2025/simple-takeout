@@ -18,19 +18,19 @@ services:
     container_name: takeout-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${TAKEOUT_DB_PASSWORD:-123456}
+      MYSQL_ROOT_PASSWORD: ${TAKEOUT_DB_PASSWORD:?TAKEOUT_DB_PASSWORD must be set}
       MYSQL_DATABASE: takeout
       TZ: Asia/Shanghai
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
     ports:
-      # 映射到宿主 3307，避免与宿主机已装的 MySQL84（3306）冲突
-      - "${TAKEOUT_MYSQL_PORT:-3307}:3306"
+      # 映射到宿主 3310，避免与宿主机已装的 MySQL84（3306）冲突
+      - "${TAKEOUT_MYSQL_PORT:-3310}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${TAKEOUT_DB_PASSWORD:-123456}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${TAKEOUT_DB_PASSWORD:?TAKEOUT_DB_PASSWORD must be set}"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -42,7 +42,7 @@ services:
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "${TAKEOUT_REDIS_PORT:-6379}:6379"
+      - "${TAKEOUT_REDIS_PORT:-6387}:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -56,43 +56,65 @@ services:
       context: ./server
       dockerfile: Dockerfile
     image: takeout-server:latest
-    container_name: takeout-app
+    # 无 container_name，允许 Compose 启动多个 app 副本。
     restart: unless-stopped
+    deploy:
+      replicas: 2
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
-      # 容器内用服务名互联；MySQL 端口是容器内 3306（不是宿主映射的 3307）
+      # 容器内用服务名互联；MySQL 端口是容器内 3306（不是宿主映射的 3310）
       TAKEOUT_DB_HOST: mysql
       TAKEOUT_DB_PORT: 3306
       TAKEOUT_DB_USERNAME: root
-      TAKEOUT_DB_PASSWORD: ${TAKEOUT_DB_PASSWORD:-123456}
+      TAKEOUT_DB_PASSWORD: ${TAKEOUT_DB_PASSWORD:?TAKEOUT_DB_PASSWORD must be set}
       TAKEOUT_REDIS_HOST: redis
       TAKEOUT_REDIS_PORT: 6379
-      TAKEOUT_JWT_SECRET: ${TAKEOUT_JWT_SECRET:-simple-takeout-jwt-secret-key-please-change-2026}
+      TAKEOUT_JWT_SECRET: ${TAKEOUT_JWT_SECRET:?TAKEOUT_JWT_SECRET must be set}
       TAKEOUT_CACHE_ENABLED: "true"
-      # 应用在容器内监听 9000；对外由 gateway 暴露同一个 9000（外部契约不变）
-      TAKEOUT_APP_PORT: "9000"
+      # 应用在容器内监听 8087；对外由 gateway 暴露同一个 8087（统一对外入口）
+      TAKEOUT_APP_PORT: "8087"
       TZ: Asia/Shanghai
-    ports:
-      # 仅用于直连调试（可选）：宿主 9100 → 应用 9000。
-      # 正式入口是 gateway 的 9000，两者 API 完全一致。
-      - "${TAKEOUT_APP_DEBUG_PORT:-9100}:9000"
     volumes:
       # 评价图片持久化，容器重建不丢
       - uploads-data:/app/uploads
     healthcheck:
       # 运行镜像基于 JRE，没有 curl/wget，用构建阶段编译好的 healthcheck.class 探活
-      test: ["CMD", "java", "-cp", "/app", "healthcheck", "127.0.0.1", "9000"]
+      test: ["CMD", "java", "-cp", "/app", "healthcheck", "127.0.0.1", "8087"]
       interval: 10s
       timeout: 8s
       retries: 12
       start_period: 60s
 
-  # API 网关：对外唯一入口，保持 :9000 契约与拆分前完全一致（前端 HAP 零改动）。
+  # 每个自然月首个运行时备份一次；重启不重复，失败每小时重试，保留历史备份。
+  backup:
+    image: mysql:8.4
+    container_name: takeout-mysql-backup
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_PWD: ${TAKEOUT_DB_PASSWORD:?TAKEOUT_DB_PASSWORD must be set}
+    volumes:
+      - mysql-backups:/backups
+      - ./server/docker/mysql-backup.sh:/backup.sh:ro
+    entrypoint: ["/bin/sh", "/backup.sh"]
+
+  # API 网关：对外唯一入口，保持 :8087 契约与前端 BASE_URL 一致。
   # 与应用共用同一镜像，只换启动的 jar。
+  app-balancer:
+    image: nginx:1.28-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    volumes:
+      - ./server/docker/app-upstream.conf:/etc/nginx/conf.d/default.conf:ro
+
   gateway:
     build:
       context: ./server
@@ -101,18 +123,18 @@ services:
     container_name: takeout-gateway
     restart: unless-stopped
     depends_on:
-      app:
-        condition: service_healthy
+      app-balancer:
+        condition: service_started
     environment:
-      # 网关监听容器内 9000；转发目标用服务名 app
-      TAKEOUT_GATEWAY_PORT: "9000"
-      TAKEOUT_APP_URI: http://app:9000
+      # 网关监听容器内 8087；转发目标用服务名 app
+      TAKEOUT_GATEWAY_PORT: "8087"
+      TAKEOUT_APP_URI: http://app-balancer:8087
       TZ: Asia/Shanghai
     ports:
-      # 对外契约端口：与拆分前一致
-      - "${TAKEOUT_APP_PORT:-9000}:9000"
+      # 对外契约端口：统一入口
+      - "${TAKEOUT_APP_PORT:-8087}:8087"
     healthcheck:
-      test: ["CMD", "java", "-cp", "/app", "healthcheck", "127.0.0.1", "9000"]
+      test: ["CMD", "java", "-cp", "/app", "healthcheck", "127.0.0.1", "8087"]
       interval: 10s
       timeout: 8s
       retries: 12
@@ -123,3 +145,4 @@ volumes:
   mysql-data:
   redis-data:
   uploads-data:
+  mysql-backups:

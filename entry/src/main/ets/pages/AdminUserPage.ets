@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /** 平台用户和商户账号管理：查看账号并启用/停用，不修改余额和业务数据。 */
 import { AppMotion } from '../common/theme/AppMotion'
 import { AdminUser, User, UserRole } from '../model/Models'
@@ -78,7 +79,7 @@ export struct AdminUserPage {
       PageHeader({
         title: '用户管理',
         backId: 'admin-user-back',
-        headerBgColor: MODULE_BG.ADMIN,
+        headerBgColor: COLORS.BG_PRIMARY,
         actionColor: MODULE_COLOR.ADMIN,
         actionLabel: this.loading ? '加载中' : '刷新',
         onBack: () => { router.back() },
@@ -86,38 +87,46 @@ export struct AdminUserPage {
       })
 
       Row({ space: SPACING.SM }) {
-        TextInput({ placeholder: '搜索姓名或手机号', text: this.keyword }).layoutWeight(1).height(40)
+        TextInput({ placeholder: '搜索姓名或手机号', text: this.keyword })
+          .attributeModifier(new AppInputStyle()).layoutWeight(1)
           .onChange((value: string) => { this.keyword = value })
-        Button('搜索').height(40).fontSize(FONT_SIZE.SM).onClick(() => { this.refresh() })
+        Button('搜索')
+          .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM).onClick(() => { this.refresh() })
       }.width('100%').padding(SPACING.LG).backgroundColor(MODULE_BG.ADMIN)
 
       Row({ space: SPACING.MD }) {
         Text('角色').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
-        Button('全部').fontSize(FONT_SIZE.SM).backgroundColor(this.roleFilter === -1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
-          .fontColor(this.roleFilter === -1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.roleFilter = -1; this.refresh() })
-        Button('用户').fontSize(FONT_SIZE.SM).backgroundColor(this.roleFilter === 0 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
-          .fontColor(this.roleFilter === 0 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.roleFilter = 0; this.refresh() })
-        Button('商户').fontSize(FONT_SIZE.SM).backgroundColor(this.roleFilter === 1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
-          .fontColor(this.roleFilter === 1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.roleFilter = 1; this.refresh() })
+        Button('全部').height(44)
+          .attributeModifier(new AppButtonStyle()).fontSize(FONT_SIZE.SM).backgroundColor(this.roleFilter === -1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
+          .fontColor(this.roleFilter === -1 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.roleFilter = -1; this.refresh() })
+        Button('用户').height(44)
+          .attributeModifier(new AppButtonStyle()).fontSize(FONT_SIZE.SM).backgroundColor(this.roleFilter === 0 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
+          .fontColor(this.roleFilter === 0 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.roleFilter = 0; this.refresh() })
+        Button('商户').height(44)
+          .attributeModifier(new AppButtonStyle()).fontSize(FONT_SIZE.SM).backgroundColor(this.roleFilter === 1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
+          .fontColor(this.roleFilter === 1 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.roleFilter = 1; this.refresh() })
       }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
 
       Row({ space: SPACING.MD }) {
         Text('状态').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
-        Button('全部').id('admin-user-status-all').fontSize(FONT_SIZE.SM)
+        Button('全部').height(44)
+          .attributeModifier(new AppButtonStyle()).id('admin-user-status-all').fontSize(FONT_SIZE.SM)
           .backgroundColor(this.statusFilter === -1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
-          .fontColor(this.statusFilter === -1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = -1; this.refresh() })
-        Button('已启用').id('admin-user-status-enabled').fontSize(FONT_SIZE.SM)
+          .fontColor(this.statusFilter === -1 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.statusFilter = -1; this.refresh() })
+        Button('已启用').height(44)
+          .attributeModifier(new AppButtonStyle()).id('admin-user-status-enabled').fontSize(FONT_SIZE.SM)
           .backgroundColor(this.statusFilter === 1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
-          .fontColor(this.statusFilter === 1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 1; this.refresh() })
-        Button('已停用').id('admin-user-status-disabled').fontSize(FONT_SIZE.SM)
+          .fontColor(this.statusFilter === 1 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.statusFilter = 1; this.refresh() })
+        Button('已停用').height(44)
+          .attributeModifier(new AppButtonStyle()).id('admin-user-status-disabled').fontSize(FONT_SIZE.SM)
           .backgroundColor(this.statusFilter === 0 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
-          .fontColor(this.statusFilter === 0 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 0; this.refresh() })
+          .fontColor(this.statusFilter === 0 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.statusFilter = 0; this.refresh() })
       }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
 
       // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在筛选行下方
@@ -154,9 +163,11 @@ export struct AdminUserPage {
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
         StatusBadge({ text: item.status === 1 ? '正常' : '已停用', mode: item.status === 1 ? 'success' : 'gray' })
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-      Button(item.status === 1 ? '停用' : '启用').height(30).fontSize(FONT_SIZE.XS)
+      Button(item.status === 1 ? '停用' : '启用')
+        .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
         .fontColor(item.status === 1 ? COLORS.ERROR : COLORS.SUCCESS)
-        .onClick(() => { this.toggleStatus(item) })
-    }.width('100%').padding(SPACING.MD).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
+        .onClick(() => { this.toggleStatus(item) }).backgroundColor(COLORS.ERROR_LIGHT)
+    }
+      .attributeModifier(new AppCardStyle()).width('100%').padding(SPACING.MD)
   }
 }

@@ -1,18 +1,17 @@
 server:
-  # 8080 位于 Windows 当前排除端口范围（8005-8104）内，改用未排除的 9000
-  # 默认值不变：单跑应用（本机开发、既有脚本、compose）仍是 9000。
-  # 与网关同机同跑时把应用挪开（如 TAKEOUT_APP_PORT=9100），由网关占住对外的 9000。
-  port: ${TAKEOUT_APP_PORT:9000}
+  # 应用默认监听 8087；可通过 TAKEOUT_APP_PORT 覆盖。
+  # 与网关同机同跑时把应用挪开（如 TAKEOUT_APP_PORT=9100），由网关占住对外的 8087。
+  port: ${TAKEOUT_APP_PORT:8087}
 
 spring:
   application:
     name: simple-takeout-server
   datasource:
-    # 主机/端口可用环境变量覆盖：本机开发默认 localhost:3306，
+    # 主机/端口可用环境变量覆盖：本机开发默认 localhost:3310，
     # 容器编排（docker-compose）下指向服务名 mysql:3306
-    url: jdbc:mysql://${TAKEOUT_DB_HOST:localhost}:${TAKEOUT_DB_PORT:3306}/takeout?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://${TAKEOUT_DB_HOST:localhost}:${TAKEOUT_DB_PORT:3310}/takeout?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8&allowPublicKeyRetrieval=true
     username: ${TAKEOUT_DB_USERNAME:root}
-    password: ${TAKEOUT_DB_PASSWORD:123456}
+    password: ${TAKEOUT_DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
   sql:
     init:
@@ -29,7 +28,7 @@ spring:
   data:
     redis:
       host: ${TAKEOUT_REDIS_HOST:127.0.0.1}
-      port: ${TAKEOUT_REDIS_PORT:6379}
+      port: ${TAKEOUT_REDIS_PORT:6387}
       password: ${TAKEOUT_REDIS_PASSWORD:}
       database: ${TAKEOUT_REDIS_DATABASE:0}
       # 短超时 + 关闭自动重连：Redis 故障时立刻回源数据库（实测单请求 ~550ms，而非默认重试下的 ~10s）
@@ -48,7 +47,7 @@ spring:
 takeout:
   jwt:
     # HS256 密钥（生产环境请通过环境变量注入）
-    secret: ${TAKEOUT_JWT_SECRET:simple-takeout-jwt-secret-key-please-change-2026}
+    secret: ${TAKEOUT_JWT_SECRET}
     expire-hours: 72
   security:
     rate-limit:

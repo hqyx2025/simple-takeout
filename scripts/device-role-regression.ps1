@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Device regression driver for the rider (骑手端) and admin (管理端) roles.
 
@@ -21,7 +21,7 @@ param(
   [long]$StoreId = 1,
   [long]$GoodsId = 7,
   [long]$AddressId = 1,
-  [string]$ApiBase = 'http://127.0.0.1:9000',
+  [string]$ApiBase = 'http://127.0.0.1:8087',
   [string]$Bundle = 'com.example.jiandanwaimai',
   [string]$Ability = 'EntryAbility'
 )

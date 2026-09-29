@@ -1,3 +1,4 @@
+import { PageHeader } from '../components/PageHeader'
 /** 简单外卖隐私政策页面 */
 import { AppMotion } from '../common/theme/AppMotion'
 import { routerCompat as router } from '../common/UiNavigation'
@@ -23,23 +24,7 @@ export struct PrivacyPolicyPage {
 
   build() {
     Column() {
-      Row() {
-        Text('‹ 返回')
-          .fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.TEXT_PRIMARY)
-          .onClick(() => { router.back() })
-        Text('隐私政策')
-          .fontSize(FONT_SIZE.XL)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.TEXT_PRIMARY)
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-        Text(' ').fontSize(FONT_SIZE.MD).width(28)
-      }
-      .width('100%')
-      .height(56)
-      .padding({ left: SPACING.LG, right: SPACING.LG, top: 26 })
-      .backgroundColor(COLORS.BG_WHITE)
+      PageHeader({ title: '隐私政策', onBack: () => { router.back() } })
 
       Scroll() {
         Column({ space: SPACING.MD }) {
@@ -71,7 +56,7 @@ export struct PrivacyPolicyPage {
             .fontSize(FONT_SIZE.LG)
             .fontWeight(FontWeight.Bold)
             .fontColor(COLORS.TEXT_PRIMARY)
-          Text('定位权限仅在您使用定位功能时申请和使用。您可以在系统设置中随时关闭权限；关闭后仍可手动选择收货地址。网络权限用于访问店铺、商品和订单服务。')
+          Text('定位权限仅在您使用定位功能时申请和使用。您可以在系统设置中随时关闭权限；关闭后仍可手动选择收货地址。网络权限用于访问店铺、商品和订单服务。交互手感知使用系统手势感知能力，仅在导航可见且应用位于前台时，根据正在操作页面的左手或右手调整导航位置。交互手数据不保存、不上传；也可在导航位置菜单中切换为手动靠左、靠右或居中。')
             .fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.TEXT_SECONDARY)
           Text('4. 信息保护与删除')

@@ -1,3 +1,5 @@
+import { PageHeader } from '../components/PageHeader'
+import { AppCardStyle } from '../common/theme/AppTheme'
 /**
  * 商户收入统计页
  * 展示今日 / 本周 / 累计收入与订单数据，以及账户余额
@@ -101,7 +103,7 @@ export struct MerchantStatsPage {
   build() {
     Column() {
       // 顶部导航栏
-      this.NavBar()
+      PageHeader({ title: '收入统计', onBack: () => { router.back() } })
 
       // 内容区
       Scroll() {
@@ -142,30 +144,6 @@ export struct MerchantStatsPage {
   }
 
   @Builder
-  NavBar() {
-    Row() {
-      Text('‹ 返回')
-        .fontSize(FONT_SIZE.MD)
-        .fontColor(MODULE_COLOR.MERCHANT)
-        .onClick(() => { router.back() })
-      Text('收入统计')
-        .fontSize(FONT_SIZE.XL)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(MODULE_COLOR.MERCHANT)
-        .layoutWeight(1)
-        .textAlign(TextAlign.Center)
-      Text(' ')
-        .fontSize(FONT_SIZE.BIG_TITLE)
-        .width(28)
-    }
-    .width('100%')
-    .height(56)
-    .padding({ left: SPACING.LG, right: SPACING.LG, top: 26 })
-    .backgroundColor(MODULE_BG.MERCHANT)
-    .alignItems(VerticalAlign.Center)
-  }
-
-  @Builder
   ErrorBanner() {
     Row() {
       Text('数据加载失败，以下数据可能不准确')
@@ -189,13 +167,13 @@ export struct MerchantStatsPage {
     Column({ space: SPACING.MD }) {
       Text('今日收入')
         .fontSize(FONT_SIZE.MD)
-        .fontColor(COLORS.TEXT_WHITE)
+        .fontColor(COLORS.ON_PRIMARY)
         .width('100%')
 
       Text(formatPrice(this.todayStats.todayRevenue))
         .fontSize(FONT_SIZE.BIG_TITLE)
         .fontWeight(FontWeight.Bold)
-        .fontColor(COLORS.TEXT_WHITE)
+        .fontColor(COLORS.ON_PRIMARY)
         .width('100%')
         .id('stats-today-revenue')
 
@@ -204,11 +182,11 @@ export struct MerchantStatsPage {
           Text(`${this.todayStats.todayOrders}`)
             .fontSize(FONT_SIZE.XL)
             .fontWeight(FontWeight.Bold)
-            .fontColor(COLORS.TEXT_WHITE)
+            .fontColor(COLORS.ON_PRIMARY)
             .id('stats-today-orders')
           Text('今日订单')
             .fontSize(FONT_SIZE.SM)
-            .fontColor(COLORS.TEXT_WHITE)
+            .fontColor(COLORS.ON_PRIMARY)
         }
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start)
@@ -217,11 +195,11 @@ export struct MerchantStatsPage {
           Text(`${this.todayStats.completedOrders}`)
             .fontSize(FONT_SIZE.XL)
             .fontWeight(FontWeight.Bold)
-            .fontColor(COLORS.TEXT_WHITE)
+            .fontColor(COLORS.ON_PRIMARY)
             .id('stats-completed-orders')
           Text('已完成订单')
             .fontSize(FONT_SIZE.SM)
-            .fontColor(COLORS.TEXT_WHITE)
+            .fontColor(COLORS.ON_PRIMARY)
         }
         .layoutWeight(1)
         .alignItems(HorizontalAlign.End)
@@ -239,11 +217,9 @@ export struct MerchantStatsPage {
   WeekChartCard() {
     Column({ space: SPACING.MD }) {
       Row() {
-        Text('📈')
-          .fontSize(FONT_SIZE.MD)
+        Image($r('app.media.profile_chart')).objectFit(ImageFit.Contain)
           .width(28)
           .height(28)
-          .textAlign(TextAlign.Center)
           .backgroundColor(accentBg(0))
           .borderRadius(BORDER_RADIUS.SM)
         Text('近7天收入趋势')
@@ -263,18 +239,16 @@ export struct MerchantStatsPage {
         .height(190)
         .onReady(() => { this.drawWeekRevenueChart() })
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
   }
 
   @Builder
   StatusChartCard() {
     Column({ space: SPACING.MD }) {
       Row() {
-        SymbolGlyph($r('sys.symbol.square_grid_2x2'))
-          .fontSize(FONT_SIZE.MD)
+        Image($r('app.media.ui_grid')).objectFit(ImageFit.Contain)
           .width(28)
           .height(28)
           .backgroundColor(accentBg(1))
@@ -292,10 +266,9 @@ export struct MerchantStatsPage {
         .height(180)
         .onReady(() => { this.drawStatusChart() })
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
   }
 
   // 绘制近7天收入趋势折线图
@@ -430,11 +403,9 @@ export struct MerchantStatsPage {
   WeekCard() {
     Column({ space: SPACING.MD }) {
       Row() {
-        Text('🗓️')
-          .fontSize(FONT_SIZE.MD)
+        Image($r('app.media.ui_calendar')).objectFit(ImageFit.Contain)
           .width(28)
           .height(28)
-          .textAlign(TextAlign.Center)
           .backgroundColor(accentBg(2))
           .borderRadius(BORDER_RADIUS.SM)
         Text('本周数据')
@@ -484,18 +455,16 @@ export struct MerchantStatsPage {
       }
       .width('100%')
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
   }
 
   @Builder
   CumulativeCard() {
     Column({ space: SPACING.MD }) {
       Row() {
-        SymbolGlyph($r('sys.symbol.star_trophy'))
-          .fontSize(FONT_SIZE.MD)
+        Image($r('app.media.home_trophy')).objectFit(ImageFit.Contain)
           .width(28)
           .height(28)
           .backgroundColor(accentBg(3))
@@ -535,18 +504,16 @@ export struct MerchantStatsPage {
       }
       .width('100%')
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
   }
 
   @Builder
   InfoCard() {
     Column({ space: SPACING.SM }) {
       Row() {
-        SymbolGlyph($r('sys.symbol.wallet'))
-          .fontSize(FONT_SIZE.MD)
+        Image($r('app.media.profile_wallet')).objectFit(ImageFit.Contain)
           .width(28)
           .height(28)
           .backgroundColor(accentBg(4))
@@ -568,16 +535,15 @@ export struct MerchantStatsPage {
         .margin({ top: SPACING.XS, bottom: SPACING.XS })
 
       Row() {
-        SymbolGlyph($r('sys.symbol.lightbulb')).fontSize(FONT_SIZE.SM)
+        Image($r('app.media.ui_bulb')).width(FONT_SIZE.SM).height(FONT_SIZE.SM).objectFit(ImageFit.Contain)
         Text(' 收入统计仅包含已结算订单（用户确认收货后到账）')
           .fontSize(FONT_SIZE.SM)
           .fontColor(COLORS.TEXT_HINT)
       }
       .width('100%')
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
   }
 }

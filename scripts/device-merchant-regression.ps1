@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Device regression driver for the merchant (商户端) flow: fixture a paid order, drive 接单→出餐(ready)
   through the app UI, then cross-check the order state (制作中/骑手池) and the stats numbers on the host.
@@ -27,7 +27,7 @@ param(
   [long]$GoodsId = 7,
   [long]$AddressId = 1,
   [string]$TestClass = 'MerchantFlow',
-  [string]$ApiBase = 'http://127.0.0.1:9000',
+  [string]$ApiBase = 'http://127.0.0.1:8087',
   [string]$Bundle = 'com.example.jiandanwaimai',
   [string]$Ability = 'EntryAbility'
 )

@@ -108,12 +108,12 @@ class GatewayXForwardedConfigTest {
     }
 
     @Test
-    void externalPortContractUnchanged() throws Exception {
+    void externalPortUses8087() throws Exception {
         Map<String, Object> root = loadGatewayConfig();
 
-        // 对外契约：网关监听 9000（与拆分前一致），前端 HAP 零改动的前提。
+        // 网关入口与前端配置保持一致，应用同机运行时另设 9100。
         Object port = dig(root, "server", "port");
         String portValue = String.valueOf(port);
-        assertTrue(portValue.contains("9000"), "网关对外端口必须是 9000：实际=" + portValue);
+        assertTrue(portValue.contains("8087"), "网关对外端口必须是 8087：实际=" + portValue);
     }
 }

@@ -1,3 +1,5 @@
+import { AppButtonStyle, AppCardStyle, AppTheme } from '../common/theme/AppTheme'
+import { SegmentButton, SegmentButtonOptions } from '@ohos.arkui.advanced.SegmentButton'
 /**
  * 优惠券中心页面
  * 支持领取优惠券、查看我的优惠券（未使用/已使用）
@@ -9,18 +11,6 @@ import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR } from '../comm
 import { logInfo } from '../service/AppLogger'
 import { PageHeader } from '../components/PageHeader'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
-
-// Tab项 - 使用class避免无类型对象字面量
-class CouponTab {
-  title: string = ''
-  index: number = 0
-  static create(title: string, index: number): CouponTab {
-    let tab = new CouponTab()
-    tab.title = title
-    tab.index = index
-    return tab
-  }
-}
 
 @Entry
 @Component
@@ -41,9 +31,17 @@ export struct CouponCenterPage {
   }
 
   @StorageLink('isLoggedIn') loggedIn: boolean = false
-  @StorageLink('couponList') couponList: Coupon[] = []
+  @StorageLink('couponList') @Watch('applyCouponFilter') couponList: Coupon[] = []
   @StorageLink('claimableCoupons') claimableCoupons: Coupon[] = []
   @State currentTab: number = 0  // 0=可领取, 1=我的优惠券, 2=已使用
+  @State @Watch('onTabSelection') selectedTabs: number[] = [0]
+  @State tabOptions: SegmentButtonOptions = SegmentButtonOptions.tab({
+    buttons: [{ text: '可领取' }, { text: '我的优惠券' }, { text: '已使用' }],
+    fontColor: AppTheme.MUTED, selectedFontColor: AppTheme.ACCENT,
+    backgroundColor: AppTheme.INPUT, selectedBackgroundColor: AppTheme.CARD,
+    fontSize: 14, selectedFontSize: 14,
+    buttonPadding: { top: 12, bottom: 12, left: 8, right: 8 }
+  })
   // 渲染路径禁止调用 getter（ArkUI 求值时序问题）：未使用/已使用在数据变化时显式计算
   @State unusedCoupons: Coupon[] = []
   @State usedCoupons: Coupon[] = []
@@ -66,42 +64,29 @@ export struct CouponCenterPage {
     this.usedCoupons = list.filter((c: Coupon) => c.used)
   }
 
+  onTabSelection(): void {
+    this.currentTab = this.selectedTabs[0] ?? 0
+  }
+
   build() {
     Column() {
       // 导航栏
       PageHeader({ title: '优惠券中心', topPadding: 40, onBack: () => { this.onBack() } })
 
-      // Tab切换
-      Row({ space: 0 }) {
-        ForEach([
-          CouponTab.create('可领取', 0),
-          CouponTab.create('我的优惠券', 1),
-          CouponTab.create('已使用', 2)
-        ], (tab: CouponTab) => {
-          Text(tab.title)
-            .fontSize(FONT_SIZE.MD)
-            .fontColor(this.currentTab === tab.index ? COLORS.PRIMARY : COLORS.TEXT_SECONDARY)
-            .fontWeight(this.currentTab === tab.index ? FontWeight.Bold : FontWeight.Normal)
-            .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
-            .onClick(() => { this.currentTab = tab.index })
-        }, (tab: CouponTab) => tab.index.toString())
-      }
-      .width('100%')
-      .justifyContent(FlexAlign.SpaceEvenly)
-      .padding({ top: SPACING.SM, bottom: SPACING.SM })
-      .backgroundColor(COLORS.BG_WHITE)
+      SegmentButton({ options: this.tabOptions, selectedIndexes: $selectedTabs })
+        .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
 
       // 内容区（用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中）
       List({ space: SPACING.MD }) {
         if (!this.loggedIn) {
           ListItem() {
-            this.EmptyView($r('sys.symbol.lock'), '暂无登录', '请登录后查看优惠券')
+            this.EmptyView($r('app.media.login_lock'), '暂无登录', '请登录后查看优惠券')
           }
         } else if (this.currentTab === 0) {
           // 可领取优惠券
           if (this.claimableCoupons.length === 0) {
             ListItem() {
-              this.EmptyView($r('sys.symbol.gift'), '暂无可领取的优惠券', '')
+              this.EmptyView($r('app.media.ui_gift'), '暂无可领取的优惠券', '')
             }
           }
           ForEach(this.claimableCoupons, (coupon: Coupon) => {
@@ -113,7 +98,7 @@ export struct CouponCenterPage {
           // 我的优惠券（未使用的）
           if (this.unusedCoupons.length === 0) {
             ListItem() {
-              this.EmptyView($r('sys.symbol.ticket_fill'), '暂无可用优惠券', '去"可领取"领取优惠券吧~')
+              this.EmptyView($r('app.media.home_coupon'), '暂无可用优惠券', '去"可领取"领取优惠券吧~')
             }
           }
           ForEach(this.unusedCoupons, (coupon: Coupon) => {
@@ -125,7 +110,7 @@ export struct CouponCenterPage {
           // 已使用
           if (this.usedCoupons.length === 0) {
             ListItem() {
-              this.EmptyView($r('sys.symbol.list_bullet_square'), '暂无已使用优惠券', '')
+              this.EmptyView($r('app.media.profile_order'), '暂无已使用优惠券', '')
             }
           }
           ForEach(this.usedCoupons, (coupon: Coupon) => {
@@ -138,6 +123,7 @@ export struct CouponCenterPage {
       .width('100%')
       .layoutWeight(1)
       .scrollBar(BarState.Off)
+      .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
       .backgroundColor(COLORS.BG_PRIMARY)
       .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.LG })
     }
@@ -150,8 +136,7 @@ export struct CouponCenterPage {
   @Builder
   EmptyView(iconGlyph: Resource, title: string, desc: string) {
     Column({ space: SPACING.SM }) {
-      SymbolGlyph(iconGlyph)
-        .fontSize(60)
+      Image(iconGlyph).width(60).height(60).objectFit(ImageFit.Contain)
         .margin({ top: 80 })
       Text(title)
         .fontSize(FONT_SIZE.LG)
@@ -177,10 +162,10 @@ export struct CouponCenterPage {
         Text(`¥${coupon.amount}`)
           .fontSize(FONT_SIZE.BIG_TITLE)
           .fontWeight(FontWeight.Bold)
-          .fontColor(this.currentTab === 2 ? COLORS.TEXT_HINT : COLORS.TEXT_WHITE)
+          .fontColor(this.currentTab === 2 ? COLORS.TEXT_HINT : COLORS.ON_PRIMARY)
         Text(`满${coupon.minOrder}元可用`)
           .fontSize(FONT_SIZE.XS)
-          .fontColor(this.currentTab === 2 ? COLORS.TEXT_HINT : COLORS.TEXT_WHITE)
+          .fontColor(this.currentTab === 2 ? COLORS.TEXT_HINT : COLORS.ON_PRIMARY)
       }
       .width(100)
       .height(80)
@@ -209,22 +194,19 @@ export struct CouponCenterPage {
       // 按钮：领取/已领取/使用/已使用
       if (this.currentTab === 0) {
         Button(this.isClaimed(coupon) ? '已领取' : '领取')
-          .height(32)
+          .attributeModifier(new AppButtonStyle()).height(40)
           .fontSize(FONT_SIZE.SM)
-          .fontColor(this.isClaimed(coupon) ? COLORS.TEXT_HINT : COLORS.TEXT_WHITE)
+          .fontColor(this.isClaimed(coupon) ? COLORS.TEXT_HINT : COLORS.ON_PRIMARY)
           .backgroundColor(this.isClaimed(coupon) ? COLORS.DIVIDER : MODULE_COLOR.COUPON)
           .borderRadius(BORDER_RADIUS.ROUND)
-          .type(ButtonType.Capsule)
           .margin({ right: SPACING.MD })
           .onClick(() => { this.doClaim(coupon) })
       } else if (this.currentTab === 1) {
         Button('使用')
-          .height(32)
-          .fontSize(FONT_SIZE.SM)
-          .fontColor(COLORS.TEXT_WHITE)
+          .attributeModifier(new AppButtonStyle()).height(40)
+          .fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)
           .backgroundColor(COLORS.PRIMARY)
           .borderRadius(BORDER_RADIUS.ROUND)
-          .type(ButtonType.Capsule)
           .margin({ right: SPACING.MD })
           .onClick(() => { this.onSelectCoupon(coupon) })
       } else {
@@ -234,10 +216,9 @@ export struct CouponCenterPage {
           .margin({ right: SPACING.MD })
       }
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .height(80)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
   }
 
   // 判断是否已领取

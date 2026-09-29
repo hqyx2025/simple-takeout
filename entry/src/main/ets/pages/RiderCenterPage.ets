@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /**
  * 骑手中心（四端改造）：上线/下线、配送统计、入口
  */
@@ -192,11 +193,11 @@ export struct RiderCenterPage {
   build() {
     Stack() {
     Column() {
-      PageHeader({ title: '骑手中心', showBack: false, headerBgColor: MODULE_BG.RIDER, titleColor: MODULE_COLOR.RIDER })
+      PageHeader({ title: '骑手中心', showBack: false, headerBgColor: COLORS.BG_PRIMARY, titleColor: COLORS.TEXT_PRIMARY })
 
       if (!this.loggedIn) {
         Column() {
-          SymbolGlyph($r('sys.symbol.lock')).fontSize(60).margin({ top: 80 })
+          Image($r('app.media.login_lock')).width(60).height(60).objectFit(ImageFit.Contain).margin({ top: 80 })
           Text('请使用骑手账号登录').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
         }
         .layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
@@ -207,7 +208,7 @@ export struct RiderCenterPage {
         .layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
       } else if (this.rider === null) {
         Column() {
-          SymbolGlyph($r('sys.symbol.exclamationmark_circle')).fontSize(60).margin({ top: 80 })
+          Image($r('app.media.ui_alert')).width(60).height(60).objectFit(ImageFit.Contain).margin({ top: 80 })
           Text('骑手档案加载失败').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
         }
         .layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
@@ -239,14 +240,15 @@ export struct RiderCenterPage {
                 .id('rider-online-status')
               // 资料卡内改密入口：与用户端的"我的 → 修改密码"对等
               Row({ space: SPACING.XS }) {
-                SymbolGlyph($r('sys.symbol.key')).fontSize(FONT_SIZE.SM)
+                Image($r('app.media.profile_key')).width(FONT_SIZE.SM).height(FONT_SIZE.SM).objectFit(ImageFit.Contain)
                 Text('修改密码').fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
               }
               .margin({ top: SPACING.SM })
               .id('rider-change-pwd')
               .onClick(() => { this.showChangePwd = true })
             }
-            .width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+              .attributeModifier(new AppCardStyle())
+            .width('100%').padding(SPACING.LG)
           }
 
           // 统计
@@ -274,13 +276,14 @@ export struct RiderCenterPage {
                 .fontColor(MODULE_COLOR.RIDER).width('100%')
               Row({ space: SPACING.MD }) {
                 TextInput({ placeholder: `配送半径（公里），如：${RIDER_RADIUS_DEFAULT_KM}`, text: this.radiusInput })
-                  .layoutWeight(1).height(44).type(InputType.Number)
+                  .attributeModifier(new AppInputStyle())
+                  .layoutWeight(1).type(InputType.Number)
                   .id('rider-radius-input')
                   .onChange((v: string) => { this.radiusInput = v })
                 Button(this.savingRadius ? '保存中...' : '保存半径')
-                  .height(44).fontSize(FONT_SIZE.MD)
-                  .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.RIDER)
-                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                  .attributeModifier(new AppButtonStyle())
+                  .height(44).fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.RIDER)
+                  .borderRadius(BORDER_RADIUS.ROUND)
                   .id('rider-radius-save')
                   .onClick(() => { this.onSaveRadius() })
               }
@@ -299,29 +302,32 @@ export struct RiderCenterPage {
                 .width('100%').id('rider-location-value')
               Row({ space: SPACING.MD }) {
                 Button('地图选点')
+                  .attributeModifier(new AppButtonStyle())
                   .layoutWeight(1).height(40).fontSize(FONT_SIZE.SM)
                   .fontColor(MODULE_COLOR.RIDER).backgroundColor(MODULE_BG.RIDER)
-                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                  .borderRadius(BORDER_RADIUS.ROUND)
                   .id('rider-location-map')
                   .onClick(() => { this.openRiderLocationPicker() })
                 Button(this.updatingLocation ? '定位中...' : '使用当前定位')
+                  .attributeModifier(new AppButtonStyle())
                   .layoutWeight(1).height(40).fontSize(FONT_SIZE.SM)
                   .fontColor(MODULE_COLOR.RIDER).backgroundColor(MODULE_BG.RIDER)
-                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                  .borderRadius(BORDER_RADIUS.ROUND)
                   .id('rider-location-gps')
                   .onClick(() => { this.useCurrentLocation() })
               }
               .width('100%')
             }
-            .width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+              .attributeModifier(new AppCardStyle())
+            .width('100%').padding(SPACING.LG)
           }
 
           ListItem() {
             Column() {
               Button('抢单大厅')
-                .width('100%').height(48).fontSize(FONT_SIZE.LG)
-                .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.RIDER)
-                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                .attributeModifier(new AppButtonStyle())
+                .width('100%').height(48).fontSize(FONT_SIZE.LG).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.RIDER)
+                .borderRadius(BORDER_RADIUS.ROUND)
                 .margin({ top: SPACING.MD })
                 .id('rider-pool-entry')
                 .onClick(() => {
@@ -334,17 +340,20 @@ export struct RiderCenterPage {
                 })
 
               Button('我的配送单')
+                .attributeModifier(new AppButtonStyle())
                 .width('100%').height(48).fontSize(FONT_SIZE.LG)
                 .fontColor(MODULE_COLOR.RIDER).backgroundColor(MODULE_BG.RIDER)
-                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                .borderRadius(BORDER_RADIUS.ROUND)
+                .margin({ top: SPACING.SM })
                 .id('rider-orders-entry')
                 .onClick(() => { router.pushUrl({ url: 'pages/RiderOrdersPage' }) })
 
               // 退出登录挪到页面底部并二次确认：不再和返回键抢左上角
               Button('退出登录')
+                .attributeModifier(new AppButtonStyle())
                 .width('100%').height(44).fontSize(FONT_SIZE.MD)
                 .fontColor(COLORS.ERROR).backgroundColor(COLORS.ERROR_LIGHT)
-                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                .borderRadius(BORDER_RADIUS.ROUND)
                 .margin({ top: SPACING.SM })
                 .id('rider-logout')
                 .onClick(() => { this.showLogoutConfirm = true })

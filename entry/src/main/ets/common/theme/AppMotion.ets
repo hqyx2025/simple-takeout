@@ -4,6 +4,7 @@ import { accessibility } from '@kit.AccessibilityKit'
 export class AppMotion {
   static readonly PRESS: number = 100
   static readonly TAB: number = 220
+  static readonly CART_ADD: number = 480
   static readonly ENTER: number = 240
   static readonly EXIT: number = 180
   static readonly DIALOG_ENTER: number = 200

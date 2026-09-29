@@ -7,6 +7,7 @@ import { apiLogin, apiRegister, updateUserProfileApi, fetchCurrentUserApi, recha
 import { getAuthToken, setAuthToken, getLastApiErrorMessage } from './HttpClient'
 import { logInfo, logWarn, logError } from './AppLogger'
 import { GeoPosition, getCurrentPosition, requestLocationPermission, reverseGeocodePosition } from './LocationService'
+import { deliveryCustomerId, deliveryRevision, syncDeliveryForms, clearDeliveryForms } from './DeliveryFormSync'
 import { common } from '@kit.AbilityKit'
 import { API_CONFIG } from '../common/Constants'
 
@@ -14,9 +15,13 @@ let categoriesSyncInFlight: Promise<void> | null = null
 let storesSyncInFlight: Promise<void> | null = null
 // 页面进入、Tab 切换和手动刷新可能同时触发同步；只允许最后一次请求覆盖本地状态。
 let currentUserSyncVersion: number = 0
+let addressSyncVersion: number = 0
+let orderSyncVersion: number = 0
 
 // 用户对象用于资料展示，余额单独维护为可观察字段，避免页面只保留登录时的余额副本。
 function setStoredUser(user: User): void {
+  const previous: User | undefined = AppStorage.get<User>('user')
+  if (previous?.id !== user.id || previous?.role !== user.role) { clearDeliveryForms() }
   const normalizedBalance: number = Number.isFinite(user.balance) ? user.balance : 0
   AppStorage.setOrCreate<User>('user', user)
   AppStorage.setOrCreate<number>('userBalance', normalizedBalance)
@@ -97,6 +102,9 @@ export function logout(): void {
   AppStorage.setOrCreate<CartItem[]>('cartItems', [])
   AppStorage.setOrCreate<Address[]>('addressList', [])
   AppStorage.setOrCreate<Address | null>('currentAddress', null)
+  AppStorage.setOrCreate<number>('pendingAddressId', 0)
+  AppStorage.setOrCreate<string>('addressSyncState', 'idle')
+  addressSyncVersion += 1
   AppStorage.setOrCreate<GeoPosition | null>('lastLocationPosition', null)
   // 退出登录同步关掉位置上报，否则定时器里的接口调用会触发 401 → 不清登录态的死循环
   stopRiderLocationTimer()
@@ -600,12 +608,18 @@ export async function syncUserOrdersFromServer(): Promise<void> {
     logInfo('Api', '非用户角色，跳过用户订单同步')
     return
   }
+  const owner: number = deliveryCustomerId()
+  if (owner <= 0) { clearDeliveryForms(); return }
+  const epoch: number = deliveryRevision()
+  const requestVersion: number = ++orderSyncVersion
   const orders: Order[] | null = await fetchUserOrdersApi()
+  if (owner !== deliveryCustomerId() || epoch !== deliveryRevision() || requestVersion !== orderSyncVersion) { return }
   if (orders === null) {
     logWarn('Api', '同步用户订单失败，保留当前订单列表')
     return
   }
 
+  syncDeliveryForms(orders, owner, epoch)
   // 后端返回空数组也必须覆盖本地数据，避免启动时的模拟订单残留在真实订单页面。
   AppStorage.setOrCreate<Order[]>('orderList', orders)
   const user: User | undefined = AppStorage.get<User>('user')
@@ -1059,21 +1073,34 @@ export async function syncAddressesRemote(): Promise<boolean> {
     logWarn('Api', '同步地址跳过：用户未登录')
     return false
   }
-  const remoteAddresses: Address[] = await fetchAddressesApi()
-  // fetchAddressesApi 在认证失效时会触发 HttpClient 清理登录态，不能用空数组覆盖本地缓存。
-  if (!isLoggedIn()) {
-    logWarn('Api', '同步地址失败：登录已失效，保留本地地址')
+  const requestVersion: number = ++addressSyncVersion
+  const token: string = getAuthToken()
+  const userId: number = AppStorage.get<User>('user')?.id ?? 0
+  AppStorage.setOrCreate<string>('addressSyncState', 'loading')
+  const remoteAddresses: Address[] | null = await fetchAddressesApi()
+  if (requestVersion !== addressSyncVersion || !isLoggedIn() || token !== getAuthToken()
+    || userId !== (AppStorage.get<User>('user')?.id ?? 0)) {
+    return false
+  }
+  const currentAddress: Address | null = AppStorage.get<Address>('currentAddress') ?? null
+  const selectedId: number = currentAddress?.id ?? AppStorage.get<number>('pendingAddressId') ?? 0
+  if (remoteAddresses === null) {
+    AppStorage.setOrCreate<number>('pendingAddressId', selectedId)
+    AppStorage.setOrCreate<Address[]>('addressList', [])
+    AppStorage.setOrCreate<Address | null>('currentAddress', null)
+    AppStorage.setOrCreate<string>('addressSyncState', 'failed')
     return false
   }
   const addresses: Address[] = deduplicateAddresses(remoteAddresses)
     .filter((address: Address) => address.name !== '当前位置')
   AppStorage.setOrCreate<Address[]>('addressList', addresses)
-  const currentAddress: Address | null = AppStorage.get<Address>('currentAddress') ?? null
-  const selectedAddress: Address | undefined = currentAddress !== null && currentAddress.id > 0
-    ? addresses.find((address: Address) => address.id === currentAddress.id)
+  const selectedAddress: Address | undefined = selectedId > 0
+    ? addresses.find((address: Address) => address.id === selectedId)
     : undefined
   const nextAddress: Address | undefined = selectedAddress ?? addresses.find((address: Address) => address.isDefault) ?? addresses[0]
   AppStorage.setOrCreate<Address | null>('currentAddress', nextAddress === undefined ? null : nextAddress)
+  AppStorage.setOrCreate<number>('pendingAddressId', 0)
+  AppStorage.setOrCreate<string>('addressSyncState', 'ready')
   await saveAllData()
   logInfo('Api', `同步地址 ${remoteAddresses.length} 条，去重后 ${addresses.length} 条`)
   return true

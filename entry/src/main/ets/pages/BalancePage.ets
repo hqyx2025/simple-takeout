@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /**
  * 我的钱包页（余额 + 已绑定银行卡）。
  *
@@ -108,7 +109,7 @@ export struct BalancePage {
         PageHeader({ title: '我的钱包', backId: 'balance-back', onBack: () => { router.back() } })
 
         if (!this.loggedIn) {
-          EmptyState({ iconGlyph: $r('sys.symbol.lock'), title: '暂无登录', description: '请登录后查看钱包' })
+          EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', description: '请登录后查看钱包' })
         } else {
           Scroll() {
             Column({ space: SPACING.MD }) {
@@ -142,26 +143,25 @@ export struct BalancePage {
     Column({ space: SPACING.SM }) {
       Text('账户余额')
         .fontSize(FONT_SIZE.SM)
-        .fontColor(COLORS.TEXT_WHITE)
+        .fontColor(COLORS.ON_PRIMARY)
         .width('100%')
       Text(`¥${this.balance.toFixed(2)}`)
         .id('balance-amount')
         .fontSize(FONT_SIZE.BIG_TITLE)
         .fontWeight(FontWeight.Bold)
-        .fontColor(COLORS.TEXT_WHITE)
+        .fontColor(COLORS.ON_PRIMARY)
         .width('100%')
       Row() {
         Text('余额为账户可用金额，下单支付时直接抵扣')
           .fontSize(FONT_SIZE.SM)
-          .fontColor(COLORS.TEXT_WHITE)
+          .fontColor(COLORS.ON_PRIMARY)
           .layoutWeight(1)
         Button('立即充值')
-          .height(34)
+          .attributeModifier(new AppButtonStyle()).height(40)
           .fontSize(FONT_SIZE.SM)
           .fontColor(COLORS.PRIMARY)
           .backgroundColor(COLORS.BG_WHITE)
           .borderRadius(BORDER_RADIUS.ROUND)
-          .type(ButtonType.Capsule)
           .onClick(() => { this.openRecharge() })
       }
       .width('100%')
@@ -221,10 +221,9 @@ export struct BalancePage {
         .fontColor(COLORS.TEXT_HINT)
         .width('100%')
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
   }
 
   @Builder
@@ -234,7 +233,7 @@ export struct BalancePage {
       Text(card.bankName.length > 0 ? card.bankName.charAt(0) : '银')
         .fontSize(FONT_SIZE.XL)
         .fontWeight(FontWeight.Bold)
-        .fontColor(COLORS.TEXT_WHITE)
+        .fontColor(COLORS.ON_PRIMARY)
         .backgroundColor(COLORS.PRIMARY)
         .width(44)
         .height(44)
@@ -289,24 +288,25 @@ export struct BalancePage {
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
           .width('100%')
         TextInput({ placeholder: '请输入金额，如：100', text: this.rechargeAmount })
-          .width('100%').height(44).type(InputType.Number)
-          .fontSize(FONT_SIZE.MD).backgroundColor(COLORS.BG_PRIMARY)
-          .borderRadius(BORDER_RADIUS.SM)
+          .attributeModifier(new AppInputStyle())
+          .width('100%').type(InputType.Number)
           .onChange((value: string) => { this.rechargeAmount = value })
         Row({ space: SPACING.SM }) {
           Button('取消')
+            .attributeModifier(new AppButtonStyle())
             .layoutWeight(1).height(42)
             .backgroundColor(COLORS.BG_PRIMARY).fontColor(COLORS.TEXT_SECONDARY)
             .onClick(() => { this.showRechargeDialog = false })
           Button(this.recharging ? '充值中…' : '确认充值')
+            .attributeModifier(new AppButtonStyle())
             .layoutWeight(1).height(42)
-            .backgroundColor(COLORS.PRIMARY).fontColor(COLORS.TEXT_WHITE)
+            .backgroundColor(COLORS.PRIMARY).fontColor(COLORS.ON_PRIMARY)
             .enabled(!this.recharging)
             .onClick(() => { this.submitRecharge() })
         }.width('100%')
       }
-      .width('86%').padding(SPACING.XL)
-      .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+        .attributeModifier(new AppCardStyle())
+      .width('86%').constraintSize({ maxWidth: 460 }).padding(SPACING.XL)
     }
     .width('100%').height('100%')
     .backgroundColor(COLORS.OVERLAY)

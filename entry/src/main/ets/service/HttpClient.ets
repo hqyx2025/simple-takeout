@@ -1,9 +1,10 @@
 /**
  * 统一网络请求层
- * 基于 @ohos/axios 封装，对接真实后端 API（Spring Boot + MySQL）
+ * 基于系统 RCP 共享会话封装，对接真实后端 API（Spring Boot + MySQL）
  * 所有业务数据经由本层获取，认证使用 JWT Bearer Token
  */
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError, AxiosHeaders, AxiosRequestHeaders } from '@ohos/axios'
+import { clearDeliveryForms } from './DeliveryFormSync'
+import { rcp } from '@kit.RemoteCommunicationKit'
 import http from '@ohos.net.http'
 import fileIo from '@ohos.file.fs'
 import { API_CONFIG } from '../common/Constants'
@@ -14,8 +15,11 @@ import { promptCompat as promptAction } from '../common/UiNavigation'
 // JWT Token（登录成功后由 ApiService 设置，请求时自动注入）
 let authToken: string = ''
 let lastApiErrorMessage: string = ''
+let lastToastMessage: string = ''
+let lastToastAt: number = 0
 
 export function setAuthToken(token: string): void {
+  if (authToken !== token || token === '') { clearDeliveryForms() }
   authToken = token
 }
 
@@ -32,33 +36,63 @@ function notifyApiError(message: string): void {
   if (text === '') {
     return
   }
+  const now: number = Date.now()
+  if (text === lastToastMessage && now - lastToastAt < 3000) {
+    return
+  }
+  lastToastMessage = text
+  lastToastAt = now
   promptAction.showToast({ message: text, duration: 3000 })
 }
 
-// 创建axios实例
-let httpClient: AxiosInstance | null = null
+// 预建链与业务请求必须共享同一会话，否则无法复用已建立的连接。
+let httpClient: rcp.Session | null = null
+let coldConnectionStarted: boolean = false
 
-// 构造请求头（自动注入 JWT）
-function buildHeaders(): AxiosRequestHeaders {
-  const headers: AxiosRequestHeaders = new AxiosHeaders() as AxiosRequestHeaders
-  headers.set('Content-Type', 'application/json')
-  // 余额等账户数据必须每次从数据库读取，避免设备/代理层复用旧 GET 响应。
-  headers.set('Cache-Control', 'no-cache, no-store, max-age=0')
-  headers.set('Pragma', 'no-cache')
-  headers.set('Expires', '0')
-  if (authToken !== '') {
-    headers.set('Authorization', `Bearer ${authToken}`)
+export function warmColdStartConnection(): void {
+  if (coldConnectionStarted || !(AppStorage.get<boolean>('privacyConsent') ?? false)) {
+    return
   }
+  coldConnectionStarted = true
+  try {
+    const warmup: rcp.Request = new rcp.Request(API_CONFIG.BASE_URL)
+    warmup.connectOnly = true
+    warmup.configuration = { transfer: { timeout: { connectMs: 1500, transferMs: 1500 } } }
+    // 不发送 HTTP 业务请求和令牌，不等待预连接完成再绘制首屏。
+    getClient().fetch(warmup).then(() => {
+      logInfo('Network', '冷启动预建链完成')
+    }).catch(() => {
+      logInfo('Network', '预建链未完成，业务请求按正常流程连接')
+    })
+  } catch (_) {
+    logInfo('Network', '当前设备预建链不可用，业务请求按正常流程连接')
+  }
+}
+
+export function disposeHttpClient(): void {
+  if (httpClient !== null) {
+    try { httpClient.close() } catch (_) {}
+  }
+  httpClient = null
+  coldConnectionStarted = false
+}
+
+function buildHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache, no-store, max-age=0',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  }
+  if (authToken !== '') { headers['Authorization'] = `Bearer ${authToken}` }
   return headers
 }
 
-function getClient(): AxiosInstance {
+function getClient(): rcp.Session {
   if (httpClient === null) {
-    httpClient = axios.create({
-      baseURL: API_CONFIG.BASE_URL,
-      timeout: API_CONFIG.TIMEOUT,
-      headers: buildHeaders()
-    })
+    httpClient = rcp.createSession({ requestConfiguration: {
+      transfer: { timeout: { connectMs: API_CONFIG.TIMEOUT, transferMs: API_CONFIG.TIMEOUT } }
+    } })
   }
   return httpClient
 }
@@ -116,24 +150,21 @@ function getOperationName(method: string, url: string): string {
  * 核心请求方法：返回后端 ApiResponse；网络异常时返回 code=500 的错误响应
  */
 async function request<T>(method: string, url: string, data?: Object, showErrorToast: boolean = true): Promise<ApiResponse<T>> {
+  const requestToken: string = authToken
   const operation: string = getOperationName(method, url)
   lastApiErrorMessage = ''
   logInfo('Http', `前端请求后端：${operation}（${method} ${url}）`)
   try {
-    const config: AxiosRequestConfig = {
-      headers: buildHeaders()
-    }
-    let response: AxiosResponse<ApiResponse<T>>
-    if (method === 'GET') {
-      response = await getClient().get(url, config)
-    } else if (method === 'POST') {
-      response = await getClient().post(url, data, config)
-    } else if (method === 'PUT') {
-      response = await getClient().put(url, data, config)
-    } else {
-      response = await getClient().delete(url, config)
-    }
-    const result: ApiResponse<T> = response.data
+    const nativeRequest: rcp.Request = new rcp.Request(API_CONFIG.BASE_URL + url,
+      method as rcp.HttpMethod, buildHeaders(), data === undefined ? undefined : JSON.stringify(data))
+    const response: rcp.Response = await getClient().fetch(nativeRequest)
+    let parsed: ApiResponse<T> | null = null
+    try { parsed = response.toJSON() as ApiResponse<T> | null } catch (_) {}
+    const result: ApiResponse<T> = parsed !== null && typeof parsed.code === 'number'
+      ? parsed : { code: response.statusCode >= 400 ? response.statusCode : 502,
+        message: response.statusCode === 401 ? '登录已过期，请重新登录' : '服务响应异常，请稍后重试', data: undefined as T }
+    // 网关 HTTP 401 即使返回非标准 JSON，也必须清除登录态。
+    if (response.statusCode === 401) { result.code = 401 }
     if (result.code === 200) {
       lastApiErrorMessage = ''
       logInfo('Http', `后端响应成功：${operation}，状态码=${result.code}，消息=${result.message}`)
@@ -143,7 +174,7 @@ async function request<T>(method: string, url: string, data?: Object, showErrorT
         notifyApiError(lastApiErrorMessage)
       }
       logWarn('Http', `后端业务失败：${operation}，状态码=${result.code}，消息=${result.message}`)
-      if (result.code === 401) {
+      if (result.code === 401 && requestToken === authToken) {
         // 后端可能使用 HTTP 200 返回业务状态码 401，同样需要清理登录态。
         setAuthToken('')
         AppStorage.setOrCreate<string>('authToken', '')
@@ -152,22 +183,6 @@ async function request<T>(method: string, url: string, data?: Object, showErrorT
     }
     return result
   } catch (err) {
-    const axiosErr: AxiosError = err as AxiosError
-    const resp: ApiResponse<T> = axiosErr.response?.data as ApiResponse<T>
-    if (resp !== undefined && resp !== null && resp.code !== undefined) {
-      lastApiErrorMessage = resp.message || ''
-      if (showErrorToast) {
-        notifyApiError(lastApiErrorMessage)
-      }
-      logWarn('Http', `后端业务失败：${operation}，状态码=${resp.code}，消息=${resp.message}`)
-      if (resp.code === 401) {
-        // 认证失效时立即清理内存态和 UI 登录态，避免“界面已登录但接口全部 401”。
-        setAuthToken('')
-        AppStorage.setOrCreate<string>('authToken', '')
-        AppStorage.setOrCreate<boolean>('isLoggedIn', false)
-      }
-      return resp
-    }
     logError('Http', `后端请求异常：${operation}，请检查网络和服务端状态`, err)
     lastApiErrorMessage = '网络请求失败，请确认后端服务已启动'
     if (showErrorToast) {
@@ -204,6 +219,7 @@ export async function del<T>(url: string): Promise<ApiResponse<T>> {
  * 注意：file.picker 返回的 URI 为 file://datashare://... ，需用 fileIo 读成 ArrayBuffer 后上传。
  */
 export async function uploadFile(url: string, fileUri: string, showErrorToast: boolean = true): Promise<UploadResult | null> {
+  const requestToken: string = authToken
   lastApiErrorMessage = ''
   let file: fileIo.File | null = null
   // 请求对象在 finally 中统一 destroy，避免上传失败/异常时连接资源泄漏
@@ -237,6 +253,11 @@ export async function uploadFile(url: string, fileUri: string, showErrorToast: b
     logInfo('Http', `前端请求后端：上传评价图片（POST ${url}）`)
     const response: http.HttpResponse = await httpRequest.request(url, options)
     const body: string = typeof response.result === 'string' ? response.result as string : ''
+    if (response.responseCode === 401 && requestToken === authToken) {
+      setAuthToken('')
+      AppStorage.setOrCreate<string>('authToken', '')
+      AppStorage.setOrCreate<boolean>('isLoggedIn', false)
+    }
     if (response.responseCode !== 200 || body === '') {
       lastApiErrorMessage = '图片上传失败，请稍后重试'
       if (showErrorToast) {
@@ -245,6 +266,11 @@ export async function uploadFile(url: string, fileUri: string, showErrorToast: b
       return null
     }
     const parsed: ApiResponse<UploadResult> = JSON.parse(body) as ApiResponse<UploadResult>
+    if (parsed.code === 401 && requestToken === authToken) {
+      setAuthToken('')
+      AppStorage.setOrCreate<string>('authToken', '')
+      AppStorage.setOrCreate<boolean>('isLoggedIn', false)
+    }
     if (parsed.code !== 200 || parsed.data === undefined || parsed.data === null) {
       lastApiErrorMessage = parsed.message !== undefined && parsed.message !== '' ? parsed.message : '图片上传失败'
       if (showErrorToast) {

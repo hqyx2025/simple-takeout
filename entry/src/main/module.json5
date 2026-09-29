@@ -35,6 +35,19 @@
     ],
     "extensionAbilities": [
       {
+        "name": "DeliveryFormAbility",
+        "srcEntry": "./ets/widget/DeliveryFormAbility.ets",
+        "type": "form",
+        "exported": false,
+        "metadata": [{ "name": "ohos.extension.form", "resource": "$profile:delivery_form" }]
+      },
+      {
+        "name": "DeliveryLiveAbility",
+        "srcEntry": "./ets/widget/DeliveryLiveAbility.ets",
+        "type": "liveForm",
+        "exported": false
+      },
+      {
         "name": "EntryBackupAbility",
         "srcEntry": "./ets/entrybackupability/EntryBackupAbility.ets",
         "type": "backup",
@@ -48,6 +61,9 @@
       }
     ],
     "requestPermissions": [
+      {
+        "name": "ohos.permission.DETECT_GESTURE"
+      },
       {
         "name": "ohos.permission.INTERNET"
       },

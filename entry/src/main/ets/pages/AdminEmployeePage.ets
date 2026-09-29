@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /** 管理端-员工账号管理：员工增删改中的新增、资料编辑和启停用。 */
 import { AppMotion } from '../common/theme/AppMotion'
 import { AdminEmployee, User, UserRole } from '../model/Models'
@@ -135,7 +136,7 @@ export struct AdminEmployeePage {
       PageHeader({
         title: '员工管理',
         backId: 'admin-employee-back',
-        headerBgColor: MODULE_BG.ADMIN,
+        headerBgColor: COLORS.BG_PRIMARY,
         actionColor: MODULE_COLOR.ADMIN,
         actionLabel: '新增员工',
         onBack: () => { router.back() },
@@ -144,18 +145,21 @@ export struct AdminEmployeePage {
 
       Row({ space: SPACING.MD }) {
         Text('状态').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
-        Button('全部').id('admin-employee-status-all').fontSize(FONT_SIZE.SM)
+        Button('全部').height(44)
+          .attributeModifier(new AppButtonStyle()).id('admin-employee-status-all').fontSize(FONT_SIZE.SM)
           .backgroundColor(this.statusFilter === -1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
-          .fontColor(this.statusFilter === -1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = -1; this.applyFilter() })
-        Button('已启用').id('admin-employee-status-enabled').fontSize(FONT_SIZE.SM)
+          .fontColor(this.statusFilter === -1 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.statusFilter = -1; this.applyFilter() })
+        Button('已启用').height(44)
+          .attributeModifier(new AppButtonStyle()).id('admin-employee-status-enabled').fontSize(FONT_SIZE.SM)
           .backgroundColor(this.statusFilter === 1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
-          .fontColor(this.statusFilter === 1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 1; this.applyFilter() })
-        Button('已停用').id('admin-employee-status-disabled').fontSize(FONT_SIZE.SM)
+          .fontColor(this.statusFilter === 1 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.statusFilter = 1; this.applyFilter() })
+        Button('已停用').height(44)
+          .attributeModifier(new AppButtonStyle()).id('admin-employee-status-disabled').fontSize(FONT_SIZE.SM)
           .backgroundColor(this.statusFilter === 0 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
-          .fontColor(this.statusFilter === 0 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 0; this.applyFilter() })
+          .fontColor(this.statusFilter === 0 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.statusFilter = 0; this.applyFilter() })
       }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
 
       // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在筛选行下方
@@ -187,27 +191,32 @@ export struct AdminEmployeePage {
               .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
             Text('员工姓名（必填）').fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY)
             TextInput({ placeholder: '请输入员工姓名，如：黄焖鸡老板', text: this.formUsername })
-              .width('100%').height(42).onChange((value: string) => { this.formUsername = value })
+              .attributeModifier(new AppInputStyle())
+              .width('100%').onChange((value: string) => { this.formUsername = value })
             Text('手机号（必填）').fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY)
             TextInput({ placeholder: '请输入 11 位手机号，如：13600136000', text: this.formPhone })
-              .width('100%').height(42).type(InputType.PhoneNumber)
+              .attributeModifier(new AppInputStyle())
+              .width('100%').type(InputType.PhoneNumber)
               .onChange((value: string) => { this.formPhone = value })
             if (this.editingId === 0) {
               Text('初始密码（必填）').fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY)
               TextInput({ placeholder: '请输入至少 6 位初始密码', text: this.formPassword })
-                .width('100%').height(42).type(InputType.Password)
+                .attributeModifier(new AppInputStyle())
+                .width('100%').type(InputType.Password)
                 .onChange((value: string) => { this.formPassword = value })
             }
             Row({ space: SPACING.SM }) {
-              Button('取消').layoutWeight(1).height(38)
-                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.closeForm() })
-              Button('保存').layoutWeight(1).height(38).fontColor(COLORS.TEXT_WHITE)
+              Button('取消')
+                .attributeModifier(new AppButtonStyle()).layoutWeight(1).height(40)
+                .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.closeForm() })
+              Button('保存')
+                .attributeModifier(new AppButtonStyle()).layoutWeight(1).height(40).fontColor(COLORS.ON_PRIMARY)
                 .backgroundColor(MODULE_COLOR.ADMIN)
-                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.saveEmployee() })
+                .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.saveEmployee() })
             }.width('100%')
           }
-          .width('90%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE)
-          .borderRadius(BORDER_RADIUS.LG)
+            .attributeModifier(new AppCardStyle())
+          .width('90%').constraintSize({ maxWidth: 460 }).padding(SPACING.LG)
         }
         .width('100%').height('100%').backgroundColor(COLORS.OVERLAY)
         .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
@@ -233,13 +242,15 @@ export struct AdminEmployeePage {
         StatusBadge({ text: employee.status === 1 ? '启用中' : '已停用', mode: employee.status === 1 ? 'success' : 'gray' })
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       Row({ space: SPACING.XS }) {
-        Button('编辑').height(30).fontSize(FONT_SIZE.XS).onClick(() => { this.openEdit(employee) })
-        Button(employee.status === 1 ? '停用' : '启用').height(30).fontSize(FONT_SIZE.XS)
+        Button('编辑')
+          .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS).onClick(() => { this.openEdit(employee) })
+        Button(employee.status === 1 ? '停用' : '启用')
+          .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
           .fontColor(employee.status === 1 ? COLORS.ERROR : COLORS.SUCCESS)
-          .onClick(() => { this.toggleStatus(employee) })
+          .onClick(() => { this.toggleStatus(employee) }).backgroundColor(COLORS.ERROR_LIGHT)
       }
     }
-    .width('100%').padding(SPACING.MD).backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.MD)
+      .attributeModifier(new AppCardStyle())
+    .width('100%').padding(SPACING.MD)
   }
 }

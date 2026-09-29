@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /** 商户新增商品页：表单确认后才写入数据库，并在返回前重新读取商品数据。 */
 import { AppMotion } from '../common/theme/AppMotion'
 import { Category, GoodsItem, GoodsSpec, User, UserRole } from '../model/Models'
@@ -382,7 +383,8 @@ export struct MerchantAddGoodsPage {
     Column({ space: SPACING.XS }) {
       this.FieldLabel(label, true)
       TextInput({ placeholder: placeholder, text: value })
-        .width('100%').height(44).type(InputType.Number)
+        .attributeModifier(new AppInputStyle())
+        .width('100%').type(InputType.Number)
         .onChange((next: string) => { onChange(next) })
       if (hint !== '') {
         Text(hint)
@@ -404,20 +406,22 @@ export struct MerchantAddGoodsPage {
       .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
 
       TextInput({ placeholder: '如：大份/加辣', text: row.name })
-        .layoutWeight(1).height(40).fontSize(FONT_SIZE.SM)
+        .attributeModifier(new AppInputStyle())
+        .layoutWeight(1)
         .onChange((value: string) => { this.setSpecName(index, value) })
 
       TextInput({ placeholder: '价格', text: row.price })
-        .width(62).height(40).fontSize(FONT_SIZE.SM).type(InputType.Number)
+        .attributeModifier(new AppInputStyle())
+        .width(62).type(InputType.Number)
         .onChange((value: string) => { this.setSpecPrice(index, value) })
 
       TextInput({ placeholder: '库存', text: row.stock })
-        .width(62).height(40).fontSize(FONT_SIZE.SM).type(InputType.Number)
+        .attributeModifier(new AppInputStyle())
+        .width(62).type(InputType.Number)
         .onChange((value: string) => { this.setSpecStock(index, value) })
 
       Column() {
-        SymbolGlyph($r('sys.symbol.xmark'))
-          .fontSize(FONT_SIZE.SM)
+        Image($r('app.media.ui_close')).width(FONT_SIZE.SM).height(FONT_SIZE.SM).objectFit(ImageFit.Contain)
       }
       .width(30).height(40)
       .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
@@ -435,8 +439,7 @@ export struct MerchantAddGoodsPage {
   SpecSection() {
     Column({ space: SPACING.SM }) {
       Row() {
-        SymbolGlyph($r('sys.symbol.doc_plaintext'))
-          .fontSize(FONT_SIZE.MD)
+        Image($r('app.media.ui_document')).objectFit(ImageFit.Contain)
           .width(28).height(28)
           .backgroundColor(accentBg(2))
           .borderRadius(BORDER_RADIUS.SM)
@@ -464,6 +467,7 @@ export struct MerchantAddGoodsPage {
           this.SpecRowEditor(row, index)
         }, (row: SpecRow, index: number) => `${row.key}-${index}`)
         Button(`＋ 添加规格（${this.specRows.length}/${MAX_SPEC_ROWS}）`)
+          .attributeModifier(new AppButtonStyle())
           .width('100%').height(40).fontSize(FONT_SIZE.SM)
           .fontColor(MODULE_COLOR.MERCHANT).backgroundColor(MODULE_BG.MERCHANT)
           .borderRadius(BORDER_RADIUS.MD)
@@ -477,7 +481,7 @@ export struct MerchantAddGoodsPage {
 
   build() {
     Column() {
-      PageHeader({ title: '添加商品', backText: '‹ 返回', backId: 'merchant-add-goods-back', titleColor: MODULE_COLOR.MERCHANT, headerBgColor: MODULE_BG.MERCHANT, onBack: () => { router.back() } })
+      PageHeader({ title: '添加商品', backText: '‹ 返回', backId: 'merchant-add-goods-back', titleColor: COLORS.TEXT_PRIMARY, headerBgColor: COLORS.BG_PRIMARY, onBack: () => { router.back() } })
 
       Scroll() {
         Column({ space: SPACING.MD }) {
@@ -492,8 +496,7 @@ export struct MerchantAddGoodsPage {
 
           Column({ space: SPACING.MD }) {
             Row() {
-              SymbolGlyph($r('sys.symbol.doc_text'))
-                .fontSize(FONT_SIZE.MD)
+              Image($r('app.media.ui_document')).objectFit(ImageFit.Contain)
                 .width(28).height(28)
                 .backgroundColor(accentBg(1))
                 .borderRadius(BORDER_RADIUS.SM)
@@ -505,13 +508,15 @@ export struct MerchantAddGoodsPage {
             Column({ space: SPACING.XS }) {
               this.FieldLabel('商品名称', true)
               TextInput({ placeholder: '如：宫保鸡丁', text: this.goodsName })
-                .width('100%').height(44)
+                .attributeModifier(new AppInputStyle())
+                .width('100%')
                 .onChange((value: string) => { this.goodsName = value })
             }
             Column({ space: SPACING.XS }) {
               this.FieldLabel('商品描述', false)
               TextInput({ placeholder: '如：招牌菜，微辣', text: this.goodsDescription })
-                .width('100%').height(44)
+                .attributeModifier(new AppInputStyle())
+                .width('100%')
                 .onChange((value: string) => { this.goodsDescription = value })
             }
             Row({ space: SPACING.MD }) {
@@ -521,7 +526,8 @@ export struct MerchantAddGoodsPage {
             Column({ space: SPACING.XS }) {
               this.FieldLabel('原价', false)
               TextInput({ placeholder: '特价时填写，如：30.00', text: this.originalPrice })
-                .width('100%').height(44).type(InputType.Number)
+                .attributeModifier(new AppInputStyle())
+                .width('100%').type(InputType.Number)
                 .onChange((value: string) => { this.originalPrice = value })
             }
             Column({ space: SPACING.XS }) {
@@ -531,8 +537,8 @@ export struct MerchantAddGoodsPage {
                   .alt(DEFAULT_MERCHANT_IMAGE)
                   .width(72).height(72).objectFit(ImageFit.Cover).borderRadius(BORDER_RADIUS.MD)
                 Button(this.image === '' ? '＋ 上传图片' : '更换图片')
-                  .fontSize(FONT_SIZE.SM).height(36).borderRadius(BORDER_RADIUS.MD)
-                  .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.MERCHANT)
+                  .attributeModifier(new AppButtonStyle())
+                  .fontSize(FONT_SIZE.SM).height(40).borderRadius(BORDER_RADIUS.MD).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.MERCHANT)
                   .onClick(() => { this.pickImage() })
               }
               .width('100%').alignItems(VerticalAlign.Center)
@@ -550,14 +556,14 @@ export struct MerchantAddGoodsPage {
               this.CategoryOptions()
             }
           }
+            .attributeModifier(new AppCardStyle())
           .width('100%').padding(SPACING.LG)
-          .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
 
           Column() {
             this.SpecSection()
           }
+            .attributeModifier(new AppCardStyle())
           .width('100%').padding(SPACING.LG)
-          .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
         }
         .width('100%')
         .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.XL })
@@ -566,14 +572,15 @@ export struct MerchantAddGoodsPage {
 
       Row({ space: SPACING.MD }) {
         Button('取消')
+          .attributeModifier(new AppButtonStyle())
           .layoutWeight(1).height(46).fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_SECONDARY).backgroundColor(COLORS.BG_PRIMARY)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+          .borderRadius(BORDER_RADIUS.ROUND)
           .onClick(() => { router.back() })
         Button(this.submitting ? '提交中...' : '确认添加')
-          .layoutWeight(1).height(46).fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.MERCHANT)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+          .attributeModifier(new AppButtonStyle())
+          .layoutWeight(1).height(46).fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.MERCHANT)
+          .borderRadius(BORDER_RADIUS.ROUND)
           .onClick(() => { this.confirmAdd() })
       }
       .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.LG })

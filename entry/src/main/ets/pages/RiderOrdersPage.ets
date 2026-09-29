@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 /**
  * 我的配送单（四端改造）：骑手已接订单，取餐 / 送达
  */
@@ -117,7 +118,7 @@ export struct RiderOrdersPage {
 
   build() {
     Column() {
-      PageHeader({ title: '我的配送单', backText: '‹ 返回', backId: 'rider-orders-back', titleColor: MODULE_COLOR.RIDER, headerBgColor: MODULE_BG.RIDER, actionLabel: '刷新', onAction: () => { this.loadOrders() }, onBack: () => { router.back() } })
+      PageHeader({ title: '我的配送单', backText: '‹ 返回', backId: 'rider-orders-back', titleColor: COLORS.TEXT_PRIMARY, headerBgColor: COLORS.BG_PRIMARY, actionLabel: '刷新', onAction: () => { this.loadOrders() }, onBack: () => { router.back() } })
 
       if (this.loading) {
         Column() {
@@ -125,7 +126,7 @@ export struct RiderOrdersPage {
         }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
       } else if (this.orders.length === 0) {
         Column() {
-          SymbolGlyph($r('sys.symbol.express_delivery')).fontSize(60).margin({ top: 40 })
+          Image($r('app.media.login_rider')).width(60).height(60).objectFit(ImageFit.Contain).margin({ top: 40 })
           Text('暂无配送单').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
         }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
       } else {
@@ -172,22 +173,22 @@ export struct RiderOrdersPage {
           .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).layoutWeight(1)
         if (order.status === 2) {
           Button('取餐')
-            .height(36).fontSize(FONT_SIZE.MD)
-            .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.RIDER)
-            .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+            .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.RIDER)
+            .borderRadius(BORDER_RADIUS.ROUND)
             .id(`rider-pickup-${order.id}`)
             .onClick(() => { this.pickup(order) })
         } else if (order.status === 3) {
           Button('送达')
-            .height(36).fontSize(FONT_SIZE.MD)
-            .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.SUCCESS)
-            .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+            .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.MD)
+            .fontColor(COLORS.ON_PRIMARY).backgroundColor(COLORS.SUCCESS)
+            .borderRadius(BORDER_RADIUS.ROUND)
             .id(`rider-deliver-${order.id}`)
             .onClick(() => { this.deliver(order) })
         }
       }.width('100%')
     }
-    .width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+      .attributeModifier(new AppCardStyle())
+    .width('100%').padding(SPACING.LG)
     .id(`rider-order-card-${order.id}`)
   }
 }

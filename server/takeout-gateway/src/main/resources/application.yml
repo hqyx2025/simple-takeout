@@ -1,6 +1,6 @@
 server:
-  # 对外端口：与拆分前完全一致（前端 BASE_URL 指向 :9000，零改动）
-  port: ${TAKEOUT_GATEWAY_PORT:9000}
+  # 对外统一入口，与前端 BASE_URL 的 8087 保持一致。
+  port: ${TAKEOUT_GATEWAY_PORT:8087}
 
 spring:
   application:
@@ -51,12 +51,12 @@ spring:
           routes:
             # 全部 API 路由到后端应用（Phase 2 只有一个后端；Phase 3 起按域细分）
             - id: takeout-app-api
-              uri: ${TAKEOUT_APP_URI:http://127.0.0.1:9000}
+              uri: ${TAKEOUT_APP_URI:http://127.0.0.1:9100}
               predicates:
                 - Path=/api/**
             # 评价图片等静态资源：不需要 JWT，但必须能被前端访问到，故一并转发
             - id: takeout-app-uploads
-              uri: ${TAKEOUT_APP_URI:http://127.0.0.1:9000}
+              uri: ${TAKEOUT_APP_URI:http://127.0.0.1:9100}
               predicates:
                 - Path=/uploads/**
 

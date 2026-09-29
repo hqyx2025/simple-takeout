@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 /**
  * 客服中心页面：提供客服说明、联系方式和常见问题。
  * 即时通讯等第三方能力暂未接入，页面先提供可用的本地客服指引。
@@ -63,10 +64,10 @@ export struct ContactCustomerServicePage {
             Text('\u5ba2\u670d\u4e2d\u5fc3')
               .fontSize(FONT_SIZE.XXL)
               .fontWeight(FontWeight.Bold)
-              .fontColor(COLORS.TEXT_WHITE)
+              .fontColor(COLORS.ON_PRIMARY)
             Text('\u9047\u5230\u95ee\u9898\u8bf7\u5148\u67e5\u770b\u5e38\u89c1\u95ee\u9898\uff0c\u4e5f\u53ef\u76f4\u63a5\u8054\u7cfb\u5ba2\u670d')
               .fontSize(FONT_SIZE.MD)
-              .fontColor(COLORS.TEXT_WHITE)
+              .fontColor(COLORS.ON_PRIMARY)
           }
           .width('100%')
           .padding(SPACING.XL)
@@ -76,22 +77,21 @@ export struct ContactCustomerServicePage {
 
           Row({ space: SPACING.SM }) {
             Button('\u62e8\u6253\u5ba2\u670d\u70ed\u7ebf')
+              .attributeModifier(new AppButtonStyle())
               .layoutWeight(1)
               .height(44)
               .fontSize(FONT_SIZE.MD)
               .fontColor(COLORS.PRIMARY)
               .backgroundColor(COLORS.BG_WHITE)
               .borderRadius(BORDER_RADIUS.ROUND)
-              .type(ButtonType.Capsule)
               .onClick(() => { this.showHotline() })
             Button('\u5728\u7ebf\u5ba2\u670d')
+              .attributeModifier(new AppButtonStyle())
               .layoutWeight(1)
               .height(44)
-              .fontSize(FONT_SIZE.MD)
-              .fontColor(COLORS.TEXT_WHITE)
+              .fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
               .backgroundColor(COLORS.PRIMARY_DARK)
               .borderRadius(BORDER_RADIUS.ROUND)
-              .type(ButtonType.Capsule)
               .onClick(() => { this.showOnlineService() })
           }
           .width('100%')
@@ -123,10 +123,9 @@ export struct ContactCustomerServicePage {
             }
             .width('100%')
           }
+            .attributeModifier(new AppCardStyle())
           .width('100%')
           .padding(SPACING.LG)
-          .backgroundColor(COLORS.BG_WHITE)
-          .borderRadius(BORDER_RADIUS.LG)
 
           Column({ space: SPACING.SM }) {
             Text('\u5e38\u89c1\u95ee\u9898')
@@ -137,10 +136,9 @@ export struct ContactCustomerServicePage {
               this.FaqRow(question, FAQ_ANSWERS[index], index)
             }, (question: string, index: number) => `${index}-${question}`)
           }
+            .attributeModifier(new AppCardStyle())
           .width('100%')
           .padding(SPACING.LG)
-          .backgroundColor(COLORS.BG_WHITE)
-          .borderRadius(BORDER_RADIUS.LG)
         }
         .width('100%')
         .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.XXL })

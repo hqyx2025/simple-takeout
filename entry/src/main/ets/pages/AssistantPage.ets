@@ -1,3 +1,5 @@
+import { PageHeader } from '../components/PageHeader'
+import { AppButtonStyle, AppInputStyle } from '../common/theme/AppTheme'
 /**
  * AI 智能助手聊天页。
  *
@@ -109,14 +111,7 @@ export struct AssistantPage {
   build() {
     Column() {
       // 标题栏：本组件是首页的 Tab 内容（不是独立路由页），因此不放返回按钮
-      Row() {
-        Text('AI 智能助手')
-          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
-          .layoutWeight(1).textAlign(TextAlign.Center)
-      }
-      .width('100%').height(56)
-      .padding({ left: SPACING.LG, right: SPACING.LG, top: 30 })
-      .backgroundColor(COLORS.BG_WHITE)
+      PageHeader({ title: 'AI 智能助手', showBack: false, topPadding: 0 })
 
       // 消息区：用 List 承载，条目从顶部开始排列（Scroll 内容不足一屏时会被垂直居中）
       List({ space: SPACING.MD, scroller: this.scroller }) {
@@ -164,15 +159,16 @@ export struct AssistantPage {
       // 输入区
       Row({ space: SPACING.SM }) {
         TextInput({ placeholder: '想问点什么？例如：我的订单到哪了', text: this.input })
-          .layoutWeight(1).height(42)
+          .attributeModifier(new AppInputStyle())
+          .layoutWeight(1)
           .maxLength(MAX_QUESTION_LENGTH)
           .onChange((value: string) => { this.input = value })
           .onSubmit(() => { this.send(this.input) })
         Button(this.sending ? '发送中' : '发送')
-          .height(42).fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.TEXT_WHITE)
+          .attributeModifier(new AppButtonStyle())
+          .height(42).fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
           .backgroundColor(this.sending ? COLORS.TEXT_HINT : COLORS.PRIMARY)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+          .borderRadius(BORDER_RADIUS.ROUND)
           .onClick(() => { this.send(this.input) })
       }
       .width('100%')
@@ -191,7 +187,7 @@ export struct AssistantPage {
       }
       Text(message.text)
         .fontSize(FONT_SIZE.MD)
-        .fontColor(message.role === 'user' ? COLORS.TEXT_WHITE : COLORS.TEXT_PRIMARY)
+        .fontColor(message.role === 'user' ? COLORS.ON_PRIMARY : COLORS.TEXT_PRIMARY)
         .backgroundColor(message.role === 'user' ? COLORS.PRIMARY : COLORS.BG_WHITE)
         .padding(SPACING.MD)
         .borderRadius(BORDER_RADIUS.LG)

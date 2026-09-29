@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 /**
  * 管理端-店铺管理页（大纲 9.3 商户管理-经营状态）
  * 查看全部店铺并切换营业状态（营业中/已暂停），仅 ADMIN 可进入
@@ -117,7 +118,7 @@ export struct AdminStorePage {
       PageHeader({
         title: '店铺管理',
         backId: 'admin-store-back',
-        headerBgColor: MODULE_BG.ADMIN,
+        headerBgColor: COLORS.BG_PRIMARY,
         actionColor: MODULE_COLOR.ADMIN,
         actionLabel: '刷新',
         onBack: () => { router.back() },
@@ -126,18 +127,21 @@ export struct AdminStorePage {
 
       Row({ space: SPACING.MD }) {
         Text('状态').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
-        Button('全部').id('admin-store-status-all').fontSize(FONT_SIZE.SM)
+        Button('全部').height(44)
+          .attributeModifier(new AppButtonStyle()).id('admin-store-status-all').fontSize(FONT_SIZE.SM)
           .backgroundColor(this.statusFilter === -1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
-          .fontColor(this.statusFilter === -1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = -1; this.applyFilter() })
-        Button('营业中').id('admin-store-status-open').fontSize(FONT_SIZE.SM)
+          .fontColor(this.statusFilter === -1 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.statusFilter = -1; this.applyFilter() })
+        Button('营业中').height(44)
+          .attributeModifier(new AppButtonStyle()).id('admin-store-status-open').fontSize(FONT_SIZE.SM)
           .backgroundColor(this.statusFilter === 1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
-          .fontColor(this.statusFilter === 1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 1; this.applyFilter() })
-        Button('已暂停').id('admin-store-status-closed').fontSize(FONT_SIZE.SM)
+          .fontColor(this.statusFilter === 1 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.statusFilter = 1; this.applyFilter() })
+        Button('已暂停').height(44)
+          .attributeModifier(new AppButtonStyle()).id('admin-store-status-closed').fontSize(FONT_SIZE.SM)
           .backgroundColor(this.statusFilter === 0 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
-          .fontColor(this.statusFilter === 0 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 0; this.applyFilter() })
+          .fontColor(this.statusFilter === 0 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.statusFilter = 0; this.applyFilter() })
       }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
 
       // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在筛选行下方
@@ -168,21 +172,21 @@ export struct AdminStorePage {
               }.alignItems(HorizontalAlign.Start).layoutWeight(1)
               Column({ space: SPACING.XS }) {
                 Button(store.recommended === 1 ? '取消推荐' : '推荐到发现')
-                  .height(32).fontSize(FONT_SIZE.XS)
-                  .fontColor(store.recommended === 1 ? MODULE_COLOR.ADMIN : COLORS.TEXT_WHITE)
+                  .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
+                  .fontColor(store.recommended === 1 ? MODULE_COLOR.ADMIN : COLORS.ON_PRIMARY)
                   .backgroundColor(store.recommended === 1 ? COLORS.TAG_BG : MODULE_COLOR.ADMIN)
-                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                  .borderRadius(BORDER_RADIUS.ROUND)
                   .onClick(() => { this.toggleRecommend(store) })
                 Button(store.status === 1 ? '暂停营业' : '恢复营业')
-                  .height(32).fontSize(FONT_SIZE.XS)
-                  .fontColor(store.status === 1 ? COLORS.WARNING : COLORS.TEXT_WHITE)
+                  .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
+                  .fontColor(store.status === 1 ? COLORS.WARNING : COLORS.ON_PRIMARY)
                   .backgroundColor(store.status === 1 ? COLORS.TAG_BG : COLORS.SUCCESS)
-                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                  .borderRadius(BORDER_RADIUS.ROUND)
                   .onClick(() => { this.toggleStore(store) })
               }
             }
+              .attributeModifier(new AppCardStyle())
             .width('100%').padding(SPACING.MD)
-            .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
           }
         }, (store: AdminStore) => `${this.renderVersion}-${store.id}`)
       }

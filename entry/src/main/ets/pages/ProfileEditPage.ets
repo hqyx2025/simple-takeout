@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /**
  * 个人信息编辑页
  * 修改昵称和手机号
@@ -134,7 +135,7 @@ export struct ProfileEditPage {
         Circle({ width: 72, height: 72 }).fill(COLORS.PRIMARY)
         Text(this.getAvatarLetter())
           .fontSize(FONT_SIZE.TITLE)
-          .fontColor(COLORS.TEXT_WHITE)
+          .fontColor(COLORS.ON_PRIMARY)
           .fontWeight(FontWeight.Bold)
       }
       .width(72)
@@ -145,10 +146,9 @@ export struct ProfileEditPage {
         .fontColor(COLORS.TEXT_PRIMARY)
         .fontWeight(FontWeight.Medium)
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.XL)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
     .alignItems(HorizontalAlign.Center)
   }
 
@@ -162,12 +162,8 @@ export struct ProfileEditPage {
           .fontColor(COLORS.TEXT_SECONDARY)
           .width(72)
         TextInput({ placeholder: '请输入昵称', text: this.username })
+          .attributeModifier(new AppInputStyle())
           .layoutWeight(1)
-          .height(44)
-          .fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.TEXT_PRIMARY)
-          .backgroundColor(Color.Transparent)
-          .borderRadius(BORDER_RADIUS.SM)
           .maxLength(20)
           .onChange((value: string) => { this.username = value })
       }
@@ -183,12 +179,8 @@ export struct ProfileEditPage {
           .fontColor(COLORS.TEXT_SECONDARY)
           .width(72)
         TextInput({ placeholder: '请输入手机号', text: this.phone })
+          .attributeModifier(new AppInputStyle())
           .layoutWeight(1)
-          .height(44)
-          .fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.TEXT_PRIMARY)
-          .backgroundColor(Color.Transparent)
-          .borderRadius(BORDER_RADIUS.SM)
           .maxLength(11)
           .type(InputType.PhoneNumber)
           .onChange((value: string) => { this.phone = value })
@@ -213,23 +205,21 @@ export struct ProfileEditPage {
       .width('100%')
       .alignItems(VerticalAlign.Center)
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
   }
 
   @Builder
   SaveButton() {
     Row() {
       Button(this.saving ? '保存中…' : '保存')
+        .attributeModifier(new AppButtonStyle())
         .width('100%')
         .height(48)
-        .fontSize(FONT_SIZE.LG)
-        .fontColor(COLORS.TEXT_WHITE)
+        .fontSize(FONT_SIZE.LG).fontColor(COLORS.ON_PRIMARY)
         .backgroundColor(COLORS.PRIMARY)
         .borderRadius(BORDER_RADIUS.ROUND)
-        .type(ButtonType.Capsule)
         .enabled(!this.saving)
         .onClick(() => { this.handleSave() })
     }

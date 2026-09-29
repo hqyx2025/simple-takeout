@@ -54,7 +54,9 @@ export default function searchFlowTest() {
       // ---------- 2. 输入中文关键词并搜索（测试进程内直接输入，不经 hdc 参数编码） ----------
       await input.click()
       await driver.delayMs(800)
-      await input.inputText('黄焖鸡')
+      const focusedInput: Component = requireComponent(
+        await driver.findComponent(ON.id('search-input')), 'focused search-input')
+      await focusedInput.inputText('黄焖鸡')
       await driver.delayMs(1200)
       expect(await clickByIdOrText(driver, 'search-submit', '搜索')).assertTrue()
       await driver.delayMs(3500)
@@ -65,6 +67,15 @@ export default function searchFlowTest() {
       console.info('[SearchFlow] resultList=' + isFound(resultList) + ' emptyState=' + isFound(emptyState))
       // 必须有明确结果：结果列表或空态，不能两者都没有（那就是"点了没反应"）
       expect(isFound(resultList) || isFound(emptyState)).assertTrue()
+
+      // 原生 Search 清除输入后应回到历史搜索，不能继续显示上次结果或加载状态。
+      const clearInput: Component = requireComponent(
+        await driver.findComponent(ON.id('search-input')), 'search-input before clear')
+      await clearInput.clearText()
+      await driver.delayMs(800)
+      expect(isFound(await driver.findComponent(ON.text('历史搜索')))).assertTrue()
+      expect(isFound(await driver.findComponent(ON.id('search-store-1')))).assertFalse()
+      expect(isFound(await driver.findComponent(ON.id('search-empty')))).assertFalse()
 
       // ---------- 3. 返回首页（历史上返回按钮点不中） ----------
       expect(await clickByIdOrText(driver, 'search-back', '‹')).assertTrue()

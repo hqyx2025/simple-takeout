@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 /**
  * 确认弹窗组件
  * 用于需要用户确认的操作
@@ -40,36 +41,32 @@ export struct ConfirmDialog {
 
         Row({ space: SPACING.MD }) {
           Button(this.cancelText)
+            .attributeModifier(new AppButtonStyle())
             .layoutWeight(1)
             .height(44)
             .fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.TEXT_SECONDARY)
             .backgroundColor(COLORS.BG_PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
-            .type(ButtonType.Capsule)
-            .attributeModifier(new SoftPressModifier())
             .animation(AppMotion.pressAnimation())
             .onClick(() => { this.onCancel() })
 
           Button(this.confirmText)
+            .attributeModifier(new AppButtonStyle())
             .layoutWeight(1)
             .height(44)
-            .fontSize(FONT_SIZE.MD)
-            .fontColor(Color.White)
+            .fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
             .backgroundColor(COLORS.PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
-            .type(ButtonType.Capsule)
-            .attributeModifier(new SoftPressModifier())
             .animation(AppMotion.pressAnimation())
             .onClick(() => { this.onConfirm() })
         }
         .width('100%')
         .margin({ top: SPACING.SM })
       }
-      .width('80%')
+        .attributeModifier(new AppCardStyle())
+      .width('80%').constraintSize({ maxWidth: 460 })
       .padding(SPACING.XL)
-      .backgroundColor(COLORS.BG_WHITE)
-      .borderRadius(BORDER_RADIUS.XL)
       .alignItems(HorizontalAlign.Center)
       .transition(AppMotion.dialogTransition(this.reducedMotion))
     }

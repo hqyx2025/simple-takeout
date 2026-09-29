@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle, AppTextAreaStyle, AppTheme } from '../common/theme/AppTheme'
 /**
  * 结算页
  * 展示收货地址、商品明细、金额计算、优惠券选择、备注输入
@@ -368,10 +369,6 @@ export struct CheckoutPage {
       .height('100%')
       .backgroundColor(COLORS.BG_PRIMARY)
 
-      if (this.showCouponDialog) {
-        this.CouponDialog()
-      }
-
       // 提交订单加载遮罩（模拟支付中）
       if (this.submitting) {
         Column() {
@@ -388,6 +385,16 @@ export struct CheckoutPage {
     }
     .width('100%')
     .height('100%')
+    .bindSheet($$this.showCouponDialog, this.CouponDialog(), {
+      height: SheetSize.MEDIUM,
+      detents: [SheetSize.MEDIUM, SheetSize.LARGE],
+      preferType: SheetType.BOTTOM,
+      title: { title: '选择优惠券' },
+      showClose: true,
+      dragBar: true,
+      backgroundColor: AppTheme.CARD,
+      radius: { topLeft: AppTheme.SHEET_RADIUS, topRight: AppTheme.SHEET_RADIUS }
+    })
   }
 
   @Builder
@@ -398,8 +405,7 @@ export struct CheckoutPage {
   @Builder
   EmptyState() {
     Column() {
-      Text('🛒')
-        .fontSize(60)
+      Image($r('app.media.home_nav_cart')).width(60).height(60).objectFit(ImageFit.Contain)
       Text('暂无结算商品')
         .fontSize(FONT_SIZE.LG)
         .fontColor(COLORS.TEXT_HINT)
@@ -414,8 +420,7 @@ export struct CheckoutPage {
   @Builder
   AddressCard() {
     Row() {
-SymbolGlyph($r('sys.symbol.location_right_fill'))
-          .fontSize(FONT_SIZE.XL)
+Image($r('app.media.home_location')).width(FONT_SIZE.XL).height(FONT_SIZE.XL).objectFit(ImageFit.Contain)
       if (this.currentAddress !== null) {
         Column({ space: SPACING.XS }) {
           Row() {
@@ -446,10 +451,9 @@ SymbolGlyph($r('sys.symbol.location_right_fill'))
         .fontSize(FONT_SIZE.XL)
         .fontColor(COLORS.TEXT_HINT)
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
     .alignItems(VerticalAlign.Center)
     .onClick(() => { this.openAddressSelector() })
   }
@@ -458,7 +462,7 @@ SymbolGlyph($r('sys.symbol.location_right_fill'))
   StoreAndItemsCard() {
     Column({ space: SPACING.SM }) {
       Row() {
-        SymbolGlyph($r('sys.symbol.store')).fontSize(FONT_SIZE.LG)
+        Image($r('app.media.login_store')).width(FONT_SIZE.LG).height(FONT_SIZE.LG).objectFit(ImageFit.Contain)
         Text(this.checkoutStoreId > 0 && this.storeInfo !== null ? this.storeInfo.name : '\u5168\u90e8\u5e97\u94fa\u5546\u54c1')
           .fontSize(FONT_SIZE.LG)
           .fontWeight(FontWeight.Bold)
@@ -507,16 +511,15 @@ SymbolGlyph($r('sys.symbol.location_right_fill'))
         .padding({ top: SPACING.XS, bottom: SPACING.XS })
       }, (item: CartItem) => `${item.goods.id}_${item.specId ?? 0}`)
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
   }
 
   @Builder
   CouponCard() {
     Row() {
-SymbolGlyph($r('sys.symbol.ticket_fill')).fontSize(FONT_SIZE.MD)
+Image($r('app.media.home_coupon')).width(FONT_SIZE.MD).height(FONT_SIZE.MD).objectFit(ImageFit.Contain)
         Text('优惠券')
           .fontSize(FONT_SIZE.MD)
         .fontColor(COLORS.TEXT_PRIMARY)
@@ -537,10 +540,9 @@ SymbolGlyph($r('sys.symbol.ticket_fill')).fontSize(FONT_SIZE.MD)
         .fontColor(COLORS.TEXT_HINT)
         .margin({ left: SPACING.XS })
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
     .alignItems(VerticalAlign.Center)
     .onClick(() => { this.showCouponDialog = true })
   }
@@ -583,10 +585,9 @@ SymbolGlyph($r('sys.symbol.ticket_fill')).fontSize(FONT_SIZE.MD)
         .width('100%')
       }
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
   }
 
   @Builder
@@ -608,7 +609,7 @@ SymbolGlyph($r('sys.symbol.ticket_fill')).fontSize(FONT_SIZE.MD)
         ForEach(this.deliveryTypeOptions, (opt: DeliveryTypeOption) => {
           Text(this.deliveryType === opt.code && opt.code === 'PICKUP' ? `${opt.label}（免配送费）` : opt.label)
             .fontSize(FONT_SIZE.XS)
-            .fontColor(this.deliveryType === opt.code ? COLORS.TEXT_WHITE : COLORS.TEXT_PRIMARY)
+            .fontColor(this.deliveryType === opt.code ? COLORS.ON_PRIMARY : COLORS.TEXT_PRIMARY)
             .backgroundColor(this.deliveryType === opt.code ? COLORS.PRIMARY : COLORS.TAG_BG)
             .padding({ left: SPACING.SM, right: SPACING.SM, top: 4, bottom: 4 })
             .borderRadius(BORDER_RADIUS.SM)
@@ -617,14 +618,15 @@ SymbolGlyph($r('sys.symbol.ticket_fill')).fontSize(FONT_SIZE.MD)
       }
       .width('100%')
     }
-    .width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+      .attributeModifier(new AppCardStyle())
+    .width('100%').padding(SPACING.LG)
   }
 
   @Builder
   DeliveryOption(index: number, label: string) {
     Text(label)
       .fontSize(FONT_SIZE.SM)
-      .fontColor(this.selectedDelivery === index ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
+      .fontColor(this.selectedDelivery === index ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
       .backgroundColor(this.selectedDelivery === index ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
       .padding({ left: SPACING.MD, right: SPACING.MD, top: SPACING.XS, bottom: SPACING.XS })
       .borderRadius(BORDER_RADIUS.ROUND)
@@ -653,20 +655,17 @@ SymbolGlyph($r('sys.symbol.ticket_fill')).fontSize(FONT_SIZE.MD)
         .fontWeight(FontWeight.Bold)
         .fontColor(COLORS.TEXT_PRIMARY)
       TextArea({ placeholder: '选填，请输入备注信息（最多50字）' })
+        .attributeModifier(new AppTextAreaStyle())
         .width('100%')
         .height(80)
-        .fontSize(FONT_SIZE.MD)
         .maxLength(50)
-        .borderRadius(BORDER_RADIUS.MD)
-        .backgroundColor(COLORS.BG_PRIMARY)
         .onChange((value: string) => {
           this.remark = value
         })
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
     .alignItems(HorizontalAlign.Start)
   }
 
@@ -688,12 +687,11 @@ SymbolGlyph($r('sys.symbol.ticket_fill')).fontSize(FONT_SIZE.MD)
       .layoutWeight(1)
 
       Button('提交订单')
+        .attributeModifier(new AppButtonStyle())
         .height(44)
-        .fontSize(FONT_SIZE.LG)
-        .fontColor(COLORS.TEXT_WHITE)
+        .fontSize(FONT_SIZE.LG).fontColor(COLORS.ON_PRIMARY)
         .backgroundColor(COLORS.PRIMARY)
         .borderRadius(BORDER_RADIUS.ROUND)
-        .type(ButtonType.Capsule)
         .id('checkout-submit')
         .onClick(() => { this.submitOrder() })
     }
@@ -705,28 +703,7 @@ SymbolGlyph($r('sys.symbol.ticket_fill')).fontSize(FONT_SIZE.MD)
 
   @Builder
   CouponDialog() {
-    Stack({ alignContent: Alignment.Bottom }) {
-      Column()
-        .width('100%')
-        .height('100%')
-        .backgroundColor(COLORS.TEXT_PRIMARY)
-        .opacity(0.4)
-        .onClick(() => { this.showCouponDialog = false })
-
       Column() {
-        Row() {
-          Text('选择优惠券')
-            .fontSize(FONT_SIZE.LG)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(COLORS.TEXT_PRIMARY)
-            .layoutWeight(1)
-SymbolGlyph($r('sys.symbol.xmark'))
-            .fontSize(FONT_SIZE.LG)
-            .onClick(() => { this.showCouponDialog = false })
-        }
-        .width('100%')
-        .padding({ bottom: SPACING.MD })
-
         if (this.getAvailableCoupons().length === 0) {
           Column() {
             Text('暂无可用优惠券')
@@ -752,16 +729,12 @@ SymbolGlyph($r('sys.symbol.xmark'))
           .width('100%')
           .layoutWeight(1)
           .scrollBar(BarState.Off)
+          .edgeEffect(EdgeEffect.Spring)
         }
       }
       .width('100%')
-      .height('50%')
+      .height('100%')
       .padding(SPACING.LG)
-      .backgroundColor(COLORS.BG_WHITE)
-      .borderRadius(BORDER_RADIUS.XL)
-    }
-    .width('100%')
-    .height('100%')
   }
 
   @Builder
@@ -802,19 +775,17 @@ SymbolGlyph($r('sys.symbol.xmark'))
         .scrollBar(BarState.Off)
 
         Button('知道了')
+          .attributeModifier(new AppButtonStyle())
           .width('100%')
           .height(44)
-          .fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.TEXT_WHITE)
+          .fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
           .backgroundColor(COLORS.PRIMARY)
           .borderRadius(BORDER_RADIUS.ROUND)
-          .type(ButtonType.Capsule)
           .onClick(() => { this.showOrderFailureDialog = false })
       }
-      .width('84%')
+        .attributeModifier(new AppCardStyle())
+      .width('84%').constraintSize({ maxWidth: 460 })
       .padding(SPACING.XL)
-      .backgroundColor(COLORS.BG_WHITE)
-      .borderRadius(BORDER_RADIUS.XL)
       .alignItems(HorizontalAlign.Center)
     }
     .width('100%')
@@ -830,12 +801,12 @@ SymbolGlyph($r('sys.symbol.xmark'))
           Text(`¥${coupon.amount.toFixed(0)}`)
             .fontSize(FONT_SIZE.XXL)
             .fontWeight(FontWeight.Bold)
-            .fontColor(COLORS.TEXT_WHITE)
+            .fontColor(COLORS.ON_PRIMARY)
         } else {
           Text('不使用')
             .fontSize(FONT_SIZE.SM)
             .fontWeight(FontWeight.Bold)
-            .fontColor(COLORS.TEXT_WHITE)
+            .fontColor(COLORS.ON_PRIMARY)
         }
       }
       .width(80)

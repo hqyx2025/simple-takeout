@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /**
  * 设置页面
  * 包含：清除缓存、修改密码、退出登录、关于我们
@@ -128,26 +129,26 @@ export struct SettingsPage {
         // 设置项列表
         Column() {
           // 清除缓存
-          this.SettingItem($r('sys.symbol.trash'), '清除缓存', this.cacheSize, false, () => {
+          this.SettingItem($r('app.media.ui_trash'), '清除缓存', this.cacheSize, false, () => {
             this.clearCache()
           })
 
           // 退出登录（仅登录时显示）
           if (this.loggedIn) {
             // 修改密码
-            this.SettingItem($r('sys.symbol.key'), '修改密码', '', false, () => {
+            this.SettingItem($r('app.media.profile_key'), '修改密码', '', false, () => {
               this.openPwdDialog()
             })
-            this.SettingItem($r('sys.symbol.door_service'), '退出登录', '', true, () => {
+            this.SettingItem($r('app.media.profile_headset'), '退出登录', '', true, () => {
               this.showLogoutConfirm = true
             })
           }
 
           // 关于我们
-          this.SettingItem($r('sys.symbol.info_circle'), '关于我们', '', false, () => {
+          this.SettingItem($r('app.media.ui_info'), '关于我们', '', false, () => {
             this.showAbout = true
           })
-          this.SettingItem($r('sys.symbol.lock'), '隐私政策', '', false, () => {
+          this.SettingItem($r('app.media.login_lock'), '隐私政策', '', false, () => {
             router.pushUrl({ url: 'pages/PrivacyPolicyPage' })
           })
         }
@@ -169,7 +170,7 @@ export struct SettingsPage {
             .onClick(() => { this.showAbout = false })
 
           Column({ space: SPACING.MD }) {
-            Text('🍜').fontSize(60)
+            Image($r('app.media.home_bowl')).width(60).height(60).objectFit(ImageFit.Contain)
             Text('简单外卖')
               .fontSize(FONT_SIZE.XXL)
               .fontWeight(FontWeight.Bold)
@@ -185,6 +186,7 @@ export struct SettingsPage {
               .fontSize(FONT_SIZE.SM)
               .fontColor(COLORS.TEXT_HINT)
             Button('关闭')
+              .attributeModifier(new AppButtonStyle())
               .height(40)
               .fontSize(FONT_SIZE.MD)
               .fontColor(COLORS.PRIMARY)
@@ -192,14 +194,12 @@ export struct SettingsPage {
               .borderWidth(1)
               .borderColor(COLORS.PRIMARY)
               .borderRadius(BORDER_RADIUS.ROUND)
-              .type(ButtonType.Capsule)
               .margin({ top: SPACING.LG })
               .onClick(() => { this.showAbout = false })
           }
-          .width('80%')
+            .attributeModifier(new AppCardStyle())
+          .width('80%').constraintSize({ maxWidth: 460 })
           .padding(SPACING.XXL)
-          .backgroundColor(COLORS.BG_WHITE)
-          .borderRadius(BORDER_RADIUS.XL)
           .alignItems(HorizontalAlign.Center)
         }
         .width('100%')
@@ -235,11 +235,8 @@ export struct SettingsPage {
               .width('100%')
               .margin({ top: SPACING.SM })
             TextInput({ placeholder: '请输入当前登录密码', text: this.oldPwd })
+              .attributeModifier(new AppInputStyle())
               .type(InputType.Password)
-              .height(44)
-              .fontSize(FONT_SIZE.MD)
-              .backgroundColor(COLORS.BG_PRIMARY)
-              .borderRadius(BORDER_RADIUS.MD)
               .onChange((value: string) => { this.oldPwd = value })
 
             Text('新密码（必填，至少 6 位）')
@@ -248,11 +245,8 @@ export struct SettingsPage {
               .width('100%')
               .margin({ top: SPACING.SM })
             TextInput({ placeholder: '请输入新密码，如：takeout2026', text: this.newPwd })
+              .attributeModifier(new AppInputStyle())
               .type(InputType.Password)
-              .height(44)
-              .fontSize(FONT_SIZE.MD)
-              .backgroundColor(COLORS.BG_PRIMARY)
-              .borderRadius(BORDER_RADIUS.MD)
               .onChange((value: string) => { this.newPwd = value })
 
             Text('确认新密码（必填）')
@@ -261,15 +255,13 @@ export struct SettingsPage {
               .width('100%')
               .margin({ top: SPACING.SM })
             TextInput({ placeholder: '请再次输入新密码', text: this.confirmPwd })
+              .attributeModifier(new AppInputStyle())
               .type(InputType.Password)
-              .height(44)
-              .fontSize(FONT_SIZE.MD)
-              .backgroundColor(COLORS.BG_PRIMARY)
-              .borderRadius(BORDER_RADIUS.MD)
               .onChange((value: string) => { this.confirmPwd = value })
 
             Row({ space: SPACING.MD }) {
               Button('取消')
+                .attributeModifier(new AppButtonStyle())
                 .layoutWeight(1)
                 .height(44)
                 .fontSize(FONT_SIZE.MD)
@@ -278,27 +270,24 @@ export struct SettingsPage {
                 .borderWidth(1)
                 .borderColor(COLORS.DIVIDER)
                 .borderRadius(BORDER_RADIUS.ROUND)
-                .type(ButtonType.Capsule)
                 .enabled(!this.pwdSaving)
                 .onClick(() => { this.showPwdDialog = false })
               Button(this.pwdSaving ? '提交中…' : '确认修改')
+                .attributeModifier(new AppButtonStyle())
                 .layoutWeight(1)
                 .height(44)
-                .fontSize(FONT_SIZE.MD)
-                .fontColor(COLORS.TEXT_WHITE)
+                .fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
                 .backgroundColor(COLORS.PRIMARY)
                 .borderRadius(BORDER_RADIUS.ROUND)
-                .type(ButtonType.Capsule)
                 .enabled(!this.pwdSaving)
                 .onClick(() => { this.submitPasswordChange() })
             }
             .width('100%')
             .margin({ top: SPACING.LG })
           }
-          .width('86%')
+            .attributeModifier(new AppCardStyle())
+          .width('86%').constraintSize({ maxWidth: 460 })
           .padding(SPACING.XXL)
-          .backgroundColor(COLORS.BG_WHITE)
-          .borderRadius(BORDER_RADIUS.XL)
           .alignItems(HorizontalAlign.Start)
         }
         .width('100%')
@@ -325,7 +314,7 @@ export struct SettingsPage {
   @Builder
   SettingItem(iconGlyph: Resource, title: string, value: string, isDanger: boolean, onClick: () => void) {
     Row({ space: SPACING.MD }) {
-      SymbolGlyph(iconGlyph).fontSize(20)
+      Image(iconGlyph).width(20).height(20).objectFit(ImageFit.Contain)
       Text(title)
         .fontSize(FONT_SIZE.LG)
         .fontColor(isDanger ? COLORS.ERROR : COLORS.TEXT_PRIMARY)

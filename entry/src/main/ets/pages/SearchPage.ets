@@ -1,3 +1,6 @@
+import { AppButtonStyle, AppCardStyle, AppSearchStyle } from '../common/theme/AppTheme'
+import { PageHeader } from '../components/PageHeader'
+import { LoadingIndicator } from '../components/LoadingIndicator'
 /**
  * 搜索页 - 热门搜索、历史搜索、店铺搜索结果
  */
@@ -28,12 +31,14 @@ export struct SearchPage {
       .opacity(0)
   }
 
-  @StorageLink('isLoggedIn') loggedIn: boolean = false
+  @StorageLink('isLoggedIn') @Watch('resetSearch') loggedIn: boolean = false
   @State searchText: string = ''
   @State hotWords: string[] = []
   @State historyWords: string[] = []
   @State searchResults: StoreItem[] = []
   @State hasSearched: boolean = false
+  @State searching: boolean = false
+  private searchRequest: number = 0
   // 直接压栈独立 StoreDetailPage，返回时回到搜索页（不再 back 给首页代跳）
   onStoreClick: (store: StoreItem) => void = (store: StoreItem) => {
     if (store.id <= 0) {
@@ -66,14 +71,35 @@ export struct SearchPage {
     if (keyword === '') {
       return
     }
+    const request: number = ++this.searchRequest
+    this.searching = true
     this.hasSearched = true
-    // 搜索店铺只使用后端结果，避免本地缓存混入搜索结果。
-    const remote: StoreItem[] = await searchStoresRemote(keyword)
-    this.searchResults = remote
-    logInfo('Search', `执行搜索 keyword=${keyword} 命中${this.searchResults.length}家店铺`)
-    // 保存搜索历史
-    await addSearchHistory(keyword)
-    await this.loadHistory()
+    try {
+      // 清除输入、切换关键词或退出登录后，旧请求不能覆盖新界面。
+      const remote: StoreItem[] = await searchStoresRemote(keyword)
+      if (request !== this.searchRequest || !this.loggedIn) {
+        return
+      }
+      this.searchResults = remote
+      logInfo('Search', `执行搜索 keyword=${keyword} 命中${remote.length}家店铺`)
+      await addSearchHistory(keyword)
+      await this.loadHistory()
+    } finally {
+      if (request === this.searchRequest) {
+        this.searching = false
+      }
+    }
+  }
+
+  resetSearch(): void {
+    this.searchRequest += 1
+    this.searching = false
+    this.hasSearched = false
+    this.searchResults = []
+  }
+
+  aboutToDisappear(): void {
+    this.resetSearch()
   }
 
   searchByKeyword(keyword: string) {
@@ -88,41 +114,40 @@ export struct SearchPage {
 
   build() {
     Column() {
-      // 顶部导航栏：返回 + 搜索框 + 搜索按钮
+      PageHeader({ title: '搜索', backText: '‹', backId: 'search-back', onBack: () => { this.onBack() } })
       Row({ space: SPACING.XS }) {
-        Text('‹')
-          .fontSize(24)
-          .fontColor(COLORS.TEXT_PRIMARY)
-          // 补足触控区域：原实现无宽高，可点面积仅约 20×30px（低于 40×40 的可用性基线），
-          // 真机/模拟器上很难点中，表现为"返回按钮点了没反应"。
-          .width(40)
-          .height(40)
-          .textAlign(TextAlign.Center)
-          .id('search-back')
-          .onClick(() => { this.onBack() })
-        TextInput({ placeholder: '搜索美食、店铺', text: this.searchText })
+        Search({ placeholder: '搜索美食、店铺', value: this.searchText })
+          .attributeModifier(new AppSearchStyle())
           .layoutWeight(1)
-          .height(36)
-          .backgroundColor(COLORS.BG_PRIMARY)
-          .borderRadius(BORDER_RADIUS.ROUND)
           .id('search-input')
-          .onChange((value: string) => { this.searchText = value })
-        Text('搜索')
+          .accessibilityText('搜索美食、店铺')
+          .onChange((value: string) => {
+            this.searchText = value
+            this.resetSearch()
+          })
+          .onSubmit(() => { this.doSearch() })
+        Button('搜索', { type: ButtonType.Normal })
+          .attributeModifier(new AppButtonStyle())
           .fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.PRIMARY)
+          .fontColor(COLORS.ON_PRIMARY)
+          .height(44)
+          .padding({ left: 12, right: 12 })
           .id('search-submit')
           .onClick(() => { this.doSearch() })
       }
       .width('100%')
-      .height(44)
-      .padding({ left: SPACING.LG, right: SPACING.LG })
-      .backgroundColor(COLORS.BG_WHITE)
+      .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
+      .backgroundColor(COLORS.BG_PRIMARY)
 
       // 内容区（用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中）
-      List() {
+      List({ space: SPACING.SM }) {
         if (!this.loggedIn) {
           ListItem() {
             this.EmptyLoginResult()
+          }
+        } else if (this.searching) {
+          ListItem() {
+            LoadingIndicator({ text: '正在搜索店铺…' }).height(240)
           }
         } else if (!this.hasSearched) {
           // 未搜索时显示：热门搜索 + 历史搜索
@@ -152,6 +177,7 @@ export struct SearchPage {
       .id('search-page-list')
       .width('100%')
       .scrollBar(BarState.Off)
+      .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
       .divider({ strokeWidth: 0 })
       .layoutWeight(1)
       .padding(this.hasSearched ? { left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.LG } : { bottom: SPACING.LG })
@@ -234,8 +260,7 @@ export struct SearchPage {
   @Builder
   EmptyResult() {
     Column() {
-      SymbolGlyph($r('sys.symbol.magnifyingglass'))
-        .fontSize(60)
+      Image($r('app.media.home_search')).width(60).height(60).objectFit(ImageFit.Contain)
       Text('没有找到相关店铺')
         .fontSize(FONT_SIZE.LG)
         .fontColor(COLORS.TEXT_HINT)
@@ -256,7 +281,7 @@ export struct SearchPage {
   @Builder
   EmptyLoginResult() {
     Column() {
-      SymbolGlyph($r('sys.symbol.lock')).fontSize(60)
+      Image($r('app.media.login_lock')).width(60).height(60).objectFit(ImageFit.Contain)
       Text('暂无登录').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
       Text('请登录后搜索店铺').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.SM })
     }
@@ -279,7 +304,7 @@ export struct SearchPage {
           Text(store.name.substring(0, 1))
             .fontSize(FONT_SIZE.TITLE)
             .fontWeight(FontWeight.Bold)
-            .fontColor(COLORS.TEXT_WHITE)
+            .fontColor(COLORS.ON_PRIMARY)
         }
         .width(80)
         .height(80)
@@ -346,10 +371,9 @@ export struct SearchPage {
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.MD)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
     .id(`search-store-${store.id}`)
     .onClick(() => { this.onStoreClick(store) })
   }

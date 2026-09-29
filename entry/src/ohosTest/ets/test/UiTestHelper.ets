@@ -298,11 +298,16 @@ export async function openQuickLoginDialog(driver: Driver): Promise<boolean> {
   for (let tap = 0; tap < 4; tap++) {
     await driver.delayMs(400)
     try {
-      await (versionText as Component).click()
+      const currentVersion = await driver.findComponent(ON.id('version-text'))
+      if (!isFound(currentVersion)) {
+        return isFound(await driver.waitForComponent(ON.id('quick-login-user'), 3000))
+      }
+      await (currentVersion as Component).click()
     } catch (err) {
       console.info('[UiTest] versionText click failed tap=' + tap + ': ' + (err as Error).message)
     }
-    const quickButton = await driver.findComponent(ON.id('quick-login-user'))
+    // 弹窗有入场动画；立即查询可能仍是旧树，下一次点按就会误选骑手。
+    const quickButton = await driver.waitForComponent(ON.id('quick-login-user'), 2000)
     if (isFound(quickButton)) {
       return true
     }

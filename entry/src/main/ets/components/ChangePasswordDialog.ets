@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /**
  * 修改密码弹窗（四端共用）。
  * 调用方在 Stack 中放置本组件并在修改成功后执行 logout + 跳转登录页。
@@ -83,11 +84,8 @@ export struct ChangePasswordDialog {
           .width('100%')
           .margin({ top: SPACING.SM })
         TextInput({ placeholder: '请输入当前登录密码', text: this.oldPwd })
+          .attributeModifier(new AppInputStyle())
           .type(InputType.Password)
-          .height(44)
-          .fontSize(FONT_SIZE.MD)
-          .backgroundColor(COLORS.BG_PRIMARY)
-          .borderRadius(BORDER_RADIUS.MD)
           .onChange((value: string) => { this.oldPwd = value })
 
         Text('新密码（必填，至少 6 位）')
@@ -96,11 +94,8 @@ export struct ChangePasswordDialog {
           .width('100%')
           .margin({ top: SPACING.SM })
         TextInput({ placeholder: '请输入新密码，如：takeout2026', text: this.newPwd })
+          .attributeModifier(new AppInputStyle())
           .type(InputType.Password)
-          .height(44)
-          .fontSize(FONT_SIZE.MD)
-          .backgroundColor(COLORS.BG_PRIMARY)
-          .borderRadius(BORDER_RADIUS.MD)
           .onChange((value: string) => { this.newPwd = value })
 
         Text('确认新密码（必填）')
@@ -109,15 +104,13 @@ export struct ChangePasswordDialog {
           .width('100%')
           .margin({ top: SPACING.SM })
         TextInput({ placeholder: '请再次输入新密码', text: this.confirmPwd })
+          .attributeModifier(new AppInputStyle())
           .type(InputType.Password)
-          .height(44)
-          .fontSize(FONT_SIZE.MD)
-          .backgroundColor(COLORS.BG_PRIMARY)
-          .borderRadius(BORDER_RADIUS.MD)
           .onChange((value: string) => { this.confirmPwd = value })
 
         Row({ space: SPACING.MD }) {
           Button('取消')
+            .attributeModifier(new AppButtonStyle())
             .layoutWeight(1)
             .height(44)
             .fontSize(FONT_SIZE.MD)
@@ -126,28 +119,25 @@ export struct ChangePasswordDialog {
             .borderWidth(1)
             .borderColor(COLORS.DIVIDER)
             .borderRadius(BORDER_RADIUS.ROUND)
-            .type(ButtonType.Capsule)
             .enabled(!this.saving)
             .onClick(() => { this.onClose() })
 
           Button(this.saving ? '提交中...' : '确认修改')
+            .attributeModifier(new AppButtonStyle())
             .layoutWeight(1)
             .height(44)
-            .fontSize(FONT_SIZE.MD)
-            .fontColor(COLORS.TEXT_WHITE)
+            .fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
             .backgroundColor(COLORS.PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
-            .type(ButtonType.Capsule)
             .enabled(!this.saving)
             .onClick(() => { this.submit() })
         }
         .width('100%')
         .margin({ top: SPACING.MD })
       }
-      .width('86%')
+        .attributeModifier(new AppCardStyle())
+      .width('86%').constraintSize({ maxWidth: 460 })
       .padding(SPACING.XL)
-      .backgroundColor(COLORS.BG_WHITE)
-      .borderRadius(BORDER_RADIUS.XL)
     }
     .width('100%')
     .height('100%')

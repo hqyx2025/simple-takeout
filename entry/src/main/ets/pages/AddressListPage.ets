@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /**
  * 地址管理页面
  * 支持地址的增删改查与设置默认地址
@@ -73,6 +74,7 @@ export struct AddressListPage {
   }
 
   @StorageLink('addressList') addressList: Address[] = []
+  @StorageLink('addressSyncState') addressSyncState: string = 'idle'
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State addressListRevision: number = 0
   @State showAddForm: boolean = false
@@ -116,15 +118,22 @@ export struct AddressListPage {
         // 地址列表 / 空状态
         if (this.addressList.length === 0) {
           Column({ space: SPACING.SM }) {
-            SymbolGlyph($r('sys.symbol.inbox'))
-              .fontSize(60)
+            Image($r('app.media.ui_inbox')).width(60).height(60).objectFit(ImageFit.Contain)
               .margin({ top: 80 })
-            Text('暂无收货地址')
+            Text(this.addressSyncState === 'failed' ? '收货地址暂时无法加载'
+              : this.addressSyncState === 'loading' ? '正在同步收货地址…' : '暂无收货地址')
               .fontSize(FONT_SIZE.LG)
               .fontColor(COLORS.TEXT_HINT)
-            Text('点击下方按钮添加收货地址')
+            Text(this.addressSyncState === 'failed' ? '请检查网络连接后重试'
+              : this.addressSyncState === 'loading' ? '请稍候' : '点击下方按钮添加收货地址')
               .fontSize(FONT_SIZE.MD)
               .fontColor(COLORS.TEXT_HINT)
+            if (this.addressSyncState === 'failed') {
+              Button('重新加载')
+                .attributeModifier(new AppButtonStyle())
+                .id('address-retry')
+                .onClick(() => { syncAddressesRemote() })
+            }
           }
           .width('100%')
           .layoutWeight(1)
@@ -149,7 +158,7 @@ export struct AddressListPage {
                     if (addr.isDefault) {
                       Text('默认')
                         .fontSize(FONT_SIZE.XS)
-                        .fontColor(COLORS.TEXT_WHITE)
+                        .fontColor(COLORS.ON_PRIMARY)
                         .backgroundColor(COLORS.PRIMARY)
                         .padding({ left: SPACING.SM, right: SPACING.SM, top: 2, bottom: 2 })
                         .borderRadius(BORDER_RADIUS.SM)
@@ -196,10 +205,9 @@ export struct AddressListPage {
                   }
                   .width('100%')
                 }
+                  .attributeModifier(new AppCardStyle())
                 .width('100%')
                 .padding(SPACING.LG)
-                .backgroundColor(COLORS.BG_WHITE)
-                .borderRadius(BORDER_RADIUS.LG)
                 .onClick(() => {
                   // 选择该地址作为当前配送地址（首页/结算页联动）
                   AppStorage.setOrCreate<Address>('currentAddress', addr)
@@ -221,13 +229,12 @@ export struct AddressListPage {
 
         // 新增收货地址按钮
         Button('+ 新增收货地址')
-          .width('90%')
+          .attributeModifier(new AppButtonStyle())
+          .width('90%').constraintSize({ maxWidth: 460 })
           .height(48)
-          .fontSize(FONT_SIZE.LG)
-          .fontColor(COLORS.TEXT_WHITE)
+          .fontSize(FONT_SIZE.LG).fontColor(COLORS.ON_PRIMARY)
           .backgroundColor(COLORS.PRIMARY)
           .borderRadius(BORDER_RADIUS.ROUND)
-          .type(ButtonType.Capsule)
           .margin({ top: SPACING.MD, bottom: SPACING.SM })
           .onClick(() => { this.openAddForm() })
 
@@ -248,13 +255,13 @@ export struct AddressListPage {
               .textAlign(TextAlign.Center)
 
             TextInput({ placeholder: '姓名', text: this.formData.name })
+              .attributeModifier(new AppInputStyle())
               .width('100%')
-              .height(44)
               .onChange((v: string) => { this.formData.name = v })
 
             TextInput({ placeholder: '电话', text: this.formData.phone })
+              .attributeModifier(new AppInputStyle())
               .width('100%')
-              .height(44)
               .type(InputType.PhoneNumber)
               .onChange((v: string) => { this.formData.phone = v })
 
@@ -264,7 +271,7 @@ export struct AddressListPage {
                   .fontSize(FONT_SIZE.MD)
                   .fontColor(COLORS.TEXT_SECONDARY)
                 Blank()
-                SymbolGlyph($r('sys.symbol.location_right_fill')).fontSize(FONT_SIZE.MD)
+                Image($r('app.media.home_location')).width(FONT_SIZE.MD).height(FONT_SIZE.MD).objectFit(ImageFit.Contain)
           Text(' 定位选择当前位置')
                   .fontSize(FONT_SIZE.SM)
                   .fontColor(this.locatingCurrent ? COLORS.TEXT_HINT : COLORS.PRIMARY)
@@ -274,13 +281,13 @@ export struct AddressListPage {
             }
 
             TextInput({ placeholder: '地址（如：北京市海淀区）', text: this.formData.address })
+              .attributeModifier(new AppInputStyle())
               .width('100%')
-              .height(44)
               .onChange((v: string) => { this.formData.address = v })
 
             TextInput({ placeholder: '详细地址（如：XX路XX号）', text: this.formData.detail })
+              .attributeModifier(new AppInputStyle())
               .width('100%')
-              .height(44)
               .onChange((v: string) => { this.formData.detail = v })
 
             // 标签选择
@@ -292,7 +299,7 @@ export struct AddressListPage {
               ForEach(AddressTag.ALL, (tag: string) => {
                 Text(tag)
                   .fontSize(FONT_SIZE.SM)
-                  .fontColor(this.formData.tag === tag ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
+                  .fontColor(this.formData.tag === tag ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
                   .backgroundColor(this.formData.tag === tag ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
                   .padding({ left: SPACING.MD, right: SPACING.MD, top: SPACING.XS, bottom: SPACING.XS })
                   .borderRadius(BORDER_RADIUS.ROUND)
@@ -316,30 +323,28 @@ export struct AddressListPage {
             // 按钮组
             Row({ space: SPACING.MD }) {
               Button('取消')
+                .attributeModifier(new AppButtonStyle())
                 .layoutWeight(1)
                 .height(44)
                 .fontSize(FONT_SIZE.MD)
                 .fontColor(COLORS.TEXT_SECONDARY)
                 .backgroundColor(COLORS.BG_PRIMARY)
                 .borderRadius(BORDER_RADIUS.ROUND)
-                .type(ButtonType.Capsule)
                 .onClick(() => { this.showAddForm = false })
               Button('保存')
+                .attributeModifier(new AppButtonStyle())
                 .layoutWeight(1)
                 .height(44)
-                .fontSize(FONT_SIZE.MD)
-                .fontColor(COLORS.TEXT_WHITE)
+                .fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
                 .backgroundColor(COLORS.PRIMARY)
                 .borderRadius(BORDER_RADIUS.ROUND)
-                .type(ButtonType.Capsule)
                 .onClick(() => { this.doSave() })
             }
             .width('100%')
           }
-          .width('90%')
+            .attributeModifier(new AppCardStyle())
+          .width('90%').constraintSize({ maxWidth: 460 })
           .padding(SPACING.XL)
-          .backgroundColor(COLORS.BG_WHITE)
-          .borderRadius(BORDER_RADIUS.XL)
         }
         .width('100%')
         .height('100%')

@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppTheme } from '../common/theme/AppTheme'
 /**
  * 独立店铺详情页。
  * 首页附近店、发现推荐、分类商品、搜索和收藏入口统一进入此页面。
@@ -12,8 +13,6 @@ import { promptCompat as promptAction, routerCompat as router } from '../common/
 import { GoodsItem, GoodsSpec, CartItem } from '../model/Models'
 import { addCartItemRemote, getLastRemoteErrorMessage, refreshCartFromServer } from '../service/AppStorageManager'
 
-// 规格列表最大高度：规格过多时弹窗内部滚动，避免撑满整屏遮住底部按钮
-const SPEC_LIST_MAX_HEIGHT: number = 260
 // 数量步进器上下限
 const SPEC_MIN_QUANTITY: number = 1
 
@@ -36,14 +35,12 @@ function createEmptyGoodsItem(): GoodsItem {
 }
 
 /**
- * 多规格菜品选规格弹窗。
+ * 多规格菜品半屏面板，规格区域滚动，数量与加购按钮固定在底部。
  * 规格名 / 规格价 / 规格库存全部来自后端 goods.specs；库存为 0 的规格不可选。
  * 加入购物车成功后由调用方刷新购物车角标，失败时展示后端错误文案，不做静默失败。
  */
-@CustomDialog
-export struct SpecSelectDialog {
-  // @CustomDialog 要求必须持有 CustomDialogController 成员，由页面在构造时注入
-  controller?: CustomDialogController
+@Component
+export struct SpecSelectSheet {
   // 通过闭包在弹窗创建时读取菜品，避免弹窗参数被过早求值导致拿到旧数据
   resolveGoods: () => GoodsItem = (): GoodsItem => createEmptyGoodsItem()
   storeId: number = 0
@@ -54,7 +51,8 @@ export struct SpecSelectDialog {
   @State specList: GoodsSpec[] = []
   @State selectedSpecId: number = 0
   @State quantity: number = SPEC_MIN_QUANTITY
-  @State submitting: boolean = false
+  @Link submitting: boolean
+  @State selectedPrice: number = 0
 
   aboutToAppear(): void {
     const goods: GoodsItem = this.resolveGoods()
@@ -77,6 +75,7 @@ export struct SpecSelectDialog {
       return
     }
     this.selectedSpecId = spec.id
+    this.selectedPrice = spec.price
     if (this.quantity > spec.stock) {
       this.quantity = spec.stock
     }
@@ -107,7 +106,9 @@ export struct SpecSelectDialog {
   }
 
   private closeDialog(): void {
-    this.onClose()
+    if (!this.submitting) {
+      this.onClose()
+    }
   }
 
   private async submit(): Promise<void> {
@@ -154,7 +155,7 @@ export struct SpecSelectDialog {
       }
       await refreshCartFromServer()
       promptAction.showToast({ message: '已加入购物车', duration: 2000 })
-      this.closeDialog()
+      this.onClose()
     } finally {
       this.submitting = false
     }
@@ -163,6 +164,13 @@ export struct SpecSelectDialog {
   @Builder
   SpecRow(spec: GoodsSpec) {
     Row() {
+      Radio({ value: spec.id.toString(), group: 'goods-spec' })
+        .checked(this.selectedSpecId === spec.id)
+        .enabled(spec.stock > 0 && !this.submitting)
+        .radioStyle({ checkedBackgroundColor: AppTheme.PRIMARY,
+          uncheckedBorderColor: AppTheme.MUTED, indicatorColor: AppTheme.PRIMARY_TEXT })
+        .accessibilityText(spec.name)
+        .onChange((checked: boolean) => { if (checked) { this.selectSpec(spec) } })
       Column({ space: SPACING.XS }) {
         Text(spec.name)
           .fontSize(FONT_SIZE.MD)
@@ -187,6 +195,9 @@ export struct SpecSelectDialog {
     .borderWidth(1)
     .borderColor(this.selectedSpecId === spec.id ? COLORS.PRIMARY : COLORS.DIVIDER)
     .borderRadius(BORDER_RADIUS.MD)
+    .enabled(!this.submitting)
+    .accessibilitySelected(this.selectedSpecId === spec.id)
+    .id(`spec-option-${spec.id}`)
     .onClick(() => { this.selectSpec(spec) })
   }
 
@@ -204,9 +215,12 @@ export struct SpecSelectDialog {
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start)
 
-        SymbolGlyph($r('sys.symbol.xmark'))
-          .fontSize(FONT_SIZE.LG)
-          .padding(SPACING.XS)
+        Button({ type: ButtonType.Circle }) {
+          Image($r('app.media.ui_close')).width(20).height(20).objectFit(ImageFit.Contain)
+        }
+          .width(44).height(44).backgroundColor(AppTheme.INPUT)
+          .accessibilityText('关闭规格选择').id('spec-close')
+          .enabled(!this.submitting)
           .onClick(() => { this.closeDialog() })
       }
       .width('100%')
@@ -221,7 +235,8 @@ export struct SpecSelectDialog {
       }
       .scrollBar(BarState.Off)
       .width('100%')
-      .constraintSize({ maxHeight: SPEC_LIST_MAX_HEIGHT })
+      .layoutWeight(1)
+      .edgeEffect(EdgeEffect.Spring)
       .margin({ top: SPACING.MD })
 
       // 数量步进器：选中规格后出现，最少 1 份、最多不超过该规格库存
@@ -229,18 +244,20 @@ export struct SpecSelectDialog {
         Row() {
           Text('数量').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
           Row({ space: SPACING.MD }) {
-            Text('-')
-              .width(28).height(28).fontSize(FONT_SIZE.LG).fontColor(COLORS.PRIMARY)
+            Button('-')
+              .width(44).height(44).fontSize(FONT_SIZE.LG).fontColor(COLORS.PRIMARY)
               .backgroundColor(COLORS.BG_PRIMARY).borderRadius(BORDER_RADIUS.CIRCLE)
-              .textAlign(TextAlign.Center)
+              .enabled(!this.submitting && this.quantity > SPEC_MIN_QUANTITY)
+              .accessibilityText('减少数量')
               .onClick(() => { this.changeQuantity(-1) })
             Text(this.quantity.toString())
               .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_PRIMARY)
               .width(32).textAlign(TextAlign.Center)
-            Text('+')
-              .width(28).height(28).fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_WHITE)
+            Button('+')
+              .width(44).height(44).fontSize(FONT_SIZE.LG).fontColor(COLORS.ON_PRIMARY)
               .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.CIRCLE)
-              .textAlign(TextAlign.Center)
+              .enabled(!this.submitting)
+              .accessibilityText('增加数量')
               .onClick(() => { this.changeQuantity(1) })
           }
         }
@@ -248,16 +265,24 @@ export struct SpecSelectDialog {
         .margin({ top: SPACING.MD })
       }
 
+      if (this.selectedSpecId > 0) {
+        Text(`合计 ¥${(this.selectedPrice * this.quantity).toFixed(2)}`)
+          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRICE_RED)
+          .width('100%').margin({ top: SPACING.SM })
+      }
       Button('加入购物车')
-        .width('100%').height(44)
-        .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_WHITE)
+        .attributeModifier(new AppButtonStyle())
+        .width('100%').height(AppTheme.CONTROL_HEIGHT)
+        .enabled(!this.submitting)
+        .id('spec-add-cart')
+        .fontSize(FONT_SIZE.LG).fontColor(COLORS.ON_PRIMARY)
         .backgroundColor(COLORS.PRIMARY)
         .borderRadius(BORDER_RADIUS.ROUND)
-        .type(ButtonType.Capsule)
         .margin({ top: SPACING.LG })
         .onClick(() => { this.submit() })
     }
     .width('100%')
+    .height('100%')
     .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
     .backgroundColor(COLORS.BG_WHITE)
     .borderRadius({ topLeft: BORDER_RADIUS.XL, topRight: BORDER_RADIUS.XL })
@@ -286,27 +311,22 @@ export struct StoreDetailPage {
   @StorageLink('selectedStoreName') storeName: string = ''
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State showLogin: boolean = false
+  @State detailVisible: boolean = true
   // 待选规格的菜品；弹窗通过闭包在打开时读取，保证切换菜品后弹窗展示的是最新菜品
   @State specGoods: GoodsItem = createEmptyGoodsItem()
+  @State showSpecSheet: boolean = false
+  @State specSubmitting: boolean = false
 
-  private specDialog: CustomDialogController = new CustomDialogController({
-    builder: SpecSelectDialog({
+  @Builder
+  SpecSheet() {
+    SpecSelectSheet({
       resolveGoods: (): GoodsItem => this.specGoods,
       storeId: this.storeId,
       storeName: this.storeName,
-      onClose: () => {
-        this.specDialog.close()
-        this.specGoods = createEmptyGoodsItem()
-      }
-    }),
-    autoCancel: true,
-    alignment: DialogAlignment.Bottom,
-    customStyle: true,
-    cancel: () => {
-      // 点击遮罩或返回键关闭时同步清理待选菜品
-      this.specGoods = createEmptyGoodsItem()
-    }
-  })
+      submitting: $specSubmitting,
+      onClose: () => { this.showSpecSheet = false }
+    })
+  }
 
   aboutToAppear(): void {
     if (this.storeId <= 0) {
@@ -315,9 +335,17 @@ export struct StoreDetailPage {
     }
   }
 
+  onPageShow(): void {
+    this.detailVisible = true
+  }
+
+  onPageHide(): void {
+    this.detailVisible = false
+  }
+
   private openSpecDialog(goods: GoodsItem): void {
     this.specGoods = goods
-    this.specDialog.open()
+    this.showSpecSheet = true
   }
 
   private goBack(): void {
@@ -329,11 +357,12 @@ export struct StoreDetailPage {
   build() {
     Stack() {
       Column() {
-        PageHeader({ title: this.storeName || '店铺详情', onBack: () => { this.goBack() } })
+        PageHeader({ title: this.storeName || '店铺详情', topPadding: SPACING.SM, onBack: () => { this.goBack() } })
 
         if (this.storeId > 0) {
           StoreDetailContent({
             storeId: this.storeId,
+            pageVisible: this.detailVisible,
             onNavigateLogin: () => { this.showLogin = true },
             onSelectSpecGoods: (goods: GoodsItem) => { this.openSpecDialog(goods) }
           })
@@ -359,5 +388,20 @@ export struct StoreDetailPage {
     }
     .width('100%')
     .height('100%')
+    .bindSheet($$this.showSpecSheet, this.SpecSheet(), {
+      height: '70%',
+      detents: ['70%', SheetSize.LARGE],
+      preferType: SheetType.BOTTOM,
+      showClose: false,
+      dragBar: true,
+      backgroundColor: AppTheme.CARD,
+      radius: { topLeft: AppTheme.SHEET_RADIUS, topRight: AppTheme.SHEET_RADIUS },
+      onWillDismiss: (action: DismissSheetAction) => {
+        if (!this.specSubmitting) {
+          action.dismiss()
+        }
+      },
+      onDisappear: () => { this.specGoods = createEmptyGoodsItem() }
+    })
   }
 }

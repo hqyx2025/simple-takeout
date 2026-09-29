@@ -4,7 +4,7 @@
  * 运行镜像基于 JRE，没有 curl/wget，因此用这段最小 Java 程序替代。
  * 只判断 TCP 能否建立连接（HTTP 层返回 400/401/200 都算服务已就绪）。
  *
- * 用法：java -cp /app healthcheck 127.0.0.1 9000
+ * 用法：java -cp /app healthcheck 127.0.0.1 8087
  * 退出码：0 = 服务可达；1 = 不可达
  */
 import java.net.InetSocketAddress;
@@ -14,7 +14,7 @@ public final class healthcheck {
 
     public static void main(String[] args) {
         String host = args.length > 0 ? args[0] : "127.0.0.1";
-        int port = args.length > 1 ? Integer.parseInt(args[1]) : 9000;
+        int port = args.length > 1 ? Integer.parseInt(args[1]) : 8087;
 
         try (Socket socket = new Socket()) {
             socket.connect(new InetSocketAddress(host, port), 3000);

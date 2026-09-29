@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle, AppFilterStyle, AppRefreshStyle } from '../common/theme/AppTheme'
 /**
  * 我的订单页（独立路由页）。
  *
@@ -79,6 +80,9 @@ struct OrderListPage {
   @StorageLink('orderFilterStatus') @Watch('onOrderFilterRequest') requestedStatus: number = -1
   @State @Watch('onFilterChange') currentStatus: number = -1
   @State isRefreshing: boolean = false
+  @State filteredCount: number = 0
+  @State expandedOrderIds: number[] = []
+  private ordersLoading: boolean = false
 
   aboutToAppear() {
     logInfo('Page', '进入我的订单页 OrderListPage')
@@ -109,14 +113,25 @@ struct OrderListPage {
 
   // 拉取后端用户订单并刷新列表
   private async refreshOrders(): Promise<void> {
+    if (this.ordersLoading) {
+      return
+    }
     if (!this.loggedIn) {
       this.orderList = []
       this.refreshDataSource()
+      this.isRefreshing = false
       return
     }
-    await syncUserOrdersFromServer()
-    this.orderList = AppStorage.get<Order[]>('orderList') || []
-    this.refreshDataSource()
+    this.ordersLoading = true
+    this.isRefreshing = true
+    try {
+      await syncUserOrdersFromServer()
+      this.orderList = this.loggedIn ? (AppStorage.get<Order[]>('orderList') ?? []) : []
+      this.refreshDataSource()
+    } finally {
+      this.ordersLoading = false
+      this.isRefreshing = false
+    }
   }
 
   onOrderListChange(): void {
@@ -145,6 +160,7 @@ struct OrderListPage {
       filtered = filtered.filter(o => o !== null && typeof o === 'object' && o.status === this.currentStatus)
     }
     this.orderDataSource.setData(filtered)
+    this.filteredCount = filtered.length
   }
 
   /** 支付待付款订单：扣余额并流转到待接单（余额支付模型）。 */
@@ -179,7 +195,7 @@ struct OrderListPage {
       PageHeader({ title: '我的订单', backId: 'order-list-back', onBack: () => { router.back() } })
 
       Scroll() {
-        Row({ space: 0 }) {
+        Row({ space: SPACING.SM }) {
           ForEach([
             OrderTabItem.create('全部', -1),
             OrderTabItem.create('待付款', 0),
@@ -187,48 +203,56 @@ struct OrderListPage {
             OrderTabItem.create('配送中', 3),
             OrderTabItem.create('已完成', 4),
           ], (item: OrderTabItem) => {
-            Text(item.title)
-              .fontSize(FONT_SIZE.MD)
-              .fontColor(this.currentStatus === item.status ? COLORS.PRIMARY : COLORS.TEXT_SECONDARY)
-              .fontWeight(this.currentStatus === item.status ? FontWeight.Bold : FontWeight.Normal)
-              .padding({ left: SPACING.MD, right: SPACING.MD, top: SPACING.SM, bottom: SPACING.SM })
-              .id(`order-filter-${item.status}`)
-              .onClick(() => { this.currentStatus = item.status })
+            this.FilterTab(item)
           }, (item: OrderTabItem) => item.title)
         }
-        .padding({ left: SPACING.LG, right: SPACING.LG })
+        .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
       }
       .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
       .width('100%').backgroundColor(COLORS.BG_WHITE)
 
       if (!this.loggedIn) {
-        EmptyState({ iconGlyph: $r('sys.symbol.lock'), title: '暂无登录', description: '请登录后查看订单' })
-      } else if (!Array.isArray(this.orderList) || this.orderList.length === 0) {
-        EmptyState({ iconGlyph: $r('sys.symbol.gift'), title: '暂无订单', description: '快去点一份美味吧' })
+        EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', description: '请登录后查看订单' })
       } else {
-        Refresh({ refreshing: this.isRefreshing }) {
+        Refresh({ refreshing: $$this.isRefreshing }) {
           List({ space: SPACING.SM }) {
+            if (this.filteredCount === 0 && !this.isRefreshing) {
+              ListItem() {
+                EmptyState({ icon: $r('app.media.ui_gift'), title: '暂无订单',
+                  description: this.currentStatus === -1 ? '快去点一份美味吧' : '当前分类暂无订单，可下拉刷新' })
+                  .height(300)
+              }
+            }
             LazyForEach(this.orderDataSource, (order: Order) => {
               ListItem() {
                 this.OrderCard(order)
               }
             }, (item: Order) => item.id.toString())
           }
-          .layoutWeight(1)
+          .height('100%')
           .width('100%')
           .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.LG })
           .scrollBar(BarState.Off).divider({ strokeWidth: 0 })
+          .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
           .cachedCount(5)
         }
-        .onRefreshing(() => {
-          this.orderList = AppStorage.get<Order[]>('orderList') || []
-          this.refreshDataSource()
-          this.isRefreshing = false
-        })
+        .layoutWeight(1)
+        .attributeModifier(new AppRefreshStyle())
+        .onRefreshing(() => { this.refreshOrders() })
       }
     }
     .width('100%').height('100%')
     .backgroundColor(COLORS.BG_PRIMARY)
+  }
+
+  @Builder
+  FilterTab(item: OrderTabItem) {
+    Button(item.title)
+      .attributeModifier(new AppFilterStyle(this.currentStatus === item.status))
+      .animation(AppMotion.pressAnimation())
+      .accessibilitySelected(this.currentStatus === item.status)
+      .id(`order-filter-${item.status}`)
+      .onClick(() => { this.currentStatus = item.status })
   }
 
   @Builder
@@ -240,7 +264,9 @@ struct OrderListPage {
         Text(getOrderStatusText(order.status, order.escrowStatus ?? 0))
           .fontSize(FONT_SIZE.MD).fontColor(getOrderStatusColor(order.status, order.escrowStatus ?? 0)).fontWeight(FontWeight.Bold)
       }
-      ForEach(order.items || [], (item: CartItem) => {
+      Text(`订单号：${order.orderNo ?? order.id}`).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+        .width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+      ForEach(this.expandedOrderIds.indexOf(order.id) >= 0 ? (order.items ?? []) : (order.items ?? []).slice(0, 2), (item: CartItem) => {
         Row() {
           // 多规格：订单行附带下单时锁定的规格快照
           Text((item.specName ?? '') !== '' ? `${item.goods.name}（${item.specName}）` : item.goods.name)
@@ -248,24 +274,40 @@ struct OrderListPage {
           Text(`x${item.quantity}`).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
         }.width('100%')
       }, (item: CartItem) => `${item.goods.id}_${item.specId ?? 0}`)
+      if ((order.items ?? []).length > 2) {
+        Button(this.expandedOrderIds.indexOf(order.id) >= 0 ? '收起商品 ∧' : `展开其余 ${(order.items ?? []).length - 2} 件商品 ∨`)
+          .attributeModifier(new AppButtonStyle()).height(40).width('100%')
+          .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY).backgroundColor(COLORS.BG_PRIMARY)
+          .id(`order-expand-${order.id}`)
+          .onClick(() => {
+            this.getUIContext().animateTo({ duration: AppMotion.duration(220), curve: Curve.EaseOut }, () => {
+              this.expandedOrderIds = this.expandedOrderIds.indexOf(order.id) >= 0
+                ? this.expandedOrderIds.filter((id: number) => id !== order.id) : this.expandedOrderIds.concat(order.id)
+            })
+          })
+      }
       Row() {
         Text(`共${(order.items || []).reduce((s, i) => s + i.quantity, 0)}件 实付`)
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
         Text(`¥${order.payAmount.toFixed(2)}`)
           .fontSize(FONT_SIZE.LG).fontColor(COLORS.PRICE_RED).fontWeight(FontWeight.Bold)
-        Blank()
+      }.width('100%')
+      Flex({ justifyContent: FlexAlign.End, wrap: FlexWrap.Wrap }) {
         if (order.status === 0) {
           // 待付款：可取消（释放库存与优惠券）或立即支付
-          Button('取消订单').height(32).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
-            .backgroundColor(COLORS.BG_PRIMARY).borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+          Button('取消订单')
+            .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+            .backgroundColor(COLORS.BG_PRIMARY).borderRadius(BORDER_RADIUS.ROUND)
             .margin({ right: SPACING.SM })
             .onClick(() => { this.cancelPendingOrder(order) })
-          Button('立即支付').height(32).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_WHITE)
-            .backgroundColor(MODULE_COLOR.ORDER).borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+          Button('立即支付')
+            .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)
+            .backgroundColor(MODULE_COLOR.ORDER).borderRadius(BORDER_RADIUS.ROUND)
             .onClick(() => { this.payPendingOrder(order) })
         } else if (order.status === 4 && (order.escrowStatus ?? 0) === 0) {
-          Button('确认收货并结算').height(32).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_WHITE)
-            .backgroundColor(MODULE_COLOR.CART).borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+          Button('确认收货并结算')
+            .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)
+            .backgroundColor(MODULE_COLOR.CART).borderRadius(BORDER_RADIUS.ROUND)
             .onClick(async () => {
               const ok: boolean = await confirmOrderRemote(order.id)
               this.orderList = AppStorage.get<Order[]>('orderList') || []
@@ -281,13 +323,14 @@ struct OrderListPage {
           Text('配送中，送达后可确认收货')
             .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
         } else if (order.status === 5) {
-          Button('已取消').height(32).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
-            .backgroundColor(COLORS.BG_PRIMARY).borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+          Button('已取消')
+            .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+            .backgroundColor(COLORS.BG_PRIMARY).borderRadius(BORDER_RADIUS.ROUND)
         }
       }.width('100%')
     }
     .width('100%').padding(SPACING.MD)
-    .backgroundColor(MODULE_BG.ORDER).borderRadius(BORDER_RADIUS.LG)
+    .attributeModifier(new AppCardStyle())
     .id(`order-card-${order.id}`)
     .onClick(() => {
       AppStorage.setOrCreate<Order>('currentOrder', order)

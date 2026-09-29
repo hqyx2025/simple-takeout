@@ -1,4 +1,6 @@
 /node_modules
+.env
+/.rivet/
 /oh_modules
 /local.properties
 /.idea

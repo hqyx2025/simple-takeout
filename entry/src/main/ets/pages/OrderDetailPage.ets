@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle, AppTextAreaStyle } from '../common/theme/AppTheme'
 /**
  * 订单详情页
  * 展示订单状态时间轴、店铺与商品、配送信息、金额明细、订单信息
@@ -273,7 +274,7 @@ export struct OrderDetailPage {
 
         if (this.order === null) {
           Column({ space: SPACING.SM }) {
-            SymbolGlyph(this.loggedIn ? $r('sys.symbol.gift') : $r('sys.symbol.lock')).fontSize(60).margin({ top: 100 })
+            Image(this.loggedIn ? $r('app.media.ui_gift') : $r('app.media.login_lock')).width(60).height(60).objectFit(ImageFit.Contain).margin({ top: 100 })
             Text(this.loggedIn ? '订单不存在' : '暂无登录')
               .fontSize(FONT_SIZE.LG)
               .fontColor(COLORS.TEXT_HINT)
@@ -435,8 +436,7 @@ export struct OrderDetailPage {
             .fontWeight(FontWeight.Bold)
             .fontColor(COLORS.TEXT_PRIMARY)
             .layoutWeight(1)
-SymbolGlyph($r('sys.symbol.xmark'))
-.fontSize(FONT_SIZE.LG)
+Image($r('app.media.ui_close')).width(FONT_SIZE.LG).height(FONT_SIZE.LG).objectFit(ImageFit.Contain)
 .onClick(() => { this.showRefundDialog = false })
         }
         .width('100%')
@@ -452,7 +452,7 @@ SymbolGlyph($r('sys.symbol.xmark'))
           ForEach(this.refundReasonOptions, (opt: RefundReasonOption) => {
             Text(opt.label)
               .fontSize(FONT_SIZE.XS)
-              .fontColor(this.refundReasonType === opt.code ? COLORS.TEXT_WHITE : COLORS.TEXT_PRIMARY)
+              .fontColor(this.refundReasonType === opt.code ? COLORS.ON_PRIMARY : COLORS.TEXT_PRIMARY)
               .backgroundColor(this.refundReasonType === opt.code ? COLORS.PRIMARY : COLORS.TAG_BG)
               .padding({ left: SPACING.SM, right: SPACING.SM, top: 4, bottom: 4 })
               .borderRadius(BORDER_RADIUS.SM)
@@ -463,32 +463,29 @@ SymbolGlyph($r('sys.symbol.xmark'))
         .margin({ bottom: SPACING.MD })
 
         TextArea({ placeholder: '补充说明（选填，最多50字）' })
+          .attributeModifier(new AppTextAreaStyle())
           .width('100%')
           .height(90)
-          .fontSize(FONT_SIZE.MD)
           .maxLength(50)
-          .borderRadius(BORDER_RADIUS.MD)
-          .backgroundColor(COLORS.BG_PRIMARY)
           .onChange((value: string) => { this.refundReason = value })
 
         Row({ space: SPACING.MD }) {
           Button('取消')
+            .attributeModifier(new AppButtonStyle())
             .layoutWeight(1)
             .height(44)
             .fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.TEXT_SECONDARY)
             .backgroundColor(COLORS.BG_PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
-            .type(ButtonType.Capsule)
             .onClick(() => { this.showRefundDialog = false })
           Button('提交申请')
+            .attributeModifier(new AppButtonStyle())
             .layoutWeight(1)
             .height(44)
-            .fontSize(FONT_SIZE.MD)
-            .fontColor(COLORS.TEXT_WHITE)
+            .fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
             .backgroundColor(COLORS.PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
-            .type(ButtonType.Capsule)
             .onClick(() => { this.submitRefund() })
         }
         .width('100%')
@@ -526,8 +523,7 @@ SymbolGlyph($r('sys.symbol.xmark'))
       // 待付款：支付倒计时提示（超时由后端自动取消）
       if (this.order!.status === 0) {
         Row() {
-          SymbolGlyph($r('sys.symbol.alarm'))
-            .fontSize(FONT_SIZE.LG)
+          Image($r('app.media.home_clock')).width(FONT_SIZE.LG).height(FONT_SIZE.LG).objectFit(ImageFit.Contain)
           Text(this.payRemainSeconds > 0
             ? `请在 ${this.payCountdownText()} 内完成支付，超时订单将自动取消`
             : '支付时限已到，正在确认订单状态…')
@@ -549,10 +545,9 @@ SymbolGlyph($r('sys.symbol.xmark'))
         this.RiderTracking()
       }
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
   }
 
   // 骑手配送位置跟踪动画
@@ -560,7 +555,7 @@ SymbolGlyph($r('sys.symbol.xmark'))
   RiderTracking() {
     Column({ space: SPACING.SM }) {
       Row() {
-        SymbolGlyph($r('sys.symbol.express_delivery')).fontSize(18)
+        Image($r('app.media.login_rider')).width(18).height(18).objectFit(ImageFit.Contain)
         Text(' 骑手配送中')
           .fontSize(FONT_SIZE.MD)
           .fontWeight(FontWeight.Bold)
@@ -589,8 +584,7 @@ SymbolGlyph($r('sys.symbol.xmark'))
           .backgroundColor(COLORS.PRIMARY)
 
         // 骑手图标（沿轨道移动）
-        SymbolGlyph($r('sys.symbol.express_delivery'))
-          .fontSize(20)
+        Image($r('app.media.login_rider')).width(20).height(20).objectFit(ImageFit.Contain)
           .translate({ x: this.riderProgress * (this.trackWidth - 30) })
           .animation({ duration: 250, curve: Curve.Linear })
       }
@@ -615,7 +609,7 @@ SymbolGlyph($r('sys.symbol.xmark'))
   StoreAndItemsCard() {
     Column({ space: SPACING.SM }) {
       Row() {
-        SymbolGlyph($r('sys.symbol.store')).fontSize(FONT_SIZE.LG)
+        Image($r('app.media.login_store')).width(FONT_SIZE.LG).height(FONT_SIZE.LG).objectFit(ImageFit.Contain)
         Text(this.order!.storeName)
           .fontSize(FONT_SIZE.LG)
           .fontWeight(FontWeight.Bold)
@@ -655,10 +649,9 @@ SymbolGlyph($r('sys.symbol.xmark'))
         .padding({ top: SPACING.XS, bottom: SPACING.XS })
       }, (item: CartItem) => `${item.goods.id}_${item.specId ?? 0}`)
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
   }
 
   @Builder
@@ -700,7 +693,7 @@ SymbolGlyph($r('sys.symbol.xmark'))
       // 配送骑手（配送中及之后由后端返回）
       if (this.order!.riderName !== undefined && this.order!.riderName !== '') {
         Row() {
-          SymbolGlyph($r('sys.symbol.express_delivery')).fontSize(18)
+          Image($r('app.media.login_rider')).width(18).height(18).objectFit(ImageFit.Contain)
           Text(' 配送骑手')
             .fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.TEXT_SECONDARY)
@@ -714,10 +707,9 @@ SymbolGlyph($r('sys.symbol.xmark'))
         .width('100%')
       }
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
   }
 
   @Builder
@@ -784,10 +776,9 @@ SymbolGlyph($r('sys.symbol.xmark'))
       }
       .width('100%')
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
   }
 
   @Builder
@@ -806,7 +797,7 @@ SymbolGlyph($r('sys.symbol.xmark'))
         Text('订单号')
           .fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_SECONDARY)
-        Text(this.order!.id.toString())
+        Text(this.order!.orderNo ?? this.order!.id.toString())
           .fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_PRIMARY)
           .layoutWeight(1)
@@ -840,10 +831,9 @@ SymbolGlyph($r('sys.symbol.xmark'))
         .width('100%')
       }
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
   }
 
   @Builder
@@ -856,7 +846,7 @@ SymbolGlyph($r('sys.symbol.xmark'))
           ForEach(this.payChannelOptions, (opt: PayChannelOption) => {
             Text(opt.code === 'BALANCE' ? opt.label : `${opt.label}(模拟)`)
               .fontSize(FONT_SIZE.XS)
-              .fontColor(this.payChannel === opt.code ? COLORS.TEXT_WHITE : COLORS.TEXT_PRIMARY)
+              .fontColor(this.payChannel === opt.code ? COLORS.ON_PRIMARY : COLORS.TEXT_PRIMARY)
               .backgroundColor(this.payChannel === opt.code ? COLORS.PRIMARY : COLORS.TAG_BG)
               .padding({ left: SPACING.SM, right: SPACING.SM, top: 4, bottom: 4 })
               .borderRadius(BORDER_RADIUS.SM)
@@ -870,25 +860,24 @@ SymbolGlyph($r('sys.symbol.xmark'))
         // 待付款：取消订单（未支付，仅释放库存与优惠券）
         if (this.order!.status === 0) {
           Button('取消订单')
+            .attributeModifier(new AppButtonStyle())
             .layoutWeight(1)
             .height(44)
             .fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.TEXT_SECONDARY)
             .backgroundColor(COLORS.BG_PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
-            .type(ButtonType.Capsule)
             .enabled(!this.paying)
             .id('order-cancel')
             .onClick(() => { this.showCancelDialog = true })
 
           Button(this.paying ? '支付中…' : `立即支付 ¥${this.order!.payAmount.toFixed(2)}`)
+            .attributeModifier(new AppButtonStyle())
             .layoutWeight(2)
             .height(44)
-            .fontSize(FONT_SIZE.MD)
-            .fontColor(COLORS.TEXT_WHITE)
+            .fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
             .backgroundColor(COLORS.PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
-            .type(ButtonType.Capsule)
             .enabled(!this.paying)
             .id('order-pay')
             .onClick(() => { this.payNow() })
@@ -897,39 +886,38 @@ SymbolGlyph($r('sys.symbol.xmark'))
         // 待接单/制作中/配送中且托管未处理：取消订单
         if (this.order!.status >= 1 && this.order!.status <= 3 && (this.order!.escrowStatus ?? 0) === 0) {
           Button('取消订单')
+            .attributeModifier(new AppButtonStyle())
             .layoutWeight(1)
             .height(44)
             .fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.TEXT_SECONDARY)
             .backgroundColor(COLORS.BG_PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
-            .type(ButtonType.Capsule)
             .onClick(() => { this.showCancelDialog = true })
         }
 
         // status===4 且托管款未结算：确认收货并结算
         if (this.order!.status === 4 && (this.order!.escrowStatus ?? 0) === 0) {
           Button('确认收货并结算')
+            .attributeModifier(new AppButtonStyle())
             .layoutWeight(1)
             .height(44)
-            .fontSize(FONT_SIZE.MD)
-            .fontColor(COLORS.TEXT_WHITE)
+            .fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
             .backgroundColor(COLORS.PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
-            .type(ButtonType.Capsule)
             .onClick(() => { this.showConfirmDialog = true })
         }
 
         // status===4 且托管未结算、未评价：申请退款（演进项：退款审批，见大纲 7.11）
         if (this.order!.status === 4 && (this.order!.escrowStatus ?? 0) === 0 && this.order!.reviewed === 0) {
           Button('申请退款')
+            .attributeModifier(new AppButtonStyle())
             .layoutWeight(1)
             .height(44)
             .fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.ERROR)
             .backgroundColor(Color.Transparent)
             .borderRadius(BORDER_RADIUS.ROUND)
-            .type(ButtonType.Capsule)
             .borderWidth(1)
             .borderColor(COLORS.ERROR)
             .onClick(() => { this.showRefundDialog = true })
@@ -938,13 +926,13 @@ SymbolGlyph($r('sys.symbol.xmark'))
         // status===4 (已送达/已完成): 再来一单 + 商品评价
         if (this.order!.status === 4) {
           Button('再来一单')
+            .attributeModifier(new AppButtonStyle())
             .layoutWeight(1)
             .height(44)
             .fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.PRIMARY)
             .backgroundColor(Color.Transparent)
             .borderRadius(BORDER_RADIUS.ROUND)
-            .type(ButtonType.Capsule)
             .borderWidth(1)
             .borderColor(COLORS.PRIMARY)
             .onClick(() => {
@@ -955,13 +943,12 @@ SymbolGlyph($r('sys.symbol.xmark'))
             })
           if ((this.order!.escrowStatus ?? 0) === 1 && this.order!.reviewed === 0) {
             Button('评价商品')
+              .attributeModifier(new AppButtonStyle())
               .layoutWeight(1)
               .height(44)
-              .fontSize(FONT_SIZE.MD)
-              .fontColor(COLORS.TEXT_WHITE)
+              .fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
               .backgroundColor(COLORS.PRIMARY)
               .borderRadius(BORDER_RADIUS.ROUND)
-              .type(ButtonType.Capsule)
               .id('order-review-entry')
               .onClick(() => {
                 if (this.order !== null && this.order.items.length > 0) {

@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 /**
  * 抢单大厅（四端改造）：展示待取餐池订单，骑手在线即可抢单
  */
@@ -98,7 +99,7 @@ export struct RiderOrderPoolPage {
 
   build() {
     Column() {
-      PageHeader({ title: '抢单大厅', backText: '‹ 返回', backId: 'rider-pool-back', titleColor: MODULE_COLOR.RIDER, headerBgColor: MODULE_BG.RIDER, actionLabel: '刷新', onAction: () => { this.loadPool() }, onBack: () => { router.back() } })
+      PageHeader({ title: '抢单大厅', backText: '‹ 返回', backId: 'rider-pool-back', titleColor: COLORS.TEXT_PRIMARY, headerBgColor: COLORS.BG_PRIMARY, actionLabel: '刷新', onAction: () => { this.loadPool() }, onBack: () => { router.back() } })
 
       if (this.rangeText() !== '') {
         Text(this.rangeText())
@@ -115,7 +116,7 @@ export struct RiderOrderPoolPage {
         }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
       } else if (this.orders.length === 0) {
         Column({ space: SPACING.SM }) {
-          SymbolGlyph($r('sys.symbol.express_delivery')).fontSize(60).margin({ top: 40 })
+          Image($r('app.media.login_rider')).width(60).height(60).objectFit(ImageFit.Contain).margin({ top: 40 })
           Text(this.needsLocation() ? '请先设置接单位置' : '暂无待抢订单')
             .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
           Text(this.needsLocation()
@@ -166,14 +167,14 @@ export struct RiderOrderPoolPage {
         Text(`${getOrderStatusText(order.status)} · ${order.createTime}`)
           .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).layoutWeight(1)
         Button('抢单')
-          .height(36).fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.RIDER)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+          .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.RIDER)
+          .borderRadius(BORDER_RADIUS.ROUND)
           .id(`rider-grab-${order.id}`)
           .onClick(() => { this.grab(order) })
       }.width('100%')
     }
-    .width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+      .attributeModifier(new AppCardStyle())
+    .width('100%').padding(SPACING.LG)
     .id(`rider-pool-card-${order.id}`)
   }
 }

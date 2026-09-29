@@ -1,5 +1,8 @@
 package com.example.takeout.common;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+
 /**
  * 订单号生成器（雪花 ID + 唯一键冲突重试的唯一入口）。
  *
@@ -19,9 +22,12 @@ public final class OrderIdGenerator {
     private OrderIdGenerator() {
     }
 
-    /** 生成一个订单号（13~19 位纯数字，可直接放进 orders.order_no VARCHAR(32)）。 */
+    private static final DateTimeFormatter ORDER_DATE = DateTimeFormatter.BASIC_ISO_DATE;
+
+    /** 订单号：下单日期 yyyyMMdd + 7 位数字标识；数据库 UNIQUE 约束负责极端碰撞重试。 */
     public static String nextOrderNo() {
-        return GENERATOR.nextIdString();
+        long suffix = Math.floorMod(GENERATOR.nextId(), 10_000_000L);
+        return LocalDate.now().format(ORDER_DATE) + String.format("%07d", suffix);
     }
 
     /** 当前实例派生的 workerId（诊断用：多实例排查撞号时对比该值）。 */

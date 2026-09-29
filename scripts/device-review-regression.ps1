@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Device regression driver for the review (图文评价) flow: fixture a completed order, run the ReviewFlow
   UiTest class, then verify upload + rendering numbers on the host.
@@ -26,7 +26,7 @@ param(
   [long]$GoodsId = 7,
   [long]$AddressId = 1,
   [string]$TestClass = 'ReviewFlow',
-  [string]$ApiBase = 'http://127.0.0.1:9000',
+  [string]$ApiBase = 'http://127.0.0.1:8087',
   [string]$Bundle = 'com.example.jiandanwaimai',
   [string]$Ability = 'EntryAbility'
 )

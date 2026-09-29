@@ -225,10 +225,14 @@ const GRANTED: number = 0
 /**
  * 请求定位权限（模糊+精确），返回是否获得至少一种定位授权
  */
-export async function requestLocationPermission(context: common.UIAbilityContext): Promise<boolean> {
+export async function requestLocationPermission(context: common.UIAbilityContext, fromSettings: boolean = false): Promise<boolean> {
   const permissions: Permissions[] = ['ohos.permission.APPROXIMATELY_LOCATION', 'ohos.permission.LOCATION']
   try {
     const atManager: abilityAccessCtrl.AtManager = abilityAccessCtrl.createAtManager()
+    if (fromSettings) {
+      const settingsResults: abilityAccessCtrl.GrantStatus[] = await atManager.requestPermissionOnSetting(context, permissions)
+      return settingsResults.some((status: abilityAccessCtrl.GrantStatus) => status === GRANTED)
+    }
     const result = await atManager.requestPermissionsFromUser(context, permissions)
     const results: Array<number> = result.authResults
     for (let i = 0; i < results.length; i++) {
@@ -247,8 +251,8 @@ export async function requestLocationPermission(context: common.UIAbilityContext
  * 获取设备当前实时位置（一次性定位，超时由 AMAP_CONFIG.TIMEOUT 控制）
  * 注意：模拟器可能定位失败或返回固定位置，失败时用户可拖动地图手动选点
  */
-export async function getCurrentPosition(context: common.UIAbilityContext): Promise<GeoPosition> {
-  const granted: boolean = await requestLocationPermission(context)
+export async function getCurrentPosition(context: common.UIAbilityContext, fromSettings: boolean = false): Promise<GeoPosition> {
+  const granted: boolean = await requestLocationPermission(context, fromSettings)
   if (!granted) {
     throw new Error('未获得定位权限，无法获取当前位置')
   }
@@ -264,7 +268,9 @@ export async function getCurrentPosition(context: common.UIAbilityContext): Prom
       latitude: location.latitude,
       longitude: location.longitude
     }
-    if (position.latitude === 0 && position.longitude === 0) {
+    if (!Number.isFinite(position.latitude) || !Number.isFinite(position.longitude)
+      || Math.abs(position.latitude) > 90 || Math.abs(position.longitude) > 180
+      || (position.latitude === 0 && position.longitude === 0)) {
       throw new Error('系统未返回有效的当前位置，请稍后重试或手动选择位置')
     }
     logInfo('Location', `获取当前位置成功: ${position.longitude.toFixed(6)}, ${position.latitude.toFixed(6)}`)

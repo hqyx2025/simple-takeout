@@ -1,5 +1,7 @@
 {
   "string": [
+    { "name": "delivery_form_name", "value": "订单配送" },
+    { "name": "delivery_form_desc", "value": "应用同步的订单快照；点击骑手播放动画，非实时位置或预计送达时间" },
     {
       "name": "module_desc",
       "value": "简单外卖主模块"

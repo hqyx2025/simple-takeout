@@ -1,5 +1,6 @@
 {
   "src": [
+    "widget/DeliveryLive",
     "pages/Index",
     "pages/SearchPage",
     "pages/LocationPage",

@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /**
  * 管理端-分类管理页（大纲 9.4 平台分类管理）
  * 平台分类的增删改：新增、行内编辑（名称）、删除（后端校验有关联店铺时禁止删除）
@@ -118,7 +119,7 @@ export struct AdminCategoryPage {
         PageHeader({
           title: '分类管理',
           backId: 'admin-category-back',
-          headerBgColor: MODULE_BG.ADMIN,
+          headerBgColor: COLORS.BG_PRIMARY,
           actionColor: MODULE_COLOR.ADMIN,
           actionLabel: '刷新',
           onBack: () => { router.back() },
@@ -136,8 +137,10 @@ export struct AdminCategoryPage {
           ListItem() {
             Row({ space: SPACING.SM }) {
               TextInput({ placeholder: '新增分类名称', text: this.newCategoryName })
-                .layoutWeight(1).height(42).onChange((value: string) => { this.newCategoryName = value })
-              Button('新增').height(42).fontSize(FONT_SIZE.SM)
+                .attributeModifier(new AppInputStyle())
+                .layoutWeight(1).onChange((value: string) => { this.newCategoryName = value })
+              Button('新增')
+                .attributeModifier(new AppButtonStyle()).height(42).fontSize(FONT_SIZE.SM)
                 .backgroundColor(MODULE_COLOR.ADMIN).onClick(() => { this.createCategory() })
             }.width('100%')
           }
@@ -157,14 +160,15 @@ export struct AdminCategoryPage {
                   .borderRadius(BORDER_RADIUS.MD)
                 if (this.editingCategoryId === category.id) {
                   TextInput({ placeholder: '分类名称', text: this.editCategoryName })
-                    .layoutWeight(1).height(36).onChange((value: string) => { this.editCategoryName = value })
+                    .attributeModifier(new AppInputStyle())
+                    .layoutWeight(1).onChange((value: string) => { this.editCategoryName = value })
                   Button('保存')
-                    .height(30).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.SUCCESS)
-                    .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                    .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS).fontColor(COLORS.ON_PRIMARY).backgroundColor(COLORS.SUCCESS)
+                    .borderRadius(BORDER_RADIUS.ROUND)
                     .onClick(() => { this.saveCategory(category) })
                   Button('取消')
-                    .height(30).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY)
-                    .backgroundColor(COLORS.BG_PRIMARY).borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                    .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY)
+                    .backgroundColor(COLORS.BG_PRIMARY).borderRadius(BORDER_RADIUS.ROUND)
                     .onClick(() => { this.editingCategoryId = 0 })
                 } else {
                   Column({ space: 2 }) {
@@ -188,8 +192,8 @@ export struct AdminCategoryPage {
                     })
                 }
               }
+                .attributeModifier(new AppCardStyle())
               .width('100%').padding(SPACING.MD)
-              .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
             }
           }, (category: Category) => `${this.renderVersion}-${category.id}`)
         }

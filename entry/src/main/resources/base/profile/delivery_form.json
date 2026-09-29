@@ -1,0 +1,27 @@
+{
+  "forms": [
+    {
+      "name": "DeliveryCard",
+      "displayName": "$string:delivery_form_name",
+      "description": "$string:delivery_form_desc",
+      "src": "./ets/widget/DeliveryCard.ets",
+      "uiSyntax": "arkts",
+      "window": {
+        "designWidth": 320,
+        "autoDesignWidth": true
+      },
+      "isDynamic": true,
+      "isDefault": true,
+      "updateEnabled": false,
+      "scheduledUpdateTime": "10:30",
+      "updateDuration": 1,
+      "defaultDimension": "2*2",
+      "supportDimensions": [
+        "2*2"
+      ],
+      "sceneAnimationParams": {
+        "abilityName": "DeliveryLiveAbility"
+      }
+    }
+  ]
+}

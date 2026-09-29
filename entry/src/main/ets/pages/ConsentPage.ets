@@ -1,3 +1,4 @@
+import { AppButtonStyle } from '../common/theme/AppTheme'
 /**
  * 隐私政策同意页（启动首屏）。
  * 用独立路由页承载同意流程，而不是在首页内叠一层 if 覆盖层：
@@ -9,6 +10,7 @@ import { promptCompat as promptAction, routerCompat as router } from '../common/
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { initLogger, setPrivacyConsent, logInfo } from '../service/AppLogger'
 import { loadAllData, savePrivacyConsent, saveAllData } from '../service/DataPersistence'
+import { warmColdStartConnection } from '../service/HttpClient'
 
 @Entry
 @Component
@@ -43,6 +45,7 @@ export struct ConsentPage {
     await savePrivacyConsent(true)
     initLogger()
     await loadAllData()
+    warmColdStartConnection()
     await saveAllData()
     logInfo('Consent', '用户已同意隐私政策，进入首页')
     promptAction.showToast({ message: '已同意隐私政策', duration: 1500 })
@@ -54,23 +57,27 @@ export struct ConsentPage {
   }
 
   build() {
+    Scroll() {
     Column({ space: SPACING.MD }) {
-      Row() {
+      Row({ space: 12 }) {
+        Image($r('app.media.login_brand')).width(52).height(52)
+          .objectFit(ImageFit.Contain).accessibilityLevel('no')
         Text('简单外卖').fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
       }
       .width('100%')
       .padding({ bottom: SPACING.SM })
 
       Text('隐私政策提示')
-        .fontSize(FONT_SIZE.XL)
+        .fontSize(FONT_SIZE.BIG_TITLE)
         .fontWeight(FontWeight.Bold)
         .fontColor(COLORS.TEXT_PRIMARY)
         .width('100%')
-        .textAlign(TextAlign.Center)
+        .textAlign(TextAlign.Start)
 
       Text('为了提供登录、定位、配送、下单与评价服务，我们需要按照《隐私政策》处理必要的账号与订单信息。请阅读并同意后继续使用。')
         .fontSize(FONT_SIZE.MD)
         .fontColor(COLORS.TEXT_SECONDARY)
+        .lineHeight(24)
         .width('100%')
         .textAlign(TextAlign.Start)
 
@@ -83,23 +90,22 @@ export struct ConsentPage {
 
       Row({ space: SPACING.MD }) {
         Button('暂不同意')
+          .attributeModifier(new AppButtonStyle())
           .id('privacy-reject')
           .layoutWeight(1)
-          .height(44)
-          .backgroundColor(COLORS.BG_PRIMARY)
+          .height(52)
+          .backgroundColor(COLORS.INPUT)
           .fontColor(COLORS.TEXT_SECONDARY)
           .borderRadius(BORDER_RADIUS.ROUND)
-          .type(ButtonType.Capsule)
           .onClick(() => { this.reject() })
 
         Button(this.submitting ? '处理中…' : '同意并继续')
+          .attributeModifier(new AppButtonStyle())
           .id('privacy-accept')
           .layoutWeight(1)
-          .height(44)
-          .backgroundColor(COLORS.PRIMARY)
-          .fontColor(COLORS.TEXT_WHITE)
+          .height(52)
+          .backgroundColor(COLORS.PRIMARY).fontColor(COLORS.ON_PRIMARY)
           .borderRadius(BORDER_RADIUS.ROUND)
-          .type(ButtonType.Capsule)
           .enabled(!this.submitting)
           .onClick(() => { this.accept() })
       }
@@ -107,10 +113,13 @@ export struct ConsentPage {
       .margin({ top: SPACING.MD })
     }
     .width('100%')
-    .height('100%')
-    .padding(SPACING.XL)
+    .constraintSize({ maxWidth: 508 })
+    .padding(SPACING.XXL)
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
-    .backgroundColor(COLORS.BG_WHITE)
+    }
+    .width('100%').height('100%')
+    .scrollBar(BarState.Off)
+    .backgroundColor(COLORS.BG_PRIMARY)
   }
 }

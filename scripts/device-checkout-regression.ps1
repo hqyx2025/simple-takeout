@@ -1,4 +1,4 @@
- <#
+﻿ <#
 .SYNOPSIS
   Device regression driver for the checkout flow: min-order guard (negative path) + pending-payment order (positive path).
 
@@ -34,7 +34,7 @@ param(
   [int]$GoodsId = 40,
   [int]$SpecId = 0,
   [string]$TestClass = 'CheckoutFlow',
-  [string]$ApiBase = 'http://127.0.0.1:9000',
+  [string]$ApiBase = 'http://127.0.0.1:8087',
   [string]$Bundle = 'com.example.jiandanwaimai',
   [string]$Ability = 'EntryAbility'
 )

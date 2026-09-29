@@ -1,3 +1,4 @@
+import { AppCardStyle } from '../common/theme/AppTheme'
 /** 平台经营统计：订单、GMV、托管资金与热销商品。 */
 import { AppMotion } from '../common/theme/AppMotion'
 import { ColorMetrics } from '@kit.ArkUI';
@@ -71,7 +72,7 @@ export struct AdminStatisticsPage {
       PageHeader({
         title: '平台统计',
         backId: 'admin-statistics-back',
-        headerBgColor: MODULE_BG.ADMIN,
+        headerBgColor: COLORS.BG_PRIMARY,
         actionColor: MODULE_COLOR.ADMIN,
         actionLabel: this.loading ? '加载中' : '刷新',
         onBack: () => { router.back() },
@@ -197,7 +198,8 @@ export struct AdminStatisticsPage {
       Text(store.storeName).fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).layoutWeight(1)
       Text(`成交 ¥${store.gmv.toFixed(2)}`).fontSize(FONT_SIZE.SM).fontColor(MODULE_COLOR.ADMIN)
     }
-    .width('100%').padding(SPACING.MD).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
+      .attributeModifier(new AppCardStyle())
+    .width('100%').padding(SPACING.MD)
   }
 
   @Builder
@@ -224,7 +226,8 @@ export struct AdminStatisticsPage {
         Text(`${storeName}  ¥${price.toFixed(2)}  销量${sales}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       Text(status === 1 ? '上架' : '下架').fontSize(FONT_SIZE.XS).fontColor(status === 1 ? COLORS.SUCCESS : COLORS.ERROR)
-    }.width('100%').padding(SPACING.MD).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
+    }
+      .attributeModifier(new AppCardStyle()).width('100%').padding(SPACING.MD)
   }
 
   /** 近7日订单趋势折线图（复用商户端 Canvas 画法）。 */
@@ -300,6 +303,7 @@ export struct AdminStatisticsPage {
       Text(point.date).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).width(90)
       Text(`订单 ${point.orderCount}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
       Text(`成交 ¥${point.gmv.toFixed(2)}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
-    }.width('100%').padding(SPACING.MD).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
+    }
+      .attributeModifier(new AppCardStyle()).width('100%').padding(SPACING.MD)
   }
 }

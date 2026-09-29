@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle, AppTextAreaStyle } from '../common/theme/AppTheme'
 /**
  * 管理端-退款审批页（大纲 9.7 退款处理）
  * 用户申请退款（已送达订单）的审批：同意退款（escrow 0→2 + 退用户余额 + 回滚库存）或拒绝（订单恢复已送达）
@@ -120,7 +121,7 @@ export struct AdminRefundPage {
         PageHeader({
           title: '退款审批',
           backId: 'admin-refund-back',
-          headerBgColor: MODULE_BG.ADMIN,
+          headerBgColor: COLORS.BG_PRIMARY,
           actionColor: MODULE_COLOR.ADMIN,
           actionLabel: this.loading ? '加载中…' : '刷新',
           onBack: () => { router.back() },
@@ -165,14 +166,16 @@ export struct AdminRefundPage {
                 if (record.status === 'PENDING') {
                   Row({ space: SPACING.SM }) {
                     Button('同意退款')
-                      .layoutWeight(1).height(34).fontSize(FONT_SIZE.SM)
-                      .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.SUCCESS)
-                      .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                      .attributeModifier(new AppButtonStyle())
+                      .layoutWeight(1).height(40).fontSize(FONT_SIZE.SM)
+                      .fontColor(COLORS.ON_PRIMARY).backgroundColor(COLORS.SUCCESS)
+                      .borderRadius(BORDER_RADIUS.ROUND)
                       .onClick(() => { this.doApproveRefund(record) })
                     Button('拒绝')
-                      .layoutWeight(1).height(34).fontSize(FONT_SIZE.SM)
+                      .attributeModifier(new AppButtonStyle())
+                      .layoutWeight(1).height(40).fontSize(FONT_SIZE.SM)
                       .fontColor(COLORS.ERROR).backgroundColor(COLORS.ERROR_LIGHT)
-                      .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                      .borderRadius(BORDER_RADIUS.ROUND)
                       .onClick(() => {
                         this.rejectingRefundId = record.id
                         this.rejectReason = ''
@@ -181,8 +184,8 @@ export struct AdminRefundPage {
                   }.width('100%')
                 }
               }
+                .attributeModifier(new AppCardStyle())
               .width('100%').padding(SPACING.MD)
-              .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.MD)
             }
           }, (record: RefundRecord) => `${this.renderVersion}-${record.id}`)
         }
@@ -200,26 +203,27 @@ export struct AdminRefundPage {
             Text('请填写拒绝原因（必填），拒绝后订单将恢复为已送达状态')
               .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
             TextArea({ placeholder: '如：商品已送达且无质量问题', text: this.rejectReason })
-              .width('100%').height(80).fontSize(FONT_SIZE.MD)
-              .borderRadius(BORDER_RADIUS.MD).backgroundColor(COLORS.BG_PRIMARY)
+              .attributeModifier(new AppTextAreaStyle())
+              .width('100%').height(80)
               .onChange((value: string) => { this.rejectReason = value })
             Row({ space: SPACING.MD }) {
               Button('取消')
+                .attributeModifier(new AppButtonStyle())
                 .layoutWeight(1).height(42).fontSize(FONT_SIZE.MD)
                 .fontColor(COLORS.TEXT_SECONDARY).backgroundColor(COLORS.BG_PRIMARY)
-                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                .borderRadius(BORDER_RADIUS.ROUND)
                 .onClick(() => { this.showRejectDialog = false })
               Button('确认拒绝')
+                .attributeModifier(new AppButtonStyle())
                 .layoutWeight(1).height(42).fontSize(FONT_SIZE.MD)
-                .fontColor(COLORS.TEXT_WHITE).backgroundColor(COLORS.ERROR)
-                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                .fontColor(COLORS.ON_PRIMARY).backgroundColor(COLORS.ERROR)
+                .borderRadius(BORDER_RADIUS.ROUND)
                 .onClick(() => { this.doRejectRefund() })
             }
           }
-          .width('90%')
+            .attributeModifier(new AppCardStyle())
+          .width('90%').constraintSize({ maxWidth: 460 })
           .padding(SPACING.XL)
-          .backgroundColor(COLORS.BG_WHITE)
-          .borderRadius(BORDER_RADIUS.XL)
         }
         .width('100%').height('100%')
         .backgroundColor(COLORS.OVERLAY)

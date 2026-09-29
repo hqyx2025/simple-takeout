@@ -5,7 +5,7 @@ import { UserRole } from '../model/Models'
 import { loginRemote, registerRemote, logout, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { logInfo, logWarn } from '../service/AppLogger'
 import { APP_CONFIG } from '../common/Constants'
-import { LoginTheme } from '../common/theme/LoginTheme'
+import { AppTheme } from '../common/theme/AppTheme'
 import { AppMotion } from '../common/theme/AppMotion'
 import { promptCompat as promptAction } from '../common/UiNavigation'
 
@@ -36,21 +36,21 @@ export struct LoginPage {
 
   build() {
     Column() {
-      Scroll() {
+      Column() {
         Column() {
           Column() {
             this.brandHeader()
             Text(this.isLoginMode ? '欢迎回来' : '从一顿美味开始')
-              .fontSize(28)
+              .fontSize(24)
               .fontWeight(FontWeight.Bold)
-              .fontColor(LoginTheme.TEXT)
+              .fontColor(AppTheme.TEXT)
               .width('100%')
-              .margin({ top: 16, bottom: 8 })
+              .margin({ top: 10, bottom: 4 })
             Text(this.isLoginMode ? '选好身份，开启今天的美味。' : '创建账号，加入简单外卖。')
               .fontSize(14)
-              .fontColor(LoginTheme.MUTED)
+              .fontColor(AppTheme.MUTED)
               .width('100%')
-              .margin({ bottom: 16 })
+              .margin({ bottom: 10 })
 
             this.modeSelector()
             this.roleSelector()
@@ -65,28 +65,27 @@ export struct LoginPage {
               InputType.Password, 'login-password', (value: string) => { this.password = value })
 
             if (this.tipMsg) {
-              this.formMessage(this.tipMsg, LoginTheme.SUCCESS, LoginTheme.SUCCESS_BG)
+              this.formMessage(this.tipMsg, AppTheme.SUCCESS, AppTheme.SUCCESS_BG)
             }
             if (this.errorMsg) {
-              this.formMessage(this.errorMsg, LoginTheme.ERROR, LoginTheme.ERROR_BG)
+              this.formMessage(this.errorMsg, AppTheme.ERROR, AppTheme.ERROR_BG)
             }
             this.submitButton()
 
             Text(this.isLoginMode ? '使用所选身份对应的账号登录' : '注册成功后，请使用新账号登录')
               .fontSize(12)
-              .fontColor(LoginTheme.MUTED)
+              .fontColor(AppTheme.MUTED)
               .textAlign(TextAlign.Center)
               .width('100%')
-              .margin({ top: 12 })
+              .margin({ top: 8 })
           }
           .width('100%')
-          .constraintSize({ maxWidth: LoginTheme.FORM_MAX_WIDTH })
+          .constraintSize({ maxWidth: AppTheme.FORM_MAX_WIDTH })
         }
         .width('100%')
-        .padding({ left: 24, right: 24, top: 16, bottom: 16 })
+        .padding({ left: 24, right: 24, top: 8, bottom: 8 })
       }
-      .scrollBar(BarState.Off)
-      .align(Alignment.Top)
+      .justifyContent(FlexAlign.Center)
       .width('100%')
       .layoutWeight(1)
 
@@ -94,13 +93,13 @@ export struct LoginPage {
       if (this.isLoginMode) {
         Button('v' + APP_CONFIG.VERSION, { type: ButtonType.Normal })
           .fontSize(12)
-          .fontColor(LoginTheme.MUTED)
+          .fontColor(AppTheme.MUTED)
           .backgroundColor(Color.Transparent)
           .height(44)
           .padding({ left: 24, right: 24 })
           .borderRadius(12)
           .id('version-text')
-          .margin({ top: 4, bottom: 8 })
+          .margin({ bottom: 4 })
           .onClick(() => {
             this.versionClickCount = this.versionClickCount + 1
             if (this.versionClickCount >= 3) {
@@ -112,25 +111,25 @@ export struct LoginPage {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(LoginTheme.PAGE)
+    .backgroundColor(AppTheme.PAGE)
   }
 
   @Builder
   private brandHeader() {
     Row({ space: 12 }) {
       Image($r('app.media.login_brand'))
-        .width(52)
-        .height(52)
+        .width(44)
+        .height(44)
         .objectFit(ImageFit.Contain)
         .accessibilityLevel('no')
       Column({ space: 5 }) {
         Text('简单外卖')
           .fontSize(22)
           .fontWeight(FontWeight.Bold)
-          .fontColor(LoginTheme.TEXT)
+          .fontColor(AppTheme.TEXT)
         Text('美味送到家')
           .fontSize(12)
-          .fontColor(LoginTheme.MUTED)
+          .fontColor(AppTheme.MUTED)
       }
       .alignItems(HorizontalAlign.Start)
     }
@@ -146,9 +145,9 @@ export struct LoginPage {
     }
     .width('100%')
     .padding(4)
-    .backgroundColor(LoginTheme.INPUT)
-    .borderRadius(LoginTheme.CONTROL_RADIUS)
-    .margin({ bottom: 16 })
+    .backgroundColor(AppTheme.INPUT)
+    .borderRadius(AppTheme.CONTROL_RADIUS)
+    .margin({ bottom: 10 })
   }
 
   @Builder
@@ -158,8 +157,8 @@ export struct LoginPage {
       .height(44)
       .fontSize(16)
       .fontWeight(FontWeight.Medium)
-      .fontColor(this.isLoginMode === loginMode ? LoginTheme.TEXT : LoginTheme.MUTED)
-      .backgroundColor(this.isLoginMode === loginMode ? LoginTheme.CARD : Color.Transparent)
+      .fontColor(this.isLoginMode === loginMode ? AppTheme.TEXT : AppTheme.MUTED)
+      .backgroundColor(this.isLoginMode === loginMode ? AppTheme.CARD : Color.Transparent)
       .borderRadius(10)
       .animation({ duration: this.reduceMotion ? 0 : AppMotion.PRESS, curve: Curve.EaseOut })
       .id(id)
@@ -170,11 +169,11 @@ export struct LoginPage {
 
   @Builder
   private roleSelector() {
-    Column({ space: 10 }) {
+    Column({ space: 6 }) {
       Text(this.isLoginMode ? '选择登录身份' : '选择账户类型')
         .fontSize(13)
         .fontWeight(FontWeight.Medium)
-        .fontColor(LoginTheme.MUTED)
+        .fontColor(AppTheme.MUTED)
         .width('100%')
       Row({ space: 10 }) {
         this.roleCard('用户点餐', $r('app.media.login_user'), $r('app.media.login_user_active'),
@@ -196,7 +195,7 @@ export struct LoginPage {
       .width('100%')
     }
     .width('100%')
-    .margin({ bottom: 16 })
+    .margin({ bottom: 10 })
   }
 
   @Builder
@@ -212,7 +211,7 @@ export struct LoginPage {
           Text(label)
             .fontSize(14)
             .fontWeight(FontWeight.Medium)
-            .fontColor(this.selectedRole === role ? LoginTheme.ACCENT : LoginTheme.TEXT)
+            .fontColor(this.selectedRole === role ? AppTheme.ACCENT : AppTheme.TEXT)
             .layoutWeight(1)
         }
         .width('100%')
@@ -230,12 +229,12 @@ export struct LoginPage {
       .height('100%')
     }
     .layoutWeight(1)
-    .height(56)
+    .height(44)
     .padding(0)
-    .backgroundColor(this.selectedRole === role ? LoginTheme.ACCENT_SOFT : LoginTheme.CARD)
+    .backgroundColor(this.selectedRole === role ? AppTheme.ACCENT_SOFT : AppTheme.CARD)
     .border({ width: this.selectedRole === role ? 1.5 : 1,
-      color: this.selectedRole === role ? LoginTheme.ACCENT : LoginTheme.BORDER })
-    .borderRadius(LoginTheme.CONTROL_RADIUS)
+      color: this.selectedRole === role ? AppTheme.ACCENT : AppTheme.BORDER })
+    .borderRadius(AppTheme.CONTROL_RADIUS)
     .animation({ duration: this.reduceMotion ? 0 : AppMotion.PRESS, curve: Curve.EaseOut })
     .id(id)
     .accessibilitySelected(this.selectedRole === role)
@@ -246,11 +245,11 @@ export struct LoginPage {
   @Builder
   private formField(label: string, placeholder: string, value: string, icon: Resource,
     inputType: InputType, id: string, onValueChange: (value: string) => void) {
-    Column({ space: 8 }) {
+    Column({ space: 4 }) {
       Text(label)
         .fontSize(13)
         .fontWeight(FontWeight.Medium)
-        .fontColor(LoginTheme.TEXT)
+        .fontColor(AppTheme.TEXT)
         .width('100%')
       Row({ space: 10 }) {
         Image(icon)
@@ -260,11 +259,11 @@ export struct LoginPage {
           .accessibilityLevel('no')
         TextInput({ placeholder: placeholder, text: value })
           .fontSize(16)
-          .fontColor(LoginTheme.TEXT)
-          .placeholderColor(LoginTheme.MUTED)
-          .caretColor(LoginTheme.ACCENT)
+          .fontColor(AppTheme.TEXT)
+          .placeholderColor(AppTheme.MUTED)
+          .caretColor(AppTheme.ACCENT)
           .layoutWeight(1)
-          .height(LoginTheme.CONTROL_HEIGHT)
+          .height(44)
           .padding(0)
           .backgroundColor(Color.Transparent)
           .borderRadius(0)
@@ -276,15 +275,15 @@ export struct LoginPage {
           .onBlur(() => { this.focusedField = '' })
       }
       .width('100%')
-      .height(LoginTheme.CONTROL_HEIGHT)
+      .height(44)
       .padding({ left: 14, right: 14 })
-      .backgroundColor(LoginTheme.INPUT)
+      .backgroundColor(AppTheme.INPUT)
       .border({ width: this.focusedField === id ? 1.5 : 1,
-        color: this.focusedField === id ? LoginTheme.ACCENT : LoginTheme.BORDER })
-      .borderRadius(LoginTheme.CONTROL_RADIUS)
+        color: this.focusedField === id ? AppTheme.ACCENT : AppTheme.BORDER })
+      .borderRadius(AppTheme.CONTROL_RADIUS)
     }
     .width('100%')
-    .margin({ bottom: 12 })
+    .margin({ bottom: 8 })
   }
 
   @Builder
@@ -293,7 +292,7 @@ export struct LoginPage {
       .fontSize(13)
       .fontColor(textColor)
       .width('100%')
-      .padding(12)
+      .padding(8)
       .backgroundColor(background)
       .borderRadius(10)
       .margin({ bottom: 10 })
@@ -307,12 +306,12 @@ export struct LoginPage {
           LoadingProgress()
             .width(20)
             .height(20)
-            .color(LoginTheme.PRIMARY_TEXT)
+            .color(AppTheme.PRIMARY_TEXT)
         }
         Text(this.submitting ? '提交中…' : (this.isLoginMode ? '登录' : '注册'))
           .fontSize(18)
           .fontWeight(FontWeight.Bold)
-          .fontColor(LoginTheme.PRIMARY_TEXT)
+          .fontColor(AppTheme.PRIMARY_TEXT)
         if (!this.submitting) {
           Image($r('app.media.login_arrow'))
             .width(20)
@@ -323,8 +322,8 @@ export struct LoginPage {
       .justifyContent(FlexAlign.Center)
     }
     .width('100%')
-    .height(LoginTheme.CONTROL_HEIGHT)
-    .backgroundColor(LoginTheme.PRIMARY)
+    .height(44)
+    .backgroundColor(AppTheme.PRIMARY)
     .borderRadius(16)
     .id('login-submit')
     .margin({ top: 6 })
@@ -456,11 +455,11 @@ export struct QuickLoginDialog {
         Text('选择登录身份')
           .fontSize(20)
           .fontWeight(FontWeight.Bold)
-          .fontColor(LoginTheme.TEXT)
+          .fontColor(AppTheme.TEXT)
         Blank()
         Button('取消', { type: ButtonType.Normal })
           .fontSize(14)
-          .fontColor(LoginTheme.MUTED)
+          .fontColor(AppTheme.MUTED)
           .backgroundColor(Color.Transparent)
           .height(44)
           .padding({ left: 12, right: 12 })
@@ -474,7 +473,7 @@ export struct QuickLoginDialog {
       .width('100%')
       .padding({ left: 24, right: 12, top: 12, bottom: 8 })
 
-      Divider().color(LoginTheme.BORDER)
+      Divider().color(AppTheme.BORDER)
       Column({ space: 10 }) {
         this.quickLoginButton('用户点餐', $r('app.media.login_user'),
           '13800138000', UserRole.CUSTOMER, 'quick-login-user')
@@ -490,7 +489,7 @@ export struct QuickLoginDialog {
     }
     .width('100%')
     .constraintSize({ maxWidth: 508 })
-    .backgroundColor(LoginTheme.PAGE)
+    .backgroundColor(AppTheme.PAGE)
     .borderRadius({ topLeft: 24, topRight: 24 })
   }
 
@@ -504,17 +503,17 @@ export struct QuickLoginDialog {
           .accessibilityLevel('no')
         Text(label)
           .fontSize(16)
-          .fontColor(LoginTheme.TEXT)
+          .fontColor(AppTheme.TEXT)
           .fontWeight(FontWeight.Medium)
       }
       .width('100%')
       .padding({ left: 16, right: 16 })
     }
     .width('100%')
-    .height(LoginTheme.CONTROL_HEIGHT)
-    .backgroundColor(LoginTheme.INPUT)
-    .border({ width: 1, color: LoginTheme.BORDER })
-    .borderRadius(LoginTheme.CONTROL_RADIUS)
+    .height(44)
+    .backgroundColor(AppTheme.INPUT)
+    .border({ width: 1, color: AppTheme.BORDER })
+    .borderRadius(AppTheme.CONTROL_RADIUS)
     .id(id)
     .accessibilityText(label)
     .onClick(() => {

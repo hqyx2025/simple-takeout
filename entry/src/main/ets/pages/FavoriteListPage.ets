@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 /**
  * 收藏列表页
  * 展示当前用户的收藏店铺列表
@@ -87,9 +88,9 @@ export struct FavoriteListPage {
 
       // 内容区
       if (!this.loggedIn) {
-        EmptyState({ iconGlyph: $r('sys.symbol.lock'), title: '暂无登录', description: '请登录后查看收藏' })
+        EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', description: '请登录后查看收藏' })
       } else if (this.favoriteList.length === 0) {
-        EmptyState({ icon: '💝', title: '暂无收藏店铺', description: '去首页收藏喜欢的店铺吧' })
+        EmptyState({ icon: $r('app.media.home_heart'), title: '暂无收藏店铺', description: '去首页收藏喜欢的店铺吧' })
       } else {
         List({ space: SPACING.MD }) {
           LazyForEach(this.dataSource, (item: Favorite) => {
@@ -123,7 +124,7 @@ export struct FavoriteListPage {
         Text(this.getFirstChar(item.storeName))
           .fontSize(FONT_SIZE.XXL)
           .fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.TEXT_WHITE)
+          .fontColor(COLORS.ON_PRIMARY)
           .backgroundColor(accentFg(accentIndexFromText(item.storeName)))
           .width(56)
           .height(56)
@@ -151,19 +152,17 @@ export struct FavoriteListPage {
 
       // 取消收藏按钮
       Button('取消收藏')
+        .attributeModifier(new AppButtonStyle())
         .fontSize(FONT_SIZE.SM)
         .fontColor(COLORS.TEXT_SECONDARY)
         .backgroundColor(COLORS.BG_PRIMARY)
-        .borderRadius(BORDER_RADIUS.ROUND)
-        .type(ButtonType.Capsule)
-        .height(32)
+        .borderRadius(BORDER_RADIUS.ROUND).height(40)
         .padding({ left: SPACING.MD, right: SPACING.MD })
         .onClick(() => { this.onCancelFavorite(item.storeId) })
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
     .alignItems(VerticalAlign.Center)
     .onClick(() => { this.onItemClick(item.storeId, item.storeName) })
   }

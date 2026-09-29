@@ -1,3 +1,7 @@
+import { AppMotion } from '../common/theme/AppMotion'
+import { FloatingTabBarTheme } from '../common/theme/FloatingTabBarTheme'
+import { PageHeader } from '../components/PageHeader'
+import { AppButtonStyle } from '../common/theme/AppTheme'
 /**
  * 购物车页面。
  *
@@ -10,6 +14,13 @@ import { CartItem, BundleInfo, GoodsItem } from '../model/Models'
 import { deleteCartItemRemote, deleteCartItemsRemote, refreshCartFromServer, updateCartItemQuantityRemote, fetchBundleRemote } from '../service/AppStorageManager'
 import { EmptyState } from '../components/EmptyState'
 import { logInfo } from '../service/AppLogger'
+
+class CartStoreCard {
+  storeId: number = 0
+  items: CartItem[] = []
+  visibleItems: CartItem[] = []
+  expanded: boolean = false
+}
 
 /** 凑单提示：某店铺还差多少钱起送 + 可凑单的便宜菜品 */
 class BundleHint {
@@ -39,6 +50,8 @@ class BundleHint {
 @Component
 export struct CartPage {
   @State cartItems: CartItem[] = []
+  @State expandedStoreIds: number[] = []
+  @State storeCards: CartStoreCard[] = []
   // 全局购物车变化时刷新本页（Tab 常驻内存，没有页面级 onPageShow 可依赖）
   @StorageLink('cartItems') @Watch('onGlobalCartChange') globalCartItems: CartItem[] = []
   @StorageLink('isLoggedIn') loggedIn: boolean = false
@@ -94,6 +107,29 @@ export struct CartPage {
     }
     this.totalCount = nextTotalCount
     this.totalPrice = nextTotalPrice
+    this.rebuildCards()
+  }
+
+  private rebuildCards(): void {
+    const ids: number[] = this.getStoreIds()
+    this.expandedStoreIds = this.expandedStoreIds.filter((id: number) => ids.indexOf(id) >= 0)
+    this.storeCards = ids.map((id: number) => {
+      const card: CartStoreCard = new CartStoreCard()
+      card.storeId = id
+      card.items = this.getStoreItems(id)
+      card.expanded = this.expandedStoreIds.indexOf(id) >= 0
+      card.visibleItems = card.expanded ? card.items : card.items.slice(0, 2)
+      return card
+    })
+  }
+
+  private toggleStore(storeId: number): void {
+    this.getUIContext().animateTo({ duration: AppMotion.duration(220), curve: Curve.EaseOut }, () => {
+      this.expandedStoreIds = this.expandedStoreIds.indexOf(storeId) >= 0
+        ? this.expandedStoreIds.filter((id: number) => id !== storeId)
+        : this.expandedStoreIds.concat(storeId)
+      this.rebuildCards()
+    })
   }
 
   /** 凑单提示：对未达起送价的店铺查询还差多少元并给出可凑单菜品。 */
@@ -326,35 +362,18 @@ export struct CartPage {
 
   build() {
     Column() {
-      Row() {
-        Text('购物车')
-          .fontSize(FONT_SIZE.XL)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.TEXT_PRIMARY)
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-        Text(this.editing ? '完成' : '管理')
-          .fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.PRIMARY)
-          .width(48)
-          .textAlign(TextAlign.End)
-          .onClick(() => {
-            this.editing = !this.editing
-            if (!this.editing) {
-              this.selectedRowKeys = []
-            }
-          })
-      }      .width('100%')
-      .height(56)
-      .padding({ left: SPACING.LG, right: SPACING.LG })
-      .backgroundColor(COLORS.BG_WHITE)
-      .alignItems(VerticalAlign.Center)
+      PageHeader({ title: '购物车', showBack: false, topPadding: 0, actionLabel: this.editing ? '完成' : '管理',
+        onAction: () => {
+          this.editing = !this.editing
+          if (!this.editing) { this.selectedRowKeys = [] }
+        } })
 
       if (!this.loggedIn) {
-        EmptyState({ iconGlyph: $r('sys.symbol.lock'), title: '暂无登录', description: '请登录后查看购物车' })
+        EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', description: '请登录后查看购物车' })
       } else if (this.getCurrentCartItems().length === 0) {
-        EmptyState({ icon: '🛒', title: '购物车是空的', description: '去首页挑选喜欢的商品吧' })
+        EmptyState({ icon: $r('app.media.home_nav_cart'), title: '购物车是空的', description: '去首页挑选喜欢的商品吧' })
       } else {
+        Stack({ alignContent: Alignment.Bottom }) {
         // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
         List({ space: SPACING.SM }) {
           ListItem() {
@@ -368,17 +387,18 @@ export struct CartPage {
             .width('100%')
             .padding({ left: SPACING.SM, right: SPACING.SM, top: SPACING.SM, bottom: SPACING.XS })
           }
-          ForEach(this.getStoreIds(), (storeId: number) => {
+          ForEach(this.storeCards, (card: CartStoreCard) => {
             ListItem() {
-              this.StoreCard(storeId)
+              this.StoreCard(card)
             }
-          }, (storeId: number) => `${this.cartRenderVersion}-${storeId}`)
+          }, (card: CartStoreCard) => `${this.cartRenderVersion}-${card.storeId}-${card.expanded}`)
         }
         .width('100%')
-        .layoutWeight(1)
+        .height('100%')
+        .contentEndOffset(FloatingTabBarTheme.CONTENT_INSET + 88)
         .scrollBar(BarState.Off)
         .backgroundColor(COLORS.BG_PRIMARY)
-        .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: 96 })
+        .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.MD })
 
         Row() {
           if (this.editing) {
@@ -387,12 +407,12 @@ export struct CartPage {
               .fontColor(COLORS.TEXT_SECONDARY)
               .layoutWeight(1)
             Button('删除选中')
+              .attributeModifier(new AppButtonStyle())
               .height(40)
               .fontSize(FONT_SIZE.MD)
-              .fontColor(COLORS.TEXT_WHITE)
+              .fontColor(COLORS.ON_PRIMARY)
               .backgroundColor(COLORS.ERROR)
               .borderRadius(BORDER_RADIUS.ROUND)
-              .type(ButtonType.Capsule)
               .onClick(() => { this.deleteSelected() })
           } else {
             Column({ space: SPACING.XS }) {
@@ -407,19 +427,22 @@ export struct CartPage {
             .alignItems(HorizontalAlign.Start)
             .layoutWeight(1)
             Button('\u53bb\u7ed3\u7b97')
+              .attributeModifier(new AppButtonStyle())
               .height(40)
-              .fontSize(FONT_SIZE.MD)
-              .fontColor(COLORS.TEXT_WHITE)
+              .fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
               .backgroundColor(MODULE_COLOR.CART)
               .borderRadius(BORDER_RADIUS.ROUND)
-              .type(ButtonType.Capsule)
               .id('cart-checkout')
               .onClick(() => { this.checkoutAll() })
           }
         }
-        .width('100%')
+        .width('calc(100% - 32vp)')
         .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
         .backgroundColor(COLORS.BG_WHITE)
+        .borderRadius(22)
+        .border({ width: 1, color: COLORS.DIVIDER })
+        .margin({ bottom: FloatingTabBarTheme.CONTENT_INSET + 4 })
+        }.width('100%').layoutWeight(1)
       }
     }
     .width('100%')
@@ -428,121 +451,103 @@ export struct CartPage {
   }
 
   @Builder
-  StoreCard(storeId: number) {
+  StoreCard(card: CartStoreCard) {
     Column({ space: SPACING.SM }) {
       Row() {
-        Text('\ud83c\udfea').fontSize(FONT_SIZE.XL)
-          .width(32).height(32).textAlign(TextAlign.Center)
-          .backgroundColor(accentBg(accentIndexFromText(this.getStoreName(storeId))))
+        Image($r('app.media.login_store')).width(32).height(32).padding(5).objectFit(ImageFit.Contain)
+          .backgroundColor(accentBg(accentIndexFromText(this.getStoreName(card.storeId))))
           .borderRadius(BORDER_RADIUS.SM)
-        Text(this.getStoreName(storeId))
+        Text(this.getStoreName(card.storeId))
           .fontSize(FONT_SIZE.LG)
           .fontWeight(FontWeight.Bold)
           .fontColor(MODULE_COLOR.CART)
           .layoutWeight(1)
         Button('删除')
-          .height(32)
+          .attributeModifier(new AppButtonStyle()).height(40)
           .fontSize(FONT_SIZE.SM)
           .fontColor(COLORS.ERROR)
           .backgroundColor(COLORS.ERROR_LIGHT)
           .borderRadius(BORDER_RADIUS.ROUND)
-          .type(ButtonType.Capsule)
-          .onClick(() => { this.deleteStore(storeId) })
+          .onClick(() => { this.deleteStore(card.storeId) })
       }
-      ForEach(this.getStoreItems(storeId), (item: CartItem) => {
+      ForEach(card.visibleItems, (item: CartItem) => {
         this.CartItemRow(item)
       }, (item: CartItem) => `${this.cartRenderVersion}-${item.storeId}-${item.goods.id}-${item.specId ?? 0}`)
 
+      if (card.items.length > 2) {
+        Button(card.expanded ? '收起商品 ∧' : `展开其余 ${card.items.length - 2} 件商品 ∨`)
+          .attributeModifier(new AppButtonStyle()).height(40).width('100%')
+          .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
+          .backgroundColor(COLORS.BG_PRIMARY)
+          .id(`cart-expand-${card.storeId}`)
+          .accessibilityText(card.expanded ? '收起商品' : `展开其余 ${card.items.length - 2} 件商品`)
+          .onClick(() => { this.toggleStore(card.storeId) })
+      }
+      Row() {
+        Text(`共 ${card.items.reduce((sum: number, item: CartItem) => sum + item.quantity, 0)} 件`)
+          .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).layoutWeight(1)
+        Text(`小计 ¥${this.getStoreTotal(card.storeId).toFixed(2)}`)
+          .fontSize(FONT_SIZE.MD).fontColor(COLORS.PRICE_RED).maxLines(1)
+      }.width('100%')
       // 凑单提示：未达起送价时给出差额与店内可凑单菜品
-      if (this.getBundleHint(storeId) !== null) {
-        this.BundleTipCard(this.getBundleHint(storeId)!)
+      if (this.getBundleHint(card.storeId) !== null) {
+        this.BundleTipCard(this.getBundleHint(card.storeId)!)
       }
     }
     .width('100%')
     .padding(SPACING.MD)
-    .backgroundColor(MODULE_BG.CART)
+    .backgroundColor(COLORS.BG_WHITE)
+    .border({ width: 1, color: COLORS.DIVIDER })
+    .id(`cart-store-${card.storeId}`)
     .borderRadius(BORDER_RADIUS.LG)
   }
 
   @Builder
   CartItemRow(item: CartItem) {
-    Row({ space: SPACING.MD }) {
-      if (this.editing) {
-        Text(this.isSelected(item) ? '✓' : '○')
-          .width(24)
-          .height(24)
-          .fontSize(FONT_SIZE.LG)
-          .fontColor(this.isSelected(item) ? COLORS.PRIMARY : COLORS.TEXT_HINT)
-          .textAlign(TextAlign.Center)
-          .onClick(() => { this.toggleSelected(item) })
-      }
-      Image(merchantImageSource(item.goods.image))
-        .alt(DEFAULT_MERCHANT_IMAGE)
-        .width(64)
-        .height(64)
-        .borderRadius(BORDER_RADIUS.MD)
-        .objectFit(ImageFit.Cover)
-      Column({ space: SPACING.XS }) {
-        Text(item.goods.name)
-          .fontSize(FONT_SIZE.LG)
-          .fontColor(COLORS.TEXT_PRIMARY)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-        // 多规格：展示所选规格，库存与价格都按规格计算
-        if ((item.specName ?? '') !== '') {
-          Text(`规格：${item.specName}`)
-            .fontSize(FONT_SIZE.SM)
-            .fontColor(COLORS.TEXT_HINT)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-        }
-        Text(`¥${(item.price ?? item.goods.price).toFixed(2)}`)
-          .fontSize(FONT_SIZE.MD)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.PRICE_RED)
-      }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
+    Column({ space: SPACING.SM }) {
       Row({ space: SPACING.SM }) {
-        Text('−')
-          .width(30)
-          .height(30)
-          .fontSize(FONT_SIZE.LG)
-          .fontColor(COLORS.TEXT_SECONDARY)
-          .backgroundColor(COLORS.BG_PRIMARY)
-          .borderRadius(BORDER_RADIUS.CIRCLE)
-          .textAlign(TextAlign.Center)
+        if (this.editing) {
+          Checkbox({ name: this.rowKey(item) })
+            .select(this.isSelected(item)).width(22).height(22)
+            .onChange(() => { this.toggleSelected(item) })
+        }
+        Image(merchantImageSource(item.goods.image)).alt(DEFAULT_MERCHANT_IMAGE)
+          .width(60).height(60).objectFit(ImageFit.Contain)
+          .backgroundColor(COLORS.BG_PRIMARY).borderRadius(BORDER_RADIUS.MD)
+        Column({ space: SPACING.XS }) {
+          Text(item.goods.name).fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Medium)
+            .fontColor(COLORS.TEXT_PRIMARY).maxLines(2)
+            .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
+          if ((item.specName ?? '') !== '') {
+            Text(`规格：${item.specName}`).fontSize(FONT_SIZE.SM)
+              .fontColor(COLORS.TEXT_HINT).maxLines(2).width('100%')
+          }
+        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+      }.width('100%')
+      Row({ space: 4 }) {
+        Text(`¥${(item.price ?? item.goods.price).toFixed(2)}`)
+          .fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.PRICE_RED)
+          .maxLines(1).layoutWeight(1)
+        Button('删除').attributeModifier(new AppButtonStyle()).height(36)
+          .padding({ left: 8, right: 8 }).fontSize(FONT_SIZE.SM)
+          .fontColor(COLORS.TEXT_HINT).backgroundColor(Color.Transparent)
+          .onClick(() => { this.deleteOne(item) })
+        Button('−').attributeModifier(new AppButtonStyle()).width(36).height(36)
+          .fontColor(COLORS.TEXT_PRIMARY).backgroundColor(COLORS.BG_PRIMARY)
           .id(`cart-minus-${item.goods.id}-${item.specId ?? 0}`)
+          .accessibilityText(`减少${item.goods.name}`)
           .onClick(() => { this.changeQuantity(item, -1) })
-        Text(this.getRowQuantity(item).toString())
-          .fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.TEXT_PRIMARY)
-          .width(24)
-          .textAlign(TextAlign.Center)
+        Text(this.getRowQuantity(item).toString()).fontSize(FONT_SIZE.MD)
+          .fontColor(COLORS.TEXT_PRIMARY).width(28).textAlign(TextAlign.Center).maxLines(1)
           .id(`cart-qty-${item.goods.id}-${item.specId ?? 0}`)
-        Text('+')
-          .width(30)
-          .height(30)
-          .fontSize(FONT_SIZE.LG)
-          .fontColor(COLORS.TEXT_WHITE)
-          .backgroundColor(COLORS.PRIMARY)
-          .borderRadius(BORDER_RADIUS.CIRCLE)
-          .textAlign(TextAlign.Center)
+        Button('+').attributeModifier(new AppButtonStyle()).width(36).height(36)
+          .fontColor(COLORS.ON_PRIMARY).backgroundColor(COLORS.PRIMARY)
           .id(`cart-plus-${item.goods.id}-${item.specId ?? 0}`)
+          .accessibilityText(`增加${item.goods.name}`)
           .onClick(() => { this.changeQuantity(item, 1) })
-      }
-      .alignItems(VerticalAlign.Center)
-      Button('删除')
-        .height(30)
-        .fontSize(FONT_SIZE.SM)
-        .fontColor(COLORS.ERROR)
-        .backgroundColor(COLORS.ERROR_LIGHT)
-        .borderRadius(BORDER_RADIUS.ROUND)
-        .type(ButtonType.Capsule)
-        .onClick(() => { this.deleteOne(item) })
-    }
-    .width('100%')
-    .padding({ top: SPACING.XS, bottom: SPACING.XS })
+      }.width('100%')
+    }.width('100%').padding({ top: SPACING.SM, bottom: SPACING.SM })
+    .id(`cart-row-${item.storeId}-${item.goods.id}-${item.specId ?? 0}`)
   }
 
   /** 凑单提示卡：还差多少元起送 + 店内可凑单菜品 + 去凑单入口。 */

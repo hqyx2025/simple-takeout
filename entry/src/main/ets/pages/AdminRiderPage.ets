@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 /**
  * 管理端骑手管理（四端改造）：骑手列表与启用/停用
  */
@@ -75,7 +76,7 @@ export struct AdminRiderPage {
       PageHeader({
         title: '骑手管理',
         backId: 'admin-rider-back',
-        headerBgColor: MODULE_BG.ADMIN,
+        headerBgColor: COLORS.BG_PRIMARY,
         actionColor: MODULE_COLOR.ADMIN,
         actionLabel: '刷新',
         onBack: () => { router.back() },
@@ -84,18 +85,21 @@ export struct AdminRiderPage {
 
       Row({ space: SPACING.MD }) {
         Text('状态').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
-        Button('全部').id('admin-rider-status-all').fontSize(FONT_SIZE.SM)
+        Button('全部').height(44)
+          .attributeModifier(new AppButtonStyle()).id('admin-rider-status-all').fontSize(FONT_SIZE.SM)
           .backgroundColor(this.statusFilter === -1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
-          .fontColor(this.statusFilter === -1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = -1; this.applyFilter() })
-        Button('已启用').id('admin-rider-status-enabled').fontSize(FONT_SIZE.SM)
+          .fontColor(this.statusFilter === -1 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.statusFilter = -1; this.applyFilter() })
+        Button('已启用').height(44)
+          .attributeModifier(new AppButtonStyle()).id('admin-rider-status-enabled').fontSize(FONT_SIZE.SM)
           .backgroundColor(this.statusFilter === 1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
-          .fontColor(this.statusFilter === 1 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 1; this.applyFilter() })
-        Button('已停用').id('admin-rider-status-disabled').fontSize(FONT_SIZE.SM)
+          .fontColor(this.statusFilter === 1 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.statusFilter = 1; this.applyFilter() })
+        Button('已停用').height(44)
+          .attributeModifier(new AppButtonStyle()).id('admin-rider-status-disabled').fontSize(FONT_SIZE.SM)
           .backgroundColor(this.statusFilter === 0 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
-          .fontColor(this.statusFilter === 0 ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule).onClick(() => { this.statusFilter = 0; this.applyFilter() })
+          .fontColor(this.statusFilter === 0 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.statusFilter = 0; this.applyFilter() })
       }
       .width('100%').padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
       .backgroundColor(MODULE_BG.ADMIN)
@@ -106,7 +110,7 @@ export struct AdminRiderPage {
         }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
       } else if (this.displayRiders.length === 0) {
         Column() {
-          SymbolGlyph($r('sys.symbol.express_delivery')).fontSize(60).margin({ top: 40 })
+          Image($r('app.media.login_rider')).width(60).height(60).objectFit(ImageFit.Contain).margin({ top: 40 })
           Text(this.statusFilter === -1 ? '暂无骑手' : '当前筛选条件下暂无骑手')
             .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
           Text('骑手通过「注册→选择骑手」开通').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.SM })
@@ -146,13 +150,14 @@ export struct AdminRiderPage {
       Row() {
         Blank()
         Button(rider.status === 1 ? '停用' : '启用')
-          .height(32).fontSize(FONT_SIZE.SM)
+          .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM)
           .fontColor(rider.status === 1 ? COLORS.ERROR : MODULE_COLOR.ADMIN)
           .backgroundColor(rider.status === 1 ? COLORS.ERROR_LIGHT : COLORS.TAG_BG)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+          .borderRadius(BORDER_RADIUS.ROUND)
           .onClick(() => { this.toggleStatus(rider) })
       }.width('100%')
     }
-    .width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+      .attributeModifier(new AppCardStyle())
+    .width('100%').padding(SPACING.LG)
   }
 }

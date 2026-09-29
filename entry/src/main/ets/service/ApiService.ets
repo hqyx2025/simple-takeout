@@ -1573,10 +1573,10 @@ export async function toggleFavoriteApi(storeId: number): Promise<boolean> {
   return resp.code === 200 ? (resp.data === true) : false
 }
 
-export async function fetchAddressesApi(): Promise<Address[]> {
+export async function fetchAddressesApi(): Promise<Address[] | null> {
   const resp: ApiResponse<ServerAddress[]> = await get<ServerAddress[]>(API_CONFIG.ENDPOINTS['addresses'])
-  if (resp.code !== 200 || resp.data === null) {
-    return []
+  if (resp.code !== 200 || !Array.isArray(resp.data)) {
+    return null
   }
   return resp.data.map((a: ServerAddress) => toAddress(a))
 }

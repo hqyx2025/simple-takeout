@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 /**
  * 管理端-平台管理入口页
  * 仅 ADMIN 可进入：平台分类/店铺/员工/订单/退款管理 + 数据概览
@@ -11,6 +12,7 @@ import { fetchAdminRefundsApi } from '../service/ApiService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { PageHeader } from '../components/PageHeader'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { logInfo } from '../service/AppLogger'
 
 interface AdminStore {
@@ -32,7 +34,7 @@ interface AdminOrder {
 
 /** 入口卡片模型 */
 class AdminEntryItem {
-  icon: Resource = $r('sys.symbol.questionmark_circle')
+  icon: Resource = $r('app.media.ui_info')
   title: string = ''
   description: string = ''
   count: number = 0
@@ -78,6 +80,7 @@ export struct AdminCenterPage {
   @State refunds: RefundRecord[] = []
   @State employees: number = 0
   @State loading: boolean = false
+  @State showLogoutConfirm: boolean = false
 
   aboutToAppear(): void {
     logInfo('Page', '进入管理端入口页 AdminCenterPage')
@@ -121,16 +124,16 @@ export struct AdminCenterPage {
   /** 四个后台模块入口卡片（数据源提取为方法，避免 ForEach 字面量闭包捕获问题）。 */
   private getAdminEntries(): AdminEntryItem[] {
     const entries: AdminEntryItem[] = [
-      AdminEntryItem.create($r('sys.symbol.folder'), '分类管理', '平台分类的增删改', this.categories.length, 'pages/AdminCategoryPage'),
-      AdminEntryItem.create($r('sys.symbol.store'), '店铺管理', '营业状态与发现页推荐', this.stores.length, 'pages/AdminStorePage'),
-      AdminEntryItem.create($r('sys.symbol.person_2'), '员工管理', '商户账号创建、编辑与停用', this.employees, 'pages/AdminEmployeePage'),
-      AdminEntryItem.create($r('sys.symbol.fork_knife_fill'), '商品监管', '搜索商品并强制上下架', 0, 'pages/AdminProductPage'),
-      AdminEntryItem.create($r('sys.symbol.person'), '用户管理', '查看用户和商户账号状态', 0, 'pages/AdminUserPage'),
-      AdminEntryItem.create($r('sys.symbol.archivebox'), '订单管理', '托管订单状态与退款', this.orders.length, 'pages/AdminOrderPage'),
-      AdminEntryItem.create($r('sys.symbol.wallet'), '退款审批', '处理用户退款申请', this.getPendingRefundCount(), 'pages/AdminRefundPage'),
-      AdminEntryItem.create($r('sys.symbol.square_grid_2x2'), '平台统计', '查看平台订单、成交和热销商品', 0, 'pages/AdminStatisticsPage'),
-      AdminEntryItem.create($r('sys.symbol.express_delivery'), '骑手管理', '骑手列表与启用停用', 0, 'pages/AdminRiderPage'),
-      AdminEntryItem.create($r('sys.symbol.paintbrush_pointed_square'), '内容管理', '首页轮播与平台公告', 0, 'pages/AdminContentPage')
+      AdminEntryItem.create($r('app.media.ui_folder'), '分类管理', '平台分类的增删改', this.categories.length, 'pages/AdminCategoryPage'),
+      AdminEntryItem.create($r('app.media.login_store'), '店铺管理', '营业状态与发现页推荐', this.stores.length, 'pages/AdminStorePage'),
+      AdminEntryItem.create($r('app.media.ui_people'), '员工管理', '商户账号创建、编辑与停用', this.employees, 'pages/AdminEmployeePage'),
+      AdminEntryItem.create($r('app.media.home_bowl'), '商品监管', '搜索商品并强制上下架', 0, 'pages/AdminProductPage'),
+      AdminEntryItem.create($r('app.media.login_user'), '用户管理', '查看用户和商户账号状态', 0, 'pages/AdminUserPage'),
+      AdminEntryItem.create($r('app.media.profile_order'), '订单管理', '托管订单状态与退款', this.orders.length, 'pages/AdminOrderPage'),
+      AdminEntryItem.create($r('app.media.profile_wallet'), '退款审批', '处理用户退款申请', this.getPendingRefundCount(), 'pages/AdminRefundPage'),
+      AdminEntryItem.create($r('app.media.ui_grid'), '平台统计', '查看平台订单、成交和热销商品', 0, 'pages/AdminStatisticsPage'),
+      AdminEntryItem.create($r('app.media.login_rider'), '骑手管理', '骑手列表与启用停用', 0, 'pages/AdminRiderPage'),
+      AdminEntryItem.create($r('app.media.ui_content'), '内容管理', '首页轮播与平台公告', 0, 'pages/AdminContentPage')
     ]
     return entries
   }
@@ -151,18 +154,14 @@ export struct AdminCenterPage {
   }
 
   build() {
+    Stack() {
     Column() {
       PageHeader({
         title: '平台管理',
-        backText: '退出',
-        backId: 'admin-center-logout',
-        headerBgColor: MODULE_BG.ADMIN,
+        showBack: false,
+        headerBgColor: COLORS.BG_PRIMARY,
         actionColor: MODULE_COLOR.ADMIN,
         actionLabel: this.loading ? '加载中…' : '刷新',
-        onBack: () => {
-          logout()
-          router.replaceUrl({ url: 'pages/Index' })
-        },
         onAction: () => { this.refresh() }
       })
 
@@ -205,31 +204,49 @@ export struct AdminCenterPage {
         }, (item: AdminEntryItem) => item.title)
 
         ListItem() {
-          Text('管理端仅提供后台运营功能，不包含点餐、定位等用户端能力')
-            .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%').textAlign(TextAlign.Center)
+          Button('退出登录', { type: ButtonType.Normal }).height(44)
+            .attributeModifier(new AppButtonStyle())
+            .width('100%')
+            .fontColor(COLORS.ERROR).backgroundColor(COLORS.ERROR_LIGHT)
+            .id('admin-center-logout')
+            .onClick(() => { this.showLogoutConfirm = true })
         }
       }
       .width('100%').layoutWeight(1).scrollBar(BarState.Off)
       .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
     }
     .width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)
+    if (this.showLogoutConfirm) {
+      ConfirmDialog({
+        title: '退出登录', content: '退出后需要重新登录才能管理平台，确定退出吗？',
+        confirmText: '退出', cancelText: '取消',
+        onConfirm: () => {
+          this.showLogoutConfirm = false
+          logout()
+          router.replaceUrl({ url: 'pages/Index' })
+        },
+        onCancel: () => { this.showLogoutConfirm = false }
+      })
+    }
+    }.width('100%').height('100%')
   }
 
   /** 入口卡片（参数经方法作用域传递，规避 ArkTS ForEach 闭包捕获限制）。 */
   @Builder
   EntryCard(item: AdminEntryItem) {
     Row({ space: SPACING.MD }) {
-      SymbolGlyph(item.icon)
-        .width(44).height(44).fontSize(24)
+      Image(item.icon).objectFit(ImageFit.Contain)
+        .width(44).height(44)
+        .padding(10)
         .backgroundColor(accentBg(accentIndexFromText(item.title)))
         .borderRadius(BORDER_RADIUS.MD)
       Column({ space: SPACING.XS }) {
         Row({ space: SPACING.SM }) {
           Text(item.title).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
-            .fontColor(this.entryThemeColor(item.title))
+            .fontColor(COLORS.TEXT_PRIMARY)
           if (item.count > 0) {
             Text(item.count.toString())
-              .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_WHITE)
+              .fontSize(FONT_SIZE.XS).fontColor(COLORS.ON_PRIMARY)
               .backgroundColor(item.title === '退款审批' ? COLORS.ERROR : this.entryThemeColor(item.title))
               .borderRadius(BORDER_RADIUS.ROUND)
               .padding({ left: SPACING.SM, right: SPACING.SM, top: SPACING.XS, bottom: SPACING.XS })
@@ -239,8 +256,8 @@ export struct AdminCenterPage {
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       Text('›').fontSize(FONT_SIZE.XL).fontColor(this.entryThemeColor(item.title))
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%').padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
     .id('admin-entry-' + item.page.replace('pages/', ''))
     .onClick(() => { router.pushUrl({ url: item.page }) })
   }

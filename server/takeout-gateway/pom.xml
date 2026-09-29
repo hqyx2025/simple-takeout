@@ -3,7 +3,7 @@
   API 网关（Phase 2）。
 
   职责边界（刻意克制）：只做**路由 + 透传**，不校验业务、不聚合响应。
-  - 外部契约不变：监听 9000，与拆分前完全一致，前端 HAP 零改动
+  - 对外监听 8087，与前端 BASE_URL 保持一致
   - 鉴权仍由各服务的 AuthInterceptor 独占（网关不把鉴权变成唯一防线）
   - 用 WebFlux 版网关（响应式，非阻塞转发）
 -->
@@ -22,7 +22,7 @@
   <artifactId>takeout-gateway</artifactId>
   <version>1.0.0</version>
   <name>takeout-gateway</name>
-  <description>API 网关：/api/** 与 /uploads/** 反向代理（保持 :9000 契约不变）</description>
+  <description>API 网关：/api/** 与 /uploads/** 反向代理，统一入口 :8087</description>
 
   <dependencies>
     <dependency>

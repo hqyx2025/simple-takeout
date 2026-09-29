@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle, AppTextAreaStyle } from '../common/theme/AppTheme'
 /**
  * 商户评价管理页
  * 查看本店收到的评价并回复
@@ -82,7 +83,7 @@ export struct MerchantReviewsPage {
     Stack() {
       Column() {
         // 导航栏
-        PageHeader({ title: '评价管理', backText: '‹ 返回', backId: 'merchant-reviews-back', titleColor: MODULE_COLOR.MERCHANT, headerBgColor: MODULE_BG.MERCHANT, onBack: () => { router.back() } })
+        PageHeader({ title: '评价管理', backText: '‹ 返回', backId: 'merchant-reviews-back', titleColor: COLORS.TEXT_PRIMARY, headerBgColor: COLORS.BG_PRIMARY, onBack: () => { router.back() } })
 
         if (this.loading) {
           Column() {
@@ -93,7 +94,7 @@ export struct MerchantReviewsPage {
           .alignItems(HorizontalAlign.Center)
         } else if (this.reviews.length === 0) {
           Column() {
-            SymbolGlyph($r('sys.symbol.doc_plaintext')).fontSize(60).margin({ top: 40 })
+            Image($r('app.media.ui_document')).width(60).height(60).objectFit(ImageFit.Contain).margin({ top: 40 })
             Text('暂无评价')
               .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
           }
@@ -195,17 +196,16 @@ export struct MerchantReviewsPage {
       Row() {
         Blank()
         Button(review.reply === '' ? '回复' : '修改回复')
-          .height(32).fontSize(FONT_SIZE.SM)
+          .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM)
           .fontColor(MODULE_COLOR.MERCHANT).backgroundColor(MODULE_BG.MERCHANT)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+          .borderRadius(BORDER_RADIUS.ROUND)
           .onClick(() => { this.openReply(review) })
       }
       .width('100%')
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
   }
 
   @Builder
@@ -218,26 +218,26 @@ export struct MerchantReviewsPage {
         Text('回复会展示在用户评价下方')
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%')
         TextArea({ placeholder: '请输入回复内容，最多200字', text: this.replyText })
+          .attributeModifier(new AppTextAreaStyle())
           .width('100%').height(100).maxLength(200)
-          .fontSize(FONT_SIZE.MD).backgroundColor(COLORS.BG_PRIMARY)
-          .borderRadius(BORDER_RADIUS.MD)
           .onChange((value: string) => { this.replyText = value })
         Row({ space: SPACING.MD }) {
           Button('取消')
+            .attributeModifier(new AppButtonStyle())
             .layoutWeight(1).height(42)
             .fontColor(COLORS.TEXT_SECONDARY).backgroundColor(COLORS.BG_PRIMARY)
-            .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+            .borderRadius(BORDER_RADIUS.ROUND)
             .onClick(() => { this.replyTarget = null })
           Button(this.submitting ? '提交中…' : '提交回复')
-            .layoutWeight(1).height(42)
-            .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.MERCHANT)
-            .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+            .attributeModifier(new AppButtonStyle())
+            .layoutWeight(1).height(42).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.MERCHANT)
+            .borderRadius(BORDER_RADIUS.ROUND)
             .onClick(() => { this.submitReply() })
         }
         .width('100%')
       }
-      .width('86%').padding(SPACING.XL)
-      .backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+        .attributeModifier(new AppCardStyle())
+      .width('86%').constraintSize({ maxWidth: 460 }).padding(SPACING.XL)
     }
     .width('100%').height('100%')
     .backgroundColor(COLORS.OVERLAY)

@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle, AppFilterStyle } from '../common/theme/AppTheme'
 /**
  * 商户订单管理页
  * 按状态Tab分类展示商户所有店铺订单
@@ -125,7 +126,7 @@ export struct MerchantOrdersPage {
       PageHeader({
         title: '订单管理',
         backId: 'merchant-orders-back',
-        headerBgColor: MODULE_BG.MERCHANT,
+        headerBgColor: COLORS.BG_PRIMARY,
         actionColor: MODULE_COLOR.MERCHANT,
         onBack: () => { router.back() }
       })
@@ -134,13 +135,7 @@ export struct MerchantOrdersPage {
       Scroll() {
         Row({ space: SPACING.SM }) {
           ForEach(this.statusTabs, (tab: OrderStatusTab) => {
-            Text(tab.name)
-              .fontSize(FONT_SIZE.MD)
-              .fontColor(this.currentStatus === tab.status ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY)
-              .backgroundColor(this.currentStatus === tab.status ? MODULE_COLOR.MERCHANT : COLORS.BG_PRIMARY)
-              .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
-              .borderRadius(BORDER_RADIUS.ROUND)
-              .onClick(() => { this.currentStatus = tab.status })
+            this.FilterTab(tab)
           }, (tab: OrderStatusTab) => tab.status.toString())
         }
         .padding({ left: SPACING.LG, right: SPACING.LG })
@@ -148,13 +143,13 @@ export struct MerchantOrdersPage {
       .scrollable(ScrollDirection.Horizontal)
       .scrollBar(BarState.Off)
       .width('100%')
-      .height(48)
+      .height(60)
       .backgroundColor(COLORS.BG_WHITE)
 
       // 订单列表 / 空状态
       if (this.getFilteredOrders().length === 0) {
         Column() {
-          SymbolGlyph($r('sys.symbol.inbox')).fontSize(32).margin({ top: 40 })
+          Image($r('app.media.ui_inbox')).width(32).height(32).objectFit(ImageFit.Contain).margin({ top: 40 })
           Text('暂无订单')
             .fontSize(FONT_SIZE.LG)
             .fontColor(COLORS.TEXT_HINT)
@@ -184,12 +179,20 @@ export struct MerchantOrdersPage {
   }
 
   @Builder
+  FilterTab(tab: OrderStatusTab) {
+    Button(tab.name)
+      .attributeModifier(new AppFilterStyle(this.currentStatus === tab.status))
+      .animation(AppMotion.pressAnimation())
+      .accessibilitySelected(this.currentStatus === tab.status)
+      .onClick(() => { this.currentStatus = tab.status })
+  }
+
+  @Builder
   OrderCard(order: Order) {
     Column({ space: SPACING.SM }) {
       // 店铺名 + 订单状态
       Row() {
-        SymbolGlyph($r('sys.symbol.store'))
-          .fontSize(FONT_SIZE.MD)
+        Image($r('app.media.login_store')).objectFit(ImageFit.Contain)
           .width(28)
           .height(28)
 .backgroundColor(accentBg(accentIndexFromText(order.storeName)))
@@ -259,10 +262,9 @@ export struct MerchantOrdersPage {
       }
       .width('100%')
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
     .id(`merchant-order-card-${order.id}`)
   }
 
@@ -271,12 +273,10 @@ export struct MerchantOrdersPage {
     if (order.status === 1) {
       // 待接单：接单按钮（1→2）
       Button('接单')
-        .height(32)
-        .fontSize(FONT_SIZE.SM)
-        .fontColor(COLORS.TEXT_WHITE)
+        .attributeModifier(new AppButtonStyle()).height(40)
+        .fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)
         .backgroundColor(MODULE_COLOR.MERCHANT)
         .borderRadius(BORDER_RADIUS.ROUND)
-        .type(ButtonType.Capsule)
         .id(`merchant-action-${order.id}`)
         .onClick(() => { this.handleAccept(order) })
     } else if (order.status === 2) {
@@ -294,12 +294,10 @@ export struct MerchantOrdersPage {
       } else {
         // 制作中：出餐完成（写 ready_time，进入骑手待取餐池）
         Button('出餐完成')
-          .height(32)
-          .fontSize(FONT_SIZE.SM)
-          .fontColor(COLORS.TEXT_WHITE)
+          .attributeModifier(new AppButtonStyle()).height(40)
+          .fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)
           .backgroundColor(MODULE_COLOR.MERCHANT)
           .borderRadius(BORDER_RADIUS.ROUND)
-          .type(ButtonType.Capsule)
           .id(`merchant-action-${order.id}`)
           .onClick(() => { this.handleReady(order) })
       }
@@ -312,12 +310,10 @@ export struct MerchantOrdersPage {
       } else {
         // 未分配骑手的订单仍保留商户自行确认送达（兼容无骑手时的自配送）
         Button('确认送达')
-          .height(32)
-          .fontSize(FONT_SIZE.SM)
-          .fontColor(COLORS.TEXT_WHITE)
+          .attributeModifier(new AppButtonStyle()).height(40)
+          .fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)
           .backgroundColor(MODULE_COLOR.MERCHANT)
           .borderRadius(BORDER_RADIUS.ROUND)
-          .type(ButtonType.Capsule)
           .id(`merchant-action-${order.id}`)
           .onClick(() => { this.handleComplete(order) })
       }

@@ -1,12 +1,14 @@
-/** 本轮首页专用的颜色与控件尺寸；不改变其他业务页的全局主题。 */
+import { AppTheme } from './AppTheme'
+
+/** 首页控件尺寸；颜色继承全站登录页基准。 */
 export class HomeTheme {
-  static readonly SURFACE: Resource = $r('app.color.home_surface')
-  static readonly CARD: Resource = $r('app.color.home_card')
-  static readonly TEXT: Resource = $r('app.color.home_text')
-  static readonly MUTED: Resource = $r('app.color.home_muted')
-  static readonly ACCENT: Resource = $r('app.color.home_accent')
-  static readonly SOFT: Resource = $r('app.color.home_soft')
-  static readonly INPUT: Resource = $r('app.color.home_input')
+  static readonly SURFACE: Resource = AppTheme.PAGE
+  static readonly CARD: Resource = AppTheme.CARD
+  static readonly TEXT: Resource = AppTheme.TEXT
+  static readonly MUTED: Resource = AppTheme.MUTED
+  static readonly ACCENT: Resource = AppTheme.ACCENT
+  static readonly SOFT: Resource = AppTheme.ACCENT_SOFT
+  static readonly INPUT: Resource = AppTheme.INPUT
   static readonly ICON: number = 24
   static readonly SMALL_ICON: number = 16
   static readonly SEARCH_ICON: number = 20

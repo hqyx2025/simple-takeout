@@ -6,7 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 /**
  * API 网关入口。
  *
- * <p>本模块是 Phase 2 引入的**唯一新增进程**：它把 `:9000` 上原本直连单体的请求
+ * <p>本模块是 Phase 2 引入的**唯一新增进程**：它把 `:8087` 上原本直连单体的请求
  * 转发给后端应用，从而为后续「按域拆服务」留出路由层。</p>
  *
  * <p><b>为什么现在只路由到一个后端</b>：Phase 2 的目标是「对外契约零变化下先建立路由层」，

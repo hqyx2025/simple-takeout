@@ -5,7 +5,10 @@ import { loadAllData } from '../service/DataPersistence';
 import { initLogger, setPrivacyConsent, logInfo } from '../service/AppLogger';
 import { registerClickLogging } from '../common/ClickLogger';
 import { User, UserRole } from '../model/Models';
+import { routerCompat } from '../common/UiNavigation'
+import { deliveryCustomerId } from '../service/DeliveryFormSync'
 import { AppMotion } from '../common/theme/AppMotion';
+import { warmColdStartConnection, disposeHttpClient } from '../service/HttpClient';
 
 const DOMAIN = 0x0000;
 
@@ -14,8 +17,29 @@ export default class EntryAbility extends UIAbility {
   private mainWindow: window.Window | null = null
   private windowContentReady: boolean = false
   private persistenceLoaded: boolean = false
+  private deliveryOrdersPending: boolean = false
+
+  onNewWant(want: Want): void {
+    this.deliveryOrdersPending = want.parameters?.deliveryOrders === 'true'
+    this.openDeliveryOrders()
+  }
+
+  private openDeliveryOrders(): void {
+    if (!this.windowContentReady || !this.deliveryOrdersPending || this.mainWindow === null) { return }
+    this.deliveryOrdersPending = false
+    // Never accept an order ID from the launcher. Re-enter the authenticated customer list.
+    if (deliveryCustomerId() > 0) {
+      AppStorage.setOrCreate<number>('orderFilterStatus', -1)
+      try {
+        this.mainWindow.getUIContext().runScopedTask(() => {
+          routerCompat.pushUrl({ url: 'pages/OrderListPage' })
+        })
+      } catch (_) { /* Window teardown: leave navigation to the next user action. */ }
+    }
+  }
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
+    this.deliveryOrdersPending = want.parameters?.deliveryOrders === 'true'
     AppMotion.init()
     try {
       this.context.getApplicationContext().setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET);
@@ -32,6 +56,7 @@ export default class EntryAbility extends UIAbility {
       setPrivacyConsent(consented)
       if (consented) {
         initLogger()
+        warmColdStartConnection()
       }
       this.persistenceLoaded = true
       this.loadMainContentIfReady()
@@ -43,6 +68,7 @@ export default class EntryAbility extends UIAbility {
   }
 
   onDestroy(): void {
+    disposeHttpClient()
     AppMotion.dispose()
     hilog.info(DOMAIN, '测试标签', '%{public}s', '破坏能力 Ability onDestroy');
   }
@@ -62,9 +88,9 @@ export default class EntryAbility extends UIAbility {
       return
     }
     try {
-      const surface: string = '#' + this.context.resourceManager.getColorByNameSync('home_surface')
+      const surface: string = '#' + this.context.resourceManager.getColorByNameSync('bg_primary')
         .toString(16).padStart(8, '0')
-      const content: string = '#' + this.context.resourceManager.getColorByNameSync('home_text')
+      const content: string = '#' + this.context.resourceManager.getColorByNameSync('text_primary')
         .toString(16).padStart(8, '0')
       this.mainWindow.setWindowBackgroundColor(surface)
       this.mainWindow.setWindowSystemBarProperties({
@@ -104,6 +130,7 @@ export default class EntryAbility extends UIAbility {
       hilog.info(DOMAIN, '测试标签', '内容加载成功。');
       // Window 背景 API 必须在 loadContent 成功之后调用。
       this.windowContentReady = true
+      this.openDeliveryOrders()
       this.updateWindowAppearance()
       // 内容就绪后注册全局点击日志：之后每次用户点击都会记录当前页面标识
       try {
@@ -122,6 +149,7 @@ export default class EntryAbility extends UIAbility {
   }
 
   onForeground(): void {
+    AppStorage.setOrCreate<boolean>('appForeground', true)
     AppMotion.refresh()
     this.updateWindowAppearance()
     // Ability has brought to foreground
@@ -129,6 +157,7 @@ export default class EntryAbility extends UIAbility {
   }
 
   onBackground(): void {
+    AppStorage.setOrCreate<boolean>('appForeground', false)
     // Ability has back to background
     hilog.info(DOMAIN, '测试标签', '%{public}s', '后台能力');
   }

@@ -4,7 +4,7 @@
 
 // 品牌主色（业务数据用途的稳定 hex，不随深浅色变化）。
 // 如分类展示色传给后端存储、Canvas 需要字符串色的场景使用。
-export const COLORS_PRIMARY_HEX: string = '#FF6B35'
+export const COLORS_PRIMARY_HEX: string = '#C74B1B'
 
 // 主题颜色 - 使用 class 避免 arkts-no-untyped-obj-literals
 // 颜色已主题化为 app.color.* 双态资源（resources/base + resources/dark），
@@ -12,6 +12,9 @@ export const COLORS_PRIMARY_HEX: string = '#FF6B35'
 // ResourceColor 参数）直接传入即兼容，Canvas/API 等需要 string 的场景用
 // ColorMetrics.resourceColor(X).color 运行时解析。
 export class COLORS {
+  static readonly INPUT: Resource = $r('app.color.input')
+  static readonly ON_PRIMARY: Resource = $r('app.color.on_primary')
+  static readonly INFO: Resource = $r('app.color.info')
   static readonly PRIMARY: Resource = $r('app.color.primary')
   static readonly PRIMARY_LIGHT: Resource = $r('app.color.primary_light')
   static readonly PRIMARY_DARK: Resource = $r('app.color.primary_dark')
@@ -66,11 +69,11 @@ export class FONT_SIZE {
 
 // 圆角
 export class BORDER_RADIUS {
-  static readonly SM: number = 4
-  static readonly MD: number = 8
-  static readonly LG: number = 12
-  static readonly XL: number = 16
-  static readonly ROUND: number = 20
+  static readonly SM: number = 8
+  static readonly MD: number = 14
+  static readonly LG: number = 18
+  static readonly XL: number = 24
+  static readonly ROUND: number = 14
   static readonly CIRCLE: number = 999
 }
 
@@ -91,7 +94,7 @@ export function getOrderStatusText(status: number, escrowStatus?: number): strin
 export function getOrderStatusColor(status: number, escrowStatus?: number): ResourceColor {
   if (status === 0) { return $r('app.color.primary') }
   if (status === 1) { return $r('app.color.warning') }
-  if (status === 2) { return $r('app.color.module_search') }
+  if (status === 2) { return COLORS.INFO }
   if (status === 3) { return $r('app.color.success') }
   if (status === 4) { return (escrowStatus ?? 0) === 1 ? $r('app.color.text_hint') : $r('app.color.warning') }
   if (status === 5) { return $r('app.color.text_hint') }
@@ -135,9 +138,9 @@ export class APP_CONFIG {
 }
 
 // API端点常量
-// BASE_URL：模拟器访问宿主机用 10.0.2.2；真机联调改为电脑局域网 IP，如 http://192.168.1.100:9000
+// BASE_URL：模拟器访问宿主机用 10.0.2.2；真机联调改为电脑局域网 IP，如 http://192.168.1.100:8087
 export class API_CONFIG {
-  static readonly DEV_BASE_URL: string = 'http://10.0.2.2:9000'
+  static readonly DEV_BASE_URL: string = 'http://10.0.2.2:8087'
   static readonly RELEASE_BASE_URL: string = 'https://api.example.com'
   // Release 构建前改为 true，并将 RELEASE_BASE_URL 替换为真实 HTTPS 域名。
   static readonly USE_HTTPS: boolean = false
@@ -178,11 +181,11 @@ export class AMAP_CONFIG {
 }
 
 /**
- * 商户上传图片的默认占位图。
- * 资源位置：entry/src/main/resources/rawfile/images/default/merchant_goods_default.png
+ * 商户未上传图片时使用的本地 SVG 占位图。
+ * 资源位置：entry/src/main/resources/base/media/food_placeholder.svg
  * 图片资源的目录约定与新增流程见 md/图片资源规范.md。
  */
-export const DEFAULT_MERCHANT_IMAGE: Resource = $rawfile('images/default/merchant_goods_default.png')
+export const DEFAULT_MERCHANT_IMAGE: Resource = $r('app.media.food_placeholder')
 
 /**
  * 商户上传图片地址 → 可渲染的图片来源。
@@ -201,8 +204,8 @@ export function merchantImageSource(image: string | undefined): ResourceStr {
 }
 
 /**
- * 功能模块主题色：一个模块一种颜色，同一模块在所有页面保持一致。
- * 用途：模块标题、模块图标底、分区强调色，避免整屏只有白底 + 灰字（"很多空白"的观感来源之一）。
+ * 功能模块统一沿用登录页陶橙强调色；业务状态仍使用独立语义色。
+ * 保留原有模块常量供业务页复用，颜色在资源层统一。
  */
 export class MODULE_COLOR {
   static readonly HOME: Resource = $r('app.color.module_home')
@@ -241,7 +244,7 @@ export class MODULE_BG {
   static readonly ADMIN: Resource = $r('app.color.module_bg_admin')
 }
 
-/** 逐项取色的浅色底 / 前景色板（成对），让相邻卡片、图标底颜色不相同。 */
+/** 兼容现有入口取色调用，统一为品牌浅底与前景色。 */
 export class ACCENT {
   static readonly BG: Resource[] = [$r('app.color.accent_bg_0'), $r('app.color.accent_bg_1'), $r('app.color.accent_bg_2'),
     $r('app.color.accent_bg_3'), $r('app.color.accent_bg_4'), $r('app.color.accent_bg_5'),

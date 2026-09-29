@@ -1,3 +1,5 @@
+import { AppButtonStyle, AppCardStyle, AppTheme, AppRefreshStyle } from '../common/theme/AppTheme'
+import { SegmentButton, SegmentButtonOptions } from '@ohos.arkui.advanced.SegmentButton'
 /**
  * 榜单页：店铺榜（按月销量+评分排序）与菜品热销榜（跨店铺按累计销量排序）。
  * 数据全部来自后端榜单接口；名次徽章前三名使用强调色，点击条目进入店铺详情页。
@@ -36,6 +38,14 @@ export struct RankingPage {
 
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State currentTab: number = 0
+  @State @Watch('onTabSelection') selectedTabs: number[] = [0]
+  @State tabOptions: SegmentButtonOptions = SegmentButtonOptions.tab({
+    buttons: [{ text: '店铺榜' }, { text: '菜品榜' }],
+    fontColor: AppTheme.MUTED, selectedFontColor: AppTheme.ACCENT,
+    backgroundColor: AppTheme.INPUT, selectedBackgroundColor: AppTheme.CARD,
+    fontSize: 14, selectedFontSize: 14,
+    buttonPadding: { top: 12, bottom: 12, left: 16, right: 16 }
+  })
   @State storeList: StoreItem[] = []
   @State goodsList: SpecialGoodsItem[] = []
   @State loading: boolean = true
@@ -79,7 +89,8 @@ export struct RankingPage {
     logInfo('Rank', `榜单加载完成 店铺=${this.storeList.length} 菜品=${this.goodsList.length}`)
   }
 
-  private switchTab(index: number): void {
+  onTabSelection(): void {
+    const index: number = this.selectedTabs[0] ?? 0
     if (this.currentTab === index) {
       return
     }
@@ -106,7 +117,7 @@ export struct RankingPage {
       return COLORS.TEXT_PRIMARY
     }
     if (rank === 2 || rank === 3) {
-      return COLORS.TEXT_WHITE
+      return COLORS.ON_PRIMARY
     }
     return COLORS.TEXT_SECONDARY
   }
@@ -141,29 +152,6 @@ export struct RankingPage {
     .alignItems(HorizontalAlign.Center)
     .backgroundColor(this.rankBadgeColor(rank))
     .borderRadius(BORDER_RADIUS.SM)
-  }
-
-  /** 每个榜单一种模块色，避免两个 Tab 完全同色。 */
-  private tabColor(index: number): ResourceColor {
-    return index === 0 ? MODULE_COLOR.NEARBY : MODULE_COLOR.SPECIAL
-  }
-
-  @Builder
-  TabButton(title: string, index: number) {
-    Column({ space: SPACING.XS }) {
-      Text(title)
-        .fontSize(FONT_SIZE.MD)
-        .fontWeight(this.currentTab === index ? FontWeight.Bold : FontWeight.Normal)
-        .fontColor(this.currentTab === index ? this.tabColor(index) : COLORS.TEXT_SECONDARY)
-      Divider()
-        .strokeWidth(2)
-        .color(this.currentTab === index ? this.tabColor(index) : COLORS.DIVIDER)
-    }
-    .layoutWeight(1)
-    .height(48)
-    .justifyContent(FlexAlign.Center)
-    .alignItems(HorizontalAlign.Center)
-    .onClick(() => { this.switchTab(index) })
   }
 
   @Builder
@@ -201,10 +189,9 @@ export struct RankingPage {
         .fontSize(FONT_SIZE.XL)
         .fontColor(COLORS.TEXT_HINT)
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
     .alignItems(VerticalAlign.Center)
     .onClick(() => { this.openStoreDetail(item.id, item.name) })
   }
@@ -262,10 +249,9 @@ export struct RankingPage {
         .fontSize(FONT_SIZE.XL)
         .fontColor(COLORS.TEXT_HINT)
     }
+      .attributeModifier(new AppCardStyle())
     .width('100%')
     .padding(SPACING.LG)
-    .backgroundColor(COLORS.BG_WHITE)
-    .borderRadius(BORDER_RADIUS.LG)
     .alignItems(VerticalAlign.Center)
     .onClick(() => { this.openStoreDetail(item.goods.storeId ?? 0, item.storeName) })
   }
@@ -273,20 +259,18 @@ export struct RankingPage {
   @Builder
   ErrorView(reason: string) {
     Column({ space: SPACING.MD }) {
-      SymbolGlyph($r('sys.symbol.dot_radiowaves'))
-        .fontSize(52)
+      Image($r('app.media.ui_radar')).width(52).height(52).objectFit(ImageFit.Contain)
       Text(`榜单加载失败：${reason}`)
         .fontSize(FONT_SIZE.MD)
         .fontColor(COLORS.TEXT_SECONDARY)
         .textAlign(TextAlign.Center)
         .padding({ left: SPACING.XL, right: SPACING.XL })
       Button('点击重试')
+        .attributeModifier(new AppButtonStyle())
         .height(40)
-        .fontSize(FONT_SIZE.MD)
-        .fontColor(COLORS.TEXT_WHITE)
+        .fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
         .backgroundColor(COLORS.PRIMARY)
         .borderRadius(BORDER_RADIUS.ROUND)
-        .type(ButtonType.Capsule)
         .padding({ left: SPACING.XL, right: SPACING.XL })
         .onClick(() => { this.loadRankData(false) })
     }
@@ -316,27 +300,22 @@ export struct RankingPage {
       // 顶部导航栏
       PageHeader({ title: '榜单', onBack: () => { router.back() } })
 
-      // Tab 切换（自绘 Tab，与优惠券中心页风格一致）
-      Row() {
-        this.TabButton('店铺榜', 0)
-        this.TabButton('菜品榜', 1)
-      }
-      .width('100%')
-      .backgroundColor(MODULE_BG.RANKING)
+      SegmentButton({ options: this.tabOptions, selectedIndexes: $selectedTabs })
+        .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
 
       // 内容区
       if (this.loading) {
         LoadingIndicator({ text: '榜单加载中...' })
       } else if (!this.loggedIn) {
-EmptyState({ iconGlyph: $r('sys.symbol.lock'), title: '暂无登录', description: '请登录后查看榜单' })
+EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', description: '请登录后查看榜单' })
        } else if (this.currentTab === 0) {
          this.RankHint('店铺榜按月销量排序，同销量时按评分排序（仅营业店铺）')
          if (this.storeError !== '') {
            this.ErrorView(this.storeError)
          } else if (!Array.isArray(this.storeList) || this.storeList.length === 0) {
-           EmptyState({ iconGlyph: $r('sys.symbol.star_trophy'), title: '暂无店铺榜单', description: '暂时没有营业中的店铺数据' })
+           EmptyState({ icon: $r('app.media.home_trophy'), title: '暂无店铺榜单', description: '暂时没有营业中的店铺数据' })
         } else {
-          Refresh({ refreshing: this.refreshing }) {
+          Refresh({ refreshing: $$this.refreshing }) {
             List({ space: SPACING.MD }) {
               ForEach(this.storeList, (item: StoreItem, index: number) => {
                 ListItem() {
@@ -352,7 +331,7 @@ EmptyState({ iconGlyph: $r('sys.symbol.lock'), title: '暂无登录', descriptio
             .cachedCount(5)
           }
           .layoutWeight(1)
-          .pullToRefresh(true)
+          .attributeModifier(new AppRefreshStyle())
           .onRefreshing(() => {
             this.refreshing = true
             this.loadRankData(false)
@@ -363,9 +342,9 @@ EmptyState({ iconGlyph: $r('sys.symbol.lock'), title: '暂无登录', descriptio
         if (this.goodsError !== '') {
           this.ErrorView(this.goodsError)
         } else if (!Array.isArray(this.goodsList) || this.goodsList.length === 0) {
-          EmptyState({ icon: '🍜', title: '暂无菜品榜单', description: '暂时没有热销菜品数据' })
+          EmptyState({ icon: $r('app.media.home_bowl'), title: '暂无菜品榜单', description: '暂时没有热销菜品数据' })
         } else {
-          Refresh({ refreshing: this.refreshing }) {
+          Refresh({ refreshing: $$this.refreshing }) {
             List({ space: SPACING.MD }) {
               ForEach(this.goodsList, (item: SpecialGoodsItem, index: number) => {
                 ListItem() {
@@ -381,7 +360,7 @@ EmptyState({ iconGlyph: $r('sys.symbol.lock'), title: '暂无登录', descriptio
             .cachedCount(5)
           }
           .layoutWeight(1)
-          .pullToRefresh(true)
+          .attributeModifier(new AppRefreshStyle())
           .onRefreshing(() => {
             this.refreshing = true
             this.loadRankData(false)

@@ -8,7 +8,7 @@
       因此设备实测完全不需要发布证书，也不需要 AGC。
     * 模拟器必须用 -noWindow 启动（带窗口时本机会报 GLib 断言并退出）；
       启动约需 40-60 秒才会出现在 hdc list targets 中。
-    * 应用访问宿主机后端用 http://10.0.2.2:9000（模拟器 NAT 别名），后端需先启动：
+    * 应用访问宿主机后端用 http://10.0.2.2:8087（模拟器 NAT 别名），后端需先启动：
       mvn -f server/pom.xml spring-boot:run
 
 .EXAMPLE
@@ -96,9 +96,9 @@ Write-Host ("      型号 {0} / API {1}" -f (& $hdc shell param get const.produc
 
 # ---------- 2. 后端连通性 ----------
 try {
-  $probe = Invoke-RestMethod -Uri 'http://127.0.0.1:9000/api/auth/login' -Method Post -ContentType 'application/json' `
+  $probe = Invoke-RestMethod -Uri 'http://127.0.0.1:8087/api/auth/login' -Method Post -ContentType 'application/json' `
     -Body '{"phone":"13800138000","password":"123456"}' -TimeoutSec 5
-  Write-Host '[2/5] 后端在线（127.0.0.1:9000 可登录）' -ForegroundColor Green
+  Write-Host '[2/5] 后端在线（127.0.0.1:8087 可登录）' -ForegroundColor Green
 } catch {
   Write-Host '[2/5] [WARN] 宿主机后端未响应，应用内所有接口都会失败。请先运行：mvn -f server/pom.xml spring-boot:run' -ForegroundColor Yellow
 }

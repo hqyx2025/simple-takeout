@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle, AppInputStyle, AppTextAreaStyle } from '../common/theme/AppTheme'
 /**
  * 管理端内容管理（演进项已落地）：首页轮播 Banner 与平台公告
  */
@@ -120,7 +121,7 @@ export struct AdminContentPage {
         PageHeader({
           title: '内容管理',
           backId: 'admin-content-back',
-          headerBgColor: MODULE_BG.ADMIN,
+          headerBgColor: COLORS.BG_PRIMARY,
           actionColor: MODULE_COLOR.ADMIN,
           actionLabel: '刷新',
           onBack: () => { router.back() },
@@ -137,13 +138,13 @@ export struct AdminContentPage {
             // Banner 区
             ListItem() {
               Row({ space: SPACING.SM }) {
-                Text('🖼️')
-                  .width(28).height(28).textAlign(TextAlign.Center)
+                Image($r('app.media.ui_content')).objectFit(ImageFit.Contain)
+                  .width(28).height(28)
                   .backgroundColor(accentBg(0)).borderRadius(BORDER_RADIUS.SM)
                 Text('轮播 Banner').fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.ADMIN).layoutWeight(1)
-                Button('新增 Banner').height(32).fontSize(FONT_SIZE.SM)
-                  .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.ADMIN)
-                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                Button('新增 Banner')
+                  .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.ADMIN)
+                  .borderRadius(BORDER_RADIUS.ROUND)
                   .onClick(() => { this.showBannerDialog = true })
               }.width('100%')
             }
@@ -162,13 +163,13 @@ export struct AdminContentPage {
             // 公告区
             ListItem() {
               Row({ space: SPACING.SM }) {
-                Text('📢')
-                  .width(28).height(28).textAlign(TextAlign.Center)
+                Image($r('app.media.home_announcement')).objectFit(ImageFit.Contain)
+                  .width(28).height(28)
                   .backgroundColor(accentBg(1)).borderRadius(BORDER_RADIUS.SM)
                 Text('平台公告').fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.ADMIN).layoutWeight(1)
-                Button('发布公告').height(32).fontSize(FONT_SIZE.SM)
-                  .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.ADMIN)
-                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                Button('发布公告')
+                  .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.ADMIN)
+                  .borderRadius(BORDER_RADIUS.ROUND)
                   .onClick(() => { this.showAnnouncementDialog = true })
               }.width('100%')
             }
@@ -214,16 +215,19 @@ export struct AdminContentPage {
         Text(banner.color).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
       }.layoutWeight(1).alignItems(HorizontalAlign.Start)
       StatusBadge({ text: banner.status === 1 ? '展示中' : '已隐藏', mode: banner.status === 1 ? 'success' : 'gray' })
-      Button(banner.status === 1 ? '隐藏' : '展示').height(28).fontSize(FONT_SIZE.XS)
+      Button(banner.status === 1 ? '隐藏' : '展示')
+        .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
         .fontColor(MODULE_COLOR.ADMIN).backgroundColor(MODULE_BG.ADMIN)
-        .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+        .borderRadius(BORDER_RADIUS.ROUND)
         .onClick(() => { this.toggleBanner(banner) })
-      Button('删除').height(28).fontSize(FONT_SIZE.XS)
+      Button('删除')
+        .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
         .fontColor(COLORS.ERROR).backgroundColor(COLORS.ERROR_LIGHT)
-        .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+        .borderRadius(BORDER_RADIUS.ROUND)
         .onClick(() => { this.deleteBanner(banner) })
     }
-    .width('100%').padding(SPACING.MD).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+      .attributeModifier(new AppCardStyle())
+    .width('100%').padding(SPACING.MD)
   }
 
   @Builder
@@ -243,18 +247,21 @@ export struct AdminContentPage {
         .textOverflow({ overflow: TextOverflow.Ellipsis })
       Row() {
         Blank()
-        Button(a.status === 1 ? '下线' : '发布').height(28).fontSize(FONT_SIZE.XS)
+        Button(a.status === 1 ? '下线' : '发布')
+          .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
           .fontColor(MODULE_COLOR.ADMIN).backgroundColor(MODULE_BG.ADMIN)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+          .borderRadius(BORDER_RADIUS.ROUND)
           .onClick(() => { this.toggleAnnouncement(a) })
-        Button('删除').height(28).fontSize(FONT_SIZE.XS)
+        Button('删除')
+          .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
           .fontColor(COLORS.ERROR).backgroundColor(COLORS.ERROR_LIGHT)
-          .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+          .borderRadius(BORDER_RADIUS.ROUND)
           .margin({ left: SPACING.SM })
           .onClick(() => { this.deleteAnnouncement(a) })
       }.width('100%')
     }
-    .width('100%').padding(SPACING.LG).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+      .attributeModifier(new AppCardStyle())
+    .width('100%').padding(SPACING.LG)
   }
 
   @Builder
@@ -264,26 +271,28 @@ export struct AdminContentPage {
         Text('新增 Banner').fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY).width('100%').textAlign(TextAlign.Center)
         Text('标题（必填）').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).width('100%')
         TextInput({ placeholder: '请输入 Banner 标题，如：新人专享 满20减15', text: this.bannerTitle })
-          .width('100%').height(44).fontSize(FONT_SIZE.MD).backgroundColor(COLORS.BG_PRIMARY)
-          .borderRadius(BORDER_RADIUS.MD)
+          .attributeModifier(new AppInputStyle())
+          .width('100%')
           .onChange((v: string) => { this.bannerTitle = v })
         Text('背景色（选填，默认品牌橙）').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).width('100%')
         TextInput({ placeholder: '#FF6B35', text: this.bannerColor })
-          .width('100%').height(44).fontSize(FONT_SIZE.MD).backgroundColor(COLORS.BG_PRIMARY)
-          .borderRadius(BORDER_RADIUS.MD)
+          .attributeModifier(new AppInputStyle())
+          .width('100%')
           .onChange((v: string) => { this.bannerColor = v })
         Row({ space: SPACING.MD }) {
-          Button('取消').layoutWeight(1).height(42)
+          Button('取消')
+            .attributeModifier(new AppButtonStyle()).layoutWeight(1).height(42)
             .fontColor(COLORS.TEXT_SECONDARY).backgroundColor(COLORS.BG_PRIMARY)
-            .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+            .borderRadius(BORDER_RADIUS.ROUND)
             .onClick(() => { this.showBannerDialog = false })
-          Button('新增').layoutWeight(1).height(42)
-            .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.ADMIN)
-            .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+          Button('新增')
+            .attributeModifier(new AppButtonStyle()).layoutWeight(1).height(42).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.ADMIN)
+            .borderRadius(BORDER_RADIUS.ROUND)
             .onClick(() => { this.submitBanner() })
         }.width('100%')
       }
-      .width('86%').padding(SPACING.XL).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+        .attributeModifier(new AppCardStyle())
+      .width('86%').constraintSize({ maxWidth: 460 }).padding(SPACING.XL)
     }
     .width('100%').height('100%').backgroundColor(COLORS.OVERLAY)
     .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
@@ -296,26 +305,28 @@ export struct AdminContentPage {
         Text('发布公告').fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY).width('100%').textAlign(TextAlign.Center)
         Text('标题（必填）').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).width('100%')
         TextInput({ placeholder: '请输入公告标题', text: this.announcementTitle })
-          .width('100%').height(44).fontSize(FONT_SIZE.MD).backgroundColor(COLORS.BG_PRIMARY)
-          .borderRadius(BORDER_RADIUS.MD)
+          .attributeModifier(new AppInputStyle())
+          .width('100%')
           .onChange((v: string) => { this.announcementTitle = v })
         Text('内容（必填）').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).width('100%')
         TextArea({ placeholder: '请输入公告内容，最多200字', text: this.announcementContent })
-          .width('100%').height(100).maxLength(200).fontSize(FONT_SIZE.MD).backgroundColor(COLORS.BG_PRIMARY)
-          .borderRadius(BORDER_RADIUS.MD)
+          .attributeModifier(new AppTextAreaStyle())
+          .width('100%').height(100).maxLength(200)
           .onChange((v: string) => { this.announcementContent = v })
         Row({ space: SPACING.MD }) {
-          Button('取消').layoutWeight(1).height(42)
+          Button('取消')
+            .attributeModifier(new AppButtonStyle()).layoutWeight(1).height(42)
             .fontColor(COLORS.TEXT_SECONDARY).backgroundColor(COLORS.BG_PRIMARY)
-            .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+            .borderRadius(BORDER_RADIUS.ROUND)
             .onClick(() => { this.showAnnouncementDialog = false })
-          Button('发布').layoutWeight(1).height(42)
-            .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.ADMIN)
-            .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+          Button('发布')
+            .attributeModifier(new AppButtonStyle()).layoutWeight(1).height(42).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.ADMIN)
+            .borderRadius(BORDER_RADIUS.ROUND)
             .onClick(() => { this.submitAnnouncement() })
         }.width('100%')
       }
-      .width('86%').padding(SPACING.XL).backgroundColor(COLORS.BG_WHITE).borderRadius(BORDER_RADIUS.LG)
+        .attributeModifier(new AppCardStyle())
+      .width('86%').constraintSize({ maxWidth: 460 }).padding(SPACING.XL)
     }
     .width('100%').height('100%').backgroundColor(COLORS.OVERLAY)
     .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)

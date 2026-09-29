@@ -1,3 +1,4 @@
+import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /**
  * 商户中心页面
  * 商户可查看自己的店铺列表、管理店铺、上架食物
@@ -391,7 +392,7 @@ export struct MerchantCenterPage {
     Stack() {
       Column() {
         // 顶部
-        PageHeader({ title: '商户中心', backText: '‹', backId: 'merchant-center-back', titleColor: MODULE_COLOR.MERCHANT, headerBgColor: MODULE_BG.MERCHANT, actionLabel: this.user.username, onAction: () => {}, onBack: () => { router.back() } })
+        PageHeader({ title: '商户中心', backText: '‹', backId: 'merchant-center-back', titleColor: COLORS.TEXT_PRIMARY, headerBgColor: COLORS.BG_PRIMARY, actionLabel: this.user.username, onAction: () => {}, onBack: () => { router.back() } })
 
         // 统计概览
         Row() {
@@ -410,21 +411,19 @@ export struct MerchantCenterPage {
           }
           .layoutWeight(1).alignItems(HorizontalAlign.Center)
         }
+          .attributeModifier(new AppCardStyle())
         .width('100%')
         .padding(SPACING.LG)
         .margin({ top: SPACING.SM })
-        .backgroundColor(COLORS.BG_WHITE)
-        .borderRadius(BORDER_RADIUS.LG)
 
         // 新建店铺按钮
         Button('+ 新建店铺')
-          .width('90%')
+          .attributeModifier(new AppButtonStyle())
+          .width('90%').constraintSize({ maxWidth: 460 })
           .height(44)
-          .fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.TEXT_WHITE)
+          .fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
           .backgroundColor(MODULE_COLOR.MERCHANT)
           .borderRadius(BORDER_RADIUS.ROUND)
-          .type(ButtonType.Capsule)
           .margin({ top: SPACING.LG })
           .onClick(() => { this.openAddStoreForm() })
 
@@ -496,10 +495,9 @@ export struct MerchantCenterPage {
                 Text('管理 ›')
                   .fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.MERCHANT)
               }
+                .attributeModifier(new AppCardStyle())
               .width('100%')
               .padding(SPACING.MD)
-              .backgroundColor(COLORS.BG_WHITE)
-              .borderRadius(BORDER_RADIUS.LG)
               .onClick(async () => {
                 this.selectedStoreId = store.id
                 this.selectedStoreGoods = await fetchMerchantGoodsApi(store.id)
@@ -526,111 +524,123 @@ export struct MerchantCenterPage {
               Text('新建店铺')
                 .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.MERCHANT)
                 .layoutWeight(1).textAlign(TextAlign.Center)
-              SymbolGlyph($r('sys.symbol.xmark'))
-                .fontSize(FONT_SIZE.LG).fontColor([COLORS.TEXT_HINT])
+              Image($r('app.media.ui_close')).width(FONT_SIZE.LG).height(FONT_SIZE.LG).objectFit(ImageFit.Contain)
                 .onClick(() => { this.showAddStore = false })
             }
             .width('100%')
-            Text('创建后将自动归入您的名下，店铺名称为必填项')
-              .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
-            Column({ space: SPACING.XS }) {
-              Text('店铺名称（必填）')
-                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-              TextInput({ placeholder: '请输入店铺名称，如：老王快餐店', text: this.newStoreName })
-                .width('100%').height(44).onChange((v: string) => { this.newStoreName = v })
-            }
-            Column({ space: SPACING.XS }) {
-              Text('店铺地址（必填，用于计算距离）')
-                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-              if (this.storeAddressOptions.length > 1) {
-                Select(this.storeAddressOptions)
-                  .selected(this.newStoreAddressIndex >= 0 ? this.newStoreAddressIndex : 0)
-                  .value(this.newStoreAddressIndex >= 0
-                    ? this.storeAddressOptions[this.newStoreAddressIndex].value : '请选择商户已保存地址')
-                  .width('100%').height(44)
-                  .onSelect((index: number, value: string) => { this.handleStoreAddressSelect('new', index) })
-              } else {
-                Button('暂无保存地址，去新增地址')
-                  .width('100%').height(44).fontSize(FONT_SIZE.SM)
-                  .fontColor(MODULE_COLOR.MERCHANT).backgroundColor(MODULE_BG.MERCHANT)
-                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-                  .onClick(() => { this.openStoreAddressManager('new') })
+            Scroll() {
+              Column({ space: SPACING.MD }) {
+                Text('创建后将自动归入您的名下，店铺名称为必填项')
+                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+                Column({ space: SPACING.XS }) {
+                  Text('店铺名称（必填）')
+                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                  TextInput({ placeholder: '请输入店铺名称，如：老王快餐店', text: this.newStoreName })
+                    .attributeModifier(new AppInputStyle())
+                    .width('100%').onChange((v: string) => { this.newStoreName = v })
+                }
+                Column({ space: SPACING.XS }) {
+                  Text('店铺地址（必填，用于计算距离）')
+                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                  if (this.storeAddressOptions.length > 1) {
+                    Select(this.storeAddressOptions)
+                      .selected(this.newStoreAddressIndex >= 0 ? this.newStoreAddressIndex : 0)
+                      .value(this.newStoreAddressIndex >= 0
+                        ? this.storeAddressOptions[this.newStoreAddressIndex].value : '请选择商户已保存地址')
+                      .width('100%').height(44)
+                      .onSelect((index: number, value: string) => { this.handleStoreAddressSelect('new', index) })
+                  } else {
+                    Button('暂无保存地址，去新增地址')
+                      .attributeModifier(new AppButtonStyle())
+                      .width('100%').height(44).fontSize(FONT_SIZE.SM)
+                      .fontColor(MODULE_COLOR.MERCHANT).backgroundColor(MODULE_BG.MERCHANT)
+                      .borderRadius(BORDER_RADIUS.ROUND)
+                      .onClick(() => { this.openStoreAddressManager('new') })
+                  }
+                  Text('地址来自商户已保存地址，也可以直接用地图定位门店位置')
+                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%')
+                  Button('定位选择店铺位置（地图选点）')
+                    .attributeModifier(new AppButtonStyle())
+                    .width('100%').height(40).fontSize(FONT_SIZE.SM)
+                    .fontColor(MODULE_COLOR.MERCHANT).backgroundColor(MODULE_BG.MERCHANT)
+                    .borderRadius(BORDER_RADIUS.ROUND)
+                    .onClick(() => { this.openStoreLocationPicker('new') })
+                  if (this.newStorePickedAddress !== '') {
+                    Text(`已定位门店位置：${this.newStorePickedAddress}`)
+                      .fontSize(FONT_SIZE.XS).fontColor(MODULE_COLOR.MERCHANT).width('100%')
+                  }
+                }
+                Column({ space: SPACING.XS }) {
+                  Text('店铺公告（选填，将展示在店铺详情页）')
+                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                  TextInput({ placeholder: '请输入店铺公告，如：新店开业，欢迎光临', text: this.newStoreNotice })
+                    .attributeModifier(new AppInputStyle())
+                    .width('100%').onChange((v: string) => { this.newStoreNotice = v })
+                }
+                Column({ space: SPACING.XS }) {
+                  Text('店铺照片（选填，展示在用户端店铺详情页，方便顾客找到门店）')
+                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                  Row({ space: SPACING.MD }) {
+                    Image(merchantImageSource(this.newStoreImage))
+                      .alt(DEFAULT_MERCHANT_IMAGE)
+                      .width(72).height(72).objectFit(ImageFit.Cover).borderRadius(BORDER_RADIUS.MD)
+                    Button(this.newStoreImage === '' ? '＋ 上传照片' : '更换照片')
+                      .attributeModifier(new AppButtonStyle())
+                      .fontSize(FONT_SIZE.SM).height(40).borderRadius(BORDER_RADIUS.MD).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.MERCHANT)
+                      .onClick(() => { this.pickStoreImage(true) })
+                  }
+                  .width('100%').alignItems(VerticalAlign.Center)
+                }
+                Row({ space: SPACING.MD }) {
+                  Column({ space: SPACING.XS }) {
+                    Text('配送费（元）')
+                      .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                    TextInput({ placeholder: '如：3', text: this.newStoreDeliveryFee })
+                      .attributeModifier(new AppInputStyle())
+                      .width('100%').type(InputType.Number)
+                      .onChange((v: string) => { this.newStoreDeliveryFee = v })
+                  }
+                  .layoutWeight(1)
+                  Column({ space: SPACING.XS }) {
+                    Text('起送价（元）')
+                      .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                    TextInput({ placeholder: '如：20', text: this.newStoreMinOrder })
+                      .attributeModifier(new AppInputStyle())
+                      .width('100%').type(InputType.Number)
+                      .onChange((v: string) => { this.newStoreMinOrder = v })
+                  }
+                  .layoutWeight(1)
+                }
+                Column({ space: SPACING.XS }) {
+                  Text(`最远配送半径（公里，默认 ${MERCHANT_RADIUS_DEFAULT_KM}；超出半径的用户下单会提示超距)`)
+                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                  TextInput({ placeholder: `如：${MERCHANT_RADIUS_DEFAULT_KM}`, text: this.newStoreRadius })
+                    .attributeModifier(new AppInputStyle())
+                    .width('100%').type(InputType.Number)
+                    .id('merchant-radius-input-new')
+                    .onChange((v: string) => { this.newStoreRadius = v })
+                }
               }
-              Text('地址来自商户已保存地址，也可以直接用地图定位门店位置')
-                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%')
-              Button('定位选择店铺位置（地图选点）')
-                .width('100%').height(40).fontSize(FONT_SIZE.SM)
-                .fontColor(MODULE_COLOR.MERCHANT).backgroundColor(MODULE_BG.MERCHANT)
-                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-                .onClick(() => { this.openStoreLocationPicker('new') })
-              if (this.newStorePickedAddress !== '') {
-                Text(`已定位门店位置：${this.newStorePickedAddress}`)
-                  .fontSize(FONT_SIZE.XS).fontColor(MODULE_COLOR.MERCHANT).width('100%')
-              }
+              .width('100%')
             }
-            Column({ space: SPACING.XS }) {
-              Text('店铺公告（选填，将展示在店铺详情页）')
-                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-              TextInput({ placeholder: '请输入店铺公告，如：新店开业，欢迎光临', text: this.newStoreNotice })
-                .width('100%').height(44).onChange((v: string) => { this.newStoreNotice = v })
-            }
-            Column({ space: SPACING.XS }) {
-              Text('店铺照片（选填，展示在用户端店铺详情页，方便顾客找到门店）')
-                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-              Row({ space: SPACING.MD }) {
-                Image(merchantImageSource(this.newStoreImage))
-                  .alt(DEFAULT_MERCHANT_IMAGE)
-                  .width(72).height(72).objectFit(ImageFit.Cover).borderRadius(BORDER_RADIUS.MD)
-                Button(this.newStoreImage === '' ? '＋ 上传照片' : '更换照片')
-                  .fontSize(FONT_SIZE.SM).height(36).borderRadius(BORDER_RADIUS.MD)
-                  .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.MERCHANT)
-                  .onClick(() => { this.pickStoreImage(true) })
-              }
-              .width('100%').alignItems(VerticalAlign.Center)
-            }
-            Row({ space: SPACING.MD }) {
-              Column({ space: SPACING.XS }) {
-                Text('配送费（元）')
-                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-                TextInput({ placeholder: '如：3', text: this.newStoreDeliveryFee })
-                  .width('100%').height(44).type(InputType.Number)
-                  .onChange((v: string) => { this.newStoreDeliveryFee = v })
-              }
-              .layoutWeight(1)
-              Column({ space: SPACING.XS }) {
-                Text('起送价（元）')
-                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-                TextInput({ placeholder: '如：20', text: this.newStoreMinOrder })
-                  .width('100%').height(44).type(InputType.Number)
-                  .onChange((v: string) => { this.newStoreMinOrder = v })
-              }
-              .layoutWeight(1)
-            }
-            Column({ space: SPACING.XS }) {
-              Text(`最远配送半径（公里，默认 ${MERCHANT_RADIUS_DEFAULT_KM}；超出半径的用户下单会提示超距)`)
-                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-              TextInput({ placeholder: `如：${MERCHANT_RADIUS_DEFAULT_KM}`, text: this.newStoreRadius })
-                .width('100%').height(44).type(InputType.Number)
-                .id('merchant-radius-input-new')
-                .onChange((v: string) => { this.newStoreRadius = v })
-            }
+            .width('100%').layoutWeight(1).scrollBar(BarState.Off)
             Row({ space: SPACING.MD }) {
               Button('取消')
+                .attributeModifier(new AppButtonStyle())
                 .layoutWeight(1).height(42).fontSize(FONT_SIZE.MD)
                 .fontColor(COLORS.TEXT_SECONDARY).backgroundColor(COLORS.BG_PRIMARY)
-                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                .borderRadius(BORDER_RADIUS.ROUND)
                 .onClick(() => { this.showAddStore = false })
               Button(this.creatingStore ? '创建中...' : '确认创建')
-                .layoutWeight(1).height(42).fontSize(FONT_SIZE.MD)
-                .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.MERCHANT)
-                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                .attributeModifier(new AppButtonStyle())
+                .layoutWeight(1).height(42).fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.MERCHANT)
+                .borderRadius(BORDER_RADIUS.ROUND)
                 .onClick(() => { this.doCreateStore() })
             }
           }
-          .width('88%')
+            .attributeModifier(new AppCardStyle())
+          .width('88%').height('86%').constraintSize({ maxWidth: 460 })
           .padding(SPACING.LG)
-          .backgroundColor(COLORS.BG_WHITE)
-          .borderRadius(BORDER_RADIUS.XL)
         }
         .width('100%').height('100%')
         .backgroundColor(COLORS.OVERLAY)
@@ -665,107 +675,119 @@ export struct MerchantCenterPage {
               Text('编辑店铺')
                 .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.MERCHANT)
                 .layoutWeight(1).textAlign(TextAlign.Center)
-              SymbolGlyph($r('sys.symbol.xmark'))
-                .fontSize(FONT_SIZE.LG).fontColor([COLORS.TEXT_HINT])
+              Image($r('app.media.ui_close')).width(FONT_SIZE.LG).height(FONT_SIZE.LG).objectFit(ImageFit.Contain)
                 .onClick(() => { this.showEditStore = false })
             }
             .width('100%')
-            Text('修改后用户端店铺信息将同步更新，店铺名称为必填项')
-              .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
-            Column({ space: SPACING.XS }) {
-              Text('店铺名称（必填）')
-                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-              TextInput({ placeholder: '请输入店铺名称，如：老王快餐店', text: this.editStoreName })
-                .width('100%').height(44).onChange((v: string) => { this.editStoreName = v })
-            }
-            Column({ space: SPACING.XS }) {
-              Text('店铺地址（必填，用于计算距离）')
-                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-              if (this.editStoreAddressOptions.length > 1) {
-                Select(this.editStoreAddressOptions)
-                  .selected(this.editStoreAddressIndex >= 0 ? this.editStoreAddressIndex : 0)
-                  .value(this.editStoreAddressIndex >= 0
-                    ? this.editStoreAddressOptions[this.editStoreAddressIndex].value : '请选择商户已保存地址')
-                  .width('100%').height(44)
-                  .onSelect((index: number, value: string) => { this.handleStoreAddressSelect('edit', index) })
-              } else {
-                Button('暂无保存地址，去新增地址')
-                  .width('100%').height(44).fontSize(FONT_SIZE.SM)
-                  .fontColor(MODULE_COLOR.MERCHANT).backgroundColor(MODULE_BG.MERCHANT)
-                  .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-                  .onClick(() => { this.openStoreAddressManager('edit') })
+            Scroll() {
+              Column({ space: SPACING.MD }) {
+                Text('修改后用户端店铺信息将同步更新，店铺名称为必填项')
+                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+                Column({ space: SPACING.XS }) {
+                  Text('店铺名称（必填）')
+                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                  TextInput({ placeholder: '请输入店铺名称，如：老王快餐店', text: this.editStoreName })
+                    .attributeModifier(new AppInputStyle())
+                    .width('100%').onChange((v: string) => { this.editStoreName = v })
+                }
+                Column({ space: SPACING.XS }) {
+                  Text('店铺地址（必填，用于计算距离）')
+                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                  if (this.editStoreAddressOptions.length > 1) {
+                    Select(this.editStoreAddressOptions)
+                      .selected(this.editStoreAddressIndex >= 0 ? this.editStoreAddressIndex : 0)
+                      .value(this.editStoreAddressIndex >= 0
+                        ? this.editStoreAddressOptions[this.editStoreAddressIndex].value : '请选择商户已保存地址')
+                      .width('100%').height(44)
+                      .onSelect((index: number, value: string) => { this.handleStoreAddressSelect('edit', index) })
+                  } else {
+                    Button('暂无保存地址，去新增地址')
+                      .attributeModifier(new AppButtonStyle())
+                      .width('100%').height(44).fontSize(FONT_SIZE.SM)
+                      .fontColor(MODULE_COLOR.MERCHANT).backgroundColor(MODULE_BG.MERCHANT)
+                      .borderRadius(BORDER_RADIUS.ROUND)
+                      .onClick(() => { this.openStoreAddressManager('edit') })
+                  }
+                  Text('地址来自商户已保存地址，也可以直接用地图重新定位门店位置')
+                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%')
+                  Button('定位选择店铺位置（地图选点）')
+                    .attributeModifier(new AppButtonStyle())
+                    .width('100%').height(40).fontSize(FONT_SIZE.SM)
+                    .fontColor(MODULE_COLOR.MERCHANT).backgroundColor(MODULE_BG.MERCHANT)
+                    .borderRadius(BORDER_RADIUS.ROUND)
+                    .onClick(() => { this.openStoreLocationPicker('edit') })
+                }
+                Column({ space: SPACING.XS }) {
+                  Text('店铺公告（选填，将展示在店铺详情页）')
+                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                  TextInput({ placeholder: '请输入店铺公告，如：本店支持免配送费', text: this.editStoreNotice })
+                    .attributeModifier(new AppInputStyle())
+                    .width('100%').onChange((v: string) => { this.editStoreNotice = v })
+                }
+                Column({ space: SPACING.XS }) {
+                  Text('店铺照片（选填，展示在用户端店铺详情页，方便顾客找到门店）')
+                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                  Row({ space: SPACING.MD }) {
+                    Image(merchantImageSource(this.editStoreImage))
+                      .alt(DEFAULT_MERCHANT_IMAGE)
+                      .width(72).height(72).objectFit(ImageFit.Cover).borderRadius(BORDER_RADIUS.MD)
+                    Button(this.editStoreImage === '' ? '＋ 上传照片' : '更换照片')
+                      .attributeModifier(new AppButtonStyle())
+                      .fontSize(FONT_SIZE.SM).height(40).borderRadius(BORDER_RADIUS.MD).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.MERCHANT)
+                      .onClick(() => { this.pickStoreImage(false) })
+                  }
+                  .width('100%').alignItems(VerticalAlign.Center)
+                }
+                Row({ space: SPACING.MD }) {
+                  Column({ space: SPACING.XS }) {
+                    Text('配送费（元）')
+                      .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                    TextInput({ placeholder: '如：3', text: this.editStoreDeliveryFee })
+                      .attributeModifier(new AppInputStyle())
+                      .width('100%').type(InputType.Number)
+                      .onChange((v: string) => { this.editStoreDeliveryFee = v })
+                  }
+                  .layoutWeight(1)
+                  Column({ space: SPACING.XS }) {
+                    Text('起送价（元）')
+                      .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                    TextInput({ placeholder: '如：20', text: this.editStoreMinOrder })
+                      .attributeModifier(new AppInputStyle())
+                      .width('100%').type(InputType.Number)
+                      .onChange((v: string) => { this.editStoreMinOrder = v })
+                  }
+                  .layoutWeight(1)
+                }
+                Column({ space: SPACING.XS }) {
+                  Text(`最远配送半径（公里，默认 ${MERCHANT_RADIUS_DEFAULT_KM}；超出半径的用户下单会提示超距)`)
+                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                  TextInput({ placeholder: `如：${MERCHANT_RADIUS_DEFAULT_KM}`, text: this.editStoreRadius })
+                    .attributeModifier(new AppInputStyle())
+                    .width('100%').type(InputType.Number)
+                    .id('merchant-radius-input-edit')
+                    .onChange((v: string) => { this.editStoreRadius = v })
+                }
               }
-              Text('地址来自商户已保存地址，也可以直接用地图重新定位门店位置')
-                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%')
-              Button('定位选择店铺位置（地图选点）')
-                .width('100%').height(40).fontSize(FONT_SIZE.SM)
-                .fontColor(MODULE_COLOR.MERCHANT).backgroundColor(MODULE_BG.MERCHANT)
-                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
-                .onClick(() => { this.openStoreLocationPicker('edit') })
+              .width('100%')
             }
-            Column({ space: SPACING.XS }) {
-              Text('店铺公告（选填，将展示在店铺详情页）')
-                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-              TextInput({ placeholder: '请输入店铺公告，如：本店支持免配送费', text: this.editStoreNotice })
-                .width('100%').height(44).onChange((v: string) => { this.editStoreNotice = v })
-            }
-            Column({ space: SPACING.XS }) {
-              Text('店铺照片（选填，展示在用户端店铺详情页，方便顾客找到门店）')
-                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-              Row({ space: SPACING.MD }) {
-                Image(merchantImageSource(this.editStoreImage))
-                  .alt(DEFAULT_MERCHANT_IMAGE)
-                  .width(72).height(72).objectFit(ImageFit.Cover).borderRadius(BORDER_RADIUS.MD)
-                Button(this.editStoreImage === '' ? '＋ 上传照片' : '更换照片')
-                  .fontSize(FONT_SIZE.SM).height(36).borderRadius(BORDER_RADIUS.MD)
-                  .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.MERCHANT)
-                  .onClick(() => { this.pickStoreImage(false) })
-              }
-              .width('100%').alignItems(VerticalAlign.Center)
-            }
-            Row({ space: SPACING.MD }) {
-              Column({ space: SPACING.XS }) {
-                Text('配送费（元）')
-                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-                TextInput({ placeholder: '如：3', text: this.editStoreDeliveryFee })
-                  .width('100%').height(44).type(InputType.Number)
-                  .onChange((v: string) => { this.editStoreDeliveryFee = v })
-              }
-              .layoutWeight(1)
-              Column({ space: SPACING.XS }) {
-                Text('起送价（元）')
-                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-                TextInput({ placeholder: '如：20', text: this.editStoreMinOrder })
-                  .width('100%').height(44).type(InputType.Number)
-                  .onChange((v: string) => { this.editStoreMinOrder = v })
-              }
-              .layoutWeight(1)
-            }
-            Column({ space: SPACING.XS }) {
-              Text(`最远配送半径（公里，默认 ${MERCHANT_RADIUS_DEFAULT_KM}；超出半径的用户下单会提示超距)`)
-                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-              TextInput({ placeholder: `如：${MERCHANT_RADIUS_DEFAULT_KM}`, text: this.editStoreRadius })
-                .width('100%').height(44).type(InputType.Number)
-                .id('merchant-radius-input-edit')
-                .onChange((v: string) => { this.editStoreRadius = v })
-            }
+            .width('100%').layoutWeight(1).scrollBar(BarState.Off)
             Row({ space: SPACING.MD }) {
               Button('取消')
+                .attributeModifier(new AppButtonStyle())
                 .layoutWeight(1).height(42).fontSize(FONT_SIZE.MD)
                 .fontColor(COLORS.TEXT_SECONDARY).backgroundColor(COLORS.BG_PRIMARY)
-                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                .borderRadius(BORDER_RADIUS.ROUND)
                 .onClick(() => { this.showEditStore = false })
               Button(this.savingStore ? '保存中...' : '确认保存')
-                .layoutWeight(1).height(42).fontSize(FONT_SIZE.MD)
-                .fontColor(COLORS.TEXT_WHITE).backgroundColor(MODULE_COLOR.MERCHANT)
-                .borderRadius(BORDER_RADIUS.ROUND).type(ButtonType.Capsule)
+                .attributeModifier(new AppButtonStyle())
+                .layoutWeight(1).height(42).fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.MERCHANT)
+                .borderRadius(BORDER_RADIUS.ROUND)
                 .onClick(() => { this.doEditStore() })
             }
           }
-          .width('88%')
+            .attributeModifier(new AppCardStyle())
+          .width('88%').height('86%').constraintSize({ maxWidth: 460 })
           .padding(SPACING.LG)
-          .backgroundColor(COLORS.BG_WHITE)
-          .borderRadius(BORDER_RADIUS.XL)
         }
         .width('100%').height('100%')
         .backgroundColor(COLORS.OVERLAY)
@@ -780,8 +802,7 @@ export struct MerchantCenterPage {
             Row() {
               Text('分类管理')
                 .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.MERCHANT).layoutWeight(1)
-              SymbolGlyph($r('sys.symbol.xmark'))
-                .fontSize(FONT_SIZE.LG).fontColor([COLORS.TEXT_HINT])
+              Image($r('app.media.ui_close')).width(FONT_SIZE.LG).height(FONT_SIZE.LG).objectFit(ImageFit.Contain)
                 .onClick(() => { this.showManageCategories = false })
             }
             .width('100%')
@@ -790,12 +811,13 @@ export struct MerchantCenterPage {
 
             Row({ space: SPACING.SM }) {
               TextInput({ placeholder: '新分类名称', text: this.newCategoryName })
-                .layoutWeight(1).height(40)
+                .attributeModifier(new AppInputStyle())
+                .layoutWeight(1)
                 .onChange((v: string) => { this.newCategoryName = v })
               Button('新增')
-                .height(40).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_WHITE)
+                .attributeModifier(new AppButtonStyle())
+                .height(40).fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)
                 .backgroundColor(MODULE_COLOR.MERCHANT).borderRadius(BORDER_RADIUS.ROUND)
-                .type(ButtonType.Capsule)
                 .onClick(() => { this.doAddCategory() })
             }
             .width('100%')
@@ -813,17 +835,16 @@ export struct MerchantCenterPage {
                   Row({ space: SPACING.SM }) {
                     if (this.editingCategoryId === category.id) {
                       TextInput({ placeholder: '分类名称', text: this.editCategoryName })
-                        .layoutWeight(1).height(36)
+                        .attributeModifier(new AppInputStyle())
+                        .layoutWeight(1)
                         .onChange((v: string) => { this.editCategoryName = v })
                       Button('保存')
-                        .height(30).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_WHITE)
+                        .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS).fontColor(COLORS.ON_PRIMARY)
                         .backgroundColor(COLORS.SUCCESS).borderRadius(BORDER_RADIUS.ROUND)
-                        .type(ButtonType.Capsule)
                         .onClick(() => { this.doEditCategory(category) })
                       Button('取消')
-                        .height(30).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY)
+                        .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY)
                         .backgroundColor(COLORS.BG_PRIMARY).borderRadius(BORDER_RADIUS.ROUND)
-                        .type(ButtonType.Capsule)
                         .onClick(() => { this.editingCategoryId = 0 })
                     } else {
                       Text(category.name.substring(0, 1))
@@ -856,11 +877,10 @@ export struct MerchantCenterPage {
             .layoutWeight(1)
             .scrollBar(BarState.Off)
           }
-          .width('88%')
+            .attributeModifier(new AppCardStyle())
+          .width('88%').constraintSize({ maxWidth: 460 })
           .height('70%')
           .padding(SPACING.XL)
-          .backgroundColor(COLORS.BG_WHITE)
-          .borderRadius(BORDER_RADIUS.XL)
         }
         .width('100%').height('100%')
         .backgroundColor(COLORS.OVERLAY)
@@ -880,9 +900,8 @@ export struct MerchantCenterPage {
               .fontColor(MODULE_COLOR.MERCHANT)
               .layoutWeight(1).textAlign(TextAlign.Center)
             Button('+ 添加商品')
-              .height(32).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_WHITE)
+              .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)
               .backgroundColor(MODULE_COLOR.MERCHANT).borderRadius(BORDER_RADIUS.ROUND)
-              .type(ButtonType.Capsule)
               .onClick(() => { this.openAddGoodsPage() })
           }
           .width('100%').height(50)
@@ -917,9 +936,8 @@ export struct MerchantCenterPage {
                       .fontSize(FONT_SIZE.XS).fontColor(goods.stock !== undefined && goods.stock === 0 ? COLORS.ERROR : COLORS.TEXT_HINT)
                     Row({ space: SPACING.XS }) {
                       Button('删除')
-                        .height(28).fontSize(FONT_SIZE.XS).fontColor(COLORS.ERROR)
+                        .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS).fontColor(COLORS.ERROR)
                         .backgroundColor(COLORS.ERROR_LIGHT).borderRadius(BORDER_RADIUS.ROUND)
-                        .type(ButtonType.Capsule)
                         .onClick(async () => {
                             const deleted: boolean = await deleteMerchantGoodsApi(goods.id)
                             if (deleted) {
@@ -930,30 +948,26 @@ export struct MerchantCenterPage {
                             }
                         })
                       Button('编辑')
-                        .height(28).fontSize(FONT_SIZE.XS).fontColor(MODULE_COLOR.MERCHANT)
+                        .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS).fontColor(MODULE_COLOR.MERCHANT)
                         .backgroundColor(MODULE_BG.MERCHANT).borderRadius(BORDER_RADIUS.ROUND)
-                        .type(ButtonType.Capsule)
                         .onClick(() => { this.openEditGoodsPage(goods) })
                       if (goods.isOnShelf === false) {
                         Button('上架')
-                          .height(28).fontSize(FONT_SIZE.XS).fontColor(COLORS.SUCCESS)
+                          .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS).fontColor(COLORS.SUCCESS)
                           .backgroundColor(COLORS.SUCCESS_LIGHT).borderRadius(BORDER_RADIUS.ROUND)
-                          .type(ButtonType.Capsule)
                           .onClick(() => { this.toggleGoodsShelf(goods, true) })
                       } else {
                         Button('下架')
-                          .height(28).fontSize(FONT_SIZE.XS).fontColor(COLORS.WARNING)
+                          .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS).fontColor(COLORS.WARNING)
                           .backgroundColor(COLORS.TAG_BG).borderRadius(BORDER_RADIUS.ROUND)
-                          .type(ButtonType.Capsule)
                           .onClick(() => { this.toggleGoodsShelf(goods, false) })
                       }
                     }
                   }
                 }
+                  .attributeModifier(new AppCardStyle())
                 .width('100%')
                 .padding(SPACING.MD)
-                .backgroundColor(COLORS.BG_WHITE)
-                .borderRadius(BORDER_RADIUS.LG)
               }
             }, (item: GoodsItem) => item.id.toString())
           }
@@ -964,7 +978,7 @@ export struct MerchantCenterPage {
 
           if (this.selectedStoreGoods.length === 0) {
             Column() {
-              SymbolGlyph($r('sys.symbol.inbox')).fontSize(50).margin({ top: 40 })
+              Image($r('app.media.ui_inbox')).width(50).height(50).objectFit(ImageFit.Contain).margin({ top: 40 })
               Text('暂无商品')
                 .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: 8 })
               Text('点击上方"添加商品"开始上架')
