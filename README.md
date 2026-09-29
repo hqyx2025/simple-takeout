@@ -82,7 +82,9 @@
 
 ```mermaid
 flowchart LR
-  App["HarmonyOS App<br/>ArkTS + ArkUI"] -->|"HTTP · JWT Bearer"| API["Spring Boot<br/>Controller / Service / DAO"]
+  App["HarmonyOS App<br/>ArkTS + ArkUI"] -->|"HTTP · JWT Bearer"| Gateway["Gateway :8087"]
+  Gateway --> Balancer["Nginx 动态解析 / 轮询"]
+  Balancer --> API["Spring Boot app × 2<br/>Controller / Service / DAO"]
   API --> MySQL[("MySQL 8.4<br/>takeout")]
   API -->|"热点读缓存 / 失败降级回源"| Redis[("Redis 7")]
   API -->|"同一事务写入事件"| Outbox[("outbox_events")]
@@ -110,7 +112,7 @@ simple-takeout/
 │       │   └── model/        # 数据模型
 │       ├── test/             # Hypium 本地单元测试
 │       └── ohosTest/         # UiTest 设备端自动化测试
-├── server/                   # Spring Boot 后端（端口 9000）
+├── server/                   # Spring Boot 后端（端口 8087）
 │   ├── src/main/
 │   │   ├── java/com/example/takeout/
 │   │   │   ├── controller/   # 对外接口
@@ -134,20 +136,34 @@ simple-takeout/
 
 ## 快速开始
 
-### 方式一：Docker Compose 一键启动（含 MySQL + Redis + 后端）
+### 方式一：Docker Compose 单机双实例
 
-```bash
-docker compose up -d --build     # 首次构建并启动全部服务
-docker compose logs -f app       # 查看后端日志
-docker compose down              # 停止（数据保留在命名卷）
-docker compose down -v           # 停止并清空数据库数据
+首次启动前，在仓库根目录创建本地 `.env`（不要提交真实密钥）：
+
+```dotenv
+TAKEOUT_DB_PASSWORD=替换为数据库密码
+TAKEOUT_JWT_SECRET=替换为至少32字节的随机密钥
 ```
 
-- 后端地址：`http://localhost:9000`
-- **MySQL 映射到宿主 `3307`**（避开本机已装的 MySQL84 占用 3306），Redis 映射到 `6379`
-- 只想跑基础设施、后端用 Maven 本机起：`docker compose up -d mysql redis`
+已有 MySQL 数据卷不会因修改环境变量而自动改密码，需要先用旧凭据修改数据库账号密码。JWT 密钥变更后需重新登录。直接运行 Maven 时也必须向进程注入这两个环境变量，Spring Boot 不自动读取根目录 `.env`。
 
-建表与种子数据无需手工导入：后端启动时自动执行 `schema.sql`，`DataSeeder` 补齐演示数据与测试账号。
+```bash
+docker compose up -d --build --wait
+docker compose ps
+docker compose logs -f app
+docker compose down  # 停止并保留数据卷
+```
+
+- 默认 7 个容器：gateway、app-balancer（Nginx）、app × 2、mysql、redis、backup。
+- 请求链路：`localhost:8087 → gateway → app-balancer:8087 → app:8087`；app 不映射宿主机 9100。
+- MySQL / Redis 宿主端口为 3310 / 6387；当前是本地开发配置，不应直接暴露公网。
+- 两个 app 共用数据库、Redis 和 `uploads-data` 卷，图片暂不迁移对象存储；仅支持同一 Docker 主机共享本地卷。
+- `docker compose up -d --scale app=3` 可临时扩到三个副本；要永久修改默认数量，请修改 Compose 的 `app.deploy.replicas`。Nginx 每 5 秒重新解析 app 地址，不自动重试业务请求。
+- 备份每个自然月首次运行时生成一次 `takeout-YYYYMM.sql.gz`，保存在 `mysql-backups` 卷；每小时检查并重试失败备份，重启不重复当月已成功的备份，当前不自动删除历史文件。
+- `docker compose logs backup` 查看备份结果；导出副本：`docker compose cp backup:/backups ./TemporaryCacheStorage/mysql-backups`。备份卷与数据库同机，仍需另外保留异机副本。
+- **不要执行 `docker compose down -v`**，它会删除数据库、Redis、上传图片及备份卷。
+
+验证边界：双 app 和网关启动健康；请求已分发至两个副本（未登录请求返回 401）；当月备份通过 gzip 完整性检查。尚未完成备份恢复演练、故障切换与完整多实例下单/支付回归，不代表生产高可用验收。
 
 ### 方式二：本机开发
 
@@ -155,8 +171,8 @@ docker compose down -v           # 停止并清空数据库数据
 | --- | --- |
 | JDK | 25（后端编译/运行要求，`maven.compiler.release=25`） |
 | Maven | 3.9+ |
-| MySQL | 8.4（默认端口 3306，连接信息见下方环境变量） |
-| Redis | 7（默认 `localhost:6379`；可用 `docker compose up -d redis` 起一个） |
+| MySQL | 8.4（默认连接端口 3310，连接信息见下方环境变量） |
+| Redis | 7（默认 `localhost:6387`；可用 `docker compose up -d redis` 起一个） |
 | DevEco Studio | 支持 HarmonyOS NEXT SDK **API 26** 的版本 |
 | 运行设备 | HarmonyOS 模拟器或真机 |
 
@@ -168,12 +184,12 @@ mvn -f server/pom.xml -pl takeout-app spring-boot:run
 # 运行后端测试（命令不变：聚合根会自动跑全部模块的测试）
 mvn -f server/pom.xml test
 
-# 单独启动网关（默认监听 9000，转发到 ${TAKEOUT_APP_URI:-http://127.0.0.1:9000}）
+# 单独启动网关（默认监听 8087，转发到 ${TAKEOUT_APP_URI:-http://127.0.0.1:9100}）
 mvn -f server/pom.xml -pl takeout-gateway spring-boot:run
 ```
 
-- 服务端口：**9000**（非 8080）
-- 与网关同机同跑时，用 `--server.port=9100` 或 `TAKEOUT_APP_PORT=9100` 把应用挪开，由网关占住对外的 9000
+- 服务端口：**8087**
+- 与网关同机同跑时，用 `--server.port=9100` 或 `TAKEOUT_APP_PORT=9100` 把应用挪开，由网关占住对外的 8087
 
 运行 App：
 
@@ -183,8 +199,8 @@ mvn -f server/pom.xml -pl takeout-gateway spring-boot:run
 
 后端地址约定在 `entry/src/main/ets/common/Constants.ets` 的 `API_CONFIG`：
 
-- 模拟器访问宿主机后端：默认 `http://10.0.2.2:9000`，无需修改
-- 真机联调：将 `BASE_URL` 改为电脑的局域网 IP（如 `http://192.168.1.100:9000`）
+- 模拟器访问宿主机后端：默认 `http://10.0.2.2:8087`，无需修改
+- 真机联调：将 `BASE_URL` 改为电脑的局域网 IP（如 `http://192.168.1.100:8087`）
 - 发布构建：配置真实 HTTPS 域名后，将 `USE_HTTPS` 置为 `true`
 
 Release 构建需要签名与证书：参考 `signing/release-signing.template.json5` 在本机安全目录填写真实 p12/p7b 路径（真实证书与密码禁止提交到仓库）。
@@ -197,17 +213,17 @@ Release 构建需要签名与证书：参考 `signing/release-signing.template.j
 
 | 环境变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `TAKEOUT_DB_HOST` / `TAKEOUT_DB_PORT` | `localhost` / `3306` | 数据库主机与端口（容器内指向 `mysql:3306`） |
-| `TAKEOUT_DB_USERNAME` / `TAKEOUT_DB_PASSWORD` | `root` / `123456` | 数据库凭据 |
-| `TAKEOUT_REDIS_HOST` / `_PORT` / `_PASSWORD` / `_DATABASE` | `127.0.0.1` / `6379` / 空 / `0` | Redis 连接 |
-| `TAKEOUT_JWT_SECRET` | 内置默认值 | JWT 签名密钥（生产环境务必注入） |
+| `TAKEOUT_DB_HOST` / `TAKEOUT_DB_PORT` | `localhost` / `3310` | 数据库主机与端口（容器内指向 `mysql:3306`） |
+| `TAKEOUT_DB_USERNAME` / `TAKEOUT_DB_PASSWORD` | `root` / 必填 | 数据库凭据，密码无默认值 |
+| `TAKEOUT_REDIS_HOST` / `_PORT` / `_PASSWORD` / `_DATABASE` | `127.0.0.1` / `6387` / 空 / `0` | Redis 连接 |
+| `TAKEOUT_JWT_SECRET` | 必填 | 至少 32 字节的签名密钥，建议随机生成 |
 | `TAKEOUT_CACHE_ENABLED` | `true` | 热点缓存总开关 |
 | `TAKEOUT_MQ_ENABLED` | `true` | 领域事件（Outbox + Stream）总开关 |
 | `TAKEOUT_CACHE_TTL_SECONDS` / `_JITTER_SECONDS` | `300` / `120` | 缓存基础 TTL 与防雪崩抖动上限（秒） |
 | `TAKEOUT_CACHE_NULL_TTL_SECONDS` | `60` | 防穿透空值占位 TTL（秒） |
 | `TAKEOUT_PAY_TIMEOUT_MINUTES` | `15` | 待付款订单支付时限（分钟） |
 | `TAKEOUT_UPLOAD_DIR` | `uploads` | 评价图片存储目录 |
-| `TAKEOUT_APP_PORT` / `TAKEOUT_MYSQL_PORT` / `TAKEOUT_REDIS_PORT` | `9000` / `3307` / `6379` | Compose 端口映射（宿主侧） |
+| `TAKEOUT_APP_PORT` / `TAKEOUT_MYSQL_PORT` / `TAKEOUT_REDIS_PORT` | `8087` / `3310` / `6387` | Compose 端口映射（宿主侧） |
 
 ### 测试账号（密码均为 `123456`）
 
@@ -283,11 +299,17 @@ Release 构建需要签名与证书：参考 `signing/release-signing.template.j
 
 `users` 用户 / `stores` 店铺 / `goods` 商品 / `goods_specs` 商品规格 / `orders` 订单（商品与地址为 JSON 快照）/ `coupons` 优惠券 / `reviews` 评价 / `favorites` 收藏 / `addresses` 收货地址 / `categories` 分类（平台/商户）/ `refund_records` 退款申请 / `cart_items` 购物车 / `riders` 骑手档案 / `banners` 轮播 / `announcements` 公告 / `seckills` 限时秒杀 / `outbox_events` 事务性 Outbox 事件表
 
+## 开发方式
+
+直接提出需求即可，默认直接实现、验证并交付；无需计划审批、逐步确认或维护任务清单。技术细节按需参考 [AGENTS.md](AGENTS.md) 与 [开发参考](md/开发参考.md)。所有页面沿用登录页视觉，新增图标和插图使用 SVG。
+
 ## 文档索引
 
 | 文档 | 说明 |
 | --- | --- |
-| [md/重构大纲提示词.md](md/重构大纲提示词.md) | 唯一权威设计大纲（26 章，含现状/演进标注），改功能前必读 |
+| [md/重构大纲提示词.md](md/重构大纲提示词.md) | 业务设计与演进参考，按当前需求查阅相关章节 |
+| [md/开发参考.md](md/开发参考.md) | 技术栈、业务口径、构建细节与历史排错经验，按需查阅 |
+| [md/UI与图标优化说明.md](md/UI与图标优化说明.md) | 登录页统一视觉、共享组件、SVG 资源与实际验证范围 |
 | [md/简单外卖业务流程落地.md](md/简单外卖业务流程落地.md) | 角色/流程/接口落地口径（Mermaid 流程图） |
 | [md/Redis缓存与异步事件架构.md](md/Redis缓存与异步事件架构.md) | 缓存三类故障防护、事务性 Outbox 设计、降级行为与实测数据 |
 | [md/骑手端设计与实施计划.md](md/骑手端设计与实施计划.md) | 骑手端设计与落地计划 |
@@ -297,8 +319,8 @@ Release 构建需要签名与证书：参考 `signing/release-signing.template.j
 | [md/图片资源规范.md](md/图片资源规范.md) | 图片资源目录约定（静态图/上传图位置、命名、统一引用方式与默认占位图） |
 | [md/archive/未完成.txt](md/archive/未完成.txt) | 尚未完成的质量项记录 |
 | [md/archive/](md/archive) | 历史会话记录归档（2026-08-20 ~ 2026-09-19） |
-| [AGENTS.md](AGENTS.md) | AI 编码助手项目记忆：技术栈、构建、业务口径、陷阱清单、提交规范 |
-| [.agents/skills/specs](.agents/skills/specs) | 功能规格与验收清单（开发/验收依据） |
+| [AGENTS.md](AGENTS.md) | AI 编码助手直接执行约定及必要工程约束 |
+| [md/archive/specs](md/archive/specs) | 历史功能规格与验收记录（非执行门禁） |
 
 ## 已知未完成项
 
