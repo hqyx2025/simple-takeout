@@ -89,6 +89,9 @@ public class DomainEventPublisher {
         }
         try {
             outboxDao.insert(eventType, orderId, json, LocalDateTime.now().format(FMT));
+        } catch (org.springframework.dao.DataAccessException e) {
+            // MySQL 死锁可能已回滚整个事务，不能吞异常后继续返回业务成功。
+            throw e;
         } catch (Exception e) {
             // Outbox 落库失败不能影响主业务（宁可丢一条通知，也不能让下单失败）
             log.warn("[事件] Outbox 写入失败 type={} orderId={}", eventType, orderId, e);

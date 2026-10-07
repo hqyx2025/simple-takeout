@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
 import java.sql.ResultSet;
@@ -196,6 +197,17 @@ public class GoodsDao {
 
     public Optional<Goods> findById(long id) {
         return attachSpecs(jdbc.query("SELECT * FROM goods WHERE id = ? AND deleted = 0", MAPPER, id)).stream().findFirst();
+    }
+
+    /**
+     * 在业务事务内按主键升序锁定商品，再修改规格、秒杀或优惠券。
+     * 逐主键查询固定实际加锁顺序，不依赖 IN + ORDER BY 的执行计划。
+     * 商品行是其规格/秒杀的共同锁入口；不同商品的订单仍可并发。
+     */
+    public void lockStockRows(Collection<Long> goodsIds) {
+        for (long id : goodsIds.stream().distinct().sorted().toList()) {
+            jdbc.queryForList("SELECT id FROM goods WHERE id = ? FOR UPDATE", Long.class, id);
+        }
     }
 
     public long insert(Goods g) {

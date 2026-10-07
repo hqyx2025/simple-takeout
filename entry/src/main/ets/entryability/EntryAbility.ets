@@ -1,4 +1,4 @@
-import { AbilityConstant, Configuration, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
+import { AbilityConstant, Configuration, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
 import { loadAllData } from '../service/DataPersistence';
@@ -9,6 +9,7 @@ import { routerCompat } from '../common/UiNavigation'
 import { deliveryCustomerId } from '../service/DeliveryFormSync'
 import { AppMotion } from '../common/theme/AppMotion';
 import { warmColdStartConnection, disposeHttpClient } from '../service/HttpClient';
+import { loadAppearanceSettings, applyAppearanceSettings } from '../service/AppearanceSettings';
 
 const DOMAIN = 0x0000;
 
@@ -41,17 +42,12 @@ export default class EntryAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     this.deliveryOrdersPending = want.parameters?.deliveryOrders === 'true'
     AppMotion.init()
-    try {
-      this.context.getApplicationContext().setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET);
-    } catch (err) {
-      hilog.error(DOMAIN, '测试标签', '设置颜色模式失败。原因：%{public}s  Failed to set colorMode. Cause: ', JSON.stringify(err));
-    }
     hilog.info(DOMAIN, '测试标签', '%{public}s', '创建能力 Ability onCreate');
     // 将 AbilityContext 存入 AppStorage，供持久化服务使用
     AppStorage.setOrCreate('appContext', this.context);
     logInfo('EntryAbility', '创建能力 Ability onCreate');
     // 先恢复持久化登录态，再加载页面，避免启动瞬间先渲染主页后才覆盖登录页。
-    loadAllData().then(() => {
+    Promise.all([loadAllData(), loadAppearanceSettings(this.context)]).then(() => {
       const consented: boolean = AppStorage.get<boolean>('privacyConsent') || false
       setPrivacyConsent(consented)
       if (consented) {
@@ -130,6 +126,11 @@ export default class EntryAbility extends UIAbility {
       hilog.info(DOMAIN, '测试标签', '内容加载成功。');
       // Window 背景 API 必须在 loadContent 成功之后调用。
       this.windowContentReady = true
+      try {
+        applyAppearanceSettings(this.context)
+      } catch (_) {
+        hilog.warn(DOMAIN, 'Settings', '恢复外观设置失败，保留系统默认外观');
+      }
       this.openDeliveryOrders()
       this.updateWindowAppearance()
       // 内容就绪后注册全局点击日志：之后每次用户点击都会记录当前页面标识

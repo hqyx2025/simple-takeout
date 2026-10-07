@@ -40,11 +40,13 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -52,6 +54,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -86,6 +89,12 @@ public class OrderService {
     private final HotDataCacheService cache;
     private final DomainEventPublisher eventPublisher;
     private final ObjectProvider<StringRedisTemplate> redisProvider;
+    private TransactionTemplate transactions;
+
+    @Autowired
+    void configureTransactions(TransactionTemplate transactions) {
+        this.transactions = transactions;
+    }
 
     /** 待付款订单的支付时限（分钟），超时由定时任务自动取消。 */
     @Value("${takeout.order.pay-timeout-minutes:15}")
@@ -123,12 +132,14 @@ public class OrderService {
      * 因此这些聚合视图统一失效，避免用户看到「有货/有名额」的过期信息而下单失败。
      */
     private void invalidateStockDependentCache() {
-        for (String pattern : HotDataCacheService.Keys.STOCK_DEPENDENT_PATTERNS) {
-            cache.evictByPattern(pattern);
-        }
+        DomainEventPublisher.afterCommit(() -> {
+            for (String pattern : HotDataCacheService.Keys.STOCK_DEPENDENT_PATTERNS) {
+                cache.evictByPattern(pattern);
+            }
+        });
     }
 
-    /** 创建订单：从用户余额扣款后进入平台托管，状态=1 待接单。 */
+    /** 创建待付款订单：只占用库存和优惠券，支付成功后才扣款。 */
     @Transactional
     public Order.OrderView createOrder(long userId, long storeId, List<Order.OrderItem> items,
                                        long addressId, long couponId, String remark) {
@@ -228,6 +239,34 @@ public class OrderService {
 
         // 金额计算：商品总价 + 配送费 - 优惠（多规格取规格价，生效中的秒杀自动套用秒杀价）
         String now = LocalDateTime.now().format(FMT);
+        // 一次收集整单锁集合（含套餐组件和可能赠品），任何写操作前按商品 ID 升序取得行锁。
+        // 下单与取消先锁整单 goods，再操作规格、秒杀和优惠券，避免反向等待；
+        // 不改变订单快照的展示顺序，也不使用 JVM/Redis 锁，适用于多个 app 实例。
+        Set<Long> goodsIds = new HashSet<>();
+        for (Order.OrderItem item : orderItems) {
+            if (item == null || item.quantity() <= 0) {
+                throw new BizException("商品数量必须大于 0");
+            }
+            goodsIds.add(item.goodsId());
+        }
+        Map<Long, Setmeal> resolvedSetmeals = new HashMap<>();
+        for (SetmealOrder so : setmealOrders) {
+            if (so == null || so.quantity() <= 0) {
+                throw new BizException("套餐数量必须大于 0");
+            }
+            Setmeal setmeal = storeDao.findSetmeal(so.setmealId()).orElseThrow(() -> new BizException("套餐不存在"));
+            resolvedSetmeals.put(so.setmealId(), setmeal);
+            for (SetmealItem component : setmeal.items()) {
+                goodsIds.add(component.goodsId());
+            }
+        }
+        List<MarketingActivity> activities = storeDao.listActiveMarketingActivities(storeId, now);
+        for (MarketingActivity activity : activities) {
+            if ("GIFT".equals(activity.type()) && activity.giftGoodsId() > 0) {
+                goodsIds.add(activity.giftGoodsId());
+            }
+        }
+        goodsDao.lockStockRows(goodsIds);
         double goodsAmount = 0;
         List<Order.OrderItem> normalizedItems = new ArrayList<>();
         List<StockHold> holds = new ArrayList<>();
@@ -268,7 +307,7 @@ public class OrderService {
             if (so.quantity() <= 0) {
                 throw new BizException("套餐数量必须大于 0");
             }
-            Setmeal setmeal = storeDao.findSetmeal(so.setmealId()).orElseThrow(() -> new BizException("套餐不存在"));
+            Setmeal setmeal = resolvedSetmeals.get(so.setmealId());
             if (setmeal.storeId() != storeId) {
                 throw new BizException("套餐不属于该店铺");
             }
@@ -312,7 +351,7 @@ public class OrderService {
             appliedCoupon = coupon;
         }
         // ===== 营销活动：折扣 / 新客立减 / 满赠（无活动时为恒等，不改变既有金额口径）=====
-        for (MarketingActivity activity : storeDao.listActiveMarketingActivities(storeId, now)) {
+        for (MarketingActivity activity : activities) {
             switch (activity.type()) {
                 case "DISCOUNT" -> {
                     if (activity.discountRate() > 0 && activity.discountRate() < 1) {
@@ -403,6 +442,7 @@ public class OrderService {
     }
 
     /** 支付：channel 空/余额走余额扣款；微信/支付宝为 Mock（走余额 + 模拟回调）。 */
+    @Transactional
     public Order.OrderView payOrder(long userId, long orderId, String channel) {
         String normalizedChannel = PaymentChannels.normalize(channel);
         if (!PaymentChannels.SUPPORTED.contains(normalizedChannel)) {
@@ -447,13 +487,19 @@ public class OrderService {
      * 待付款订单超时自动取消（定时任务入口）：超过支付时限仍未支付的订单一律取消，
      * 回滚库存、秒杀名额并释放优惠券。
      */
-    @Transactional
     public int cancelExpiredPendingOrders() {
         String deadline = LocalDateTime.now().minusMinutes(Math.max(payTimeoutMinutes, 1)).format(FMT);
         int cancelled = 0;
         for (Order order : orderDao.listExpiredPending(deadline)) {
-            if (cancelPending(order, "超时未支付，订单已自动取消")) {
-                cancelled++;
+            try {
+                // 每单单独提交：不带着前一单的库存锁去获取下一单的订单锁。
+                if (Boolean.TRUE.equals(transactions.execute(status ->
+                        cancelPending(order, "超时未支付，订单已自动取消")))) {
+                    cancelled++;
+                }
+            } catch (DataAccessException e) {
+                // 本单已回滚，保留待付款状态；继续其他单，下轮扫描再处理失败单。
+                log.warn("[超时取消] 单笔事务失败 orderId={}", order.id(), e);
             }
         }
         return cancelled;
@@ -641,7 +687,9 @@ public class OrderService {
 
     /** 回滚订单商品库存与秒杀名额（取消/退款时调用，必须在条件更新成功后的同一事务内）。 */
     void rollbackStock(Order order) {
-        for (Order.OrderItem item : parseItems(order.items())) {
+        List<Order.OrderItem> items = parseItems(order.items());
+        goodsDao.lockStockRows(items.stream().map(Order.OrderItem::goodsId).toList());
+        for (Order.OrderItem item : items) {
             goodsDao.restoreStock(item.goodsId(), item.quantity());
             if (item.specId() > 0) {
                 specDao.restoreStock(item.specId(), item.quantity());
@@ -866,8 +914,8 @@ public class OrderService {
                 rating, requireMaxLength(content, 512, "评价内容"), toJson(tags == null ? List.of() : tags),
                 toJson(images == null ? List.of() : images), anonymous == 0 ? 0 : 1, now);
         // 评价后重算店铺与商品平均评分
-        storeDao.updateRating(order.storeId(), round1(reviewDao.avgRating(order.storeId())));
         goodsDao.updateRating(selectedGoodsId, round1(reviewDao.avgGoodsRating(selectedGoodsId)));
+        storeDao.updateRating(order.storeId(), round1(reviewDao.avgRating(order.storeId())));
         // 订单内全部商品评价完才标记整单已评价
         long distinctGoods = orderItems.stream().map(Order.OrderItem::goodsId).distinct().count();
         if (reviewDao.countByOrder(orderId) >= distinctGoods) {

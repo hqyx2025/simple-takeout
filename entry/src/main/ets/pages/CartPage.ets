@@ -49,6 +49,7 @@ class BundleHint {
  */
 @Component
 export struct CartPage {
+  @State actionBarHeight: number = 72
   @State cartItems: CartItem[] = []
   @State expandedStoreIds: number[] = []
   @State storeCards: CartStoreCard[] = []
@@ -395,7 +396,7 @@ export struct CartPage {
         }
         .width('100%')
         .height('100%')
-        .contentEndOffset(FloatingTabBarTheme.CONTENT_INSET + 88)
+        .contentEndOffset(FloatingTabBarTheme.CONTENT_INSET + 4 + this.actionBarHeight + SPACING.MD)
         .scrollBar(BarState.Off)
         .backgroundColor(COLORS.BG_PRIMARY)
         .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.MD })
@@ -438,10 +439,17 @@ export struct CartPage {
         }
         .width('calc(100% - 32vp)')
         .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
-        .backgroundColor(COLORS.BG_WHITE)
+        .backgroundColor(Color.Transparent)
+        .backgroundEffect({ radius: FloatingTabBarTheme.GLASS_BLUR_RADIUS,
+          saturation: FloatingTabBarTheme.GLASS_SATURATION, color: FloatingTabBarTheme.GLASS_COLOR })
         .borderRadius(22)
         .border({ width: 1, color: COLORS.DIVIDER })
         .margin({ bottom: FloatingTabBarTheme.CONTENT_INSET + 4 })
+        .id('cart-action-bar')
+        .onAreaChange((_: Area, area: Area) => {
+          const height: number = Number(area.height)
+          if (height > 0 && height !== this.actionBarHeight) { this.actionBarHeight = height }
+        })
         }.width('100%').layoutWeight(1)
       }
     }
@@ -532,16 +540,22 @@ export struct CartPage {
           .padding({ left: 8, right: 8 }).fontSize(FONT_SIZE.SM)
           .fontColor(COLORS.TEXT_HINT).backgroundColor(Color.Transparent)
           .onClick(() => { this.deleteOne(item) })
-        Button('−').attributeModifier(new AppButtonStyle()).width(36).height(36)
-          .fontColor(COLORS.TEXT_PRIMARY).backgroundColor(COLORS.BG_PRIMARY)
+        Button({ type: ButtonType.Normal }) {
+          Text('−').fontSize(22).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+            .textAlign(TextAlign.Center).width('100%')
+        }.attributeModifier(new AppButtonStyle()).width(36).height(36).padding(0)
+          .backgroundColor(COLORS.BG_PRIMARY)
           .id(`cart-minus-${item.goods.id}-${item.specId ?? 0}`)
           .accessibilityText(`减少${item.goods.name}`)
           .onClick(() => { this.changeQuantity(item, -1) })
         Text(this.getRowQuantity(item).toString()).fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_PRIMARY).width(28).textAlign(TextAlign.Center).maxLines(1)
           .id(`cart-qty-${item.goods.id}-${item.specId ?? 0}`)
-        Button('+').attributeModifier(new AppButtonStyle()).width(36).height(36)
-          .fontColor(COLORS.ON_PRIMARY).backgroundColor(COLORS.PRIMARY)
+        Button({ type: ButtonType.Normal }) {
+          Text('+').fontSize(22).fontWeight(FontWeight.Bold).fontColor(COLORS.ON_PRIMARY)
+            .textAlign(TextAlign.Center).width('100%')
+        }.attributeModifier(new AppButtonStyle()).width(36).height(36).padding(0)
+          .backgroundColor(COLORS.PRIMARY)
           .id(`cart-plus-${item.goods.id}-${item.specId ?? 0}`)
           .accessibilityText(`增加${item.goods.name}`)
           .onClick(() => { this.changeQuantity(item, 1) })

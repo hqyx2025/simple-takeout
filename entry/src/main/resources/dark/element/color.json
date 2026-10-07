@@ -1,6 +1,8 @@
 {
   "color": [
     {"name": "navigation_glass", "value": "#A6221D19"},
+    {"name": "navigation_press_light", "value": "#3DFFFFFF"},
+    {"name": "assistant_send", "value": "#0099FF"},
     {"name": "start_window_background", "value": "#191917"},
     {"name": "primary", "value": "#FFAD84"},
     {"name": "primary_light", "value": "#FFAC83"},

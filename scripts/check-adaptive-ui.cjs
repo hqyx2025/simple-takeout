@@ -67,8 +67,19 @@ const motion = { OperatingHandStatus: { UNKNOWN_STATUS: 0, LEFT_HAND_OPERATED: 1
     return recentHand;
   }
 };
-const { Nav } = run('export class Nav {' + nav.slice(nav.indexOf('  private beginSwipe'), nav.indexOf('  private icon')) + '}', {
+const navMethods = ['handleTouch', 'moveLight', 'selectAtRelease', 'onHandChanged', 'scheduleMove',
+  'updateListening', 'stopListening', 'aboutToDisappear'].map(name => {
+  const privatePrefix = ['updateListening', 'aboutToDisappear'].includes(name) ? '' : 'private ';
+  const start = name === 'onHandChanged'
+    ? nav.indexOf('  private onHandChanged =')
+    : nav.indexOf(`  ${privatePrefix}${name}(`);
+  assert(start >= 0, name);
+  return nav.slice(start, nav.indexOf('\n  }', start) + 4);
+}).join('\n');
+const { Nav } = run('export class Nav {' + navMethods + '}', {
   motion, AppStorage: { get: key => storage.get(key) },
+  TouchType: { Down: 0, Up: 1, Move: 2, Cancel: 3 }, Curve: { EaseOut: 0 },
+  FloatingTabBarTheme: { WIDTH: 272 },
   canIUse: capability => { assert.equal(capability, 'SystemCapability.MultimodalAwareness.Motion'); return supported; },
   clearTimeout: id => timers.delete(id), setTimeout: fn => { timers.set(++nextId, fn); return nextId; }
 });
@@ -90,11 +101,11 @@ bar.mode = 'right'; bar.updateListening(); assert.equal(subscriptions, 0); asser
 bar.mode = 'auto'; bar.active = false; bar.updateListening(); assert.equal(subscriptions, 0);
 bar.active = true; storage.set('privacyConsent', false); bar.updateListening(); assert.equal(subscriptions, 0);
 storage.set('privacyConsent', true); supported = false;
-bar.updateListening(); assert.equal(subscriptions, 0); assert.equal(bar.available, false); assert.equal(bar.side, 0);
+bar.updateListening(); assert.equal(subscriptions, 0); assert.equal(bar.side, 0);
 supported = true; subscribeFails = true;
-bar.updateListening(); assert.equal(subscriptions, 0); assert.equal(bar.available, false);
+bar.updateListening(); assert.equal(subscriptions, 0);
 subscribeFails = false; recentFails = true;
-bar.updateListening(); assert.equal(subscriptions, 1); assert.equal(bar.available, true);
+bar.updateListening(); assert.equal(subscriptions, 1);
 bar.onHandChanged(2); flush(); assert.equal(bar.side, 1, 'recent-status failure must keep live subscription');
 bar.onHandChanged(1); bar.foreground = false; bar.updateListening(); flush();
 assert.equal(subscriptions, 0); assert.equal(bar.side, 1, 'background must cancel pending movement');
@@ -105,23 +116,23 @@ assert.equal(bar.pressed, false); assert.equal(subscriptions, 0); assert.equal(t
 bar.pendingSide = 1; bar.scheduleMove(); flush(); assert.equal(bar.side, -1, 'stale touch cannot move unsubscribed navigation');
 console.log('PASS: independent card collapse, full totals/specs, operating-hand restore/debounce, press/lifecycle/privacy/unsupported guards');
 
+Object.assign(bar, { widthVp: 360, pressed: false, pressedFinger: -1, reduceMotion: false,
+  getUIContext: () => ({ animateTo: (_, update) => update() }),
+  selected: 0, active: true, foreground: true, onSelect: index => selectedPages.push(index) });
 const selectedPages = [];
-Object.assign(bar, { selected: 1, active: true, foreground: true, onSelect: index => selectedPages.push(index) });
-bar.beginSwipe(); bar.finishSwipe(80, 2);
-assert.deepEqual(selectedPages, [2], 'right swipe opens the next page');
-bar.selected = 2; bar.beginSwipe(); bar.finishSwipe(-80, 2);
-assert.deepEqual(selectedPages, [2, 1], 'left swipe opens the previous page');
-bar.finishSwipe(-80, 0); // Duplicate completion must not switch again.
-bar.beginSwipe(); bar.finishSwipe(20, 0);
-bar.beginSwipe(); bar.finishSwipe(40, 90);
-bar.selected = 0; bar.beginSwipe(); bar.finishSwipe(-80, 0);
-bar.selected = 3; bar.beginSwipe(); bar.finishSwipe(80, 0);
-bar.selected = 1; bar.beginSwipe(); bar.active = false; bar.finishSwipe(-80, 0);
-bar.active = true; bar.beginSwipe(); bar.stopListening(); bar.finishSwipe(-80, 0);
-assert.deepEqual(selectedPages, [2, 1], 'jitter, vertical motion, edges and canceled/hidden drags must not switch');
-bar.selected = 0; bar.beginSwipe(); bar.finishSwipe(400, 0);
-assert.deepEqual(selectedPages, [2, 1, 1], 'one swipe advances one adjacent page');
-console.log('PASS: navigation swipe direction, threshold, boundaries, one-page limit and lifecycle cancellation');
+const touch = (type, points) => bar.handleTouch({ type, touches: points, changedTouches: points });
+const release = (x, id = 7) => { touch(0, [{ id, x, y: 28 }]); touch(1, [{ id, x, y: 28 }]); };
+release(20); release(90); release(160); release(230);
+assert.deepEqual(selectedPages, [0, 1, 2, 3], 'release position selects the tab underneath');
+touch(0, [{ id: 7, x: 20, y: 28 }]);
+touch(2, [{ id: 7, x: 190, y: 28 }]); assert.equal(bar.lightX, 190, 'light follows the held finger');
+touch(1, [{ id: 8, x: 190, y: 28 }]); assert.equal(bar.pressed, true, 'another finger cannot release the light');
+touch(2, [{ id: 7, x: 900, y: 28 }]); assert.equal(bar.lightX, 272, 'drag light is clamped to the capsule');
+touch(1, [{ id: 7, x: 400, y: 28 }]); assert.deepEqual(selectedPages, [0, 1, 2, 3], 'release outside the capsule does not select');
+touch(0, [{ id: 7, x: 90, y: 28 }]); touch(3, []); assert.equal(bar.lightOpacity, 0);
+touch(0, [{ id: 7, x: 90, y: 28 }]); bar.stopListening(); assert.equal(bar.lightOpacity, 0);
+bar.active = false; touch(0, [{ id: 7, x: 90, y: 28 }]); assert.equal(bar.pressed, false);
+console.log('PASS: press light follows touch, release position selects exact tab, outside/cancel/hide do not select');
 
 (async () => {
   const requests = [], sessions = [], toasts = [];
@@ -137,7 +148,8 @@ console.log('PASS: navigation swipe direction, threshold, boundaries, one-page l
     rcp: { Request, createSession: config => { sessions.push(config); return session; } },
     API_CONFIG: { BASE_URL: 'https://example.test', TIMEOUT: 10000 },
     AppStorage: { get: key => storage.get(key), setOrCreate: (key, value) => storage.set(key, value) },
-    logInfo() {}, logWarn() {}, logError() {}, promptAction: { showToast: toast => toasts.push(toast) }
+    logInfo() {}, logWarn() {}, logError() {}, clearDeliveryForms() {},
+    promptAction: { showToast: toast => toasts.push(toast) }
   });
   http.warmColdStartConnection(); assert.equal(requests.length, 0);
   storage.set('privacyConsent', true); http.setAuthToken('private-token');

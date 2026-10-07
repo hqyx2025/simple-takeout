@@ -1,5 +1,6 @@
 import { PageHeader } from '../components/PageHeader'
-import { AppButtonStyle, AppInputStyle } from '../common/theme/AppTheme'
+import { AppTheme, AppButtonStyle, AppInputStyle } from '../common/theme/AppTheme'
+import { FloatingTabBarTheme } from '../common/theme/FloatingTabBarTheme'
 /**
  * AI 智能助手聊天页。
  *
@@ -46,6 +47,7 @@ export struct AssistantPage {
   @State input: string = ''
   @State sending: boolean = false
   @State quickQuestions: string[] = QUICK_QUESTIONS
+  @State composerHeight: number = 124
   private scroller: Scroller = new Scroller()
 
   aboutToAppear() {
@@ -113,67 +115,91 @@ export struct AssistantPage {
       // 标题栏：本组件是首页的 Tab 内容（不是独立路由页），因此不放返回按钮
       PageHeader({ title: 'AI 智能助手', showBack: false, topPadding: 0 })
 
-      // 消息区：用 List 承载，条目从顶部开始排列（Scroll 内容不足一屏时会被垂直居中）
-      List({ space: SPACING.MD, scroller: this.scroller }) {
-        ForEach(this.messages, (message: ChatMessage) => {
-          ListItem() {
-            this.MessageBubble(message)
-          }
-        }, (message: ChatMessage) => message.id.toString())
-
-        if (this.sending) {
-          ListItem() {
-            Row({ space: SPACING.SM }) {
-              LoadingProgress().width(18).height(18).color(COLORS.PRIMARY)
-              Text('助手正在思考…').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+      // 消息铺满主体，操作区与首页导航一样浮在内容上方。
+      Stack({ alignContent: Alignment.Bottom }) {
+        // 消息区：用 List 承载，条目从顶部开始排列（Scroll 内容不足一屏时会被垂直居中）
+        List({ space: SPACING.MD, scroller: this.scroller }) {
+          ForEach(this.messages, (message: ChatMessage) => {
+            ListItem() {
+              this.MessageBubble(message)
             }
-            .width('100%')
-            .justifyContent(FlexAlign.Start)
+          }, (message: ChatMessage) => message.id.toString())
+
+          if (this.sending) {
+            ListItem() {
+              Row({ space: SPACING.SM }) {
+                LoadingProgress().width(18).height(18).color(COLORS.PRIMARY)
+                Text('助手正在思考…').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+              }
+              .width('100%')
+              .justifyContent(FlexAlign.Start)
+            }
           }
         }
-      }
-      .id('assistant-message-list')
-      .width('100%').layoutWeight(1).scrollBar(BarState.Off)
-      .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.MD })
+        .id('assistant-message-list')
+        .width('100%').height('100%').scrollBar(BarState.Off)
+        .contentEndOffset(FloatingTabBarTheme.CONTENT_INSET + this.composerHeight + SPACING.MD)
+        .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.MD })
+        .onAreaChange((oldArea: Area, area: Area) => {
+          if (Number(oldArea.height) !== Number(area.height)) { this.scrollToBottom() }
+        })
 
-      // 快捷问题
-      Scroll() {
-        Row({ space: SPACING.SM }) {
-          ForEach(this.quickQuestions, (question: string) => {
-            Text(question)
-              .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
-              .backgroundColor(COLORS.TAG_BG)
-              .padding({ left: SPACING.MD, right: SPACING.MD, top: SPACING.SM, bottom: SPACING.SM })
+        Column() {
+          // 快捷问题
+          Scroll() {
+            Row({ space: SPACING.SM }) {
+              ForEach(this.quickQuestions, (question: string) => {
+                Text(question)
+                  .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
+                  .backgroundColor(COLORS.TAG_BG)
+                  .padding({ left: SPACING.MD, right: SPACING.MD, top: SPACING.SM, bottom: SPACING.SM })
+                  .borderRadius(BORDER_RADIUS.ROUND)
+                  .id(`assistant-quick-${question}`)
+                  .onClick(() => { this.send(question) })
+              }, (question: string) => question)
+            }
+            .padding({ left: SPACING.LG, right: SPACING.LG })
+          }
+          .scrollable(ScrollDirection.Horizontal)
+          .scrollBar(BarState.Off)
+          .width('100%').height(52)
+          .backgroundColor(Color.Transparent)
+
+          // 输入区
+          Row({ space: SPACING.SM }) {
+            TextInput({ placeholder: '想问点什么？例如：我的订单到哪了', text: this.input })
+              .attributeModifier(new AppInputStyle())
+              .backgroundColor(Color.Transparent)
+              .backgroundEffect({ radius: FloatingTabBarTheme.GLASS_BLUR_RADIUS,
+                saturation: FloatingTabBarTheme.GLASS_SATURATION, color: FloatingTabBarTheme.GLASS_COLOR })
+              .layoutWeight(1)
+              .id('assistant-input')
+              .maxLength(MAX_QUESTION_LENGTH)
+              .onChange((value: string) => { this.input = value })
+              .onSubmit(() => { this.send(this.input) })
+            Button(this.sending ? '发送中' : '发送')
+              .attributeModifier(new AppButtonStyle())
+              .height(42).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_WHITE)
+              .backgroundColor(this.sending ? COLORS.TEXT_HINT : AppTheme.ASSISTANT_SEND)
               .borderRadius(BORDER_RADIUS.ROUND)
-              .id(`assistant-quick-${question}`)
-              .onClick(() => { this.send(question) })
-          }, (question: string) => question)
+              .id('assistant-send')
+              .onClick(() => { this.send(this.input) })
+          }
+          .width('85%')
+          .padding({ top: SPACING.SM, bottom: SPACING.MD })
+          .backgroundColor(Color.Transparent)
         }
-        .padding({ left: SPACING.LG, right: SPACING.LG })
-      }
-      .scrollable(ScrollDirection.Horizontal)
-      .scrollBar(BarState.Off)
-      .width('100%').height(52)
-      .backgroundColor(COLORS.BG_WHITE)
-
-      // 输入区
-      Row({ space: SPACING.SM }) {
-        TextInput({ placeholder: '想问点什么？例如：我的订单到哪了', text: this.input })
-          .attributeModifier(new AppInputStyle())
-          .layoutWeight(1)
-          .maxLength(MAX_QUESTION_LENGTH)
-          .onChange((value: string) => { this.input = value })
-          .onSubmit(() => { this.send(this.input) })
-        Button(this.sending ? '发送中' : '发送')
-          .attributeModifier(new AppButtonStyle())
-          .height(42).fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
-          .backgroundColor(this.sending ? COLORS.TEXT_HINT : COLORS.PRIMARY)
-          .borderRadius(BORDER_RADIUS.ROUND)
-          .onClick(() => { this.send(this.input) })
-      }
-      .width('100%')
-      .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.XXL })
-      .backgroundColor(COLORS.BG_WHITE)
+        .width('100%')
+        .margin({ bottom: FloatingTabBarTheme.CONTENT_INSET })
+        .hitTestBehavior(HitTestMode.Transparent)
+        .onAreaChange((_: Area, area: Area) => {
+          const height: number = Number(area.height)
+          if (height > 0 && height !== this.composerHeight) {
+            this.composerHeight = height
+            this.scrollToBottom()
+          }
+        })
+      }.width('100%').layoutWeight(1)
     }
     .width('100%').height('100%')
     .backgroundColor(COLORS.BG_PRIMARY)

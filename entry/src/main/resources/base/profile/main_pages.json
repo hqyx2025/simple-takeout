@@ -14,6 +14,7 @@
     "pages/ProfileEditPage",
     "pages/BalancePage",
     "pages/SettingsPage",
+    "pages/AppSettingsPage",
     "pages/PrivacyPolicyPage",
     "pages/ContactCustomerServicePage",
     "pages/ProductListPage",

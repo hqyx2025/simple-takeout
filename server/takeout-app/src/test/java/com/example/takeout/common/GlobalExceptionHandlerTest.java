@@ -26,4 +26,13 @@ class GlobalExceptionHandlerTest {
         assertEquals(500, response.code());
         assertEquals("服务器内部错误，请稍后重试", response.message());
     }
+
+    @Test
+    void databaseLockConflictUses409WithoutExposingSql() {
+        var response = handler.handleLockConflict(new org.springframework.dao.CannotAcquireLockException("sensitive SQL"));
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertEquals(409, response.getBody().code());
+        assertEquals("订单操作冲突，请刷新状态后重试", response.getBody().message());
+    }
 }

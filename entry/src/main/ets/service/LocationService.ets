@@ -25,6 +25,15 @@ export interface AddressSearchResult {
   longitude: number
 }
 
+export interface NearbyAddressSearchResult extends AddressSearchResult {
+  distance: number
+}
+
+export interface NearbyAddressSearchPage {
+  places: NearbyAddressSearchResult[]
+  hasMore: boolean
+}
+
 interface AmapAddressComponent {
   province?: string
   city?: string
@@ -50,6 +59,7 @@ interface AmapPoi {
   location?: string
   cityname?: string
   adname?: string
+  distance?: string
 }
 
 interface AmapPoiResponse {
@@ -69,10 +79,45 @@ function parseAmapLocation(value: string | undefined): GeoPosition | null {
   }
   const longitude: number = Number(parts[0])
   const latitude: number = Number(parts[1])
-  if (Number.isNaN(longitude) || Number.isNaN(latitude) || (longitude === 0 && latitude === 0)) {
+  if (!Number.isFinite(longitude) || !Number.isFinite(latitude) || Math.abs(longitude) > 180 ||
+    Math.abs(latitude) > 90 || (longitude === 0 && latitude === 0)) {
     return null
   }
   return { longitude: longitude, latitude: latitude }
+}
+
+/** 按地图中心查询真实周边地点；直接 HTTPS 请求，避免依赖 Web 地图插件的回调时机。 */
+export async function searchNearbyAddress(position: GeoPosition, page: number = 1): Promise<NearbyAddressSearchPage> {
+  if (!Number.isInteger(page) || page < 1 || page > 100) {
+    throw new Error('附近地点页码无效')
+  }
+  const pageSize: number = 20
+  const url: string = `https://restapi.amap.com/v3/place/around?location=${position.longitude.toFixed(6)},${position.latitude.toFixed(6)}&radius=1000&sortrule=distance&offset=${pageSize}&page=${page}&key=${AMAP_CONFIG.MAP_JS_KEY}`
+  const response: AxiosResponse<AmapPoiResponse> = await axios.get<AmapPoiResponse>(url, { timeout: AMAP_CONFIG.TIMEOUT })
+  const data: AmapPoiResponse = response.data
+  if (data.status !== '1' || !Array.isArray(data.pois)) {
+    throw new Error('附近地点查询失败')
+  }
+  const results: NearbyAddressSearchResult[] = []
+  const seen: string[] = []
+  for (let i = 0; i < data.pois.length; i++) {
+    const item: AmapPoi = data.pois[i]
+    const coordinate: GeoPosition | null = parseAmapLocation(item.location)
+    const name: string = (item.name ?? '').trim()
+    if (coordinate === null || name === '') { continue }
+    const key: string = `${name}|${coordinate.longitude}|${coordinate.latitude}`
+    if (seen.indexOf(key) >= 0) { continue }
+    seen.push(key)
+    const distance: number = item.distance !== undefined && item.distance !== '' ? Number(item.distance) : -1
+    if (Number.isFinite(distance) && distance > 1000) { continue }
+    results.push({ name: name, district: item.adname ?? item.cityname ?? '',
+      address: typeof item.address === 'string' ? item.address : '', latitude: coordinate.latitude,
+      longitude: coordinate.longitude, distance: Number.isFinite(distance) && distance >= 0 ? distance : -1 })
+  }
+  const total: number = Number(data.count)
+  const hasMore: boolean = page < 100 && data.pois.length === pageSize &&
+    (!Number.isFinite(total) || page * pageSize < total)
+  return { places: results, hasMore: hasMore }
 }
 
 /**

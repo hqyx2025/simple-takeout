@@ -19,4 +19,6 @@ export class HomeTheme {
   static readonly SEARCH_HEIGHT: number = 48
   static readonly TAB_HEIGHT: number = 64
   static readonly CONTROL_RADIUS: number = 16
+  static readonly GRID_IMAGE_RATIO: number = 1.6
+  static readonly STORE_PLACEHOLDER: Resource = $r('app.media.store_placeholder')
 }

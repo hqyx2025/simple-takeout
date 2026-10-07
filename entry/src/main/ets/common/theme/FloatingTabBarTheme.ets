@@ -1,19 +1,23 @@
 import { deviceInfo } from '@kit.BasicServicesKit';
 import { uiMaterial } from '@kit.ArkUI';
 
-/** 光感层与后方的模糊层分开，避免材质覆盖背景模糊。 */
-export class FloatingNavigationMaterial implements AttributeModifier<RowAttribute> {
+/** 胶囊原生材质；按压光带由导航统一绘制，避免设备材质支持差异。 */
+export class FloatingNavigationMaterial implements AttributeModifier<StackAttribute> {
   private material: uiMaterial.ImmersiveMaterial | undefined = FloatingTabBarTheme.material();
 
-  applyNormalAttribute(row: RowAttribute): void {
+  applyNormalAttribute(stack: StackAttribute): void {
     if (this.material !== undefined) {
-      row.systemMaterial(this.material);
+      stack.systemMaterial(this.material);
     }
   }
 }
 
-/** 手机首页悬浮导航的局部样式；低版本保留原有 Tabs。 */
+/** 首页悬浮导航与底部操作区共用的玻璃颜色和布局尺寸。 */
 export class FloatingTabBarTheme {
+  static readonly GLASS_COLOR: Resource = $r('app.color.navigation_glass');
+  static readonly PRESS_LIGHT: Resource = $r('app.color.navigation_press_light');
+  static readonly GLASS_BLUR_RADIUS: number = 20;
+  static readonly GLASS_SATURATION: number = 1.1;
   static readonly HEIGHT: number = 56;
   static readonly WIDTH: number = 272;
   static readonly SIDE_MARGIN: number = 20;
@@ -28,7 +32,7 @@ export class FloatingTabBarTheme {
       if (uiMaterial.isImmersiveMaterialSupported()) {
         return new uiMaterial.ImmersiveMaterial({
           style: uiMaterial.ImmersiveStyle.THICK, materialColor: Color.Transparent,
-          colorInvert: false, applyShadow: true, interactive: true, lightEffect: { color: undefined }
+          colorInvert: false, applyShadow: true, interactive: false, lightEffect: null
         });
       }
     } catch (_) {}

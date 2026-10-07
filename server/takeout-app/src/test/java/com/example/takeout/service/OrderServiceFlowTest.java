@@ -26,7 +26,11 @@ import com.example.takeout.model.Store;
 import com.example.takeout.model.User;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -64,11 +68,18 @@ class OrderServiceFlowTest {
     private final GoodsSpecDao specDao = mock(GoodsSpecDao.class);
     private final SeckillDao seckillDao = mock(SeckillDao.class);
     private final HotDataCacheService cache = mock(HotDataCacheService.class);
+    private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     private final OrderService service = new OrderService(orderDao, storeDao, goodsDao, addressDao,
             couponDao, reviewDao, userDao, refundDao, new ObjectMapper(), mock(CartItemMapper.class),
             mock(RiderDao.class), specDao, seckillDao, cache,
             mock(com.example.takeout.service.mq.DomainEventPublisher.class),
             mock(org.springframework.beans.factory.ObjectProvider.class), mock(PaymentRecordDao.class));
+
+    @BeforeEach
+    void configureTransactions() {
+        when(transactionManager.getTransaction(any())).thenAnswer(invocation -> new SimpleTransactionStatus());
+        service.configureTransactions(new TransactionTemplate(transactionManager));
+    }
 
     private static final long STORE_ID = 10L;
     private static final long GOODS_ID = 100L;
@@ -276,6 +287,22 @@ class OrderServiceFlowTest {
 
         assertEquals(0, cancelled);
         verify(goodsDao, never()).restoreStock(anyLong(), anyInt());
+    }
+
+    @Test
+    void timeoutJobRollsBackOneFailedOrderAndContinuesWithNextTransaction() {
+        when(orderDao.listExpiredPending(anyString())).thenReturn(List.of(
+                storedOrder(15, 0, ITEMS, ""), storedOrder(16, 0, ITEMS, "")));
+        when(orderDao.cancelPending(eq(15L), anyString())).thenThrow(
+                new org.springframework.dao.CannotAcquireLockException("deadlock"));
+        when(orderDao.cancelPending(eq(16L), anyString())).thenReturn(true);
+
+        assertEquals(1, service.cancelExpiredPendingOrders());
+
+        verify(transactionManager, org.mockito.Mockito.times(2)).getTransaction(any());
+        verify(transactionManager).rollback(any());
+        verify(transactionManager).commit(any());
+        verify(goodsDao).restoreStock(GOODS_ID, 1);
     }
 
     @Test

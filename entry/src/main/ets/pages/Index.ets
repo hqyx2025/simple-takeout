@@ -16,15 +16,17 @@ import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrder
 import { EmptyState } from '../components/EmptyState'
 import { RatingStars } from '../components/RatingStars'
 import { ConfirmDialog } from '../components/ConfirmDialog'
-import { ChangePasswordDialog } from '../components/ChangePasswordDialog'
+import { PageHeader } from '../components/PageHeader'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { initLogger, logInfo, logError, setPrivacyConsent } from '../service/AppLogger'
 import { savePrivacyConsent } from '../service/DataPersistence'
 import { loadAllData, saveAllData } from '../service/DataPersistence'
 import { HomeTheme } from '../common/theme/HomeTheme'
+import { BreakpointSystem } from '../common/utils/BreakpointSystem'
 import { SoftPressModifier } from '../common/theme/SoftPressModifier'
 import { AppMotion } from '../common/theme/AppMotion'
 import { common } from '@kit.AbilityKit'
+import { display } from '@kit.ArkUI'
 
 // 定义快捷入口和订单Tab的数据类型，解决 arkts-no-untyped-obj-literals 错误
 class QuickEntryItem {
@@ -340,9 +342,7 @@ struct Index {
       }
 
       TabContent() {
-        Column() {
-          AssistantPage()
-        }.width('100%').height('100%').padding({ bottom: FloatingTabBarTheme.CONTENT_INSET })
+        AssistantPage()
       }
 
       TabContent() {
@@ -393,6 +393,8 @@ struct HomePage {
   @State specialGoods: SpecialGoodsItem[] = []
   @State banners: Banner[] = []
   @State announcements: Announcement[] = []
+  @State selectedAnnouncement: Announcement | null = null
+  @State showAnnouncementSheet: boolean = false
   // 限时秒杀（服务端时间窗口内且有剩余名额的秒杀）
   @State seckills: SeckillItem[] = []
   // 秒杀倒计时秒表：每秒 +1，与实际剩余时间相减得到实时剩余（避免每个卡片各自起定时器）
@@ -407,6 +409,8 @@ struct HomePage {
   // 附近推荐（原「发现」Tab 的能力，现并入首页）：进入首页与定位变化时刷新
   @State recommendedStores: StoreItem[] = []
   @State recommendedLoading: boolean = false
+  @State homeGridColumns: number = 2
+  private homeBreakpoint: BreakpointSystem = new BreakpointSystem()
   // 隐私政策同意改由独立页面 pages/ConsentPage 承载（见该文件注释），首页不再内嵌同意弹窗
   onStoreClick: (store: StoreItem) => void = () => {}
   onNavigateLogin: () => void = () => {}
@@ -495,6 +499,10 @@ struct HomePage {
 
   aboutToAppear() {
     this.isHeaderVisible = true
+    this.homeBreakpoint.register(this.getUIContext().getHostContext() as common.UIAbilityContext,
+      (_breakpoint: string) => {
+        this.homeGridColumns = display.isFoldable() && this.homeBreakpoint.isWideForLayout() ? 3 : 2
+      })
     const initialCategories: Category[] = AppStorage.get<Category[]>('categoryList') || []
     this.categories = initialCategories.slice()
     // 秒杀倒计时：单个 1 秒定时器驱动全页秒杀卡片，避免每张卡片各起一个定时器
@@ -510,6 +518,7 @@ struct HomePage {
 
   aboutToDisappear() {
     this.stopSeckillTicker()
+    this.homeBreakpoint.unregister()
   }
 
   // 首页特价团购直接读取后端商品接口，避免使用本地模拟商品。
@@ -811,15 +820,27 @@ struct HomePage {
 
           // 平台公告
           if (this.announcements.length > 0) {
-            Row({ space: SPACING.SM }) {
-              Image($r('app.media.home_announcement')).width(HomeTheme.SEARCH_ICON).height(HomeTheme.SEARCH_ICON)
-                .accessibilityLevel('no')
-              Text(this.announcements[0].title)
-                .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
-                .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            Button({ type: ButtonType.Normal }) {
+              Row({ space: SPACING.SM }) {
+                Image($r('app.media.home_announcement')).width(HomeTheme.SEARCH_ICON).height(HomeTheme.SEARCH_ICON)
+                  .accessibilityLevel('no')
+                Text(this.announcements[0].title)
+                  .fontSize(FONT_SIZE.SM).fontColor(HomeTheme.MUTED)
+                  .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+              }
+              .width('100%')
             }
-            .width('100%')
-            .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.XS })
+            .attributeModifier(new AppButtonStyle())
+            .width('100%').constraintSize({ minHeight: HomeTheme.SEARCH_HEIGHT })
+            .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
+            .backgroundColor(Color.Transparent)
+            .id('home-announcement-entry')
+            .accessibilityGroup(true).accessibilityText(`查看公告：${this.announcements[0].title}`)
+            .animation(AppMotion.pressAnimation())
+            .onClick(() => {
+              this.selectedAnnouncement = this.announcements[0]
+              this.showAnnouncementSheet = true
+            })
           }
 
           // 快捷入口
@@ -938,9 +959,11 @@ struct HomePage {
               .width('100%').textAlign(TextAlign.Center)
               .padding({ top: SPACING.SM, bottom: SPACING.SM })
           } else {
-            List({ space: SPACING.SM }) {
+            GridRow({ columns: { xs: 2, sm: this.homeGridColumns },
+              breakpoints: { value: ['600vp'], reference: BreakpointsReference.ComponentSize },
+              gutter: { x: SPACING.SM, y: SPACING.SM } }) {
               ForEach(this.recommendedStores, (store: StoreItem) => {
-                ListItem() {
+                GridCol() {
                   RecommendedStoreCardHost({
                     store: store,
                     onStoreClick: (target: StoreItem) => { this.onStoreClick(target) }
@@ -949,10 +972,7 @@ struct HomePage {
               }, (store: StoreItem) => `recommend-${store.id}`)
             }
             .id('home-recommend-list')
-            // 高度按内容自适应（推荐是首页的一段，不是整屏列表），靠外层 Scroll 滚动
             .width('100%')
-            .height(this.recommendedStores.length * 108)
-            .scrollBar(BarState.Off)
             .padding({ left: SPACING.LG, right: SPACING.LG })
           }
 
@@ -981,11 +1001,16 @@ struct HomePage {
           } else if (this.specialGoods.length === 0) {
             this.homeEmpty($r('app.media.home_bag'), '暂无特价商品', '商家上新特价商品后会展示在这里')
           } else {
-            Column({ space: SPACING.SM }) {
+            GridRow({ columns: { xs: 2, sm: this.homeGridColumns },
+              breakpoints: { value: ['600vp'], reference: BreakpointsReference.ComponentSize },
+              gutter: { x: SPACING.SM, y: SPACING.SM } }) {
               ForEach(this.specialGoods, (item: SpecialGoodsItem) => {
-                this.SpecialGoodsCard(item)
+                GridCol() {
+                  this.SpecialGoodsCard(item)
+                }
               }, (item: SpecialGoodsItem) => `${item.goods.storeId}-${item.goods.id}`)
             }
+            .id('home-special-grid')
             .width('100%')
             .padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.LG })
           }
@@ -1006,6 +1031,49 @@ struct HomePage {
     }
     .width('100%')
     .height('100%')
+    .bindSheet($$this.showAnnouncementSheet, this.AnnouncementSheet(), {
+      height: '70%',
+      detents: ['70%', SheetSize.LARGE],
+      preferType: SheetType.BOTTOM,
+      showClose: true,
+      dragBar: true,
+      backgroundColor: HomeTheme.CARD,
+      radius: { topLeft: AppTheme.SHEET_RADIUS, topRight: AppTheme.SHEET_RADIUS }
+    })
+  }
+
+  @Builder
+  AnnouncementSheet() {
+    Column() {
+      PageHeader({ title: '公告详情', showBack: false, topPadding: 0, headerBgColor: HomeTheme.CARD })
+      Scroll() {
+        Column({ space: SPACING.LG }) {
+          if (this.selectedAnnouncement !== null) {
+            Text(this.selectedAnnouncement.title)
+              .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(HomeTheme.TEXT)
+              .width('100%').id('home-announcement-title')
+            if ((this.selectedAnnouncement.createTime ?? '') !== '') {
+              Text(`发布时间：${this.selectedAnnouncement.createTime.replace('T', ' ')}`)
+                .fontSize(FONT_SIZE.SM).fontColor(HomeTheme.MUTED).width('100%')
+            }
+            Text(this.selectedAnnouncement.content)
+              .fontSize(FONT_SIZE.LG).fontColor(HomeTheme.TEXT).lineHeight(26)
+              .width('100%').id('home-announcement-content')
+          }
+        }
+        .width('100%').padding(SPACING.XL).alignItems(HorizontalAlign.Start)
+      }
+      .width('100%').layoutWeight(1).align(Alignment.Top).scrollBar(BarState.Auto)
+      Row() {
+        Button('知道了')
+          .attributeModifier(new AppButtonStyle())
+          .width('100%').height(AppTheme.CONTROL_HEIGHT)
+          .id('home-announcement-close')
+          .onClick(() => { this.showAnnouncementSheet = false })
+      }
+      .width('100%').padding(SPACING.XL)
+    }
+    .width('100%').height('100%').backgroundColor(HomeTheme.CARD)
   }
 
   @Builder
@@ -1101,47 +1169,51 @@ struct HomePage {
 
   @Builder
   SpecialGoodsCard(item: SpecialGoodsItem) {
-    Row({ space: SPACING.MD }) {
-      Column() {
-        Text(item.goods.name.substring(0, 1))
-          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold)
-          .fontColor(accentFg(accentIndexFromText(item.goods.name)))
+    Column({ space: SPACING.SM }) {
+      Stack({ alignContent: Alignment.TopEnd }) {
+        Image(merchantImageSource(item.goods.image))
+          .alt(DEFAULT_MERCHANT_IMAGE)
+          .width('100%').aspectRatio(HomeTheme.GRID_IMAGE_RATIO).objectFit(ImageFit.Cover)
+          .borderRadius(BORDER_RADIUS.MD)
+        Text('特价')
+          .fontSize(FONT_SIZE.XS).fontColor(COLORS.ON_PRIMARY)
+          .backgroundColor(COLORS.PRICE_RED)
+          .padding({ left: 6, right: 6, top: 2, bottom: 2 }).borderRadius(BORDER_RADIUS.ROUND)
+          .margin(SPACING.SM)
       }
-      .width(82).height(82)
-      .backgroundColor(accentBg(accentIndexFromText(item.goods.name)))
-      .borderRadius(BORDER_RADIUS.MD)
-      .justifyContent(FlexAlign.Center)
+      .width('100%')
 
       Column({ space: SPACING.XS }) {
-        Row() {
-          Text(item.goods.name)
-            .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
-            .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-          Text('特价')
-            .fontSize(FONT_SIZE.XS).fontColor(COLORS.ON_PRIMARY)
-            .backgroundColor(COLORS.PRICE_RED)
-            .padding({ left: 6, right: 6, top: 2, bottom: 2 }).borderRadius(BORDER_RADIUS.ROUND)
-        }
-        Text(`${item.storeName} · ${item.storeDistance}`)
+        Text(item.goods.name)
+          .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+          .width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+        Text(item.storeName)
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
-          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        Row({ space: SPACING.SM }) {
+          .width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+        Text(item.storeDistance)
+          .fontSize(FONT_SIZE.SM).fontColor(HomeTheme.MUTED)
+          .width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+        Flex({ wrap: FlexWrap.Wrap, alignItems: ItemAlign.Center }) {
           Text(`¥${item.goods.price.toFixed(2)}`)
             .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.PRICE_RED)
+            .margin({ right: SPACING.SM })
           if (item.goods.originalPrice !== undefined && item.goods.originalPrice > item.goods.price) {
             Text(`¥${item.goods.originalPrice.toFixed(2)}`)
               .fontSize(FONT_SIZE.SM).fontColor(HomeTheme.MUTED)
               .decoration({ type: TextDecorationType.LineThrough })
           }
         }
+        .width('100%')
         Text(item.goods.description)
           .fontSize(FONT_SIZE.XS).fontColor(HomeTheme.MUTED)
-          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          .width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
       }
-      .layoutWeight(1).alignItems(HorizontalAlign.Start)
+      .width('100%').alignItems(HorizontalAlign.Start)
     }
     .width('100%').padding(SPACING.MD).backgroundColor(MODULE_BG.SPECIAL)
+    .border({ width: 1, color: AppTheme.BORDER })
     .borderRadius(BORDER_RADIUS.LG)
+    .id(`home-special-card-${item.goods.storeId}-${item.goods.id}`)
     .onClick(() => { this.openSpecialStore(item) })
   }
 
@@ -1211,7 +1283,7 @@ struct HomePage {
 // 原「发现」Tab 已并入首页：推荐数据与卡片渲染都留在首页，这里只保留共享的卡片构建器
 @Component
 struct RecommendedStoreCardHost {
-  store: StoreItem = {
+  @Prop store: StoreItem = {
     id: 0, name: '', image: '', rating: 0, monthlySales: 0, deliveryFee: 0, minOrder: 0,
     deliveryTime: '', distance: '', tags: [], notice: '', categoryId: 0, ownerId: 0
   }
@@ -1230,41 +1302,40 @@ struct RecommendedStoreCardHost {
   }
 
   build() {
-    Row({ space: SPACING.MD }) {
-      if (this.store.image !== '') {
-        Image(merchantImageSource(this.store.image))
-          .alt(DEFAULT_MERCHANT_IMAGE)
-          .width(76).height(76).objectFit(ImageFit.Cover).borderRadius(BORDER_RADIUS.MD)
-      } else {
-        Column() {
-          Text(this.store.name.substring(0, 1)).fontSize(28).fontWeight(FontWeight.Bold).fontColor(COLORS.ON_PRIMARY)
-        }
-        .width(76).height(76)
-        .backgroundColor(accentFg(accentIndexFromText(this.store.name)))
-        .borderRadius(BORDER_RADIUS.MD)
-        .justifyContent(FlexAlign.Center)
+    Column({ space: SPACING.SM }) {
+      Stack({ alignContent: Alignment.TopEnd }) {
+        Image((this.store.image ?? '').trim() === '' ? HomeTheme.STORE_PLACEHOLDER : merchantImageSource(this.store.image))
+          .alt(HomeTheme.STORE_PLACEHOLDER)
+          .width('100%').aspectRatio(HomeTheme.GRID_IMAGE_RATIO).objectFit(ImageFit.Cover)
+          .borderRadius(BORDER_RADIUS.MD)
+        Text('平台推荐').fontSize(FONT_SIZE.XS).fontColor(COLORS.PRIMARY)
+          .backgroundColor(COLORS.TAG_BG).padding({ left: 5, right: 5, top: 2, bottom: 2 })
+          .borderRadius(BORDER_RADIUS.ROUND).margin(SPACING.SM)
       }
+      .width('100%')
       Column({ space: SPACING.XS }) {
-        Row() {
-          Text(this.store.name).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
-            .fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1).maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-          Text('平台推荐').fontSize(FONT_SIZE.XS).fontColor(COLORS.PRIMARY)
-            .backgroundColor(COLORS.TAG_BG).padding({ left: 5, right: 5, top: 2, bottom: 2 })
-            .borderRadius(BORDER_RADIUS.ROUND)
-        }.width('100%')
-        Row({ space: SPACING.SM }) {
+        Text(this.store.name).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
+          .fontColor(COLORS.TEXT_PRIMARY).width('100%').maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Flex({ wrap: FlexWrap.Wrap, alignItems: ItemAlign.Center }) {
           RatingStars({ rating: this.store.rating, fontSize: FONT_SIZE.SM, showNumber: true })
-          Text(`月售${formatSales(this.store.monthlySales)}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
-          Text(this.distanceText()).fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
+          Text(`月售${formatSales(this.store.monthlySales)}`)
+            .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).margin({ left: SPACING.SM })
         }
-        Text(`${this.store.deliveryTime} · 配送¥${this.store.deliveryFee} · ${this.store.minOrder}元起送`)
+        .width('100%')
+        Text(`${this.store.deliveryTime} · ${this.distanceText()}`)
+          .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
+          .width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+        Text(`配送¥${this.store.deliveryFee} · ${this.store.minOrder}元起送`)
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+          .width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(this.store.notice).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
-          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+          .width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+      }.width('100%').alignItems(HorizontalAlign.Start)
     }
-      .attributeModifier(new AppCardStyle())
+    .attributeModifier(new AppCardStyle())
+    .border({ width: 1, color: AppTheme.BORDER })
+    .id(`home-recommend-card-${this.store.id}`)
     .width('100%').padding(SPACING.MD).onClick(() => { this.onStoreClick(this.store) })
   }
 }
@@ -2204,7 +2275,6 @@ export struct StoreDetailContent {
 @Component
 struct ProfileMainPage {
   @State showRechargeDialog: boolean = false
-  @State showChangePwd: boolean = false
   @State rechargeAmount: string = ''
   @State recharging: boolean = false
   @Prop @Watch('onRefreshTokenChange') refreshToken: number = 0
@@ -2357,17 +2427,17 @@ struct ProfileMainPage {
                 this.ProfileMenuRow($r('app.media.profile_headset'), '联系客服', () => {
                   router.pushUrl({ url: 'pages/ContactCustomerServicePage' })
                 })
+                this.ProfileMenuRow($r('app.media.profile_settings'), '设置', () => {
+                  router.pushUrl({ url: 'pages/SettingsPage' })
+                }, 'profile-app-settings')
               }
               .width('100%').padding({ top: 16, bottom: 4 })
               .backgroundColor(HomeTheme.CARD).borderRadius(20)
 
               Column() {
-                this.ProfileSectionTitle('账户设置')
-                this.ProfileMenuRow($r('app.media.profile_settings'), '设置', () => {
-                  router.pushUrl({ url: 'pages/SettingsPage' })
-                })
-                this.ProfileMenuRow($r('app.media.profile_key'), '修改密码', () => {
-                  this.showChangePwd = true
+                this.ProfileSectionTitle('钱包服务')
+                this.ProfileMenuRow($r('app.media.profile_wallet'), '钱包与银行卡', () => {
+                  this.openBalancePage()
                 })
                 this.ProfileMenuRow($r('app.media.profile_wallet'), '测试充值余额', () => {
                   this.openRechargeDialog()
@@ -2431,12 +2501,6 @@ struct ProfileMainPage {
 
       if (this.showRechargeDialog) {
         this.RechargeDialog()
-      }
-      if (this.showChangePwd) {
-        ChangePasswordDialog({
-          onSuccess: () => { this.showChangePwd = false; logout(); router.replaceUrl({ url: 'pages/Index' }) },
-          onClose: () => { this.showChangePwd = false }
-        })
       }
     }
     .width('100%').height('100%')

@@ -323,10 +323,10 @@ public class AdminService {
         if (!orderDao.refundEscrow(order.id())) {
             throw new BizException("订单资金已处理，不能重复退款");
         }
-        userDao.addBalance(order.userId(), order.payAmount());
-        paymentRecordDao.insert(order.id(), order.userId(), order.payAmount(), "REFUND", "BALANCE", "SUCCESS", now());
         // 复用统一回滚：goods 库存 + 规格库存 + 秒杀名额，避免规格库存与秒杀名额泄漏
         orderService.rollbackStock(order);
+        userDao.addBalance(order.userId(), order.payAmount());
+        paymentRecordDao.insert(order.id(), order.userId(), order.payAmount(), "REFUND", "BALANCE", "SUCCESS", now());
         refundDao.updateStatus(refundId, "REFUNDED", now(), "");
         // 同意退款已回滚库存，失效相关展示缓存
         invalidateStoreAndGoodsCache();

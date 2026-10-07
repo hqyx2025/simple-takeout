@@ -26,8 +26,8 @@ import static org.mockito.Mockito.when;
 /**
  * 领域事件发布器单测。
  *
- * 重点验证「事件机制绝不能拖垮主业务」：Outbox 写入失败、序列化失败、
- * Redis 不可用等异常都不得向上抛出；同时保证事件确实被记录，
+ * 序列化/Redis 故障降级；数据库异常必须传播并回滚业务事务，避免死锁后误报成功。
+ * 同时保证事件确实被记录，
  * 以及 Redis 缺失时投递返回失败（交给中继重试）而不是误报成功。
  */
 class DomainEventPublisherTest {
@@ -84,6 +84,16 @@ class DomainEventPublisherTest {
 
         assertDoesNotThrow(() ->
                 publisher.publish(DomainEventPublisher.ORDER_CREATED, 42L, Map.of("userId", 1L)));
+    }
+
+    @Test
+    void propagatesDatabaseDeadlockSoBusinessTransactionCannotReportSuccess() {
+        var failure = new org.springframework.dao.CannotAcquireLockException("deadlock");
+        when(outboxDao.insert(anyString(), anyLong(), anyString(), anyString())).thenThrow(failure);
+
+        org.junit.jupiter.api.Assertions.assertSame(failure,
+                org.junit.jupiter.api.Assertions.assertThrows(org.springframework.dao.CannotAcquireLockException.class,
+                        () -> publisher.publish(DomainEventPublisher.ORDER_CREATED, 42L, Map.of())));
     }
 
     /** payload 无法序列化时也不得抛异常。 */

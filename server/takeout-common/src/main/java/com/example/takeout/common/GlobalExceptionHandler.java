@@ -48,6 +48,14 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(ApiResponse.error(400, "请求参数格式不正确"));
     }
 
+    /** 数据库锁竞争失败后事务已经回滚，明确告知客户端刷新重试。 */
+    @ExceptionHandler(org.springframework.dao.PessimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> handleLockConflict(org.springframework.dao.PessimisticLockingFailureException e) {
+        log.warn("数据库事务锁竞争失败", e);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(409, "订单操作冲突，请刷新状态后重试"));
+    }
+
     /**
      * 上传文件超过 multipart 上限：Spring 在进入业务代码前就抛异常，
      * FileStorageService 里那句「图片大小不能超过 5MB」永远不可达，这里兜住并给出同样的提示。

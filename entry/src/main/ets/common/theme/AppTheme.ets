@@ -12,6 +12,7 @@ export class AppTheme {
   static readonly ACCENT_SOFT: Resource = $r('app.color.tag_bg')
   static readonly PRIMARY: Resource = $r('app.color.primary')
   static readonly PRIMARY_TEXT: Resource = $r('app.color.on_primary')
+  static readonly ASSISTANT_SEND: Resource = $r('app.color.assistant_send')
   static readonly ERROR: Resource = $r('app.color.error')
   static readonly ERROR_BG: Resource = $r('app.color.error_light')
   static readonly SUCCESS: Resource = $r('app.color.success')

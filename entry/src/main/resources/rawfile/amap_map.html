@@ -85,6 +85,7 @@ function initMap() {
         address = result.regeocode.formattedAddress || '';
       }
       notifyCenter(lng, lat, address, source);
+      notifyNearby(lng, lat, status, result);
     });
   }
 
@@ -93,6 +94,37 @@ function initMap() {
     if (window.ohosBridge && window.ohosBridge.onCenterChanged) {
       window.ohosBridge.onCenterChanged(lng.toFixed(6), lat.toFixed(6), address, source);
     }
+  }
+
+  // extensions=all 已包含周边 POI，复用地址解析响应，不额外请求地图服务。
+  function notifyNearby(lng, lat, status, result) {
+    if (!window.ohosBridge || !window.ohosBridge.onNearbyResult) return;
+    var success = status === 'complete' && result && result.regeocode;
+    var regeocode = success ? result.regeocode : {};
+    var pois = regeocode.pois || [];
+    var component = regeocode.addressComponent || {};
+    var list = [];
+    var seen = {};
+    for (var i = 0; i < pois.length; i++) {
+      var poi = pois[i];
+      if (!poi || !poi.location || !poi.name) continue;
+      var longitude = Number(typeof poi.location.getLng === 'function' ? poi.location.getLng() : poi.location.lng);
+      var latitude = Number(typeof poi.location.getLat === 'function' ? poi.location.getLat() : poi.location.lat);
+      if (!Number.isFinite(longitude) || !Number.isFinite(latitude) || Math.abs(longitude) > 180 ||
+        Math.abs(latitude) > 90 || (longitude === 0 && latitude === 0)) continue;
+      var key = poi.name + '|' + longitude + '|' + latitude;
+      if (seen[key]) continue;
+      seen[key] = true;
+      var distance = Number(poi.distance);
+      list.push({ name: poi.name, district: poi.adname || poi.district || component.district || '',
+        address: typeof poi.address === 'string' ? poi.address : '', lng: longitude, lat: latitude,
+        distance: poi.distance !== undefined && poi.distance !== null && poi.distance !== '' &&
+          Number.isFinite(distance) && distance >= 0 ? distance : -1 });
+    }
+    list.sort(function (a, b) {
+      return (a.distance < 0 ? Infinity : a.distance) - (b.distance < 0 ? Infinity : b.distance);
+    });
+    window.ohosBridge.onNearbyResult(lng.toFixed(6), lat.toFixed(6), JSON.stringify(list.slice(0, 20)), success ? '1' : '0');
   }
 
   // 地图移动/缩放结束：中心即所选位置
@@ -130,6 +162,7 @@ function initMap() {
 // 移动地图中心到指定坐标（定位/搜索联动）
 function moveTo(lng, lat) {
   if (map === null) return;
+  centerRevision++;
   hasSelection = true;
   selectionSource = 'selected';
   lastLng = 0;
