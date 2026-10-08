@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -76,6 +77,10 @@ public class HotDataCacheService {
     @Value("${takeout.cache.rebuild-wait-ms:500}")
     private long rebuildWaitMs = 500;
 
+    private static final DefaultRedisScript<Long> UNLOCK_SCRIPT = new DefaultRedisScript<>(
+            "if redis.call('get', KEYS[1]) == ARGV[1] then " +
+                    "return redis.call('del', KEYS[1]) else return 0 end", Long.class);
+
     public HotDataCacheService(ObjectProvider<StringRedisTemplate> redisProvider, ObjectMapper objectMapper) {
         this.redisProvider = redisProvider;
         this.objectMapper = objectMapper;
@@ -123,10 +128,13 @@ public class HotDataCacheService {
             }
         }
 
-        loaded = loadAndFill(redis, redisKey, typeRef, loader);
-
-        if (redis != null && token != null) {
-            unlock(redis, redisKey, token);
+        try {
+            loaded = loadAndFill(redis, redisKey, typeRef, loader);
+        } finally {
+            // 回源失败也必须立即释放自己的锁，否则所有请求会被无意义地挡到 TTL 到期。
+            if (redis != null && token != null) {
+                unlock(redis, redisKey, token);
+            }
         }
         return loaded;
     }
@@ -280,10 +288,9 @@ public class HotDataCacheService {
     private void unlock(StringRedisTemplate redis, String redisKey, String token) {
         String lockKey = redisKey + LOCK_SUFFIX;
         try {
-            String current = redis.opsForValue().get(lockKey);
-            if (token.equals(current)) {
-                redis.delete(lockKey);
-            }
+            // GET 后再 DEL 在 TTL 到期并被新请求抢锁的窗口里可能误删新锁，
+            // 用 Redis Lua 保证「校验 token + 删除」是一个原子操作。
+            redis.execute(UNLOCK_SCRIPT, List.of(lockKey), token);
         } catch (Exception e) {
             log.warn("[缓存击穿保护] 释放锁失败 key={}（将由 TTL 自动过期）", lockKey, e);
         }

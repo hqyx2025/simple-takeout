@@ -13,6 +13,10 @@ import { API_CONFIG } from '../common/Constants'
 
 let categoriesSyncInFlight: Promise<void> | null = null
 let storesSyncInFlight: Promise<void> | null = null
+// 购物车接口返回的是整张购物车；不同页面并发写入时，旧响应可能晚到并覆盖新状态。
+// 统一串行化写请求，保证本地状态按服务端提交顺序推进。
+let cartMutationQueue: Promise<void> = Promise.resolve()
+let cartRevision: number = 0
 // 页面进入、Tab 切换和手动刷新可能同时触发同步；只允许最后一次请求覆盖本地状态。
 let currentUserSyncVersion: number = 0
 let addressSyncVersion: number = 0
@@ -188,9 +192,13 @@ export async function refreshCartFromServer(): Promise<CartItem[] | null> {
   if (!isLoggedIn()) {
     return null
   }
+  const revision: number = cartRevision
   const remoteCart: CartItem[] | null = await fetchCartApi()
   if (remoteCart === null) {
     return null
+  }
+  if (revision !== cartRevision) {
+    return AppStorage.get<CartItem[]>('cartItems') || []
   }
   setRemoteCart(remoteCart)
   return remoteCart
@@ -200,6 +208,7 @@ export async function syncCartRemote(): Promise<boolean> {
   if (!isLoggedIn()) {
     return false
   }
+  const revision: number = cartRevision
   const remoteCart: CartItem[] | null = await fetchCartApi()
   if (remoteCart === null) {
     logWarn('Api', '同步购物车失败，保留本地购物车')
@@ -215,10 +224,16 @@ export async function syncCartRemote(): Promise<boolean> {
     }
     const migratedCart: CartItem[] | null = await fetchCartApi()
     if (migratedCart !== null) {
+      if (revision !== cartRevision) {
+        return true
+      }
       setRemoteCart(migratedCart)
       logInfo('Api', `迁移本地购物车 ${migratedCart.length} 条`)
       return true
     }
+  }
+  if (revision !== cartRevision) {
+    return true
   }
   setRemoteCart(remoteCart)
   logInfo('Api', `同步购物车 ${remoteCart.length} 条`)
@@ -226,49 +241,66 @@ export async function syncCartRemote(): Promise<boolean> {
 }
 
 export async function addCartItemRemote(item: CartItem): Promise<boolean> {
-  const remoteCart: CartItem[] | null = await addCartItemApi(item.goods.id,
-    item.specId ?? 0, item.quantity)
-  if (remoteCart === null) {
-    return false
-  }
-  setRemoteCart(remoteCart)
-  return true
+  return enqueueCartMutation(async (): Promise<boolean> => {
+    const remoteCart: CartItem[] | null = await addCartItemApi(item.goods.id,
+      item.specId ?? 0, item.quantity)
+    if (remoteCart === null) {
+      return false
+    }
+    setRemoteCart(remoteCart)
+    return true
+  })
 }
 
 export async function updateCartItemQuantityRemote(goodsId: number, quantity: number, specId: number = 0): Promise<boolean> {
-  const remoteCart: CartItem[] | null = await updateCartItemQuantityApi(goodsId, specId, quantity)
-  if (remoteCart === null) {
-    return false
-  }
-  setRemoteCart(remoteCart)
-  return true
+  return enqueueCartMutation(async (): Promise<boolean> => {
+    const remoteCart: CartItem[] | null = await updateCartItemQuantityApi(goodsId, specId, quantity)
+    if (remoteCart === null) {
+      return false
+    }
+    setRemoteCart(remoteCart)
+    return true
+  })
 }
 
 export async function deleteCartItemRemote(goodsId: number, specId: number = 0): Promise<boolean> {
-  const remoteCart: CartItem[] | null = await deleteCartItemApi(goodsId, specId)
-  if (remoteCart === null) {
-    return false
-  }
-  setRemoteCart(remoteCart)
-  return true
+  return enqueueCartMutation(async (): Promise<boolean> => {
+    const remoteCart: CartItem[] | null = await deleteCartItemApi(goodsId, specId)
+    if (remoteCart === null) {
+      return false
+    }
+    setRemoteCart(remoteCart)
+    return true
+  })
 }
 
 export async function deleteCartItemsRemote(goodsIds: number[]): Promise<boolean> {
-  const remoteCart: CartItem[] | null = await deleteCartItemsApi(goodsIds)
-  if (remoteCart === null) {
-    return false
-  }
-  setRemoteCart(remoteCart)
-  return true
+  return enqueueCartMutation(async (): Promise<boolean> => {
+    const remoteCart: CartItem[] | null = await deleteCartItemsApi(goodsIds)
+    if (remoteCart === null) {
+      return false
+    }
+    setRemoteCart(remoteCart)
+    return true
+  })
 }
 
 export async function clearCartRemote(): Promise<boolean> {
-  const remoteCart: CartItem[] | null = await clearCartApi()
-  if (remoteCart === null) {
-    return false
-  }
-  setRemoteCart(remoteCart)
-  return true
+  return enqueueCartMutation(async (): Promise<boolean> => {
+    const remoteCart: CartItem[] | null = await clearCartApi()
+    if (remoteCart === null) {
+      return false
+    }
+    setRemoteCart(remoteCart)
+    return true
+  })
+}
+
+function enqueueCartMutation(operation: () => Promise<boolean>): Promise<boolean> {
+  cartRevision += 1
+  const result: Promise<boolean> = cartMutationQueue.then(operation)
+  cartMutationQueue = result.then((): void => undefined).catch((): void => undefined)
+  return result
 }
 
 export function getGoodsForStore(storeId: number): GoodsItem[] {

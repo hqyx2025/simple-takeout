@@ -4,7 +4,7 @@ import { AppMotion } from '../common/theme/AppMotion'
 import { ColorMetrics } from '@kit.ArkUI';
 import { AdminHotGoods, AdminOrderStatusCount, AdminStatisticsData, AdminTopStore, AdminTrendPoint, User, UserRole } from '../model/Models'
 import { fetchAdminDashboardApi, fetchAdminOrderTrendApi, fetchAdminStatisticsApi } from '../service/ApiService'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, getOrderStatusColor, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { PageHeader } from '../components/PageHeader'
 
@@ -32,9 +32,11 @@ export struct AdminStatisticsPage {
     balance: 0, coupons: [], orders: [], storeIds: []
   }
   @State stats: AdminStatisticsData | null = null
-  @State trend: AdminTrendPoint[] = []
+  @State @Watch('redrawCharts') trend: AdminTrendPoint[] = []
   @State orderStatuses: AdminOrderStatusCount[] = []
   @State topStores: AdminTopStore[] = []
+  @State maxStatusCount: number = 1
+  @State maxStoreGmv: number = 0
   @State loading: boolean = false
   private trendChartContext: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true))
 
@@ -59,6 +61,16 @@ export struct AdminStatisticsPage {
     if (dashboard !== null) {
       this.orderStatuses = dashboard.orderStatuses
       this.topStores = dashboard.topStores
+      let statusMax: number = 1
+      for (const item of this.orderStatuses) {
+        statusMax = Math.max(statusMax, item.count)
+      }
+      this.maxStatusCount = statusMax
+      let storeMax: number = 0
+      for (const store of this.topStores.slice(0, 5)) {
+        storeMax = Math.max(storeMax, store.gmv)
+      }
+      this.maxStoreGmv = storeMax
     }
     this.loading = false
   }
@@ -87,40 +99,102 @@ export struct AdminStatisticsPage {
           }
         } else {
           ListItem() {
-            Row({ space: SPACING.SM }) {
-              this.Metric('用户', this.stats.totalUsers.toString(), false)
-              this.Metric('商户', this.stats.totalMerchants.toString(), false)
-              this.Metric('店铺', this.stats.totalStores.toString(), false)
-              this.Metric('商品', this.stats.totalGoods.toString(), false)
-            }.width('100%')
+            Column({ space: SPACING.MD }) {
+              Row() {
+                Text('平台概览').fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold)
+                  .fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
+                Text('实时汇总').fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+              }.width('100%')
+              Row({ space: SPACING.SM }) {
+                this.Metric('用户', this.stats.totalUsers.toString(), false)
+                this.Metric('商户', this.stats.totalMerchants.toString(), false)
+                this.Metric('店铺', this.stats.totalStores.toString(), false)
+                this.Metric('商品', this.stats.totalGoods.toString(), false)
+              }.width('100%')
+              Divider().color(COLORS.DIVIDER)
+              Row({ space: SPACING.SM }) {
+                this.Metric('订单', this.stats.totalOrders.toString(), false)
+                this.Metric('累计成交', `¥${this.valueOrZero(this.stats.totalGmv)}`, true)
+                this.Metric('已结算', `¥${this.valueOrZero(this.stats.settledAmount)}`, false)
+                this.Metric('待结算', `¥${this.valueOrZero(this.stats.pendingEscrowAmount)}`, false)
+              }.width('100%')
+            }
+            .attributeModifier(new AppCardStyle())
+            .width('100%').padding(SPACING.MD)
           }
           ListItem() {
-            Row({ space: SPACING.SM }) {
-              this.Metric('订单', this.stats.totalOrders.toString(), false)
-              this.Metric('累计成交', `¥${this.valueOrZero(this.stats.totalGmv)}`, true)
-              this.Metric('已结算', `¥${this.valueOrZero(this.stats.settledAmount)}`, false)
-              this.Metric('待结算', `¥${this.valueOrZero(this.stats.pendingEscrowAmount)}`, false)
-            }.width('100%')
-          }
-          ListItem() {
-            Row({ space: SPACING.MD }) {
-              Text(`今日订单：${this.stats.todayOrders}`).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
-              Text(`今日成交：¥${this.valueOrZero(this.stats.todayGmv)}`).fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.ADMIN)
-            }.width('100%').padding(SPACING.MD).backgroundColor(MODULE_BG.ADMIN).borderRadius(BORDER_RADIUS.MD)
+            Column({ space: SPACING.SM }) {
+              Text('今日表现').fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold)
+                .fontColor(COLORS.TEXT_PRIMARY).width('100%')
+              Row({ space: SPACING.MD }) {
+                Column({ space: SPACING.XS }) {
+                  Text(`${this.stats.todayOrders}`).fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold)
+                    .fontColor(accentFg(0))
+                  Text('今日订单').fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+                }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+                Column({ space: SPACING.XS }) {
+                  Text(`¥${this.valueOrZero(this.stats.todayGmv)}`).fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold)
+                    .fontColor(MODULE_COLOR.ADMIN)
+                  Text('今日成交').fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+                }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+              }.width('100%')
+            }
+            .attributeModifier(new AppCardStyle())
+            .width('100%').padding(SPACING.MD)
           }
           ListItem() {
             this.SectionTitle('近7日订单趋势', 0)
           }
           ListItem() {
-            Canvas(this.trendChartContext)
-              .width('100%')
-              .height(190)
-              .backgroundColor(COLORS.BG_WHITE)
-              .borderRadius(BORDER_RADIUS.MD)
-              .onReady(() => { this.drawTrendChart() })
+            Column() {
+              if (this.trend.length === 0) {
+                this.ChartEmpty('近 7 日暂无订单数据', 190)
+              } else {
+                Canvas(this.trendChartContext)
+                  .width('100%')
+                  .height(190)
+                  .onReady(() => { this.drawTrendChart() })
+              }
+            }
+            .attributeModifier(new AppCardStyle())
+            .width('100%').padding(SPACING.MD)
           }
           ListItem() {
-            this.SectionTitle('热销商品排行', 1)
+            this.SectionTitle('订单状态分布', 1)
+          }
+          ListItem() {
+            Column({ space: SPACING.LG }) {
+              if (this.orderStatuses.length === 0) {
+                this.ChartEmpty('暂无订单状态数据', 190)
+              } else {
+                ForEach(this.orderStatuses, (item: AdminOrderStatusCount) => {
+                  this.StatusBar(item)
+                }, (item: AdminOrderStatusCount) => item.status.toString())
+              }
+            }
+            .attributeModifier(new AppCardStyle())
+            .width('100%').padding(SPACING.MD)
+          }
+          ListItem() {
+            this.SectionTitle('店铺成交额排行', 2)
+          }
+          ListItem() {
+            Column({ space: SPACING.LG }) {
+              if (this.topStores.length === 0) {
+                this.ChartEmpty('暂无店铺成交数据', 230)
+              } else if (this.maxStoreGmv <= 0) {
+                this.ChartEmpty('暂无成交额数据', 230)
+              } else {
+                ForEach(this.topStores.slice(0, 5), (store: AdminTopStore, index: number) => {
+                  this.StoreBar(store, index + 1)
+                }, (store: AdminTopStore) => store.storeId.toString())
+              }
+            }
+            .attributeModifier(new AppCardStyle())
+            .width('100%').padding(SPACING.MD)
+          }
+          ListItem() {
+            this.SectionTitle('热销商品排行', 3)
           }
           ForEach(this.stats.hotGoods, (item: AdminHotGoods) => {
             ListItem() {
@@ -128,7 +202,7 @@ export struct AdminStatisticsPage {
             }
           }, (item: AdminHotGoods) => item.goodsId.toString())
           ListItem() {
-            this.SectionTitle('订单状态分布', 2)
+            this.SectionTitle('订单状态明细', 4)
           }
           ListItem() {
             Row({ space: SPACING.SM }) {
@@ -143,7 +217,7 @@ export struct AdminStatisticsPage {
             .width('100%')
           }
           ListItem() {
-            this.SectionTitle('店铺成交额排行', 3)
+            this.SectionTitle('店铺成交额明细', 5)
           }
           ForEach(this.topStores, (store: AdminTopStore, index: number) => {
             ListItem() {
@@ -157,18 +231,54 @@ export struct AdminStatisticsPage {
     }.width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)
   }
 
-  /** 分区标题：小色块 + 主题色文字 + 浅底标题条（模块标题层级感）。 */
+  @Builder
+  ChartEmpty(message: string, height: number) {
+    Text(message).fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_SECONDARY)
+      .textAlign(TextAlign.Center).width('100%').height(height)
+      .padding(SPACING.LG)
+  }
+
+  @Builder
+  StatusBar(item: AdminOrderStatusCount) {
+    Column({ space: SPACING.SM }) {
+      Row({ space: SPACING.SM }) {
+        Text(this.statusLabel(item.status)).fontSize(FONT_SIZE.MD)
+          .fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
+        Text(`${item.count} 单`).fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Medium)
+          .fontColor(COLORS.TEXT_PRIMARY)
+      }.width('100%')
+      Progress({ value: item.count, total: this.maxStatusCount, type: ProgressType.Linear })
+        .width('100%').color(getOrderStatusColor(item.status))
+        .backgroundColor(COLORS.INPUT).style({ strokeWidth: SPACING.SM })
+    }.width('100%')
+  }
+
+  @Builder
+  StoreBar(store: AdminTopStore, rank: number) {
+    Column({ space: SPACING.SM }) {
+      Row({ space: SPACING.SM }) {
+        Text(`${rank}`).fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold)
+          .fontColor(MODULE_COLOR.ADMIN).width(SPACING.XL)
+        Text(store.storeName).fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_PRIMARY)
+          .layoutWeight(1).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
+        Text(`¥${store.gmv.toFixed(2)}`).fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Medium)
+          .fontColor(MODULE_COLOR.ADMIN)
+      }.width('100%')
+      Progress({ value: store.gmv, total: this.maxStoreGmv, type: ProgressType.Linear })
+        .width('100%').color(MODULE_COLOR.ADMIN).backgroundColor(COLORS.INPUT)
+        .style({ strokeWidth: SPACING.SM })
+    }.width('100%')
+  }
+
+  /** 分区标题：窄色条 + 文字 + 分隔线，减少大面积底色干扰。 */
   @Builder
   SectionTitle(title: string, index: number) {
     Row({ space: SPACING.SM }) {
-      Text('•')
-        .width(28).height(28).textAlign(TextAlign.Center)
-        .fontColor(accentFg(index)).backgroundColor(accentBg(index))
-        .borderRadius(BORDER_RADIUS.SM)
-      Text(title).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.ADMIN)
+      Text('').width(4).height(18).backgroundColor(accentFg(index)).borderRadius(2)
+      Text(title).fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+      Divider().layoutWeight(1).color(COLORS.DIVIDER)
     }
-    .width('100%').padding({ left: SPACING.SM, right: SPACING.SM, top: SPACING.XS, bottom: SPACING.XS })
-    .backgroundColor(MODULE_BG.ADMIN).borderRadius(BORDER_RADIUS.MD)
+    .width('100%').padding({ left: SPACING.XS, right: SPACING.XS, top: SPACING.SM, bottom: SPACING.XS })
   }
 
   private statusLabel(status: number): string {
@@ -208,8 +318,7 @@ export struct AdminStatisticsPage {
       Text(value).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
         .fontColor(highlight ? COLORS.PRIMARY : accentFg(accentIndexFromText(title)))
       Text(title).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
-    }.layoutWeight(1).padding({ top: SPACING.MD, bottom: SPACING.MD })
-    .backgroundColor(accentBg(accentIndexFromText(title))).borderRadius(BORDER_RADIUS.MD)
+    }.layoutWeight(1).padding({ top: SPACING.XS, bottom: SPACING.XS })
   }
 
   @Builder
@@ -242,7 +351,7 @@ export struct AdminStatisticsPage {
     const chartH: number = height - paddingTop - paddingBottom
 
     ctx.clearRect(0, 0, width, height)
-    if (this.trend.length < 2) {
+    if (this.trend.length === 0) {
       return
     }
     let maxCount: number = 0
@@ -257,7 +366,7 @@ export struct AdminStatisticsPage {
 
     ctx.strokeStyle = ColorMetrics.resourceColor(COLORS.DIVIDER).color
     ctx.lineWidth = 1
-    ctx.font = '10px sans-serif'
+    ctx.font = `${FONT_SIZE.SM}vp sans-serif`
     for (let i = 0; i <= 4; i++) {
       const y: number = paddingTop + chartH * i / 4
       ctx.beginPath()
@@ -269,11 +378,14 @@ export struct AdminStatisticsPage {
       ctx.fillText(`${label}`, 2, y + 3)
     }
 
+    const pointDenominator: number = Math.max(this.trend.length - 1, 1)
     ctx.strokeStyle = ColorMetrics.resourceColor(MODULE_COLOR.ADMIN).color
     ctx.lineWidth = 2
     ctx.beginPath()
     for (let i = 0; i < this.trend.length; i++) {
-      const x: number = paddingLeft + chartW * i / (this.trend.length - 1)
+      const x: number = this.trend.length === 1
+        ? paddingLeft + chartW / 2
+        : paddingLeft + chartW * i / pointDenominator
       const y: number = paddingTop + chartH - chartH * this.trend[i].orderCount / maxCount
       if (i === 0) {
         ctx.moveTo(x, y)
@@ -284,17 +396,28 @@ export struct AdminStatisticsPage {
     ctx.stroke()
 
     for (let i = 0; i < this.trend.length; i++) {
-      const x: number = paddingLeft + chartW * i / (this.trend.length - 1)
+      const x: number = this.trend.length === 1
+        ? paddingLeft + chartW / 2
+        : paddingLeft + chartW * i / pointDenominator
       const y: number = paddingTop + chartH - chartH * this.trend[i].orderCount / maxCount
       ctx.fillStyle = ColorMetrics.resourceColor(MODULE_COLOR.ADMIN).color
       ctx.beginPath()
       ctx.arc(x, y, 3, 0, 2 * Math.PI)
       ctx.fill()
       ctx.fillStyle = ColorMetrics.resourceColor(COLORS.TEXT_HINT).color
-      ctx.font = '9px sans-serif'
-      const label: string = this.trend[i].date.length > 10 ? this.trend[i].date.substring(5, 10) : this.trend[i].date
+      ctx.font = `${FONT_SIZE.SM}vp sans-serif`
+      const label: string = this.trend[i].date.length >= 10 ? this.trend[i].date.substring(5, 10) : this.trend[i].date
       ctx.fillText(label, x - 12, height - 6)
     }
+    if (this.trend.length === 1) {
+      ctx.fillStyle = ColorMetrics.resourceColor(COLORS.TEXT_SECONDARY).color
+      ctx.font = `${FONT_SIZE.SM}vp sans-serif`
+      ctx.fillText(`${this.trend[0].orderCount} 单`, paddingLeft + chartW / 2 - 12, paddingTop + 18)
+    }
+  }
+
+  private redrawCharts(): void {
+    this.drawTrendChart()
   }
 
   @Builder

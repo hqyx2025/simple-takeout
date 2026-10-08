@@ -49,6 +49,7 @@ class BundleHint {
  */
 @Component
 export struct CartPage {
+  @Prop bottomInset: number = 0
   @State actionBarHeight: number = 72
   @State cartItems: CartItem[] = []
   @State expandedStoreIds: number[] = []
@@ -396,7 +397,8 @@ export struct CartPage {
         }
         .width('100%')
         .height('100%')
-        .contentEndOffset(FloatingTabBarTheme.CONTENT_INSET + 4 + this.actionBarHeight + SPACING.MD)
+        .clipContent(ContentClipMode.BOUNDARY)
+        .contentEndOffset(FloatingTabBarTheme.CONTENT_INSET + this.bottomInset + 4 + this.actionBarHeight + SPACING.MD)
         .scrollBar(BarState.Off)
         .backgroundColor(COLORS.BG_PRIMARY)
         .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.MD })
@@ -437,14 +439,14 @@ export struct CartPage {
               .onClick(() => { this.checkoutAll() })
           }
         }
-        .width('calc(100% - 32vp)')
+        .width('75%')
         .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
         .backgroundColor(Color.Transparent)
         .backgroundEffect({ radius: FloatingTabBarTheme.GLASS_BLUR_RADIUS,
           saturation: FloatingTabBarTheme.GLASS_SATURATION, color: FloatingTabBarTheme.GLASS_COLOR })
         .borderRadius(22)
         .border({ width: 1, color: COLORS.DIVIDER })
-        .margin({ bottom: FloatingTabBarTheme.CONTENT_INSET + 4 })
+        .margin({ bottom: FloatingTabBarTheme.CONTENT_INSET + this.bottomInset + 4 })
         .id('cart-action-bar')
         .onAreaChange((_: Area, area: Area) => {
           const height: number = Number(area.height)

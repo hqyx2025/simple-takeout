@@ -19,6 +19,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.inOrder;
+import org.mockito.InOrder;
 
 class CartServiceTest {
 
@@ -64,5 +66,26 @@ class CartServiceTest {
         assertEquals(0, result.size());
         verify(mapper).delete(any());
         verify(mapper).selectList(any());
+    }
+
+    @Test
+    void addLocksGoodsBeforeReadingCartRow() {
+        CartItemMapper mapper = mock(CartItemMapper.class);
+        GoodsDao goodsDao = mock(GoodsDao.class);
+        StoreDao storeDao = mock(StoreDao.class);
+        CartService service = new CartService(mapper, goodsDao, storeDao, mock(GoodsSpecDao.class));
+        Goods goods = new Goods(10L, 20L, "测试商品", "", 10.0, 10.0, "", 1,
+                0L, 10, 0, 0, 4.5, "", false, 1, "now");
+        when(goodsDao.findById(10L)).thenReturn(Optional.of(goods));
+        when(mapper.selectOne(any())).thenReturn(null);
+        when(mapper.selectList(any())).thenReturn(List.of());
+
+        service.add(1L, 10L, 1);
+
+        InOrder order = inOrder(goodsDao, mapper);
+        order.verify(goodsDao).lockStockRows(List.of(10L));
+        order.verify(goodsDao).findById(10L);
+        order.verify(mapper).selectOne(any());
+        verify(mapper).insert(any(CartItemEntity.class));
     }
 }

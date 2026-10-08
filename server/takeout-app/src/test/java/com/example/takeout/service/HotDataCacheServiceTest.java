@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -172,6 +173,23 @@ class HotDataCacheServiceTest {
         }
 
         verify(valueOps, never()).set(anyString(), anyString(), any(Duration.class));
+    }
+
+    @Test
+    void releasesRebuildLockWhenLoaderThrows() {
+        when(valueOps.get(anyString())).thenReturn(null);
+        when(valueOps.setIfAbsent(anyString(), anyString(), any(Duration.class))).thenReturn(true);
+
+        try {
+            cache.get("categories", CATEGORY_LIST, () -> {
+                throw new IllegalStateException("db down");
+            });
+        } catch (IllegalStateException expected) {
+            // 原始回源异常继续向上抛
+        }
+
+        verify(redis).execute(any(org.springframework.data.redis.core.script.DefaultRedisScript.class),
+                anyList(), anyString());
     }
 
     /**

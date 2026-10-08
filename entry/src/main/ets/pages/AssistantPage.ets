@@ -1,5 +1,5 @@
 import { PageHeader } from '../components/PageHeader'
-import { AppTheme, AppButtonStyle, AppInputStyle } from '../common/theme/AppTheme'
+import { AppTheme, AppButtonStyle } from '../common/theme/AppTheme'
 import { FloatingTabBarTheme } from '../common/theme/FloatingTabBarTheme'
 /**
  * AI 智能助手聊天页。
@@ -41,6 +41,7 @@ const MAX_QUESTION_LENGTH = 200
 
 @Component
 export struct AssistantPage {
+  @Prop bottomInset: number = 0
   // 消息 id 递增，保证 ForEach key 唯一且稳定（禁直接用 index）
   private nextMessageId: number = 1
   @State messages: ChatMessage[] = []
@@ -138,7 +139,8 @@ export struct AssistantPage {
         }
         .id('assistant-message-list')
         .width('100%').height('100%').scrollBar(BarState.Off)
-        .contentEndOffset(FloatingTabBarTheme.CONTENT_INSET + this.composerHeight + SPACING.MD)
+        .clipContent(ContentClipMode.BOUNDARY)
+        .contentEndOffset(FloatingTabBarTheme.CONTENT_INSET + this.bottomInset + this.composerHeight + SPACING.MD)
         .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.MD })
         .onAreaChange((oldArea: Area, area: Area) => {
           if (Number(oldArea.height) !== Number(area.height)) { this.scrollToBottom() }
@@ -165,13 +167,14 @@ export struct AssistantPage {
           .width('100%').height(52)
           .backgroundColor(Color.Transparent)
 
-          // 输入区
+          // 输入与发送共用一个悬浮容器。
           Row({ space: SPACING.SM }) {
             TextInput({ placeholder: '想问点什么？例如：我的订单到哪了', text: this.input })
-              .attributeModifier(new AppInputStyle())
+              .height(AppTheme.CONTROL_HEIGHT).fontSize(16)
+              .fontColor(AppTheme.TEXT).placeholderColor(AppTheme.MUTED).caretColor(AppTheme.ACCENT)
               .backgroundColor(Color.Transparent)
-              .backgroundEffect({ radius: FloatingTabBarTheme.GLASS_BLUR_RADIUS,
-                saturation: FloatingTabBarTheme.GLASS_SATURATION, color: FloatingTabBarTheme.GLASS_COLOR })
+              .border({ width: 0 }).borderRadius(BORDER_RADIUS.CIRCLE)
+              .padding({ left: SPACING.MD, right: SPACING.XS })
               .layoutWeight(1)
               .id('assistant-input')
               .maxLength(MAX_QUESTION_LENGTH)
@@ -185,12 +188,17 @@ export struct AssistantPage {
               .id('assistant-send')
               .onClick(() => { this.send(this.input) })
           }
-          .width('85%')
-          .padding({ top: SPACING.SM, bottom: SPACING.MD })
+          .width('75%')
+          .padding({ left: SPACING.XS, right: SPACING.MD, top: SPACING.XS, bottom: SPACING.XS })
+          .margin({ top: SPACING.SM, bottom: SPACING.MD })
           .backgroundColor(Color.Transparent)
+          .backgroundEffect({ radius: FloatingTabBarTheme.GLASS_BLUR_RADIUS,
+            saturation: FloatingTabBarTheme.GLASS_SATURATION, color: FloatingTabBarTheme.GLASS_COLOR })
+          .border({ width: 1, color: COLORS.DIVIDER }).borderRadius(BORDER_RADIUS.CIRCLE)
+          .id('assistant-composer')
         }
         .width('100%')
-        .margin({ bottom: FloatingTabBarTheme.CONTENT_INSET })
+        .margin({ bottom: FloatingTabBarTheme.CONTENT_INSET + this.bottomInset })
         .hitTestBehavior(HitTestMode.Transparent)
         .onAreaChange((_: Area, area: Area) => {
           const height: number = Number(area.height)

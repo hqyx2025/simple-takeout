@@ -1,5 +1,7 @@
 package com.example.takeout.service;
 
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
 import com.example.takeout.common.BizException;
 import com.example.takeout.dao.*;
 import com.example.takeout.mapper.CartItemMapper;
@@ -10,6 +12,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -33,6 +36,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.ArgumentMatchers.*;
 
 /**
@@ -153,6 +157,56 @@ class OrderConcurrencyMySqlTest {
 
     private Order.OrderItem item(long goodsId, long specId) {
         return new Order.OrderItem(goodsId, "test", 0, 1, "", specId, "", 0);
+    }
+
+    @Test
+    void differentGoodsCanBeAddedToEmptyCartConcurrentlyThroughAllQuantityEntrypoints() throws Exception {
+        var source = jdbc.getDataSource();
+        var factory = new MybatisSqlSessionFactoryBean();
+        factory.setDataSource(source);
+        factory.setConfiguration(new MybatisConfiguration());
+        var sessions = factory.getObject();
+        sessions.getConfiguration().addMapper(CartItemMapper.class);
+        var realMapper = new SqlSessionTemplate(sessions).getMapper(CartItemMapper.class);
+        var specs = new GoodsSpecDao(jdbc);
+
+        for (int entrypoint = 0; entrypoint < 4; entrypoint++) {
+            jdbc.update("DELETE FROM cart_items");
+            var bothRowsRead = new CountDownLatch(2);
+            var mapper = mock(CartItemMapper.class, delegatesTo(realMapper));
+            doAnswer(invocation -> {
+                var row = realMapper.selectOne(invocation.getArgument(0));
+                assertNull(row);
+                // Force both transactions to finish the missing-row SELECT before either INSERT.
+                // REPEATABLE_READ acquires overlapping gap locks here and then deadlocks.
+                bothRowsRead.countDown();
+                assertTrue(bothRowsRead.await(10, TimeUnit.SECONDS));
+                return row;
+            }).when(mapper).selectOne(any());
+            var target = new CartService(mapper, new GoodsDao(jdbc, specs), new StoreDao(jdbc), specs);
+            var proxy = new ProxyFactory(target);
+            proxy.addAdvice(new TransactionInterceptor(new DataSourceTransactionManager(source),
+                    new AnnotationTransactionAttributeSource()));
+            var cart = (CartService) proxy.getProxy();
+            int operation = entrypoint;
+
+            runTogether(2, index -> {
+                long goodsId = 100 + index;
+                int quantity = 2 + index;
+                switch (operation) {
+                    case 0 -> cart.add(1, goodsId, quantity);
+                    case 1 -> cart.add(1, goodsId, 0, quantity);
+                    case 2 -> cart.setQuantity(1, goodsId, quantity);
+                    case 3 -> cart.setQuantity(1, goodsId, 0, quantity);
+                    default -> throw new AssertionError("Unknown cart entrypoint");
+                }
+            });
+
+            assertEquals(2, count("SELECT COUNT(*) FROM cart_items WHERE user_id=1"));
+            assertEquals(2, count("SELECT quantity FROM cart_items WHERE user_id=1 AND goods_id=100 AND spec_id=0"));
+            assertEquals(3, count("SELECT quantity FROM cart_items WHERE user_id=1 AND goods_id=101 AND spec_id=0"));
+        }
+        assertEquals(3, count("SELECT COUNT(*) FROM goods WHERE stock=1000"));
     }
 
     @Test

@@ -12,6 +12,7 @@ import com.example.takeout.model.Goods;
 import com.example.takeout.model.GoodsSpec;
 import com.example.takeout.model.Store;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -22,6 +23,8 @@ import java.util.List;
 /**
  * 购物车业务：每个用户只能操作自己的购物车，商品详情由现有 JdbcTemplate DAO 查询。
  * 多规格：购物车行按 (用户, 菜品, 规格) 唯一；多规格菜品必须带 specId 才能加入。
+ * 加购/改数量使用 READ_COMMITTED：空购物车行不加 gap lock，避免不同商品首次插入互相死锁。
+ * 同商品的数量更新仍由商品行锁串行化，已有购物车行使用 FOR UPDATE 保护。
  */
 @Service
 public class CartService {
@@ -64,16 +67,21 @@ public class CartService {
         return result;
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public List<CartItemView> add(long userId, long goodsId, int quantity) {
         return add(userId, goodsId, 0, quantity);
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public List<CartItemView> add(long userId, long goodsId, long specId, int quantity) {
         requirePositiveQuantity(quantity);
+        // 购物车的数量更新与下单扣库存共用商品行作为第一把锁。
+        // 先锁商品、再锁购物车行，避免两个进程同时首次加购时都读到空行，
+        // 也避免购物车更新与下单/补库存形成反向等待。
+        goodsDao.lockStockRows(List.of(goodsId));
         Goods goods = requireAvailableGoods(goodsId);
         GoodsSpec spec = requireSpec(goods, specId);
-        CartItemEntity existing = findEntity(userId, goodsId, specId);
+        CartItemEntity existing = findEntityForUpdate(userId, goodsId, specId);
         // 用 long 累加再判上限：int 直接相加会在「已加购 1 份 + 请求 2147483647 份」时溢出成负数，
         // 而 validateStock 的 quantity > available 对负数不成立 → 负数落库、库存口径被绕过。
         long next = existing == null ? quantity : (long) existing.getQuantity() + quantity;
@@ -86,19 +94,22 @@ public class CartService {
         return list(userId);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public List<CartItemView> setQuantity(long userId, long goodsId, int quantity) {
         return setQuantity(userId, goodsId, 0, quantity);
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public List<CartItemView> setQuantity(long userId, long goodsId, long specId, int quantity) {
         if (quantity <= 0) {
             return deleteOne(userId, goodsId, specId);
         }
+        // 与 add 保持完全相同的锁顺序，避免并发下单/改数量互相死锁。
+        goodsDao.lockStockRows(List.of(goodsId));
         Goods goods = requireAvailableGoods(goodsId);
         GoodsSpec spec = requireSpec(goods, specId);
         validateStock(goods, spec, quantity);
-        saveQuantity(userId, goodsId, specId, quantity, findEntity(userId, goodsId, specId));
+        saveQuantity(userId, goodsId, specId, quantity, findEntityForUpdate(userId, goodsId, specId));
         return list(userId);
     }
 
@@ -133,12 +144,12 @@ public class CartService {
         return List.of();
     }
 
-    private CartItemEntity findEntity(long userId, long goodsId, long specId) {
+    private CartItemEntity findEntityForUpdate(long userId, long goodsId, long specId) {
         return cartItemMapper.selectOne(new LambdaQueryWrapper<CartItemEntity>()
                 .eq(CartItemEntity::getUserId, userId)
                 .eq(CartItemEntity::getGoodsId, goodsId)
                 .eq(CartItemEntity::getSpecId, specId)
-                .last("LIMIT 1"));
+                .last("LIMIT 1 FOR UPDATE"));
     }
 
     private void saveQuantity(long userId, long goodsId, long specId, int quantity, CartItemEntity existing) {

@@ -82,7 +82,15 @@ struct Index {
   // 管理端跳转占位：管理端不渲染主页（定位/购物车/订单等 C 端功能），直接进入平台管理页
   @State adminRedirecting: boolean = false
   @State pageVisible: boolean = true
+  @State systemBottomInset: number = 0
+  private safeViewportHeight: number = 0
+  private contentViewportHeight: number = 0
   private tabsController: TabsController = new TabsController()
+
+  private updateSystemBottomInset(): void {
+    if (this.safeViewportHeight <= 0 || this.contentViewportHeight <= 0) { return }
+    this.systemBottomInset = Math.max(0, this.contentViewportHeight - this.safeViewportHeight)
+  }
 
   pageTransition() {
     PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
@@ -325,6 +333,8 @@ struct Index {
     .width('100%')
     .height('100%')
     .backgroundColor(HomeTheme.SURFACE)
+    // 背景覆盖手势区，登录覆盖层仍按系统安全区布局。
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 
   @Builder
@@ -333,6 +343,7 @@ struct Index {
     Tabs({ controller: this.tabsController, barPosition: BarPosition.End, index: $$this.currentTab }) {
       TabContent() {
         HomePage({
+          bottomInset: this.systemBottomInset,
           onStoreClick: (store: StoreItem) => {
             this.showStoreDetail(store.id, store.name)
           },
@@ -342,15 +353,16 @@ struct Index {
       }
 
       TabContent() {
-        AssistantPage()
+        AssistantPage({ bottomInset: this.systemBottomInset })
       }
 
       TabContent() {
-        CartPage()
+        CartPage({ bottomInset: this.systemBottomInset })
       }
 
       TabContent() {
         ProfileMainPage({
+          bottomInset: this.systemBottomInset,
           refreshToken: this.profileRefreshToken,
           onNavigateLogin: () => { this.showLogin = true }
         })
@@ -374,11 +386,24 @@ struct Index {
     .animationDuration(this.reduceMotion ? 0 : AppMotion.TAB)
     .animationCurve(Curve.EaseOut)
     .width('100%')
-    .height('100%')
+    // 所有 Tab 内容铺到手势区，悬浮导航仍按系统安全区布局。
+    .height(LayoutPolicy.matchParent)
+    .align(Alignment.Top)
     .backgroundColor(HomeTheme.SURFACE)
+    .ignoreLayoutSafeArea([LayoutSafeAreaType.SYSTEM], [LayoutSafeAreaEdge.BOTTOM])
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+    .onSizeChange((_: SizeOptions, size: SizeOptions) => {
+      this.contentViewportHeight = Number(size.height)
+      this.updateSystemBottomInset()
+    })
     AdaptiveTabBar({ selected: this.selectedTab, active: this.pageVisible,
       onSelect: (index: number) => { this.tabsController.changeIndex(index) } })
-    }.width('100%').height('100%')
+    }
+    .width('100%').height('100%')
+    .onSizeChange((_: SizeOptions, size: SizeOptions) => {
+      this.safeViewportHeight = Number(size.height)
+      this.updateSystemBottomInset()
+    })
   }
 
 }
@@ -386,6 +411,7 @@ struct Index {
 // ===================== 首页 =====================
 @Component
 struct HomePage {
+  @Prop bottomInset: number = 0
   @StorageLink('appReduceMotion') reduceMotion: boolean = false
   @State bannerVisible: boolean = false
   @StorageLink('categoryList') categories: Category[] = []
@@ -1014,7 +1040,7 @@ struct HomePage {
             .width('100%')
             .padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.LG })
           }
-          Blank().height(FloatingTabBarTheme.CONTENT_INSET)
+          Blank().height(FloatingTabBarTheme.CONTENT_INSET + this.bottomInset)
           }
         }
         .width('100%')
@@ -1635,12 +1661,10 @@ export struct StoreDetailContent {
     }
     const storeId: number = this.storeId
     const session: string = AppStorage.get<string>('authToken') ?? ''
+    // 点击立即入队；飞行动画只提供反馈，不能阻塞或取消已接受的加购。
+    this.cartAnimator.play(`goods-plus-${goods.id}`).catch(() => {})
     this.enqueueCartOperation(async (): Promise<void> => {
       if (!this.active || storeId !== this.storeId || session !== (AppStorage.get<string>('authToken') ?? '')) {
-        return
-      }
-      const landed: boolean = await this.cartAnimator.play(`goods-plus-${goods.id}`)
-      if (!landed || !this.active || storeId !== this.storeId || session !== (AppStorage.get<string>('authToken') ?? '')) {
         return
       }
       const item: CartItem = { goods: goods, quantity: 1, storeId: storeId, storeName: this.storeName }
@@ -2274,6 +2298,7 @@ export struct StoreDetailContent {
 // ===================== 个人中心 =====================
 @Component
 struct ProfileMainPage {
+  @Prop bottomInset: number = 0
   @State showRechargeDialog: boolean = false
   @State rechargeAmount: string = ''
   @State recharging: boolean = false
@@ -2488,7 +2513,8 @@ struct ProfileMainPage {
             }
             .width('100%').constraintSize({ maxWidth: 680 })
           }
-          .width('100%').padding({ left: 16, right: 16, top: 20, bottom: FloatingTabBarTheme.CONTENT_INSET + 16 })
+          .width('100%').padding({ left: 16, right: 16, top: 20,
+            bottom: FloatingTabBarTheme.CONTENT_INSET + this.bottomInset + 16 })
         }
         .scrollBar(BarState.Off)
         .align(Alignment.Top)
