@@ -26,7 +26,8 @@ public class UserDao {
             rs.getInt("status"),
             rs.getDouble("balance"),
             rs.getString("create_time"),
-            rs.getString("password_changed_at")
+            rs.getString("password_changed_at"),
+            rs.getString("payment_password_hash")
     );
 
     private final JdbcTemplate jdbc;
@@ -145,5 +146,10 @@ public class UserDao {
     public void updatePassword(long userId, String passwordHash, String changedAt) {
         jdbc.update("UPDATE users SET password = ?, password_changed_at = ? WHERE id = ?",
                 passwordHash, changedAt, userId);
+    }
+
+    public void updatePaymentPassword(long userId, String passwordHash) {
+        jdbc.update("UPDATE users SET payment_password_hash = ? WHERE id = ?",
+                passwordHash, userId);
     }
 }

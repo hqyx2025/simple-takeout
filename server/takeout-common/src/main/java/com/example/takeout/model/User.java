@@ -17,24 +17,33 @@ public record User(
         double balance,
         String createTime,
         /** 最后一次改密时间（空=从未改密）；仅服务端签发 token 用，@JsonIgnore 不返回前端。 */
-        @JsonIgnore String passwordChangedAt
+        @JsonIgnore String passwordChangedAt,
+        /** 独立支付密码哈希；空值表示尚未设置，永远不返回前端。 */
+        @JsonIgnore String paymentPasswordHash
 ) {
     /** 兼容旧调用点的 9 参构造（视为启用状态）。 */
     public User(long id, String username, String avatar, String phone, String password,
                 int role, double balance, String createTime, String passwordChangedAt) {
-        this(id, username, avatar, phone, password, role, 1, balance, createTime, passwordChangedAt);
+        this(id, username, avatar, phone, password, role, 1, balance, createTime, passwordChangedAt, "");
     }
 
     /** 兼容旧调用点的 8 参构造（视为从未改密、启用状态）。 */
     public User(long id, String username, String avatar, String phone, String password,
                 int role, double balance, String createTime) {
-        this(id, username, avatar, phone, password, role, 1, balance, createTime, "");
+        this(id, username, avatar, phone, password, role, 1, balance, createTime, "", "");
+    }
+
+    /** 兼容需要显式状态但尚未读取支付密码的调用点。 */
+    public User(long id, String username, String avatar, String phone, String password,
+                int role, int status, double balance, String createTime, String passwordChangedAt) {
+        this(id, username, avatar, phone, password, role, status, balance, createTime, passwordChangedAt, "");
     }
 
     /**
      * 脱敏视图：不返回密码
      */
     public User safe() {
-        return new User(id, username, avatar, phone, "", role, status, balance, createTime, passwordChangedAt);
+        return new User(id, username, avatar, phone, "", role, status, balance, createTime, passwordChangedAt,
+                paymentPasswordHash);
     }
 }

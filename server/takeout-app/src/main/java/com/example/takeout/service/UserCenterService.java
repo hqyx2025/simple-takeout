@@ -8,6 +8,7 @@ import com.example.takeout.dao.FavoriteDao;
 import com.example.takeout.dao.GoodsDao;
 import com.example.takeout.dao.ReviewDao;
 import com.example.takeout.dao.StoreDao;
+import com.example.takeout.dao.UserDao;
 import com.example.takeout.dao.UserCouponDao;
 import com.example.takeout.model.Address;
 import com.example.takeout.model.BankCard;
@@ -15,9 +16,11 @@ import com.example.takeout.model.Coupon;
 import com.example.takeout.model.Goods;
 import com.example.takeout.model.Review;
 import com.example.takeout.model.Store;
+import com.example.takeout.security.PaymentPasswordUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,11 +49,15 @@ public class UserCenterService {
     private final BankCardDao bankCardDao;
     private final ObjectMapper objectMapper;
     private final UserCouponDao userCouponDao;
+    private final UserDao userDao;
+    private final BankCardCrypto bankCardCrypto;
 
+    /** Spring production constructor: payment password and card crypto are explicit dependencies. */
+    @Autowired
     public UserCenterService(CouponDao couponDao, FavoriteDao favoriteDao, AddressDao addressDao,
                              ReviewDao reviewDao, StoreDao storeDao, GoodsDao goodsDao,
                              BankCardDao bankCardDao, ObjectMapper objectMapper,
-                             UserCouponDao userCouponDao) {
+                             UserCouponDao userCouponDao, UserDao userDao, BankCardCrypto bankCardCrypto) {
         this.couponDao = couponDao;
         this.favoriteDao = favoriteDao;
         this.addressDao = addressDao;
@@ -60,17 +67,147 @@ public class UserCenterService {
         this.bankCardDao = bankCardDao;
         this.objectMapper = objectMapper;
         this.userCouponDao = userCouponDao;
+        this.userDao = userDao;
+        this.bankCardCrypto = bankCardCrypto;
+    }
+
+    /** 兼容仅覆盖非钱包能力的旧单元测试构造。 */
+    public UserCenterService(CouponDao couponDao, FavoriteDao favoriteDao, AddressDao addressDao,
+                             ReviewDao reviewDao, StoreDao storeDao, GoodsDao goodsDao,
+                             BankCardDao bankCardDao, ObjectMapper objectMapper,
+                             UserCouponDao userCouponDao) {
+        this(couponDao, favoriteDao, addressDao, reviewDao, storeDao, goodsDao, bankCardDao,
+                objectMapper, userCouponDao, null, null);
     }
 
     // ============ 钱包（余额 + 已绑定银行卡） ============
 
     /**
-     * 当前用户已绑定的银行卡（只读展示）。
+     * 当前用户保存的银行卡信息。
      * 余额不在这里返回：余额的权威来源是 users.balance，统一走 /auth/me，
      * 避免同一份数据出现两个口径。
      */
     public List<BankCard> listBankCards(long userId) {
         return bankCardDao.listByUser(userId);
+    }
+
+    /**
+     * 新卡绑定主路径：接受完整卡号（允许用户输入空格），只把后四位和密文写入数据库。
+     */
+    @Transactional
+    public BankCard addBankCardFull(long userId, String bankName, String cardType, String fullCardNumber) {
+        String bank = validateBankName(bankName);
+        String type = validateCardType(cardType);
+        String normalized = normalizeCardNumber(fullCardNumber);
+        String last4 = normalized.substring(normalized.length() - 4);
+        lockBankCardAccount(userId);
+        for (String encrypted : bankCardDao.listEncryptedCardNumbers(userId)) {
+            if (normalized.equals(bankCardCrypto.decrypt(encrypted))) {
+                throw new BizException("已添加该银行卡，请勿重复添加");
+            }
+        }
+        int isDefault = bankCardDao.listByUser(userId).isEmpty() ? 1 : 0;
+        long id = bankCardDao.insert(userId, bank, type, last4, bankCardCrypto.encrypt(normalized),
+                isDefault, LocalDateTime.now().format(FMT));
+        return bankCardDao.findById(id).orElseThrow(() -> new BizException("银行卡信息添加失败"));
+    }
+
+    /**
+     * 兼容旧测试和历史客户端的尾号写入；生产新接口不再使用此路径。
+     * 旧卡没有可揭示的完整卡号，揭示时会给出明确提示而不会伪造卡号。
+     */
+    @Transactional
+    public BankCard addBankCard(long userId, String bankName, String cardType, String cardNoLast4) {
+        String bank = validateBankName(bankName);
+        String type = validateCardType(cardType);
+        if (cardNoLast4 == null || !cardNoLast4.matches("[0-9]{4}")) {
+            throw new BizException("卡号后四位必须为 4 位数字");
+        }
+        lockBankCardAccount(userId);
+        if (bankCardDao.activeInfoExists(userId, bank, type, cardNoLast4)) {
+            throw new BizException("已添加相同银行、卡类型和尾号的信息，请勿重复添加");
+        }
+        int isDefault = bankCardDao.listByUser(userId).isEmpty() ? 1 : 0;
+        long id = bankCardDao.insert(userId, bank, type, cardNoLast4, isDefault, LocalDateTime.now().format(FMT));
+        return bankCardDao.findById(id).orElseThrow(() -> new BizException("银行卡信息添加失败"));
+    }
+
+    @Transactional(readOnly = true)
+    public String revealBankCard(long userId, long id, String paymentPassword) {
+        if (id <= 0) {
+            throw new BizException("银行卡记录编号不正确");
+        }
+        if (paymentPassword == null || !paymentPassword.matches("[0-9]{6}")) {
+            throw new BizException("支付密码必须为 6 位数字");
+        }
+        if (userDao == null) {
+            throw new BizException(503, "支付密码服务暂不可用，请稍后重试");
+        }
+        var user = userDao.findById(userId).orElseThrow(() -> new BizException(401, "用户不存在，请重新登录"));
+        if (user.paymentPasswordHash() == null || user.paymentPasswordHash().isBlank()) {
+            throw new BizException("尚未设置支付密码，请先设置支付密码");
+        }
+        if (!PaymentPasswordUtil.matches(paymentPassword, user.paymentPasswordHash())) {
+            throw new BizException("支付密码不正确");
+        }
+        String encrypted = bankCardDao.findEncryptedCardNumber(userId, id)
+                .orElseThrow(() -> new BizException(403, "无权查看该银行卡信息或记录已删除"));
+        return bankCardCrypto.decrypt(encrypted);
+    }
+
+    private String validateBankName(String bankName) {
+        String bank = bankName == null ? "" : bankName.trim();
+        if (bank.isEmpty() || bank.length() > 64 || bank.chars().anyMatch(Character::isISOControl)) {
+            throw new BizException("请输入有效的银行名称，最多 64 个字");
+        }
+        return bank;
+    }
+
+    private String validateCardType(String cardType) {
+        String type = cardType == null ? "" : cardType.trim();
+        if (!"储蓄卡".equals(type) && !"信用卡".equals(type)) {
+            throw new BizException("卡类型请选择储蓄卡或信用卡");
+        }
+        return type;
+    }
+
+    private String normalizeCardNumber(String cardNumber) {
+        if (cardNumber == null) {
+            throw new BizException("请输入完整银行卡号");
+        }
+        String normalized = cardNumber.replaceAll("\\s", "");
+        if (!normalized.matches("[0-9]{16,19}")) {
+            throw new BizException("银行卡号必须为 16 至 19 位数字");
+        }
+        return normalized;
+    }
+
+    @Transactional
+    public void deleteBankCard(long userId, long id) {
+        if (id <= 0) {
+            throw new BizException("银行卡记录编号不正确");
+        }
+        lockBankCardAccount(userId);
+        BankCard card = bankCardDao.findById(id).orElseThrow(() -> new BizException(404, "银行卡记录不存在"));
+        if (card.userId() != userId) {
+            throw new BizException(403, "无权删除其他账号的银行卡信息");
+        }
+        if (card.status() == 0) {
+            return;
+        }
+        bankCardDao.delete(userId, id);
+        if (card.isDefault() == 1) {
+            List<BankCard> remaining = bankCardDao.listByUser(userId);
+            if (!remaining.isEmpty()) {
+                bankCardDao.setDefault(userId, remaining.getFirst().id());
+            }
+        }
+    }
+
+    private void lockBankCardAccount(long userId) {
+        if (!bankCardDao.lockUser(userId)) {
+            throw new BizException(401, "用户不存在，请重新登录");
+        }
     }
 
     // ============ 优惠券 ============

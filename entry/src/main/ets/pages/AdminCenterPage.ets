@@ -133,7 +133,8 @@ export struct AdminCenterPage {
       AdminEntryItem.create($r('app.media.profile_wallet'), '退款审批', '处理用户退款申请', this.getPendingRefundCount(), 'pages/AdminRefundPage'),
       AdminEntryItem.create($r('app.media.ui_grid'), '平台统计', '查看平台订单、成交和热销商品', 0, 'pages/AdminStatisticsPage'),
       AdminEntryItem.create($r('app.media.login_rider'), '骑手管理', '骑手列表与启用停用', 0, 'pages/AdminRiderPage'),
-      AdminEntryItem.create($r('app.media.ui_content'), '内容管理', '首页轮播与平台公告', 0, 'pages/AdminContentPage')
+      AdminEntryItem.create($r('app.media.ui_content'), '内容管理', '首页轮播与平台公告', 0, 'pages/AdminContentPage'),
+      AdminEntryItem.create($r('app.media.ui_info'), 'AI 助手设置', '管理问答接口、模型与密钥', 0, 'pages/AdminAssistantPage')
     ]
     return entries
   }

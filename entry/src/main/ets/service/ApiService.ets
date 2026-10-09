@@ -212,6 +212,10 @@ interface ServerBankCard {
   createTime: string
 }
 
+interface ServerRevealedBankCard {
+  cardNumber: string
+}
+
 interface ServerReview {
   id: number
   orderId: number
@@ -632,6 +636,32 @@ export async function changePasswordApi(oldPassword: string, newPassword: string
   }
   logInfo('Api', '修改密码成功，旧 token 已失效')
   return true
+}
+
+export interface SmsCodeApiResult { code: string; mock: boolean }
+export interface SmsCodeResult { success: boolean; code: string }
+interface ForgotPasswordRequest { phone: string; code: string; newPassword: string }
+interface ForgotPaymentPasswordRequest { phone: string; code: string; paymentPassword: string }
+interface SmsCodeRequest { phone: string }
+
+export async function requestSmsCodeApi(phone: string): Promise<SmsCodeResult> {
+  const request: SmsCodeRequest = { phone: phone }
+  const response: ApiResponse<SmsCodeApiResult> = await post<SmsCodeApiResult>(
+    '/api/auth/sms-code', request, false)
+  const result: SmsCodeResult = { success: response.code === 200, code: response.data?.code ?? '' }
+  return result
+}
+
+export async function resetLoginPasswordApi(phone: string, code: string, newPassword: string): Promise<PaymentPasswordResult> {
+  const request: ForgotPasswordRequest = { phone: phone, code: code, newPassword: newPassword }
+  const response: ApiResponse<Object> = await post<Object>('/api/auth/password/forgot', request, false)
+  return { success: response.code === 200, message: response.message || '' }
+}
+
+export async function resetPaymentPasswordApi(phone: string, code: string, paymentPassword: string): Promise<PaymentPasswordResult> {
+  const request: ForgotPaymentPasswordRequest = { phone: phone, code: code, paymentPassword: paymentPassword }
+  const response: ApiResponse<Object> = await post<Object>('/api/auth/payment-password/forgot', request, false)
+  return { success: response.code === 200, message: response.message || '' }
 }
 
 export async function updateUserProfileApi(username: string, phone: string): Promise<User | undefined> {
@@ -1581,24 +1611,75 @@ export async function fetchAddressesApi(): Promise<Address[] | null> {
   return resp.data.map((a: ServerAddress) => toAddress(a))
 }
 
-// ==================== 钱包：已绑定银行卡（只读） ====================
+// ==================== 钱包：银行卡管理 ====================
 
-export async function fetchBankCardsApi(): Promise<BankCard[]> {
-  const resp: ApiResponse<ServerBankCard[]> = await get<ServerBankCard[]>('/api/wallet/bank-cards')
-  if (resp.code !== 200 || resp.data === null) {
-    return []
+interface BankCardRequest {
+  bankName: string
+  cardType: string
+  fullCardNumber: string
+}
+
+interface RevealBankCardRequest { paymentPassword: string }
+interface SetPaymentPasswordRequest { loginPassword: string; paymentPassword: string }
+export interface RevealBankCardResult { cardNumber: string | null; message: string }
+export interface PaymentPasswordResult { success: boolean; message: string }
+
+
+function toBankCard(card: ServerBankCard): BankCard {
+  const result: BankCard = {
+    id: card.id,
+    bankName: card.bankName,
+    cardType: card.cardType,
+    cardNoMasked: card.cardNoMasked,
+    isDefault: card.isDefault === 1,
+    createTime: card.createTime
   }
-  return resp.data.map((c: ServerBankCard) => {
-    const card: BankCard = {
-      id: c.id,
-      bankName: c.bankName,
-      cardType: c.cardType,
-      cardNoMasked: c.cardNoMasked,
-      isDefault: c.isDefault === 1,
-      createTime: c.createTime
-    }
-    return card
-  })
+  return result
+}
+
+export async function fetchBankCardsApi(): Promise<BankCard[] | null> {
+  const resp: ApiResponse<ServerBankCard[]> = await get<ServerBankCard[]>('/api/wallet/bank-cards')
+  if (resp.code !== 200 || !Array.isArray(resp.data)) {
+    return null
+  }
+  return resp.data.map((card: ServerBankCard) => toBankCard(card))
+}
+
+export async function addBankCardApi(bankName: string, cardType: string, fullCardNumber: string): Promise<BankCard | null> {
+  const request: BankCardRequest = { bankName: bankName, cardType: cardType, fullCardNumber: fullCardNumber }
+  const response: ApiResponse<ServerBankCard> = await post<ServerBankCard>('/api/wallet/bank-cards', request)
+  if (response.code !== 200 || response.data === null || response.data === undefined) { return null }
+  return toBankCard(response.data)
+}
+
+export async function deleteBankCardApi(cardId: number): Promise<boolean> {
+  const response: ApiResponse<Object> = await del<Object>(`/api/wallet/bank-cards/${cardId}`)
+  return response.code === 200
+}
+
+/**
+ * 在支付密码校验通过后临时取回完整卡号。调用方必须在使用后立即清理返回值，
+ * 本服务层不写入 AppStorage、日志或任何持久化缓存。
+ */
+export async function revealBankCardApi(cardId: number, paymentPassword: string): Promise<RevealBankCardResult> {
+  const request: RevealBankCardRequest = { paymentPassword: paymentPassword }
+  const response: ApiResponse<ServerRevealedBankCard> =
+    await post<ServerRevealedBankCard>(`/api/wallet/bank-cards/${cardId}/reveal`, request, false)
+  if (response.code !== 200 || response.data === null || response.data === undefined) {
+    return { cardNumber: null, message: response.message || '支付密码校验失败' }
+  }
+  const cardNumber: string = typeof response.data.cardNumber === 'string' ? response.data.cardNumber : ''
+  if (!/^[0-9]{16,19}$/.test(cardNumber)) {
+    return { cardNumber: null, message: '银行卡号响应无效，请稍后重试' }
+  }
+  return { cardNumber: cardNumber, message: '' }
+}
+
+/** 设置或重置支付密码，登录密码只在本次请求中使用，不作本地保存。 */
+export async function setPaymentPasswordApi(loginPassword: string, paymentPassword: string): Promise<PaymentPasswordResult> {
+  const request: SetPaymentPasswordRequest = { loginPassword: loginPassword, paymentPassword: paymentPassword }
+  const response: ApiResponse<Object> = await post<Object>('/api/auth/payment-password', request, false)
+  return { success: response.code === 200, message: response.message || '' }
 }
 
 export async function addAddressApi(name: string, phone: string, detail: string, isDefault: boolean,
@@ -1895,37 +1976,59 @@ function toAnnouncement(a: ServerAnnouncement): Announcement {
   return announcement
 }
 
-// ===================== AI 智能助手（规则问答） =====================
+// ===================== AI 智能助手 =====================
+
+export interface AssistantHistoryMessage {
+  role: string
+  content: string
+}
+
+export interface AssistantAction {
+  label: string
+  target: string
+  value?: string
+}
 
 /** 助手提问请求体（后端 AskRequest 对应字段）。 */
 interface AssistantAskRequest {
   question: string
+  history: AssistantHistoryMessage[]
 }
 
 /** 助手回答（后端 AssistantReply 对应字段）。 */
 interface ServerAssistantReply {
   answer: string
   suggestions: string[]
+  actions?: AssistantAction[]
+  source?: string
 }
 
 /** 助手回答的前端结构：不依赖后端字段名，避免字段缺失时渲染崩溃。 */
 export class AssistantReply {
   answer: string = ''
   suggestions: string[] = []
+  actions: AssistantAction[] = []
+  source: string = 'LOCAL'
 }
 
 /**
  * 向智能助手提问。
- * 助手是纯只读的规则问答（不接外部大模型），失败时返回 null 由页面给出兜底提示。
+ * 通过服务端调用管理员配置的模型；业务查询与导航由服务端处理。
  */
-export async function askAssistantApi(question: string): Promise<AssistantReply | null> {
-  const req: AssistantAskRequest = { question: question }
-  const resp: ApiResponse<ServerAssistantReply> = await post<ServerAssistantReply>('/api/assistant/chat', req)
+export async function askAssistantApi(question: string,
+  history: AssistantHistoryMessage[] = []): Promise<AssistantReply | null> {
+  const req: AssistantAskRequest = { question: question, history: history.slice(-10) }
+  const resp: ApiResponse<ServerAssistantReply> = await post<ServerAssistantReply>('/api/assistant/chat', req, false, 25000)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     return null
   }
   const reply: AssistantReply = new AssistantReply()
-  reply.answer = resp.data.answer ?? ''
-  reply.suggestions = Array.isArray(resp.data.suggestions) ? resp.data.suggestions : []
+  reply.answer = typeof resp.data.answer === 'string' ? resp.data.answer : ''
+  reply.suggestions = Array.isArray(resp.data.suggestions)
+    ? resp.data.suggestions.filter((item: string) => typeof item === 'string').slice(0, 4) : []
+  reply.actions = Array.isArray(resp.data.actions)
+    ? resp.data.actions.filter((item: AssistantAction) => item !== null && typeof item.label === 'string'
+      && typeof item.target === 'string' && item.label.trim() !== '').slice(0, 5) : []
+  reply.source = resp.data.source === 'AI' ? 'AI' : 'LOCAL'
   return reply
 }

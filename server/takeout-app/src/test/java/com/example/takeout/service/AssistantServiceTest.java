@@ -2,6 +2,7 @@ package com.example.takeout.service;
 
 import com.example.takeout.dao.OrderDao;
 import com.example.takeout.dao.UserDao;
+import com.example.takeout.common.BizException;
 import com.example.takeout.model.Order;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.User;
@@ -12,6 +13,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.*;
 
 /**
  * 智能助手规则问答的意图路由与数据组装（纯单元测试，不起 Spring 上下文）。
@@ -78,7 +80,10 @@ class AssistantServiceTest {
     }
 
     private AssistantService service(List<Order> orders, User user, List<Store.StoreView> stores) {
-        return new AssistantService(new FakeOrderDao(orders), new FakeUserDao(user), new FakeStoreService(stores));
+        AssistantConfigService config = mock(AssistantConfigService.class);
+        when(config.load()).thenReturn(new AssistantConfigService.Config(false, "", "", ""));
+        return new AssistantService(new FakeOrderDao(orders), new FakeUserDao(user), new FakeStoreService(stores),
+                config, mock(AssistantAiClient.class));
     }
 
     @Test
@@ -125,12 +130,16 @@ class AssistantServiceTest {
 
     @Test
     void recommendQuestionListsStoresWithRating() {
-        String answer = service(List.of(), user(10.0),
-                List.of(store("老王快餐店", 4.8), store("川味小馆", 4.5))).reply(1L, "推荐几家店").answer();
+        AssistantService.AssistantReply reply = service(List.of(), user(10.0),
+                List.of(store("老王快餐店", 4.8), store("川味小馆", 4.5))).reply(1L, "推荐几家店");
+        String answer = reply.answer();
 
         assertTrue(answer.contains("老王快餐店"), answer);
         assertTrue(answer.contains("川味小馆"), answer);
         assertTrue(answer.contains("4.8"), answer);
+        assertEquals("STORE", reply.actions().getFirst().target());
+        assertEquals("1", reply.actions().getFirst().value());
+        assertEquals("老王快餐店", reply.actions().getFirst().label());
     }
 
     @Test
@@ -165,5 +174,91 @@ class AssistantServiceTest {
         assertTrue(assistant.reply(1L, "付不了款怎么办").answer().contains("15 分钟"), "支付意图未命中");
         assertTrue(assistant.reply(1L, "优惠券怎么用").answer().contains("优惠券"), "优惠券意图未命中");
         assertTrue(assistant.reply(1L, "怎么加地址").answer().contains("收货地址"), "地址意图未命中");
+    }
+
+    @Test
+    void specificOrderOperationsTakePriorityAndRefundDoesNotMeanWallet() {
+        AssistantService assistant = service(List.of(), user(99.0), List.of());
+        for (String question : List.of("取消订单", "订单怎么退款", "退钱", "怎么支付订单")) {
+            AssistantService.AssistantReply reply = assistant.reply(1, question);
+            assertEquals("ORDERS", reply.actions().getFirst().target());
+            assertFalse(reply.answer().contains("你的余额"), reply.answer());
+            assertFalse(reply.answer().contains("还没有订单"), reply.answer());
+        }
+        assertTrue(assistant.reply(1, "退款").answer().contains("确认收货前申请"));
+        assertFalse(assistant.reply(1, "退款").answer().contains("先确认收货"));
+    }
+
+    @Test
+    void navigationOnlyReturnsKnownPageTargets() {
+        AssistantService assistant = service(List.of(), user(0), List.of());
+        String[][] destinations = {{"打开订单", "ORDERS"}, {"带我去钱包", "WALLET"},
+                {"跳转到收货地址", "ADDRESSES"}, {"打开优惠券", "COUPONS"},
+                {"去首页", "HOME"}, {"打开搜索", "SEARCH"}, {"进入收藏", "FAVORITES"},
+                {"打开个人资料", "PROFILE"}, {"打开购物车", "CART"}, {"打开设置", "SETTINGS"},
+                {"去定位", "LOCATION"}, {"进入客服页面", "SUPPORT"}};
+        for (String[] destination : destinations) {
+            AssistantService.AssistantReply reply = assistant.reply(1, destination[0]);
+            assertEquals(destination[1], reply.actions().getFirst().target());
+            assertEquals("LOCAL", reply.source());
+        }
+        assertTrue(assistant.reply(1, "打开管理员页面").actions().isEmpty());
+    }
+
+    @Test
+    void generalQuestionUsesConfiguredModelAndFiltersBusinessHistory() {
+        AssistantConfigService configService = mock(AssistantConfigService.class);
+        AssistantAiClient client = mock(AssistantAiClient.class);
+        AssistantConfigService.Config config = new AssistantConfigService.Config(true, "https://provider.example/v1/chat/completions", "model", "secret");
+        when(configService.load()).thenReturn(config);
+        when(client.complete(eq(config), eq("换一种写法"), anyList())).thenReturn("模型回答");
+        AssistantService assistant = new AssistantService(new FakeOrderDao(List.of()), new FakeUserDao(user(20)),
+                new FakeStoreService(List.of()), configService, client);
+        List<AssistantAiClient.Message> safe = List.of(new AssistantAiClient.Message("user", "写一首诗"),
+                new AssistantAiClient.Message("assistant", "春日晴好"));
+        List<AssistantAiClient.Message> history = List.of(new AssistantAiClient.Message("user", "余额多少"),
+                new AssistantAiClient.Message("assistant", "你的余额是 ¥20.00"), safe.get(0), safe.get(1));
+
+        AssistantService.AssistantReply reply = assistant.reply(1, "换一种写法", history);
+
+        assertEquals("模型回答", reply.answer());
+        assertEquals("AI", reply.source());
+        assertTrue(reply.actions().isEmpty());
+        verify(client).complete(config, "换一种写法", safe);
+        when(client.complete(eq(config), eq("推荐一本书"), anyList())).thenReturn("书籍推荐");
+        assertEquals("AI", assistant.reply(1, "推荐一本书").source());
+        verify(client).complete(config, "推荐一本书", List.of());
+        assistant.reply(1, "我的订单");
+        assistant.reply(1, "余额多少");
+        verifyNoMoreInteractions(client);
+    }
+
+    @Test
+    void modelAndSecretStorageFailuresFallBackWithoutLeakingDetails() {
+        AssistantConfigService config = mock(AssistantConfigService.class);
+        when(config.load()).thenThrow(new BizException(503, "private secret"));
+        AssistantService assistant = new AssistantService(new FakeOrderDao(List.of()), new FakeUserDao(user(0)),
+                new FakeStoreService(List.of()), config, mock(AssistantAiClient.class));
+        AssistantService.AssistantReply reply = assistant.reply(1, "帮我写诗");
+        assertTrue(reply.answer().contains("暂时不可用"));
+        assertFalse(reply.answer().contains("private secret"));
+        assertEquals("LOCAL", reply.source());
+    }
+
+    @Test
+    void refundedTerminalStateDoesNotLookPendingAndMoneyIsExcluded() {
+        AssistantService assistant = service(List.of(order(2, 6, 2, 50), order(1, 4, 2, 20)), user(70), List.of());
+        String answer = assistant.reply(1, "订单").answer();
+        assertTrue(answer.contains("待确认收货 0 笔"));
+        assertTrue(answer.contains("已退款"));
+        assertTrue(assistant.reply(1, "余额").answer().contains("已支付 ¥0.00"));
+    }
+
+    @Test
+    void configuredPaymentDeadlineIsUsedInGuidance() {
+        AssistantService assistant = service(List.of(), user(0), List.of());
+        org.springframework.test.util.ReflectionTestUtils.setField(assistant, "payTimeoutMinutes", 25);
+        assertTrue(assistant.reply(1, "怎么支付订单").answer().contains("25 分钟"));
+        assertTrue(assistant.reply(1, "我的订单").answer().contains("25 分钟"));
     }
 }

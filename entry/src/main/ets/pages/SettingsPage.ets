@@ -1,13 +1,12 @@
 import { abilityAccessCtrl, bundleManager, common } from '@kit.AbilityKit'
 import { notificationManager } from '@kit.NotificationKit'
-import { AppButtonStyle, AppCardStyle, AppTheme } from '../common/theme/AppTheme'
+import { AppButtonStyle, AppCardStyle, AppInputStyle, AppTheme } from '../common/theme/AppTheme'
 import { AppMotion } from '../common/theme/AppMotion'
 import { COLORS, SPACING, FONT_SIZE, APP_CONFIG } from '../common/Constants'
 import { User, UserRole, createEmptyUser } from '../model/Models'
 import { logout } from '../service/AppStorageManager'
 import { getCacheSize, clearAppCache } from '../service/CacheService'
 import { ConfirmDialog } from '../components/ConfirmDialog'
-import { ChangePasswordDialog } from '../components/ChangePasswordDialog'
 import { PageHeader } from '../components/PageHeader'
 import { routerCompat as router, promptCompat as promptAction } from '../common/UiNavigation'
 
@@ -49,7 +48,6 @@ export struct SettingsPage {
   @State showLogoutConfirm: boolean = false
   @State switchingAccount: boolean = false
   @State showCacheConfirm: boolean = false
-  @State showPwdDialog: boolean = false
   @State showPrivacySheet: boolean = false
   @State cacheSize: string = '计算中…'
   @State clearingCache: boolean = false
@@ -83,6 +81,9 @@ export struct SettingsPage {
   }
 
   onPageShow(): void { this.refreshSystemStatus() }
+
+  aboutToDisappear(): void {
+  }
 
   private async refreshSystemStatus(): Promise<void> {
     try {
@@ -132,11 +133,11 @@ export struct SettingsPage {
 
   private doLogout(): void {
     this.showLogoutConfirm = false
-    this.showPwdDialog = false
     logout()
     this.onLogout()
     router.replaceUrl({ url: 'pages/Index' })
   }
+
 
   private async openNotifications(): Promise<void> {
     if (this.openingNotifications) { return }
@@ -185,7 +186,10 @@ export struct SettingsPage {
             Column() {
               if (this.loggedIn) {
                 SettingsItemRow({ icon: $r('app.media.profile_shield'), title: '账号安全', value: '修改密码',
-                  action: () => { this.showPwdDialog = true }, itemId: 'settings-security' })
+                  action: () => { router.pushUrl({ url: 'pages/AccountSecurityPage' }) }, itemId: 'settings-security' })
+                this.SettingDivider()
+                SettingsItemRow({ icon: $r('app.media.profile_shield'), title: '支付密码', value: '设置/修改',
+                  action: () => { router.pushUrl({ url: 'pages/AccountSecurityPage' }) }, itemId: 'settings-payment-password-entry' })
                 this.SettingDivider()
               }
               SettingsItemRow({ icon: $r('app.media.login_lock'), title: '隐私设置', value: '权限与政策',
@@ -241,9 +245,6 @@ export struct SettingsPage {
       }.width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)
 
       if (this.showAbout) { this.AboutDialog() }
-      if (this.showPwdDialog) {
-        ChangePasswordDialog({ onSuccess: () => { this.doLogout() }, onClose: () => { this.showPwdDialog = false } })
-      }
       if (this.showCacheConfirm) {
         ConfirmDialog({ title: '清除缓存', content: '清理临时文件，购物车、订单、收货地址和应用设置都会保留。',
           confirmText: '清理', cancelText: '取消', onConfirm: () => { this.clearCache() },

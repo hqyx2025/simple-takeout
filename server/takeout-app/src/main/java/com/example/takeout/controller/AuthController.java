@@ -7,7 +7,11 @@ import com.example.takeout.security.LoginRateLimiter;
 import com.example.takeout.security.TokenRevocationService;
 import com.example.takeout.service.AuthService;
 import com.example.takeout.service.thirdparty.SmsSender;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -59,6 +63,18 @@ public class AuthController {
         return ApiResponse.ok(new SmsCodeResult(smsSender.sendSmsCode(req.phone()), true));
     }
 
+    @PostMapping("/password/forgot")
+    public ApiResponse<Void> forgotPassword(@RequestBody ForgotPasswordRequest req) {
+        authService.resetPasswordBySms(req.phone(), req.code(), req.newPassword());
+        return ApiResponse.ok();
+    }
+
+    @PostMapping("/payment-password/forgot")
+    public ApiResponse<Void> forgotPaymentPassword(@RequestBody ForgotPaymentPasswordRequest req) {
+        authService.resetPaymentPasswordBySms(req.phone(), req.code(), req.paymentPassword());
+        return ApiResponse.ok();
+    }
+
     @PostMapping("/login")
     public ApiResponse<AuthService.LoginResult> login(@RequestBody LoginRequest req, HttpServletRequest http) {
         String ip = LoginRateLimiter.clientIp(http);
@@ -97,6 +113,28 @@ public class AuthController {
         return ApiResponse.ok();
     }
 
+    /** 设置或重置独立支付密码；登录密码仅用于身份确认，不会作为支付密码保存。 */
+    @PostMapping("/payment-password")
+    public ApiResponse<Void> setPaymentPassword(@RequestAttribute("userId") long userId,
+                                                @RequestBody PaymentPasswordRequest req,
+                                                HttpServletRequest http) {
+        String action = "payment-password";
+        String identity = userId + ":" + LoginRateLimiter.clientIp(http);
+        if (loginRateLimiter.isBlocked(action, identity)) {
+            throw new BizException(429, "密码尝试过于频繁，请稍后再试");
+        }
+        try {
+            authService.setPaymentPassword(userId, req.loginPassword(), req.paymentPassword());
+            loginRateLimiter.reset(action, identity);
+            return ApiResponse.ok();
+        } catch (BizException e) {
+            if ("登录密码不正确".equals(e.getMessage())) {
+                loginRateLimiter.recordAttempt(action, identity);
+            }
+            throw e;
+        }
+    }
+
     @GetMapping("/me")
     public ApiResponse<User> me(@RequestAttribute("userId") long userId) {
         return ApiResponse.ok(authService.profile(userId));
@@ -132,6 +170,21 @@ public class AuthController {
     public record SmsCodeResult(String code, boolean mock) {
     }
 
+    public record ForgotPasswordRequest(String phone, String code, String newPassword) { }
+
+    public record ForgotPaymentPasswordRequest(String phone, String code, String paymentPassword) { }
+
     public record ChangePasswordRequest(String oldPassword, String newPassword) {
+    }
+
+    public record PaymentPasswordRequest(@JsonProperty(access = JsonProperty.Access.WRITE_ONLY) String loginPassword,
+                                         @JsonProperty(access = JsonProperty.Access.WRITE_ONLY) String paymentPassword) {
+        @Override public String toString() { return "PaymentPasswordRequest[passwords=[redacted]]"; }
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> invalidBody() {
+        // Jackson 解析错误可能包含输入的密码，不记录异常文本。
+        return ResponseEntity.badRequest().body(ApiResponse.error(400, "请求参数格式不正确"));
     }
 }

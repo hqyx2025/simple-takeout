@@ -5,6 +5,7 @@ import com.example.takeout.dao.UserDao;
 import com.example.takeout.model.User;
 import com.example.takeout.security.JwtUtil;
 import com.example.takeout.security.PasswordUtil;
+import com.example.takeout.security.PaymentPasswordUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -104,6 +105,44 @@ public class AuthService {
         }
         userDao.updatePassword(userId, PasswordUtil.hash(newPassword),
                 LocalDateTime.now().format(FMT));
+    }
+
+    /** 设置或重置独立支付密码；每次都用登录密码确认，绝不把登录密码当支付密码。 */
+    @Transactional
+    public void setPaymentPassword(long userId, String loginPassword, String paymentPassword) {
+        User user = userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
+        if (loginPassword == null || !PasswordUtil.matches(loginPassword, user.password())) {
+            throw new BizException("登录密码不正确");
+        }
+        if (paymentPassword == null || !paymentPassword.matches("[0-9]{6}")) {
+            throw new BizException("支付密码必须为 6 位数字");
+        }
+        userDao.updatePaymentPassword(userId, PaymentPasswordUtil.hash(paymentPassword));
+    }
+
+    /** Mock 短信找回登录密码；正式短信供应商替换后沿用同一接口。 */
+    @Transactional
+    public void resetPasswordBySms(String phone, String code, String newPassword) {
+        if (phone == null || !phone.matches("1\\d{10}") || !"123456".equals(code)) {
+            throw new BizException("手机号或验证码不正确");
+        }
+        if (newPassword == null || newPassword.length() < 6) {
+            throw new BizException("新密码长度至少 6 位");
+        }
+        User user = userDao.findByPhone(phone).orElseThrow(() -> new BizException("手机号或验证码不正确"));
+        userDao.updatePassword(user.id(), PasswordUtil.hash(newPassword), LocalDateTime.now().format(FMT));
+    }
+
+    @Transactional
+    public void resetPaymentPasswordBySms(String phone, String code, String paymentPassword) {
+        if (phone == null || !phone.matches("1\\d{10}") || !"123456".equals(code)) {
+            throw new BizException("手机号或验证码不正确");
+        }
+        if (paymentPassword == null || !paymentPassword.matches("[0-9]{6}")) {
+            throw new BizException("支付密码必须为 6 位数字");
+        }
+        User user = userDao.findByPhone(phone).orElseThrow(() -> new BizException("手机号或验证码不正确"));
+        userDao.updatePaymentPassword(user.id(), PaymentPasswordUtil.hash(paymentPassword));
     }
 
     private int roleOf(String loginType) {

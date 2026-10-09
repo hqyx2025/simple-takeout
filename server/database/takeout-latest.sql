@@ -106,6 +106,7 @@ CREATE TABLE `bank_cards` (
   `bank_name` varchar(64) NOT NULL,
   `card_type` varchar(32) NOT NULL DEFAULT '储蓄卡',
   `card_no_last4` varchar(4) NOT NULL,
+  `full_card_encrypted` text,
   `is_default` int NOT NULL DEFAULT '0',
   `status` int NOT NULL DEFAULT '1',
   `create_time` varchar(32) NOT NULL,
@@ -119,7 +120,7 @@ CREATE TABLE `bank_cards` (
 --
 
 /*!40000 ALTER TABLE `bank_cards` DISABLE KEYS */;
-INSERT INTO `bank_cards` VALUES (1,1,'招商银行','储蓄卡','6688',1,1,'2026-09-14 17:43:14'),(2,2,'工商银行','信用卡','8899',1,1,'2026-09-14 17:43:14');
+INSERT INTO `bank_cards` VALUES (1,1,'招商银行','储蓄卡','6688',NULL,1,1,'2026-09-14 17:43:14'),(2,2,'工商银行','信用卡','8899',NULL,1,1,'2026-09-14 17:43:14');
 /*!40000 ALTER TABLE `bank_cards` ENABLE KEYS */;
 
 --
@@ -816,6 +817,7 @@ CREATE TABLE `users` (
   `balance` decimal(10,2) NOT NULL DEFAULT '0.00',
   `create_time` varchar(32) NOT NULL,
   `password_changed_at` varchar(32) NOT NULL DEFAULT '',
+  `payment_password_hash` varchar(128) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `phone` (`phone`)
 ) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -826,7 +828,7 @@ CREATE TABLE `users` (
 --
 
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES (1,'美食家小张','','13800138000','b86af4172288a2cd465eedefe52f92400e1ae6ad620609a340505ad63b4519cd',0,1,4185.85,'2026-09-14 16:21:10','2026-09-17 22:39:20'),(2,'小王','','13900139000','b86af4172288a2cd465eedefe52f92400e1ae6ad620609a340505ad63b4519cd',0,1,15.00,'2026-09-14 16:21:10',''),(3,'黄焖鸡老板','','13600136000','b86af4172288a2cd465eedefe52f92400e1ae6ad620609a340505ad63b4519cd',1,1,515.12,'2026-09-14 16:21:10',''),(4,'串串香老板','','13700137000','b86af4172288a2cd465eedefe52f92400e1ae6ad620609a340505ad63b4519cd',1,1,0.00,'2026-09-14 16:21:10',''),(5,'甜品店老板','','13500135000','b86af4172288a2cd465eedefe52f92400e1ae6ad620609a340505ad63b4519cd',1,1,0.00,'2026-09-14 16:21:10',''),(6,'平台管理员','','13100131000','b86af4172288a2cd465eedefe52f92400e1ae6ad620609a340505ad63b4519cd',2,1,0.00,'2026-09-14 16:21:12',''),(7,'骑手小李','','13300133000','b86af4172288a2cd465eedefe52f92400e1ae6ad620609a340505ad63b4519cd',3,1,0.00,'2026-09-14 16:21:12',''),(8,'HQYX骑士1','','13344886600','b86af4172288a2cd465eedefe52f92400e1ae6ad620609a340505ad63b4519cd',3,1,0.00,'2026-09-15 14:03:59','');
+INSERT INTO `users` (`id`,`username`,`avatar`,`phone`,`password`,`role`,`status`,`balance`,`create_time`,`password_changed_at`,`payment_password_hash`) VALUES (1,'美食家小张','','13800138000','b86af4172288a2cd465eedefe52f92400e1ae6ad620609a340505ad63b4519cd',0,1,4185.85,'2026-09-14 16:21:10','2026-09-17 22:39:20',NULL),(2,'小王','','13900139000','b86af4172288a2cd465eedefe52f92400e1ae6ad620609a340505ad63b4519cd',0,1,15.00,'2026-09-14 16:21:10','',NULL),(3,'黄焖鸡老板','','13600136000','b86af4172288a2cd465eedefe52f92400e1ae6ad620609a340505ad63b4519cd',1,1,515.12,'2026-09-14 16:21:10','',NULL),(4,'串串香老板','','13700137000','b86af4172288a2cd465eedefe52f92400e1ae6ad620609a340505ad63b4519cd',1,1,0.00,'2026-09-14 16:21:10','',NULL),(5,'甜品店老板','','13500135000','b86af4172288a2cd465eedefe52f92400e1ae6ad620609a340505ad63b4519cd',1,1,0.00,'2026-09-14 16:21:10','',NULL),(6,'平台管理员','','13100131000','b86af4172288a2cd465eedefe52f92400e1ae6ad620609a340505ad63b4519cd',2,1,0.00,'2026-09-14 16:21:12','',NULL),(7,'骑手小李','','13300133000','b86af4172288a2cd465eedefe52f92400e1ae6ad620609a340505ad63b4519cd',3,1,0.00,'2026-09-14 16:21:12','',NULL),(8,'HQYX骑士1','','13344886600','b86af4172288a2cd465eedefe52f92400e1ae6ad620609a340505ad63b4519cd',3,1,0.00,'2026-09-15 14:03:59','',NULL);
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 
 --

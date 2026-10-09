@@ -473,10 +473,15 @@ export async function updateUserProfileRemote(username: string, phone: string): 
 }
 
 export async function rechargeBalanceRemote(amount: number): Promise<User | undefined> {
+  const requestToken: string = getAuthToken()
+  const requestUserId: number = AppStorage.get<User>('user')?.id ?? 0
   // 充值接口返回的是事务提交后的数据库用户；先让旧的 /auth/me 请求失效，
   // 避免它在充值完成后又把旧余额写回 AppStorage。
   currentUserSyncVersion += 1
   const user: User | undefined = await rechargeBalanceApi(amount)
+  if (requestToken !== getAuthToken() || requestUserId !== (AppStorage.get<User>('user')?.id ?? 0)) {
+    return undefined
+  }
   // 充值期间若有新的页面同步请求启动，也必须在这里统一作废。
   currentUserSyncVersion += 1
   if (user !== undefined) {

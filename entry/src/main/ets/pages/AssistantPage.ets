@@ -4,13 +4,13 @@ import { FloatingTabBarTheme } from '../common/theme/FloatingTabBarTheme'
 /**
  * AI 智能助手聊天页。
  *
- * 助手能力来自后端 /api/assistant/chat：规则问答，按关键词命中意图后用库里的真实数据组装回答
- * （订单进度、余额、附近推荐店铺、退款/支付/优惠券/评价/地址等常见问题），不接外部大模型，
- * 因此没有密钥与额度依赖。
+ * 服务端提供真实业务查询、页面导航和管理员配置的模型问答。
  */
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
-import { promptCompat as promptAction } from '../common/UiNavigation'
-import { askAssistantApi, AssistantReply } from '../service/ApiService'
+import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
+import { askAssistantApi, AssistantReply, AssistantAction, AssistantHistoryMessage } from '../service/ApiService'
+import { getAuthToken, getLastApiErrorMessage } from '../service/HttpClient'
+import { User, UserRole } from '../model/Models'
 import { logInfo, logWarn } from '../service/AppLogger'
 
 /** 一条聊天消息（role：'user' 用户提问 / 'assistant' 助手回答）。 */
@@ -18,12 +18,14 @@ class ChatMessage {
   id: number = 0
   role: string = 'assistant'
   text: string = ''
+  actions: AssistantAction[] = []
 
-  static create(id: number, role: string, text: string): ChatMessage {
+  static create(id: number, role: string, text: string, actions: AssistantAction[] = []): ChatMessage {
     const message: ChatMessage = new ChatMessage()
     message.id = id
     message.role = role
     message.text = text
+    message.actions = actions
     return message
   }
 }
@@ -37,37 +39,58 @@ const QUICK_QUESTIONS: string[] = [
 ]
 
 /** 输入长度上限：与后端"纯文本问答"的定位匹配，避免超长文本打爆请求体。 */
-const MAX_QUESTION_LENGTH = 200
+const MAX_QUESTION_LENGTH = 1000
 
 @Component
 export struct AssistantPage {
   @Prop bottomInset: number = 0
   // 消息 id 递增，保证 ForEach key 唯一且稳定（禁直接用 index）
   private nextMessageId: number = 1
+  private history: AssistantHistoryMessage[] = []
+  private requestSequence: number = 0
+  @StorageLink('authToken') @Watch('resetConversation') authToken: string = ''
   @State messages: ChatMessage[] = []
   @State input: string = ''
   @State sending: boolean = false
   @State quickQuestions: string[] = QUICK_QUESTIONS
   @State composerHeight: number = 124
   private scroller: Scroller = new Scroller()
+  onNavigateTab: (index: number) => void = (_: number): void => {}
 
   aboutToAppear() {
     logInfo('Page', '进入 AI 智能助手页 AssistantPage')
+    this.resetConversation()
+  }
+
+  resetConversation(): void {
+    this.requestSequence += 1
+    this.history = []
+    this.input = ''
+    this.sending = false
+    this.quickQuestions = QUICK_QUESTIONS.slice()
     this.messages = [ChatMessage.create(
       this.nextMessageId++,
       'assistant',
-      '你好，我是简单外卖的智能助手。我能查订单进度、余额，也能推荐店铺和回答退款、优惠券、评价这些常见问题。\n试试下面的问题，或者直接打字问我。'
+      '你好，我是简单外卖的智能助手。可以帮你查订单、余额，推荐店铺，也能带你去订单、钱包、地址和优惠券页面。管理员启用 AI 后，还可以回答更多问题。\n例如：“打开我的订单”或“午餐怎么搭配？”'
     )]
+  }
+
+  aboutToDisappear(): void {
+    this.requestSequence += 1
+    this.sending = false
   }
 
   /** 追问建议去重后合并进快捷问题（最多保留 4 个，避免按钮换行挤压输入区）。 */
   private mergeSuggestions(suggestions: string[]): void {
-    const merged: string[] = QUICK_QUESTIONS.slice()
+    const merged: string[] = []
     for (let i = 0; i < suggestions.length; i++) {
       const suggestion: string = suggestions[i]
       if (suggestion.trim() !== '' && merged.indexOf(suggestion) < 0) {
         merged.push(suggestion)
       }
+    }
+    for (let i = 0; i < QUICK_QUESTIONS.length; i++) {
+      if (merged.indexOf(QUICK_QUESTIONS[i]) < 0) { merged.push(QUICK_QUESTIONS[i]) }
     }
     this.quickQuestions = merged.slice(0, 4)
   }
@@ -82,26 +105,80 @@ export struct AssistantPage {
       promptAction.showToast({ message: '助手正在回答，请稍候', duration: 1500 })
       return
     }
+    const user: User | undefined = AppStorage.get<User>('user')
+    if (!(AppStorage.get<boolean>('isLoggedIn') ?? false) || getAuthToken() === '') {
+      promptAction.showToast({ message: '请先登录后使用助手', duration: 1500 })
+      return
+    }
+    if (user?.role !== UserRole.CUSTOMER) {
+      promptAction.showToast({ message: '请使用用户端账号访问助手', duration: 1500 })
+      return
+    }
+    const token: string = getAuthToken()
+    const sequence: number = ++this.requestSequence
     this.sending = true
     this.input = ''
     this.messages = this.messages.concat([ChatMessage.create(this.nextMessageId++, 'user', text)])
     this.scrollToBottom()
 
-    const reply: AssistantReply | null = await askAssistantApi(text)
+    const reply: AssistantReply | null = await askAssistantApi(text, this.history)
+    if (sequence !== this.requestSequence || token !== getAuthToken()) { return }
     if (reply === null) {
-      logWarn('Assistant', `助手请求失败 question=${text}`)
+      logWarn('Assistant', '助手请求失败')
       this.messages = this.messages.concat([ChatMessage.create(
         this.nextMessageId++,
         'assistant',
-        '没能拿到回答，请检查网络或登录状态后重试。'
+        getLastApiErrorMessage() || '没能拿到回答，请检查网络或登录状态后重试。'
       )])
     } else {
       logInfo('Assistant', `助手回答长度=${reply.answer.length} 建议数=${reply.suggestions.length}`)
-      this.messages = this.messages.concat([ChatMessage.create(this.nextMessageId++, 'assistant', reply.answer)])
+      this.messages = this.messages.concat([ChatMessage.create(this.nextMessageId++, 'assistant', reply.answer, reply.actions)])
+      if (reply.source === 'AI') {
+        const questionMessage: AssistantHistoryMessage = { role: 'user', content: text }
+        const answerMessage: AssistantHistoryMessage = { role: 'assistant', content: reply.answer.slice(0, 1000) }
+        this.history = this.history.concat([questionMessage, answerMessage]).slice(-10)
+      } else {
+        this.history = []
+      }
       this.mergeSuggestions(reply.suggestions)
     }
     this.sending = false
     this.scrollToBottom()
+  }
+
+  private openAction(action: AssistantAction): void {
+    const user: User | undefined = AppStorage.get<User>('user')
+    if (!(AppStorage.get<boolean>('isLoggedIn') ?? false) || user?.role !== UserRole.CUSTOMER) {
+      promptAction.showToast({ message: '请先登录用户端账号', duration: 1500 })
+      return
+    }
+    switch (action.target) {
+      case 'ORDERS':
+        AppStorage.setOrCreate<number>('orderFilterStatus', -1)
+        router.pushUrl({ url: 'pages/OrderListPage' })
+        break
+      case 'WALLET': router.pushUrl({ url: 'pages/BalancePage' }); break
+      case 'ADDRESSES': router.pushUrl({ url: 'pages/AddressListPage' }); break
+      case 'COUPONS': router.pushUrl({ url: 'pages/CouponCenterPage' }); break
+      case 'SEARCH': router.pushUrl({ url: 'pages/SearchPage' }); break
+      case 'FAVORITES': router.pushUrl({ url: 'pages/FavoriteListPage' }); break
+      case 'HOME': this.onNavigateTab(0); break
+      case 'PROFILE': this.onNavigateTab(3); break
+      case 'CART': this.onNavigateTab(2); break
+      case 'SETTINGS': router.pushUrl({ url: 'pages/SettingsPage' }); break
+      case 'LOCATION': router.pushUrl({ url: 'pages/LocationPage' }); break
+      case 'SUPPORT': router.pushUrl({ url: 'pages/ContactCustomerServicePage' }); break
+      case 'STORE': {
+        const value: string = action.value ?? ''
+        const storeId: number = Number(value)
+        if (!/^\d+$/.test(value) || !Number.isSafeInteger(storeId) || storeId <= 0) { return }
+        AppStorage.setOrCreate<number>('selectedStoreId', storeId)
+        AppStorage.setOrCreate<string>('selectedStoreName', action.label)
+        router.pushUrl({ url: 'pages/StoreDetailPage' })
+        break
+      }
+      default: promptAction.showToast({ message: '暂不支持这个页面入口', duration: 1500 })
+    }
   }
 
   private scrollToBottom(): void {
@@ -219,19 +296,36 @@ export struct AssistantPage {
       if (message.role === 'user') {
         Blank()
       }
-      Text(message.text)
-        .fontSize(FONT_SIZE.MD)
-        .fontColor(message.role === 'user' ? COLORS.ON_PRIMARY : COLORS.TEXT_PRIMARY)
-        .backgroundColor(message.role === 'user' ? COLORS.PRIMARY : COLORS.BG_WHITE)
-        .padding(SPACING.MD)
-        .borderRadius(BORDER_RADIUS.LG)
-        .constraintSize({ maxWidth: '78%' })
-        .textAlign(TextAlign.Start)
-        .id(`assistant-message-${message.id}`)
+      Column({ space: SPACING.SM }) {
+        Text(message.text)
+          .fontSize(FONT_SIZE.MD)
+          .fontColor(message.role === 'user' ? COLORS.ON_PRIMARY : COLORS.TEXT_PRIMARY)
+          .textAlign(TextAlign.Start)
+          .id(`assistant-message-${message.id}`)
+        ForEach(message.actions, (action: AssistantAction) => {
+          this.ActionButton(action, message.id)
+        }, (action: AssistantAction) => `${action.target}-${action.value ?? ''}`)
+      }
+      .alignItems(HorizontalAlign.Start)
+      .backgroundColor(message.role === 'user' ? COLORS.PRIMARY : COLORS.BG_WHITE)
+      .padding(SPACING.MD)
+      .borderRadius(BORDER_RADIUS.LG)
+      .constraintSize({ maxWidth: '78%' })
       if (message.role !== 'user') {
         Blank()
       }
     }
     .width('100%')
+  }
+
+  @Builder
+  ActionButton(action: AssistantAction, messageId: number) {
+    Button(action.label)
+      .attributeModifier(new AppButtonStyle())
+      .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
+      .backgroundColor(COLORS.TAG_BG).borderRadius(BORDER_RADIUS.ROUND)
+      .id(action.target === 'STORE' ? `assistant-action-${messageId}-STORE-${action.value ?? ''}`
+        : `assistant-action-${messageId}-${action.target}`)
+      .onClick(() => { this.openAction(action) })
   }
 }

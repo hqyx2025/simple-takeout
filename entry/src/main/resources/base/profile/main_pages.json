@@ -13,7 +13,10 @@
     "pages/ReviewPage",
     "pages/ProfileEditPage",
     "pages/BalancePage",
+    "pages/AddBankCardPage",
     "pages/SettingsPage",
+    "pages/AccountSecurityPage",
+    "pages/PasswordResetPage",
     "pages/AppSettingsPage",
     "pages/PrivacyPolicyPage",
     "pages/ContactCustomerServicePage",
@@ -39,6 +42,7 @@
     "pages/AdminRefundPage",
     "pages/AdminRiderPage",
     "pages/AdminContentPage",
+    "pages/AdminAssistantPage",
     "pages/RankingPage",
     "pages/ReviewImagePage",
     "pages/ConsentPage"

@@ -149,7 +149,8 @@ function getOperationName(method: string, url: string): string {
 /**
  * 核心请求方法：返回后端 ApiResponse；网络异常时返回 code=500 的错误响应
  */
-async function request<T>(method: string, url: string, data?: Object, showErrorToast: boolean = true): Promise<ApiResponse<T>> {
+async function request<T>(method: string, url: string, data?: Object, showErrorToast: boolean = true,
+  timeoutMs: number = API_CONFIG.TIMEOUT): Promise<ApiResponse<T>> {
   const requestToken: string = authToken
   const operation: string = getOperationName(method, url)
   lastApiErrorMessage = ''
@@ -157,6 +158,7 @@ async function request<T>(method: string, url: string, data?: Object, showErrorT
   try {
     const nativeRequest: rcp.Request = new rcp.Request(API_CONFIG.BASE_URL + url,
       method as rcp.HttpMethod, buildHeaders(), data === undefined ? undefined : JSON.stringify(data))
+    nativeRequest.configuration = { transfer: { timeout: { connectMs: API_CONFIG.TIMEOUT, transferMs: timeoutMs } } }
     const response: rcp.Response = await getClient().fetch(nativeRequest)
     let parsed: ApiResponse<T> | null = null
     try { parsed = response.toJSON() as ApiResponse<T> | null } catch (_) {}
@@ -198,8 +200,9 @@ export async function get<T>(url: string): Promise<ApiResponse<T>> {
 }
 
 // POST请求
-export async function post<T>(url: string, data?: Object, showErrorToast: boolean = true): Promise<ApiResponse<T>> {
-  return request<T>('POST', url, data, showErrorToast)
+export async function post<T>(url: string, data?: Object, showErrorToast: boolean = true,
+  timeoutMs: number = API_CONFIG.TIMEOUT): Promise<ApiResponse<T>> {
+  return request<T>('POST', url, data, showErrorToast, timeoutMs)
 }
 
 // PUT请求

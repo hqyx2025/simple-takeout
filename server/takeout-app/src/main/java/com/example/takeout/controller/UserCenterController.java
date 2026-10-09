@@ -1,12 +1,21 @@
 package com.example.takeout.controller;
 
 import com.example.takeout.common.ApiResponse;
+import com.example.takeout.common.BizException;
 import com.example.takeout.model.Address;
 import com.example.takeout.model.BankCard;
 import com.example.takeout.model.Coupon;
 import com.example.takeout.model.Review;
 import com.example.takeout.model.Store;
 import com.example.takeout.service.UserCenterService;
+import com.example.takeout.security.LoginRateLimiter;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,9 +37,17 @@ import java.util.List;
 public class UserCenterController {
 
     private final UserCenterService service;
+    private final LoginRateLimiter loginRateLimiter;
 
-    public UserCenterController(UserCenterService service) {
+    @Autowired
+    public UserCenterController(UserCenterService service, LoginRateLimiter loginRateLimiter) {
         this.service = service;
+        this.loginRateLimiter = loginRateLimiter;
+    }
+
+    /** 兼容 standalone MVC 测试。 */
+    public UserCenterController(UserCenterService service) {
+        this(service, null);
     }
 
     // ============ 优惠券 ============
@@ -112,6 +129,52 @@ public class UserCenterController {
         return ApiResponse.ok(service.listBankCards(userId));
     }
 
+    @PostMapping("/wallet/bank-cards")
+    public ApiResponse<BankCard> addBankCard(@RequestAttribute("userId") long userId,
+                                            @RequestBody BankCardRequest request) {
+        String cardNumber = request.fullCardNumber();
+        // 旧客户端仅传尾号时保留兼容读取；新页面必须传完整卡号，完整卡号由服务端加密保存。
+        if (cardNumber == null || cardNumber.isBlank()) {
+            cardNumber = request.cardNoLast4();
+            return ApiResponse.ok(service.addBankCard(userId, request.bankName(), request.cardType(), cardNumber));
+        }
+        return ApiResponse.ok(service.addBankCardFull(userId, request.bankName(), request.cardType(), cardNumber));
+    }
+
+    @DeleteMapping("/wallet/bank-cards/{id}")
+    public ApiResponse<Void> deleteBankCard(@RequestAttribute("userId") long userId, @PathVariable long id) {
+        service.deleteBankCard(userId, id);
+        return ApiResponse.ok();
+    }
+
+    @PostMapping("/wallet/bank-cards/{id}/reveal")
+    public ApiResponse<RevealedBankCard> revealBankCard(@RequestAttribute("userId") long userId,
+                                                        @PathVariable long id,
+                                                        @RequestBody RevealBankCardRequest request,
+                                                        HttpServletRequest http,
+                                                        HttpServletResponse response) {
+        response.setHeader("Cache-Control", "no-store");
+        response.setHeader("Pragma", "no-cache");
+        String action = "bank-card-reveal";
+        String identity = userId + ":" + LoginRateLimiter.clientIp(http);
+        if (loginRateLimiter != null && loginRateLimiter.isBlocked(action, identity)) {
+            throw new BizException(429, "支付密码尝试过于频繁，请稍后再试");
+        }
+        try {
+            var result = new RevealedBankCard(service.revealBankCard(userId, id, request.paymentPassword()));
+            if (loginRateLimiter != null) {
+                loginRateLimiter.reset(action, identity);
+            }
+            return ApiResponse.ok(result);
+        } catch (BizException e) {
+            if (loginRateLimiter != null && ("支付密码不正确".equals(e.getMessage())
+                    || "支付密码必须为 6 位数字".equals(e.getMessage()))) {
+                loginRateLimiter.recordAttempt(action, identity);
+            }
+            throw e;
+        }
+    }
+
     // ============ 评价浏览 ============
 
     @GetMapping("/stores/{id}/reviews")
@@ -159,6 +222,28 @@ public class UserCenterController {
     }
 
     public record ReplyRequest(String reply) {
+    }
+
+    public record BankCardRequest(String bankName, String cardType,
+                                  @JsonProperty(access = JsonProperty.Access.WRITE_ONLY) String fullCardNumber,
+                                  @JsonProperty(access = JsonProperty.Access.WRITE_ONLY) String cardNoLast4) {
+        @Override public String toString() {
+            return "BankCardRequest[bankName=" + bankName + ", cardType=" + cardType + ", cardNumber=[redacted]]";
+        }
+    }
+
+    public record RevealBankCardRequest(@JsonProperty(access = JsonProperty.Access.WRITE_ONLY) String paymentPassword) {
+        @Override public String toString() { return "RevealBankCardRequest[paymentPassword=[redacted]]"; }
+    }
+
+    public record RevealedBankCard(String cardNumber) {
+        @Override public String toString() { return "RevealedBankCard[cardNumber=[redacted]]"; }
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> invalidBody() {
+        // Jackson 解析错误可能包含卡号或支付密码，不交给记录异常文本的全局处理器。
+        return ResponseEntity.badRequest().body(ApiResponse.error(400, "请求参数格式不正确"));
     }
 
     private void requireMerchant(int role) {

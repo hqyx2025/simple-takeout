@@ -84,7 +84,7 @@ public class DataSeeder implements ApplicationRunner {
         ensureColumn("users", "status", "INT NOT NULL DEFAULT 1");
     }
 
-    /** 存量商品表补充库存/乐观锁/商户分类字段；存量商品默认库存 999（充足），避免旧数据无法下单。 */
+    /** 缺库存列时以默认 999 补齐旧行；已有库存（含售罄的 0）保持不变。 */
     private void ensureGoodsColumns() {
         ensureColumn("goods", "stock", "INT NOT NULL DEFAULT 999");
         ensureColumn("goods", "version", "INT NOT NULL DEFAULT 0");
@@ -94,11 +94,6 @@ public class DataSeeder implements ApplicationRunner {
             // 将旧版本已有原价折扣商品迁移为特价商品，后续启动不覆盖商户的取消操作。
             jdbc.update("UPDATE goods SET is_special = 1 WHERE is_special = 0 AND status = 1 " +
                     "AND original_price > price");
-        }
-        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM goods WHERE stock = 0", Integer.class);
-        if (count != null && count > 0) {
-            jdbc.update("UPDATE goods SET stock = 999 WHERE stock = 0");
-            log.info("已为 {} 个存量商品补齐默认库存", count);
         }
     }
 
@@ -316,7 +311,7 @@ public class DataSeeder implements ApplicationRunner {
         }
     }
 
-    /** 钱包银行卡表（演进项：余额页展示已绑定银行卡）。只存卡号后四位，不存完整卡号。 */
+    /** 钱包银行卡表（演进项：余额页展示已绑定银行卡）。完整卡号只存服务端密文。 */
     private void ensureBankCardTable() {
         Integer count = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() " +
@@ -325,7 +320,8 @@ public class DataSeeder implements ApplicationRunner {
             jdbc.execute("CREATE TABLE IF NOT EXISTS bank_cards (" +
                     "id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id BIGINT NOT NULL, " +
                     "bank_name VARCHAR(64) NOT NULL, card_type VARCHAR(32) NOT NULL DEFAULT '储蓄卡', " +
-                    "card_no_last4 VARCHAR(4) NOT NULL, is_default INT NOT NULL DEFAULT 0, " +
+                    "card_no_last4 VARCHAR(4) NOT NULL, full_card_encrypted TEXT DEFAULT NULL, " +
+                    "is_default INT NOT NULL DEFAULT 0, " +
                     "status INT NOT NULL DEFAULT 1, create_time VARCHAR(32) NOT NULL, " +
                     "KEY idx_bank_card_user (user_id)) " +
                     "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");

@@ -1,10 +1,10 @@
-import { AppButtonStyle, AppCardStyle, AppInputStyle, AppFilterStyle, AppRefreshStyle, AppTheme } from '../common/theme/AppTheme'
+import { AppButtonStyle, AppCardStyle, AppFilterStyle, AppRefreshStyle, AppTheme } from '../common/theme/AppTheme'
 /**
  * 主页面 - 简单外卖App
  * 包含：搜索栏、分类导航、店铺列表、店铺详情、购物车、订单列表、个人中心、底部Tab导航
  */
 import { Category, StoreItem, GoodsItem, GoodsSpec, SpecialGoodsItem, SeckillItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, Banner, Announcement, MarketingActivity, Setmeal, SetmealItem, SetmealOrder, createEmptyUser } from '../model/Models'
-import { addCartItemRemote, updateCartItemQuantityRemote, createOrderRemote, refreshCartFromServer, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCartRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncBannersRemote, syncAnnouncementsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, cancelOrderRemote, payOrderRemote, fetchSeckillsRemote, getLastRemoteErrorMessage, rechargeBalanceRemote, syncCurrentUserFromServer } from '../service/AppStorageManager'
+import { addCartItemRemote, updateCartItemQuantityRemote, createOrderRemote, refreshCartFromServer, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCartRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncBannersRemote, syncAnnouncementsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, cancelOrderRemote, payOrderRemote, fetchSeckillsRemote, getLastRemoteErrorMessage, syncCurrentUserFromServer } from '../service/AppStorageManager'
 import { fetchRecommendedStoresApi, fetchSpecialGoodsApi, fetchStoreMerchantCategoriesApi, fetchStoreDetailApi, fetchStoreActivitiesApi, fetchStoreSetmealsApi } from '../service/ApiService'
 import { LoginPage } from './LoginPage'
 import { CartAddAnimator, CartAddFlight } from '../components/CartAddFlight'
@@ -353,7 +353,8 @@ struct Index {
       }
 
       TabContent() {
-        AssistantPage({ bottomInset: this.systemBottomInset })
+        AssistantPage({ bottomInset: this.systemBottomInset,
+          onNavigateTab: (index: number) => { this.tabsController.changeIndex(index) } })
       }
 
       TabContent() {
@@ -2299,9 +2300,6 @@ export struct StoreDetailContent {
 @Component
 struct ProfileMainPage {
   @Prop bottomInset: number = 0
-  @State showRechargeDialog: boolean = false
-  @State rechargeAmount: string = ''
-  @State recharging: boolean = false
   @Prop @Watch('onRefreshTokenChange') refreshToken: number = 0
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State user: User = {
@@ -2392,40 +2390,6 @@ struct ProfileMainPage {
     }
   }
 
-  private openRechargeDialog(): void {
-    if (!this.loggedIn) {
-      promptAction.showToast({ message: '\u8bf7\u5148\u767b\u5f55\u540e\u518d\u5145\u503c', duration: 1500 })
-      this.onNavigateLogin()
-      return
-    }
-    this.rechargeAmount = ''
-    this.showRechargeDialog = true
-  }
-
-  private async submitRecharge(): Promise<void> {
-    if (this.recharging) {
-      promptAction.showToast({ message: '\u5145\u503c\u6b63\u5728\u5904\u7406\uff0c\u8bf7\u7a0d\u5019', duration: 1500 })
-      return
-    }
-    const amount: number = Number.parseFloat(this.rechargeAmount.trim())
-    if (!Number.isFinite(amount) || amount < 0.01 || amount > 10000) {
-      promptAction.showToast({ message: '\u8bf7\u8f93\u5165 0.01\uff5e10000 \u5143\u7684\u5145\u503c\u91d1\u989d', duration: 1800 })
-      return
-    }
-    this.recharging = true
-    const updatedUser: User | undefined = await rechargeBalanceRemote(amount)
-    this.recharging = false
-    if (updatedUser === undefined) {
-      promptAction.showToast({ message: '\u5145\u503c\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5', duration: 2200 })
-      return
-    }
-    this.showRechargeDialog = false
-    this.rechargeAmount = ''
-    const confirmedUser: User = updatedUser as User
-    this.applyUser(confirmedUser)
-    promptAction.showToast({ message: `\u5145\u503c\u6210\u529f\uff0c\u5f53\u524d\u4f59\u989d ¥${confirmedUser.balance.toFixed(2)}`, duration: 2000 })
-  }
-
   build() {
     Stack() {
       Refresh({ refreshing: this.isRefreshing }) {
@@ -2463,9 +2427,6 @@ struct ProfileMainPage {
                 this.ProfileSectionTitle('钱包服务')
                 this.ProfileMenuRow($r('app.media.profile_wallet'), '钱包与银行卡', () => {
                   this.openBalancePage()
-                })
-                this.ProfileMenuRow($r('app.media.profile_wallet'), '测试充值余额', () => {
-                  this.openRechargeDialog()
                 })
               }
               .width('100%').padding({ top: 16, bottom: 4 })
@@ -2525,9 +2486,6 @@ struct ProfileMainPage {
       .attributeModifier(new AppRefreshStyle())
       .width('100%').height('100%')
 
-      if (this.showRechargeDialog) {
-        this.RechargeDialog()
-      }
     }
     .width('100%').height('100%')
     .backgroundColor(HomeTheme.SURFACE)
@@ -2643,44 +2601,6 @@ struct ProfileMainPage {
     Text(title)
       .fontSize(17).fontWeight(FontWeight.Bold).fontColor(HomeTheme.TEXT)
       .width('100%').padding({ left: 16, right: 16, bottom: 6 })
-  }
-
-  @Builder
-  RechargeDialog() {
-    Column() {
-      Column({ space: SPACING.MD }) {
-        Text('\u6d4b\u8bd5\u5145\u503c\u4f59\u989d')
-          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold)
-          .fontColor(HomeTheme.TEXT)
-        Text('\u5145\u503c\u91d1\u989d\u4f1a\u76f4\u63a5\u5199\u5165\u6570\u636e\u5e93\uff0c\u4ec5\u7528\u4e8e\u5f00\u53d1\u6d4b\u8bd5')
-          .fontSize(FONT_SIZE.SM).fontColor(HomeTheme.MUTED)
-          .width('100%')
-        Text('\u5145\u503c\u91d1\u989d\uff08\u5fc5\u586b\uff09')
-          .fontSize(FONT_SIZE.SM).fontColor(HomeTheme.MUTED)
-          .width('100%')
-        TextInput({ placeholder: '\u8bf7\u8f93\u5165\u91d1\u989d\uff0c\u5982\uff1a100', text: this.rechargeAmount })
-          .attributeModifier(new AppInputStyle())
-          .width('100%').type(InputType.Number)
-          .onChange((value: string) => { this.rechargeAmount = value })
-        Row({ space: SPACING.SM }) {
-          Button('\u53d6\u6d88')
-            .attributeModifier(new AppButtonStyle())
-            .layoutWeight(1).height(48)
-            .backgroundColor(HomeTheme.INPUT).fontColor(HomeTheme.MUTED)
-            .onClick(() => { this.showRechargeDialog = false })
-          Button(this.recharging ? '\u5145\u503c\u4e2d\u2026' : '\u786e\u8ba4\u5145\u503c')
-            .attributeModifier(new AppButtonStyle())
-            .layoutWeight(1).height(48)
-            .backgroundColor(HomeTheme.ACCENT).fontColor($r('app.color.on_primary'))
-            .onClick(() => { this.submitRecharge() })
-        }.width('100%')
-      }
-      .width('86%').constraintSize({ maxWidth: 460 }).padding(24)
-      .backgroundColor(HomeTheme.CARD).borderRadius(20)
-    }
-    .width('100%').height('100%')
-    .backgroundColor(COLORS.OVERLAY)
-    .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
   }
 
   /** 余额点击进钱包页（余额 + 已绑定银行卡）；未登录先引导登录。 */

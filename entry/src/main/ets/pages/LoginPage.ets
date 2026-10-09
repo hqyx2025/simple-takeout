@@ -7,7 +7,7 @@ import { logInfo, logWarn } from '../service/AppLogger'
 import { APP_CONFIG } from '../common/Constants'
 import { AppTheme } from '../common/theme/AppTheme'
 import { AppMotion } from '../common/theme/AppMotion'
-import { promptCompat as promptAction } from '../common/UiNavigation'
+import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 
 @Component
 export struct LoginPage {
@@ -71,6 +71,16 @@ export struct LoginPage {
               this.formMessage(this.errorMsg, AppTheme.ERROR, AppTheme.ERROR_BG)
             }
             this.submitButton()
+
+            if (this.isLoginMode) {
+              Button('忘记登录密码？')
+                .fontSize(13).fontColor(AppTheme.ACCENT).backgroundColor(Color.Transparent)
+                .height(36).width('100%').id('login-forgot-password')
+                .onClick(() => {
+                  AppStorage.setOrCreate<string>('passwordResetMode', 'login')
+                  router.pushUrl({ url: 'pages/PasswordResetPage' })
+                })
+            }
 
             Text(this.isLoginMode ? '使用所选身份对应的账号登录' : '注册成功后，请使用新账号登录')
               .fontSize(12)

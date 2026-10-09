@@ -12,7 +12,9 @@ CREATE TABLE IF NOT EXISTS users (
     balance DECIMAL(10,2) NOT NULL DEFAULT 0,
     create_time VARCHAR(32) NOT NULL,
     -- 最后一次改密时间（yyyy-MM-dd HH:mm:ss，空=从未改密）：签发时间早于它的 token 一律失效
-    password_changed_at VARCHAR(32) NOT NULL DEFAULT ''
+    password_changed_at VARCHAR(32) NOT NULL DEFAULT '',
+    -- 与登录密码独立的 6 位支付密码哈希；空值表示尚未设置
+    payment_password_hash VARCHAR(128) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS stores (
@@ -120,6 +122,20 @@ CREATE TABLE IF NOT EXISTS coupons (
     source VARCHAR(16) DEFAULT 'default',
     create_time VARCHAR(32) NOT NULL,
     KEY idx_coupons_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 钱包银行卡信息：完整卡号使用服务端 AES-GCM 加密，列表只返回掩码；解绑保留记录。
+CREATE TABLE IF NOT EXISTS bank_cards (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    bank_name VARCHAR(64) NOT NULL,
+    card_type VARCHAR(32) NOT NULL DEFAULT '储蓄卡',
+    card_no_last4 VARCHAR(4) NOT NULL,
+    full_card_encrypted TEXT DEFAULT NULL,
+    is_default INT NOT NULL DEFAULT 0,
+    status INT NOT NULL DEFAULT 1,
+    create_time VARCHAR(32) NOT NULL,
+    KEY idx_bank_card_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 支付/退款明细台账（最小侵入拆表：只增此表，订单商品仍走 items JSON 快照）
@@ -387,3 +403,15 @@ CREATE TABLE IF NOT EXISTS token_blacklist (
     create_time VARCHAR(32) NOT NULL,
     KEY idx_blacklist_expires (expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- AI 助手连接配置：API Key 使用服务端 AES-GCM 加密，管理员读取只返回是否已配置。
+CREATE TABLE IF NOT EXISTS assistant_config (
+    id INT PRIMARY KEY,
+    enabled INT NOT NULL DEFAULT 0,
+    endpoint VARCHAR(1024) NOT NULL DEFAULT '',
+    model VARCHAR(128) NOT NULL DEFAULT '',
+    api_key_encrypted TEXT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT IGNORE INTO assistant_config (id, enabled, endpoint, model, api_key_encrypted)
+VALUES (1, 0, '', '', '');

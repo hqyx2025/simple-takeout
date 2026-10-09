@@ -39,6 +39,10 @@ public class SchemaMigration implements ApplicationRunner {
         addColumnIfMissing("cart_items", "spec_id", "BIGINT NOT NULL DEFAULT 0");
         // 改密即失效：老库补列，空值表示从未改密（存量 token 不受影响）
         addColumnIfMissing("users", "password_changed_at", "VARCHAR(32) NOT NULL DEFAULT ''");
+        // 独立支付密码：不复用登录密码；空值要求用户先完成支付密码设置。
+        addColumnIfMissing("users", "payment_password_hash", "VARCHAR(128) DEFAULT NULL");
+        // 银行卡完整卡号只保存 AES-GCM 密文，历史仅尾号记录保持 NULL。
+        addColumnIfMissing("bank_cards", "full_card_encrypted", "TEXT DEFAULT NULL");
         // 退款原因结构化：枚举 code + 文本备注
         addColumnIfMissing("refund_records", "reason_type", "VARCHAR(32) NOT NULL DEFAULT 'OTHER'");
         // 逻辑删除：内容类表软删除字段，删除改打标、查询过滤 deleted=0
@@ -90,7 +94,21 @@ public class SchemaMigration implements ApplicationRunner {
                         "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?",
                 Integer.class, table, column);
         if (count == null || count == 0) {
-            jdbc.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition);
+            try {
+                jdbc.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition);
+            } catch (org.springframework.dao.DataAccessException e) {
+                // 多副本可能同时发现缺列；只接受 MySQL duplicate-column(1060) 且重查已存在的竞态。
+                Throwable cause = e.getMostSpecificCause();
+                if (!(cause instanceof java.sql.SQLException sqlException) || sqlException.getErrorCode() != 1060) {
+                    throw e;
+                }
+                Integer exists = jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.COLUMNS "
+                                + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?",
+                        Integer.class, table, column);
+                if (exists == null || exists == 0) {
+                    throw e;
+                }
+            }
         }
     }
 }
