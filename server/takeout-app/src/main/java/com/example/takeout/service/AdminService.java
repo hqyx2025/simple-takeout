@@ -6,6 +6,7 @@ import com.example.takeout.dao.AdminStatsDao;
 import com.example.takeout.dao.OrderDao;
 import com.example.takeout.dao.PaymentRecordDao;
 import com.example.takeout.dao.RefundDao;
+import com.example.takeout.dao.SeckillDao;
 import com.example.takeout.dao.StoreDao;
 import com.example.takeout.dao.UserDao;
 import com.example.takeout.model.Category;
@@ -13,13 +14,16 @@ import com.example.takeout.model.AdminEmployee;
 import com.example.takeout.model.AdminProduct;
 import com.example.takeout.model.AdminStatistics;
 import com.example.takeout.model.AdminUser;
+import com.example.takeout.model.MarketingActivity;
 import com.example.takeout.model.Order;
 import com.example.takeout.model.RefundRecord;
+import com.example.takeout.model.Seckill;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.User;
 import com.example.takeout.security.PasswordUtil;
 import com.example.takeout.service.mq.DomainEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -38,11 +42,22 @@ public class AdminService {
     private final HotDataCacheService cache;
     private final DomainEventPublisher eventPublisher;
     private final PaymentRecordDao paymentRecordDao;
+    private final SeckillDao seckillDao;
 
+    /** 保留无秒杀 DAO 的构造器，便于已有单元测试与嵌入式调用。 */
     public AdminService(StoreDao storeDao, OrderDao orderDao, UserDao userDao, GoodsDao goodsDao,
                         RefundDao refundDao, OrderService orderService, AdminStatsDao adminStatsDao,
                         HotDataCacheService cache, DomainEventPublisher eventPublisher,
                         PaymentRecordDao paymentRecordDao) {
+        this(storeDao, orderDao, userDao, goodsDao, refundDao, orderService, adminStatsDao, cache,
+                eventPublisher, paymentRecordDao, null);
+    }
+
+    @Autowired
+    public AdminService(StoreDao storeDao, OrderDao orderDao, UserDao userDao, GoodsDao goodsDao,
+                        RefundDao refundDao, OrderService orderService, AdminStatsDao adminStatsDao,
+                        HotDataCacheService cache, DomainEventPublisher eventPublisher,
+                        PaymentRecordDao paymentRecordDao, SeckillDao seckillDao) {
         this.storeDao = storeDao;
         this.orderDao = orderDao;
         this.userDao = userDao;
@@ -53,6 +68,7 @@ public class AdminService {
         this.cache = cache;
         this.eventPublisher = eventPublisher;
         this.paymentRecordDao = paymentRecordDao;
+        this.seckillDao = seckillDao;
     }
 
     /**
@@ -60,9 +76,11 @@ public class AdminService {
      * 统一失效店铺与商品相关缓存，避免首页长时间显示过期数据。
      */
     private void invalidateStoreAndGoodsCache() {
-        for (String pattern : HotDataCacheService.Keys.STORE_GOODS_PATTERNS) {
-            cache.evictByPattern(pattern);
-        }
+        DomainEventPublisher.afterCommit(() -> {
+            for (String pattern : HotDataCacheService.Keys.STORE_GOODS_PATTERNS) {
+                cache.evictByPattern(pattern);
+            }
+        });
     }
 
     public List<Category> categories() {
@@ -106,6 +124,88 @@ public class AdminService {
         return storeDao.listAllForAdmin().stream().map(this::toStoreView).toList();
     }
 
+    // ============ 平台营销/秒杀监管 ============
+
+    public List<MarketingActivity> marketingActivities(Long storeId) {
+        return marketingActivities(storeId, null);
+    }
+
+    public List<MarketingActivity> marketingActivities(Long storeId, Integer status) {
+        if (storeId != null && storeId <= 0) {
+            throw new BizException("店铺筛选参数不合法");
+        }
+        if (status != null && status != 0 && status != 1) {
+            throw new BizException("活动状态筛选不合法");
+        }
+        return storeDao.listMarketingActivitiesForAdmin(storeId, status);
+    }
+
+    @Transactional
+    public MarketingActivity updateMarketingActivityStatus(long activityId, int status) {
+        if (status != 0 && status != 1) {
+            throw new BizException("活动状态不合法");
+        }
+        MarketingActivity activity = storeDao.findMarketingActivityById(activityId)
+                .orElseThrow(() -> new BizException("活动不存在"));
+        storeDao.updateMarketingActivityStatus(activityId, status);
+        invalidateStoreAndGoodsCache();
+        return storeDao.findMarketingActivityById(activity.id())
+                .orElseThrow(() -> new BizException("活动状态更新失败"));
+    }
+
+    @Transactional
+    public void deleteMarketingActivity(long activityId) {
+        storeDao.findMarketingActivityById(activityId).orElseThrow(() -> new BizException("活动不存在"));
+        storeDao.deleteMarketingActivity(activityId);
+        invalidateStoreAndGoodsCache();
+    }
+
+    public List<Seckill> seckills(Long storeId) {
+        return seckills(storeId, null);
+    }
+
+    public List<Seckill> seckills(Long storeId, Integer status) {
+        if (storeId != null && storeId <= 0) {
+            throw new BizException("店铺筛选参数不合法");
+        }
+        if (status != null && status != 0 && status != 1) {
+            throw new BizException("秒杀状态筛选不合法");
+        }
+        if (seckillDao == null) {
+            throw new BizException("秒杀监管服务未配置");
+        }
+        return seckillDao.listForAdmin(storeId, status);
+    }
+
+    @Transactional
+    public Seckill updateSeckillStatus(long seckillId, int status) {
+        if (seckillDao == null) {
+            throw new BizException("秒杀监管服务未配置");
+        }
+        if (status != 0 && status != 1) {
+            throw new BizException("秒杀状态不合法");
+        }
+        Seckill current = seckillDao.findById(seckillId).orElseThrow(() -> new BizException("秒杀不存在"));
+        seckillDao.update(seckillId, current.price(), current.quota(), current.startTime(), current.endTime(), status);
+        invalidateStoreAndGoodsCache();
+        return seckillDao.findById(seckillId).orElseThrow(() -> new BizException("秒杀状态更新失败"));
+    }
+
+    @Transactional
+    public void deleteSeckill(long seckillId) {
+        if (seckillDao == null) {
+            throw new BizException("秒杀监管服务未配置");
+        }
+        Seckill current = seckillDao.findById(seckillId).orElseThrow(() -> new BizException("秒杀不存在"));
+        if (current.sold() > 0) {
+            throw new BizException("已有销量的秒杀不可删除，请先下架");
+        }
+        if (!seckillDao.deleteIfUnsold(seckillId)) {
+            throw new BizException("秒杀状态已变化，请刷新后重试");
+        }
+        invalidateStoreAndGoodsCache();
+    }
+
     public void updateStoreStatus(long storeId, int status) {
         if (status != 0 && status != 1) {
             throw new BizException("店铺状态不合法");
@@ -128,18 +228,51 @@ public class AdminService {
         return orderDao.listAll().stream().map(order -> orderService.orderDetail(order.id())).toList();
     }
 
+    public OrderPage orders(Integer status, int page, int pageSize) {
+        if (status != null && (status < 0 || status > 6)) {
+            throw new BizException("订单状态筛选不合法");
+        }
+        int size = Math.clamp(pageSize, 1, 100);
+        int current = Math.max(page, 1);
+        int total = orderDao.countForAdmin(status);
+        long offset = (long) (current - 1) * size;
+        List<Order.OrderView> list = orderDao.listForAdminWithRider(status, size, offset).stream()
+                .map(orderService::adminOrderView).toList();
+        return new OrderPage(list, total, current, size, (long) current * size < total);
+    }
+
+    public record OrderPage(List<Order.OrderView> list, int total, int page, int pageSize, boolean hasMore) {
+    }
+
     public List<AdminEmployee> employees() {
         return userDao.listEmployees();
     }
 
     public List<AdminUser> users(Integer role, Integer status, String keyword) {
+        validateUserFilters(role, status);
+        return userDao.listForAdmin(role, status, keyword);
+    }
+
+    public UserPage users(Integer role, Integer status, String keyword, int page, int pageSize) {
+        validateUserFilters(role, status);
+        int size = Math.clamp(pageSize, 1, 100);
+        int current = Math.max(page, 1);
+        int total = userDao.countForAdmin(role, status, keyword);
+        long offset = (long) (current - 1) * size;
+        List<AdminUser> list = userDao.listForAdmin(role, status, keyword, size, offset);
+        return new UserPage(list, total, current, size, (long) current * size < total);
+    }
+
+    private void validateUserFilters(Integer role, Integer status) {
         if (role != null && role != 0 && role != 1) {
             throw new BizException("用户角色筛选不合法");
         }
         if (status != null && status != 0 && status != 1) {
             throw new BizException("账号状态筛选不合法");
         }
-        return userDao.listForAdmin(role, status, keyword);
+    }
+
+    public record UserPage(List<AdminUser> list, int total, int page, int pageSize, boolean hasMore) {
     }
 
     public void updateUserStatus(long id, int status) {
@@ -299,7 +432,7 @@ public class AdminService {
         // escrow 条件更新成功才回滚库存（同一事务内，防重复回滚）；
         // 复用 OrderService 的回滚：goods 库存、规格库存、秒杀名额三者缺一不可
         orderService.rollbackStock(order);
-        userDao.addBalance(order.userId(), order.payAmount());
+        orderService.refundOrderPayment(order);
         // 已回滚库存，用户端展示需重新读取真实余量
         invalidateStoreAndGoodsCache();
         return orderService.orderDetail(orderId);
@@ -311,6 +444,22 @@ public class AdminService {
         return status == null || status.isBlank() ? refundDao.listAll() : refundDao.listByStatus(status);
     }
 
+    public RefundPage refunds(String status, int page, int pageSize) {
+        String filter = status == null || status.isBlank() ? null : status.trim().toUpperCase(java.util.Locale.ROOT);
+        if (filter != null && !List.of("PENDING", "REFUNDED", "REJECTED").contains(filter)) {
+            throw new BizException("退款状态筛选不合法");
+        }
+        int size = Math.clamp(pageSize, 1, 100);
+        int current = Math.max(page, 1);
+        int total = refundDao.countForAdmin(filter);
+        long offset = (long) (current - 1) * size;
+        List<RefundRecord> list = refundDao.listForAdmin(filter, size, offset);
+        return new RefundPage(list, total, current, size, (long) current * size < total);
+    }
+
+    public record RefundPage(List<RefundRecord> list, int total, int page, int pageSize, boolean hasMore) {
+    }
+
     public RefundRecord refundDetail(long refundId) {
         return refundDao.findById(refundId).orElseThrow(() -> new BizException("退款申请不存在"));
     }
@@ -319,15 +468,16 @@ public class AdminService {
     @Transactional
     public RefundRecord approveRefund(long refundId) {
         RefundRecord record = requirePending(refundId);
+        if (!refundDao.updateStatus(refundId, "REFUNDED", now(), "")) {
+            throw new BizException("该退款申请已处理");
+        }
         Order order = orderDao.findById(record.orderId()).orElseThrow(() -> new BizException("订单不存在"));
         if (!orderDao.refundEscrow(order.id())) {
             throw new BizException("订单资金已处理，不能重复退款");
         }
         // 复用统一回滚：goods 库存 + 规格库存 + 秒杀名额，避免规格库存与秒杀名额泄漏
         orderService.rollbackStock(order);
-        userDao.addBalance(order.userId(), order.payAmount());
-        paymentRecordDao.insert(order.id(), order.userId(), order.payAmount(), "REFUND", "BALANCE", "SUCCESS", now());
-        refundDao.updateStatus(refundId, "REFUNDED", now(), "");
+        orderService.refundOrderPayment(order);
         // 同意退款已回滚库存，失效相关展示缓存
         invalidateStoreAndGoodsCache();
         // 领域事件：与退款状态更新同事务写入 Outbox，提交后异步投递
@@ -340,14 +490,17 @@ public class AdminService {
     @Transactional
     public RefundRecord rejectRefund(long refundId, String rejectReason) {
         RefundRecord record = requirePending(refundId);
-        refundDao.updateStatus(refundId, "REJECTED", now(), rejectReason == null ? "" : rejectReason);
+        if (!refundDao.updateStatus(refundId, "REJECTED", now(), rejectReason == null ? "" : rejectReason)) {
+            throw new BizException("该退款申请已处理");
+        }
         // 订单回退到已送达：仅当仍处于退款中(6) 时回退，已是 4 则按幂等处理（退款记录才是审批事实）
         orderDao.updateStatusOnlyFrom(record.orderId(), 6, 4);
         return refundDao.findById(refundId).orElseThrow(() -> new BizException("退款处理失败"));
     }
 
     private RefundRecord requirePending(long refundId) {
-        RefundRecord record = refundDao.findById(refundId).orElseThrow(() -> new BizException("退款申请不存在"));
+        // 同意与拒绝必须争用同一行锁，锁后读取当前状态，避免两种终态都执行成功。
+        RefundRecord record = refundDao.findByIdForUpdate(refundId).orElseThrow(() -> new BizException("退款申请不存在"));
         if (!"PENDING".equals(record.status())) {
             throw new BizException("该退款申请已处理");
         }

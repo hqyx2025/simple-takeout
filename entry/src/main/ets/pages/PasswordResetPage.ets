@@ -73,8 +73,8 @@ export struct PasswordResetPage {
       promptAction.showToast({ message: '验证码发送失败，请稍后重试', duration: 1800 })
       return
     }
-    // 当前开发环境为 Mock 短信，接口返回固定验证码；接入真实短信后此字段不会回传。
-    this.code = result.code
+    // 本地 Mock 会回显服务端生成的验证码；真实短信由用户手动输入收到的验证码。
+    if (result.code !== '') { this.code = result.code }
     promptAction.showToast({ message: '验证码已发送', duration: 1500 })
   }
 

@@ -10,6 +10,7 @@ import { deliveryCustomerId } from '../service/DeliveryFormSync'
 import { AppMotion } from '../common/theme/AppMotion';
 import { warmColdStartConnection, disposeHttpClient } from '../service/HttpClient';
 import { loadAppearanceSettings, applyAppearanceSettings } from '../service/AppearanceSettings';
+import { initializePushKit, disposePushKit, registerPushForCurrentSession } from '../service/PushKitService';
 
 const DOMAIN = 0x0000;
 
@@ -53,6 +54,7 @@ export default class EntryAbility extends UIAbility {
       if (consented) {
         initLogger()
         warmColdStartConnection()
+        initializePushKit(this)
       }
       this.persistenceLoaded = true
       this.loadMainContentIfReady()
@@ -64,6 +66,7 @@ export default class EntryAbility extends UIAbility {
   }
 
   onDestroy(): void {
+    disposePushKit()
     disposeHttpClient()
     AppMotion.dispose()
     hilog.info(DOMAIN, '测试标签', '%{public}s', '破坏能力 Ability onDestroy');
@@ -153,6 +156,7 @@ export default class EntryAbility extends UIAbility {
     AppStorage.setOrCreate<boolean>('appForeground', true)
     AppMotion.refresh()
     this.updateWindowAppearance()
+    registerPushForCurrentSession()
     // Ability has brought to foreground
     hilog.info(DOMAIN, '测试标签', '%{public}s', '前景能力');
   }

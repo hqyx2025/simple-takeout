@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.OptionalLong;
 
 /**
  * Token 吊销：把 token 的 jti 记入黑名单，使「退出登录」立刻生效。
@@ -48,6 +49,16 @@ public class TokenRevocationService {
         tokenBlacklistDao.revoke(jti, jwtUtil.getUserId(claims), jwtUtil.getExpiresAtMillis(claims),
                 reason, LocalDateTime.now().format(FMT));
         return true;
+    }
+
+    /** Returns the account from a valid signed token without extending its authority. */
+    public OptionalLong userIdIfValid(String token) {
+        if (token == null || token.isBlank()) return OptionalLong.empty();
+        try {
+            return OptionalLong.of(jwtUtil.getUserId(jwtUtil.parseToken(token)));
+        } catch (Exception e) {
+            return OptionalLong.empty();
+        }
     }
 
     /** 该 jti 是否已被吊销（jti 为空的历史 token 无法吊销，按未吊销处理）。 */

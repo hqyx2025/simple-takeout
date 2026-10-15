@@ -4,8 +4,7 @@
  * 前置（由 scripts/device-role-regression.ps1 布置）：应用数据已清空（guest 态）。
  *
  * 覆盖：同意隐私 → 一键登录管理端 → 应用**直接进入平台管理页**（不再展示 C 端主页）→
- * 十个模块入口都在 → 逐个进入「分类管理/店铺管理/员工管理/商品监管/用户管理/订单管理/
- * 退款审批/平台统计/骑手管理/内容管理」并断言各页标题渲染，再返回平台管理页。
+ * 管理模块入口都在 → 逐个打开管理页并断言标题渲染，再返回平台管理页。
  */
 import { Driver, ON } from '@kit.TestKit'
 import { describe, it, expect } from '@ohos/hypium'
@@ -28,6 +27,8 @@ const ADMIN_MODULES: AdminModule[] = [
   AdminModule.create('AdminStorePage', '店铺管理'),
   AdminModule.create('AdminOrderPage', '订单管理'),
   AdminModule.create('AdminRefundPage', '退款审批'),
+  AdminModule.create('AdminMarketingPage', '营销监管'),
+  AdminModule.create('AdminAuditPage', '操作审计'),
   AdminModule.create('AdminStatisticsPage', '平台统计'),
   AdminModule.create('AdminContentPage', '内容管理')
 ]
@@ -53,10 +54,10 @@ export default function adminFlowTest() {
       console.info('[AdminFlow] C-end home search entry visible=' + isFound(cEntry))
       expect(isFound(cEntry)).assertFalse()
 
-      // 十个模块入口都在（平台管理页是长列表，靠下的入口需要滚动才可见）
+      // 管理模块入口都在（平台管理页是长列表，靠下的入口需要滚动才可见）
       const allPages: string[] = [
         'AdminCategoryPage', 'AdminStorePage', 'AdminEmployeePage', 'AdminProductPage', 'AdminUserPage',
-        'AdminOrderPage', 'AdminRefundPage', 'AdminStatisticsPage', 'AdminRiderPage', 'AdminContentPage'
+        'AdminOrderPage', 'AdminRefundPage', 'AdminMarketingPage', 'AdminAuditPage', 'AdminStatisticsPage', 'AdminRiderPage', 'AdminContentPage'
       ]
       for (let i = 0; i < allPages.length; i++) {
         const entry = await scrollUntilVisible(driver, 'admin-entry-' + allPages[i])

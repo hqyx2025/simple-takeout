@@ -5,8 +5,9 @@ import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 import { AppMotion } from '../common/theme/AppMotion'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
-import { Order } from '../model/Models'
-import { syncRiderOrdersRemote, pickupOrderRemote, deliverOrderRemote, getLastRemoteErrorMessage, reportRiderLocationRemote, startRiderLocationTimer, stopRiderLocationTimer } from '../service/AppStorageManager'
+import { Order, OrderPageData } from '../model/Models'
+import { fetchRiderOrdersPageApi } from '../service/ApiService'
+import { pickupOrderRemote, deliverOrderRemote, getLastRemoteErrorMessage, reportRiderLocationRemote, startRiderLocationTimer, stopRiderLocationTimer } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
 import { PageHeader } from '../components/PageHeader'
 
@@ -31,6 +32,10 @@ export struct RiderOrdersPage {
   @State orders: Order[] = []
   @State loading: boolean = false
   @State acting: boolean = false
+  @State renderVersion: number = 0
+  @State currentPage: number = 1
+  @State totalOrders: number = 0
+  @State hasMoreOrders: boolean = false
 
   async aboutToAppear(): Promise<void> {
     logInfo('Page', '进入我的配送单 RiderOrdersPage')
@@ -65,10 +70,18 @@ export struct RiderOrdersPage {
     return O
   }
 
-  private async loadOrders(): Promise<void> {
+  private async loadOrders(page: number = 1, append: boolean = false): Promise<void> {
+    if (this.loading) {
+      return
+    }
     this.loading = true
-    const raw: Order[] = await syncRiderOrdersRemote()
-    this.orders = this.sortOrders(raw)
+    const result: OrderPageData = await fetchRiderOrdersPageApi(page)
+    const combined: Order[] = append ? this.orders.concat(result.list) : result.list
+    this.orders = this.sortOrders(combined)
+    this.currentPage = result.page
+    this.totalOrders = result.total
+    this.hasMoreOrders = result.hasMore
+    this.renderVersion += 1
     this.loading = false
     // 全局定时器按「有无配送中订单」开关，切页不中断
     if (this.orders.some((order: Order) => order.status === 3)) {
@@ -76,6 +89,13 @@ export struct RiderOrdersPage {
     } else {
       stopRiderLocationTimer()
     }
+  }
+
+  private async loadMoreOrders(): Promise<void> {
+    if (this.loading || !this.hasMoreOrders) {
+      return
+    }
+    await this.loadOrders(this.currentPage + 1, true)
   }
 
   private async pickup(order: Order): Promise<void> {
@@ -136,7 +156,19 @@ export struct RiderOrdersPage {
             ListItem() {
               this.OrderCard(order)
             }
-          }, (order: Order) => order.id.toString())
+          }, (order: Order) => `${this.renderVersion}-${order.id}`)
+          ListItem() {
+            Row({ space: SPACING.SM }) {
+              Text(`已显示 ${this.orders.length} / ${this.totalOrders}`)
+                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).layoutWeight(1)
+              if (this.hasMoreOrders) {
+                Button(this.loading ? '加载中' : '加载更多')
+                  .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
+                  .enabled(!this.loading).id('rider-order-load-more')
+                  .onClick(() => { this.loadMoreOrders() })
+              }
+            }.width('100%').padding({ top: SPACING.SM, bottom: SPACING.MD })
+          }
         }
         .width('100%').layoutWeight(1).scrollBar(BarState.Off)
         .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.XXL })

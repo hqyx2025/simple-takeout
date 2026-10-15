@@ -16,6 +16,30 @@ import static org.mockito.Mockito.when;
 class AuthServiceSecurityTest {
 
     @Test
+    void legacyPasswordLoginUpgradesHashWithoutChangingPasswordTimestamp() {
+        UserDao userDao = mock(UserDao.class);
+        JwtUtil jwtUtil = mock(JwtUtil.class);
+        String legacyHash = "b86af4172288a2cd465eedefe52f92400e1ae6ad620609a340505ad63b4519cd";
+        String passwordChangedAt = "2026-09-17 22:39:20";
+        User user = new User(1, "用户", "", "13800138000", legacyHash,
+                0, 20, "2026-09-14 16:21:10", passwordChangedAt);
+        when(userDao.findByPhone("13800138000")).thenReturn(java.util.Optional.of(user));
+        when(jwtUtil.generateToken(1, 0, passwordChangedAt)).thenReturn("token");
+
+        AuthService.LoginResult result = new AuthService(userDao, jwtUtil).login("13800138000", "123456");
+
+        assertEquals("token", result.token());
+        verify(jwtUtil).generateToken(1, 0, passwordChangedAt);
+        verify(userDao).upgradePasswordHash(org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.eq(legacyHash),
+                org.mockito.ArgumentMatchers.argThat(hash -> hash.length() <= 128
+                        && PasswordUtil.matches("123456", hash)));
+        org.mockito.Mockito.verify(userDao, org.mockito.Mockito.never()).updatePassword(
+                org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
     void loginRejectsAccountWhenLoginTypeDoesNotMatchRole() {
         UserDao userDao = mock(UserDao.class);
         JwtUtil jwtUtil = mock(JwtUtil.class);
@@ -119,7 +143,7 @@ class AuthServiceSecurityTest {
     void changePasswordRejectsWrongOldPassword() {
         UserDao userDao = mock(UserDao.class);
         User user = new User(1, "用户", "", "13800138000", PasswordUtil.hash("123456"), 0, 20, "now");
-        when(userDao.findById(1)).thenReturn(java.util.Optional.of(user));
+        when(userDao.findByIdForUpdate(1)).thenReturn(java.util.Optional.of(user));
 
         com.example.takeout.common.BizException error = assertThrows(
                 com.example.takeout.common.BizException.class,
@@ -135,7 +159,7 @@ class AuthServiceSecurityTest {
     void changePasswordRejectsShortNewPassword() {
         UserDao userDao = mock(UserDao.class);
         User user = new User(1, "用户", "", "13800138000", PasswordUtil.hash("123456"), 0, 20, "now");
-        when(userDao.findById(1)).thenReturn(java.util.Optional.of(user));
+        when(userDao.findByIdForUpdate(1)).thenReturn(java.util.Optional.of(user));
 
         com.example.takeout.common.BizException error = assertThrows(
                 com.example.takeout.common.BizException.class,
@@ -148,7 +172,7 @@ class AuthServiceSecurityTest {
     void changePasswordRejectsSamePassword() {
         UserDao userDao = mock(UserDao.class);
         User user = new User(1, "用户", "", "13800138000", PasswordUtil.hash("123456"), 0, 20, "now");
-        when(userDao.findById(1)).thenReturn(java.util.Optional.of(user));
+        when(userDao.findByIdForUpdate(1)).thenReturn(java.util.Optional.of(user));
 
         com.example.takeout.common.BizException error = assertThrows(
                 com.example.takeout.common.BizException.class,
@@ -162,12 +186,60 @@ class AuthServiceSecurityTest {
     void changePasswordWritesNewHashAndChangeTime() {
         UserDao userDao = mock(UserDao.class);
         User user = new User(1, "用户", "", "13800138000", PasswordUtil.hash("123456"), 0, 20, "now");
-        when(userDao.findById(1)).thenReturn(java.util.Optional.of(user));
+        when(userDao.findByIdForUpdate(1)).thenReturn(java.util.Optional.of(user));
 
         new AuthService(userDao, mock(JwtUtil.class)).changePassword(1, "123456", "newpass123");
 
         verify(userDao).updatePassword(org.mockito.ArgumentMatchers.eq(1L),
                 org.mockito.ArgumentMatchers.argThat(hash -> PasswordUtil.matches("newpass123", hash)),
                 org.mockito.ArgumentMatchers.matches("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}"));
+    }
+
+    /** 改密时间秒精度下也必须严格递增，避免同秒连续改密留下上一轮 token。 */
+    @Test
+    void changePasswordAdvancesExistingChangeTimestamp() {
+        UserDao userDao = mock(UserDao.class);
+        User user = new User(1, "用户", "", "13800138000", PasswordUtil.hash("123456"), 0, 20,
+                "now", "2999-01-01 00:00:00");
+        when(userDao.findByIdForUpdate(1)).thenReturn(java.util.Optional.of(user));
+
+        new AuthService(userDao, mock(JwtUtil.class)).changePassword(1, "123456", "newpass123");
+
+        verify(userDao).updatePassword(org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("2999-01-01 00:00:01"));
+    }
+
+    @Test
+    void smsPasswordResetAlsoAdvancesExistingChangeTimestamp() {
+        UserDao userDao = mock(UserDao.class);
+        User user = new User(1, "用户", "", "13800138000", PasswordUtil.hash("123456"), 0, 20,
+                "now", "2999-01-01 00:00:00");
+        when(userDao.findByPhoneForUpdate("13800138000")).thenReturn(java.util.Optional.of(user));
+
+        SmsCodeVerifier verifier = mock(SmsCodeVerifier.class);
+        new AuthService(userDao, mock(JwtUtil.class), verifier)
+                .resetPasswordBySms("13800138000", "123456", "newpass123");
+
+        verify(verifier).consume("13800138000", "123456");
+        verify(userDao).updatePassword(org.mockito.ArgumentMatchers.eq(1L),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("2999-01-01 00:00:01"));
+    }
+
+    @Test
+    void changingPasswordWithinTheSameSecondAdvancesThePersistedVersion() {
+        UserDao users = mock(UserDao.class);
+        User user = new User(7, "user", "", "13800138000", PasswordUtil.hash("123456"),
+                0, 20, "now", "2026-10-14 12:00:00");
+        when(users.findByIdForUpdate(7)).thenReturn(java.util.Optional.of(user));
+        java.time.Clock clock = java.time.Clock.fixed(java.time.Instant.parse("2026-10-14T04:00:00.900Z"),
+                java.time.ZoneId.of("Asia/Shanghai"));
+
+        new AuthService(users, mock(JwtUtil.class), mock(SmsCodeVerifier.class), clock)
+                .changePassword(7, "123456", "newpass123");
+
+        verify(users).updatePassword(org.mockito.ArgumentMatchers.eq(7L),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq("2026-10-14 12:00:01"));
     }
 }

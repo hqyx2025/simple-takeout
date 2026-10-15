@@ -44,12 +44,34 @@ public class RefundDao {
         return jdbc.query("SELECT * FROM refund_records WHERE id = ?", MAPPER, id).stream().findFirst();
     }
 
+    public Optional<RefundRecord> findByIdForUpdate(long id) {
+        return jdbc.query("SELECT * FROM refund_records WHERE id = ? FOR UPDATE", MAPPER, id).stream().findFirst();
+    }
+
     public List<RefundRecord> listAll() {
         return jdbc.query("SELECT * FROM refund_records ORDER BY id DESC", MAPPER);
     }
 
     public List<RefundRecord> listByStatus(String status) {
         return jdbc.query("SELECT * FROM refund_records WHERE status = ? ORDER BY id DESC", MAPPER, status);
+    }
+
+    public int countForAdmin(String status) {
+        String sql = status == null || status.isBlank()
+                ? "SELECT COUNT(*) FROM refund_records" : "SELECT COUNT(*) FROM refund_records WHERE status = ?";
+        Integer count = status == null || status.isBlank()
+                ? jdbc.queryForObject(sql, Integer.class)
+                : jdbc.queryForObject(sql, Integer.class, status);
+        return count == null ? 0 : count;
+    }
+
+    public List<RefundRecord> listForAdmin(String status, int pageSize, long offset) {
+        if (status == null || status.isBlank()) {
+            return jdbc.query("SELECT * FROM refund_records ORDER BY id DESC LIMIT ? OFFSET ?",
+                    MAPPER, pageSize, offset);
+        }
+        return jdbc.query("SELECT * FROM refund_records WHERE status = ? ORDER BY id DESC LIMIT ? OFFSET ?",
+                MAPPER, status, pageSize, offset);
     }
 
     /** 同一订单存在进行中的退款申请时返回 true（防止重复申请）。 */
@@ -60,8 +82,9 @@ public class RefundDao {
         return count != null && count > 0;
     }
 
-    public void updateStatus(long id, String status, String processTime, String rejectReason) {
-        jdbc.update("UPDATE refund_records SET status = ?, process_time = ?, reject_reason = ? WHERE id = ?",
-                status, processTime, rejectReason, id);
+    public boolean updateStatus(long id, String status, String processTime, String rejectReason) {
+        return jdbc.update("UPDATE refund_records SET status = ?, process_time = ?, reject_reason = ? " +
+                        "WHERE id = ? AND status = 'PENDING'",
+                status, processTime, rejectReason, id) == 1;
     }
 }

@@ -66,6 +66,17 @@ function Reset-ToGuest {
 function Run-Class([string]$testClass) {
   $out = & $hdc shell "aa test -b $Bundle -m entry_test -s unittest OpenHarmonyTestRunner -s class $testClass -s timeout 300000" 2>&1 | Out-String
   $out -split "`n" | Where-Object { $_ -match 'OHOS_REPORT_RESULT|stream=|stack=' } | ForEach-Object { Write-Host "  $_" }
+  $cacheDir = Join-Path (Get-Location) 'TemporaryCacheStorage'
+  New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
+  $deviceLog = & $hdc shell hilog -x 2>&1 | Out-String
+  $logPath = Join-Path $cacheDir ("device-role-{0}.log" -f $testClass)
+  [IO.File]::WriteAllText($logPath, $deviceLog, [Text.UTF8Encoding]::new($false))
+  Write-Host ("  device log: {0}" -f $logPath)
+  $layoutRemote = "/data/local/tmp/device-role-$testClass.json"
+  $layoutPath = Join-Path $cacheDir ("device-role-{0}-layout.json" -f $testClass)
+  & $hdc shell "uitest dumpLayout -p $layoutRemote" | Out-Null
+  & $hdc file recv $layoutRemote $layoutPath | Out-Null
+  Write-Host ("  device layout: {0}" -f $layoutPath)
   $pass = 0; $fail = 0; $err = 0
   if ($out -match 'Pass:\s*(\d+)') { $pass = [int]$Matches[1] }
   if ($out -match 'Failure:\s*(\d+)') { $fail = [int]$Matches[1] }
@@ -132,6 +143,17 @@ Check 'fixture-order-in-pool' (([int]$ready.status -eq 2) -and ($poolHit.Count -
 # ---------- 3. rider case ----------
 Write-Host '=== [4/6] RiderFlow ===' -ForegroundColor Cyan
 Reset-ToGuest
+# bm clean resets runtime permission grants, so restore them after cleaning and before UiTest.
+Write-Host '=== grant rider location permissions ===' -ForegroundColor Cyan
+$tokenLine = (& $hdc shell "bm dump -n $Bundle" | Select-String -Pattern 'accessTokenId' | Select-Object -First 1).Line
+if ($tokenLine -match '(\d+)') {
+  $tokenId = $Matches[1]
+  & $hdc shell "atm perm -g -i $tokenId -p ohos.permission.LOCATION" | Out-Null
+  & $hdc shell "atm perm -g -i $tokenId -p ohos.permission.APPROXIMATELY_LOCATION" | Out-Null
+  Write-Host ("  granted location permissions for accessTokenId={0}" -f $tokenId) -ForegroundColor Green
+} else {
+  Write-Host '  [WARN] could not resolve accessTokenId; RiderFlow may be covered by a permission prompt' -ForegroundColor Yellow
+}
 Run-Class 'RiderFlow'
 $riderAfter = (Invoke-Api 'GET' '/api/rider/profile' $riderToken '').data
 $orderAfter = (Invoke-Api 'GET' "/api/orders/$orderId" $userToken '').data

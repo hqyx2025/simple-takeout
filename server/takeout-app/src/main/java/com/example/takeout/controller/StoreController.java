@@ -55,6 +55,102 @@ public class StoreController {
         return ApiResponse.ok(storeService.listStoreActivities(storeId));
     }
 
+    // ============ 商户营销活动与秒杀管理 ============
+
+    @GetMapping("/merchant/activities")
+    public ApiResponse<List<MarketingActivity>> merchantActivities(@RequestAttribute("userId") long userId,
+                                                                    @RequestAttribute("role") int role,
+                                                                    @RequestParam long storeId) {
+        requireMerchant(role);
+        return ApiResponse.ok(storeService.merchantActivities(userId, storeId));
+    }
+
+    @PostMapping("/merchant/activities")
+    public ApiResponse<MarketingActivity> createMarketingActivity(@RequestAttribute("userId") long userId,
+                                                                  @RequestAttribute("role") int role,
+                                                                  @RequestParam long storeId,
+                                                                  @RequestBody StoreService.MarketingActivityInput input) {
+        requireMerchant(role);
+        return ApiResponse.ok(storeService.createMarketingActivity(userId, storeId, input));
+    }
+
+    @PutMapping("/merchant/activities/{activityId}")
+    public ApiResponse<MarketingActivity> updateMarketingActivity(@RequestAttribute("userId") long userId,
+                                                                   @RequestAttribute("role") int role,
+                                                                   @RequestParam long storeId,
+                                                                   @PathVariable long activityId,
+                                                                   @RequestBody StoreService.MarketingActivityInput input) {
+        requireMerchant(role);
+        return ApiResponse.ok(storeService.updateMarketingActivity(userId, storeId, activityId, input));
+    }
+
+    @PutMapping("/merchant/activities/{activityId}/status")
+    public ApiResponse<MarketingActivity> updateMarketingActivityStatus(@RequestAttribute("userId") long userId,
+                                                                         @RequestAttribute("role") int role,
+                                                                         @RequestParam long storeId,
+                                                                         @PathVariable long activityId,
+                                                                         @RequestBody StatusRequest req) {
+        requireMerchant(role);
+        return ApiResponse.ok(storeService.updateMarketingActivityStatus(userId, storeId, activityId, req.status()));
+    }
+
+    @DeleteMapping("/merchant/activities/{activityId}")
+    public ApiResponse<Void> deleteMarketingActivity(@RequestAttribute("userId") long userId,
+                                                     @RequestAttribute("role") int role,
+                                                     @RequestParam long storeId,
+                                                     @PathVariable long activityId) {
+        requireMerchant(role);
+        storeService.deleteMarketingActivity(userId, storeId, activityId);
+        return ApiResponse.ok();
+    }
+
+    @GetMapping("/merchant/seckills")
+    public ApiResponse<List<Seckill>> merchantSeckills(@RequestAttribute("userId") long userId,
+                                                       @RequestAttribute("role") int role,
+                                                       @RequestParam long storeId) {
+        requireMerchant(role);
+        return ApiResponse.ok(storeService.merchantSeckills(userId, storeId));
+    }
+
+    @PostMapping("/merchant/seckills")
+    public ApiResponse<Seckill> createSeckill(@RequestAttribute("userId") long userId,
+                                              @RequestAttribute("role") int role,
+                                              @RequestParam long storeId,
+                                              @RequestBody StoreService.SeckillInput input) {
+        requireMerchant(role);
+        return ApiResponse.ok(storeService.createSeckill(userId, storeId, input));
+    }
+
+    @PutMapping("/merchant/seckills/{seckillId}")
+    public ApiResponse<Seckill> updateSeckill(@RequestAttribute("userId") long userId,
+                                              @RequestAttribute("role") int role,
+                                              @RequestParam long storeId,
+                                              @PathVariable long seckillId,
+                                              @RequestBody StoreService.SeckillInput input) {
+        requireMerchant(role);
+        return ApiResponse.ok(storeService.updateSeckill(userId, storeId, seckillId, input));
+    }
+
+    @PutMapping("/merchant/seckills/{seckillId}/status")
+    public ApiResponse<Seckill> updateSeckillStatus(@RequestAttribute("userId") long userId,
+                                                    @RequestAttribute("role") int role,
+                                                    @RequestParam long storeId,
+                                                    @PathVariable long seckillId,
+                                                    @RequestBody StatusRequest req) {
+        requireMerchant(role);
+        return ApiResponse.ok(storeService.updateSeckillStatus(userId, storeId, seckillId, req.status()));
+    }
+
+    @DeleteMapping("/merchant/seckills/{seckillId}")
+    public ApiResponse<Void> deleteSeckill(@RequestAttribute("userId") long userId,
+                                           @RequestAttribute("role") int role,
+                                           @RequestParam long storeId,
+                                           @PathVariable long seckillId) {
+        requireMerchant(role);
+        storeService.deleteSeckill(userId, storeId, seckillId);
+        return ApiResponse.ok();
+    }
+
     @GetMapping("/stores/{storeId}/setmeals")
     public ApiResponse<List<Setmeal>> storeSetmeals(@PathVariable long storeId) {
         return ApiResponse.ok(storeService.listStoreSetmeals(storeId));
@@ -329,6 +425,9 @@ public class StoreController {
     }
 
     public record StockRequest(int stock) {
+    }
+
+    public record StatusRequest(int status) {
     }
 
     public record MerchantCategoryRequest(String name, int sort) {

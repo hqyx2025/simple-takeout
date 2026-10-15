@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -25,6 +26,9 @@ public class DataSeeder implements ApplicationRunner {
 
     private final JdbcTemplate jdbc;
 
+    @Value("${takeout.data-seed.enabled:true}")
+    private boolean seedEnabled = true;
+
     public DataSeeder(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
@@ -41,6 +45,10 @@ public class DataSeeder implements ApplicationRunner {
         ensureReviewGoodsColumn();
         ensureStoreRecommendedColumn();
         ensureStoreLocationColumns();
+        if (!seedEnabled) {
+            log.info("演示数据初始化已关闭，跳过分类、测试账号、店铺和商品写入");
+            return;
+        }
         // 分类是首页导航的基础数据，即使已有用户数据，也必须单独补齐。
         ensureCategories();
         Integer userCount = jdbc.queryForObject("SELECT COUNT(*) FROM users", Integer.class);

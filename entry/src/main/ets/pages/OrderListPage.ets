@@ -7,7 +7,8 @@ import { AppButtonStyle, AppCardStyle, AppFilterStyle, AppRefreshStyle } from '.
  */
 import { AppMotion } from '../common/theme/AppMotion'
 import { CartItem, Order } from '../model/Models'
-import { syncUserOrdersFromServer, confirmOrderRemote, cancelOrderRemote, payOrderRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
+import { fetchUserOrdersPageApi } from '../service/ApiService'
+import { confirmOrderRemote, cancelOrderRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, MODULE_COLOR, MODULE_BG } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
 import { PageHeader } from '../components/PageHeader'
@@ -79,6 +80,10 @@ struct OrderListPage {
   @StorageLink('isLoggedIn') @Watch('onLoginStateChange') loggedIn: boolean = false
   @StorageLink('orderFilterStatus') @Watch('onOrderFilterRequest') requestedStatus: number = -1
   @State @Watch('onFilterChange') currentStatus: number = -1
+  @State pageOrders: Order[] = []
+  @State currentPage: number = 1
+  @State totalOrders: number = 0
+  @State hasMoreOrders: boolean = false
   @State isRefreshing: boolean = false
   @State filteredCount: number = 0
   @State expandedOrderIds: number[] = []
@@ -90,6 +95,10 @@ struct OrderListPage {
     this.refreshDataSource()
     if (!this.loggedIn) {
       this.orderList = []
+      this.pageOrders = []
+      this.totalOrders = 0
+      this.hasMoreOrders = false
+      this.refreshDataSource()
       return
     }
     // 从后端拉取最新订单（真实后端模式）
@@ -99,6 +108,9 @@ struct OrderListPage {
   onLoginStateChange(): void {
     if (!this.loggedIn) {
       this.orderList = []
+      this.pageOrders = []
+      this.totalOrders = 0
+      this.hasMoreOrders = false
       this.refreshDataSource()
       return
     }
@@ -107,17 +119,27 @@ struct OrderListPage {
 
   onOrderFilterRequest(): void {
     if (this.requestedStatus >= -1 && this.requestedStatus <= 6) {
-      this.currentStatus = this.requestedStatus
+      this.selectStatus(this.requestedStatus)
     }
   }
 
+  private selectStatus(status: number): void {
+    if (this.ordersLoading) {
+      return
+    }
+    this.currentStatus = status
+  }
+
   // 拉取后端用户订单并刷新列表
-  private async refreshOrders(): Promise<void> {
+  private async refreshOrders(page: number = 1, append: boolean = false): Promise<void> {
     if (this.ordersLoading) {
       return
     }
     if (!this.loggedIn) {
       this.orderList = []
+      this.pageOrders = []
+      this.totalOrders = 0
+      this.hasMoreOrders = false
       this.refreshDataSource()
       this.isRefreshing = false
       return
@@ -125,8 +147,16 @@ struct OrderListPage {
     this.ordersLoading = true
     this.isRefreshing = true
     try {
-      await syncUserOrdersFromServer()
-      this.orderList = this.loggedIn ? (AppStorage.get<Order[]>('orderList') ?? []) : []
+      const status: number | undefined = this.currentStatus < 0 ? undefined : this.currentStatus
+      const result = await fetchUserOrdersPageApi(status, page)
+      if (append) {
+        this.pageOrders = this.pageOrders.concat(result.list)
+      } else {
+        this.pageOrders = result.list
+      }
+      this.currentPage = result.page
+      this.totalOrders = result.total
+      this.hasMoreOrders = result.hasMore
       this.refreshDataSource()
     } finally {
       this.ordersLoading = false
@@ -143,44 +173,36 @@ struct OrderListPage {
   }
 
   onFilterChange(): void {
-    if (this.orderDataSource === undefined || this.orderDataSource === null) {
+    if (this.orderDataSource !== undefined && this.orderDataSource !== null && this.loggedIn) {
+      this.refreshOrders()
+    }
+  }
+
+  private async loadMoreOrders(): Promise<void> {
+    if (this.ordersLoading || !this.hasMoreOrders) {
       return
     }
-    this.refreshDataSource()
+    await this.refreshOrders(this.currentPage + 1, true)
   }
 
   private refreshDataSource(): void {
-    // 绝对防御：orderList 非数组时按空数组处理，避免 LazyForEach 崩溃
-    let list: Order[] = []
-    if (this.loggedIn && Array.isArray(this.orderList)) {
-      list = this.orderList
-    }
-    let filtered: Order[] = list
-    if (this.currentStatus !== -1) {
-      filtered = filtered.filter(o => o !== null && typeof o === 'object' && o.status === this.currentStatus)
-    }
-    this.orderDataSource.setData(filtered)
-    this.filteredCount = filtered.length
+    // Only the current server page belongs in the lazily rendered data source.
+    const list: Order[] = this.loggedIn && Array.isArray(this.pageOrders) ? this.pageOrders : []
+    this.orderDataSource.setData(list)
+    this.filteredCount = list.length
   }
 
-  /** 支付待付款订单：扣余额并流转到待接单（余额支付模型）。 */
-  private async payPendingOrder(order: Order): Promise<void> {
-    const paid: Order | null = await payOrderRemote(order.id)
-    this.orderList = AppStorage.get<Order[]>('orderList') || []
-    this.refreshDataSource()
-    if (paid === null) {
-      const errorMessage: string = getLastRemoteErrorMessage()
-      promptAction.showToast({ message: errorMessage === '' ? '支付失败，请稍后重试' : errorMessage, duration: 3000 })
-      return
-    }
-    promptAction.showToast({ message: `支付成功，已支付 ¥${paid.payAmount.toFixed(2)}`, duration: 2500 })
+  /** 待付款订单先进入详情选择渠道，避免列表按钮隐式使用余额支付。 */
+  private payPendingOrder(order: Order): void {
+    AppStorage.setOrCreate<Order>('currentOrder', order)
+    AppStorage.setOrCreate<number>('currentOrderId', order.id)
+    router.pushUrl({ url: 'pages/OrderDetailPage' })
   }
 
   /** 取消待付款订单：尚未扣款，仅释放库存与优惠券。 */
   private async cancelPendingOrder(order: Order): Promise<void> {
     const ok: boolean = await cancelOrderRemote(order.id)
-    this.orderList = AppStorage.get<Order[]>('orderList') || []
-    this.refreshDataSource()
+    await this.refreshOrders()
     if (ok) {
       promptAction.showToast({ message: '订单已取消，库存与优惠券已释放', duration: 2400 })
     } else {
@@ -228,6 +250,18 @@ struct OrderListPage {
                 this.OrderCard(order)
               }
             }, (item: Order) => item.id.toString())
+            ListItem() {
+              Row({ space: SPACING.SM }) {
+                Text(`已显示 ${this.pageOrders.length} / ${this.totalOrders}`)
+                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).layoutWeight(1)
+                if (this.hasMoreOrders) {
+                  Button(this.ordersLoading ? '加载中' : '加载更多')
+                    .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
+                    .enabled(!this.ordersLoading).id('customer-order-load-more')
+                    .onClick(() => { this.loadMoreOrders() })
+                }
+              }.width('100%').padding({ top: SPACING.SM, bottom: SPACING.MD })
+            }
           }
           .height('100%')
           .width('100%')
@@ -251,8 +285,9 @@ struct OrderListPage {
       .attributeModifier(new AppFilterStyle(this.currentStatus === item.status))
       .animation(AppMotion.pressAnimation())
       .accessibilitySelected(this.currentStatus === item.status)
+      .enabled(!this.ordersLoading)
       .id(`order-filter-${item.status}`)
-      .onClick(() => { this.currentStatus = item.status })
+      .onClick(() => { this.selectStatus(item.status) })
   }
 
   @Builder
@@ -310,8 +345,7 @@ struct OrderListPage {
             .backgroundColor(MODULE_COLOR.CART).borderRadius(BORDER_RADIUS.ROUND)
             .onClick(async () => {
               const ok: boolean = await confirmOrderRemote(order.id)
-              this.orderList = AppStorage.get<Order[]>('orderList') || []
-              this.refreshDataSource()
+              await this.refreshOrders()
               if (ok) {
                 promptAction.showToast({ message: '已确认收货，订单已完成', duration: 1800 })
               } else {

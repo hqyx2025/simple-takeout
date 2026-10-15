@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Optional;
 
 /**
@@ -19,8 +20,9 @@ public class SeckillDao {
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    /** 秒杀时间窗口 SQL 片段（start_time / end_time 为 VARCHAR，格式统一 yyyy-MM-dd HH:mm:ss）。 */
-    private static final String IN_WINDOW = " AND ? BETWEEN start_time AND end_time ";
+    /** Typed comparison with legacy-only and older-instance edits handled explicitly. */
+    private static final String IN_WINDOW = " AND " + JdbcDateTimes.PARAMETER + " BETWEEN " +
+            JdbcDateTimes.value("start_time") + " AND " + JdbcDateTimes.value("end_time") + " ";
 
     private static final RowMapper<Seckill> MAPPER = (rs, i) -> new Seckill(
             rs.getLong("id"),
@@ -46,14 +48,15 @@ public class SeckillDao {
         return jdbc.query("SELECT s.*, g.name AS goods_name, g.image AS goods_image, " +
                         "g.original_price AS goods_original_price, g.price AS goods_price, " +
                         "st.name AS store_name, st.distance AS store_distance, " +
-                        "TIMESTAMPDIFF(SECOND, ?, STR_TO_DATE(s.end_time, '%Y-%m-%d %H:%i:%s')) AS remain_seconds " +
+                        "TIMESTAMPDIFF(SECOND, " + JdbcDateTimes.PARAMETER + ", " +
+                        JdbcDateTimes.value("s.end_time") + ") AS remain_seconds " +
                         "FROM seckills s " +
                         "JOIN goods g ON g.id = s.goods_id " +
                         "JOIN stores st ON st.id = s.store_id " +
                         "WHERE s.status = 1 AND g.status = 1 AND st.status = 1 " +
                         "AND s.sold < s.quota " + IN_WINDOW +
                         "AND NOT EXISTS (SELECT 1 FROM goods_specs sp WHERE sp.goods_id = g.id AND sp.status = 1) " +
-                        "ORDER BY s.end_time, s.id LIMIT ?",
+                        "ORDER BY " + JdbcDateTimes.value("s.end_time") + ", s.id LIMIT ?",
                 (rs, i) -> new Seckill.SeckillView(
                         rs.getLong("id"),
                         rs.getLong("goods_id"),
@@ -83,24 +86,69 @@ public class SeckillDao {
         return jdbc.query("SELECT * FROM seckills ORDER BY id DESC", MAPPER);
     }
 
+    public List<Seckill> listByStore(long storeId) {
+        return jdbc.query("SELECT * FROM seckills WHERE store_id = ? ORDER BY id DESC", MAPPER, storeId);
+    }
+
+    /** 平台监管秒杀列表；storeId 为空时返回全部店铺。 */
+    public List<Seckill> listForAdmin(Long storeId) {
+        return listForAdmin(storeId, null);
+    }
+
+    /** 平台监管秒杀列表，可按店铺与上下架状态筛选。 */
+    public List<Seckill> listForAdmin(Long storeId, Integer status) {
+        StringBuilder sql = new StringBuilder("SELECT * FROM seckills WHERE 1=1");
+        List<Object> args = new ArrayList<>();
+        if (storeId != null) {
+            sql.append(" AND store_id = ?");
+            args.add(storeId);
+        }
+        if (status != null) {
+            sql.append(" AND status = ?");
+            args.add(status);
+        }
+        sql.append(" ORDER BY id DESC");
+        return jdbc.query(sql.toString(), MAPPER, args.toArray());
+    }
+
     public Optional<Seckill> findById(long id) {
         return jdbc.query("SELECT * FROM seckills WHERE id = ?", MAPPER, id).stream().findFirst();
     }
 
     public long insert(long goodsId, long storeId, double price, int quota, String startTime, String endTime, int status) {
-        jdbc.update("INSERT INTO seckills(goods_id, store_id, price, quota, sold, start_time, end_time, status, create_time) " +
-                        "VALUES(?,?,?,?,0,?,?,?,?)",
-                goodsId, storeId, price, quota, startTime, endTime, status, LocalDateTime.now().format(FMT));
+        String now = LocalDateTime.now().format(FMT);
+        jdbc.update("INSERT INTO seckills(goods_id, store_id, price, quota, sold, start_time, end_time, status, " +
+                        "create_time, start_time_dt, end_time_dt, create_time_dt) VALUES(?,?,?,?,0,?,?,?,?," +
+                        JdbcDateTimes.PARAMETER + "," + JdbcDateTimes.PARAMETER + "," + JdbcDateTimes.PARAMETER + ")",
+                goodsId, storeId, price, quota, startTime, endTime, status, now, startTime, endTime, now);
         return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 
     public void update(long id, double price, int quota, String startTime, String endTime, int status) {
-        jdbc.update("UPDATE seckills SET price = ?, quota = ?, start_time = ?, end_time = ?, status = ? WHERE id = ?",
-                price, quota, startTime, endTime, status, id);
+        jdbc.update("UPDATE seckills SET price = ?, quota = ?, start_time = ?, end_time = ?, status = ?, " +
+                        "start_time_dt = " + JdbcDateTimes.PARAMETER + ", end_time_dt = " + JdbcDateTimes.PARAMETER +
+                        " WHERE id = ?",
+                price, quota, startTime, endTime, status, startTime, endTime, id);
+    }
+
+    public void update(long id, long storeId, double price, int quota, String startTime, String endTime, int status) {
+        jdbc.update("UPDATE seckills SET price = ?, quota = ?, start_time = ?, end_time = ?, status = ?, " +
+                        "start_time_dt = " + JdbcDateTimes.PARAMETER + ", end_time_dt = " + JdbcDateTimes.PARAMETER +
+                        " WHERE id = ? AND store_id = ?",
+                price, quota, startTime, endTime, status, startTime, endTime, id, storeId);
     }
 
     public void delete(long id) {
         jdbc.update("DELETE FROM seckills WHERE id = ?", id);
+    }
+
+    /** 管理端删除前再次原子确认还没有销量，避免与下单扣减并发时越过销售保护。 */
+    public boolean deleteIfUnsold(long id) {
+        return jdbc.update("DELETE FROM seckills WHERE id = ? AND sold = 0", id) == 1;
+    }
+
+    public void delete(long id, long storeId) {
+        jdbc.update("DELETE FROM seckills WHERE id = ? AND store_id = ?", id, storeId);
     }
 
     /** 占用秒杀名额（条件更新，名额不足返回 false）。 */
@@ -120,8 +168,8 @@ public class SeckillDao {
      * 同一用户对同一场秒杀重复下单时返回 false（0 行受影响），由调用方回滚整单。
      */
     public boolean joinOnce(long userId, long seckillId, long orderId, String now) {
-        return jdbc.update("INSERT IGNORE INTO seckill_orders(user_id, seckill_id, order_id, create_time) " +
-                "VALUES(?,?,?,?)", userId, seckillId, orderId, now) == 1;
+        return jdbc.update("INSERT IGNORE INTO seckill_orders(user_id, seckill_id, order_id, create_time, create_time_dt) " +
+                "VALUES(?,?,?,?," + JdbcDateTimes.PARAMETER + ")", userId, seckillId, orderId, now, now) == 1;
     }
 
     /** 释放「一人一单」资格（取消/超时未支付回滚时与名额一并释放）。 */

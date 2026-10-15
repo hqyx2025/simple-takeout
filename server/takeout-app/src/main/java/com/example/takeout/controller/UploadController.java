@@ -10,7 +10,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 图片上传接口（图文评价）。
- * 返回相对地址 /uploads/yyyyMMdd/xxx.jpg，前端用 API 基址拼接后可直接展示。
+ * 返回本地相对地址或 OBS/CDN 的 HTTPS 访问地址。
  */
 @RestController
 @RequestMapping("/api")
@@ -28,7 +28,7 @@ public class UploadController {
     }
 
     /**
-     * @param url 相对访问地址（如 /uploads/20260912/ab12.jpg）
+     * @param url 本地相对地址或对象存储 HTTPS 访问地址
      * @param size 文件字节数
      */
     public record UploadResult(String url, long size) {

@@ -3,7 +3,7 @@ package com.example.takeout.controller;
 import com.example.takeout.security.LoginRateLimiter;
 import com.example.takeout.security.TokenRevocationService;
 import com.example.takeout.service.AuthService;
-import com.example.takeout.service.thirdparty.SmsSender;
+import com.example.takeout.service.SmsVerificationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -17,7 +17,9 @@ class AuthPaymentPasswordControllerTest {
     void setUsesAuthenticatedAccountAndReturnsNoSecrets() throws Exception {
         AuthService service = mock(AuthService.class);
         var limiter = mock(LoginRateLimiter.class);
-        var controller = new AuthController(service, limiter, mock(TokenRevocationService.class), mock(SmsSender.class));
+        var controller = new AuthController(service, limiter, mock(TokenRevocationService.class),
+                mock(com.example.takeout.service.RefreshTokenService.class), mock(SmsVerificationService.class),
+                mock(com.example.takeout.service.PushTokenService.class));
         var mvc = MockMvcBuilders.standaloneSetup(controller).build();
         mvc.perform(post("/api/auth/payment-password").requestAttr("userId", 7L)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -31,7 +33,8 @@ class AuthPaymentPasswordControllerTest {
     void malformedPasswordBodyHasFixedMessage() throws Exception {
         var service = mock(AuthService.class);
         var controller = new AuthController(service, mock(LoginRateLimiter.class),
-                mock(TokenRevocationService.class), mock(SmsSender.class));
+                mock(TokenRevocationService.class), mock(com.example.takeout.service.RefreshTokenService.class),
+                mock(SmsVerificationService.class), mock(com.example.takeout.service.PushTokenService.class));
         var mvc = MockMvcBuilders.standaloneSetup(controller).build();
         mvc.perform(post("/api/auth/payment-password").requestAttr("userId", 7L)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"paymentPassword\":[\"135790\"]}"))

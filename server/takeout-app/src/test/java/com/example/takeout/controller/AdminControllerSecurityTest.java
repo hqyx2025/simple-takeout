@@ -41,6 +41,26 @@ class AdminControllerSecurityTest {
     }
 
     @Test
+    void nonAdminCannotReadPagedUsers() {
+        AdminController controller = new AdminController(mock(AdminService.class));
+
+        BizException error = assertThrows(BizException.class,
+                () -> controller.usersPage(1, null, null, null, 1, 50));
+
+        assertEquals(403, error.getCode());
+    }
+
+    @Test
+    void nonAdminCannotReadPagedOrdersOrRefunds() {
+        AdminController controller = new AdminController(mock(AdminService.class));
+
+        assertEquals(403, assertThrows(BizException.class,
+                () -> controller.ordersPage(1, null, 1, 50)).getCode());
+        assertEquals(403, assertThrows(BizException.class,
+                () -> controller.refundsPage(1, null, 1, 50)).getCode());
+    }
+
+    @Test
     void nonAdminCannotReadStatistics() {
         AdminController controller = new AdminController(mock(AdminService.class));
 
@@ -59,5 +79,25 @@ class AdminControllerSecurityTest {
                         new AdminController.StoreRecommendRequest(1)));
 
         assertEquals(403, error.getCode());
+    }
+
+    @Test
+    void nonAdminCannotReadOrManagePlatformMarketing() {
+        AdminController controller = new AdminController(mock(AdminService.class));
+
+        assertEquals(403, assertThrows(BizException.class,
+                () -> controller.marketingActivities(1, null, null)).getCode());
+        assertEquals(403, assertThrows(BizException.class,
+                () -> controller.updateMarketingActivityStatus(1, 1,
+                        new AdminController.StoreStatusRequest(0))).getCode());
+        assertEquals(403, assertThrows(BizException.class,
+                () -> controller.deleteMarketingActivity(1, 1)).getCode());
+        assertEquals(403, assertThrows(BizException.class,
+                () -> controller.marketingSeckills(1, null, null)).getCode());
+        assertEquals(403, assertThrows(BizException.class,
+                () -> controller.updateMarketingSeckillStatus(1, 1,
+                        new AdminController.StoreStatusRequest(0))).getCode());
+        assertEquals(403, assertThrows(BizException.class,
+                () -> controller.deleteMarketingSeckill(1, 1)).getCode());
     }
 }

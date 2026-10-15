@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -80,6 +81,15 @@ public class RiderController {
                                                        @RequestAttribute("role") int role) {
         requireRider(role);
         return ApiResponse.ok(orderService.riderOrders(riderService.profile(userId).id()));
+    }
+
+    @GetMapping("/orders/page")
+    public ApiResponse<OrderService.OrderPage> myOrdersPage(@RequestAttribute("userId") long userId,
+                                                            @RequestAttribute("role") int role,
+                                                            @RequestParam(defaultValue = "1") int page,
+                                                            @RequestParam(defaultValue = "30") int pageSize) {
+        requireRider(role);
+        return ApiResponse.ok(orderService.riderOrders(riderService.profile(userId).id(), page, pageSize));
     }
 
     @PostMapping("/orders/{id}/grab")

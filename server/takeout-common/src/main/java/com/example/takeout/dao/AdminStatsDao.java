@@ -17,6 +17,9 @@ import java.util.List;
  */
 @Repository
 public class AdminStatsDao {
+    private static final String ORDER_CREATE_TIME = JdbcDateTimes.value("create_time");
+    private static final String DAY_PARAMETER = "STR_TO_DATE(?, '%Y-%m-%d')";
+
     private final JdbcTemplate jdbc;
 
     public AdminStatsDao(JdbcTemplate jdbc) {
@@ -33,9 +36,13 @@ public class AdminStatsDao {
                 "COALESCE((SELECT SUM(pay_amount) FROM orders WHERE status NOT IN (5,6)), 0) AS total_gmv, " +
                 "COALESCE((SELECT SUM(pay_amount) FROM orders WHERE status = 4 AND escrow_status = 1), 0) AS settled_amount, " +
                 "COALESCE((SELECT SUM(pay_amount) FROM orders WHERE status IN (1,2,3,4) AND escrow_status = 0), 0) AS pending_escrow_amount, " +
-                "(SELECT COUNT(*) FROM orders WHERE LEFT(create_time, 10) = ? AND status NOT IN (5,6)) AS today_orders, " +
-                "COALESCE((SELECT SUM(pay_amount) FROM orders WHERE LEFT(create_time, 10) = ? AND status NOT IN (5,6)), 0) AS today_gmv";
-        String today = LocalDate.now().toString();
+                "(SELECT COUNT(*) FROM orders WHERE " + ORDER_CREATE_TIME + " >= " + DAY_PARAMETER +
+                " AND " + ORDER_CREATE_TIME + " < " + DAY_PARAMETER + " AND status NOT IN (5,6)) AS today_orders, " +
+                "COALESCE((SELECT SUM(pay_amount) FROM orders WHERE " + ORDER_CREATE_TIME + " >= " + DAY_PARAMETER +
+                " AND " + ORDER_CREATE_TIME + " < " + DAY_PARAMETER + " AND status NOT IN (5,6)), 0) AS today_gmv";
+        LocalDate todayDate = LocalDate.now();
+        String today = todayDate.toString();
+        String tomorrow = todayDate.plusDays(1).toString();
         AdminStatistics base = jdbc.queryForObject(sql, (rs, rowNum) -> new AdminStatistics(
                 rs.getLong("total_users"),
                 rs.getLong("total_merchants"),
@@ -48,7 +55,7 @@ public class AdminStatsDao {
                 rs.getLong("today_orders"),
                 rs.getDouble("today_gmv"),
                 List.of()
-        ), today, today);
+        ), today, tomorrow, today, tomorrow);
         List<AdminStatistics.HotGoods> hotGoods = jdbc.query(
                 "SELECT g.id, g.name, g.store_id, s.name AS store_name, g.sales, g.price, g.status " +
                         "FROM goods g JOIN stores s ON s.id = g.store_id " +
@@ -67,10 +74,11 @@ public class AdminStatsDao {
         int safeDays = Math.max(1, Math.min(days, 90));
         LocalDate start = LocalDate.now().minusDays(safeDays - 1L);
         return jdbc.query(
-                "SELECT LEFT(create_time, 10) AS order_date, " +
+                "SELECT DATE(" + ORDER_CREATE_TIME + ") AS order_date, " +
                         "COUNT(CASE WHEN status NOT IN (5,6) THEN 1 END) AS order_count, " +
                         "COALESCE(SUM(CASE WHEN status NOT IN (5,6) THEN pay_amount ELSE 0 END), 0) AS gmv " +
-                        "FROM orders WHERE LEFT(create_time, 10) >= ? GROUP BY LEFT(create_time, 10) ORDER BY order_date",
+                        "FROM orders WHERE " + ORDER_CREATE_TIME + " >= " + DAY_PARAMETER +
+                        " GROUP BY DATE(" + ORDER_CREATE_TIME + ") ORDER BY order_date",
                 (rs, rowNum) -> new AdminStatistics.TrendPoint(rs.getString("order_date"),
                         rs.getLong("order_count"), rs.getDouble("gmv")), start.toString());
     }

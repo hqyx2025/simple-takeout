@@ -24,12 +24,12 @@ class SeckillOnePerUserSqlTest {
 
     @Test
     void joinOnceUsesInsertIgnoreReliantOnUniqueKey() {
-        when(jdbc.update(anyString(), anyLong(), anyLong(), anyLong(), anyString())).thenReturn(1);
+        when(jdbc.update(anyString(), anyLong(), anyLong(), anyLong(), anyString(), anyString())).thenReturn(1);
 
         assertTrue(dao.joinOnce(1L, 400L, 13L, "2026-09-15 10:00:00"));
 
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
-        verify(jdbc).update(sql.capture(), anyLong(), anyLong(), anyLong(), anyString());
+        verify(jdbc).update(sql.capture(), anyLong(), anyLong(), anyLong(), anyString(), anyString());
         String s = sql.getValue();
         assertTrue(s.contains("INSERT IGNORE"), "必须用 INSERT IGNORE 依赖唯一键防重：" + s);
         assertTrue(s.contains("seckill_orders"), s);
@@ -37,7 +37,7 @@ class SeckillOnePerUserSqlTest {
 
     @Test
     void joinOnceReturnsFalseWhenUniqueKeyHits() {
-        when(jdbc.update(anyString(), anyLong(), anyLong(), anyLong(), anyString())).thenReturn(0);
+        when(jdbc.update(anyString(), anyLong(), anyLong(), anyLong(), anyString(), anyString())).thenReturn(0);
 
         assertFalse(dao.joinOnce(1L, 400L, 13L, "2026-09-15 10:00:00"));
     }

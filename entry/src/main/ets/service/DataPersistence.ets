@@ -7,14 +7,14 @@ import preferences from '@ohos.data.preferences'
 import common from '@ohos.app.ability.common'
 import { User, Order, Address, createEmptyUser } from '../model/Models'
 import { logInfo, logWarn, logError } from './AppLogger'
-import { setAuthToken } from './HttpClient'
+import { setAuthTokens } from './HttpClient'
+import { clearAuthTokens, loadAuthTokens, saveAuthTokens, StoredAuthTokens } from './TokenStorage'
 
 const PERSISTENCE_NAME: string = 'takeout_app_data'
 
 // 需要持久化的 AppStorage 键列表
 const PERSISTENCE_KEYS: string[] = [
   'privacyConsent',
-  'authToken',
   'isLoggedIn',
   'user',
   'cartItems',
@@ -133,9 +133,6 @@ function normalizeAddressList(value: Object): Object {
 
 // 归一化入口：按 key 处理对应数据
 export function normalizeData(key: string, value: Object): Object {
-  if (key === 'authToken') {
-    return typeof value === 'string' ? value : ''
-  }
   if (key === 'user') {
     return normalizeUser(value)
   }
@@ -185,6 +182,32 @@ export async function loadAllData(): Promise<void> {
       AppStorage.setOrCreate<boolean>('_persistenceReady', true)
       return
     }
+    let storedTokens: StoredAuthTokens | null = null
+    try {
+      storedTokens = await loadAuthTokens()
+    } catch (_) {
+      logWarn('Persistence', '安全凭证不可用，需要重新登录')
+    }
+    let restoredAccessToken: string = storedTokens?.accessToken ?? ''
+    let restoredRefreshToken: string = storedTokens?.refreshToken ?? ''
+    const legacyTokenJson: string = await prefs.get('authToken', '') as string
+    if (legacyTokenJson !== '') {
+      if (restoredAccessToken === '') {
+        try {
+          const legacyToken: string = JSON.parse(legacyTokenJson) as string
+          if (legacyToken !== '') {
+            restoredAccessToken = legacyToken
+            await saveAuthTokens(legacyToken, '')
+          }
+        } catch (_) {
+          logWarn('Persistence', '旧版登录凭证迁移失败，需要重新登录')
+        }
+      }
+      await prefs.delete('authToken')
+      await prefs.flush()
+    }
+    AppStorage.setOrCreate<string>('authToken', restoredAccessToken)
+    setAuthTokens(restoredAccessToken, restoredRefreshToken)
     for (let i = 0; i < PERSISTENCE_KEYS.length; i++) {
       const key: string = PERSISTENCE_KEYS[i]
       if (key === 'privacyConsent') {
@@ -215,9 +238,6 @@ export async function loadAllData(): Promise<void> {
             continue
           }
           AppStorage.setOrCreate(key, normalized)
-          if (key === 'authToken' && typeof normalized === 'string') {
-            setAuthToken(normalized)
-          }
           logInfo('Persistence', `恢复数据 key=${key} 成功`)
         } catch (parseErr) {
           logWarn('Persistence', `恢复数据 key=${key} 解析失败，使用默认值`)
@@ -231,12 +251,19 @@ export async function loadAllData(): Promise<void> {
     const restoredBalance: number = restoredUser !== undefined && restoredUser !== null
       && Number.isFinite(restoredUser.balance) ? restoredUser.balance : 0
     AppStorage.setOrCreate<number>('userBalance', restoredBalance)
-    const restoredToken: string = AppStorage.get<string>('authToken') || ''
+    const restoredToken: string = restoredAccessToken
     const restoredLoggedIn: boolean = AppStorage.get<boolean>('isLoggedIn') || false
     if (restoredLoggedIn && restoredToken === '') {
       AppStorage.setOrCreate<boolean>('isLoggedIn', false)
       AppStorage.setOrCreate<User>('user', createEmptyUser())
       AppStorage.setOrCreate<number>('userBalance', 0)
+      AppStorage.setOrCreate<Object[]>('cartItems', [])
+      AppStorage.setOrCreate<Order[]>('orderList', [])
+      AppStorage.setOrCreate<Object[]>('favoriteList', [])
+      AppStorage.setOrCreate<Object[]>('couponList', [])
+      AppStorage.setOrCreate<Address[]>('addressList', [])
+      AppStorage.setOrCreate<Address | null>('currentAddress', null)
+      await clearAllData()
     }
     AppStorage.setOrCreate<boolean>('_persistenceReady', true)
     logInfo('Persistence', '持久化数据全部加载完成')
@@ -289,6 +316,8 @@ export async function savePrivacyConsent(granted: boolean): Promise<void> {
 export async function clearAllData(): Promise<void> {
   try {
     const prefs: preferences.Preferences = await getPrefs()
+    await clearAuthTokens()
+    await prefs.delete('authToken')
     for (let i = 0; i < PERSISTENCE_KEYS.length; i++) {
       // 隐私同意状态单一权威且单向升级：登出不得清除已同意状态，
       // 否则退出登录后冷启动会重新被判为未同意、又被赶回同意页

@@ -6,8 +6,9 @@ import { AppButtonStyle, AppCardStyle, AppFilterStyle } from '../common/theme/Ap
  */
 import { AppMotion } from '../common/theme/AppMotion'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
-import { Order, CartItem, User, UserRole } from '../model/Models'
-import { getCurrentUser, getMerchantOrders, merchantActionRemote, syncMerchantOrdersFromServer } from '../service/AppStorageManager'
+import { Order, OrderPageData, CartItem, User, UserRole } from '../model/Models'
+import { fetchMerchantOrdersPageApi } from '../service/ApiService'
+import { getCurrentUser, merchantActionRemote } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { PageHeader } from '../components/PageHeader'
@@ -45,6 +46,10 @@ export struct MerchantOrdersPage {
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State currentStatus: number = -1
   @State allOrders: Order[] = []
+  @State currentPage: number = 1
+  @State totalOrders: number = 0
+  @State hasMoreOrders: boolean = false
+  @State loading: boolean = false
   // 列表重建触发器：syncMerchantOrdersFromServer 是**原地修改**同一批 Order 对象，
   // 只重新赋值数组时 ArkUI 按 id 复用旧列表项、不会重绘，于是「点了接单界面仍显示待接单」
   // （设备实测确认）。把它拼进 ForEach key，强制重建（与购物车 cartRenderVersion 同一套路）。
@@ -70,20 +75,37 @@ export struct MerchantOrdersPage {
     }
   }
 
-  private async loadOrders(): Promise<void> {
-    // 先从后端拉取最新订单，再按本地商户过滤展示
-    await syncMerchantOrdersFromServer()
-    if (this.merchantId > 0) {
-      this.allOrders = getMerchantOrders(this.merchantId)
-      this.renderVersion += 1
+  private async loadOrders(page: number = 1, append: boolean = false): Promise<void> {
+    if (this.loading || this.merchantId <= 0) {
+      return
     }
+    this.loading = true
+    const status: number | undefined = this.currentStatus < 0 ? undefined : this.currentStatus
+    const result: OrderPageData = await fetchMerchantOrdersPageApi(status, page)
+    this.allOrders = append ? this.allOrders.concat(result.list) : result.list
+    this.currentPage = result.page
+    this.totalOrders = result.total
+    this.hasMoreOrders = result.hasMore
+    this.renderVersion += 1
+    this.loading = false
   }
 
   private getFilteredOrders(): Order[] {
-    if (this.currentStatus === -1) {
-      return this.allOrders
+    return this.allOrders
+  }
+
+  private async loadMoreOrders(): Promise<void> {
+    if (!this.loading && this.hasMoreOrders) {
+      await this.loadOrders(this.currentPage + 1, true)
     }
-    return this.allOrders.filter(o => o.status === this.currentStatus)
+  }
+
+  private selectStatus(status: number): void {
+    if (this.loading) {
+      return
+    }
+    this.currentStatus = status
+    this.loadOrders()
   }
 
   private async handleAccept(order: Order): Promise<void> {
@@ -147,7 +169,12 @@ export struct MerchantOrdersPage {
       .backgroundColor(COLORS.BG_WHITE)
 
       // 订单列表 / 空状态
-      if (this.getFilteredOrders().length === 0) {
+      if (this.loading && this.getFilteredOrders().length === 0) {
+        Column() {
+          Text('正在加载订单…').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
+        }
+        .width('100%').layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+      } else if (this.getFilteredOrders().length === 0) {
         Column() {
           Image($r('app.media.ui_inbox')).width(32).height(32).objectFit(ImageFit.Contain).margin({ top: 40 })
           Text('暂无订单')
@@ -166,6 +193,18 @@ export struct MerchantOrdersPage {
               this.OrderCard(order)
             }
           }, (order: Order) => `${this.renderVersion}-${order.id}`)
+          ListItem() {
+            Row({ space: SPACING.SM }) {
+              Text(`已显示 ${this.allOrders.length} / ${this.totalOrders}`)
+                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).layoutWeight(1)
+              if (this.hasMoreOrders) {
+                Button(this.loading ? '加载中' : '加载更多')
+                  .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
+                  .enabled(!this.loading).id('merchant-order-load-more')
+                  .onClick(() => { this.loadMoreOrders() })
+              }
+            }.width('100%').padding({ top: SPACING.SM, bottom: SPACING.MD })
+          }
         }
         .width('100%')
         .layoutWeight(1)
@@ -184,7 +223,7 @@ export struct MerchantOrdersPage {
       .attributeModifier(new AppFilterStyle(this.currentStatus === tab.status))
       .animation(AppMotion.pressAnimation())
       .accessibilitySelected(this.currentStatus === tab.status)
-      .onClick(() => { this.currentStatus = tab.status })
+      .onClick(() => { this.selectStatus(tab.status) })
   }
 
   @Builder

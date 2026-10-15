@@ -2,7 +2,7 @@ import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/App
 /** 平台用户和商户账号管理：查看账号并启用/停用，不修改余额和业务数据。 */
 import { AppMotion } from '../common/theme/AppMotion'
 import { AdminUser, User, UserRole } from '../model/Models'
-import { fetchAdminUsersApi, updateAdminUserStatusApi } from '../service/ApiService'
+import { fetchAdminUsersPageApi, updateAdminUserStatusApi } from '../service/ApiService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { StatusBadge } from '../components/StatusBadge'
 import { PageHeader } from '../components/PageHeader'
@@ -37,6 +37,9 @@ export struct AdminUserPage {
   // -1 全部 / 1 已启用 / 0 已停用（后端 /api/admin/users 的 status 参数）
   @State statusFilter: number = -1
   @State loading: boolean = false
+  @State page: number = 1
+  @State total: number = 0
+  @State hasMore: boolean = false
   // ForEach 键含 id 时，刷新回来的同 id 新对象会被复用而不重建行，
   // 表现为停用后按钮仍显示「停用」；用版本号拼进键强制重建。
   @State renderVersion: number = 0
@@ -56,11 +59,48 @@ export struct AdminUserPage {
       return
     }
     this.loading = true
+    this.page = 1
     const role: number | undefined = this.roleFilter < 0 ? undefined : this.roleFilter
     const status: number | undefined = this.statusFilter < 0 ? undefined : this.statusFilter
-    this.users = await fetchAdminUsersApi(role, status, this.keyword)
+    const result = await fetchAdminUsersPageApi(role, status, this.keyword, this.page)
+    this.users = result.list
+    this.total = result.total
+    this.hasMore = result.hasMore
     this.renderVersion += 1
     this.loading = false
+  }
+
+  private async loadMore(): Promise<void> {
+    if (this.loading || !this.hasMore) {
+      return
+    }
+    this.loading = true
+    const role: number | undefined = this.roleFilter < 0 ? undefined : this.roleFilter
+    const status: number | undefined = this.statusFilter < 0 ? undefined : this.statusFilter
+    const nextPage: number = this.page + 1
+    const result = await fetchAdminUsersPageApi(role, status, this.keyword, nextPage)
+    this.users = this.users.concat(result.list)
+    this.page = result.page
+    this.total = result.total
+    this.hasMore = result.hasMore
+    this.renderVersion += 1
+    this.loading = false
+  }
+
+  private selectRoleFilter(role: number): void {
+    if (this.loading) {
+      return
+    }
+    this.roleFilter = role
+    this.refresh()
+  }
+
+  private selectStatusFilter(status: number): void {
+    if (this.loading) {
+      return
+    }
+    this.statusFilter = status
+    this.refresh()
   }
 
   private async toggleStatus(item: AdminUser): Promise<void> {
@@ -99,15 +139,15 @@ export struct AdminUserPage {
         Button('全部').height(44)
           .attributeModifier(new AppButtonStyle()).fontSize(FONT_SIZE.SM).backgroundColor(this.roleFilter === -1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.roleFilter === -1 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.roleFilter = -1; this.refresh() })
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.selectRoleFilter(-1) })
         Button('用户').height(44)
           .attributeModifier(new AppButtonStyle()).fontSize(FONT_SIZE.SM).backgroundColor(this.roleFilter === 0 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.roleFilter === 0 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.roleFilter = 0; this.refresh() })
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.selectRoleFilter(0) })
         Button('商户').height(44)
           .attributeModifier(new AppButtonStyle()).fontSize(FONT_SIZE.SM).backgroundColor(this.roleFilter === 1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.roleFilter === 1 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.roleFilter = 1; this.refresh() })
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.selectRoleFilter(1) })
       }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
 
       Row({ space: SPACING.MD }) {
@@ -116,17 +156,17 @@ export struct AdminUserPage {
           .attributeModifier(new AppButtonStyle()).id('admin-user-status-all').fontSize(FONT_SIZE.SM)
           .backgroundColor(this.statusFilter === -1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.statusFilter === -1 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.statusFilter = -1; this.refresh() })
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.selectStatusFilter(-1) })
         Button('已启用').height(44)
           .attributeModifier(new AppButtonStyle()).id('admin-user-status-enabled').fontSize(FONT_SIZE.SM)
           .backgroundColor(this.statusFilter === 1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.statusFilter === 1 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.statusFilter = 1; this.refresh() })
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.selectStatusFilter(1) })
         Button('已停用').height(44)
           .attributeModifier(new AppButtonStyle()).id('admin-user-status-disabled').fontSize(FONT_SIZE.SM)
           .backgroundColor(this.statusFilter === 0 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.statusFilter === 0 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
-          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.statusFilter = 0; this.refresh() })
+          .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.selectStatusFilter(0) })
       }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
 
       // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在筛选行下方
@@ -142,6 +182,17 @@ export struct AdminUserPage {
             this.UserRow(item)
           }
         }, (item: AdminUser) => `${this.renderVersion}-${item.id}`)
+        ListItem() {
+          Row({ space: SPACING.SM }) {
+            Text(`已显示 ${this.users.length} / ${this.total}`)
+              .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).layoutWeight(1)
+            if (this.hasMore) {
+              Button(this.loading ? '加载中' : '加载更多')
+                .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
+                .enabled(!this.loading).id('admin-user-load-more').onClick(() => { this.loadMore() })
+            }
+          }.width('100%').padding({ top: SPACING.SM, bottom: SPACING.MD })
+        }
       }
       .width('100%').layoutWeight(1).scrollBar(BarState.Off)
       .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })

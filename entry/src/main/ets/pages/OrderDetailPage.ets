@@ -8,11 +8,13 @@ import { AppMotion } from '../common/theme/AppMotion'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
 import { Order, CartItem, DeliveryStep } from '../model/Models'
-import { cancelOrderRemote, confirmOrderRemote, applyRefundRemote, addCartItemRemote, fetchOrderDetailRemote, getLastRemoteErrorMessage, syncCartRemote, payOrderRemote } from '../service/AppStorageManager'
+import { cancelOrderRemote, confirmOrderRemote, applyRefundRemote, addCartItemRemote, fetchOrderDetailRemote, getLastRemoteErrorMessage, syncCartRemote, payOrderRemote, queryPaymentRemote } from '../service/AppStorageManager'
 import { OrderStatusTimeline } from '../components/OrderStatusTimeline'
 import { PageHeader } from '../components/PageHeader'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { logInfo } from '../service/AppLogger'
+import { bundleManager } from '@kit.AbilityKit'
+import { getAuthSessionEpoch, getServerClockOffsetMs } from '../service/HttpClient'
 
 class RefundReasonOption {
   code: string
@@ -51,7 +53,8 @@ export struct OrderDetailPage {
   }
 
   @State order: Order | null = null
-  @StorageLink('isLoggedIn') loggedIn: boolean = false
+  @StorageLink('isLoggedIn') @Watch('onLoginChanged') loggedIn: boolean = false
+  @StorageLink('appForeground') @Watch('onAppForegroundChanged') appForeground: boolean = true
   @State showCancelDialog: boolean = false
   @State showConfirmDialog: boolean = false
   @State showRefundDialog: boolean = false
@@ -78,7 +81,19 @@ export struct OrderDetailPage {
   // 待付款倒计时（秒）；>0 时展示支付倒计时，归零后提示已自动取消
   @State payRemainSeconds: number = 0
   @State paying: boolean = false
+  @State paymentUrl: string = ''
+  @State showPaymentCode: boolean = false
+  @State paymentMessage: string = ''
+  @State paymentChecking: boolean = false
+  @State manualPaymentChecking: boolean = false
+  @State paymentAttempted: boolean = false
   private payTimer: number = -1
+  private paymentQueryTimer: number = -1
+  private pageActive: boolean = false
+  private paymentAdvanced: boolean = false
+  private paymentScroller: Scroller = new Scroller()
+  // 服务端返回当前时间，倒计时用偏移后的时间，避免模拟器系统时钟不准。
+  private serverClockOffsetMs: number = 0
 
   private async addAgain(): Promise<void> {
     if (this.order === null) {
@@ -101,6 +116,7 @@ export struct OrderDetailPage {
   }
 
   async aboutToAppear(): Promise<void> {
+    this.pageActive = true
     const routerOrderId: number = AppStorage.get<number>('currentOrderId') || 0
     this.orderId = this.orderId || routerOrderId
     if (!this.loggedIn) {
@@ -113,8 +129,23 @@ export struct OrderDetailPage {
       logInfo('Page', '进入订单详情页：缺少有效订单 ID')
       return
     }
+    const sessionEpoch: number = getAuthSessionEpoch()
     const remoteOrder: Order | null = await fetchOrderDetailRemote(this.orderId)
+    if (!this.pageActive || !this.loggedIn || sessionEpoch !== getAuthSessionEpoch()) { return }
     this.order = remoteOrder
+    this.syncServerClock(remoteOrder)
+    if (remoteOrder !== null && remoteOrder.status === 0) {
+      const storedChannel: string = remoteOrder.paymentChannel ?? ''
+      this.payChannel = storedChannel === 'ALIPAY' || storedChannel === 'BALANCE'
+        ? storedChannel : 'BALANCE'
+      this.paymentUrl = remoteOrder.paymentUrl ?? ''
+      this.paymentAttempted = storedChannel === 'ALIPAY'
+      this.paymentMessage = storedChannel !== 'ALIPAY' ? '' : remoteOrder.paymentSandbox === true
+        ? '当前沙箱仅支持其他设备的支付宝沙箱钱包扫码支付'
+        : '支付已准备，可使用本机支付宝或选择其他设备扫码'
+    } else {
+      this.paymentUrl = ''
+    }
     logInfo('Page', `进入订单详情页 OrderDetailPage orderId=${this.orderId} 状态=${this.order !== null ? this.order.status : -1}`)
     // 配送中状态启动骑手动画
     if (this.order !== null && this.order.status === 3) {
@@ -123,12 +154,68 @@ export struct OrderDetailPage {
     // 待付款状态启动支付倒计时（超时后端会自动取消订单）
     if (this.order !== null && this.order.status === 0) {
       this.startPayCountdown()
+      this.startPaymentPolling()
     }
   }
 
   aboutToDisappear() {
+    this.pageActive = false
     this.stopRiderAnimation()
     this.stopPayCountdown()
+    this.stopPaymentPolling()
+  }
+
+  onPageShow(): void {
+    this.pageActive = true
+    if (this.order !== null && this.order.status === 0) {
+      this.startPayCountdown()
+      this.startPaymentPolling()
+      if (this.paymentAttempted || this.hasPendingPayment()) { this.refreshPaymentStatus(false) }
+    }
+  }
+
+  onPageHide(): void {
+    this.pageActive = false
+    this.stopPaymentPolling()
+    this.stopPayCountdown()
+  }
+
+  private onAppForegroundChanged(): void {
+    if (!this.appForeground) {
+      this.stopPaymentPolling()
+      return
+    }
+    if (this.pageActive && this.order !== null && this.order.status === 0) {
+      this.startPayCountdown()
+      this.startPaymentPolling()
+      if (this.paymentAttempted || this.hasPendingPayment()) { this.refreshPaymentStatus(false) }
+    }
+  }
+
+  private onLoginChanged(): void {
+    if (this.loggedIn) { return }
+    this.clearPaymentSession()
+    this.stopRiderAnimation()
+    this.order = null
+  }
+
+  private startPaymentPolling(): void {
+    this.stopPaymentPolling()
+    if (!this.pageActive || !this.appForeground || !this.loggedIn || this.order === null ||
+      !this.hasPendingPayment() || this.computePayRemain() <= 0) { return }
+    this.paymentQueryTimer = setInterval(() => { this.refreshPaymentStatus(false) }, 3000)
+  }
+
+  private stopPaymentPolling(): void {
+    if (this.paymentQueryTimer >= 0) {
+      clearInterval(this.paymentQueryTimer)
+      this.paymentQueryTimer = -1
+    }
+  }
+
+  private hasPendingPayment(): boolean {
+    return this.order !== null && this.order.status === 0 && this.order.paymentChannel === 'ALIPAY' &&
+      (this.paymentUrl !== '' || (this.order.outTradeNo ?? '') !== '')
   }
 
   // ============ 待付款支付倒计时 ============
@@ -141,6 +228,7 @@ export struct OrderDetailPage {
       this.payRemainSeconds = this.computePayRemain()
       if (this.payRemainSeconds <= 0) {
         this.stopPayCountdown()
+        this.stopPaymentPolling()
         // 超时后由后端定时任务取消，这里刷新一次拿到最新状态并提示用户
         this.refreshAfterTimeout()
       }
@@ -162,7 +250,13 @@ export struct OrderDetailPage {
     if (epochMs <= 0) {
       return 0
     }
-    return Math.max(Math.floor((epochMs - Date.now()) / 1000), 0)
+    const serverNowMs: number = Date.now() + this.serverClockOffsetMs
+    return Math.max(Math.floor((epochMs - serverNowMs) / 1000), 0)
+  }
+
+  private syncServerClock(order: Order | null): void {
+    const serverNowMs: number = order?.serverNowEpochMs ?? 0
+    this.serverClockOffsetMs = serverNowMs > 0 ? serverNowMs - Date.now() : getServerClockOffsetMs()
   }
 
   /** mm:ss 倒计时文案。 */
@@ -175,8 +269,12 @@ export struct OrderDetailPage {
   }
 
   private async refreshAfterTimeout(): Promise<void> {
+    const sessionEpoch: number = getAuthSessionEpoch()
     const latest: Order | null = await fetchOrderDetailRemote(this.orderId)
+    if (!this.pageActive || !this.loggedIn || sessionEpoch !== getAuthSessionEpoch()) { return }
     this.order = latest
+    this.syncServerClock(latest)
+    if (latest === null || latest.status !== 0) { this.clearPaymentSession() }
     if (latest !== null && latest.status === 5) {
       promptAction.showToast({ message: '超过支付时限，订单已自动取消', duration: 3000 })
     }
@@ -184,21 +282,171 @@ export struct OrderDetailPage {
 
   /** 待付款订单支付：成功后刷新订单并提示。 */
   private async payNow(): Promise<void> {
-    if (this.order === null || this.paying) {
+    if (!this.loggedIn || this.order === null || this.order.status !== 0 || this.paying || this.paymentChecking) {
       return
     }
+    if (this.payChannel === 'ALIPAY') {
+      this.paymentAttempted = true
+      this.showPaymentCode = false
+      this.paymentScroller.scrollTo({ xOffset: 0, yOffset: 0 })
+      try {
+        if (!bundleManager.canOpenLink('alipays://')) {
+          this.paymentMessage = '未检测到可用的支付宝，请选择其他设备扫码支付'
+          return
+        }
+      } catch (_) {
+        this.paymentMessage = '暂时无法检测支付宝，可选择其他设备扫码支付'
+        return
+      }
+      const signed: Order | null = await this.preparePayment('APP')
+      if (signed === null || signed.status !== 0) { return }
+      if ((signed.appOrderInfo ?? '') === '') {
+        this.paymentMessage = '暂时无法打开支付宝，可选择其他设备扫码支付'
+        return
+      }
+      this.startPaymentPolling()
+      this.launchAlipay(signed.appOrderInfo ?? '')
+      return
+    }
+    await this.preparePayment('QR')
+  }
+
+  private async preparePayment(mode: string): Promise<Order | null> {
+    if (this.order === null) { return null }
     this.paying = true
-    const paid: Order | null = await payOrderRemote(this.order.id, this.payChannel)
+    const sessionEpoch: number = getAuthSessionEpoch()
+    const paid: Order | null = await payOrderRemote(this.order.id, this.payChannel, mode)
     this.paying = false
+    if (!this.pageActive || !this.appForeground || !this.loggedIn || sessionEpoch !== getAuthSessionEpoch()) { return null }
     if (paid === null) {
       const errorMessage: string = getLastRemoteErrorMessage()
-      promptAction.showToast({ message: errorMessage === '' ? '支付失败，请稍后重试' : errorMessage, duration: 3000 })
-      this.refreshAfterTimeout()
+      if (this.payChannel === 'ALIPAY') {
+        this.paymentMessage = errorMessage === '' ? '支付暂不可用，请稍后重试或选择其他设备扫码支付' : errorMessage
+      } else {
+        promptAction.showToast({ message: errorMessage === '' ? '支付失败，请稍后重试' : errorMessage, duration: 3000 })
+      }
+      return null
+    }
+    this.order = paid
+    this.syncServerClock(paid)
+    if (paid.status === 0) {
+      this.paymentUrl = paid.paymentUrl ?? ''
+      this.startPaymentPolling()
+      return paid
+    }
+    this.clearPaymentSession()
+    if (paid.status < 1 || paid.status > 4) {
+      promptAction.showToast({ message: '订单状态已变化，请查看最新详情', duration: 2500 })
+      return paid
+    }
+    promptAction.showToast({ message: `支付成功，已支付 ¥${paid.payAmount.toFixed(2)}`, duration: 2500 })
+    this.advanceAfterPayment(paid)
+    return paid
+  }
+
+  /** 通过支付宝官方 Harmony SDK 拉起支付，最终状态仅由服务端查单确认。 */
+  private async launchAlipay(orderInfo: string): Promise<void> {
+    const sessionEpoch: number = getAuthSessionEpoch()
+    this.paymentMessage = '正在打开支付宝，完成支付后将自动更新订单'
+    try {
+      // 禁止 SDK 自动打开 H5；无法唤端时按用户选择进入其他设备扫码。
+      const cashier = await import('@cashier_alipay/cashiersdk')
+      const result: Map<string, string> = await new cashier.Pay().payWithNav(orderInfo, true, undefined, undefined, false)
+      if (!this.pageActive || !this.loggedIn || sessionEpoch !== getAuthSessionEpoch() ||
+        this.order === null || this.order.status !== 0) { return }
+      const resultStatus: string = result.get('resultStatus') ?? ''
+      this.paymentMessage = resultStatus === '9000' || resultStatus === '8000'
+        ? '正在确认支付结果，确认后将自动更新订单'
+        : '支付尚未完成，可重新打开支付宝或选择其他设备扫码支付'
+      this.refreshPaymentStatus(false)
+    } catch (_) {
+      if (!this.pageActive || !this.loggedIn || sessionEpoch !== getAuthSessionEpoch()) { return }
+      this.paymentMessage = '暂时无法打开支付宝，可重试或选择其他设备扫码支付'
+    }
+  }
+
+  private async showOtherDevicePayment(): Promise<void> {
+    if (!this.loggedIn || this.order === null || this.order.status !== 0 || this.paying || this.paymentChecking) { return }
+    if (this.paymentUrl === '' || this.order.paymentMode === 'APP') {
+      const qrPayment: Order | null = await this.preparePayment('QR')
+      if (qrPayment === null || qrPayment.status !== 0) { return }
+    }
+    if (this.paymentUrl === '') {
+      this.paymentMessage = '扫码支付暂不可用，请稍后重试'
       return
     }
+    this.showPaymentCode = true
+    this.paymentMessage = this.order.paymentSandbox === true
+      ? '请使用另一台设备的支付宝沙箱钱包扫码，支付后将自动更新订单'
+      : '请使用另一台设备的支付宝扫码，支付后将自动更新订单'
+    this.startPaymentPolling()
+  }
+
+  private clearPaymentSession(): void {
+    this.paymentUrl = ''
+    this.showPaymentCode = false
+    this.paymentMessage = ''
+    this.paymentAttempted = false
+    this.manualPaymentChecking = false
+    this.stopPaymentPolling()
     this.stopPayCountdown()
-    this.order = paid
-    promptAction.showToast({ message: `支付成功，已支付 ¥${paid.payAmount.toFixed(2)}`, duration: 2500 })
+  }
+
+  private advanceAfterPayment(latest: Order): void {
+    if (latest.status < 1 || latest.status > 4 || this.paymentAdvanced || !this.pageActive || !this.appForeground) { return }
+    this.paymentAdvanced = true
+    AppStorage.setOrCreate<number>('currentOrderId', latest.id)
+    // 重新进入服务端确认后的订单阶段，重建时间轴并移除待付款操作。
+    this.getUIContext().runScopedTask(() => { router.replaceUrl({ url: 'pages/OrderDetailPage' }) })
+  }
+
+  private payChannelName(): string {
+    if (this.payChannel === 'ALIPAY') {
+      return '支付宝'
+    }
+    if (this.payChannel === 'WECHAT') {
+      return '微信'
+    }
+    return '余额'
+  }
+
+  private payButtonText(): string {
+    return this.paying ? '支付中…' : `使用${this.payChannelName()}支付 ¥${this.order!.payAmount.toFixed(2)}`
+  }
+
+  private async refreshPaymentStatus(manual: boolean = true): Promise<void> {
+    if (!this.pageActive || !this.appForeground || !this.loggedIn || this.paying || this.paymentChecking ||
+      this.order === null || this.order.status !== 0) { return }
+    if (manual) { this.manualPaymentChecking = true }
+    this.paymentChecking = true
+    const sessionEpoch: number = getAuthSessionEpoch()
+    const latest: Order | null = await queryPaymentRemote(this.orderId)
+    this.paymentChecking = false
+    if (!this.pageActive || !this.appForeground || !this.loggedIn || sessionEpoch !== getAuthSessionEpoch() ||
+      this.order === null || this.order.status !== 0) {
+      if (manual) { this.manualPaymentChecking = false }
+      return
+    }
+    if (latest === null) {
+      if (manual) {
+        const errorMessage: string = getLastRemoteErrorMessage()
+        promptAction.showToast({ message: errorMessage === '' ? '查询支付状态失败，请稍后重试' : errorMessage, duration: 3000 })
+        this.manualPaymentChecking = false
+      }
+      return
+    }
+    this.order = latest
+    this.syncServerClock(latest)
+    if (latest.status !== 0) {
+      this.clearPaymentSession()
+      promptAction.showToast({ message: latest.status >= 1 && latest.status <= 4 ? '支付已确认' : '订单状态已更新', duration: 1800 })
+      this.advanceAfterPayment(latest)
+    } else {
+      this.paymentUrl = latest.paymentUrl ?? this.paymentUrl
+      this.startPaymentPolling()
+      if (manual) { promptAction.showToast({ message: '尚未收到支付成功通知，将继续自动查询', duration: 1800 }) }
+    }
+    if (manual) { this.manualPaymentChecking = false }
   }
 
   // 启动配送进度展示动画
@@ -240,7 +488,7 @@ export struct OrderDetailPage {
     if (this.order !== null && this.order.status === 0) {
       return '该订单尚未支付，取消后将释放占用的库存与优惠券，确定取消吗？'
     }
-    return '确定要取消该订单吗？取消后支付金额将立即退回余额。'
+    return '确定要取消该订单吗？取消后支付金额将按原支付渠道退回。'
   }
 
   private reloadOrder(): void {
@@ -250,6 +498,7 @@ export struct OrderDetailPage {
     }
     const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
     this.order = orders.find(o => o.id === this.orderId) || null
+    this.syncServerClock(this.order)
   }
 
   private getDeliverySteps(): DeliveryStep[] {
@@ -290,9 +539,28 @@ export struct OrderDetailPage {
           .justifyContent(FlexAlign.Center)
           .alignItems(HorizontalAlign.Center)
         } else {
-          Scroll() {
+          Scroll(this.paymentScroller) {
             Column({ space: SPACING.SM }) {
-              // 订单状态卡片
+              if (this.order!.status === 0 && this.payChannel === 'ALIPAY' && this.paymentAttempted) {
+                Column({ space: SPACING.SM }) {
+                  Text(this.showPaymentCode ? '其他设备扫码支付' : '支付宝支付').fontSize(FONT_SIZE.LG)
+                    .fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+                  Text(this.paymentMessage).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+                    .textAlign(TextAlign.Center).id('order-payment-message')
+                  if (this.showPaymentCode) {
+                    QRCode(this.paymentUrl).width(180).height(180).color('#000000').backgroundColor('#FFFFFF')
+                      .id('order-payment-qrcode')
+                  } else {
+                    Button('其他设备扫码支付').attributeModifier(new AppButtonStyle())
+                      .enabled(!this.paying && !this.manualPaymentChecking)
+                      .id('order-scan-other-device').onClick(() => { this.showOtherDevicePayment() })
+                  }
+                  Button('刷新支付状态').attributeModifier(new AppButtonStyle())
+                    .enabled(this.hasPendingPayment() && !this.manualPaymentChecking && !this.paying)
+                    .id('order-refresh-payment').onClick(() => { this.refreshPaymentStatus() })
+                }.attributeModifier(new AppCardStyle()).width('100%').padding(SPACING.MD).id('order-payment-panel')
+              }
+
               this.StatusCard()
 
               // 店铺与商品卡片
@@ -344,12 +612,12 @@ export struct OrderDetailPage {
               const refundAmount: number = this.order.payAmount
               const ok: boolean = await cancelOrderRemote(this.order.id)
               if (ok) {
-                this.stopPayCountdown()
+                this.clearPaymentSession()
                 this.reloadOrder()
                 promptAction.showToast({
                   message: unpaid
                     ? '订单已取消，库存与优惠券已释放'
-                    : `订单已取消，退款 ¥${refundAmount.toFixed(2)} 已退回余额`,
+                    : `订单已取消，退款 ¥${refundAmount.toFixed(2)} 已按原支付渠道退回`,
                   duration: 2500
                 })
               } else {
@@ -442,7 +710,7 @@ Image($r('app.media.ui_close')).width(FONT_SIZE.LG).height(FONT_SIZE.LG).objectF
         .width('100%')
         .padding({ bottom: SPACING.MD })
 
-        Text(`退款金额：¥${this.order !== null ? this.order.payAmount.toFixed(2) : '0.00'}（审核通过后退回余额）`)
+        Text(`退款金额：¥${this.order !== null ? this.order.payAmount.toFixed(2) : '0.00'}（审核通过后按原支付渠道退回）`)
           .fontSize(FONT_SIZE.SM)
           .fontColor(COLORS.TEXT_SECONDARY)
           .width('100%')
@@ -525,12 +793,13 @@ Image($r('app.media.ui_close')).width(FONT_SIZE.LG).height(FONT_SIZE.LG).objectF
         Row() {
           Image($r('app.media.home_clock')).width(FONT_SIZE.LG).height(FONT_SIZE.LG).objectFit(ImageFit.Contain)
           Text(this.payRemainSeconds > 0
-            ? `请在 ${this.payCountdownText()} 内完成支付，超时订单将自动取消`
+            ? `请在剩余 ${this.payCountdownText()} 内完成支付，超时订单将自动取消`
             : '支付时限已到，正在确认订单状态…')
             .fontSize(FONT_SIZE.SM)
             .fontColor(COLORS.ERROR)
             .layoutWeight(1)
             .margin({ left: SPACING.SM })
+            .id('order-pay-countdown')
         }
         .width('100%')
         .padding(SPACING.MD)
@@ -667,10 +936,14 @@ Image($r('app.media.ui_close')).width(FONT_SIZE.LG).height(FONT_SIZE.LG).objectF
       .padding({ bottom: SPACING.SM })
 
       Row() {
+        Text('收货人')
+          .fontSize(FONT_SIZE.MD)
+          .fontColor(COLORS.TEXT_SECONDARY)
         Text(this.order!.address.name)
           .fontSize(FONT_SIZE.MD)
           .fontWeight(FontWeight.Bold)
           .fontColor(COLORS.TEXT_PRIMARY)
+          .margin({ left: SPACING.SM })
         Text(this.order!.address.phone)
           .fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_SECONDARY)
@@ -690,22 +963,37 @@ Image($r('app.media.ui_close')).width(FONT_SIZE.LG).height(FONT_SIZE.LG).objectF
       }
       .width('100%')
 
-      // 配送骑手（配送中及之后由后端返回）
-      if (this.order!.riderName !== undefined && this.order!.riderName !== '') {
-        Row() {
+      Row() {
+        if (this.order!.deliveryType !== 'PICKUP') {
           Image($r('app.media.login_rider')).width(18).height(18).objectFit(ImageFit.Contain)
-          Text(' 配送骑手')
+        }
+        Text(this.order!.deliveryType === 'PICKUP' ? '取餐方式' : '配送骑手')
+          .fontSize(FONT_SIZE.MD)
+          .fontColor(COLORS.TEXT_SECONDARY)
+          .margin({ left: SPACING.SM })
+        if (this.order!.deliveryType === 'PICKUP') {
+          Text('到店自取，无需骑手配送')
             .fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.TEXT_SECONDARY)
-          Text(`${this.order!.riderName} ${this.order!.riderPhone}`)
+            .layoutWeight(1)
+            .margin({ left: SPACING.SM })
+        } else if (this.order!.riderName !== undefined && this.order!.riderName !== '') {
+          Text(`${this.order!.riderName} ${this.order!.riderPhone ?? ''}`)
             .fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.PRIMARY)
             .fontWeight(FontWeight.Bold)
             .layoutWeight(1)
             .margin({ left: SPACING.SM })
+        } else {
+          Text(this.order!.status === 0 ? '支付后等待接单' : this.order!.status <= 3 ? '待骑手接单' : '未分配骑手')
+            .fontSize(FONT_SIZE.MD)
+            .fontColor(COLORS.TEXT_HINT)
+            .layoutWeight(1)
+            .margin({ left: SPACING.SM })
+            .id('order-rider-pending')
         }
-        .width('100%')
       }
+      .width('100%')
     }
       .attributeModifier(new AppCardStyle())
     .width('100%')
@@ -830,6 +1118,21 @@ Image($r('app.media.ui_close')).width(FONT_SIZE.LG).height(FONT_SIZE.LG).objectF
         }
         .width('100%')
       }
+
+      if ((this.order!.expectTime ?? '') !== '') {
+        Row() {
+          Text('预约送达')
+            .fontSize(FONT_SIZE.MD)
+            .fontColor(COLORS.TEXT_SECONDARY)
+          Text(this.order!.expectTime ?? '')
+            .fontSize(FONT_SIZE.MD)
+            .fontColor(COLORS.TEXT_PRIMARY)
+            .layoutWeight(1)
+            .textAlign(TextAlign.End)
+            .id('order-expect-time')
+        }
+        .width('100%')
+      }
     }
       .attributeModifier(new AppCardStyle())
     .width('100%')
@@ -844,13 +1147,7 @@ Image($r('app.media.ui_close')).width(FONT_SIZE.LG).height(FONT_SIZE.LG).objectF
       if (this.order!.status === 0) {
         Row({ space: SPACING.SM }) {
           ForEach(this.payChannelOptions, (opt: PayChannelOption) => {
-            Text(opt.code === 'BALANCE' ? opt.label : `${opt.label}(模拟)`)
-              .fontSize(FONT_SIZE.XS)
-              .fontColor(this.payChannel === opt.code ? COLORS.ON_PRIMARY : COLORS.TEXT_PRIMARY)
-              .backgroundColor(this.payChannel === opt.code ? COLORS.PRIMARY : COLORS.TAG_BG)
-              .padding({ left: SPACING.SM, right: SPACING.SM, top: 4, bottom: 4 })
-              .borderRadius(BORDER_RADIUS.SM)
-              .onClick(() => { this.payChannel = opt.code })
+            this.PayChannelChip(opt)
           }, (opt: PayChannelOption) => opt.code)
         }
         .width('100%')
@@ -867,18 +1164,18 @@ Image($r('app.media.ui_close')).width(FONT_SIZE.LG).height(FONT_SIZE.LG).objectF
             .fontColor(COLORS.TEXT_SECONDARY)
             .backgroundColor(COLORS.BG_PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
-            .enabled(!this.paying)
+            .enabled(!this.paying && !this.manualPaymentChecking)
             .id('order-cancel')
             .onClick(() => { this.showCancelDialog = true })
 
-          Button(this.paying ? '支付中…' : `立即支付 ¥${this.order!.payAmount.toFixed(2)}`)
+          Button(this.payButtonText())
             .attributeModifier(new AppButtonStyle())
             .layoutWeight(2)
             .height(44)
             .fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
             .backgroundColor(COLORS.PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
-            .enabled(!this.paying)
+            .enabled(!this.paying && !this.manualPaymentChecking)
             .id('order-pay')
             .onClick(() => { this.payNow() })
         }
@@ -969,5 +1266,23 @@ Image($r('app.media.ui_close')).width(FONT_SIZE.LG).height(FONT_SIZE.LG).objectF
       .width('100%')
       .margin({ top: SPACING.MD })
     }
+  }
+
+  @Builder
+  PayChannelChip(opt: PayChannelOption) {
+    Text(opt.label)
+      .fontSize(FONT_SIZE.XS)
+      .fontColor(this.payChannel === opt.code ? COLORS.ON_PRIMARY : COLORS.TEXT_PRIMARY)
+      .backgroundColor(this.payChannel === opt.code ? COLORS.PRIMARY : COLORS.TAG_BG)
+      .padding({ left: SPACING.SM, right: SPACING.SM, top: 4, bottom: 4 })
+      .borderRadius(BORDER_RADIUS.SM)
+      .accessibilitySelected(this.payChannel === opt.code)
+      .enabled(opt.code !== 'WECHAT' && !this.paying && !this.manualPaymentChecking)
+      .opacity(opt.code === 'WECHAT' ? 0.45 : 1)
+      .id(`order-pay-channel-${opt.code}`)
+      .onClick(() => {
+        this.payChannel = opt.code
+        this.showPaymentCode = false
+      })
   }
 }

@@ -4,7 +4,7 @@ import { AppButtonStyle, AppCardStyle, AppFilterStyle, AppRefreshStyle, AppTheme
  * 包含：搜索栏、分类导航、店铺列表、店铺详情、购物车、订单列表、个人中心、底部Tab导航
  */
 import { Category, StoreItem, GoodsItem, GoodsSpec, SpecialGoodsItem, SeckillItem, CartItem, Order, User, UserRole, Review, Address, Coupon, Favorite, Banner, Announcement, MarketingActivity, Setmeal, SetmealItem, SetmealOrder, createEmptyUser } from '../model/Models'
-import { addCartItemRemote, updateCartItemQuantityRemote, createOrderRemote, refreshCartFromServer, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCartRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncBannersRemote, syncAnnouncementsRemote, syncStoresFromServer, syncGoodsFromServer, syncUserOrdersFromServer, toggleFavoriteRemote, confirmOrderRemote, cancelOrderRemote, payOrderRemote, fetchSeckillsRemote, getLastRemoteErrorMessage, syncCurrentUserFromServer } from '../service/AppStorageManager'
+import { addCartItemRemote, updateCartItemQuantityRemote, createOrderRemote, refreshCartFromServer, initAppStorage, isLoggedIn, logout, getAllStoresList, getGoodsForStore, isFavorited, syncAddressesRemote, syncCartRemote, syncCategoriesFromServer, syncStoreReviewsRemote, syncBannersRemote, syncAnnouncementsRemote, syncStoresFromServer, syncGoodsFromServer, toggleFavoriteRemote, confirmOrderRemote, cancelOrderRemote, payOrderRemote, fetchSeckillsRemote, getLastRemoteErrorMessage, syncCurrentUserFromServer } from '../service/AppStorageManager'
 import { fetchRecommendedStoresApi, fetchSpecialGoodsApi, fetchStoreMerchantCategoriesApi, fetchStoreDetailApi, fetchStoreActivitiesApi, fetchStoreSetmealsApi } from '../service/ApiService'
 import { LoginPage } from './LoginPage'
 import { CartAddAnimator, CartAddFlight } from '../components/CartAddFlight'
@@ -165,7 +165,6 @@ struct Index {
       // 后端业务接口统一要求 JWT，登录成功后再拉取首页真实数据。
       syncCategoriesFromServer()
       syncStoresFromServer()
-      syncUserOrdersFromServer()
     }
   }
 
@@ -237,7 +236,6 @@ struct Index {
       syncCartRemote()
       syncCategoriesFromServer()
       syncStoresFromServer()
-      syncUserOrdersFromServer()
     }
   }
 

@@ -6,7 +6,9 @@ import com.example.takeout.model.User;
 import com.example.takeout.security.LoginRateLimiter;
 import com.example.takeout.security.TokenRevocationService;
 import com.example.takeout.service.AuthService;
-import com.example.takeout.service.thirdparty.SmsSender;
+import com.example.takeout.service.RefreshTokenService;
+import com.example.takeout.service.SmsVerificationService;
+import com.example.takeout.service.PushTokenService;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
@@ -34,14 +36,19 @@ public class AuthController {
     private final AuthService authService;
     private final LoginRateLimiter loginRateLimiter;
     private final TokenRevocationService tokenRevocationService;
-    private final SmsSender smsSender;
+    private final RefreshTokenService refreshTokenService;
+    private final SmsVerificationService smsVerificationService;
+    private final PushTokenService pushTokenService;
 
     public AuthController(AuthService authService, LoginRateLimiter loginRateLimiter,
-                          TokenRevocationService tokenRevocationService, SmsSender smsSender) {
+                          TokenRevocationService tokenRevocationService, RefreshTokenService refreshTokenService,
+                          SmsVerificationService smsVerificationService, PushTokenService pushTokenService) {
         this.authService = authService;
         this.loginRateLimiter = loginRateLimiter;
         this.tokenRevocationService = tokenRevocationService;
-        this.smsSender = smsSender;
+        this.refreshTokenService = refreshTokenService;
+        this.smsVerificationService = smsVerificationService;
+        this.pushTokenService = pushTokenService;
     }
 
     @PostMapping("/register")
@@ -54,29 +61,45 @@ public class AuthController {
         return ApiResponse.ok(authService.register(req.username(), req.phone(), req.password(), req.role()).safe());
     }
 
-    /** 短信验证码（Mock 适配层：固定码 + 日志，真实短信服务商可替换 SmsSender 实现）。 */
+    /** The server generates, stores, and sends the one-time code. Only local mock mode returns it. */
     @PostMapping("/sms-code")
-    public ApiResponse<SmsCodeResult> smsCode(@RequestBody SmsCodeRequest req) {
+    public ApiResponse<SmsCodeResult> smsCode(@RequestBody SmsCodeRequest req, HttpServletRequest http) {
+        String ip = LoginRateLimiter.clientIp(http);
+        if (loginRateLimiter.isBlocked("sms-code", ip)) {
+            throw new BizException(429, "验证码请求过于频繁，请稍后再试");
+        }
+        loginRateLimiter.recordAttempt("sms-code", ip);
         if (req == null || req.phone() == null || !req.phone().matches("1\\d{10}")) {
             throw new BizException("手机号格式不正确");
         }
-        return ApiResponse.ok(new SmsCodeResult(smsSender.sendSmsCode(req.phone()), true));
+        SmsVerificationService.IssueResult result = smsVerificationService.issue(req.phone());
+        return ApiResponse.ok(new SmsCodeResult(result.code(), result.mock()));
     }
 
     @PostMapping("/password/forgot")
-    public ApiResponse<Void> forgotPassword(@RequestBody ForgotPasswordRequest req) {
+    public ApiResponse<Void> forgotPassword(@RequestBody ForgotPasswordRequest req, HttpServletRequest http) {
+        String ip = LoginRateLimiter.clientIp(http);
+        if (loginRateLimiter.isBlocked("password-forgot", ip)) {
+            throw new BizException(429, "找回密码请求过于频繁，请稍后再试");
+        }
+        loginRateLimiter.recordAttempt("password-forgot", ip);
         authService.resetPasswordBySms(req.phone(), req.code(), req.newPassword());
         return ApiResponse.ok();
     }
 
     @PostMapping("/payment-password/forgot")
-    public ApiResponse<Void> forgotPaymentPassword(@RequestBody ForgotPaymentPasswordRequest req) {
+    public ApiResponse<Void> forgotPaymentPassword(@RequestBody ForgotPaymentPasswordRequest req, HttpServletRequest http) {
+        String ip = LoginRateLimiter.clientIp(http);
+        if (loginRateLimiter.isBlocked("payment-password-forgot", ip)) {
+            throw new BizException(429, "找回支付密码请求过于频繁，请稍后再试");
+        }
+        loginRateLimiter.recordAttempt("payment-password-forgot", ip);
         authService.resetPaymentPasswordBySms(req.phone(), req.code(), req.paymentPassword());
         return ApiResponse.ok();
     }
 
     @PostMapping("/login")
-    public ApiResponse<AuthService.LoginResult> login(@RequestBody LoginRequest req, HttpServletRequest http) {
+    public ApiResponse<AuthSessionResult> login(@RequestBody LoginRequest req, HttpServletRequest http) {
         String ip = LoginRateLimiter.clientIp(http);
         if (loginRateLimiter.isBlocked("login", ip)) {
             throw new BizException(429, "登录尝试过于频繁，请稍后再试");
@@ -84,11 +107,24 @@ public class AuthController {
         try {
             AuthService.LoginResult result = authService.login(req.phone(), req.password(), req.loginType());
             loginRateLimiter.reset("login", ip);
-            return ApiResponse.ok(result);
+            return ApiResponse.ok(new AuthSessionResult(result.token(), refreshTokenService.issue(result.user().id(), result.token()),
+                    result.user()));
         } catch (BizException e) {
             loginRateLimiter.recordAttempt("login", ip);
             throw e;
         }
+    }
+
+    @PostMapping("/refresh")
+    public ApiResponse<RefreshTokenService.RefreshResult> refresh(@RequestBody RefreshRequest req) {
+        return ApiResponse.ok(refreshTokenService.refresh(req == null ? null : req.refreshToken()));
+    }
+
+    @PostMapping("/push-token")
+    public ApiResponse<PushRegistrationResult> registerPushToken(@RequestAttribute("userId") long userId,
+                                               @RequestBody PushTokenRequest req) {
+        pushTokenService.register(userId, req == null ? null : req.token());
+        return ApiResponse.ok(new PushRegistrationResult(pushTokenService.profileId(userId)));
     }
 
     /**
@@ -96,10 +132,14 @@ public class AuthController {
      * 前端即使请求失败也只清本地登录态（弱网下退出登录不能被网络拖住）。
      */
     @PostMapping("/logout")
-    public ApiResponse<Void> logout(@RequestHeader(value = "Authorization", required = false) String authorization) {
+    public ApiResponse<Void> logout(@RequestHeader(value = "Authorization", required = false) String authorization,
+                                    @RequestBody(required = false) LogoutRequest req) {
         String token = authorization != null && authorization.startsWith("Bearer ")
                 ? authorization.substring(7) : null;
+        java.util.OptionalLong userId = tokenRevocationService.userIdIfValid(token);
         tokenRevocationService.revoke(token, "logout");
+        refreshTokenService.revoke(req == null ? null : req.refreshToken());
+        if (userId.isPresent() && req != null) pushTokenService.unregister(userId.getAsLong(), req.pushToken());
         return ApiResponse.ok();
     }
 
@@ -157,6 +197,23 @@ public class AuthController {
 
     public record LoginRequest(String phone, String password, String loginType) {
     }
+
+    public record AuthSessionResult(String token, String refreshToken, User user) {
+    }
+
+    public record RefreshRequest(String refreshToken) {
+    }
+
+    public record LogoutRequest(String refreshToken,
+                                @JsonProperty(access = JsonProperty.Access.WRITE_ONLY) String pushToken) {
+        @Override public String toString() { return "LogoutRequest[refreshToken=[redacted], pushToken=[redacted]]"; }
+    }
+
+    public record PushTokenRequest(@JsonProperty(access = JsonProperty.Access.WRITE_ONLY) String token) {
+        @Override public String toString() { return "PushTokenRequest[token=[redacted]]"; }
+    }
+
+    public record PushRegistrationResult(String profileId) { }
 
     public record ProfileUpdateRequest(String username, String phone) {
     }

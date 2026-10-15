@@ -13,6 +13,10 @@ import riderFlowTest from './RiderFlow.test';
 import adminFlowTest from './AdminFlow.test';
 import probeTest from './Probe.test';
 import importProbeTest from './ImportProbe.test';
+import authTokenStorageTest from './AuthTokenStorage.test';
+import orderPaymentSelectionTest from './OrderPaymentSelection.test';
+import checkoutDeliveryTimeTest from './CheckoutDeliveryTime.test';
+import orderMobilePaymentTest from './OrderMobilePayment.test';
 
 export default function testsuite() {
   abilityTest();
@@ -30,4 +34,8 @@ export default function testsuite() {
   adminFlowTest();
   probeTest();
   importProbeTest();
+  authTokenStorageTest();
+  orderPaymentSelectionTest();
+  checkoutDeliveryTimeTest();
+  orderMobilePaymentTest();
 }

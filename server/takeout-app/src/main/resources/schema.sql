@@ -14,7 +14,9 @@ CREATE TABLE IF NOT EXISTS users (
     -- 最后一次改密时间（yyyy-MM-dd HH:mm:ss，空=从未改密）：签发时间早于它的 token 一律失效
     password_changed_at VARCHAR(32) NOT NULL DEFAULT '',
     -- 与登录密码独立的 6 位支付密码哈希；空值表示尚未设置
-    payment_password_hash VARCHAR(128) DEFAULT NULL
+    payment_password_hash VARCHAR(128) DEFAULT NULL,
+    KEY idx_users_admin_role_status_page (role, status, id),
+    KEY idx_users_admin_status_page (status, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS stores (
@@ -104,10 +106,42 @@ CREATE TABLE IF NOT EXISTS orders (
     rider_id BIGINT NOT NULL DEFAULT 0,
     ready_time VARCHAR(32) DEFAULT '',
     expect_time VARCHAR(32) DEFAULT '',
+    -- DATETIME shadows are dual-written; legacy strings remain during the rolling compatibility window.
+    create_time_dt DATETIME DEFAULT NULL,
+    pay_time_dt DATETIME DEFAULT NULL,
+    accept_time_dt DATETIME DEFAULT NULL,
+    deliver_time_dt DATETIME DEFAULT NULL,
+    complete_time_dt DATETIME DEFAULT NULL,
+    ready_time_dt DATETIME DEFAULT NULL,
+    expect_time_dt DATETIME DEFAULT NULL,
     delivery_type VARCHAR(16) NOT NULL DEFAULT 'DELIVERY',
     KEY idx_orders_user (user_id),
     KEY idx_orders_store (store_id),
-    KEY idx_orders_rider (rider_id)
+    KEY idx_orders_rider (rider_id),
+    KEY idx_orders_user_page (user_id, id),
+    KEY idx_orders_store_page (store_id, id),
+    KEY idx_orders_rider_page (rider_id, id),
+    KEY idx_orders_admin_status_page (status, id),
+    KEY idx_orders_pending_timeout (status, create_time, id),
+    KEY idx_orders_rider_pool (status, rider_id, ready_time, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 结构化订单商品快照；orders.items 保留用于旧客户端与存量订单兼容。
+CREATE TABLE IF NOT EXISTS order_items (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT NOT NULL,
+    line_no INT NOT NULL,
+    goods_id BIGINT NOT NULL,
+    goods_name VARCHAR(128) NOT NULL,
+    unit_price DECIMAL(10,2) NOT NULL,
+    quantity INT NOT NULL,
+    image VARCHAR(255) NOT NULL DEFAULT '',
+    spec_id BIGINT NOT NULL DEFAULT 0,
+    spec_name VARCHAR(64) NOT NULL DEFAULT '',
+    seckill_id BIGINT NOT NULL DEFAULT 0,
+    UNIQUE KEY uk_order_items_line (order_id, line_no),
+    KEY idx_order_items_goods (goods_id, order_id),
+    KEY idx_order_items_spec (spec_id, order_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS coupons (
@@ -121,6 +155,8 @@ CREATE TABLE IF NOT EXISTS coupons (
     expire_time VARCHAR(32) NOT NULL,
     source VARCHAR(16) DEFAULT 'default',
     create_time VARCHAR(32) NOT NULL,
+    expire_time_dt DATETIME DEFAULT NULL,
+    create_time_dt DATETIME DEFAULT NULL,
     KEY idx_coupons_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -152,6 +188,27 @@ CREATE TABLE IF NOT EXISTS payment_records (
     KEY idx_payment_records_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Third-party payment attempts. active_order_id serializes concurrent channels for one pending order.
+CREATE TABLE IF NOT EXISTS payment_transactions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    channel VARCHAR(16) NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    out_trade_no VARCHAR(32) NOT NULL,
+    provider_transaction_id VARCHAR(128) DEFAULT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'PENDING',
+    payment_url TEXT,
+    payment_mode VARCHAR(8) NOT NULL DEFAULT 'QR',
+    active_order_id BIGINT DEFAULT NULL,
+    create_time VARCHAR(32) NOT NULL,
+    notify_time VARCHAR(32) DEFAULT NULL,
+    UNIQUE KEY uk_payment_transactions_out_trade_no (out_trade_no),
+    UNIQUE KEY uk_payment_transactions_provider_id (channel, provider_transaction_id),
+    UNIQUE KEY uk_payment_transactions_active_order (active_order_id),
+    KEY idx_payment_transactions_order (order_id, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- 优惠券领取台账：按活动唯一(user_id,store_id,name)终身限领一次，唯一键兜底并发
 CREATE TABLE IF NOT EXISTS user_coupons (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -162,6 +219,8 @@ CREATE TABLE IF NOT EXISTS user_coupons (
     amount DECIMAL(10,2) NOT NULL DEFAULT 0,
     claim_time VARCHAR(32) NOT NULL,
     expire_time VARCHAR(32) NOT NULL,
+    claim_time_dt DATETIME DEFAULT NULL,
+    expire_time_dt DATETIME DEFAULT NULL,
     UNIQUE KEY uk_user_coupon_campaign (user_id, store_id, name),
     KEY idx_user_coupons_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -180,6 +239,9 @@ CREATE TABLE IF NOT EXISTS marketing_activities (
     end_time VARCHAR(32) NOT NULL,
     status INT NOT NULL DEFAULT 1,
     create_time VARCHAR(32) NOT NULL,
+    start_time_dt DATETIME DEFAULT NULL,
+    end_time_dt DATETIME DEFAULT NULL,
+    create_time_dt DATETIME DEFAULT NULL,
     KEY idx_mkt_store (store_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -283,6 +345,7 @@ CREATE TABLE IF NOT EXISTS refund_records (
     process_time VARCHAR(32) DEFAULT '',
     reject_reason VARCHAR(255) DEFAULT '',
     KEY idx_refund_order (order_id),
+    KEY idx_refund_status_page (status, id),
     KEY idx_refund_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -357,6 +420,9 @@ CREATE TABLE IF NOT EXISTS seckills (
     end_time VARCHAR(32) NOT NULL,
     status INT NOT NULL DEFAULT 1,
     create_time VARCHAR(32) NOT NULL,
+    start_time_dt DATETIME DEFAULT NULL,
+    end_time_dt DATETIME DEFAULT NULL,
+    create_time_dt DATETIME DEFAULT NULL,
     KEY idx_seckill_goods (goods_id),
     KEY idx_seckill_window (status, start_time, end_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -369,6 +435,7 @@ CREATE TABLE IF NOT EXISTS seckill_orders (
     seckill_id BIGINT NOT NULL,
     order_id BIGINT NOT NULL DEFAULT 0,
     create_time VARCHAR(32) NOT NULL,
+    create_time_dt DATETIME DEFAULT NULL,
     UNIQUE KEY uk_seckill_user (user_id, seckill_id),
     KEY idx_seckill_orders_seckill (seckill_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -388,6 +455,7 @@ CREATE TABLE IF NOT EXISTS outbox_events (
     owner VARCHAR(64) NOT NULL DEFAULT '',
     lease_until BIGINT NOT NULL DEFAULT 0,
     create_time VARCHAR(32) NOT NULL,
+    create_time_dt DATETIME DEFAULT NULL,
     KEY idx_outbox_pending (status, id),
     KEY idx_outbox_claim (status, lease_until, id),
     KEY idx_outbox_order (order_id)
@@ -402,6 +470,36 @@ CREATE TABLE IF NOT EXISTS token_blacklist (
     expires_at BIGINT NOT NULL DEFAULT 0,
     create_time VARCHAR(32) NOT NULL,
     KEY idx_blacklist_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- HarmonyOS Push Kit device tokens are encrypted at rest and scoped to the authenticated account.
+CREATE TABLE IF NOT EXISTS push_tokens (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    token_hash CHAR(64) NOT NULL,
+    token_encrypted TEXT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    UNIQUE KEY uk_push_token_hash (token_hash),
+    KEY idx_push_tokens_user (user_id, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 操作审计：只保存路由和结果元数据，不记录请求体或凭证。
+CREATE TABLE IF NOT EXISTS operation_audit_logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    operator_id BIGINT NOT NULL,
+    operator_role INT NOT NULL,
+    order_id BIGINT NOT NULL DEFAULT 0,
+    status_after INT NOT NULL DEFAULT -1,
+    action VARCHAR(128) NOT NULL,
+    http_method VARCHAR(10) NOT NULL,
+    request_path VARCHAR(255) NOT NULL,
+    outcome VARCHAR(16) NOT NULL,
+    http_status INT NOT NULL,
+    trace_id VARCHAR(64) NOT NULL DEFAULT '',
+    created_at BIGINT NOT NULL,
+    KEY idx_operation_audit_time (created_at, id),
+    KEY idx_operation_audit_actor_time (operator_role, operator_id, created_at, id),
+    KEY idx_operation_audit_order (order_id, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- AI 助手连接配置：API Key 使用服务端 AES-GCM 加密，管理员读取只返回是否已配置。

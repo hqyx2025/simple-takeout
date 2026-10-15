@@ -53,8 +53,9 @@ public class OutboxEventDao {
     }
 
     public long insert(String eventType, long orderId, String payload, String now) {
-        jdbc.update("INSERT INTO outbox_events(event_type, order_id, payload, status, retry_count, create_time) " +
-                "VALUES(?,?,?,0,0,?)", eventType, orderId, payload, now);
+        jdbc.update("INSERT INTO outbox_events(event_type, order_id, payload, status, retry_count, create_time, " +
+                        "create_time_dt) VALUES(?,?,?,0,0,?," + JdbcDateTimes.PARAMETER + ")",
+                eventType, orderId, payload, now, now);
         return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 
@@ -137,6 +138,7 @@ public class OutboxEventDao {
 
     /** 清理已投递的历史事件，避免表无限增长。 */
     public int deleteSentBefore(String time) {
-        return jdbc.update("DELETE FROM outbox_events WHERE status = 1 AND create_time < ?", time);
+        return jdbc.update("DELETE FROM outbox_events WHERE status = 1 AND " + JdbcDateTimes.value("create_time") +
+                " < " + JdbcDateTimes.PARAMETER, time);
     }
 }

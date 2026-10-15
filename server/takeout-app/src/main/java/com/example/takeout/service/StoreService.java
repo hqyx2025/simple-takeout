@@ -14,12 +14,15 @@ import com.example.takeout.model.MarketingActivity;
 import com.example.takeout.model.Seckill;
 import com.example.takeout.model.Setmeal;
 import com.example.takeout.model.SetmealItem;
-import com.example.takeout.model.Store;
 import com.example.takeout.model.SpecialGoods;
+import com.example.takeout.model.Store;
+import com.example.takeout.service.mq.DomainEventPublisher;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -66,6 +69,213 @@ public class StoreService {
         return storeDao.listActiveMarketingActivities(storeId, LocalDateTime.now().format(FMT));
     }
 
+    /** 商户活动管理：只允许店主/该店启用员工操作。 */
+    public List<MarketingActivity> merchantActivities(long ownerId, long storeId) {
+        requireOwned(ownerId, storeId);
+        return storeDao.listMarketingActivities(storeId);
+    }
+
+    @Transactional
+    public MarketingActivity createMarketingActivity(long ownerId, long storeId, MarketingActivityInput input) {
+        requireOwned(ownerId, storeId);
+        MarketingActivity normalized = normalizeMarketingActivity(0, storeId, input, LocalDateTime.now().format(FMT));
+        long id = storeDao.insertMarketingActivity(normalized);
+        invalidateStoreAndGoodsCache();
+        return storeDao.findMarketingActivity(storeId, id).orElseThrow(() -> new BizException("活动创建失败"));
+    }
+
+    @Transactional
+    public MarketingActivity updateMarketingActivity(long ownerId, long storeId, long activityId,
+                                                      MarketingActivityInput input) {
+        requireOwned(ownerId, storeId);
+        MarketingActivity current = storeDao.findMarketingActivity(storeId, activityId)
+                .orElseThrow(() -> new BizException("活动不存在或不属于该店铺"));
+        MarketingActivity normalized = normalizeMarketingActivity(activityId, storeId, input, current.createTime());
+        storeDao.updateMarketingActivity(normalized);
+        invalidateStoreAndGoodsCache();
+        return storeDao.findMarketingActivity(storeId, activityId)
+                .orElseThrow(() -> new BizException("活动更新失败"));
+    }
+
+    @Transactional
+    public void deleteMarketingActivity(long ownerId, long storeId, long activityId) {
+        requireOwned(ownerId, storeId);
+        storeDao.findMarketingActivity(storeId, activityId)
+                .orElseThrow(() -> new BizException("活动不存在或不属于该店铺"));
+        storeDao.deleteMarketingActivity(storeId, activityId);
+        invalidateStoreAndGoodsCache();
+    }
+
+    @Transactional
+    public MarketingActivity updateMarketingActivityStatus(long ownerId, long storeId, long activityId, int status) {
+        requireOwned(ownerId, storeId);
+        MarketingActivity current = storeDao.findMarketingActivity(storeId, activityId)
+                .orElseThrow(() -> new BizException("活动不存在或不属于该店铺"));
+        if (status != 0 && status != 1) {
+            throw new BizException("活动状态不合法");
+        }
+        storeDao.updateMarketingActivity(new MarketingActivity(current.id(), current.storeId(), current.type(),
+                current.title(), current.discountRate(), current.reduceAmount(), current.threshold(),
+                current.giftGoodsId(), current.startTime(), current.endTime(), status, current.createTime()));
+        invalidateStoreAndGoodsCache();
+        return storeDao.findMarketingActivity(storeId, activityId)
+                .orElseThrow(() -> new BizException("活动状态更新失败"));
+    }
+
+    private MarketingActivity normalizeMarketingActivity(long id, long storeId, MarketingActivityInput input,
+                                                          String createTime) {
+        if (input == null) {
+            throw new BizException("活动参数不能为空");
+        }
+        String type = requireMaxLength(normalizeRequired(input.type(), "活动类型不能为空"), 16, "活动类型").toUpperCase();
+        if (!Set.of("DISCOUNT", "NEW_USER", "GIFT").contains(type)) {
+            throw new BizException("活动类型不支持");
+        }
+        String title = requireMaxLength(normalizeRequired(input.title(), "活动标题不能为空"), 64, "活动标题");
+        if (!Double.isFinite(input.discountRate()) || !Double.isFinite(input.reduceAmount())
+                || !Double.isFinite(input.threshold()) || input.discountRate() < 0
+                || input.reduceAmount() < 0 || input.threshold() < 0) {
+            throw new BizException("活动优惠参数不合法");
+        }
+        if ("DISCOUNT".equals(type) && (input.discountRate() <= 0 || input.discountRate() >= 1)) {
+            throw new BizException("折扣率必须在 0 和 1 之间");
+        }
+        if ("NEW_USER".equals(type) && input.reduceAmount() <= 0) {
+            throw new BizException("新客立减金额必须大于 0");
+        }
+        long giftGoodsId = input.giftGoodsId();
+        if ("GIFT".equals(type)) {
+            if (input.threshold() <= 0 || giftGoodsId <= 0) {
+                throw new BizException("满赠活动需要正数门槛和赠品");
+            }
+            Goods gift = goodsDao.findById(giftGoodsId).orElseThrow(() -> new BizException("赠品商品不存在"));
+            if (gift.storeId() != storeId) {
+                throw new BizException(403, "赠品商品不属于该店铺");
+            }
+        } else {
+            giftGoodsId = 0;
+        }
+        String start = normalizeTime(input.startTime(), "开始时间");
+        String end = normalizeTime(input.endTime(), "结束时间");
+        if (end.compareTo(start) <= 0) {
+            throw new BizException("结束时间必须晚于开始时间");
+        }
+        if (input.status() != 0 && input.status() != 1) {
+            throw new BizException("活动状态不合法");
+        }
+        return new MarketingActivity(id, storeId, type, title,
+                "DISCOUNT".equals(type) ? input.discountRate() : 0,
+                "NEW_USER".equals(type) ? input.reduceAmount() : 0,
+                "GIFT".equals(type) ? input.threshold() : 0,
+                giftGoodsId, start, end, input.status(), createTime);
+    }
+
+    private String normalizeTime(String value, String field) {
+        String normalized = requireMaxLength(normalizeRequired(value, field + "不能为空"), 32, field);
+        try {
+            return LocalDateTime.parse(normalized, FMT).format(FMT);
+        } catch (DateTimeParseException ex) {
+            throw new BizException(field + "格式必须为 yyyy-MM-dd HH:mm:ss");
+        }
+    }
+
+    public record MarketingActivityInput(String type, String title, double discountRate, double reduceAmount,
+                                         double threshold, long giftGoodsId, String startTime, String endTime,
+                                         int status) {
+    }
+
+    // ============ 商户限时秒杀管理 ============
+
+    public List<Seckill> merchantSeckills(long ownerId, long storeId) {
+        requireOwned(ownerId, storeId);
+        return seckillDao.listByStore(storeId);
+    }
+
+    @Transactional
+    public Seckill createSeckill(long ownerId, long storeId, SeckillInput input) {
+        requireOwned(ownerId, storeId);
+        SeckillInput normalized = validateSeckill(storeId, input, 0);
+        long id = seckillDao.insert(normalized.goodsId(), storeId, normalized.price(), normalized.quota(),
+                normalized.startTime(), normalized.endTime(), normalized.status());
+        invalidateStoreAndGoodsCache();
+        return seckillDao.findById(id).orElseThrow(() -> new BizException("秒杀创建失败"));
+    }
+
+    @Transactional
+    public Seckill updateSeckill(long ownerId, long storeId, long seckillId, SeckillInput input) {
+        requireOwned(ownerId, storeId);
+        Seckill current = seckillDao.findById(seckillId)
+                .filter(item -> item.storeId() == storeId)
+                .orElseThrow(() -> new BizException("秒杀不存在或不属于该店铺"));
+        SeckillInput normalized = validateSeckill(storeId, input, current.sold());
+        if (normalized.goodsId() != current.goodsId()) {
+            throw new BizException("秒杀商品创建后不可更换");
+        }
+        seckillDao.update(seckillId, storeId, normalized.price(), normalized.quota(), normalized.startTime(),
+                normalized.endTime(), normalized.status());
+        invalidateStoreAndGoodsCache();
+        return seckillDao.findById(seckillId).orElseThrow(() -> new BizException("秒杀更新失败"));
+    }
+
+    @Transactional
+    public void deleteSeckill(long ownerId, long storeId, long seckillId) {
+        requireOwned(ownerId, storeId);
+        Seckill current = seckillDao.findById(seckillId)
+                .filter(item -> item.storeId() == storeId)
+                .orElseThrow(() -> new BizException("秒杀不存在或不属于该店铺"));
+        if (current.sold() > 0) {
+            throw new BizException("已有销量的秒杀不可删除，请先下架");
+        }
+        seckillDao.delete(seckillId, storeId);
+        invalidateStoreAndGoodsCache();
+    }
+
+    @Transactional
+    public Seckill updateSeckillStatus(long ownerId, long storeId, long seckillId, int status) {
+        requireOwned(ownerId, storeId);
+        Seckill current = seckillDao.findById(seckillId)
+                .filter(item -> item.storeId() == storeId)
+                .orElseThrow(() -> new BizException("秒杀不存在或不属于该店铺"));
+        if (status != 0 && status != 1) {
+            throw new BizException("秒杀状态不合法");
+        }
+        seckillDao.update(seckillId, storeId, current.price(), current.quota(), current.startTime(),
+                current.endTime(), status);
+        invalidateStoreAndGoodsCache();
+        return seckillDao.findById(seckillId).orElseThrow(() -> new BizException("秒杀状态更新失败"));
+    }
+
+    private SeckillInput validateSeckill(long storeId, SeckillInput input, int sold) {
+        if (input == null || input.goodsId() <= 0) {
+            throw new BizException("秒杀商品不能为空");
+        }
+        Goods goods = goodsDao.findById(input.goodsId()).orElseThrow(() -> new BizException("秒杀商品不存在"));
+        if (goods.storeId() != storeId) {
+            throw new BizException(403, "秒杀商品不属于该店铺");
+        }
+        if (goods.multiSpec()) {
+            throw new BizException("多规格商品暂不支持秒杀");
+        }
+        if (!Double.isFinite(input.price()) || input.price() <= 0 || input.price() >= goods.price()) {
+            throw new BizException("秒杀价必须大于 0 且低于商品现价");
+        }
+        if (input.quota() <= 0 || input.quota() < sold) {
+            throw new BizException("秒杀名额必须大于已售数量");
+        }
+        String start = normalizeTime(input.startTime(), "开始时间");
+        String end = normalizeTime(input.endTime(), "结束时间");
+        if (end.compareTo(start) <= 0) {
+            throw new BizException("结束时间必须晚于开始时间");
+        }
+        if (input.status() != 0 && input.status() != 1) {
+            throw new BizException("秒杀状态不合法");
+        }
+        return new SeckillInput(input.goodsId(), input.price(), input.quota(), start, end, input.status());
+    }
+
+    public record SeckillInput(long goodsId, double price, int quota, String startTime, String endTime, int status) {
+    }
+
     // ============ 套餐与组合购 ============
 
     public List<Setmeal> listStoreSetmeals(long storeId) {
@@ -77,6 +287,7 @@ public class StoreService {
         return storeDao.listSetmealsByStore(storeId, false);
     }
 
+    @Transactional
     public Setmeal createSetmeal(long ownerId, long storeId, SetmealInput input) {
         requireOwned(ownerId, storeId);
         String name = requireMaxLength(normalizeRequired(input.name(), "套餐名称不能为空"), 128, "套餐名称");
@@ -96,6 +307,7 @@ public class StoreService {
                 .orElseThrow(() -> new BizException("套餐创建失败"));
     }
 
+    @Transactional
     public void deleteMerchantSetmeal(long ownerId, long storeId, long setmealId) {
         requireOwned(ownerId, storeId);
         boolean exists = storeDao.listSetmealsByStore(storeId, false).stream().anyMatch(s -> s.id() == setmealId);
@@ -182,6 +394,10 @@ public class StoreService {
      * 多个聚合视图，因此按模式整体失效，避免遗漏造成长期脏读。
      */
     private void invalidateStoreAndGoodsCache() {
+        DomainEventPublisher.afterCommit(this::evictStoreAndGoodsCache);
+    }
+
+    private void evictStoreAndGoodsCache() {
         for (String pattern : HotDataCacheService.Keys.STORE_GOODS_PATTERNS) {
             cache.evictByPattern(pattern);
         }
@@ -371,6 +587,7 @@ public class StoreService {
         return storeDetail(storeId);
     }
 
+    @Transactional
     public Goods addGoods(long ownerId, long storeId, GoodsInput input) {
         requireOwned(ownerId, storeId);
         validateGoodsInput(input);
@@ -387,6 +604,7 @@ public class StoreService {
         return goodsDao.findById(id).orElseThrow(() -> new BizException("商品创建失败"));
     }
 
+    @Transactional
     public Goods updateGoods(long ownerId, long goodsId, GoodsInput input) {
         Goods goods = goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品不存在"));
         requireOwned(ownerId, goods.storeId());
@@ -419,6 +637,7 @@ public class StoreService {
     }
 
     /** 整体覆盖菜品规格（保留已有规格 id，新增的插入，未提交的删除）。 */
+    @Transactional
     public Goods updateSpecs(long ownerId, long goodsId, List<SpecInput> specs) {
         Goods goods = goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品不存在"));
         requireOwned(ownerId, goods.storeId());

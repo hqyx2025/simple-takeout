@@ -1,23 +1,28 @@
 package com.example.takeout.service.mq;
 
 import com.example.takeout.common.InstanceId;
+import com.example.takeout.service.PushNotificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.connection.stream.Consumer;
 import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.connection.stream.PendingMessages;
+import org.springframework.data.redis.connection.stream.RecordId;
 import org.springframework.data.redis.connection.stream.ReadOffset;
 import org.springframework.data.redis.connection.stream.StreamOffset;
 import org.springframework.data.redis.connection.stream.StreamReadOptions;
 import org.springframework.data.redis.connection.stream.StreamRecords;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.domain.Range;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 
 /**
  * 领域事件消费者：从 Redis Stream 读取事件并执行「可延迟」的下游动作。
@@ -52,6 +57,7 @@ public class DomainEventConsumer {
     private static final String DEDUP_PREFIX = "takeout:event:consumed:";
 
     private final ObjectProvider<StringRedisTemplate> redisProvider;
+    private final ObjectProvider<PushNotificationService> pushNotifications;
 
     @Value("${takeout.mq.enabled:true}")
     private boolean enabled = true;
@@ -63,8 +69,10 @@ public class DomainEventConsumer {
     @Value("${takeout.mq.dedup-hours:24}")
     private int dedupHours = 24;
 
-    public DomainEventConsumer(ObjectProvider<StringRedisTemplate> redisProvider) {
+    public DomainEventConsumer(ObjectProvider<StringRedisTemplate> redisProvider,
+                               ObjectProvider<PushNotificationService> pushNotifications) {
         this.redisProvider = redisProvider;
+        this.pushNotifications = pushNotifications;
     }
 
     @Scheduled(fixedDelayString = "${takeout.mq.consumer-scan-ms:2000}",
@@ -79,11 +87,27 @@ public class DomainEventConsumer {
         }
         try {
             ensureGroup(redis);
-            List<MapRecord<String, Object, Object>> records = redis.opsForStream().read(
+            List<MapRecord<String, Object, Object>> records = new ArrayList<>();
+            // Reclaim abandoned consumers after the processing lease; retry this consumer's unacknowledged records first.
+            PendingMessages abandoned = redis.opsForStream().pending(DomainEventPublisher.STREAM_KEY, GROUP,
+                    Range.unbounded(), batchSize);
+            if (abandoned != null) {
+                RecordId[] ids = abandoned.stream().filter(item -> item.getElapsedTimeSinceLastDelivery()
+                                .compareTo(Duration.ofMinutes(5)) >= 0)
+                        .map(item -> item.getId()).toArray(RecordId[]::new);
+                if (ids.length > 0) redis.opsForStream().claim(DomainEventPublisher.STREAM_KEY, GROUP,
+                        consumerName, Duration.ofMinutes(5), ids);
+            }
+            List<MapRecord<String, Object, Object>> pending = redis.opsForStream().read(
+                    Consumer.from(GROUP, consumerName), StreamReadOptions.empty().count(batchSize),
+                    StreamOffset.create(DomainEventPublisher.STREAM_KEY, ReadOffset.from("0")));
+            if (pending != null) records.addAll(pending);
+            List<MapRecord<String, Object, Object>> fresh = redis.opsForStream().read(
                     Consumer.from(GROUP, consumerName),
                     StreamReadOptions.empty().count(batchSize),
                     StreamOffset.create(DomainEventPublisher.STREAM_KEY, ReadOffset.lastConsumed()));
-            if (records == null || records.isEmpty()) {
+            if (fresh != null) records.addAll(fresh);
+            if (records.isEmpty()) {
                 return;
             }
             for (MapRecord<String, Object, Object> record : records) {
@@ -157,10 +181,11 @@ public class DomainEventConsumer {
         // 先用短 TTL（5 分钟）作为处理中锁，处理成功后延长到 dedupHours。
         // 若处理失败不延长，短 TTL 过期后另一实例可重试。
         Boolean claimed = redis.opsForValue()
-                .setIfAbsent(DEDUP_PREFIX + eventId, "1", Duration.ofMinutes(5));
+                .setIfAbsent(DEDUP_PREFIX + eventId, "processing", Duration.ofMinutes(5));
         if (!Boolean.TRUE.equals(claimed)) {
-            log.debug("[事件消费] 重复事件已跳过 eventId={} type={}", eventId, eventType);
-            return true;
+            String state = redis.opsForValue().get(DEDUP_PREFIX + eventId);
+            // "1" marks completed events written by previous application versions.
+            return "done".equals(state) || "1".equals(state);
         }
 
         switch (eventType == null ? "" : eventType) {
@@ -174,8 +199,18 @@ public class DomainEventConsumer {
                     log.info("[事件消费] 订单已退款，触发财务对账记录 orderId={}", orderId);
             default -> log.info("[事件消费] 未识别事件类型 type={} orderId={}（已忽略）", eventType, orderId);
         }
+        PushNotificationService notifications = pushNotifications.getIfAvailable();
+        if (notifications != null && orderId != null) {
+            try {
+                notifications.notifyOrderEvent(eventType, Long.parseLong(orderId));
+            } catch (Exception e) {
+                log.warn("[事件消费] 推送发送失败 type={} orderId={}", eventType, orderId);
+                redis.delete(DEDUP_PREFIX + eventId);
+                return false;
+            }
+        }
         // 处理成功：延长去重键 TTL 到配置值，防止同一事件在 dedupHours 内被重复投递
-        redis.expire(DEDUP_PREFIX + eventId, Duration.ofHours(Math.max(dedupHours, 1)));
+        redis.opsForValue().set(DEDUP_PREFIX + eventId, "done", Duration.ofHours(Math.max(dedupHours, 1)));
         return true;
     }
 

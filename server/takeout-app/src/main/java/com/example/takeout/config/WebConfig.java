@@ -2,6 +2,7 @@ package com.example.takeout.config;
 
 import com.example.takeout.security.AuthInterceptor;
 import com.example.takeout.service.FileStorageService;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
@@ -17,10 +18,10 @@ public class WebConfig implements WebMvcConfigurer {
 
     private final AuthInterceptor authInterceptor;
     private final ApiRequestLoggingInterceptor apiRequestLoggingInterceptor;
-    private final FileStorageService fileStorageService;
+    private final ObjectProvider<FileStorageService> fileStorageService;
 
     public WebConfig(AuthInterceptor authInterceptor, ApiRequestLoggingInterceptor apiRequestLoggingInterceptor,
-                     FileStorageService fileStorageService) {
+                     ObjectProvider<FileStorageService> fileStorageService) {
         this.authInterceptor = authInterceptor;
         this.apiRequestLoggingInterceptor = apiRequestLoggingInterceptor;
         this.fileStorageService = fileStorageService;
@@ -28,8 +29,11 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        registry.addResourceHandler("/uploads/**")
-                .addResourceLocations(fileStorageService.root().toUri().toString());
+        FileStorageService local = fileStorageService.getIfAvailable();
+        if (local != null) {
+            registry.addResourceHandler("/uploads/**")
+                    .addResourceLocations(local.root().toUri().toString());
+        }
     }
 
     @Override
@@ -41,9 +45,16 @@ public class WebConfig implements WebMvcConfigurer {
                 .excludePathPatterns(
                         "/api/auth/login",
                         "/api/auth/register",
+                        "/api/auth/refresh",
+                        "/api/auth/logout",
                         "/api/auth/sms-code",
                         "/api/auth/password/forgot",
-                        "/api/auth/payment-password/forgot"
+                        "/api/auth/payment-password/forgot",
+                        "/api/payment/wechat/notify",
+                        "/api/payment/alipay/notify",
+                        "/v3/api-docs/**",
+                        "/swagger-ui/**",
+                        "/swagger-ui.html"
                 );
     }
 

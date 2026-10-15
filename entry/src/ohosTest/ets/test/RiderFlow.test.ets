@@ -34,6 +34,20 @@ async function waitForText(driver: Driver, id: string, expected: string, timeout
   return last
 }
 
+async function waitForOrderAction(driver: Driver, id: string, timeoutMs: number): Promise<Component | null> {
+  let waited: number = 0
+  while (waited <= timeoutMs) {
+    const found = await driver.findComponent(ON.id(id))
+    if (found !== null && found !== undefined) {
+      return found
+    }
+    await driver.delayMs(1000)
+    waited += 1000
+  }
+  console.info('[RiderFlow] waiting for order action timed out id=' + id + ', searching scrollable list')
+  return await scrollUntilVisible(driver, id, 12)
+}
+
 export default function riderFlowTest() {
   describe('RiderFlow', () => {
     it('RiderFlow_online_grab_pickup_deliver', 0, async () => {
@@ -93,18 +107,15 @@ export default function riderFlowTest() {
       console.info('[RiderFlow] grabbed order ' + orderId)
 
       // ---------- 4. 我的配送单 → 取餐 → 送达 ----------
-      // 抢单大厅是 pushUrl 出来的独立页，按返回即可回到骑手中心（不是在首页/同意页上按返回）
-      await driver.pressBack()
-      await driver.delayMs(2500)
-      expect(await clickByIdOrText(driver, 'rider-orders-entry', '我的配送单')).assertTrue()
-      await driver.delayMs(4000)
+      // 抢单成功后大厅会直接打开我的配送单页。
+      await driver.waitForIdle(800, 8000)
 
       const pickupId: string = 'rider-pickup-' + orderId
       const deliverId: string = 'rider-deliver-' + orderId
-      requireComponent(await scrollUntilVisible(driver, pickupId), pickupId)
+      requireComponent(await waitForOrderAction(driver, pickupId, 12000), pickupId)
       expect(await clickByIdOrText(driver, pickupId, '取餐')).assertTrue()
-      await driver.delayMs(4500)
-      requireComponent(await scrollUntilVisible(driver, deliverId), deliverId)
+      await driver.waitForIdle(800, 8000)
+      requireComponent(await waitForOrderAction(driver, deliverId, 12000), deliverId)
       expect(await clickByIdOrText(driver, deliverId, '送达')).assertTrue()
       await driver.delayMs(5000)
 

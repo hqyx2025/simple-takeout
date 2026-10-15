@@ -1,6 +1,15 @@
 {
   "apiType": "stageMode",
   "buildOption": {
+    // 当前开发设备为 x86_64；支付宝 HAR 仅提供 arm64 native 库，必须排除才能安装到模拟器。
+    "externalNativeOptions": {
+      "abiFilters": ["x86_64"]
+    },
+    "nativeLib": {
+      "filter": {
+        "excludes": ["**/libblueshield.so", "**/libutdid_native.so"]
+      }
+    },
     "resOptions": {
       "copyCodeResource": {
         "enable": false

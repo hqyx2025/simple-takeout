@@ -1,0 +1,24 @@
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+takeout:
+  data-seed:
+    enabled: false
+  payment:
+    mock-enabled: false
+    real-enabled: ${TAKEOUT_PAYMENT_REAL_ENABLED:true}
+  sms:
+    provider: ${TAKEOUT_SMS_PROVIDER:huawei}
+  upload:
+    provider: ${TAKEOUT_UPLOAD_PROVIDER:obs}
+    local-enabled: false
+  security:
+    rate-limit:
+      enabled: true
+  cache:
+    enabled: true
+  mq:
+    enabled: true

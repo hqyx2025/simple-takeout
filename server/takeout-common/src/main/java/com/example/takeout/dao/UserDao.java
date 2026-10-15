@@ -40,8 +40,16 @@ public class UserDao {
         return jdbc.query("SELECT * FROM users WHERE phone = ?", MAPPER, phone).stream().findFirst();
     }
 
+    public Optional<User> findByPhoneForUpdate(String phone) {
+        return jdbc.query("SELECT * FROM users WHERE phone = ? FOR UPDATE", MAPPER, phone).stream().findFirst();
+    }
+
     public Optional<User> findById(long id) {
         return jdbc.query("SELECT * FROM users WHERE id = ?", MAPPER, id).stream().findFirst();
+    }
+
+    public Optional<User> findByIdForUpdate(long id) {
+        return jdbc.query("SELECT * FROM users WHERE id = ? FOR UPDATE", MAPPER, id).stream().findFirst();
     }
 
     public boolean existsByPhone(String phone) {
@@ -68,8 +76,37 @@ public class UserDao {
     public List<AdminUser> listForAdmin(Integer role, Integer status, String keyword) {
         StringBuilder sql = new StringBuilder("SELECT u.id, u.username, u.phone, u.role, u.status, " +
                 "u.balance, u.create_time, COUNT(s.id) AS store_count FROM users u " +
-                "LEFT JOIN stores s ON s.owner_id = u.id WHERE u.role <> 2");
+                "LEFT JOIN stores s ON s.owner_id = u.id WHERE ");
         List<Object> args = new java.util.ArrayList<>();
+        appendAdminUserFilters(sql, args, role, status, keyword);
+        sql.append(" GROUP BY u.id, u.username, u.phone, u.role, u.status, u.balance, u.create_time ORDER BY u.id DESC");
+        return queryAdminUsers(sql.toString(), args);
+    }
+
+    public int countForAdmin(Integer role, Integer status, String keyword) {
+        StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM users u WHERE ");
+        List<Object> args = new java.util.ArrayList<>();
+        appendAdminUserFilters(sql, args, role, status, keyword);
+        Integer count = jdbc.queryForObject(sql.toString(), Integer.class, args.toArray());
+        return count == null ? 0 : count;
+    }
+
+    public List<AdminUser> listForAdmin(Integer role, Integer status, String keyword, int pageSize, long offset) {
+        StringBuilder sql = new StringBuilder("SELECT u.id, u.username, u.phone, u.role, u.status, " +
+                "u.balance, u.create_time, COUNT(s.id) AS store_count FROM users u " +
+                "LEFT JOIN stores s ON s.owner_id = u.id WHERE ");
+        List<Object> args = new java.util.ArrayList<>();
+        appendAdminUserFilters(sql, args, role, status, keyword);
+        sql.append(" GROUP BY u.id, u.username, u.phone, u.role, u.status, u.balance, u.create_time " +
+                "ORDER BY u.id DESC LIMIT ? OFFSET ?");
+        args.add(pageSize);
+        args.add(offset);
+        return queryAdminUsers(sql.toString(), args);
+    }
+
+    private void appendAdminUserFilters(StringBuilder sql, List<Object> args,
+                                        Integer role, Integer status, String keyword) {
+        sql.append("u.role <> 2");
         if (role != null) {
             sql.append(" AND u.role = ?");
             args.add(role);
@@ -84,8 +121,10 @@ public class UserDao {
             args.add(value);
             args.add(value);
         }
-        sql.append(" GROUP BY u.id, u.username, u.phone, u.role, u.status, u.balance, u.create_time ORDER BY u.id DESC");
-        return jdbc.query(sql.toString(), (rs, i) -> new AdminUser(
+    }
+
+    private List<AdminUser> queryAdminUsers(String sql, List<Object> args) {
+        return jdbc.query(sql, (rs, i) -> new AdminUser(
                 rs.getLong("id"), rs.getString("username"), rs.getString("phone"),
                 rs.getInt("role"), rs.getInt("status"), rs.getDouble("balance"),
                 rs.getInt("store_count"), rs.getString("create_time")
@@ -146,6 +185,15 @@ public class UserDao {
     public void updatePassword(long userId, String passwordHash, String changedAt) {
         jdbc.update("UPDATE users SET password = ?, password_changed_at = ? WHERE id = ?",
                 passwordHash, changedAt, userId);
+        jdbc.update("UPDATE token_blacklist SET reason = 'rx:password' " +
+                        "WHERE user_id = ? AND LEFT(reason, 3) IN ('rf:', 'ru:')",
+                userId);
+    }
+
+    /** Rehash without revoking existing sessions; only update if the verified hash is still current. */
+    public void upgradePasswordHash(long userId, String currentHash, String upgradedHash) {
+        jdbc.update("UPDATE users SET password = ? WHERE id = ? AND password = ?",
+                upgradedHash, userId, currentHash);
     }
 
     public void updatePaymentPassword(long userId, String passwordHash) {

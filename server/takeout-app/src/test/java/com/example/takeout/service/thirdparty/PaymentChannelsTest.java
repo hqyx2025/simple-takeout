@@ -8,23 +8,23 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Mock 支付渠道契约：空/未知归一为余额，微信/支付宝标记为第三方模拟渠道。 */
+/** 支付渠道契约：缺失或未知渠道不回退余额，支付宝/微信是第三方渠道。 */
 class PaymentChannelsTest {
 
     @Test
-    void normalizesBlankAndUnknownToBalance() {
-        assertEquals("BALANCE", PaymentChannels.normalize(null));
-        assertEquals("BALANCE", PaymentChannels.normalize("  "));
-        assertEquals("BALANCE", PaymentChannels.normalize("unknown"));
+    void defaultsMissingChannelToBalanceAndPreservesUnknownForRejection() {
+        assertEquals("", PaymentChannels.normalize(null));
+        assertEquals("", PaymentChannels.normalize("  "));
+        assertEquals("UNKNOWN", PaymentChannels.normalize("unknown"));
         assertEquals("ALIPAY", PaymentChannels.normalize("alipay"));
         assertEquals("WECHAT", PaymentChannels.normalize("WeChat"));
     }
 
     @Test
     void marksThirdPartyChannels() {
-        assertFalse(PaymentChannels.isMockThirdParty("BALANCE"));
-        assertTrue(PaymentChannels.isMockThirdParty("ALIPAY"));
-        assertTrue(PaymentChannels.isMockThirdParty("WECHAT"));
+        assertFalse(PaymentChannels.isThirdParty("BALANCE"));
+        assertTrue(PaymentChannels.isThirdParty("ALIPAY"));
+        assertTrue(PaymentChannels.isThirdParty("WECHAT"));
     }
 
     @Test

@@ -122,7 +122,15 @@ if ($null -ne $mainPages -and (Test-Path $etsDir)) {
   }
   $registered = @($mainPages.src)
   $missing = @($entryPages | Where-Object { $registered -notcontains $_ })
-  $stale = @($registered | Where-Object { -not (Test-Path (Join-Path $etsDir "$($_.Replace('pages/', '')).ets")) })
+  $stale = @($registered | Where-Object {
+      if ($_ -like 'pages/*') {
+        return -not (Test-Path (Join-Path $etsDir "$($_.Substring(6)).ets"))
+      }
+      if ($_ -like 'widget/*') {
+        return -not (Test-Path (Join-Path (Join-Path (Split-Path -Parent $etsDir) 'widget') "$($_.Substring(7)).ets"))
+      }
+      return $true
+    })
   if ($missing.Count -gt 0) {
     Add-Result 'FAIL' '页面注册' ('以下 @Entry 页面未注册到 main_pages.json：' + ($missing -join ', '))
   } else {
@@ -156,8 +164,8 @@ if ($constants -eq '') {
     Add-Result 'WARN' '高德 Key' '未检测到 MAP_JS_KEY'
   }
 }
-$httpsYml = Test-Path (Join-Path $root 'server\src\main\resources\application-https.yml')
-Add-Result ($(if ($httpsYml) { 'PASS' } else { 'WARN' })) '后端 HTTPS 配置' $(if ($httpsYml) { 'server/application-https.yml 已提供' } else { '缺少 HTTPS 配置' })
+$httpsYml = Test-Path (Join-Path $root 'server\takeout-app\src\main\resources\application-https.yml')
+Add-Result ($(if ($httpsYml) { 'PASS' } else { 'WARN' })) '后端 HTTPS 配置' $(if ($httpsYml) { 'takeout-app/application-https.yml 已提供；启用 https profile 并注入 TLS 环境变量' } else { '缺少 HTTPS 配置' })
 
 # ---------- 5. 签名配置 ----------
 $buildProfile = Read-Raw 'build-profile.json5'

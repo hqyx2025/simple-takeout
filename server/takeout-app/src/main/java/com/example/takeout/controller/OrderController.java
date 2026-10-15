@@ -55,6 +55,14 @@ public class OrderController {
         return ApiResponse.ok(orderService.userOrders(userId));
     }
 
+    @GetMapping("/orders/page")
+    public ApiResponse<OrderService.OrderPage> userOrdersPage(@RequestAttribute("userId") long userId,
+                                                              @RequestParam(required = false) Integer status,
+                                                              @RequestParam(defaultValue = "1") int page,
+                                                              @RequestParam(defaultValue = "30") int pageSize) {
+        return ApiResponse.ok(orderService.userOrders(userId, status, page, pageSize));
+    }
+
     @GetMapping("/orders/{id}")
     public ApiResponse<Order.OrderView> orderDetail(@RequestAttribute("userId") long userId,
                                                     @RequestAttribute("role") int role,
@@ -67,11 +75,18 @@ public class OrderController {
         return ApiResponse.ok(orderService.cancelOrder(userId, id));
     }
 
-    /** 支付待付款订单：扣余额并流转到待接单；channel 为 BALANCE/ALIPAY/WECHAT（微信支付宝为 Mock）。 */
+    /** BALANCE 同步扣款；ALIPAY/WECHAT 只创建预支付，支付结果由验签通知确认。 */
     @PostMapping("/orders/{id}/pay")
     public ApiResponse<Order.OrderView> pay(@RequestAttribute("userId") long userId, @PathVariable long id,
-                                            @RequestParam(required = false) String channel) {
-        return ApiResponse.ok(orderService.payOrder(userId, id, channel));
+                                            @RequestParam String channel,
+                                            @RequestParam(defaultValue = "QR") String mode) {
+        return ApiResponse.ok(orderService.payOrder(userId, id, channel, mode));
+    }
+
+    @PostMapping("/orders/{id}/payment/query")
+    public ApiResponse<Order.OrderView> queryPayment(@RequestAttribute("userId") long userId,
+                                                    @PathVariable long id) {
+        return ApiResponse.ok(orderService.refreshPaymentStatus(userId, id));
     }
 
     @PutMapping("/orders/{id}/confirm")
@@ -101,6 +116,16 @@ public class OrderController {
                                                              @RequestAttribute("role") int role) {
         requireMerchant(role);
         return ApiResponse.ok(orderService.merchantOrders(userId));
+    }
+
+    @GetMapping("/merchant/orders/page")
+    public ApiResponse<OrderService.OrderPage> merchantOrdersPage(@RequestAttribute("userId") long userId,
+                                                                  @RequestAttribute("role") int role,
+                                                                  @RequestParam(required = false) Integer status,
+                                                                  @RequestParam(defaultValue = "1") int page,
+                                                                  @RequestParam(defaultValue = "30") int pageSize) {
+        requireMerchant(role);
+        return ApiResponse.ok(orderService.merchantOrders(userId, status, page, pageSize));
     }
 
     @PutMapping("/merchant/orders/{id}/{action}")

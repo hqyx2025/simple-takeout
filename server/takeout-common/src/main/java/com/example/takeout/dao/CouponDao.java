@@ -38,8 +38,10 @@ public class CouponDao {
 
     public long insert(long userId, long storeId, String name, double threshold, double amount,
                        String expireTime, String source, String now) {
-        jdbc.update("INSERT INTO coupons(user_id, store_id, name, threshold, amount, status, expire_time, source, create_time) VALUES(?,?,?,?,?,?,?,?,?)",
-                userId, storeId, name, threshold, amount, 0, expireTime, source, now);
+        jdbc.update("INSERT INTO coupons(user_id, store_id, name, threshold, amount, status, expire_time, source, " +
+                        "create_time, expire_time_dt, create_time_dt) VALUES(?,?,?,?,?,?,?,?,?," +
+                        JdbcDateTimes.PARAMETER + "," + JdbcDateTimes.PARAMETER + ")",
+                userId, storeId, name, threshold, amount, 0, expireTime, source, now, expireTime, now);
         return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 
@@ -53,7 +55,8 @@ public class CouponDao {
 
     /** 过期券清理：把已过期的未使用券标记为已失效（status=2）。 */
     public int expireOutdated(String now) {
-        return jdbc.update("UPDATE coupons SET status = 2 WHERE status = 0 AND expire_time <> '' AND expire_time < ?", now);
+        return jdbc.update("UPDATE coupons SET status = 2 WHERE status = 0 AND " +
+                JdbcDateTimes.value("expire_time") + " < " + JdbcDateTimes.PARAMETER, now);
     }
 
     /**
@@ -62,6 +65,7 @@ public class CouponDao {
      */
     public boolean release(long id, String now) {
         return jdbc.update("UPDATE coupons SET status = 0 WHERE id = ? AND status = 1 " +
-                "AND (expire_time = '' OR expire_time >= ?)", id, now) == 1;
+                "AND (expire_time = '' OR " + JdbcDateTimes.value("expire_time") + " >= " +
+                JdbcDateTimes.PARAMETER + ")", id, now) == 1;
     }
 }

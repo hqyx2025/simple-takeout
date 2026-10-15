@@ -5,7 +5,7 @@ import { AppButtonStyle, AppCardStyle, AppTextAreaStyle } from '../common/theme/
  */
 import { AppMotion } from '../common/theme/AppMotion'
 import { User, UserRole, RefundRecord } from '../model/Models'
-import { fetchAdminRefundsApi, approveRefundApi, rejectRefundApi } from '../service/ApiService'
+import { fetchAdminRefundsPageApi, approveRefundApi, rejectRefundApi } from '../service/ApiService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg } from '../common/Constants'
 import { StatusBadge } from '../components/StatusBadge'
 import { PageHeader } from '../components/PageHeader'
@@ -37,6 +37,9 @@ export struct AdminRefundPage {
   }
   @State refunds: RefundRecord[] = []
   @State loading: boolean = false
+  @State page: number = 1
+  @State total: number = 0
+  @State hasMore: boolean = false
   // 键只含 id 时，审批后刷新回来的同 id 新对象会被复用，状态徽标与按钮不刷新。
   @State renderVersion: number = 0
   // 拒绝退款原因输入
@@ -60,7 +63,25 @@ export struct AdminRefundPage {
       return
     }
     this.loading = true
-    this.refunds = await fetchAdminRefundsApi()
+    this.page = 1
+    const result = await fetchAdminRefundsPageApi(undefined, this.page)
+    this.refunds = result.list
+    this.total = result.total
+    this.hasMore = result.hasMore
+    this.renderVersion += 1
+    this.loading = false
+  }
+
+  private async loadMore(): Promise<void> {
+    if (this.loading || !this.hasMore) {
+      return
+    }
+    this.loading = true
+    const result = await fetchAdminRefundsPageApi(undefined, this.page + 1)
+    this.refunds = this.refunds.concat(result.list)
+    this.page = result.page
+    this.total = result.total
+    this.hasMore = result.hasMore
     this.renderVersion += 1
     this.loading = false
   }
@@ -188,6 +209,17 @@ export struct AdminRefundPage {
               .width('100%').padding(SPACING.MD)
             }
           }, (record: RefundRecord) => `${this.renderVersion}-${record.id}`)
+          ListItem() {
+            Row({ space: SPACING.SM }) {
+              Text(`已显示 ${this.refunds.length} / ${this.total}`)
+                .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).layoutWeight(1)
+              if (this.hasMore) {
+                Button(this.loading ? '加载中' : '加载更多')
+                  .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
+                  .enabled(!this.loading).id('admin-refund-load-more').onClick(() => { this.loadMore() })
+              }
+            }.width('100%').padding({ top: SPACING.SM, bottom: SPACING.MD })
+          }
         }
         .width('100%').layoutWeight(1).scrollBar(BarState.Off)
         .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })

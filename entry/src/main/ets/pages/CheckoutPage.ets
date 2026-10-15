@@ -13,6 +13,7 @@ import { LoadingIndicator } from '../components/LoadingIndicator'
 import { PageHeader } from '../components/PageHeader'
 import { logInfo } from '../service/AppLogger'
 import { calculatePayAmount } from '../service/OrderCalculations'
+import { getServerNowEpochMs } from '../service/HttpClient'
 import { webview } from '@kit.ArkWeb'
 
 class DeliveryTypeOption {
@@ -51,7 +52,12 @@ export struct CheckoutPage {
   @State selectedCoupon: Coupon | null = null
   @State remark: string = ''
   @State selectedDelivery: number = 0
-  private deliveryOptions: string[] = ['立即送达', '1小时后', '2小时后']
+  @State customDeliveryTime: number = 0
+  @State customDeliveryLabel: string = ''
+  @State deliveryTimeChosen: boolean = false
+  private pendingCalendarDate: Date | null = null
+  private deliveryOptions: string[] = ['立即送达', '半小时后', '1小时后', '2小时后', '5小时后']
+  private deliveryOffsetsMinutes: number[] = [0, 30, 60, 120, 300]
   @State deliveryType: string = 'DELIVERY'
   private deliveryTypeOptions: DeliveryTypeOption[] = [
     new DeliveryTypeOption('DELIVERY', '外卖配送'),
@@ -189,8 +195,7 @@ export struct CheckoutPage {
   }
 
   // ============ 时间格式化 YYYY-MM-DD HH:mm:ss ============
-  private formatCurrentTime(): string {
-    const date: Date = new Date()
+  private formatDeliveryTime(date: Date): string {
     const y: number = date.getFullYear()
     const m: string = String(date.getMonth() + 1).padStart(2, '0')
     const d: string = String(date.getDate()).padStart(2, '0')
@@ -231,6 +236,10 @@ export struct CheckoutPage {
       promptAction.showToast({ message: '该定位地址尚未保存，请先在地址管理中保存' })
       return
     }
+    if (this.isCustomDelivery() && this.customDeliveryTime <= getServerNowEpochMs()) {
+      promptAction.showToast({ message: '自选送达时间已过，请重新选择' })
+      return
+    }
     this.submitting = true
     logInfo('Checkout', `开始统一提交订单 店铺数=${this.checkoutStoreIds.length} 商品数=${this.storeItems.length} 应付=${this.getPayAmount()} 优惠=${this.getDiscountAmount()}`)
     // 调用后端下单（余额扣减+优惠券抵扣由服务端完成）
@@ -240,6 +249,7 @@ export struct CheckoutPage {
   // 调后端创建订单并跳转
   private async doSubmitOrder(): Promise<void> {
     const address: Address = this.currentAddress as Address
+    const expectTime: string = this.getExpectTime()
     let firstOrder: Order | null = null
     let couponUsed: boolean = false
     const checkoutGoodsIds: number[] = []
@@ -260,7 +270,7 @@ export struct CheckoutPage {
         && (this.selectedCoupon.storeId === undefined || this.selectedCoupon.storeId === 0 || this.selectedCoupon.storeId === storeId)
         && groupTotal >= this.selectedCoupon.minOrder
       const couponId: number = couponCanApply && this.selectedCoupon !== null ? this.selectedCoupon.id : 0
-      const serverOrder: Order | null = await createOrderRemote(storeId, items, address.id, couponId, this.remark, checkoutGoodsIds, this.getExpectTime(), `${this.submitKey}-${storeId}`, this.deliveryType)
+      const serverOrder: Order | null = await createOrderRemote(storeId, items, address.id, couponId, this.remark, checkoutGoodsIds, expectTime, `${this.submitKey}-${storeId}`, this.deliveryType)
       if (serverOrder === null) {
         if (successfulRows.length > 0) {
           await this.removeCartRows(successfulRows)
@@ -596,12 +606,29 @@ Image($r('app.media.home_coupon')).width(FONT_SIZE.MD).height(FONT_SIZE.MD).obje
       Text('送达时间')
         .fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
         .width('100%')
-      Row({ space: SPACING.SM }) {
+      Flex({ wrap: FlexWrap.Wrap, alignItems: ItemAlign.Center }) {
         ForEach(this.deliveryOptions, (label: string, index: number) => {
           this.DeliveryOption(index, label)
         }, (label: string) => label)
+        Button('自选时间')
+          .attributeModifier(new AppButtonStyle())
+          .id('checkout-delivery-custom')
+          .accessibilitySelected(this.isCustomDelivery())
+          .height(24)
+          .fontSize(FONT_SIZE.SM)
+          .fontColor(this.isCustomDelivery() ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
+          .backgroundColor(this.isCustomDelivery() ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
+          .padding({ left: SPACING.MD, right: SPACING.MD, top: SPACING.XS, bottom: SPACING.XS })
+          .borderRadius(BORDER_RADIUS.ROUND)
+          .margin({ bottom: SPACING.XS })
+          .onClick(() => { this.selectCustomDeliveryTime() })
       }
       .width('100%')
+      if (this.deliveryTimeChosen) {
+        Text(`预约送达：${this.customDeliveryLabel}`)
+          .id('checkout-delivery-selected-time')
+          .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY).width('100%')
+      }
       Text('送达方式')
         .fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
         .width('100%')
@@ -630,21 +657,85 @@ Image($r('app.media.home_coupon')).width(FONT_SIZE.MD).height(FONT_SIZE.MD).obje
       .backgroundColor(this.selectedDelivery === index ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
       .padding({ left: SPACING.MD, right: SPACING.MD, top: SPACING.XS, bottom: SPACING.XS })
       .borderRadius(BORDER_RADIUS.ROUND)
-      .onClick(() => { this.selectedDelivery = index })
+      .margin({ right: SPACING.SM, bottom: SPACING.XS })
+      .id(`checkout-delivery-${index}`)
+      .onClick(() => { this.selectPresetDelivery(index) })
+  }
+
+  private isCustomDelivery(): boolean {
+    return this.selectedDelivery === this.deliveryOptions.length
+  }
+
+  private selectPresetDelivery(index: number): void {
+    this.selectedDelivery = index
+    const offsetMinutes: number = this.deliveryOffsetsMinutes[index] ?? 0
+    const target: Date = new Date(getServerNowEpochMs() + offsetMinutes * 60 * 1000)
+    this.customDeliveryTime = target.getTime()
+    this.customDeliveryLabel = this.formatDeliveryTime(target).substring(0, 16)
+    this.deliveryTimeChosen = true
+  }
+
+  private selectCustomDeliveryTime(): void {
+    const serverNowMs: number = getServerNowEpochMs()
+    const initial: Date = new Date(this.isCustomDelivery() && this.customDeliveryTime > serverNowMs
+      ? this.customDeliveryTime : serverNowMs)
+    const today: Date = new Date()
+    this.pendingCalendarDate = null
+    CalendarPickerDialog.show({
+      selected: initial,
+      start: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+      markToday: true,
+      backgroundColor: AppTheme.CARD,
+      backgroundBlurStyle: BlurStyle.NONE,
+      acceptButtonStyle: { fontColor: AppTheme.PRIMARY_TEXT, backgroundColor: AppTheme.PRIMARY },
+      cancelButtonStyle: { fontColor: AppTheme.MUTED, backgroundColor: AppTheme.INPUT },
+      onAccept: (date: Date): void => {
+        this.pendingCalendarDate = new Date(date.getFullYear(), date.getMonth(), date.getDate(),
+          initial.getHours(), initial.getMinutes())
+      },
+      onDidDisappear: (): void => {
+        const date: Date | null = this.pendingCalendarDate
+        this.pendingCalendarDate = null
+        if (date !== null) {
+          this.selectDeliveryClockTime(date)
+        }
+      }
+    })
+  }
+
+  private selectDeliveryClockTime(date: Date): void {
+    this.getUIContext().showTimePickerDialog({
+      selected: date,
+      useMilitaryTime: true,
+      backgroundColor: AppTheme.CARD,
+      backgroundBlurStyle: BlurStyle.NONE,
+      selectedTextStyle: { color: AppTheme.PRIMARY },
+      textStyle: { color: AppTheme.TEXT },
+      acceptButtonStyle: { fontColor: AppTheme.PRIMARY_TEXT, backgroundColor: AppTheme.PRIMARY },
+      cancelButtonStyle: { fontColor: AppTheme.MUTED, backgroundColor: AppTheme.INPUT },
+      onAccept: (time: TimePickerResult): void => {
+        const target: Date = new Date(date.getFullYear(), date.getMonth(), date.getDate(),
+          time.hour, time.minute)
+        if (target.getTime() <= getServerNowEpochMs()) {
+          promptAction.showToast({ message: '请选择晚于当前时间的送达时间' })
+          return
+        }
+        this.customDeliveryTime = target.getTime()
+        this.customDeliveryLabel = this.formatDeliveryTime(target).substring(0, 16)
+        this.selectedDelivery = this.deliveryOptions.length
+        this.deliveryTimeChosen = true
+      }
+    })
   }
 
   private getExpectTime(): string {
     if (this.selectedDelivery === 0) {
       return ''
     }
-    const target: Date = new Date(Date.now() + this.selectedDelivery * 3600 * 1000)
-    const y: number = target.getFullYear()
-    const m: string = String(target.getMonth() + 1).padStart(2, '0')
-    const d: string = String(target.getDate()).padStart(2, '0')
-    const h: string = String(target.getHours()).padStart(2, '0')
-    const min: string = String(target.getMinutes()).padStart(2, '0')
-    const s: string = String(target.getSeconds()).padStart(2, '0')
-    return `${y}-${m}-${d} ${h}:${min}:${s}`
+    const offsetMinutes: number = this.deliveryOffsetsMinutes[this.selectedDelivery] ?? 0
+    const target: Date = new Date(this.isCustomDelivery() ? this.customDeliveryTime
+      : getServerNowEpochMs() + offsetMinutes * 60 * 1000)
+    return this.formatDeliveryTime(target)
   }
 
   @Builder

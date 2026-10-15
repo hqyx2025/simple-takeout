@@ -106,6 +106,9 @@ export default function checkoutFlowTest() {
       console.info('[CheckoutFlow] pay amount (above min order) = ' + payAmountHigh)
       expect(payAmountHigh).assertEqual('¥22.59')
 
+      // 预约送达使用服务端校准时间，模拟器系统时间偏差不应拦截提交。
+      expect(await clickByIdOrText(driver, 'checkout-delivery-1', '半小时后')).assertTrue()
+
       expect(await clickByIdOrText(driver, 'checkout-submit', '提交订单')).assertTrue()
 
       const statusComp: Component = requireComponent(
@@ -113,6 +116,12 @@ export default function checkoutFlowTest() {
       const statusText: string = await statusComp.getText()
       console.info('[CheckoutFlow] order status = ' + statusText)
       expect(statusText.indexOf('待付款') >= 0).assertTrue()
+
+      const countdown: Component = requireComponent(
+        await driver.findComponent(ON.id('order-pay-countdown')), 'order-pay-countdown')
+      const countdownText: string = await countdown.getText()
+      expect(countdownText.indexOf('请在剩余 ') === 0).assertTrue()
+      expect(countdownText.indexOf(' 内完成支付') > 0).assertTrue()
 
       const payBtn = await driver.findComponent(ON.id('order-pay'))
       expect(isFound(payBtn)).assertTrue()

@@ -5,10 +5,10 @@ import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
  * 各模块为独立页面，避免单页堆叠过长；退出登录后回到登录页
  */
 import { AppMotion } from '../common/theme/AppMotion'
-import { User, UserRole, Category, RefundRecord } from '../model/Models'
+import { User, UserRole, Category } from '../model/Models'
 import { logout } from '../service/AppStorageManager'
 import { ApiResponse, get } from '../service/HttpClient'
-import { fetchAdminRefundsApi } from '../service/ApiService'
+import { fetchAdminRefundsPageApi } from '../service/ApiService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { PageHeader } from '../components/PageHeader'
@@ -30,6 +30,14 @@ interface AdminOrder {
   status: number
   payAmount: number
   escrowStatus?: number
+}
+
+interface AdminOrderPageResponse {
+  list: AdminOrder[]
+  total: number
+  page: number
+  pageSize: number
+  hasMore: boolean
 }
 
 /** 入口卡片模型 */
@@ -76,8 +84,8 @@ export struct AdminCenterPage {
   }
   @State categories: Category[] = []
   @State stores: AdminStore[] = []
-  @State orders: AdminOrder[] = []
-  @State refunds: RefundRecord[] = []
+  @State orderCount: number = 0
+  @State pendingRefundCount: number = 0
   @State employees: number = 0
   @State loading: boolean = false
   @State showLogoutConfirm: boolean = false
@@ -106,19 +114,20 @@ export struct AdminCenterPage {
     this.loading = true
     const categoryResp: ApiResponse<Category[]> = await get<Category[]>('/api/admin/categories')
     const storeResp: ApiResponse<AdminStore[]> = await get<AdminStore[]>('/api/admin/stores')
-    const orderResp: ApiResponse<AdminOrder[]> = await get<AdminOrder[]>('/api/admin/orders')
+    const orderResp: ApiResponse<AdminOrderPageResponse> = await get<AdminOrderPageResponse>(
+      '/api/admin/orders/page?page=1&pageSize=1')
     const employeeResp: ApiResponse<Object[]> = await get<Object[]>('/api/admin/employees')
     this.categories = categoryResp.code === 200 && categoryResp.data !== null ? categoryResp.data : []
     this.stores = storeResp.code === 200 && storeResp.data !== null ? storeResp.data : []
-    this.orders = orderResp.code === 200 && orderResp.data !== null ? orderResp.data : []
+    this.orderCount = orderResp.code === 200 && orderResp.data !== null ? orderResp.data.total : 0
     this.employees = employeeResp.code === 200 && employeeResp.data !== null ? employeeResp.data.length : 0
-    this.refunds = await fetchAdminRefundsApi()
+    this.pendingRefundCount = (await fetchAdminRefundsPageApi('PENDING', 1, 1)).total
     this.loading = false
   }
 
   /** 待审批退款数量（入口卡片徽标）。 */
   private getPendingRefundCount(): number {
-    return this.refunds.filter(r => r.status === 'PENDING').length
+    return this.pendingRefundCount
   }
 
   /** 四个后台模块入口卡片（数据源提取为方法，避免 ForEach 字面量闭包捕获问题）。 */
@@ -129,8 +138,10 @@ export struct AdminCenterPage {
       AdminEntryItem.create($r('app.media.ui_people'), '员工管理', '商户账号创建、编辑与停用', this.employees, 'pages/AdminEmployeePage'),
       AdminEntryItem.create($r('app.media.home_bowl'), '商品监管', '搜索商品并强制上下架', 0, 'pages/AdminProductPage'),
       AdminEntryItem.create($r('app.media.login_user'), '用户管理', '查看用户和商户账号状态', 0, 'pages/AdminUserPage'),
-      AdminEntryItem.create($r('app.media.profile_order'), '订单管理', '托管订单状态与退款', this.orders.length, 'pages/AdminOrderPage'),
+      AdminEntryItem.create($r('app.media.profile_order'), '订单管理', '托管订单状态与退款', this.orderCount, 'pages/AdminOrderPage'),
       AdminEntryItem.create($r('app.media.profile_wallet'), '退款审批', '处理用户退款申请', this.getPendingRefundCount(), 'pages/AdminRefundPage'),
+      AdminEntryItem.create($r('app.media.ui_grid'), '营销监管', '查看并管理全平台活动与秒杀', 0, 'pages/AdminMarketingPage'),
+      AdminEntryItem.create($r('app.media.ui_document'), '操作审计', '按操作记录追踪管理变更', 0, 'pages/AdminAuditPage'),
       AdminEntryItem.create($r('app.media.ui_grid'), '平台统计', '查看平台订单、成交和热销商品', 0, 'pages/AdminStatisticsPage'),
       AdminEntryItem.create($r('app.media.login_rider'), '骑手管理', '骑手列表与启用停用', 0, 'pages/AdminRiderPage'),
       AdminEntryItem.create($r('app.media.ui_content'), '内容管理', '首页轮播与平台公告', 0, 'pages/AdminContentPage'),
@@ -148,6 +159,7 @@ export struct AdminCenterPage {
     if (title === '用户管理') { return MODULE_COLOR.SEARCH }
     if (title === '订单管理') { return MODULE_COLOR.ORDER }
     if (title === '退款审批') { return MODULE_COLOR.COUPON }
+    if (title === '营销监管') { return MODULE_COLOR.SPECIAL }
     if (title === '平台统计') { return MODULE_COLOR.HOME }
     if (title === '骑手管理') { return MODULE_COLOR.RIDER }
     if (title === '内容管理') { return MODULE_COLOR.FAVORITE }
@@ -182,7 +194,7 @@ export struct AdminCenterPage {
               Text('店铺总数').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
             }.layoutWeight(1).alignItems(HorizontalAlign.Center)
             Column({ space: SPACING.XS }) {
-              Text(this.orders.length.toString())
+              Text(this.orderCount.toString())
                 .fontSize(FONT_SIZE.XXL).fontWeight(FontWeight.Bold).fontColor(accentFg(3))
               Text('订单总数').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
             }.layoutWeight(1).alignItems(HorizontalAlign.Center)

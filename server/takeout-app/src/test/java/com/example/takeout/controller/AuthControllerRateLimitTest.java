@@ -23,8 +23,12 @@ class AuthControllerRateLimitTest {
 
     private final AuthService authService = mock(AuthService.class);
     private final LoginRateLimiter limiter = mock(LoginRateLimiter.class);
+    private final com.example.takeout.service.RefreshTokenService refreshTokenService =
+            mock(com.example.takeout.service.RefreshTokenService.class);
     private final AuthController controller = new AuthController(authService, limiter,
-            mock(TokenRevocationService.class), mock(com.example.takeout.service.thirdparty.SmsSender.class));
+            mock(TokenRevocationService.class), refreshTokenService,
+            mock(com.example.takeout.service.SmsVerificationService.class),
+            mock(com.example.takeout.service.PushTokenService.class));
     private final AuthController.LoginRequest loginRequest =
             new AuthController.LoginRequest("13800138000", "123456", "USER");
 
@@ -61,10 +65,12 @@ class AuthControllerRateLimitTest {
         User user = new User(1, "用户", "", "13800138000", "", 0, 20, "now");
         when(authService.login(anyString(), anyString(), anyString()))
                 .thenReturn(new AuthService.LoginResult("token", user));
+        when(refreshTokenService.issue(1, "token")).thenReturn("refresh-token");
 
         controller.login(loginRequest, requestFrom("9.9.9.9"));
 
         verify(limiter).reset("login", "9.9.9.9");
         verify(limiter, never()).recordAttempt(anyString(), anyString());
     }
+
 }

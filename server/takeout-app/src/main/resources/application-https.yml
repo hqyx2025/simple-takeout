@@ -2,10 +2,10 @@ server:
   port: ${TAKEOUT_HTTPS_PORT:8443}
   ssl:
     enabled: true
-    key-store: ${TAKEOUT_SSL_KEY_STORE:classpath:keystore/takeout.p12}
-    key-store-password: ${TAKEOUT_SSL_KEY_STORE_PASSWORD:}
-    key-store-type: PKCS12
-    key-alias: ${TAKEOUT_SSL_KEY_ALIAS:takeout}
+    key-store: ${TAKEOUT_TLS_KEYSTORE}
+    key-store-password: ${TAKEOUT_TLS_KEYSTORE_PASSWORD}
+    key-store-type: ${TAKEOUT_TLS_KEYSTORE_TYPE:PKCS12}
+    key-alias: ${TAKEOUT_TLS_KEY_ALIAS}
 
 spring:
   config:

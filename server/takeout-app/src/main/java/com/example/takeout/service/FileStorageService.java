@@ -4,6 +4,7 @@ import com.example.takeout.common.BizException;
 import com.example.takeout.service.thirdparty.ObjectStorage;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -14,32 +15,24 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.Locale;
-import java.util.Set;
 import java.util.UUID;
 
 /**
  * 本地图片存储（图文评价上传）。
  * 图片存放在 takeout.upload.dir（默认工作目录下的 uploads），按天分目录，
  * 对外通过 WebConfig 注册的 /uploads/** 静态资源访问。
- * 说明：毕设环境不引入 OSS，故采用本地文件存储；生产环境可替换为对象存储实现。
+ * 仅用于本地开发；生产环境使用 Huawei OBS 实现。
  */
 @Service
+@ConditionalOnProperty(name = "takeout.upload.provider", havingValue = "local", matchIfMissing = true)
 public class FileStorageService implements ObjectStorage {
-
-    /** 允许的图片扩展名。 */
-    private static final Set<String> ALLOWED_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp", "gif");
-
-    /** 允许的 MIME 白名单：只放行四种图片，image/svg+xml 等可承载脚本的子类型一律拒绝。 */
-    private static final Set<String> ALLOWED_CONTENT_TYPES =
-            Set.of("image/jpeg", "image/png", "image/webp", "image/gif", "image/jpg");
-
-    /** 单张图片大小上限 5MB。 */
-    private static final long MAX_BYTES = 5L * 1024 * 1024;
 
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     private final Path root;
+
+    @Value("${takeout.upload.local-enabled:true}")
+    private boolean localStorageEnabled = true;
 
     public FileStorageService(@Value("${takeout.upload.dir:uploads}") String uploadDir) {
         this.root = Paths.get(uploadDir).toAbsolutePath().normalize();
@@ -47,7 +40,9 @@ public class FileStorageService implements ObjectStorage {
 
     @PostConstruct
     void init() throws IOException {
-        Files.createDirectories(root);
+        if (localStorageEnabled) {
+            Files.createDirectories(root);
+        }
     }
 
     /** 静态资源映射目录（WebConfig 使用）。 */
@@ -60,22 +55,10 @@ public class FileStorageService implements ObjectStorage {
      */
     @Override
     public String store(MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new BizException("请选择要上传的图片");
+        if (!localStorageEnabled) {
+            throw new BizException("本地文件上传已关闭，请配置对象存储服务");
         }
-        if (file.getSize() > MAX_BYTES) {
-            throw new BizException("图片大小不能超过 5MB");
-        }
-        String originalName = file.getOriginalFilename() == null ? "" : file.getOriginalFilename();
-        String extension = extensionOf(originalName);
-        if (!ALLOWED_EXTENSIONS.contains(extension)) {
-            throw new BizException("仅支持 jpg / png / webp / gif 格式的图片");
-        }
-        // content-type 为 null 时原逻辑会整个跳过校验，这里改成必填 + 精确白名单
-        String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase(Locale.ROOT);
-        if (!ALLOWED_CONTENT_TYPES.contains(contentType)) {
-            throw new BizException("仅支持 jpg / png / webp / gif 格式的图片");
-        }
+        String extension = ImageUploadValidator.validate(file);
         String day = LocalDate.now().format(DAY);
         String fileName = UUID.randomUUID().toString().replace("-", "") + "." + extension;
         try {
@@ -94,11 +77,4 @@ public class FileStorageService implements ObjectStorage {
         }
     }
 
-    private String extensionOf(String fileName) {
-        int index = fileName.lastIndexOf('.');
-        if (index < 0 || index == fileName.length() - 1) {
-            return "";
-        }
-        return fileName.substring(index + 1).toLowerCase(Locale.ROOT);
-    }
 }

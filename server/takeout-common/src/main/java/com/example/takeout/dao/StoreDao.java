@@ -10,6 +10,7 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Optional;
 
 /**
@@ -244,7 +245,9 @@ public class StoreDao {
 
     /** 当前生效的活动（status=1 且在时间窗内）。 */
     public List<MarketingActivity> listActiveMarketingActivities(long storeId, String now) {
-        return jdbc.query("SELECT * FROM marketing_activities WHERE store_id = ? AND status = 1 AND start_time <= ? AND end_time >= ? ORDER BY id",
+        return jdbc.query("SELECT * FROM marketing_activities WHERE store_id = ? AND status = 1 AND " +
+                        JdbcDateTimes.value("start_time") + " <= " + JdbcDateTimes.PARAMETER + " AND " +
+                        JdbcDateTimes.value("end_time") + " >= " + JdbcDateTimes.PARAMETER + " ORDER BY id",
                 MARKETING_MAPPER, storeId, now, now);
     }
 
@@ -253,11 +256,66 @@ public class StoreDao {
                 MARKETING_MAPPER, storeId);
     }
 
+    /** 平台监管活动列表；storeId 为空时返回全部店铺。 */
+    public List<MarketingActivity> listMarketingActivitiesForAdmin(Long storeId) {
+        return listMarketingActivitiesForAdmin(storeId, null);
+    }
+
+    /** 平台监管活动列表，可按店铺与上下架状态筛选。 */
+    public List<MarketingActivity> listMarketingActivitiesForAdmin(Long storeId, Integer status) {
+        StringBuilder sql = new StringBuilder("SELECT * FROM marketing_activities WHERE 1=1");
+        List<Object> args = new ArrayList<>();
+        if (storeId != null) {
+            sql.append(" AND store_id = ?");
+            args.add(storeId);
+        }
+        if (status != null) {
+            sql.append(" AND status = ?");
+            args.add(status);
+        }
+        sql.append(" ORDER BY id DESC");
+        return jdbc.query(sql.toString(), MARKETING_MAPPER, args.toArray());
+    }
+
     public long insertMarketingActivity(MarketingActivity a) {
-        jdbc.update("INSERT INTO marketing_activities(store_id, type, title, discount_rate, reduce_amount, threshold, gift_goods_id, start_time, end_time, status, create_time) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+        jdbc.update("INSERT INTO marketing_activities(store_id, type, title, discount_rate, reduce_amount, threshold, " +
+                        "gift_goods_id, start_time, end_time, status, create_time, start_time_dt, end_time_dt, create_time_dt) " +
+                        "VALUES(?,?,?,?,?,?,?,?,?,?,?," + JdbcDateTimes.PARAMETER + "," + JdbcDateTimes.PARAMETER + "," +
+                        JdbcDateTimes.PARAMETER + ")",
                 a.storeId(), a.type(), a.title(), a.discountRate(), a.reduceAmount(), a.threshold(),
-                a.giftGoodsId(), a.startTime(), a.endTime(), a.status(), a.createTime());
+                a.giftGoodsId(), a.startTime(), a.endTime(), a.status(), a.createTime(),
+                a.startTime(), a.endTime(), a.createTime());
         return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+    }
+
+    public Optional<MarketingActivity> findMarketingActivityById(long activityId) {
+        return jdbc.query("SELECT * FROM marketing_activities WHERE id = ?", MARKETING_MAPPER, activityId)
+                .stream().findFirst();
+    }
+
+    public void updateMarketingActivityStatus(long activityId, int status) {
+        jdbc.update("UPDATE marketing_activities SET status = ? WHERE id = ?", status, activityId);
+    }
+
+    public void deleteMarketingActivity(long activityId) {
+        jdbc.update("DELETE FROM marketing_activities WHERE id = ?", activityId);
+    }
+
+    public Optional<MarketingActivity> findMarketingActivity(long storeId, long activityId) {
+        return jdbc.query("SELECT * FROM marketing_activities WHERE id = ? AND store_id = ?",
+                MARKETING_MAPPER, activityId, storeId).stream().findFirst();
+    }
+
+    public void updateMarketingActivity(MarketingActivity a) {
+        jdbc.update("UPDATE marketing_activities SET type=?, title=?, discount_rate=?, reduce_amount=?, threshold=?, " +
+                        "gift_goods_id=?, start_time=?, end_time=?, status=?, start_time_dt=" + JdbcDateTimes.PARAMETER +
+                        ", end_time_dt=" + JdbcDateTimes.PARAMETER + " WHERE id=? AND store_id=?",
+                a.type(), a.title(), a.discountRate(), a.reduceAmount(), a.threshold(), a.giftGoodsId(),
+                a.startTime(), a.endTime(), a.status(), a.startTime(), a.endTime(), a.id(), a.storeId());
+    }
+
+    public void deleteMarketingActivity(long storeId, long activityId) {
+        jdbc.update("DELETE FROM marketing_activities WHERE id = ? AND store_id = ?", activityId, storeId);
     }
 
     // ============ 套餐与组合购 ============

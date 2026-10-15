@@ -24,6 +24,7 @@ import com.example.takeout.model.SetmealItem;
 import com.example.takeout.model.SetmealOrder;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.User;
+import com.example.takeout.service.thirdparty.ExternalPaymentService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,6 +52,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.doReturn;
 
 /**
  * 订单业务闭环测试：下单前置校验、待付款占库存、支付扣款、取消退款幂等、超时自动取消、多规格下单。
@@ -77,6 +80,7 @@ class OrderServiceFlowTest {
 
     @BeforeEach
     void configureTransactions() {
+        when(orderDao.findByIdForUpdate(anyLong())).thenAnswer(invocation -> orderDao.findById(invocation.getArgument(0)));
         when(transactionManager.getTransaction(any())).thenAnswer(invocation -> new SimpleTransactionStatus());
         service.configureTransactions(new TransactionTemplate(transactionManager));
     }
@@ -135,6 +139,7 @@ class OrderServiceFlowTest {
         assertEquals("", view.payTime(), "待付款订单支付时间为空");
         assertEquals(13.0, view.payAmount(), 0.001);
         assertFalse(view.payDeadline().isEmpty(), "待付款订单返回支付截止时间");
+        assertTrue(view.payDeadlineEpochMs() > view.serverNowEpochMs(), "支付截止时间晚于服务端当前时间");
         verify(userDao, never()).deductBalance(anyLong(), anyDouble());
         verify(goodsDao).deductStock(GOODS_ID, 1);
         verify(storeDao).updateMonthlySales(STORE_ID, 1);
@@ -202,6 +207,84 @@ class OrderServiceFlowTest {
     }
 
     @Test
+    void rejectsThirdPartyPaymentWhenProviderIsUnavailable() {
+        BizException error = assertThrows(BizException.class, () -> service.payOrder(USER_ID, 13, "WECHAT"));
+
+        assertEquals("订单不存在", error.getMessage());
+        verify(orderDao).findById(13);
+        verify(orderDao, never()).markPaid(anyLong(), anyString());
+        verify(userDao, never()).deductBalance(anyLong(), anyDouble());
+    }
+
+    @Test
+    void thirdPartyPaymentOnlyCreatesPrepayAndKeepsOrderPending() {
+        when(orderDao.findById(13)).thenReturn(Optional.of(storedOrder(13, 0, ITEMS, "")));
+        ExternalPaymentService gateway = mock(ExternalPaymentService.class);
+        service.configureExternalPaymentService(gateway);
+        when(gateway.startPayment(eq("ALIPAY"), any(Order.class), eq("QR"))).thenReturn(
+                new ExternalPaymentService.PaymentLaunch("ALIPAY", "A123", "https://qr.alipay.test/pay", "PENDING"));
+
+        Order.OrderView result = service.payOrder(USER_ID, 13, "ALIPAY");
+
+        assertEquals(0, result.status());
+        assertEquals("ALIPAY", result.paymentChannel());
+        assertEquals("A123", result.outTradeNo());
+        assertEquals("https://qr.alipay.test/pay", result.paymentUrl());
+        verify(gateway).startPayment(eq("ALIPAY"), any(Order.class), eq("QR"));
+        verify(orderDao, never()).markPaid(anyLong(), anyString());
+        verify(userDao, never()).deductBalance(anyLong(), anyDouble());
+    }
+
+    @Test
+    void missingOrUnknownPaymentChannelNeverFallsBackToBalance() {
+        for (String channel : new String[]{null, "", " ", "unknown"}) {
+            assertThrows(BizException.class, () -> service.payOrder(USER_ID, 13, channel));
+        }
+        verify(orderDao, never()).markPaid(anyLong(), anyString());
+        verify(userDao, never()).deductBalance(anyLong(), anyDouble());
+    }
+
+    @Test
+    void alipayFailureNeverFallsBackToBalance() {
+        when(orderDao.findById(13)).thenReturn(Optional.of(storedOrder(13, 0, ITEMS, "")));
+        ExternalPaymentService gateway = mock(ExternalPaymentService.class);
+        service.configureExternalPaymentService(gateway);
+        when(gateway.startPayment(eq("ALIPAY"), any(Order.class), eq("QR"))).thenThrow(new BizException(503, "支付渠道未配置"));
+
+        assertThrows(BizException.class, () -> service.payOrder(USER_ID, 13, "ALIPAY"));
+
+        verify(orderDao, never()).markPaid(anyLong(), anyString());
+        verify(userDao, never()).deductBalance(anyLong(), anyDouble());
+    }
+
+    @Test
+    void orderDetailRestoresPendingPaymentWithoutStartingAnotherCharge() {
+        when(orderDao.findById(13)).thenReturn(Optional.of(storedOrder(13, 0, ITEMS, "")));
+        ExternalPaymentService gateway = mock(ExternalPaymentService.class);
+        service.configureExternalPaymentService(gateway);
+        when(gateway.paymentDetails(13)).thenReturn(
+                new ExternalPaymentService.PaymentLaunch("ALIPAY", "A123", "https://qr.alipay.test/pay", "PENDING"));
+
+        Order.OrderView result = service.orderDetail(USER_ID, 0, 13);
+
+        assertEquals("ALIPAY", result.paymentChannel());
+        assertEquals("A123", result.outTradeNo());
+        assertEquals("https://qr.alipay.test/pay", result.paymentUrl());
+        verify(gateway, never()).startPayment(anyString(), any(Order.class));
+    }
+
+    @Test
+    void paymentRefreshAuthorizesBeforeContactingProvider() {
+        when(orderDao.findById(13)).thenReturn(Optional.of(storedOrder(13, 0, ITEMS, "")));
+        ExternalPaymentService gateway = mock(ExternalPaymentService.class);
+        service.configureExternalPaymentService(gateway);
+
+        assertThrows(BizException.class, () -> service.refreshPaymentStatus(USER_ID + 1, 13));
+
+        verify(gateway, never()).refreshPayment(anyLong());
+    }
+
+    @Test
     void rejectsPayingOrderThatPassedItsPayDeadline() {
         // 待付款订单已过 15 分钟支付时限：支付必须直接拒绝，不再扣余额（超时定时任务会竞争取消）
         String expired = LocalDateTime.now().minusMinutes(16).format(FMT);
@@ -253,6 +336,43 @@ class OrderServiceFlowTest {
         verify(userDao, never()).addBalance(anyLong(), anyDouble());
         verify(goodsDao).restoreStock(GOODS_ID, 1);
         verify(orderDao).cancelPending(eq(13L), anyString());
+    }
+
+    @Test
+    void cancelLocksBeforeReadingPaymentAndReloadsCurrentOrderAfterProviderSettlement() {
+        Order pending = storedOrder(13, 0, ITEMS, "");
+        Order paid = storedOrder(13, 1, ITEMS, "");
+        doReturn(Optional.of(pending), Optional.of(paid)).when(orderDao).findByIdForUpdate(13);
+        when(orderDao.findById(13)).thenReturn(Optional.of(paid));
+        when(orderDao.refundEscrow(13)).thenReturn(true);
+        when(orderDao.updateStatusFrom(eq(13L), eq(1), eq(5), eq("complete_time"), anyString())).thenReturn(true);
+        ExternalPaymentService external = mock(ExternalPaymentService.class);
+        when(external.refundOriginalPayment(paid)).thenReturn("ALIPAY");
+        service.configureExternalPaymentService(external);
+
+        service.cancelOrder(USER_ID, 13);
+
+        var sequence = inOrder(orderDao, external);
+        sequence.verify(orderDao).findByIdForUpdate(13);
+        sequence.verify(external).closePendingPayment(13);
+        sequence.verify(orderDao).findByIdForUpdate(13);
+        verify(external).refundOriginalPayment(paid);
+        verify(orderDao, never()).cancelPending(anyLong(), anyString());
+        verify(userDao, never()).addBalance(anyLong(), anyDouble());
+    }
+
+    @Test
+    void cancelAuthorizesFromTheLockedOrderBeforeReadingAnyPayment() {
+        doReturn(Optional.of(storedOrder(13, 0, ITEMS, ""))).when(orderDao).findByIdForUpdate(13);
+        ExternalPaymentService external = mock(ExternalPaymentService.class);
+        service.configureExternalPaymentService(external);
+
+        BizException failure = assertThrows(BizException.class, () -> service.cancelOrder(USER_ID + 1, 13));
+
+        assertEquals(403, failure.getCode());
+        verify(orderDao).findByIdForUpdate(13);
+        verify(orderDao, never()).findById(anyLong());
+        verify(external, never()).closePendingPayment(anyLong());
     }
 
     @Test

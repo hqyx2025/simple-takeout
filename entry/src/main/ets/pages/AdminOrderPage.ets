@@ -25,6 +25,14 @@ interface AdminOrder {
   readyTime?: string
 }
 
+interface AdminOrderPageData {
+  list: AdminOrder[]
+  total: number
+  page: number
+  pageSize: number
+  hasMore: boolean
+}
+
 class OrderTabItem {
   title: string = ''
   status: number = -1
@@ -61,9 +69,13 @@ export struct AdminOrderPage {
     balance: 0, coupons: [], orders: [], storeIds: []
   }
   @State orders: AdminOrder[] = []
-  // 当前筛选结果：避免 build 阶段依赖 getter 计算属性（ArkUI 对 getter 求值存在时序问题，曾导致渲染崩溃）
+  // 当前页结果：避免 build 阶段依赖 getter 计算属性（ArkUI 对 getter 求值存在时序问题）。
   @State displayOrders: AdminOrder[] = []
   @State currentStatus: number = -1
+  @State page: number = 1
+  @State total: number = 0
+  @State hasMore: boolean = false
+  @State loading: boolean = false
   // 退款二次确认（资金操作必须确认，防止误点）
   @State refundingOrderId: number = 0
   @State showRefundConfirm: boolean = false
@@ -82,30 +94,54 @@ export struct AdminOrderPage {
   }
 
   async refresh(): Promise<void> {
-    const resp: ApiResponse<AdminOrder[]> = await get<AdminOrder[]>('/api/admin/orders')
-    this.orders = resp.code === 200 && resp.data !== null ? resp.data : []
+    if (this.loading) {
+      return
+    }
+    this.loading = true
+    this.page = 1
+    const statusQuery: string = this.currentStatus < 0 ? '' : `&status=${this.currentStatus}`
+    const resp: ApiResponse<AdminOrderPageData> = await get<AdminOrderPageData>(
+      `/api/admin/orders/page?page=1&pageSize=50${statusQuery}`)
+    this.orders = resp.code === 200 && resp.data !== null ? resp.data.list : []
+    this.total = resp.code === 200 && resp.data !== null ? resp.data.total : 0
+    this.hasMore = resp.code === 200 && resp.data !== null ? resp.data.hasMore : false
     this.applyFilter()
+    this.loading = false
+  }
+
+  private async loadMore(): Promise<void> {
+    if (this.loading || !this.hasMore) {
+      return
+    }
+    this.loading = true
+    const nextPage: number = this.page + 1
+    const statusQuery: string = this.currentStatus < 0 ? '' : `&status=${this.currentStatus}`
+    const resp: ApiResponse<AdminOrderPageData> = await get<AdminOrderPageData>(
+      `/api/admin/orders/page?page=${nextPage}&pageSize=50${statusQuery}`)
+    if (resp.code === 200 && resp.data !== null) {
+      this.orders = this.orders.concat(resp.data.list)
+      this.page = resp.data.page
+      this.total = resp.data.total
+      this.hasMore = resp.data.hasMore
+    }
+    this.applyFilter()
+    this.loading = false
   }
 
   /** 按当前状态筛选并写入 displayOrders（显式计算，避免渲染期 getter 求值）。 */
   private applyFilter(): void {
-    if (!Array.isArray(this.orders)) {
-      this.displayOrders = []
-      return
-    }
-    if (this.currentStatus === -1) {
-      this.displayOrders = this.orders
-    } else {
-      this.displayOrders = this.orders.filter(o => o !== null && typeof o === 'object' && o.status === this.currentStatus)
-    }
+    this.displayOrders = Array.isArray(this.orders) ? this.orders : []
     // 键只含 id 时，刷新回来的同 id 新对象会被 ForEach 复用，退款后状态不刷新。
     this.renderVersion += 1
   }
 
   /** 切换筛选 Tab。 */
   private onStatusChange(status: number): void {
+    if (this.loading) {
+      return
+    }
     this.currentStatus = status
-    this.applyFilter()
+    this.refresh()
   }
 
   /** 托管资金状态文本：0 托管中 / 1 已结算 / 2 已退款。 */
@@ -279,6 +315,17 @@ export struct AdminOrderPage {
             .width('100%').padding(SPACING.MD)
           }
         }, (order: AdminOrder) => `${this.renderVersion}-${order.id}`)
+        ListItem() {
+          Row({ space: SPACING.SM }) {
+            Text(`已显示 ${this.displayOrders.length} / ${this.total}`)
+              .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).layoutWeight(1)
+            if (this.hasMore) {
+              Button(this.loading ? '加载中' : '加载更多')
+                .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
+                .enabled(!this.loading).id('admin-order-load-more').onClick(() => { this.loadMore() })
+            }
+          }.width('100%').padding({ top: SPACING.SM, bottom: SPACING.MD })
+        }
       }
       .width('100%').layoutWeight(1).scrollBar(BarState.Off)
       .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })

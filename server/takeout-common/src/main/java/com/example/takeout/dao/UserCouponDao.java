@@ -37,8 +37,10 @@ public class UserCouponDao {
 
     public void insert(long userId, long storeId, String name, double threshold, double amount,
                        String claimTime, String expireTime) {
-        jdbc.update("INSERT INTO user_coupons(user_id, store_id, name, threshold, amount, claim_time, expire_time) VALUES(?,?,?,?,?,?,?)",
-                userId, storeId, name, threshold, amount, claimTime, expireTime);
+        jdbc.update("INSERT INTO user_coupons(user_id, store_id, name, threshold, amount, claim_time, expire_time, " +
+                        "claim_time_dt, expire_time_dt) VALUES(?,?,?,?,?,?,?," + JdbcDateTimes.PARAMETER + "," +
+                        JdbcDateTimes.PARAMETER + ")",
+                userId, storeId, name, threshold, amount, claimTime, expireTime, claimTime, expireTime);
     }
 
     public List<UserCoupon> listByUser(long userId) {

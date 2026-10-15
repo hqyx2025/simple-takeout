@@ -9,7 +9,7 @@ import { ColorMetrics } from '@kit.ArkUI';
 import { routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusColor, MODULE_COLOR, MODULE_BG, accentBg, accentFg } from '../common/Constants'
 import { MerchantStatsData, User, UserRole } from '../model/Models'
-import { getCurrentUser, getMerchantTodayStats, getMerchantWeekStats, getMerchantWeekRevenue, getMerchantTodayStatusOrders, formatPrice, syncMerchantOrdersFromServer } from '../service/AppStorageManager'
+import { getCurrentUser, getMerchantTodayStats, getMerchantWeekStats, getMerchantWeekRevenue, getMerchantTodayStatusOrders, formatPrice, fetchMerchantStatsRemote } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
 
 @Entry
@@ -83,18 +83,19 @@ export struct MerchantStatsPage {
     }
   }
 
-  // 从后端同步订单后按统一口径重算统计（status=4 且 escrow=1，与大纲 21.4/后端接口一致）
+  // 直接读取服务端聚合，避免统计页为计算图表拉取全部历史订单。
   private async refreshRemoteStats(): Promise<void> {
     this.loadError = false
     try {
-      await syncMerchantOrdersFromServer()
-      const user: User | undefined = getCurrentUser()
-      if (user !== undefined && user !== null) {
-        this.todayStats = getMerchantTodayStats(user.id)
-        this.weekStats = getMerchantWeekStats(user.id)
-        this.weekRevenue = getMerchantWeekRevenue(user.id)
-        this.todayStatus = getMerchantTodayStatusOrders(user.id)
+      const aggregate = await fetchMerchantStatsRemote()
+      if (aggregate === null) {
+        this.loadError = true
+        return
       }
+      this.todayStats = aggregate.today
+      this.weekStats = aggregate.week
+      this.weekRevenue = aggregate.weekRevenue.length === 7 ? aggregate.weekRevenue : [0, 0, 0, 0, 0, 0, 0]
+      this.todayStatus = aggregate.todayStatus.length === 5 ? aggregate.todayStatus : [0, 0, 0, 0, 0]
     } catch (_e) {
       this.loadError = true
     }

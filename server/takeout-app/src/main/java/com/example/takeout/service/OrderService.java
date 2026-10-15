@@ -33,6 +33,7 @@ import com.example.takeout.model.SetmealOrder;
 import com.example.takeout.model.Store;
 import com.example.takeout.model.User;
 import com.example.takeout.service.mq.DomainEventPublisher;
+import com.example.takeout.service.thirdparty.ExternalPaymentService;
 import com.example.takeout.service.thirdparty.PaymentChannels;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -99,6 +100,13 @@ public class OrderService {
     /** 待付款订单的支付时限（分钟），超时由定时任务自动取消。 */
     @Value("${takeout.order.pay-timeout-minutes:15}")
     private int payTimeoutMinutes = 15;
+
+    private ExternalPaymentService externalPaymentService;
+
+    @Autowired(required = false)
+    void configureExternalPaymentService(ExternalPaymentService externalPaymentService) {
+        this.externalPaymentService = externalPaymentService;
+    }
 
     public OrderService(OrderDao orderDao, StoreDao storeDao, GoodsDao goodsDao, AddressDao addressDao,
                         CouponDao couponDao, ReviewDao reviewDao, UserDao userDao, RefundDao refundDao,
@@ -413,6 +421,7 @@ public class OrderService {
                 remark == null ? "" : requireMaxLength(remark, 255, "订单备注"), 0, 0, now, "", "", "", "", normalizedExpect,
                 appliedCoupon == null ? 0 : appliedCoupon.id(), normalizedDeliveryType);
         long id = insertOrderWithUniqueRetry(order);
+        orderDao.insertItems(id, normalizedItems);
         // 一人一单：下单登记秒杀参与记录，唯一键(user_id, seckill_id)拦截跨单重复；重复则回滚整单
         for (StockHold hold : holds) {
             if (hold.seckillId() > 0 && !seckillDao.joinOnce(userId, hold.seckillId(), id, now)) {
@@ -436,30 +445,46 @@ public class OrderService {
      * 支付待付款订单：扣除用户余额并流转到待接单（1）。
      * 条件更新失败说明订单已被取消/已支付，抛异常回滚余额扣减。
      */
-    @Transactional
     public Order.OrderView payOrder(long userId, long orderId) {
-        return payOrder(userId, orderId, null);
+        return payOrder(userId, orderId, PaymentChannels.BALANCE);
     }
 
-    /** 支付：channel 空/余额走余额扣款；微信/支付宝为 Mock（走余额 + 模拟回调）。 */
-    @Transactional
+    /** 余额支付在本地事务内完成；第三方支付只创建预支付，成功状态只由验签回调推进。 */
     public Order.OrderView payOrder(long userId, long orderId, String channel) {
+        return payOrder(userId, orderId, channel, "QR");
+    }
+
+    public Order.OrderView payOrder(long userId, long orderId, String channel, String mode) {
+        String normalizedMode = ExternalPaymentService.normalizeMode(mode);
         String normalizedChannel = PaymentChannels.normalize(channel);
         if (!PaymentChannels.SUPPORTED.contains(normalizedChannel)) {
             throw new BizException("不支持的支付方式");
         }
+        if (PaymentChannels.isThirdParty(normalizedChannel)) {
+            return startThirdPartyPayment(userId, orderId, normalizedChannel, normalizedMode);
+        }
+        return transactions.execute(status -> payWithBalance(userId, orderId));
+    }
+
+    private Order.OrderView startThirdPartyPayment(long userId, long orderId, String channel, String mode) {
         Order order = requireOrder(orderId);
         if (order.userId() != userId) {
             throw new BizException(403, "无权操作该订单");
         }
-        if (order.status() != 0) {
-            throw new BizException(order.status() == 5 ? "订单已取消，无法支付" : "订单已支付，请勿重复支付");
-        }
-        // 支付时限秒级显式检查：过了 payDeadline 的待付款订单不再接受支付（超时定时任务会竞争取消，
-        // 这里提前拦下避免扣余额后才发现订单已被取消回滚；先查后改只影响几秒钟窗口，最终以条件更新为准）
-        PayDeadline deadline = payDeadline(order);
-        if (deadline.epochMs() > 0 && System.currentTimeMillis() > deadline.epochMs()) {
-            throw new BizException("订单已超过支付时限，请重新下单");
+        ensurePayable(order);
+        if (externalPaymentService == null) throw new BizException(503, "真实支付渠道未配置");
+        ExternalPaymentService.PaymentLaunch launch = externalPaymentService.startPayment(channel, order, mode);
+        return orderDetail(orderId).withPayment(launch.channel(), launch.outTradeNo(), launch.paymentUrl(),
+                launch.appOrderInfo(), launch.paymentMode(), launch.paymentSandbox());
+    }
+
+    private Order.OrderView payWithBalance(long userId, long orderId) {
+        Order order = externalPaymentService == null ? requireOrder(orderId)
+                : orderDao.findByIdForUpdate(orderId).orElseThrow(() -> new BizException("订单不存在"));
+        if (order.userId() != userId) throw new BizException(403, "无权操作该订单");
+        ensurePayable(order);
+        if (externalPaymentService != null && externalPaymentService.hasPendingPayment(orderId)) {
+            throw new BizException(409, "第三方支付正在处理，请先取消支付后使用余额");
         }
         User user = userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
         if (user.balance() < order.payAmount()) {
@@ -473,14 +498,21 @@ public class OrderService {
         if (!userDao.deductBalance(userId, order.payAmount())) {
             throw new BizException("余额不足，请先充值");
         }
-        if (PaymentChannels.isMockThirdParty(normalizedChannel)) {
-            PaymentChannels.logMockCallback(normalizedChannel, orderId);
-        }
-        paymentRecordDao.insert(orderId, userId, order.payAmount(), "PAY", normalizedChannel, "SUCCESS", now);
+        paymentRecordDao.insert(orderId, userId, order.payAmount(), "PAY", PaymentChannels.BALANCE, "SUCCESS", now);
         // 支付成功后才发出事件：条件更新失败会抛异常回滚，不会产生「假支付」事件
         eventPublisher.publish(DomainEventPublisher.ORDER_PAID, orderId,
                 Map.of("userId", userId, "payAmount", order.payAmount()));
         return orderDetail(orderId);
+    }
+
+    private void ensurePayable(Order order) {
+        if (order.status() != 0) {
+            throw new BizException(order.status() == 5 ? "订单已取消，无法支付" : "订单已支付，请勿重复支付");
+        }
+        PayDeadline deadline = payDeadline(order);
+        if (deadline.epochMs() > 0 && System.currentTimeMillis() > deadline.epochMs()) {
+            throw new BizException("订单已超过支付时限，请重新下单");
+        }
     }
 
     /**
@@ -492,12 +524,16 @@ public class OrderService {
         int cancelled = 0;
         for (Order order : orderDao.listExpiredPending(deadline)) {
             try {
+                // 定时扫描不能在订单行锁内等待支付渠道网络请求，否则会阻塞用户支付/取消输入。
+                if (externalPaymentService != null) {
+                    externalPaymentService.closePendingPayment(order.id());
+                }
                 // 每单单独提交：不带着前一单的库存锁去获取下一单的订单锁。
                 if (Boolean.TRUE.equals(transactions.execute(status ->
-                        cancelPending(order, "超时未支付，订单已自动取消")))) {
+                        cancelPending(order, "超时未支付，订单已自动取消", false)))) {
                     cancelled++;
                 }
-            } catch (DataAccessException e) {
+            } catch (RuntimeException e) {
                 // 本单已回滚，保留待付款状态；继续其他单，下轮扫描再处理失败单。
                 log.warn("[超时取消] 单笔事务失败 orderId={}", order.id(), e);
             }
@@ -507,6 +543,14 @@ public class OrderService {
 
     /** 取消待付款订单：条件更新 0→5，成功后才回滚库存/名额并释放优惠券（同一事务）。 */
     private boolean cancelPending(Order order, String reason) {
+        return cancelPending(order, reason, true);
+    }
+
+    private boolean cancelPending(Order order, String reason, boolean closeExternalPayment) {
+        if (closeExternalPayment && externalPaymentService != null) {
+            orderDao.findByIdForUpdate(order.id()).orElseThrow(() -> new BizException("订单不存在"));
+            externalPaymentService.closePendingPayment(order.id());
+        }
         if (!orderDao.cancelPending(order.id(), LocalDateTime.now().format(FMT))) {
             return false;
         }
@@ -569,6 +613,17 @@ public class OrderService {
         return orderDao.listByUser(userId).stream().map(this::toView).toList();
     }
 
+    public OrderPage userOrders(long userId, Integer status, int page, int pageSize) {
+        validatePageStatus(status);
+        int size = Math.clamp(pageSize, 1, 100);
+        int current = Math.max(page, 1);
+        int total = orderDao.countByUser(userId, status);
+        long offset = (long) (current - 1) * size;
+        List<Order.OrderView> list = orderDao.listByUser(userId, status, size, offset).stream()
+                .map(this::toView).toList();
+        return new OrderPage(list, total, current, size, (long) current * size < total);
+    }
+
     /**
      * 商户订单：仅可见自己店铺的订单
      * 待付款（status=0）订单尚未支付，不计入商户待处理列表（超时由定时任务自动取消）
@@ -588,9 +643,29 @@ public class OrderService {
                 .toList();
     }
 
+    public OrderPage merchantOrders(long ownerId, Integer status, int page, int pageSize) {
+        validatePageStatus(status);
+        int size = Math.clamp(pageSize, 1, 100);
+        int current = Math.max(page, 1);
+        int total = orderDao.countByMerchant(ownerId, status);
+        long offset = (long) (current - 1) * size;
+        List<Order.OrderView> list = orderDao.listByMerchant(ownerId, status, size, offset).stream()
+                .map(row -> orderViewWithRider(row.order(), row.riderName(), row.riderPhone(), row.readyTime()))
+                .toList();
+        return new OrderPage(list, total, current, size, (long) current * size < total);
+    }
+
     public Order.OrderView orderDetail(long id) {
         Order order = orderDao.findById(id).orElseThrow(() -> new BizException("订单不存在"));
-        return toViewWithRider(order);
+        return withPaymentDetails(order, toViewWithRider(order));
+    }
+
+    /** 管理端列表已通过 JOIN 批量读取骑手信息，避免逐订单查询骑手和出餐时间。 */
+    public Order.OrderView adminOrderView(OrderDao.AdminOrderRow row) {
+        Order order = row.order();
+        PayDeadline deadline = payDeadline(order);
+        return order.toView(parseItems(order.items()), parseAddress(order.address()), deadline.text(),
+                deadline.epochMs(), row.riderName(), row.riderPhone(), row.readyTime() == null ? "" : row.readyTime());
     }
 
     public Order.OrderView orderDetail(long requesterId, int role, long id) {
@@ -598,16 +673,40 @@ public class OrderService {
         if (order.userId() != requesterId && (role != 1 || !isStoreOwner(requesterId, order.storeId()))) {
             throw new BizException(403, "无权查看该订单");
         }
-        return toViewWithRider(order);
+        return withPaymentDetails(order, toViewWithRider(order));
+    }
+
+    /** 用户主动查单只接受支付平台的签名响应，仍不能由客户端声明支付成功。 */
+    public Order.OrderView refreshPaymentStatus(long userId, long orderId) {
+        Order order = requireOrder(orderId);
+        if (order.userId() != userId) throw new BizException(403, "无权操作该订单");
+        if (order.status() == 0 && externalPaymentService != null) {
+            externalPaymentService.refreshPayment(orderId);
+        }
+        return orderDetail(orderId);
+    }
+
+    private Order.OrderView withPaymentDetails(Order order, Order.OrderView view) {
+        if (externalPaymentService == null) return view;
+        ExternalPaymentService.PaymentLaunch payment = externalPaymentService.paymentDetails(order.id());
+        boolean pending = order.status() == 0 && payment != null && "PENDING".equals(payment.status());
+        return payment == null ? view : view.withPayment(payment.channel(), payment.outTradeNo(),
+                pending ? payment.paymentUrl() : "", pending ? payment.appOrderInfo() : "",
+                payment.paymentMode(), payment.paymentSandbox());
     }
 
     // ============ 状态流转 ============
 
     @Transactional
     public Order.OrderView cancelOrder(long userId, long orderId) {
-        Order order = requireOrder(orderId);
+        // Current reads preserve order -> payment lock ordering without establishing a stale RR snapshot.
+        Order order = orderDao.findByIdForUpdate(orderId).orElseThrow(() -> new BizException("订单不存在"));
         if (order.userId() != userId) {
             throw new BizException(403, "无权操作该订单");
+        }
+        if (externalPaymentService != null) {
+            externalPaymentService.closePendingPayment(orderId);
+            order = orderDao.findByIdForUpdate(orderId).orElseThrow(() -> new BizException("订单不存在"));
         }
         if (order.status() != 0 && order.status() != 1 && order.status() != 2 && order.status() != 3) {
             throw new BizException("当前状态不可取消");
@@ -630,12 +729,19 @@ public class OrderService {
         }
         // escrow 条件更新成功才回滚库存（同一事务内，防重复回滚）
         rollbackStock(order);
-        userDao.addBalance(userId, order.payAmount());
-        paymentRecordDao.insert(orderId, userId, order.payAmount(), "REFUND", "BALANCE", "SUCCESS",
-                LocalDateTime.now().format(FMT));
+        refundOrderPayment(order);
         eventPublisher.publish(DomainEventPublisher.ORDER_CANCELLED, orderId,
                 Map.of("userId", userId, "reason", "用户取消已支付订单，已即时退款"));
         return orderDetail(orderId);
+    }
+
+    /** All refund callers share the original payment channel; external charges are never credited as wallet balance. */
+    public void refundOrderPayment(Order order) {
+        String channel = externalPaymentService == null ? PaymentChannels.BALANCE
+                : externalPaymentService.refundOriginalPayment(order);
+        if (PaymentChannels.BALANCE.equals(channel)) userDao.addBalance(order.userId(), order.payAmount());
+        paymentRecordDao.insert(order.id(), order.userId(), order.payAmount(), "REFUND", channel, "SUCCESS",
+                LocalDateTime.now().format(FMT));
     }
 
     /**
@@ -845,6 +951,30 @@ public class OrderService {
         return orderDao.listByRider(riderId).stream().map(this::toView).toList();
     }
 
+    public OrderPage riderOrders(long riderId, int page, int pageSize) {
+        int size = Math.clamp(pageSize, 1, 100);
+        int current = Math.max(page, 1);
+        int total = orderDao.countByRider(riderId);
+        long offset = (long) (current - 1) * size;
+        List<Order.OrderView> list = orderDao.listByRider(riderId, size, offset).stream().map(this::toView).toList();
+        return new OrderPage(list, total, current, size, (long) current * size < total);
+    }
+
+    private void validatePageStatus(Integer status) {
+        if (status != null && (status < 0 || status > 6)) {
+            throw new BizException("订单状态筛选不合法");
+        }
+    }
+
+    private Order.OrderView orderViewWithRider(Order order, String riderName, String riderPhone, String readyTime) {
+        PayDeadline deadline = payDeadline(order);
+        return order.toView(parseItems(order.items()), parseAddress(order.address()), deadline.text(),
+                deadline.epochMs(), riderName, riderPhone, readyTime == null ? "" : readyTime);
+    }
+
+    public record OrderPage(List<Order.OrderView> list, int total, int page, int pageSize, boolean hasMore) {
+    }
+
     @Transactional
     public Order.OrderView confirmOrder(long userId, long orderId) {
         Order order = requireOrder(orderId);
@@ -934,50 +1064,38 @@ public class OrderService {
     public MerchantStats merchantStats(long ownerId, long storeId) {
         List<Store> stores = storeDao.listByOwner(ownerId);
         if (stores.isEmpty()) {
-            return new MerchantStats(0, 0, 0, 0, 0, 0);
+            return MerchantStats.empty();
         }
         long sid = storeId > 0 ? storeId : stores.get(0).id();
         boolean owned = stores.stream().anyMatch(s -> s.id() == sid);
         if (!owned) {
             throw new BizException(403, "无权查看该店铺统计");
         }
-        List<Order> orders = orderDao.listSettledByStore(sid);
         LocalDate today = LocalDate.now();
         LocalDate weekStart = today.minusDays(today.getDayOfWeek().getValue() - 1);
         LocalDate monthStart = today.withDayOfMonth(1);
-
-        double todayIncome = sumSince(orders, today.atStartOfDay());
-        double weekIncome = sumSince(orders, weekStart.atStartOfDay());
-        double monthIncome = sumSince(orders, monthStart.atStartOfDay());
-        long todayCount = countSince(orders, today.atStartOfDay());
-        long weekCount = countSince(orders, weekStart.atStartOfDay());
-        long monthCount = countSince(orders, monthStart.atStartOfDay());
-        return new MerchantStats(todayCount, todayIncome, weekCount, weekIncome, monthCount, monthIncome);
-    }
-
-    private double sumSince(List<Order> orders, LocalDateTime since) {
-        return orders.stream()
-                .filter(o -> parseTime(o.completeTime()).isAfter(since.minusSeconds(1)))
-                .mapToDouble(Order::payAmount)
-                .sum();
-    }
-
-    private long countSince(List<Order> orders, LocalDateTime since) {
-        return orders.stream()
-                .filter(o -> parseTime(o.completeTime()).isAfter(since.minusSeconds(1)))
-                .count();
-    }
-
-    private LocalDateTime parseTime(String time) {
-        try {
-            return LocalDateTime.parse(time, FMT);
-        } catch (Exception e) {
-            return LocalDateTime.MIN;
+        String todayStart = today.atStartOfDay().format(FMT);
+        String tomorrowStart = today.plusDays(1).atStartOfDay().format(FMT);
+        List<String> dayStarts = new ArrayList<>();
+        for (int i = 6; i >= 0; i--) {
+            dayStarts.add(today.minusDays(i).atStartOfDay().format(FMT));
         }
+        OrderDao.MerchantStatsAggregate aggregate = orderDao.aggregateMerchantStats(sid, todayStart,
+                tomorrowStart, weekStart.atStartOfDay().format(FMT), monthStart.atStartOfDay().format(FMT), dayStarts);
+        return new MerchantStats(aggregate.todayCompleted(), aggregate.todayIncome(), aggregate.todayOrders(),
+                aggregate.weekCompleted(), aggregate.weekIncome(), aggregate.weekOrders(), aggregate.monthCompleted(),
+                aggregate.monthIncome(), aggregate.monthOrders(), aggregate.totalOrders(), aggregate.totalIncome(),
+                aggregate.dayIncome(), aggregate.statusCounts());
     }
 
-    public record MerchantStats(long todayCount, double todayIncome, long weekCount, double weekIncome,
-                                long monthCount, double monthIncome) {
+    public record MerchantStats(long todayCount, double todayIncome, long todayOrderCount, long weekCount,
+                                double weekIncome, long weekOrderCount, long monthCount, double monthIncome,
+                                long monthOrderCount, long totalCount, double totalIncome,
+                                List<Double> weekRevenue, List<Long> todayStatus) {
+        public static MerchantStats empty() {
+            return new MerchantStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    List.of(0d, 0d, 0d, 0d, 0d, 0d, 0d), List.of(0L, 0L, 0L, 0L, 0L));
+        }
     }
 
     // ============ 工具 ============

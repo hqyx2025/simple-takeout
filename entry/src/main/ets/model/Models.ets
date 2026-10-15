@@ -175,16 +175,35 @@ export interface Order {
   payDeadline?: string
   /** 服务端计算的支付截止毫秒时间戳，避免前端解析字符串时区问题 */
   payDeadlineEpochMs?: number
+  /** 服务端返回当前毫秒时间戳，用于修正设备时钟偏移 */
+  serverNowEpochMs?: number
   /** 下单使用的优惠券 ID（0=未使用），待付款取消时由后端自动退回 */
   couponId?: number
   orderNo?: string
   /** 配送骑手姓名/电话（配送中及之后返回） */
   riderName?: string
   riderPhone?: string
+  /** DELIVERY 外卖配送 / PICKUP 到店自取。 */
+  deliveryType?: string
   /** 商户出餐时间：非空表示已出餐并已进入骑手待取餐池（此时数字状态仍为 2 制作中） */
   readyTime?: string
+  paymentChannel?: string
+  outTradeNo?: string
+  paymentUrl?: string
+  /** 支付宝官方 APP 支付 SDK 使用的服务端签名串，仅 APP 预支付时返回。 */
+  appOrderInfo?: string
+  paymentMode?: string
+  paymentSandbox?: boolean
   address: Address
   remark: string
+}
+
+export interface OrderPageData {
+  list: Order[]
+  total: number
+  page: number
+  pageSize: number
+  hasMore: boolean
 }
 
 // 用户模型（支持双角色）
@@ -346,6 +365,14 @@ export interface RefundRecord {
   rejectReason?: string
 }
 
+export interface RefundPageData {
+  list: RefundRecord[]
+  total: number
+  page: number
+  pageSize: number
+  hasMore: boolean
+}
+
 // 配送时间轴节点
 export interface DeliveryStep {
   status: number        // 对应订单状态码
@@ -367,6 +394,18 @@ export interface MerchantStatsData {
   completedOrders: number
   totalOrders: number
   totalRevenue: number
+  /** 服务端聚合的近7天已结算收入；缺失时由旧客户端口径回退。 */
+  weekRevenue?: number[]
+  /** 服务端聚合的今日订单状态分布：[待接单, 制作中, 配送中, 已完成, 已取消]。 */
+  todayStatus?: number[]
+}
+
+/** 商户统计接口完整响应，包含今日/本周卡片和图表所需聚合数据。 */
+export interface MerchantStatsAggregateData {
+  today: MerchantStatsData
+  week: MerchantStatsData
+  weekRevenue: number[]
+  todayStatus: number[]
 }
 
 // 管理端员工账号
@@ -419,6 +458,37 @@ export interface AdminUser {
   balance: number
   storeCount: number
   createTime: string
+}
+
+export interface AdminUserPageData {
+  list: AdminUser[]
+  total: number
+  page: number
+  pageSize: number
+  hasMore: boolean
+}
+
+export interface AdminOperationLog {
+  id: number
+  operatorId: number
+  operatorRole: number
+  orderId: number
+  statusAfter: number
+  action: string
+  method: string
+  path: string
+  outcome: string
+  status: number
+  traceId: string
+  createdAt: number
+}
+
+export interface AdminOperationLogPageData {
+  list: AdminOperationLog[]
+  total: number
+  page: number
+  pageSize: number
+  hasMore: boolean
 }
 
 export interface AdminHotGoods {
@@ -479,6 +549,34 @@ export interface MarketingActivity {
   reduceAmount: number
   threshold: number
   giftGoodsId: number
+  startTime: string
+  endTime: string
+  status: number
+  createTime: string
+}
+
+/** 商户端秒杀管理记录（字段与后端 Seckill 对齐）。 */
+export interface MerchantSeckill {
+  id: number
+  goodsId: number
+  storeId: number
+  price: number
+  quota: number
+  sold: number
+  startTime: string
+  endTime: string
+  status: number
+  createTime: string
+}
+
+/** 平台管理员秒杀监管记录。 */
+export interface AdminSeckill {
+  id: number
+  goodsId: number
+  storeId: number
+  price: number
+  quota: number
+  sold: number
   startTime: string
   endTime: string
   status: number

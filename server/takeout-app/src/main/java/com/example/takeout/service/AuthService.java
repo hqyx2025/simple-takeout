@@ -6,10 +6,12 @@ import com.example.takeout.model.User;
 import com.example.takeout.security.JwtUtil;
 import com.example.takeout.security.PasswordUtil;
 import com.example.takeout.security.PaymentPasswordUtil;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.Clock;
 import java.time.format.DateTimeFormatter;
 
 /**
@@ -22,10 +24,26 @@ public class AuthService {
 
     private final UserDao userDao;
     private final JwtUtil jwtUtil;
+    private final SmsCodeVerifier smsCodeVerifier;
+    private final Clock clock;
 
-    public AuthService(UserDao userDao, JwtUtil jwtUtil) {
+    @Autowired
+    public AuthService(UserDao userDao, JwtUtil jwtUtil, SmsCodeVerifier smsCodeVerifier) {
+        this(userDao, jwtUtil, smsCodeVerifier, Clock.systemDefaultZone());
+    }
+
+    AuthService(UserDao userDao, JwtUtil jwtUtil, SmsCodeVerifier smsCodeVerifier, Clock clock) {
         this.userDao = userDao;
         this.jwtUtil = jwtUtil;
+        this.smsCodeVerifier = smsCodeVerifier;
+        this.clock = clock;
+    }
+
+    /** Unit-test constructor; password reset remains closed unless a verifier is supplied. */
+    public AuthService(UserDao userDao, JwtUtil jwtUtil) {
+        this(userDao, jwtUtil, (phone, code) -> {
+            throw new BizException("手机号或验证码不正确");
+        });
     }
 
     /**
@@ -83,6 +101,9 @@ public class AuthService {
             }
         }
         String token = jwtUtil.generateToken(user.id(), user.role(), user.passwordChangedAt());
+        if (PasswordUtil.needsRehash(user.password())) {
+            userDao.upgradePasswordHash(user.id(), user.password(), PasswordUtil.hash(password));
+        }
         return new LoginResult(token, user.safe());
     }
 
@@ -92,8 +113,9 @@ public class AuthService {
      * <p>改密时间会让**所有早于此刻签发的 token 立即失效**（含当前这一个），
      * 所以前端改密成功后必须回到登录页重新登录——这不是体验缺陷，是「改密即踢掉其他会话」的实现。</p>
      */
+    @Transactional
     public void changePassword(long userId, String oldPassword, String newPassword) {
-        User user = userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
+        User user = userDao.findByIdForUpdate(userId).orElseThrow(() -> new BizException("用户不存在"));
         if (oldPassword == null || !PasswordUtil.matches(oldPassword, user.password())) {
             throw new BizException("原密码不正确");
         }
@@ -104,7 +126,7 @@ public class AuthService {
             throw new BizException("新密码不能与原密码相同");
         }
         userDao.updatePassword(userId, PasswordUtil.hash(newPassword),
-                LocalDateTime.now().format(FMT));
+                nextPasswordChangedAt(user.passwordChangedAt()));
     }
 
     /** 设置或重置独立支付密码；每次都用登录密码确认，绝不把登录密码当支付密码。 */
@@ -120,27 +142,24 @@ public class AuthService {
         userDao.updatePaymentPassword(userId, PaymentPasswordUtil.hash(paymentPassword));
     }
 
-    /** Mock 短信找回登录密码；正式短信供应商替换后沿用同一接口。 */
+    /** SMS recovery consumes the server-issued, short-lived one-time code before changing credentials. */
     @Transactional
     public void resetPasswordBySms(String phone, String code, String newPassword) {
-        if (phone == null || !phone.matches("1\\d{10}") || !"123456".equals(code)) {
-            throw new BizException("手机号或验证码不正确");
-        }
         if (newPassword == null || newPassword.length() < 6) {
             throw new BizException("新密码长度至少 6 位");
         }
-        User user = userDao.findByPhone(phone).orElseThrow(() -> new BizException("手机号或验证码不正确"));
-        userDao.updatePassword(user.id(), PasswordUtil.hash(newPassword), LocalDateTime.now().format(FMT));
+        smsCodeVerifier.consume(phone, code);
+        User user = userDao.findByPhoneForUpdate(phone).orElseThrow(() -> new BizException("手机号或验证码不正确"));
+        userDao.updatePassword(user.id(), PasswordUtil.hash(newPassword),
+                nextPasswordChangedAt(user.passwordChangedAt()));
     }
 
     @Transactional
     public void resetPaymentPasswordBySms(String phone, String code, String paymentPassword) {
-        if (phone == null || !phone.matches("1\\d{10}") || !"123456".equals(code)) {
-            throw new BizException("手机号或验证码不正确");
-        }
         if (paymentPassword == null || !paymentPassword.matches("[0-9]{6}")) {
             throw new BizException("支付密码必须为 6 位数字");
         }
+        smsCodeVerifier.consume(phone, code);
         User user = userDao.findByPhone(phone).orElseThrow(() -> new BizException("手机号或验证码不正确"));
         userDao.updatePaymentPassword(user.id(), PaymentPasswordUtil.hash(paymentPassword));
     }
@@ -153,6 +172,26 @@ public class AuthService {
             case "RIDER" -> 3;
             default -> throw new BizException("登录端类型不合法，仅支持 USER、MERCHANT、ADMIN、RIDER");
         };
+    }
+
+    /**
+     * 改密时间只有秒精度（历史表结构与 JWT 声明均如此），因此连续两次改密可能得到同一时间，
+     * 让第一轮改密后签发的 token 逃过「早于改密时间」校验。保证新值严格晚于已记录值，
+     * 同时兼容旧库中的空值或无法解析的历史内容。
+     */
+    private String nextPasswordChangedAt(String previous) {
+        LocalDateTime now = LocalDateTime.now(clock).withNano(0);
+        if (previous != null && !previous.isBlank()) {
+            try {
+                LocalDateTime previousTime = LocalDateTime.parse(previous, FMT);
+                if (!now.isAfter(previousTime)) {
+                    now = previousTime.plusSeconds(1);
+                }
+            } catch (java.time.format.DateTimeParseException ignored) {
+                // 老库异常值按当前时间修复；后续 token 会使用规范格式。
+            }
+        }
+        return now.format(FMT);
     }
 
     public User profile(long userId) {

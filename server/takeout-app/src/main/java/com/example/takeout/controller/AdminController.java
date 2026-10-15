@@ -6,8 +6,10 @@ import com.example.takeout.model.Category;
 import com.example.takeout.model.AdminEmployee;
 import com.example.takeout.model.AdminStatistics;
 import com.example.takeout.model.AdminUser;
+import com.example.takeout.model.MarketingActivity;
 import com.example.takeout.model.Order;
 import com.example.takeout.model.RefundRecord;
+import com.example.takeout.model.Seckill;
 import com.example.takeout.model.Store;
 import com.example.takeout.service.AdminService;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -86,10 +88,67 @@ public class AdminController {
         return ApiResponse.ok();
     }
 
+    // ============ 平台营销/秒杀监管 ============
+
+    @GetMapping("/marketing/activities")
+    public ApiResponse<List<MarketingActivity>> marketingActivities(@RequestAttribute("role") int role,
+                                                                     @RequestParam(required = false) Long storeId,
+                                                                     @RequestParam(required = false) Integer status) {
+        requireAdmin(role);
+        return ApiResponse.ok(adminService.marketingActivities(storeId, status));
+    }
+
+    @PutMapping("/marketing/activities/{id}/status")
+    public ApiResponse<MarketingActivity> updateMarketingActivityStatus(@RequestAttribute("role") int role,
+                                                                         @PathVariable long id,
+                                                                         @RequestBody StoreStatusRequest req) {
+        requireAdmin(role);
+        return ApiResponse.ok(adminService.updateMarketingActivityStatus(id, req.status()));
+    }
+
+    @DeleteMapping("/marketing/activities/{id}")
+    public ApiResponse<Void> deleteMarketingActivity(@RequestAttribute("role") int role, @PathVariable long id) {
+        requireAdmin(role);
+        adminService.deleteMarketingActivity(id);
+        return ApiResponse.ok();
+    }
+
+    @GetMapping("/marketing/seckills")
+    public ApiResponse<List<Seckill>> marketingSeckills(@RequestAttribute("role") int role,
+                                                        @RequestParam(required = false) Long storeId,
+                                                        @RequestParam(required = false) Integer status) {
+        requireAdmin(role);
+        return ApiResponse.ok(adminService.seckills(storeId, status));
+    }
+
+    @PutMapping("/marketing/seckills/{id}/status")
+    public ApiResponse<Seckill> updateMarketingSeckillStatus(@RequestAttribute("role") int role,
+                                                              @PathVariable long id,
+                                                              @RequestBody StoreStatusRequest req) {
+        requireAdmin(role);
+        return ApiResponse.ok(adminService.updateSeckillStatus(id, req.status()));
+    }
+
+    @DeleteMapping("/marketing/seckills/{id}")
+    public ApiResponse<Void> deleteMarketingSeckill(@RequestAttribute("role") int role, @PathVariable long id) {
+        requireAdmin(role);
+        adminService.deleteSeckill(id);
+        return ApiResponse.ok();
+    }
+
     @GetMapping("/orders")
     public ApiResponse<List<Order.OrderView>> orders(@RequestAttribute("role") int role) {
         requireAdmin(role);
         return ApiResponse.ok(adminService.orders());
+    }
+
+    @GetMapping("/orders/page")
+    public ApiResponse<AdminService.OrderPage> ordersPage(@RequestAttribute("role") int role,
+                                                          @RequestParam(required = false) Integer status,
+                                                          @RequestParam(defaultValue = "1") int page,
+                                                          @RequestParam(defaultValue = "50") int pageSize) {
+        requireAdmin(role);
+        return ApiResponse.ok(adminService.orders(status, page, pageSize));
     }
 
     @PutMapping("/orders/{id}/refund")
@@ -121,6 +180,17 @@ public class AdminController {
                                               @RequestParam(required = false) String keyword) {
         requireAdmin(role);
         return ApiResponse.ok(adminService.users(userRole, status, keyword));
+    }
+
+    @GetMapping("/users/page")
+    public ApiResponse<AdminService.UserPage> usersPage(@RequestAttribute("role") int role,
+                                                        @RequestParam(required = false) Integer userRole,
+                                                        @RequestParam(required = false) Integer status,
+                                                        @RequestParam(required = false) String keyword,
+                                                        @RequestParam(defaultValue = "1") int page,
+                                                        @RequestParam(defaultValue = "50") int pageSize) {
+        requireAdmin(role);
+        return ApiResponse.ok(adminService.users(userRole, status, keyword, page, pageSize));
     }
 
     @PutMapping("/users/{id}/status")
@@ -210,6 +280,15 @@ public class AdminController {
                                                    @RequestParam(required = false) String status) {
         requireAdmin(role);
         return ApiResponse.ok(adminService.refunds(status));
+    }
+
+    @GetMapping("/refunds/page")
+    public ApiResponse<AdminService.RefundPage> refundsPage(@RequestAttribute("role") int role,
+                                                            @RequestParam(required = false) String status,
+                                                            @RequestParam(defaultValue = "1") int page,
+                                                            @RequestParam(defaultValue = "50") int pageSize) {
+        requireAdmin(role);
+        return ApiResponse.ok(adminService.refunds(status, page, pageSize));
     }
 
     @GetMapping("/refunds/{id}")

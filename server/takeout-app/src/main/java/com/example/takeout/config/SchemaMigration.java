@@ -35,6 +35,7 @@ public class SchemaMigration implements ApplicationRunner {
         addColumnIfMissing("orders", "delivery_type", "VARCHAR(16) NOT NULL DEFAULT 'DELIVERY'");
         // 待付款支付模型：订单与所用优惠券解绑时需要用 coupon_id 释放优惠券
         addColumnIfMissing("orders", "coupon_id", "BIGINT NOT NULL DEFAULT 0");
+        addColumnIfMissing("payment_transactions", "payment_mode", "VARCHAR(8) NOT NULL DEFAULT 'QR'");
         // 多规格 SKU：购物车按 (用户,菜品,规格) 唯一
         addColumnIfMissing("cart_items", "spec_id", "BIGINT NOT NULL DEFAULT 0");
         // 改密即失效：老库补列，空值表示从未改密（存量 token 不受影响）
@@ -63,7 +64,41 @@ public class SchemaMigration implements ApplicationRunner {
         // 默认 0 让存量行（老库补列后）立刻可被认领，不会因补列而滞留。
         addColumnIfMissing("outbox_events", "owner", "VARCHAR(64) NOT NULL DEFAULT ''");
         addColumnIfMissing("outbox_events", "lease_until", "BIGINT NOT NULL DEFAULT 0");
+        migrateOrderTimeColumns();
+        migrateDomainTimeColumns();
+        addIndexIfMissing("orders", "idx_orders_user_page", "(user_id, id)");
+        addIndexIfMissing("orders", "idx_orders_store_page", "(store_id, id)");
+        addIndexIfMissing("orders", "idx_orders_rider_page", "(rider_id, id)");
+        addIndexIfMissing("orders", "idx_orders_admin_status_page", "(status, id)");
+        addIndexIfMissing("orders", "idx_orders_pending_timeout", "(status, create_time, id)");
+        addIndexIfMissing("orders", "idx_orders_rider_pool", "(status, rider_id, ready_time, id)");
+        addIndexIfMissing("refund_records", "idx_refund_status_page", "(status, id)");
+        addIndexIfMissing("users", "idx_users_admin_role_status_page", "(role, status, id)");
+        addIndexIfMissing("users", "idx_users_admin_status_page", "(status, id)");
         rebuildCartUniqueKey();
+    }
+
+    void migrateOrderTimeColumns() {
+        // Keep the VARCHAR columns for older application instances and API compatibility.
+        // The DAO dual-writes new changes and explicitly parses legacy values when shadow data is absent.
+        for (String column : new String[]{"create_time", "pay_time", "accept_time", "deliver_time",
+                "complete_time", "ready_time", "expect_time"}) {
+            addColumnIfMissing("orders", column + "_dt", "DATETIME DEFAULT NULL");
+        }
+    }
+
+    void migrateDomainTimeColumns() {
+        for (String[] tableColumns : new String[][]{
+                {"coupons", "expire_time", "create_time"},
+                {"user_coupons", "claim_time", "expire_time"},
+                {"marketing_activities", "start_time", "end_time", "create_time"},
+                {"seckills", "start_time", "end_time", "create_time"},
+                {"seckill_orders", "create_time"},
+                {"outbox_events", "create_time"}}) {
+            for (int i = 1; i < tableColumns.length; i++) {
+                addColumnIfMissing(tableColumns[0], tableColumns[i] + "_dt", "DATETIME DEFAULT NULL");
+            }
+        }
     }
 
     /**
@@ -108,6 +143,21 @@ public class SchemaMigration implements ApplicationRunner {
                 if (exists == null || exists == 0) {
                     throw e;
                 }
+            }
+        }
+    }
+
+    private void addIndexIfMissing(String table, String indexName, String columns) {
+        if (indexExists(table, indexName)) {
+            return;
+        }
+        try {
+            jdbc.execute("ALTER TABLE " + table + " ADD INDEX " + indexName + " " + columns);
+        } catch (org.springframework.dao.DataAccessException e) {
+            Throwable cause = e.getMostSpecificCause();
+            if (!(cause instanceof java.sql.SQLException sqlException) || sqlException.getErrorCode() != 1061
+                    || !indexExists(table, indexName)) {
+                throw e;
             }
         }
     }

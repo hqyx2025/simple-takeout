@@ -3,13 +3,15 @@
  * 负责：调用后端 REST API（HttpClient）+ 后端 JSON 与客户端 Models 之间的双向转换
  * 所有页面/服务层通过本模块访问真实后端数据
  */
-import { get, post, put, del, uploadFile, ApiResponse, setAuthToken } from './HttpClient'
+import { get, post, put, del, uploadFile, ApiResponse, setAuthTokens, getRefreshToken } from './HttpClient'
+import { saveAuthTokens } from './TokenStorage'
+import { currentPushToken } from './PushKitService'
 import { API_CONFIG } from '../common/Constants'
 import {
-  User, UserRole, StoreItem, GoodsItem, SpecialGoodsItem, Category, Order, CartItem,
-  Address, Coupon, Review, Rider, Banner, Announcement, Favorite, RefundRecord, AdminEmployee, AdminProduct, AdminProductPage, AdminUser,
+  User, UserRole, StoreItem, GoodsItem, SpecialGoodsItem, Category, Order, OrderPageData, CartItem,
+  Address, Coupon, Review, Rider, Banner, Announcement, Favorite, RefundRecord, RefundPageData, AdminEmployee, AdminProduct, AdminProductPage, AdminUser, AdminUserPageData, AdminOperationLog, AdminOperationLogPageData,
   BankCard,
-  AdminStatisticsData, AdminTrendPoint, AdminHotGoods, AdminDashboard, AdminOrderStatusCount, AdminTopStore, MarketingActivity, Setmeal, SetmealOrder, Employee, SeckillItem, BundleInfo, UploadResult, GoodsSpec
+  AdminStatisticsData, AdminTrendPoint, AdminHotGoods, AdminDashboard, AdminOrderStatusCount, AdminTopStore, MarketingActivity, AdminSeckill, Setmeal, SetmealOrder, Employee, SeckillItem, BundleInfo, UploadResult, GoodsSpec, MerchantStatsAggregateData, MerchantSeckill
 } from '../model/Models'
 import { logInfo, logWarn } from './AppLogger'
 
@@ -161,10 +163,44 @@ interface ServerOrder {
   expectTime: string
   riderName: string
   riderPhone: string
+  deliveryType?: string
   readyTime?: string
   couponId?: number
   payDeadline?: string
   payDeadlineEpochMs?: number
+  serverNowEpochMs?: number
+  paymentChannel?: string
+  outTradeNo?: string
+  paymentUrl?: string
+  appOrderInfo?: string
+  paymentMode?: string
+  paymentSandbox?: boolean
+}
+
+interface ServerOrderPage {
+  list: ServerOrder[]
+  total: number
+  page: number
+  pageSize: number
+  hasMore: boolean
+}
+
+interface ServerMerchantStats {
+  todayCount: number
+  todayIncome: number
+  todayCompleted?: number
+  todayOrderCount?: number
+  weekCount: number
+  weekIncome: number
+  weekCompleted?: number
+  weekOrderCount?: number
+  monthCount: number
+  monthIncome: number
+  monthOrderCount?: number
+  totalCount?: number
+  totalIncome?: number
+  weekRevenue?: number[]
+  todayStatus?: number[]
 }
 
 interface ServerUser {
@@ -330,6 +366,30 @@ interface ServerAdminUser {
   createTime: string
 }
 
+interface ServerAdminUserPage {
+  list: ServerAdminUser[]
+  total: number
+  page: number
+  pageSize: number
+  hasMore: boolean
+}
+
+interface ServerRefundPage {
+  list: RefundRecord[]
+  total: number
+  page: number
+  pageSize: number
+  hasMore: boolean
+}
+
+interface ServerAdminOperationLogPage {
+  list: AdminOperationLog[]
+  total: number
+  page: number
+  pageSize: number
+  hasMore: boolean
+}
+
 interface ServerAdminHotGoods {
   goodsId: number
   goodsName: string
@@ -362,7 +422,13 @@ interface ServerAdminTrendPoint {
 
 interface LoginResult {
   token: string
+  refreshToken?: string
   user: ServerUser
+}
+
+interface LogoutRequest {
+  refreshToken: string
+  pushToken: string
 }
 
 // ==================== 请求 DTO ====================
@@ -591,7 +657,13 @@ export async function apiLogin(phone: string, password: string, loginType?: stri
     logWarn('Api', `登录失败：${resp.message}`)
     return null
   }
-  setAuthToken(resp.data.token)
+  const refresh: string = resp.data.refreshToken ?? ''
+  setAuthTokens(resp.data.token, refresh)
+  try {
+    await saveAuthTokens(resp.data.token, refresh)
+  } catch (_) {
+    logWarn('Auth', '安全凭证无法写入设备密钥存储；本次运行可继续，重启后需要重新登录')
+  }
   logInfo('Api', `登录成功 userId=${resp.data.user.id}`)
   return toUser(resp.data.user)
 }
@@ -615,7 +687,8 @@ export async function apiRegister(username: string, phone: string, password: str
  * showErrorToast 关闭：退出登录失败只提示不打断（本地登录态无论如何都要清）。
  */
 export async function apiLogout(): Promise<boolean> {
-  const resp: ApiResponse<string> = await post<string>('/api/auth/logout', undefined, false)
+  const request: LogoutRequest = { refreshToken: getRefreshToken(), pushToken: currentPushToken() }
+  const resp: ApiResponse<string> = await post<string>('/api/auth/logout', request, false)
   if (resp.code !== 200) {
     logWarn('Api', `登出接口失败：${resp.message}`)
     return false
@@ -939,6 +1012,12 @@ export async function fetchRiderPoolApi(): Promise<Order[]> {
   return resp.data.map((o: ServerOrder) => toOrder(o))
 }
 
+export async function fetchRiderOrdersPageApi(page: number = 1, pageSize: number = 30): Promise<OrderPageData> {
+  const resp: ApiResponse<ServerOrderPage> = await get<ServerOrderPage>(
+    `/api/rider/orders/page?page=${page}&pageSize=${pageSize}`)
+  return toOrderPageData(resp, page, pageSize)
+}
+
 export async function fetchRiderOrdersApi(): Promise<Order[]> {
   const resp: ApiResponse<ServerOrder[]> = await get<ServerOrder[]>('/api/rider/orders')
   if (resp.code !== 200 || resp.data === null) {
@@ -1174,6 +1253,14 @@ export async function fetchUserOrdersApi(): Promise<Order[] | null> {
   return resp.data.map((o: ServerOrder) => toOrder(o))
 }
 
+export async function fetchUserOrdersPageApi(status?: number, page: number = 1,
+  pageSize: number = 30): Promise<OrderPageData> {
+  const statusQuery: string = status === undefined ? '' : `&status=${status}`
+  const resp: ApiResponse<ServerOrderPage> = await get<ServerOrderPage>(
+    `/api/orders/page?page=${page}&pageSize=${pageSize}${statusQuery}`)
+  return toOrderPageData(resp, page, pageSize)
+}
+
 export async function fetchOrderDetailApi(orderId: number): Promise<Order | null> {
   const resp: ApiResponse<ServerOrder> = await get<ServerOrder>(`/api/orders/${orderId}`)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
@@ -1187,9 +1274,19 @@ export async function cancelOrderApi(orderId: number): Promise<boolean> {
   return resp.code === 200
 }
 
-/** 支付待付款订单：扣余额并流转到待接单（余额支付模型）。 */
-export async function payOrderApi(orderId: number, channel: string = 'BALANCE'): Promise<Order | null> {
-  const resp: ApiResponse<ServerOrder> = await post<ServerOrder>(`/api/orders/${orderId}/pay?channel=${channel}`)
+/** 按明确选择的渠道支付：余额即时扣款，第三方返回待扫码支付信息。 */
+export async function payOrderApi(orderId: number, channel: string, mode: string = 'QR'): Promise<Order | null> {
+  const resp: ApiResponse<ServerOrder> = await post<ServerOrder>(
+    `/api/orders/${orderId}/pay?channel=${channel}&mode=${mode}`, undefined, false)
+  if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
+    return null
+  }
+  return toOrder(resp.data)
+}
+
+/** 查询第三方支付结果；服务端会向支付渠道查单并在确认成功后推进订单状态。 */
+export async function queryPaymentApi(orderId: number): Promise<Order | null> {
+  const resp: ApiResponse<ServerOrder> = await post<ServerOrder>(`/api/orders/${orderId}/payment/query`, undefined, false)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     return null
   }
@@ -1215,6 +1312,127 @@ export async function fetchMerchantOrdersApi(): Promise<Order[]> {
     return []
   }
   return resp.data.map((o: ServerOrder) => toOrder(o))
+}
+
+export async function fetchMerchantOrdersPageApi(status?: number, page: number = 1,
+  pageSize: number = 30): Promise<OrderPageData> {
+  const statusQuery: string = status === undefined ? '' : `&status=${status}`
+  const resp: ApiResponse<ServerOrderPage> = await get<ServerOrderPage>(
+    `/api/merchant/orders/page?page=${page}&pageSize=${pageSize}${statusQuery}`)
+  return toOrderPageData(resp, page, pageSize)
+}
+
+/** 商户统计聚合：服务端直接返回金额、计数及图表数据，避免拉取全部历史订单。 */
+export async function fetchMerchantStatsApi(storeId: number = 0): Promise<MerchantStatsAggregateData | null> {
+  const suffix: string = storeId > 0 ? `?storeId=${storeId}` : ''
+  const resp: ApiResponse<ServerMerchantStats> = await get<ServerMerchantStats>(`/api/merchant/stats${suffix}`)
+  if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
+    return null
+  }
+  const data: ServerMerchantStats = resp.data
+  const weekRevenue: number[] = Array.isArray(data.weekRevenue)
+    ? data.weekRevenue.map((value: number) => Number(value ?? 0)) : [0, 0, 0, 0, 0, 0, 0]
+  const todayStatus: number[] = Array.isArray(data.todayStatus)
+    ? data.todayStatus.map((value: number) => Number(value ?? 0)) : [0, 0, 0, 0, 0]
+  return {
+    today: {
+      todayOrders: Number(data.todayOrderCount ?? data.todayCount ?? 0),
+      todayRevenue: Number(data.todayIncome ?? 0),
+      completedOrders: Number(data.todayCount ?? data.todayCompleted ?? 0),
+      totalOrders: Number(data.totalCount ?? 0),
+      totalRevenue: Number(data.totalIncome ?? 0)
+    },
+    week: {
+      todayOrders: Number(data.weekOrderCount ?? data.weekCount ?? 0),
+      todayRevenue: Number(data.weekIncome ?? 0),
+      completedOrders: Number(data.weekCount ?? data.weekCompleted ?? 0),
+      totalOrders: Number(data.totalCount ?? 0),
+      totalRevenue: Number(data.totalIncome ?? 0)
+    },
+    weekRevenue: weekRevenue,
+    todayStatus: todayStatus
+  }
+}
+
+export interface MerchantMarketingInput {
+  type: string
+  title: string
+  discountRate: number
+  reduceAmount: number
+  threshold: number
+  giftGoodsId: number
+  startTime: string
+  endTime: string
+  status: number
+}
+
+export interface MerchantSeckillInput {
+  goodsId: number
+  price: number
+  quota: number
+  startTime: string
+  endTime: string
+  status: number
+}
+
+interface StatusUpdateRequest {
+  status: number
+}
+
+export async function fetchMerchantActivitiesApi(storeId: number): Promise<MarketingActivity[]> {
+  const resp: ApiResponse<MarketingActivity[]> = await get<MarketingActivity[]>(`/api/merchant/activities?storeId=${storeId}`)
+  return resp.code === 200 && resp.data !== null ? resp.data : []
+}
+
+export async function saveMerchantActivityApi(storeId: number, input: MerchantMarketingInput,
+  activityId: number = 0): Promise<MarketingActivity | null> {
+  const path: string = activityId > 0
+    ? `/api/merchant/activities/${activityId}?storeId=${storeId}`
+    : `/api/merchant/activities?storeId=${storeId}`
+  const resp: ApiResponse<MarketingActivity> = activityId > 0
+    ? await put<MarketingActivity>(path, input)
+    : await post<MarketingActivity>(path, input)
+  return resp.code === 200 && resp.data !== null ? resp.data : null
+}
+
+export async function updateMerchantActivityStatusApi(storeId: number, activityId: number, status: number): Promise<boolean> {
+  const req: StatusUpdateRequest = { status: status }
+  const resp: ApiResponse<MarketingActivity> = await put<MarketingActivity>(
+    `/api/merchant/activities/${activityId}/status?storeId=${storeId}`, req)
+  return resp.code === 200
+}
+
+export async function deleteMerchantActivityApi(storeId: number, activityId: number): Promise<boolean> {
+  const resp: ApiResponse<null> = await del<null>(`/api/merchant/activities/${activityId}?storeId=${storeId}`)
+  return resp.code === 200
+}
+
+export async function fetchMerchantSeckillsApi(storeId: number): Promise<MerchantSeckill[]> {
+  const resp: ApiResponse<MerchantSeckill[]> = await get<MerchantSeckill[]>(`/api/merchant/seckills?storeId=${storeId}`)
+  return resp.code === 200 && resp.data !== null ? resp.data : []
+}
+
+export async function saveMerchantSeckillApi(storeId: number, input: MerchantSeckillInput,
+  seckillId: number = 0): Promise<MerchantSeckill | null> {
+  const path: string = seckillId > 0
+    ? `/api/merchant/seckills/${seckillId}?storeId=${storeId}`
+    : `/api/merchant/seckills?storeId=${storeId}`
+  const resp: ApiResponse<MerchantSeckill> = seckillId > 0
+    ? await put<MerchantSeckill>(path, input)
+    : await post<MerchantSeckill>(path, input)
+  return resp.code === 200 && resp.data !== null ? resp.data : null
+}
+
+export async function updateMerchantSeckillStatusApi(storeId: number, seckillId: number, status: number): Promise<boolean> {
+  const req: StatusUpdateRequest = { status: status }
+  const resp: ApiResponse<MerchantSeckill> = await put<MerchantSeckill>(
+    `/api/merchant/seckills/${seckillId}/status?storeId=${storeId}`, req)
+  return resp.code === 200
+}
+
+export async function deleteMerchantSeckillApi(storeId: number, seckillId: number): Promise<boolean> {
+  const resp: ApiResponse<null> = await del<null>(`/api/merchant/seckills/${seckillId}?storeId=${storeId}`)
+  return resp.code === 200
 }
 
 /**
@@ -1391,6 +1609,20 @@ export async function fetchAdminRefundsApi(status?: string): Promise<RefundRecor
   return resp.code === 200 && resp.data !== null ? resp.data : []
 }
 
+export async function fetchAdminRefundsPageApi(status?: string, page: number = 1,
+  pageSize: number = 50): Promise<RefundPageData> {
+  const params: string[] = [`page=${page}`, `pageSize=${pageSize}`]
+  if (status !== undefined && status !== '') {
+    params.push(`status=${encodeURIComponent(status)}`)
+  }
+  const resp: ApiResponse<ServerRefundPage> = await get<ServerRefundPage>(`/api/admin/refunds/page?${params.join('&')}`)
+  if (resp.code !== 200 || resp.data === null) {
+    return { list: [], total: 0, page: page, pageSize: pageSize, hasMore: false }
+  }
+  return { list: resp.data.list, total: resp.data.total, page: resp.data.page,
+    pageSize: resp.data.pageSize, hasMore: resp.data.hasMore }
+}
+
 export async function approveRefundApi(refundId: number): Promise<boolean> {
   const resp: ApiResponse<RefundRecord> = await post<RefundRecord>(`/api/admin/refunds/${refundId}/approve`, undefined)
   return resp.code === 200
@@ -1477,6 +1709,40 @@ export async function fetchAdminUsersApi(role?: number, status?: number, keyword
   })
 }
 
+export async function fetchAdminUsersPageApi(role?: number, status?: number, keyword?: string,
+  page: number = 1, pageSize: number = 50): Promise<AdminUserPageData> {
+  const params: string[] = [`page=${page}`, `pageSize=${pageSize}`]
+  if (role !== undefined) {
+    params.push(`userRole=${role}`)
+  }
+  if (status !== undefined) {
+    params.push(`status=${status}`)
+  }
+  if (keyword !== undefined && keyword.trim() !== '') {
+    params.push(`keyword=${encodeURIComponent(keyword.trim())}`)
+  }
+  const resp: ApiResponse<ServerAdminUserPage> = await get<ServerAdminUserPage>(`/api/admin/users/page?${params.join('&')}`)
+  if (resp.code !== 200 || resp.data === null) {
+    return { list: [], total: 0, page: page, pageSize: pageSize, hasMore: false }
+  }
+  const list: AdminUser[] = resp.data.list.map((item: ServerAdminUser): AdminUser => ({
+    id: item.id, username: item.username, phone: item.phone, role: item.role,
+    status: item.status, balance: item.balance, storeCount: item.storeCount, createTime: item.createTime
+  }))
+  return { list: list, total: resp.data.total, page: resp.data.page,
+    pageSize: resp.data.pageSize, hasMore: resp.data.hasMore }
+}
+
+export async function fetchAdminOperationLogsApi(page: number = 1, pageSize: number = 50): Promise<AdminOperationLogPageData> {
+  const resp: ApiResponse<ServerAdminOperationLogPage> = await get<ServerAdminOperationLogPage>(
+    `/api/admin/audit-logs?page=${page}&pageSize=${pageSize}`)
+  if (resp.code !== 200 || resp.data === null) {
+    return { list: [], total: 0, page: page, pageSize: pageSize, hasMore: false }
+  }
+  return { list: resp.data.list, total: resp.data.total, page: resp.data.page,
+    pageSize: resp.data.pageSize, hasMore: resp.data.hasMore }
+}
+
 export async function updateAdminUserStatusApi(id: number, status: number): Promise<boolean> {
   const req: AdminStatusRequest = { status: status }
   const resp: ApiResponse<Object> = await put<Object>(`/api/admin/users/${id}/status`, req)
@@ -1519,6 +1785,51 @@ export async function updateAdminProductStatusApi(id: number, status: number): P
 
 export async function deleteAdminProductApi(id: number): Promise<boolean> {
   const resp: ApiResponse<Object> = await del<Object>(`/api/admin/products/${id}`)
+  return resp.code === 200
+}
+
+export async function fetchAdminMarketingStoresApi(): Promise<StoreItem[]> {
+  const resp: ApiResponse<ServerStore[]> = await get<ServerStore[]>('/api/admin/stores')
+  return resp.code === 200 && resp.data !== null ? resp.data.map((store: ServerStore) => toStoreItem(store)) : []
+}
+
+export async function fetchAdminMarketingActivitiesApi(storeId: number = 0, status: number = -1): Promise<MarketingActivity[]> {
+  const params: string[] = []
+  if (storeId > 0) params.push(`storeId=${storeId}`)
+  if (status >= 0) params.push(`status=${status}`)
+  const query: string = params.length > 0 ? `?${params.join('&')}` : ''
+  const resp: ApiResponse<MarketingActivity[]> = await get<MarketingActivity[]>(`/api/admin/marketing/activities${query}`)
+  return resp.code === 200 && resp.data !== null ? resp.data : []
+}
+
+export async function updateAdminMarketingActivityStatusApi(id: number, status: number): Promise<boolean> {
+  const req: StatusUpdateRequest = { status: status }
+  const resp: ApiResponse<MarketingActivity> = await put<MarketingActivity>(`/api/admin/marketing/activities/${id}/status`, req)
+  return resp.code === 200
+}
+
+export async function deleteAdminMarketingActivityApi(id: number): Promise<boolean> {
+  const resp: ApiResponse<null> = await del<null>(`/api/admin/marketing/activities/${id}`)
+  return resp.code === 200
+}
+
+export async function fetchAdminMarketingSeckillsApi(storeId: number = 0, status: number = -1): Promise<AdminSeckill[]> {
+  const params: string[] = []
+  if (storeId > 0) params.push(`storeId=${storeId}`)
+  if (status >= 0) params.push(`status=${status}`)
+  const query: string = params.length > 0 ? `?${params.join('&')}` : ''
+  const resp: ApiResponse<AdminSeckill[]> = await get<AdminSeckill[]>(`/api/admin/marketing/seckills${query}`)
+  return resp.code === 200 && resp.data !== null ? resp.data : []
+}
+
+export async function updateAdminMarketingSeckillStatusApi(id: number, status: number): Promise<boolean> {
+  const req: StatusUpdateRequest = { status: status }
+  const resp: ApiResponse<AdminSeckill> = await put<AdminSeckill>(`/api/admin/marketing/seckills/${id}/status`, req)
+  return resp.code === 200
+}
+
+export async function deleteAdminMarketingSeckillApi(id: number): Promise<boolean> {
+  const resp: ApiResponse<null> = await del<null>(`/api/admin/marketing/seckills/${id}`)
   return resp.code === 200
 }
 
@@ -1867,15 +2178,37 @@ function toOrder(o: ServerOrder): Order {
     expectTime: o.expectTime || '',
     payDeadline: o.payDeadline || '',
     payDeadlineEpochMs: o.payDeadlineEpochMs ?? 0,
+    serverNowEpochMs: o.serverNowEpochMs ?? 0,
     couponId: o.couponId ?? 0,
     orderNo: o.orderNo || '',
     riderName: o.riderName || '',
     riderPhone: o.riderPhone || '',
+    deliveryType: o.deliveryType ?? 'DELIVERY',
     readyTime: o.readyTime || '',
+    paymentChannel: o.paymentChannel ?? '',
+    outTradeNo: o.outTradeNo ?? '',
+    paymentUrl: o.paymentUrl ?? '',
+    appOrderInfo: o.appOrderInfo ?? '',
+    paymentMode: o.paymentMode ?? '',
+    paymentSandbox: o.paymentSandbox ?? false,
     address: addr,
     remark: o.remark
   }
   return order
+}
+
+function toOrderPageData(resp: ApiResponse<ServerOrderPage>, requestedPage: number,
+  requestedPageSize: number): OrderPageData {
+  if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
+    return { list: [], total: 0, page: requestedPage, pageSize: requestedPageSize, hasMore: false }
+  }
+  return {
+    list: resp.data.list.map((order: ServerOrder) => toOrder(order)),
+    total: resp.data.total,
+    page: resp.data.page,
+    pageSize: resp.data.pageSize,
+    hasMore: resp.data.hasMore
+  }
 }
 
 function toCoupon(c: ServerCoupon): Coupon {

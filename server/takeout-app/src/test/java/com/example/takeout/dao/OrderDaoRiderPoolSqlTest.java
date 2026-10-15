@@ -51,12 +51,12 @@ class OrderDaoRiderPoolSqlTest {
 
     @Test
     void markReadyWritesReadyTimeWithoutChangingStatus() {
-        when(jdbc.update(anyString(), anyString(), any(Long.class))).thenReturn(1);
+        when(jdbc.update(anyString(), anyString(), anyString(), any(Long.class))).thenReturn(1);
 
         assertTrue(dao.markReady(500L, "2026-09-15 10:05:00"));
 
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
-        verify(jdbc).update(sql.capture(), anyString(), any(Long.class));
+        verify(jdbc).update(sql.capture(), anyString(), anyString(), any(Long.class));
         String statement = sql.getValue();
         // 只写 ready_time：把 status 一起改掉会让订单跳出池子的 status = 2 筛选
         assertTrue(statement.contains("ready_time = ?"), statement);
@@ -90,16 +90,16 @@ class OrderDaoRiderPoolSqlTest {
 
     @Test
     void riderDeliverOnlyMatchesOwnDelivery() {
-        when(jdbc.update(anyString(), anyString(), any(Long.class), any(Long.class))).thenReturn(1);
+        when(jdbc.update(anyString(), anyString(), anyString(), any(Long.class), any(Long.class))).thenReturn(1);
 
         assertTrue(dao.riderDeliver(500L, 77L, "2026-09-15 10:20:00"));
 
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
-        verify(jdbc).update(sql.capture(), anyString(), any(Long.class), any(Long.class));
+        verify(jdbc).update(sql.capture(), anyString(), anyString(), any(Long.class), any(Long.class));
         String statement = sql.getValue();
         // 只能送达「本人配送中」的订单，并且仍然要求 status = 3
         assertTrue(statement.contains("rider_id = ?"), statement);
         assertTrue(statement.contains("status = 3"), statement);
-        assertEquals(3, statement.split("\\?", -1).length - 1, "参数个数必须与占位符一致：" + statement);
+        assertEquals(4, statement.split("\\?", -1).length - 1, "参数个数必须与占位符一致：" + statement);
     }
 }

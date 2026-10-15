@@ -6,6 +6,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -35,7 +36,7 @@ class AdminStatsDaoSqlTest {
     /** 抓 overview 里那条大 SELECT（第一个参数即 SQL 文本）。 */
     private String captureOverviewSql() {
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
-        verify(jdbc).queryForObject(sql.capture(), any(RowMapper.class), anyString(), anyString());
+        verify(jdbc).queryForObject(sql.capture(), any(RowMapper.class), any(Object[].class));
         return sql.getValue();
     }
 
@@ -47,7 +48,7 @@ class AdminStatsDaoSqlTest {
 
     @Test
     void todayOrdersAndTodayGmvShareTheSameStatusFilter() {
-        when(jdbc.queryForObject(anyString(), any(RowMapper.class), anyString(), anyString())).thenReturn(EMPTY);
+        when(jdbc.queryForObject(anyString(), any(RowMapper.class), any(Object[].class))).thenReturn(EMPTY);
         when(jdbc.query(anyString(), any(RowMapper.class), any(Long.class))).thenReturn(java.util.List.of());
 
         dao.overview(10);
@@ -60,6 +61,9 @@ class AdminStatsDaoSqlTest {
                 "today_orders 必须与 today_gmv 一样排除已取消/退款中订单：" + ordersClause);
         assertTrue(sql.contains("status NOT IN (5,6)), 0) AS today_gmv"),
                 "today_gmv 的排除条件被改动：" + sql);
+        assertTrue(sql.contains("CASE WHEN DATE_FORMAT(create_time_dt,"), sql);
+        assertTrue(sql.contains("STR_TO_DATE(create_time,"), sql);
+        assertFalse(sql.contains("LEFT(create_time, 10)"), sql);
     }
 
     @Test
@@ -76,7 +80,7 @@ class AdminStatsDaoSqlTest {
 
     @Test
     void totalOrdersKeepsAllStatusesOnPurpose() {
-        when(jdbc.queryForObject(anyString(), any(RowMapper.class), anyString(), anyString())).thenReturn(EMPTY);
+        when(jdbc.queryForObject(anyString(), any(RowMapper.class), any(Object[].class))).thenReturn(EMPTY);
         when(jdbc.query(anyString(), any(RowMapper.class), any(Long.class))).thenReturn(java.util.List.of());
 
         dao.overview(10);

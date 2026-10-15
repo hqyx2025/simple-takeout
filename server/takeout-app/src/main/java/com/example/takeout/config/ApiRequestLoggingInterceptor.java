@@ -1,14 +1,18 @@
 package com.example.takeout.config;
 
 import com.example.takeout.common.TraceContext;
+import com.example.takeout.dao.OperationAuditLogDao;
 import com.example.takeout.security.AuthInterceptor;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -25,6 +29,16 @@ public class ApiRequestLoggingInterceptor implements HandlerInterceptor {
 
     private static final Logger log = LoggerFactory.getLogger(ApiRequestLoggingInterceptor.class);
     private static final String START_TIME = ApiRequestLoggingInterceptor.class.getName() + ".startTime";
+    private final OperationAuditLogDao operationLogDao;
+
+    @Autowired
+    public ApiRequestLoggingInterceptor(OperationAuditLogDao operationLogDao) {
+        this.operationLogDao = operationLogDao;
+    }
+
+    ApiRequestLoggingInterceptor() {
+        this.operationLogDao = null;
+    }
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
@@ -64,10 +78,58 @@ public class ApiRequestLoggingInterceptor implements HandlerInterceptor {
                         traceId, identity, request.getMethod(), request.getRequestURI(), response.getStatus(), durationMs,
                         ex.getMessage(), ex);
             }
+            recordOperation(request, response, handler, userId, role, traceId);
         } finally {
             // 线程复用：必须清理，否则下一个请求的日志会带上本次的 traceId
             TraceContext.clear();
         }
+    }
+
+    private void recordOperation(HttpServletRequest request, HttpServletResponse response, Object handler,
+                                 Object userId, Object role, String traceId) {
+        if (operationLogDao == null || !(userId instanceof Number operatorId)
+                || !(role instanceof Number operatorRole)
+                || "GET".equalsIgnoreCase(request.getMethod())
+                || "OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            return;
+        }
+        String path = request.getRequestURI();
+        long orderId = extractOrderId(path);
+        boolean adminMutation = operatorRole.intValue() == 2 && path.startsWith("/api/admin/");
+        boolean merchantMutation = operatorRole.intValue() == 1 && path.startsWith("/api/merchant/");
+        if (!adminMutation && !merchantMutation && orderId == 0) {
+            return;
+        }
+        String action = handler instanceof HandlerMethod method
+                ? method.getBeanType().getSimpleName() + "." + method.getMethod().getName()
+                : path;
+        if (path.length() > 255) {
+            path = path.substring(0, 255);
+        }
+        try {
+            int status = response.getStatus();
+            int orderStatus = orderId == 0 ? -1 : operationLogDao.currentOrderStatus(orderId);
+            operationLogDao.insert(operatorId.longValue(), operatorRole.intValue(), orderId, orderStatus,
+                    action, request.getMethod(), path,
+                    status < 400 ? "SUCCESS" : "FAILURE", status, traceId,
+                    Instant.now().toEpochMilli());
+        } catch (RuntimeException e) {
+            log.warn("操作审计写入失败 traceId={} path={}", traceId, path, e);
+        }
+    }
+
+    private long extractOrderId(String path) {
+        String[] segments = path.split("/");
+        for (int i = 0; i < segments.length - 1; i++) {
+            if ("orders".equals(segments[i])) {
+                try {
+                    return Long.parseLong(segments[i + 1]);
+                } catch (NumberFormatException ignored) {
+                    return 0;
+                }
+            }
+        }
+        return 0;
     }
 
     private String query(HttpServletRequest request) {

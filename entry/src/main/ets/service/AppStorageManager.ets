@@ -1,15 +1,17 @@
 /**
  * 全局状态管理 - 使用AppStorage管理应用级状态
  */
-import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, Rider, Banner, Announcement, MerchantStatsData, Category, RefundRecord, GoodsSpec, SeckillItem, SpecialGoodsItem, BundleInfo, UploadResult, SetmealOrder, createEmptyUser, createDefaultCategories } from '../model/Models'
+import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, Rider, Banner, Announcement, MerchantStatsData, MerchantStatsAggregateData, Category, RefundRecord, GoodsSpec, SeckillItem, SpecialGoodsItem, BundleInfo, UploadResult, SetmealOrder, createEmptyUser, createDefaultCategories } from '../model/Models'
 import { saveAllData, clearAllData } from './DataPersistence'
-import { apiLogin, apiRegister, updateUserProfileApi, fetchCurrentUserApi, rechargeBalanceApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, createOrderApi, cancelOrderApi, payOrderApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi, fetchMerchantReviewsApi, replyReviewApi, fetchRiderProfileApi, setRiderStatusApi, fetchRiderPoolApi, fetchRiderOrdersApi, grabOrderApi, pickupOrderApi, deliverOrderApi, fetchBannersApi, fetchAnnouncementsApi, fetchAdminRidersApi, updateRiderStatusApi, fetchAdminBannersApi, createBannerApi, updateBannerStatusApi, deleteBannerApi, fetchAdminAnnouncementsApi, createAnnouncementApi, updateAnnouncementStatusApi, deleteAnnouncementApi, applyRefundApi, fetchCartApi, addCartItemApi, updateCartItemQuantityApi, deleteCartItemApi, deleteCartItemsApi, clearCartApi, uploadImageApi, fetchSeckillsApi, fetchRankStoresApi, fetchRankGoodsApi, fetchBundleApi, updateMerchantGoodsSpecsApi, apiLogout, changePasswordApi, updateRiderLocationApi } from './ApiService'
-import { getAuthToken, setAuthToken, getLastApiErrorMessage } from './HttpClient'
+import { apiLogin, apiRegister, updateUserProfileApi, fetchCurrentUserApi, rechargeBalanceApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, fetchMerchantStatsApi, createOrderApi, cancelOrderApi, payOrderApi, queryPaymentApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi, fetchMerchantReviewsApi, replyReviewApi, fetchRiderProfileApi, setRiderStatusApi, fetchRiderPoolApi, fetchRiderOrdersApi, grabOrderApi, pickupOrderApi, deliverOrderApi, fetchBannersApi, fetchAnnouncementsApi, fetchAdminRidersApi, updateRiderStatusApi, fetchAdminBannersApi, createBannerApi, updateBannerStatusApi, deleteBannerApi, fetchAdminAnnouncementsApi, createAnnouncementApi, updateAnnouncementStatusApi, deleteAnnouncementApi, applyRefundApi, fetchCartApi, addCartItemApi, updateCartItemQuantityApi, deleteCartItemApi, deleteCartItemsApi, clearCartApi, uploadImageApi, fetchSeckillsApi, fetchRankStoresApi, fetchRankGoodsApi, fetchBundleApi, updateMerchantGoodsSpecsApi, apiLogout, changePasswordApi, updateRiderLocationApi } from './ApiService'
+import { getAuthToken, setAuthTokens, getLastApiErrorMessage, registerSessionExpiredHandler,
+  getAuthSessionEpoch } from './HttpClient'
 import { logInfo, logWarn, logError } from './AppLogger'
 import { GeoPosition, getCurrentPosition, requestLocationPermission, reverseGeocodePosition } from './LocationService'
 import { deliveryCustomerId, deliveryRevision, syncDeliveryForms, clearDeliveryForms } from './DeliveryFormSync'
 import { common } from '@kit.AbilityKit'
 import { API_CONFIG } from '../common/Constants'
+import { clearPushIdentity, registerPushForCurrentSession } from './PushKitService'
 
 let categoriesSyncInFlight: Promise<void> | null = null
 let storesSyncInFlight: Promise<void> | null = null
@@ -98,11 +100,21 @@ export function logout(): void {
   apiLogout().catch((err: Error) => {
     logWarn('Auth', `登出接口调用失败，仅清理本地登录态：${err.message}`)
   })
+  clearLocalSessionState().catch((err: Error) => {
+    logError('Auth', '清理本地登录数据失败', err)
+  })
+}
+
+async function clearLocalSessionState(): Promise<void> {
+  clearPushIdentity()
   currentUserSyncVersion += 1
-  setAuthToken('')
+  orderSyncVersion += 1
+  addressSyncVersion += 1
+  cartRevision += 1
+  setAuthTokens('', '')
   AppStorage.setOrCreate<string>('authToken', '')
-  AppStorage.setOrCreate<boolean>('isLoggedIn', false)
   setStoredUser(createEmptyUser())
+  AppStorage.setOrCreate<number>('userBalance', 0)
   AppStorage.setOrCreate<CartItem[]>('cartItems', [])
   AppStorage.setOrCreate<Address[]>('addressList', [])
   AppStorage.setOrCreate<Address | null>('currentAddress', null)
@@ -110,15 +122,26 @@ export function logout(): void {
   AppStorage.setOrCreate<string>('addressSyncState', 'idle')
   addressSyncVersion += 1
   AppStorage.setOrCreate<GeoPosition | null>('lastLocationPosition', null)
-  // 退出登录同步关掉位置上报，否则定时器里的接口调用会触发 401 → 不清登录态的死循环
   stopRiderLocationTimer()
-  // 券与订单也必须清：否则换账号登录后会继承上一账号的已选优惠券，
-  // 带着别人的 couponId 提交，后端查不到该券 → 下单必然失败
   AppStorage.setOrCreate<Coupon | null>('selectedCoupon', null)
   AppStorage.setOrCreate<Coupon[]>('couponList', [])
   AppStorage.setOrCreate<Order[]>('orderList', [])
-  clearAllData()
-  logInfo('Auth', '用户退出登录，已清除登录态与购物车')
+  AppStorage.setOrCreate<Coupon[]>('claimableCoupons', [])
+  AppStorage.setOrCreate<Favorite[]>('favoriteList', [])
+  AppStorage.setOrCreate<Review[]>('reviewList', [])
+  AppStorage.setOrCreate<StoreItem[]>('allStores', [])
+  AppStorage.setOrCreate<Record<string, GoodsItem[]>>('allGoodsMap', {})
+  AppStorage.setOrCreate<Category[]>('categoryList', createDefaultCategories())
+  AppStorage.setOrCreate<number>('selectedStoreId', 0)
+  AppStorage.setOrCreate<string>('selectedStoreName', '')
+  AppStorage.setOrCreate<number>('currentOrderId', 0)
+  AppStorage.setOrCreate<number>('currentReviewGoodsId', 0)
+  AppStorage.setOrCreate<number>('checkoutStoreId', 0)
+  AppStorage.setOrCreate<boolean>('pendingLocationAfterLogin', false)
+  AppStorage.setOrCreate<boolean>('pendingLocationLoginPrompt', false)
+  AppStorage.setOrCreate<boolean>('isLoggedIn', false)
+  await clearAllData()
+  logInfo('Auth', '本地登录态与账号缓存已清理')
 }
 
 export function isLoggedIn(): boolean {
@@ -241,10 +264,10 @@ export async function syncCartRemote(): Promise<boolean> {
 }
 
 export async function addCartItemRemote(item: CartItem): Promise<boolean> {
-  return enqueueCartMutation(async (): Promise<boolean> => {
+  return enqueueCartMutation(async (epoch: number): Promise<boolean> => {
     const remoteCart: CartItem[] | null = await addCartItemApi(item.goods.id,
       item.specId ?? 0, item.quantity)
-    if (remoteCart === null) {
+    if (remoteCart === null || epoch !== getAuthSessionEpoch()) {
       return false
     }
     setRemoteCart(remoteCart)
@@ -253,9 +276,9 @@ export async function addCartItemRemote(item: CartItem): Promise<boolean> {
 }
 
 export async function updateCartItemQuantityRemote(goodsId: number, quantity: number, specId: number = 0): Promise<boolean> {
-  return enqueueCartMutation(async (): Promise<boolean> => {
+  return enqueueCartMutation(async (epoch: number): Promise<boolean> => {
     const remoteCart: CartItem[] | null = await updateCartItemQuantityApi(goodsId, specId, quantity)
-    if (remoteCart === null) {
+    if (remoteCart === null || epoch !== getAuthSessionEpoch()) {
       return false
     }
     setRemoteCart(remoteCart)
@@ -264,9 +287,9 @@ export async function updateCartItemQuantityRemote(goodsId: number, quantity: nu
 }
 
 export async function deleteCartItemRemote(goodsId: number, specId: number = 0): Promise<boolean> {
-  return enqueueCartMutation(async (): Promise<boolean> => {
+  return enqueueCartMutation(async (epoch: number): Promise<boolean> => {
     const remoteCart: CartItem[] | null = await deleteCartItemApi(goodsId, specId)
-    if (remoteCart === null) {
+    if (remoteCart === null || epoch !== getAuthSessionEpoch()) {
       return false
     }
     setRemoteCart(remoteCart)
@@ -275,9 +298,9 @@ export async function deleteCartItemRemote(goodsId: number, specId: number = 0):
 }
 
 export async function deleteCartItemsRemote(goodsIds: number[]): Promise<boolean> {
-  return enqueueCartMutation(async (): Promise<boolean> => {
+  return enqueueCartMutation(async (epoch: number): Promise<boolean> => {
     const remoteCart: CartItem[] | null = await deleteCartItemsApi(goodsIds)
-    if (remoteCart === null) {
+    if (remoteCart === null || epoch !== getAuthSessionEpoch()) {
       return false
     }
     setRemoteCart(remoteCart)
@@ -286,9 +309,9 @@ export async function deleteCartItemsRemote(goodsIds: number[]): Promise<boolean
 }
 
 export async function clearCartRemote(): Promise<boolean> {
-  return enqueueCartMutation(async (): Promise<boolean> => {
+  return enqueueCartMutation(async (epoch: number): Promise<boolean> => {
     const remoteCart: CartItem[] | null = await clearCartApi()
-    if (remoteCart === null) {
+    if (remoteCart === null || epoch !== getAuthSessionEpoch()) {
       return false
     }
     setRemoteCart(remoteCart)
@@ -296,9 +319,13 @@ export async function clearCartRemote(): Promise<boolean> {
   })
 }
 
-function enqueueCartMutation(operation: () => Promise<boolean>): Promise<boolean> {
+function enqueueCartMutation(operation: (epoch: number) => Promise<boolean>): Promise<boolean> {
+  const epoch: number = getAuthSessionEpoch()
   cartRevision += 1
-  const result: Promise<boolean> = cartMutationQueue.then(operation)
+  const result: Promise<boolean> = cartMutationQueue.then(async (): Promise<boolean> => {
+    if (epoch !== getAuthSessionEpoch()) { return false }
+    return await operation(epoch)
+  })
   cartMutationQueue = result.then((): void => undefined).catch((): void => undefined)
   return result
 }
@@ -460,6 +487,11 @@ export function getMerchantTodayStatusOrders(merchantId: number): number[] {
   return dist
 }
 
+/** 获取商户统计聚合，统计页无需同步全量订单。 */
+export async function fetchMerchantStatsRemote(storeId: number = 0): Promise<MerchantStatsAggregateData | null> {
+  return fetchMerchantStatsApi(storeId)
+}
+
 export async function updateUserProfileRemote(username: string, phone: string): Promise<User | undefined> {
   const user: User | undefined = await updateUserProfileApi(username, phone)
   if (user === undefined) {
@@ -522,6 +554,7 @@ export async function loginRemote(phone: string, password: string, loginType?: s
     AppStorage.setOrCreate<string>('authToken', token)
     setStoredUser(user)
     AppStorage.setOrCreate<boolean>('isLoggedIn', true)
+    registerPushForCurrentSession()
     // 登录成功后立即按当前账号同步地址，恢复默认配送地址；不能继续沿用上一个账号的定位缓存。
     if (user.role === UserRole.CUSTOMER) {
       await syncAddressesRemote()
@@ -669,8 +702,9 @@ export async function syncUserOrdersFromServer(): Promise<void> {
 }
 
 export async function fetchOrderDetailRemote(orderId: number): Promise<Order | null> {
+  const sessionEpoch: number = getAuthSessionEpoch()
   const order: Order | null = await fetchOrderDetailApi(orderId)
-  if (order === null) {
+  if (order === null || sessionEpoch !== getAuthSessionEpoch()) {
     return null
   }
   const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
@@ -723,27 +757,75 @@ export async function createOrderRemote(storeId: number, cartItems: CartItem[], 
   return order
 }
 
+async function updateStoredOrder(orderId: number, knownOrder?: Order): Promise<Order | null> {
+  const owner: number = deliveryCustomerId()
+  const epoch: number = deliveryRevision()
+  const token: string = getAuthToken()
+  const userId: number = AppStorage.get<User>('user')?.id ?? 0
+  const order: Order | null = knownOrder ?? await fetchOrderDetailApi(orderId)
+  if (order === null || owner !== deliveryCustomerId() || epoch !== deliveryRevision()
+    || token !== getAuthToken() || userId !== (AppStorage.get<User>('user')?.id ?? 0)) {
+    return null
+  }
+  const orders: Order[] = AppStorage.get<Order[]>('orderList') ?? []
+  const index: number = orders.findIndex((item: Order) => item.id === order.id)
+  if (index >= 0) {
+    orders[index] = order
+  } else {
+    orders.unshift(order)
+  }
+  AppStorage.setOrCreate<Order[]>('orderList', orders)
+  const user: User | undefined = AppStorage.get<User>('user')
+  if (user !== undefined && user !== null && user.id === userId) {
+    user.orders = orders
+    setStoredUser(user)
+  }
+  syncDeliveryForms(orders, owner, epoch)
+  await saveAllData()
+  return order
+}
+
 /**
- * 远程取消订单：成功同步更新本地
+ * 远程取消订单：仅同步被操作的订单，避免为一条状态变化拉取全部历史。
  */
 export async function cancelOrderRemote(orderId: number): Promise<boolean> {
   const ok: boolean = await cancelOrderApi(orderId)
   if (ok) {
-    await syncUserOrdersFromServer()
+    await updateStoredOrder(orderId)
     logInfo('Api', `远程取消订单 orderId=${orderId}`)
   }
   return ok
 }
 
 /**
- * 支付待付款订单：扣余额并流转到待接单，同时刷新订单与账户余额
+ * 支付待付款订单：保留服务端返回的支付阶段，并同步订单与账户余额。
  */
-export async function payOrderRemote(orderId: number, channel: string = 'BALANCE'): Promise<Order | null> {
-  const order: Order | null = await payOrderApi(orderId, channel)
+export async function payOrderRemote(orderId: number, channel: string, mode: string = 'QR'): Promise<Order | null> {
+  const sessionEpoch: number = getAuthSessionEpoch()
+  const order: Order | null = await payOrderApi(orderId, channel, mode)
+  if (sessionEpoch !== getAuthSessionEpoch()) { return null }
   if (order !== null) {
-    await syncUserOrdersFromServer()
+    await updateStoredOrder(orderId, order)
+    if (sessionEpoch !== getAuthSessionEpoch()) { return null }
     await syncCurrentUserFromServer()
+    if (sessionEpoch !== getAuthSessionEpoch()) { return null }
     logInfo('Api', `支付订单成功 orderId=${orderId} 状态=${order.status}`)
+  }
+  return order
+}
+
+/** 查询第三方支付状态并同步订单；不直接把待支付订单当作余额支付。 */
+export async function queryPaymentRemote(orderId: number): Promise<Order | null> {
+  const sessionEpoch: number = getAuthSessionEpoch()
+  const order: Order | null = await queryPaymentApi(orderId)
+  if (sessionEpoch !== getAuthSessionEpoch()) { return null }
+  if (order !== null) {
+    await updateStoredOrder(orderId, order)
+    if (sessionEpoch !== getAuthSessionEpoch()) { return null }
+    if (order.status !== 0) {
+      await syncCurrentUserFromServer()
+      if (sessionEpoch !== getAuthSessionEpoch()) { return null }
+    }
   }
   return order
 }
@@ -757,7 +839,7 @@ export async function uploadReviewImageRemote(fileUri: string): Promise<string> 
   if (result === null || result.url === '') {
     return ''
   }
-  return API_CONFIG.BASE_URL + result.url
+  return result.url.startsWith('/') ? API_CONFIG.BASE_URL + result.url : result.url
 }
 
 /** 首页限时秒杀专区数据 */
@@ -802,7 +884,7 @@ function getCurrentLongitude(): number | undefined {
 export async function confirmOrderRemote(orderId: number): Promise<boolean> {
   const ok: boolean = await confirmOrderApi(orderId)
   if (ok) {
-    await syncUserOrdersFromServer()
+    await updateStoredOrder(orderId)
     logInfo('Api', `远程确认收货 orderId=${orderId}`)
   }
   return ok
@@ -814,7 +896,7 @@ export async function confirmOrderRemote(orderId: number): Promise<boolean> {
 export async function applyRefundRemote(orderId: number, reasonType: string, reason: string): Promise<boolean> {
   const record: RefundRecord | null = await applyRefundApi(orderId, reasonType, reason)
   if (record !== null) {
-    await syncUserOrdersFromServer()
+    await updateStoredOrder(orderId)
     logInfo('Api', `远程申请退款 orderId=${orderId} refundId=${record.id}`)
     return true
   }
@@ -1198,3 +1280,5 @@ export async function setDefaultAddressRemote(addressId: number): Promise<boolea
   }
   return ok
 }
+
+registerSessionExpiredHandler(clearLocalSessionState)

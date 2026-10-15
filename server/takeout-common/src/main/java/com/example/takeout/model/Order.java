@@ -97,7 +97,8 @@ public record Order(
 
     /**
      * 视图模型：items/address 解析为结构体；payDeadline 为待付款订单的支付截止时间（非待付款为空串）；
-     * payDeadlineEpochMs 为服务端计算的毫秒时间戳，避免前端解析字符串时区问题
+     * payDeadlineEpochMs 为服务端计算的毫秒时间戳，避免前端解析字符串时区问题；
+     * serverNowEpochMs 用于修正客户端设备与服务端的时钟偏移
      */
     public record OrderView(
             long id,
@@ -124,11 +125,56 @@ public record Order(
             long couponId,
             String payDeadline,
             long payDeadlineEpochMs,
+            long serverNowEpochMs,
             String riderName,
             String riderPhone,
             String readyTime,
-            String deliveryType
+            String deliveryType,
+            String paymentChannel,
+            String outTradeNo,
+            String paymentUrl,
+            String appOrderInfo,
+            String paymentMode,
+            boolean paymentSandbox
     ) {
+        public OrderView(long id, String orderNo, long userId, long storeId, String storeName, int status,
+                         List<OrderItem> items, AddressInfo address, double goodsAmount, double deliveryFee,
+                         double discount, double payAmount, String remark, int reviewed, int escrowStatus,
+                         String createTime, String payTime, String acceptTime, String deliverTime,
+                         String completeTime, String expectTime, long couponId, String payDeadline,
+                         long payDeadlineEpochMs, String riderName, String riderPhone, String readyTime,
+                         String deliveryType) {
+            this(id, orderNo, userId, storeId, storeName, status, items, address, goodsAmount, deliveryFee,
+                    discount, payAmount, remark, reviewed, escrowStatus, createTime, payTime, acceptTime,
+                    deliverTime, completeTime, expectTime, couponId, payDeadline, payDeadlineEpochMs,
+                    0L, riderName, riderPhone, readyTime, deliveryType, "", "", "", "", "", false);
+        }
+
+        public OrderView(long id, String orderNo, long userId, long storeId, String storeName, int status,
+                         List<OrderItem> items, AddressInfo address, double goodsAmount, double deliveryFee,
+                         double discount, double payAmount, String remark, int reviewed, int escrowStatus,
+                         String createTime, String payTime, String acceptTime, String deliverTime,
+                         String completeTime, String expectTime, long couponId, String payDeadline,
+                         long payDeadlineEpochMs, long serverNowEpochMs, String riderName, String riderPhone,
+                         String readyTime, String deliveryType) {
+            this(id, orderNo, userId, storeId, storeName, status, items, address, goodsAmount, deliveryFee,
+                    discount, payAmount, remark, reviewed, escrowStatus, createTime, payTime, acceptTime,
+                    deliverTime, completeTime, expectTime, couponId, payDeadline, payDeadlineEpochMs,
+                    serverNowEpochMs, riderName, riderPhone, readyTime, deliveryType, "", "", "", "", "", false);
+        }
+
+        public OrderView withPayment(String channel, String tradeNo, String url) {
+            return withPayment(channel, tradeNo, url, "", "QR", false);
+        }
+
+        public OrderView withPayment(String channel, String tradeNo, String url, String orderInfo,
+                                     String mode, boolean sandbox) {
+            return new OrderView(id, orderNo, userId, storeId, storeName, status, items, address,
+                    goodsAmount, deliveryFee, discount, payAmount, remark, reviewed, escrowStatus,
+                    createTime, payTime, acceptTime, deliverTime, completeTime, expectTime, couponId,
+                    payDeadline, payDeadlineEpochMs, serverNowEpochMs, riderName, riderPhone, readyTime, deliveryType,
+                    channel, tradeNo, url, orderInfo, mode, sandbox);
+        }
     }
 
     public OrderView toView(List<OrderItem> itemList, AddressInfo addr, String riderName, String riderPhone) {
@@ -140,6 +186,8 @@ public record Order(
         return new OrderView(id, orderNo, userId, storeId, storeName, status, itemList, addr,
                 goodsAmount, deliveryFee, discount, payAmount, remark, reviewed, escrowStatus,
                 createTime, payTime, acceptTime, deliverTime, completeTime, expectTime, couponId,
-                payDeadline, payDeadlineEpochMs, riderName, riderPhone, readyTime, deliveryType);
+                payDeadline, payDeadlineEpochMs,
+                status == 0 && payDeadlineEpochMs > 0 ? System.currentTimeMillis() : 0L,
+                riderName, riderPhone, readyTime, deliveryType);
     }
 }
