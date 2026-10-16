@@ -916,7 +916,7 @@ Image($r('app.media.ui_close')).width(FONT_SIZE.LG).height(FONT_SIZE.LG).objectF
         .width('100%')
         .alignItems(VerticalAlign.Center)
         .padding({ top: SPACING.XS, bottom: SPACING.XS })
-      }, (item: CartItem) => `${item.goods.id}_${item.specId ?? 0}`)
+      }, (item: CartItem, index: number) => `${index}_${item.goods.id}_${item.specId ?? 0}`)
     }
       .attributeModifier(new AppCardStyle())
     .width('100%')

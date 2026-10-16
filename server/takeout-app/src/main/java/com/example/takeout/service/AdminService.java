@@ -398,10 +398,7 @@ public class AdminService {
                 requireStatusUpdated(orderDao.merchantComplete(orderId, now));
             }
             case "cancel" -> {
-                if (order.status() != 1 && order.status() != 2 && order.status() != 3) {
-                    throw new BizException("当前状态不可取消");
-                }
-                return refundOrder(orderId);
+                return orderService.cancelOrderByAdmin(orderId);
             }
             default -> throw new BizException("不支持的订单操作：" + action);
         }
@@ -423,19 +420,7 @@ public class AdminService {
         if (order.status() != 1 && order.status() != 2 && order.status() != 3) {
             throw new BizException("当前状态不可直接退款（已送达请走退款审批，未支付无需退款）");
         }
-        if (!orderDao.refundEscrow(orderId)) {
-            throw new BizException("订单资金已处理，不能重复退款");
-        }
-        if (!orderDao.updateStatusFrom(orderId, order.status(), 5, "complete_time", now())) {
-            throw new BizException("订单状态已变化，请刷新后重试");
-        }
-        // escrow 条件更新成功才回滚库存（同一事务内，防重复回滚）；
-        // 复用 OrderService 的回滚：goods 库存、规格库存、秒杀名额三者缺一不可
-        orderService.rollbackStock(order);
-        orderService.refundOrderPayment(order);
-        // 已回滚库存，用户端展示需重新读取真实余量
-        invalidateStoreAndGoodsCache();
-        return orderService.orderDetail(orderId);
+        return orderService.cancelOrderByAdmin(orderId);
     }
 
     // ============ 退款审批（演进项，见大纲 9.7/10.7） ============

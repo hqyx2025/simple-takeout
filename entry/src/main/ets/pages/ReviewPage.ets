@@ -451,7 +451,7 @@ export struct ReviewPage {
                 .margin({ right: SPACING.SM, bottom: SPACING.SM })
                 .borderRadius(BORDER_RADIUS.ROUND)
                 .onClick(() => { this.selectedGoodsId = item.goods.id })
-            }, (item: CartItem) => `${item.goods.id}_${item.specId ?? 0}`)
+            }, (item: CartItem, index: number) => `${index}_${item.goods.id}_${item.specId ?? 0}`)
           }.width('100%')
         }
       }

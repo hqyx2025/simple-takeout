@@ -49,6 +49,7 @@ class OrderConcurrencyMySqlTest {
     private JdbcTemplate jdbc;
     private String database;
     private OrderService service;
+    private AdminService adminService;
     private PaymentRecordDao paymentRecords;
     private OutboxEventDao outbox;
     private HotDataCacheService cache;
@@ -83,6 +84,13 @@ class OrderConcurrencyMySqlTest {
         proxy.addAdvice(new TransactionInterceptor(new DataSourceTransactionManager(source),
                 new AnnotationTransactionAttributeSource()));
         service = (OrderService) proxy.getProxy();
+        var adminTarget = new AdminService(new StoreDao(jdbc), new OrderDao(jdbc), new UserDao(jdbc),
+                new GoodsDao(jdbc, specs), new RefundDao(jdbc), service, mock(AdminStatsDao.class), cache,
+                new DomainEventPublisher(outbox, mock(ObjectProvider.class), new ObjectMapper()), paymentRecords);
+        var adminProxy = new ProxyFactory(adminTarget);
+        adminProxy.addAdvice(new TransactionInterceptor(new DataSourceTransactionManager(source),
+                new AnnotationTransactionAttributeSource()));
+        adminService = (AdminService) adminProxy.getProxy();
         jdbc.update("INSERT INTO stores(id,name,owner_id,create_time) VALUES(10,'test',99,'2026-01-01 00:00:00')");
         for (int id = 1; id <= 8; id++) {
             jdbc.update("INSERT INTO users(id,username,phone,password,balance,create_time) VALUES(?,?,?,'test',1000,?)",
@@ -258,6 +266,90 @@ class OrderConcurrencyMySqlTest {
         assertEquals(1000, count("SELECT stock FROM goods_specs WHERE id=300"));
         assertEquals(1000, count("SELECT stock FROM goods WHERE id=102"));
         assertEquals(0, count("SELECT COUNT(*) FROM coupons WHERE status<>0"));
+    }
+
+    @Test
+    void adminUserAndTimeoutCancellationReleaseTheSameReservationOnlyOnce() throws Exception {
+        long id = service.createOrder(1, 10, List.of(item(102, 300)), 1, 1, "").id();
+        jdbc.update("UPDATE orders SET create_time='2026-01-01 00:00:00' WHERE id=?", id);
+
+        runTogether(3, index -> {
+            if (index == 0) {
+                service.cancelExpiredPendingOrders();
+                return;
+            }
+            try {
+                if (index == 1) service.cancelOrder(1, id);
+                else adminService.orderFlow(id, "cancel");
+            } catch (BizException alreadyCancelled) {
+                assertTrue(alreadyCancelled.getMessage().contains("取消"));
+            }
+        });
+
+        assertEquals(5, service.orderDetail(id).status());
+        assertEquals(1000, count("SELECT stock FROM goods WHERE id=102"));
+        assertEquals(1000, count("SELECT stock FROM goods_specs WHERE id=300"));
+        assertEquals(0, count("SELECT status FROM coupons WHERE id=1"));
+        assertEquals(1000, count("SELECT balance FROM users WHERE id=1"));
+        assertEquals(0, count("SELECT COUNT(*) FROM payment_records"));
+        assertEquals(1, count("SELECT COUNT(*) FROM outbox_events WHERE event_type='ORDER_CANCELLED'"));
+    }
+
+    @Test
+    void adminAndUserCancellationCompeteWithPaymentWithoutDuplicatingFundsOrStock() throws Exception {
+        long id = service.createOrder(1, 10, List.of(item(102, 300)), 1, 1, "").id();
+
+        runTogether(8, index -> {
+            try {
+                if (index == 0) service.payOrder(1, id);
+                else if (index % 2 == 0) service.cancelOrder(1, id);
+                else adminService.orderFlow(id, "cancel");
+            } catch (BizException alreadyProcessed) {
+                assertTrue(alreadyProcessed.getMessage().contains("取消")
+                        || alreadyProcessed.getMessage().contains("状态"));
+            }
+        });
+
+        assertEquals(5, service.orderDetail(id).status());
+        assertEquals(1000, count("SELECT balance FROM users WHERE id=1"));
+        assertEquals(1000, count("SELECT stock FROM goods WHERE id=102"));
+        assertEquals(1000, count("SELECT stock FROM goods_specs WHERE id=300"));
+        int payments = count("SELECT COUNT(*) FROM payment_records WHERE type='PAY'");
+        assertTrue(payments == 0 || payments == 1);
+        assertEquals(payments, count("SELECT COUNT(*) FROM payment_records WHERE type='REFUND'"));
+        assertEquals(payments, count("SELECT status FROM coupons WHERE id=1"));
+        assertEquals(1, count("SELECT COUNT(*) FROM outbox_events WHERE event_type='ORDER_CANCELLED'"));
+    }
+
+    @Test
+    void adminCancellationRollsBackAllResourcesWhenEventWriteFails() {
+        long id = service.createOrder(1, 10, List.of(item(100, 0)), 1, 1, "").id();
+        doThrow(new CannotAcquireLockException("injected outbox failure"))
+                .when(outbox).insert(eq(DomainEventPublisher.ORDER_CANCELLED), eq(id), anyString(), anyString());
+
+        assertThrows(CannotAcquireLockException.class, () -> adminService.orderFlow(id, "cancel"));
+
+        assertEquals(0, service.orderDetail(id).status());
+        assertEquals(999, count("SELECT stock FROM goods WHERE id=100"));
+        assertEquals(1, count("SELECT sold FROM seckills WHERE id=100"));
+        assertEquals(1, count("SELECT COUNT(*) FROM seckill_orders"));
+        assertEquals(1, count("SELECT status FROM coupons WHERE id=1"));
+    }
+
+    @Test
+    void setmealSnapshotAndStoredItemAmountsMatchToTheCent() throws Exception {
+        jdbc.update("INSERT INTO setmeals(id,store_id,name,price,create_time) VALUES(500,10,'three items',10,'2026-01-01 00:00:00')");
+        jdbc.update("INSERT INTO setmeal_items(setmeal_id,goods_id,goods_name,quantity) VALUES(500,100,'component',3)");
+        var order = service.createOrder(1, 10, List.of(), 1, 0, "", List.of(), "", "",
+                List.of(new com.example.takeout.model.SetmealOrder(500, 2)), "");
+
+        assertEquals(20.0, order.goodsAmount(), 0.000001);
+        assertEquals(20.0, jdbc.queryForObject("SELECT SUM(unit_price*quantity) FROM order_items WHERE order_id=?",
+                java.math.BigDecimal.class, order.id()).doubleValue(), 0.000001);
+        assertEquals(20.0, order.items().stream().mapToDouble(line -> line.price() * line.quantity()).sum(), 0.000001);
+        assertEquals(994, count("SELECT stock FROM goods WHERE id=100"));
+        adminService.orderFlow(order.id(), "cancel");
+        assertEquals(1000, count("SELECT stock FROM goods WHERE id=100"));
     }
 
     @Test

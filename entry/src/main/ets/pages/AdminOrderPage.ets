@@ -6,10 +6,9 @@ import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
  */
 import { AppMotion } from '../common/theme/AppMotion'
 import { User, UserRole } from '../model/Models'
-import { ApiResponse, get, put } from '../service/HttpClient'
+import { ApiResponse, get } from '../service/HttpClient'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
-import { ConfirmDialog } from '../components/ConfirmDialog'
 import { PageHeader } from '../components/PageHeader'
 import { logInfo } from '../service/AppLogger'
 import { adminOrderActionApi } from '../service/ApiService'
@@ -76,9 +75,6 @@ export struct AdminOrderPage {
   @State total: number = 0
   @State hasMore: boolean = false
   @State loading: boolean = false
-  // 退款二次确认（资金操作必须确认，防止误点）
-  @State refundingOrderId: number = 0
-  @State showRefundConfirm: boolean = false
   @State actioningOrderId: number = 0
   // 拼进 ForEach 键，强制重建同 id 的订单行（否则刷新后状态/按钮文案停留在旧值）
   @State renderVersion: number = 0
@@ -145,7 +141,10 @@ export struct AdminOrderPage {
   }
 
   /** 托管资金状态文本：0 托管中 / 1 已结算 / 2 已退款。 */
-  private getEscrowText(escrowStatus?: number): string {
+  private getEscrowText(status: number, escrowStatus?: number): string {
+    if (status === 0 || (status === 5 && (escrowStatus ?? 0) === 0)) {
+      return '未扣款'
+    }
     if (escrowStatus === 1) {
       return '已结算'
     }
@@ -165,19 +164,6 @@ export struct AdminOrderPage {
     return COLORS.WARNING
   }
 
-  /** 管理端取消异常订单并退款（仅未完成订单；已送达走退款审批）。 */
-  async refund(): Promise<void> {
-    const resp: ApiResponse<AdminOrder> = await put<AdminOrder>(`/api/admin/orders/${this.refundingOrderId}/refund`, undefined)
-    this.showRefundConfirm = false
-    if (resp.code === 200) {
-      this.refundingOrderId = 0
-      promptAction.showToast({ message: '订单已退款并关闭', duration: 1500 })
-      await this.refresh()
-    } else {
-      promptAction.showToast({ message: resp.message || '订单退款失败，请刷新后重试', duration: 1800 })
-    }
-  }
-
   async runOrderAction(orderId: number, action: string, successText: string): Promise<void> {
     if (this.actioningOrderId === orderId) {
       promptAction.showToast({ message: '该订单操作正在处理，请稍候', duration: 1200 })
@@ -189,8 +175,6 @@ export struct AdminOrderPage {
     if (ok) {
       promptAction.showToast({ message: successText, duration: 1400 })
       await this.refresh()
-    } else {
-      promptAction.showToast({ message: '订单操作失败，请刷新后重试', duration: 1600 })
     }
   }
 
@@ -212,11 +196,13 @@ export struct AdminOrderPage {
         Row({ space: 0 }) {
           ForEach([
             OrderTabItem.create('全部', -1),
+            OrderTabItem.create('待付款', 0),
             OrderTabItem.create('待接单', 1),
             OrderTabItem.create('制作中', 2),
             OrderTabItem.create('配送中', 3),
             OrderTabItem.create('已送达', 4),
-            OrderTabItem.create('已取消', 5)
+            OrderTabItem.create('已取消', 5),
+            OrderTabItem.create('退款中', 6)
           ], (item: OrderTabItem) => {
             Text(item.title)
               .fontSize(FONT_SIZE.MD)
@@ -237,7 +223,7 @@ export struct AdminOrderPage {
       // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
       List({ space: SPACING.MD }) {
         ListItem() {
-          Text('托管资金：下单即托管，用户确认收货后结算给商户；未完成订单可由平台直接退款')
+          Text('支付后托管，用户确认收货后结算给商户；待付款取消释放库存与可用优惠券，已付款取消按原渠道退款，已送达订单走退款审批')
             .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%')
         }
 
@@ -260,12 +246,19 @@ export struct AdminOrderPage {
                 Row({ space: SPACING.SM }) {
                   Text(getOrderStatusText(order.status, order.escrowStatus))
                     .fontSize(FONT_SIZE.SM).fontColor(getOrderStatusColor(order.status))
-                  Text(`托管：${this.getEscrowText(order.escrowStatus)}`)
+                  Text(`资金：${this.getEscrowText(order.status, order.escrowStatus)}`)
                     .fontSize(FONT_SIZE.SM).fontColor(this.getEscrowColor(order.escrowStatus))
                 }
-                Text(`实付 ¥${(order.payAmount ?? 0).toFixed(2)}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+                Text(`订单金额 ¥${(order.payAmount ?? 0).toFixed(2)}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
               }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-              if (order.status === 1) {
+              if (order.status === 0) {
+                Button('取消')
+                  .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
+                  .fontColor(COLORS.ERROR).backgroundColor(COLORS.ERROR_LIGHT)
+                  .borderRadius(BORDER_RADIUS.ROUND)
+                  .id(`admin-order-cancel-${order.id}`)
+                  .onClick(() => { this.runOrderAction(order.id, 'cancel', '订单已取消') })
+              } else if (order.status === 1) {
                 Button('接单')
                   .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.ADMIN)
                   .borderRadius(BORDER_RADIUS.ROUND)
@@ -300,15 +293,6 @@ export struct AdminOrderPage {
                   .fontColor(COLORS.ERROR).backgroundColor(COLORS.ERROR_LIGHT)
                   .borderRadius(BORDER_RADIUS.ROUND)
                   .onClick(() => { this.runOrderAction(order.id, 'cancel', '订单已取消并退款') })
-              } else if (order.status !== 4 && order.status !== 5) {
-                Button('退款')
-                  .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM)
-                  .fontColor(COLORS.ON_PRIMARY).backgroundColor(COLORS.ERROR)
-                  .borderRadius(BORDER_RADIUS.ROUND)
-                  .onClick(() => {
-                    this.refundingOrderId = order.id
-                    this.showRefundConfirm = true
-                  })
               }
             }
               .attributeModifier(new AppCardStyle())
@@ -330,17 +314,6 @@ export struct AdminOrderPage {
       .width('100%').layoutWeight(1).scrollBar(BarState.Off)
       .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
 
-      // 退款二次确认弹窗
-      if (this.showRefundConfirm) {
-        ConfirmDialog({
-          title: '订单退款',
-          content: '确定对该订单退款并关闭吗？退款将退回用户余额，商品库存同步回滚。',
-          confirmText: '确定退款',
-          cancelText: '取消',
-          onConfirm: () => { this.refund() },
-          onCancel: () => { this.showRefundConfirm = false }
-        })
-      }
     }
     .width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)
   }

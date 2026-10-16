@@ -166,6 +166,36 @@ class OrderServiceFlowTest {
     }
 
     @Test
+    void setmealSnapshotDistributesRemainderCentsWithoutLosingMoney() throws Exception {
+        stubCommon(10, 0, 3);
+        when(storeDao.findSetmeal(500)).thenReturn(Optional.of(new Setmeal(500, STORE_ID, "三件套餐", "", 10, 30, "", 1, "",
+                List.of(new SetmealItem(1, 500, GOODS_ID, "组件菜", 3)))));
+        when(goodsDao.deductStock(eq(GOODS_ID), anyInt())).thenReturn(true);
+        when(orderDao.insert(any(Order.class))).thenReturn(13L);
+        when(orderDao.findById(13)).thenReturn(Optional.of(storedOrder(13, 0, ITEMS, "")));
+
+        service.createOrder(USER_ID, STORE_ID, List.of(), ADDRESS_ID, 0, "", List.of(), "", "",
+                List.of(new SetmealOrder(500, 2)), "");
+
+        var captor = org.mockito.ArgumentCaptor.forClass(Order.class);
+        verify(orderDao).insert(captor.capture());
+        Order order = captor.getValue();
+        Order.OrderItem[] lines = new ObjectMapper().readValue(order.items(), Order.OrderItem[].class);
+        java.math.BigDecimal total = java.math.BigDecimal.ZERO;
+        int quantity = 0;
+        for (Order.OrderItem line : lines) {
+            java.math.BigDecimal price = java.math.BigDecimal.valueOf(line.price());
+            assertTrue(price.scale() <= 2);
+            total = total.add(price.multiply(java.math.BigDecimal.valueOf(line.quantity())));
+            quantity += line.quantity();
+        }
+        assertEquals(6, quantity);
+        assertEquals(20.0, total.doubleValue(), 0.000001);
+        assertEquals(order.goodsAmount(), total.doubleValue(), 0.000001);
+        assertEquals(23.0, order.payAmount(), 0.000001);
+    }
+
+    @Test
     void pickupOrderChargesNoDeliveryFee() {
         stubCommon(10, 0, 3);
         when(orderDao.insert(any(Order.class))).thenReturn(13L);
@@ -385,6 +415,50 @@ class OrderServiceFlowTest {
         service.cancelOrder(USER_ID, 14);
 
         verify(couponDao).release(eq(66L), anyString());
+    }
+
+    @Test
+    void adminCancellationOfPendingOrderReleasesCouponWithoutRefunding() {
+        Order pending = new Order(14, "NO14", USER_ID, STORE_ID, "测试店", 0, ITEMS, ADDRESS_JSON,
+                10, 3, 3, 10, "", 0, 0, LocalDateTime.now().format(FMT), "", "", "", "", "", 66);
+        when(orderDao.findById(14)).thenReturn(Optional.of(pending));
+        when(orderDao.cancelPending(eq(14L), anyString())).thenReturn(true);
+
+        service.cancelOrderByAdmin(14);
+
+        verify(goodsDao).restoreStock(GOODS_ID, 1);
+        verify(couponDao).release(eq(66L), anyString());
+        verify(orderDao, never()).refundEscrow(anyLong());
+        verify(userDao, never()).addBalance(anyLong(), anyDouble());
+    }
+
+    @Test
+    void adminCancellationRefundsOriginalChannelAndDoesNotReturnUsedCoupon() {
+        Order paid = new Order(14, "NO14", USER_ID, STORE_ID, "测试店", 1, ITEMS, ADDRESS_JSON,
+                10, 3, 3, 10, "", 0, 0, LocalDateTime.now().format(FMT), "", "", "", "", "", 66);
+        when(orderDao.findById(14)).thenReturn(Optional.of(paid));
+        when(orderDao.refundEscrow(14)).thenReturn(true);
+        when(orderDao.updateStatusFrom(eq(14L), eq(1), eq(5), eq("complete_time"), anyString())).thenReturn(true);
+        ExternalPaymentService external = mock(ExternalPaymentService.class);
+        when(external.refundOriginalPayment(paid)).thenReturn("ALIPAY");
+        service.configureExternalPaymentService(external);
+
+        service.cancelOrderByAdmin(14);
+
+        verify(external).refundOriginalPayment(paid);
+        verify(goodsDao).restoreStock(GOODS_ID, 1);
+        verify(couponDao, never()).release(anyLong(), anyString());
+        verify(userDao, never()).addBalance(anyLong(), anyDouble());
+    }
+
+    @Test
+    void adminCannotCancelDeliveredRefundingOrTerminalOrders() {
+        for (int status : new int[]{4, 5, 6}) {
+            when(orderDao.findById(14)).thenReturn(Optional.of(storedOrder(14, status, ITEMS, "")));
+            assertThrows(BizException.class, () -> service.cancelOrderByAdmin(14));
+        }
+        verify(goodsDao, never()).restoreStock(anyLong(), anyInt());
+        verify(userDao, never()).addBalance(anyLong(), anyDouble());
     }
 
     @Test

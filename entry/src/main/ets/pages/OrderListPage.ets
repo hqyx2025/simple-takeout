@@ -308,7 +308,7 @@ struct OrderListPage {
             .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_SECONDARY).layoutWeight(1)
           Text(`x${item.quantity}`).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
         }.width('100%')
-      }, (item: CartItem) => `${item.goods.id}_${item.specId ?? 0}`)
+      }, (item: CartItem, index: number) => `${index}_${item.goods.id}_${item.specId ?? 0}`)
       if ((order.items ?? []).length > 2) {
         Button(this.expandedOrderIds.indexOf(order.id) >= 0 ? '收起商品 ∧' : `展开其余 ${(order.items ?? []).length - 2} 件商品 ∨`)
           .attributeModifier(new AppButtonStyle()).height(40).width('100%')

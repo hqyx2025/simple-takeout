@@ -50,6 +50,26 @@ class AdminServiceOrderFlowTest {
     }
 
     @Test
+    void adminCancelsPendingOrderThroughSharedResourceRelease() {
+        when(orderDao.findById(ORDER_ID)).thenReturn(Optional.of(storedOrder(0)));
+
+        service.orderFlow(ORDER_ID, "cancel");
+
+        verify(orderService).cancelOrderByAdmin(ORDER_ID);
+        verify(orderDao, never()).refundEscrow(anyLong());
+    }
+
+    @Test
+    void adminRefundUsesTheSameCancellationAsUserAndTimeoutFlows() {
+        when(orderDao.findById(ORDER_ID)).thenReturn(Optional.of(storedOrder(1)));
+
+        service.refundOrder(ORDER_ID);
+
+        verify(orderService).cancelOrderByAdmin(ORDER_ID);
+        verify(orderDao, never()).refundEscrow(anyLong());
+    }
+
+    @Test
     void adminReadyWritesReadyTimeInsteadOfPushingOrderToDelivering() {
         when(orderDao.findById(ORDER_ID)).thenReturn(Optional.of(storedOrder(2)));
         when(orderDao.markReady(eq(ORDER_ID), anyString())).thenReturn(true);

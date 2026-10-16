@@ -60,6 +60,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.time.Duration;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -275,7 +277,7 @@ public class OrderService {
             }
         }
         goodsDao.lockStockRows(goodsIds);
-        double goodsAmount = 0;
+        BigDecimal goodsTotal = BigDecimal.ZERO;
         List<Order.OrderItem> normalizedItems = new ArrayList<>();
         List<StockHold> holds = new ArrayList<>();
         for (Order.OrderItem item : orderItems) {
@@ -305,12 +307,12 @@ public class OrderService {
                     seckillId = seckill.id();
                 }
             }
-            goodsAmount += unitPrice * item.quantity();
+            goodsTotal = goodsTotal.add(BigDecimal.valueOf(unitPrice).multiply(BigDecimal.valueOf(item.quantity())));
             normalizedItems.add(new Order.OrderItem(goods.id(), goods.name(), unitPrice, item.quantity(),
                     goods.image(), spec == null ? 0 : spec.id(), spec == null ? "" : spec.name(), seckillId));
             holds.add(new StockHold(goods.id(), spec == null ? 0 : spec.id(), item.quantity(), seckillId));
         }
-        // 套餐（组合购）：展开为组件商品行，组件价按套餐价等比分配，组件库存照常扣减/取消回滚
+        // 套餐按件分摊到分；余下的分逐件补齐，保证快照和明细表均能对账。
         for (SetmealOrder so : setmealOrders) {
             if (so.quantity() <= 0) {
                 throw new BizException("套餐数量必须大于 0");
@@ -322,19 +324,35 @@ public class OrderService {
             if (setmeal.status() != 1) {
                 throw new BizException("套餐已下架");
             }
-            int totalQty = setmeal.items().stream().mapToInt(SetmealItem::quantity).sum();
-            if (setmeal.items().isEmpty() || totalQty <= 0) {
+            long totalQty = setmeal.items().stream().mapToLong(SetmealItem::quantity).sum();
+            if (setmeal.items().isEmpty() || setmeal.items().stream().anyMatch(si -> si.quantity() <= 0)) {
                 throw new BizException("套餐配置错误，请联系商家");
             }
-            goodsAmount += setmeal.price() * so.quantity();
-            double componentPrice = setmeal.price() / totalQty;
+            BigDecimal setmealPrice = BigDecimal.valueOf(setmeal.price()).setScale(2, RoundingMode.HALF_UP);
+            goodsTotal = goodsTotal.add(setmealPrice.multiply(BigDecimal.valueOf(so.quantity())));
+            long cents = setmealPrice.movePointRight(2).longValueExact();
+            long unitCents = cents / totalQty;
+            long remainder = cents % totalQty;
             for (SetmealItem si : setmeal.items()) {
-                int qty = si.quantity() * so.quantity();
-                normalizedItems.add(new Order.OrderItem(si.goodsId(), si.goodsName(), componentPrice, qty, "", 0, "", 0));
-                holds.add(new StockHold(si.goodsId(), 0, qty, 0));
+                int extra = (int) Math.min(remainder, si.quantity());
+                remainder -= extra;
+                // 每个组件最多两行，同价数量合并，避免按购买件数展开。
+                for (int part = 0; part < 2; part++) {
+                    int count = part == 0 ? extra : si.quantity() - extra;
+                    if (count == 0) continue;
+                    int qty;
+                    try {
+                        qty = Math.multiplyExact(count, so.quantity());
+                    } catch (ArithmeticException overflow) {
+                        throw new BizException("套餐购买数量过大");
+                    }
+                    double price = BigDecimal.valueOf(unitCents + (part == 0 ? 1 : 0), 2).doubleValue();
+                    normalizedItems.add(new Order.OrderItem(si.goodsId(), si.goodsName(), price, qty, "", 0, "", 0));
+                    holds.add(new StockHold(si.goodsId(), 0, qty, 0));
+                }
             }
         }
-        goodsAmount = round2(goodsAmount);
+        double goodsAmount = goodsTotal.setScale(2, RoundingMode.HALF_UP).doubleValue();
         double checkoutGoodsAmount = resolveCheckoutGoodsAmount(userId, storeId, checkoutGoodsIds, goodsAmount);
         if (checkoutGoodsAmount < store.minOrder()) {
             throw new BizException("未达到店铺起送价（满" + (long) store.minOrder() + "元起送）");
@@ -359,11 +377,14 @@ public class OrderService {
             appliedCoupon = coupon;
         }
         // ===== 营销活动：折扣 / 新客立减 / 满赠（无活动时为恒等，不改变既有金额口径）=====
+        double discountedGoodsAmount = goodsAmount;
         for (MarketingActivity activity : activities) {
             switch (activity.type()) {
                 case "DISCOUNT" -> {
                     if (activity.discountRate() > 0 && activity.discountRate() < 1) {
-                        goodsAmount = round2(goodsAmount * activity.discountRate());
+                        discountedGoodsAmount = BigDecimal.valueOf(discountedGoodsAmount)
+                                .multiply(BigDecimal.valueOf(activity.discountRate()))
+                                .setScale(2, RoundingMode.HALF_UP).doubleValue();
                     }
                 }
                 case "NEW_USER" -> {
@@ -372,7 +393,7 @@ public class OrderService {
                     }
                 }
                 case "GIFT" -> {
-                    if (activity.giftGoodsId() > 0 && goodsAmount >= activity.threshold()) {
+                    if (activity.giftGoodsId() > 0 && discountedGoodsAmount >= activity.threshold()) {
                         Goods gift = goodsDao.findById(activity.giftGoodsId()).orElse(null);
                         boolean already = normalizedItems.stream().anyMatch(i -> i.goodsId() == activity.giftGoodsId());
                         if (gift != null && gift.storeId() == storeId && gift.status() == 1 && gift.stock() > 0 && !already) {
@@ -384,7 +405,10 @@ public class OrderService {
                 default -> { }
             }
         }
-        double payAmount = round2(goodsAmount + deliveryFee - discount);
+        discount = BigDecimal.valueOf(discount).add(BigDecimal.valueOf(goodsAmount))
+                .subtract(BigDecimal.valueOf(discountedGoodsAmount)).setScale(2, RoundingMode.HALF_UP).doubleValue();
+        double payAmount = BigDecimal.valueOf(goodsAmount).add(BigDecimal.valueOf(deliveryFee))
+                .subtract(BigDecimal.valueOf(discount)).setScale(2, RoundingMode.HALF_UP).doubleValue();
         if (payAmount < 0) {
             throw new BizException("优惠金额不能超过订单金额");
         }
@@ -530,7 +554,7 @@ public class OrderService {
                 }
                 // 每单单独提交：不带着前一单的库存锁去获取下一单的订单锁。
                 if (Boolean.TRUE.equals(transactions.execute(status ->
-                        cancelPending(order, "超时未支付，订单已自动取消", false)))) {
+                        cancelPending(order, "超时未支付，订单已自动取消")))) {
                     cancelled++;
                 }
             } catch (RuntimeException e) {
@@ -543,14 +567,6 @@ public class OrderService {
 
     /** 取消待付款订单：条件更新 0→5，成功后才回滚库存/名额并释放优惠券（同一事务）。 */
     private boolean cancelPending(Order order, String reason) {
-        return cancelPending(order, reason, true);
-    }
-
-    private boolean cancelPending(Order order, String reason, boolean closeExternalPayment) {
-        if (closeExternalPayment && externalPaymentService != null) {
-            orderDao.findByIdForUpdate(order.id()).orElseThrow(() -> new BizException("订单不存在"));
-            externalPaymentService.closePendingPayment(order.id());
-        }
         if (!orderDao.cancelPending(order.id(), LocalDateTime.now().format(FMT))) {
             return false;
         }
@@ -704,7 +720,22 @@ public class OrderService {
         if (order.userId() != userId) {
             throw new BizException(403, "无权操作该订单");
         }
-        if (externalPaymentService != null) {
+        return cancelOrder(order, "用户取消订单");
+    }
+
+    /** 仅供已通过管理端权限校验的内部调用；与用户取消共用状态迁移和资源处理。 */
+    @Transactional
+    public Order.OrderView cancelOrderByAdmin(long orderId) {
+        Order order = orderDao.findByIdForUpdate(orderId).orElseThrow(() -> new BizException("订单不存在"));
+        return cancelOrder(order, "平台取消订单");
+    }
+
+    private Order.OrderView cancelOrder(Order order, String reason) {
+        long orderId = order.id();
+        if (order.status() < 0 || order.status() > 3) {
+            throw new BizException("当前状态不可取消");
+        }
+        if (order.status() == 0 && externalPaymentService != null) {
             externalPaymentService.closePendingPayment(orderId);
             order = orderDao.findByIdForUpdate(orderId).orElseThrow(() -> new BizException("订单不存在"));
         }
@@ -713,7 +744,7 @@ public class OrderService {
         }
         // 待付款订单：尚未扣款，直接释放库存/秒杀名额与优惠券（escrow 保持未托管）
         if (order.status() == 0) {
-            if (!cancelPending(order, "用户取消待付款订单")) {
+            if (!cancelPending(order, reason)) {
                 throw new BizException("订单状态已变化，请刷新后重试");
             }
             return orderDetail(orderId);
@@ -731,7 +762,7 @@ public class OrderService {
         rollbackStock(order);
         refundOrderPayment(order);
         eventPublisher.publish(DomainEventPublisher.ORDER_CANCELLED, orderId,
-                Map.of("userId", userId, "reason", "用户取消已支付订单，已即时退款"));
+                Map.of("userId", order.userId(), "reason", reason + "，已按原支付渠道退款"));
         return orderDetail(orderId);
     }
 
