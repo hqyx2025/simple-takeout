@@ -27,7 +27,8 @@ public class UserDao {
             rs.getDouble("balance"),
             rs.getString("create_time"),
             rs.getString("password_changed_at"),
-            rs.getString("payment_password_hash")
+            rs.getString("payment_password_hash"),
+            rs.getString("email")
     );
 
     private final JdbcTemplate jdbc;
@@ -60,6 +61,17 @@ public class UserDao {
     public boolean existsByPhoneExceptUser(String phone, long userId) {
         Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM users WHERE phone = ? AND id <> ?",
                 Integer.class, phone, userId);
+        return count != null && count > 0;
+    }
+
+    public boolean existsByUsername(String username) {
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM users WHERE username = ?", Integer.class, username);
+        return count != null && count > 0;
+    }
+
+    public boolean existsByUsernameExceptUser(String username, long userId) {
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM users WHERE username = ? AND id <> ?",
+                Integer.class, username, userId);
         return count != null && count > 0;
     }
 
@@ -138,7 +150,7 @@ public class UserDao {
     public AdminEmployee insertEmployee(String username, String phone, String passwordHash, String now) {
         jdbc.update("INSERT INTO users(username, avatar, phone, password, role, status, balance, create_time) " +
                         "VALUES(?,?,?,?,1,1,0,?)", username, "", phone, passwordHash, now);
-        long id = jdbc.queryForObject("SELECT id FROM users WHERE phone = ?", Long.class, phone);
+        long id = jdbc.queryForObject("SELECT id FROM users WHERE username = ?", Long.class, username);
         return listEmployees().stream().filter(employee -> employee.id() == id).findFirst()
                 .orElseThrow(() -> new IllegalStateException("员工创建后查询失败"));
     }
@@ -154,8 +166,16 @@ public class UserDao {
     public User insert(String username, String phone, String passwordHash, int role, double balance, String now) {
         jdbc.update("INSERT INTO users(username, avatar, phone, password, role, balance, create_time) VALUES(?,?,?,?,?,?,?)",
                 username, "", phone, passwordHash, role, balance, now);
-        long id = jdbc.queryForObject("SELECT id FROM users WHERE phone = ?", Long.class, phone);
+        long id = jdbc.queryForObject("SELECT id FROM users WHERE username = ?", Long.class, username);
         return new User(id, username, "", phone, passwordHash, role, balance, now);
+    }
+
+    public User insert(String username, String phone, String email, String passwordHash,
+                       int role, double balance, String now) {
+        jdbc.update("INSERT INTO users(username, avatar, phone, email, password, role, balance, create_time) " +
+                        "VALUES(?,?,?,?,?,?,?,?)", username, "", phone, email, passwordHash, role, balance, now);
+        long id = jdbc.queryForObject("SELECT id FROM users WHERE username = ?", Long.class, username);
+        return new User(id, username, "", phone, passwordHash, role, 1, balance, now, "", "", email);
     }
 
     /**
@@ -177,6 +197,11 @@ public class UserDao {
 
     public void updateProfile(long userId, String username, String phone) {
         jdbc.update("UPDATE users SET username = ?, phone = ? WHERE id = ?", username, phone, userId);
+    }
+
+    public void updateProfile(long userId, String username, String phone, String email) {
+        jdbc.update("UPDATE users SET username = ?, phone = ?, email = ? WHERE id = ?",
+                username, phone, email, userId);
     }
 
     /**

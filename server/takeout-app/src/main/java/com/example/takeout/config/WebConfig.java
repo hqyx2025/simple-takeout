@@ -47,6 +47,7 @@ public class WebConfig implements WebMvcConfigurer {
                         "/api/auth/register",
                         "/api/auth/refresh",
                         "/api/auth/logout",
+                        "/api/auth/email-code",
                         "/api/auth/sms-code",
                         "/api/auth/password/forgot",
                         "/api/auth/payment-password/forgot",

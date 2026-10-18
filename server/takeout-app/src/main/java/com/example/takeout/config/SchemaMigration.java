@@ -42,6 +42,8 @@ public class SchemaMigration implements ApplicationRunner {
         addColumnIfMissing("users", "password_changed_at", "VARCHAR(32) NOT NULL DEFAULT ''");
         // 独立支付密码：不复用登录密码；空值要求用户先完成支付密码设置。
         addColumnIfMissing("users", "payment_password_hash", "VARCHAR(128) DEFAULT NULL");
+        // 邮箱可共用；账号和手机号唯一。
+        addColumnIfMissing("users", "email", "VARCHAR(254) DEFAULT NULL");
         // 银行卡完整卡号只保存 AES-GCM 密文，历史仅尾号记录保持 NULL。
         addColumnIfMissing("bank_cards", "full_card_encrypted", "TEXT DEFAULT NULL");
         // 退款原因结构化：枚举 code + 文本备注
@@ -75,7 +77,46 @@ public class SchemaMigration implements ApplicationRunner {
         addIndexIfMissing("refund_records", "idx_refund_status_page", "(status, id)");
         addIndexIfMissing("users", "idx_users_admin_role_status_page", "(role, status, id)");
         addIndexIfMissing("users", "idx_users_admin_status_page", "(status, id)");
+        migrateAccountIndexes();
         rebuildCartUniqueKey();
+    }
+
+    private void migrateAccountIndexes() {
+        // Serialize multi-replica DDL on one connection; release with the connection even on failure.
+        jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Void>) connection -> {
+            try (var statement = connection.createStatement()) {
+                try (var result = statement.executeQuery("SELECT GET_LOCK('takeout-account-indexes', 60)")) {
+                    if (!result.next() || result.getInt(1) != 1) {
+                        throw new java.sql.SQLException("Unable to acquire account migration lock");
+                    }
+                }
+                try {
+                    java.util.List<String> oldIndexes = new java.util.ArrayList<>();
+                    try (var result = statement.executeQuery("SELECT INDEX_NAME FROM information_schema.STATISTICS "
+                            + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND NON_UNIQUE = 0 "
+                            + "AND INDEX_NAME <> 'PRIMARY' GROUP BY INDEX_NAME "
+                            + "HAVING COUNT(*) = 1 AND MAX(COLUMN_NAME) = 'email'")) {
+                        while (result.next()) oldIndexes.add(result.getString(1));
+                    }
+                    boolean addAccountIndex;
+                    // Add account uniqueness; keep the existing unique phone index.
+                    try (var result = statement.executeQuery("SELECT COUNT(*) FROM information_schema.STATISTICS "
+                            + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND INDEX_NAME = 'uk_users_username'")) {
+                        result.next();
+                        addAccountIndex = result.getInt(1) == 0;
+                    }
+                    if (addAccountIndex) {
+                        statement.execute("ALTER TABLE users ADD UNIQUE KEY uk_users_username (username)");
+                    }
+                    for (String index : oldIndexes) {
+                        statement.execute("ALTER TABLE users DROP INDEX `" + index.replace("`", "``") + "`");
+                    }
+                } finally {
+                    statement.execute("SELECT RELEASE_LOCK('takeout-account-indexes')");
+                }
+            }
+            return null;
+        });
     }
 
     void migrateOrderTimeColumns() {
@@ -161,4 +202,5 @@ public class SchemaMigration implements ApplicationRunner {
             }
         }
     }
+
 }

@@ -38,7 +38,7 @@ class SmsVerificationServiceTest {
 
         assertEquals(true, result.mock());
         org.junit.jupiter.api.Assertions.assertTrue(result.code().matches("\\d{6}"));
-        verify(sender).sendSmsCode("13800138000", result.code());
+        verify(sender).sendVerificationCode("13800138000", result.code(), "13800138000");
         verify(values).set(anyString(), org.mockito.ArgumentMatchers.argThat(stored -> !stored.equals(result.code())),
                 eq(Duration.ofSeconds(300)));
     }
@@ -56,7 +56,7 @@ class SmsVerificationServiceTest {
 
         assertEquals("", result.code());
         assertEquals(false, result.mock());
-        verify(sender).sendSmsCode(eq("13800138000"), anyString());
+        verify(sender).sendVerificationCode(eq("13800138000"), anyString(), eq("13800138000"));
     }
 
     @Test
@@ -69,7 +69,7 @@ class SmsVerificationServiceTest {
         SmsVerificationService service = new SmsVerificationService(redis, sender, SIGNING_SECRET, 300, 60);
 
         assertThrows(BizException.class, () -> service.issue("13800138000"));
-        verify(sender, never()).sendSmsCode(anyString(), anyString());
+        verify(sender, never()).sendVerificationCode(anyString(), anyString(), anyString());
     }
 
     @Test

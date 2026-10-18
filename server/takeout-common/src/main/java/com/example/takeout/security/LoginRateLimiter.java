@@ -35,8 +35,9 @@ public class LoginRateLimiter {
     private static final Map<String, Policy> POLICIES = Map.of(
             "login", new Policy(10, 60, 600),
             "register", new Policy(5, 3600, 3600),
-            // 短信找回按来源 IP 限制，避免固定/第三方验证码接口被刷。
+            // 验证码找回按来源 IP 限制，避免第三方邮件接口被刷。
             "sms-code", new Policy(5, 60, 600),
+            "email-code", new Policy(5, 60, 600),
             "password-forgot", new Policy(5, 60, 600),
             "payment-password-forgot", new Policy(5, 60, 600),
             // 支付密码验证及设置：失败计数，成功清零，避免 6 位密码被连续猜测。

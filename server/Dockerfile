@@ -22,15 +22,11 @@ WORKDIR /workspace
 
 COPY docker/settings.xml /usr/share/maven/conf/settings.xml
 
-# 先只拷 pom（聚合根 + 各模块）并预热依赖，源码变更时不必重新下载依赖
-# （buildkit cache mount 持久化 /root/.m2，跨构建复用）
-# 注意：不能用 -pl/-am 限定模块——实测 -pl ... -am + dependency:go-offline 在
-# 聚合 reactor 下会静默卡死（timeout 124 复现），对整根预热则正常。
+# Maven 缓存由 package 阶段复用；避免 dependency:go-offline 下载无关插件并卡住构建。
 COPY pom.xml .
 COPY takeout-common/pom.xml takeout-common/pom.xml
 COPY takeout-app/pom.xml takeout-app/pom.xml
 COPY takeout-gateway/pom.xml takeout-gateway/pom.xml
-RUN --mount=type=cache,target=/root/.m2 mvn -B -q dependency:go-offline || true
 
 COPY takeout-common/src ./takeout-common/src
 COPY takeout-app/src ./takeout-app/src

@@ -9,9 +9,9 @@ class ProductionHuaweiGuardTest {
     @Test
     void productionDoesNotAcceptMockSmsOrLocalUploadOverrides() {
         assertThrows(IllegalStateException.class, () -> new ProductionHuaweiGuard("mock", "obs", false, false));
-        assertThrows(IllegalStateException.class, () -> new ProductionHuaweiGuard("huawei", "local", false, false));
-        assertDoesNotThrow(() -> new ProductionHuaweiGuard("huawei", "obs", false, false));
-        assertThrows(IllegalStateException.class, () -> new ProductionHuaweiGuard("huawei", "obs", true, false));
-        assertThrows(IllegalStateException.class, () -> new ProductionHuaweiGuard("huawei", "obs", false, true));
+        assertThrows(IllegalStateException.class, () -> new ProductionHuaweiGuard("qq-email", "local", false, false));
+        assertDoesNotThrow(() -> new ProductionHuaweiGuard("qq-email", "obs", false, false));
+        assertThrows(IllegalStateException.class, () -> new ProductionHuaweiGuard("qq-email", "obs", true, false));
+        assertThrows(IllegalStateException.class, () -> new ProductionHuaweiGuard("qq-email", "obs", false, true));
     }
 }

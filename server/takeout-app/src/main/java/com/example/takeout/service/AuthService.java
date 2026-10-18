@@ -54,34 +54,48 @@ public class AuthService {
         });
     }
 
-    /**
-     * 注册（role：0=用户 1=商户 3=骑手）
-     */
-    public User register(String username, String phone, String password, int role) {
-        if (username == null || username.isBlank()) {
-            throw new BizException("用户名不能为空");
-        }
-        // users.username 为 VARCHAR(64)：超长会因列宽溢出变成 500；trim 后再落库，
-        // 否则「 张三」与「张三 」会成为两个显示相同的账号（资料修改路径已是 trim 口径）
-        String trimmedUsername = username.trim();
-        if (trimmedUsername.length() > 64) {
-            throw new BizException("用户名最多 64 个字符");
-        }
-        if (phone == null || !phone.matches("1\\d{10}")) {
-            throw new BizException("手机号格式不正确");
-        }
-        if (password == null || password.length() < 6) {
-            throw new BizException("密码长度至少 6 位");
+    /** Register only after consuming an email code bound to the proposed phone and mailbox. */
+    @Transactional
+    public User register(String username, String phone, String email, String code, String password, int role) {
+        String normalizedEmail = registrationEmail(username, phone, email);
+        if (password == null || password.length() < 6 || password.length() > 64) {
+            throw new BizException("密码长度应为 6 至 64 位");
         }
         if (role != 0 && role != 1 && role != 3) {
             throw new BizException("角色不合法");
         }
+        if (code == null || !code.matches("[0-9]{6}")) {
+            throw new BizException("请输入 6 位邮箱验证码");
+        }
+        smsCodeVerifier.consume(registrationIdentity(phone, normalizedEmail), code);
+        String now = LocalDateTime.now().format(FMT);
+        return userDao.insert(username.trim(), phone, normalizedEmail, PasswordUtil.hash(password),
+                role, role == 0 ? 20.0 : 0.0, now);
+    }
+
+    /** Check duplicates before requesting mail and again before account creation. */
+    public String registrationEmail(String username, String phone, String email) {
+        if (username == null || username.isBlank()) {
+            throw new BizException("账号名不能为空");
+        }
+        if (username.trim().length() > 64) {
+            throw new BizException("账号名最多 64 个字符");
+        }
+        if (phone == null || !phone.matches("1\\d{10}")) {
+            throw new BizException("手机号格式不正确");
+        }
+        String normalizedEmail = requireEmail(email);
+        if (userDao.existsByUsername(username.trim())) {
+            throw new BizException("该账号已注册");
+        }
         if (userDao.existsByPhone(phone)) {
             throw new BizException("该手机号已注册");
         }
-        double balance = role == 0 ? 20.0 : 0.0;
-        String now = LocalDateTime.now().format(FMT);
-        return userDao.insert(trimmedUsername, phone, PasswordUtil.hash(password), role, balance, now);
+        return normalizedEmail;
+    }
+
+    public String registrationIdentity(String phone, String email) {
+        return "registration:" + phone + ":" + requireEmail(email);
     }
 
     /**
@@ -150,26 +164,49 @@ public class AuthService {
         userDao.updatePaymentPassword(userId, PaymentPasswordUtil.hash(paymentPassword));
     }
 
-    /** SMS recovery consumes the server-issued, short-lived one-time code before changing credentials. */
+    /** Codes are bound to immutable user ID, password purpose, and current contact details. */
     @Transactional
-    public void resetPasswordBySms(String phone, String code, String newPassword) {
-        if (newPassword == null || newPassword.length() < 6) {
-            throw new BizException("新密码长度至少 6 位");
+    public void resetPasswordByEmail(String phone, String email, String code, String newPassword) {
+        if (newPassword == null || newPassword.length() < 6 || newPassword.length() > 64) {
+            throw new BizException("新密码长度应为 6 至 64 位");
         }
-        smsCodeVerifier.consume(phone, code);
-        User user = userDao.findByPhoneForUpdate(phone).orElseThrow(() -> new BizException("手机号或验证码不正确"));
+        User user = recoveryUser(phone, email, true);
+        smsCodeVerifier.consume(recoveryIdentity(user, "login"), code);
         userDao.updatePassword(user.id(), PasswordUtil.hash(newPassword),
                 nextPasswordChangedAt(user.passwordChangedAt()));
     }
 
     @Transactional
-    public void resetPaymentPasswordBySms(String phone, String code, String paymentPassword) {
+    public void resetPaymentPasswordByEmail(String phone, String email, String code, String paymentPassword) {
         if (paymentPassword == null || !paymentPassword.matches("[0-9]{6}")) {
             throw new BizException("支付密码必须为 6 位数字");
         }
-        smsCodeVerifier.consume(phone, code);
-        User user = userDao.findByPhone(phone).orElseThrow(() -> new BizException("手机号或验证码不正确"));
+        User user = recoveryUser(phone, email, true);
+        smsCodeVerifier.consume(recoveryIdentity(user, "payment"), code);
         userDao.updatePaymentPassword(user.id(), PaymentPasswordUtil.hash(paymentPassword));
+    }
+
+    public User recoveryUser(String phone, String email, boolean lock) {
+        if (phone == null || !phone.matches("1\\d{10}")) {
+            throw new BizException("手机号或邮箱不匹配");
+        }
+        String normalizedEmail = requireEmail(email);
+        User user = (lock ? userDao.findByPhoneForUpdate(phone) : userDao.findByPhone(phone))
+                .orElseThrow(() -> new BizException("手机号或邮箱不匹配"));
+        if (user.status() != 1 || !phone.equals(user.phone())) {
+            throw new BizException("手机号或邮箱不匹配");
+        }
+        if (!normalizedEmail.equals(normalizeEmail(user.email()))) {
+            throw new BizException("邮箱错误，请输入该手机号绑定的邮箱");
+        }
+        return user;
+    }
+
+    public String recoveryIdentity(User user, String purpose) {
+        if (!"login".equals(purpose) && !"payment".equals(purpose)) {
+            throw new BizException("验证码用途不正确");
+        }
+        return "recovery:" + user.id() + ":" + purpose + ":" + user.phone() + ":" + normalizeEmail(user.email());
     }
 
     private int roleOf(String loginType) {
@@ -207,17 +244,53 @@ public class AuthService {
     }
 
     public User updateProfile(long userId, String username, String phone) {
+        return updateProfileInternal(userId, username, phone, null, false);
+    }
+
+    public User updateProfile(long userId, String username, String phone, String email) {
+        return updateProfileInternal(userId, username, phone, email, true);
+    }
+
+    private User updateProfileInternal(long userId, String username, String phone, String email,
+                                       boolean updateEmail) {
         if (username == null || username.isBlank()) {
             throw new BizException("用户名不能为空");
         }
         if (phone == null || !phone.matches("1\\d{10}")) {
             throw new BizException("手机号格式不正确");
         }
+        if (username.trim().length() > 64) {
+            throw new BizException("账号最多 64 个字符");
+        }
         if (userDao.existsByPhoneExceptUser(phone, userId)) {
             throw new BizException("该手机号已被其他账号使用");
         }
-        userDao.updateProfile(userId, username.trim(), phone);
+        if (userDao.existsByUsernameExceptUser(username.trim(), userId)) {
+            throw new BizException("该账号已被其他用户使用");
+        }
+        if (!updateEmail) {
+            userDao.updateProfile(userId, username.trim(), phone);
+        } else {
+            String normalizedEmail = requireEmail(email);
+            userDao.updateProfile(userId, username.trim(), phone, normalizedEmail);
+        }
         return profile(userId);
+    }
+
+    private String requireEmail(String value) {
+        String normalized = normalizeEmail(value);
+        if (normalized.isEmpty()) {
+            throw new BizException("邮箱格式不正确");
+        }
+        return normalized;
+    }
+
+    private String normalizeEmail(String value) {
+        if (value == null) return "";
+        String normalized = value.trim().toLowerCase(java.util.Locale.ROOT);
+        return normalized.length() <= 254 && normalized.matches(
+                "^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$")
+                ? normalized : "";
     }
 
     /** 测试充值：金额写入用户余额，返回数据库中的最新用户信息。 */

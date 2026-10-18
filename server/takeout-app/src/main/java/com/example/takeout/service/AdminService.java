@@ -344,6 +344,9 @@ public class AdminService {
         if (userDao.existsByPhone(phone)) {
             throw new BizException("手机号已注册");
         }
+        if (userDao.existsByUsername(normalizedName)) {
+            throw new BizException("账号已注册");
+        }
         return userDao.insertEmployee(normalizedName, phone, PasswordUtil.hash(password), now());
     }
 
@@ -354,6 +357,9 @@ public class AdminService {
         validatePhone(phone);
         if (userDao.existsByPhoneExceptUser(phone, id)) {
             throw new BizException("手机号已被其他账号使用");
+        }
+        if (userDao.existsByUsernameExceptUser(normalizedName, id)) {
+            throw new BizException("账号已被其他用户使用");
         }
         userDao.updateEmployee(id, normalizedName, phone);
         return userDao.listEmployees().stream().filter(employee -> employee.id() == id).findFirst()

@@ -22,8 +22,11 @@ public class SmsVerificationService implements SmsCodeVerifier {
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final DefaultRedisScript<Long> CONSUME_SCRIPT = new DefaultRedisScript<>(
             "local value = redis.call('GET', KEYS[1]); "
-                    + "if value == ARGV[1] then redis.call('DEL', KEYS[1]); redis.call('DEL', KEYS[2]); return 1; "
-                    + "end; return 0",
+                    + "if not value then return 0 end; "
+                    + "if value == ARGV[1] then redis.call('DEL', KEYS[1]); redis.call('DEL', KEYS[2]); return 1 end; "
+                    + "local tries = redis.call('INCR', KEYS[2]); "
+                    + "if tries == 1 then redis.call('PEXPIRE', KEYS[2], redis.call('PTTL', KEYS[1])) end; "
+                    + "if tries >= 5 then redis.call('DEL', KEYS[1]); redis.call('DEL', KEYS[2]) end; return 0",
             Long.class);
 
     private final StringRedisTemplate redis;
@@ -34,10 +37,10 @@ public class SmsVerificationService implements SmsCodeVerifier {
 
     public SmsVerificationService(StringRedisTemplate redis, SmsSender sender,
                                   @Value("${takeout.jwt.secret}") String signingSecret,
-                                  @Value("${takeout.sms.code-ttl-seconds:300}") long ttlSeconds,
+                                  @Value("${takeout.sms.code-ttl-seconds:900}") long ttlSeconds,
                                   @Value("${takeout.sms.cooldown-seconds:60}") long cooldownSeconds) {
         if (signingSecret == null || signingSecret.length() < 32 || ttlSeconds < 60 || cooldownSeconds < 1) {
-            throw new IllegalStateException("短信验证码配置无效");
+            throw new IllegalStateException("验证码配置无效");
         }
         this.redis = redis;
         this.sender = sender;
@@ -46,19 +49,23 @@ public class SmsVerificationService implements SmsCodeVerifier {
         this.cooldown = Duration.ofSeconds(cooldownSeconds);
     }
 
-    public IssueResult issue(String phone) {
-        String phoneHash = digest(phone);
-        String codeKey = "takeout:sms:code:" + phoneHash;
-        String cooldownKey = "takeout:sms:cooldown:" + phoneHash;
+    public IssueResult issue(String identity) {
+        return issue(identity, identity);
+    }
+
+    public IssueResult issue(String identity, String destination) {
+        String identityHash = digest(identity);
+        String codeKey = "takeout:verification:code:" + identityHash;
+        String cooldownKey = "takeout:verification:cooldown:" + digest(destination);
         try {
             Boolean allowed = redis.opsForValue().setIfAbsent(cooldownKey, "1", cooldown);
             if (!Boolean.TRUE.equals(allowed)) {
                 throw new BizException(429, "验证码请求过于频繁，请稍后再试");
             }
             String code = "%06d".formatted(RANDOM.nextInt(1_000_000));
-            redis.opsForValue().set(codeKey, digest(phone + ":" + code), ttl);
+            redis.opsForValue().set(codeKey, digest(identity + ":" + code), ttl);
             try {
-                sender.sendSmsCode(phone, code);
+                sender.sendVerificationCode(destination, code, identity);
             } catch (RuntimeException e) {
                 redis.delete(List.of(codeKey, cooldownKey));
                 throw new BizException(503, "验证码发送失败，请稍后重试");
@@ -73,15 +80,15 @@ public class SmsVerificationService implements SmsCodeVerifier {
     }
 
     @Override
-    public void consume(String phone, String code) {
-        if (phone == null || !phone.matches("1\\d{10}") || code == null || !code.matches("\\d{6}")) {
+    public void consume(String identity, String code) {
+        if (!validIdentity(identity) || code == null || !code.matches("\\d{6}")) {
             throw invalidCode();
         }
-        String phoneHash = digest(phone);
-        String codeKey = "takeout:sms:code:" + phoneHash;
-        String cooldownKey = "takeout:sms:cooldown:" + phoneHash;
+        String identityHash = digest(identity);
+        String codeKey = "takeout:verification:code:" + identityHash;
+        String attemptsKey = "takeout:verification:attempts:" + identityHash;
         try {
-            Long consumed = redis.execute(CONSUME_SCRIPT, List.of(codeKey, cooldownKey), digest(phone + ":" + code));
+            Long consumed = redis.execute(CONSUME_SCRIPT, List.of(codeKey, attemptsKey), digest(identity + ":" + code));
             if (!Long.valueOf(1L).equals(consumed)) {
                 throw invalidCode();
             }
@@ -103,7 +110,13 @@ public class SmsVerificationService implements SmsCodeVerifier {
     }
 
     private BizException invalidCode() {
-        return new BizException("手机号或验证码不正确");
+        return new BizException("验证码不正确或已过期，请重新获取");
+    }
+
+    private boolean validIdentity(String value) {
+        return value != null && (value.matches("registration:1[0-9]{10}:[^\\s:]+@[^\\s:]+") || value.matches("recovery:[1-9][0-9]*:(login|payment):1[0-9]{10}:[^\\s:]+@[^\\s:]+") || value.matches("1\\d{10}") || value.matches(
+                "1\\d{10}:[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+") || value.matches(
+                "^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"));
     }
 
     public record IssueResult(String code, boolean mock) { }

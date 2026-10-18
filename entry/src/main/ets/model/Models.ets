@@ -212,6 +212,7 @@ export interface User {
   username: string
   avatar: string
   phone: string
+  email?: string
   password: string
   role: UserRole
   balance: number

@@ -492,8 +492,8 @@ export async function fetchMerchantStatsRemote(storeId: number = 0): Promise<Mer
   return fetchMerchantStatsApi(storeId)
 }
 
-export async function updateUserProfileRemote(username: string, phone: string): Promise<User | undefined> {
-  const user: User | undefined = await updateUserProfileApi(username, phone)
+export async function updateUserProfileRemote(username: string, phone: string, email: string): Promise<User | undefined> {
+  const user: User | undefined = await updateUserProfileApi(username, phone, email)
   if (user === undefined) {
     logWarn('Api', '远程更新个人资料失败')
     return undefined
@@ -576,8 +576,8 @@ export async function loginRemote(phone: string, password: string, loginType?: s
 /**
  * 远程注册：成功返回用户；失败返回 undefined
  */
-export async function registerRemote(username: string, phone: string, password: string, role: UserRole): Promise<User | undefined> {
-  const user: User | null = await apiRegister(username, phone, password, role)
+export async function registerRemote(username: string, phone: string, email: string, code: string, password: string, role: UserRole): Promise<User | undefined> {
+  const user: User | null = await apiRegister(username, phone, email, code, password, role)
   if (user !== null) {
     logInfo('Api', `远程注册成功 userId=${user.id}`)
     return user

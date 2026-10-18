@@ -58,22 +58,27 @@ public class AuthController {
             throw new BizException(429, "注册提交过于频繁，请稍后再试");
         }
         loginRateLimiter.recordAttempt("register", ip);
-        return ApiResponse.ok(authService.register(req.username(), req.phone(), req.password(), req.role()).safe());
+        return ApiResponse.ok(authService.register(req.username(), req.phone(), req.email(), req.code(), req.password(), req.role()).safe());
     }
 
-    /** The server generates, stores, and sends the one-time code. Only local mock mode returns it. */
-    @PostMapping("/sms-code")
-    public ApiResponse<SmsCodeResult> smsCode(@RequestBody SmsCodeRequest req, HttpServletRequest http) {
+    /** The server generates, stores, and sends the one-time email code. Only local mock mode returns it. */
+    @PostMapping({"/email-code", "/sms-code"})
+    public ApiResponse<EmailCodeResult> emailCode(@RequestBody EmailCodeRequest req, HttpServletRequest http) {
         String ip = LoginRateLimiter.clientIp(http);
-        if (loginRateLimiter.isBlocked("sms-code", ip)) {
+        if (loginRateLimiter.isBlocked("email-code", ip)) {
             throw new BizException(429, "验证码请求过于频繁，请稍后再试");
         }
-        loginRateLimiter.recordAttempt("sms-code", ip);
-        if (req == null || req.phone() == null || !req.phone().matches("1\\d{10}")) {
-            throw new BizException("手机号格式不正确");
+        loginRateLimiter.recordAttempt("email-code", ip);
+        if (req == null) throw new BizException("请填写手机号和邮箱");
+        SmsVerificationService.IssueResult result;
+        if ("register".equals(req.purpose())) {
+            String email = authService.registrationEmail(req.username(), req.phone(), req.email());
+            result = smsVerificationService.issue(authService.registrationIdentity(req.phone(), email), email);
+        } else {
+            User user = authService.recoveryUser(req.phone(), req.email(), false);
+            result = smsVerificationService.issue(authService.recoveryIdentity(user, req.purpose()), user.email());
         }
-        SmsVerificationService.IssueResult result = smsVerificationService.issue(req.phone());
-        return ApiResponse.ok(new SmsCodeResult(result.code(), result.mock()));
+        return ApiResponse.ok(new EmailCodeResult(result.code(), result.mock()));
     }
 
     @PostMapping("/password/forgot")
@@ -83,7 +88,7 @@ public class AuthController {
             throw new BizException(429, "找回密码请求过于频繁，请稍后再试");
         }
         loginRateLimiter.recordAttempt("password-forgot", ip);
-        authService.resetPasswordBySms(req.phone(), req.code(), req.newPassword());
+        authService.resetPasswordByEmail(req.phone(), req.email(), req.code(), req.newPassword());
         return ApiResponse.ok();
     }
 
@@ -94,7 +99,7 @@ public class AuthController {
             throw new BizException(429, "找回支付密码请求过于频繁，请稍后再试");
         }
         loginRateLimiter.recordAttempt("payment-password-forgot", ip);
-        authService.resetPaymentPasswordBySms(req.phone(), req.code(), req.paymentPassword());
+        authService.resetPaymentPasswordByEmail(req.phone(), req.email(), req.code(), req.paymentPassword());
         return ApiResponse.ok();
     }
 
@@ -183,7 +188,7 @@ public class AuthController {
     @PutMapping("/me")
     public ApiResponse<User> updateMe(@RequestAttribute("userId") long userId,
                                       @RequestBody ProfileUpdateRequest req) {
-        return ApiResponse.ok(authService.updateProfile(userId, req.username(), req.phone()));
+        return ApiResponse.ok(authService.updateProfile(userId, req.username(), req.phone(), req.email()));
     }
 
     @PostMapping("/recharge")
@@ -192,7 +197,7 @@ public class AuthController {
         return ApiResponse.ok(authService.recharge(userId, req.amount()));
     }
 
-    public record RegisterRequest(String username, String phone, String password, int role) {
+    public record RegisterRequest(String username, String phone, String email, String code, String password, int role) {
     }
 
     public record LoginRequest(String phone, String password, String loginType) {
@@ -215,21 +220,21 @@ public class AuthController {
 
     public record PushRegistrationResult(String profileId) { }
 
-    public record ProfileUpdateRequest(String username, String phone) {
+    public record ProfileUpdateRequest(String username, String phone, String email) {
     }
 
     public record RechargeRequest(double amount) {
     }
 
-    public record SmsCodeRequest(String phone) {
+    public record EmailCodeRequest(String phone, String email, String purpose, String username) {
     }
 
-    public record SmsCodeResult(String code, boolean mock) {
+    public record EmailCodeResult(String code, boolean mock) {
     }
 
-    public record ForgotPasswordRequest(String phone, String code, String newPassword) { }
+    public record ForgotPasswordRequest(String phone, String email, String code, String newPassword) { }
 
-    public record ForgotPaymentPasswordRequest(String phone, String code, String paymentPassword) { }
+    public record ForgotPaymentPasswordRequest(String phone, String email, String code, String paymentPassword) { }
 
     public record ChangePasswordRequest(String oldPassword, String newPassword) {
     }

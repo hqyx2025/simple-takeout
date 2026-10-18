@@ -5,8 +5,9 @@ import { UserRole } from '../model/Models'
 import { loginRemote, registerRemote, logout, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { logInfo, logWarn } from '../service/AppLogger'
 import { APP_CONFIG } from '../common/Constants'
-import { AppTheme } from '../common/theme/AppTheme'
+import { AppTheme, AppInputStyle, AppButtonStyle } from '../common/theme/AppTheme'
 import { AppMotion } from '../common/theme/AppMotion'
+import { requestEmailCodeApi, EmailCodeResult } from '../service/ApiService'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 
 @Component
@@ -15,6 +16,12 @@ export struct LoginPage {
   @State isLoginMode: boolean = true
   @State selectedRole: UserRole = UserRole.CUSTOMER
   @State phone: string = ''
+  @State email: string = ''
+  @State emailCode: string = ''
+  @State sendingCode: boolean = false
+  @State cooldownSeconds: number = 0
+  private cooldownTimer: number = -1
+  private pageActive: boolean = true
   @State password: string = ''
   @State username: string = ''
   @State errorMsg: string = ''
@@ -36,7 +43,7 @@ export struct LoginPage {
 
   build() {
     Column() {
-      Column() {
+      Scroll() {
         Column() {
           Column() {
             this.brandHeader()
@@ -56,11 +63,16 @@ export struct LoginPage {
             this.roleSelector()
 
             if (!this.isLoginMode) {
-              this.formField('用户名', '请输入用户名', this.username, $r('app.media.login_user'),
+              this.formField('账号名', '请输入账号名，例如 takeout_user', this.username, $r('app.media.login_user'),
                 InputType.Normal, 'login-username', (value: string) => { this.username = value })
+              this.formField('邮箱', '请输入用于找回密码的邮箱', this.email, $r('app.media.login_user'),
+                InputType.Email, 'login-email', (value: string) => { this.email = value; this.emailCode = '' })
             }
-            this.formField('手机号', '请输入手机号', this.phone, $r('app.media.login_phone'),
-              InputType.PhoneNumber, 'login-phone', (value: string) => { this.phone = value })
+            this.formField('手机号', '请输入唯一的 11 位手机号', this.phone, $r('app.media.login_phone'),
+              InputType.PhoneNumber, 'login-phone', (value: string) => { this.phone = value; this.emailCode = '' })
+            if (!this.isLoginMode) {
+              this.registrationCodeField()
+            }
             this.formField('密码', '请输入密码', this.password, $r('app.media.login_lock'),
               InputType.Password, 'login-password', (value: string) => { this.password = value })
 
@@ -70,7 +82,7 @@ export struct LoginPage {
             if (this.errorMsg) {
               this.formMessage(this.errorMsg, AppTheme.ERROR, AppTheme.ERROR_BG)
             }
-            this.submitButton()
+            if (this.isLoginMode) { this.submitButton() }
 
             if (this.isLoginMode) {
               Button('忘记登录密码？')
@@ -95,9 +107,17 @@ export struct LoginPage {
         .width('100%')
         .padding({ left: 24, right: 24, top: 8, bottom: 8 })
       }
-      .justifyContent(FlexAlign.Center)
+      .scrollBar(BarState.Off)
       .width('100%')
       .layoutWeight(1)
+
+      if (!this.isLoginMode) {
+        Row() {
+          Column() { this.submitButton() }
+            .width('100%').constraintSize({ maxWidth: AppTheme.FORM_MAX_WIDTH })
+        }.width('100%').justifyContent(FlexAlign.Center)
+          .padding({ left: 24, right: 24, top: 8, bottom: 16 })
+      }
 
       // 固定底部入口，窄屏与长表单下也可连续点击三次打开快捷登录。
       if (this.isLoginMode) {
@@ -122,6 +142,58 @@ export struct LoginPage {
     .width('100%')
     .height('100%')
     .backgroundColor(AppTheme.PAGE)
+  }
+
+  aboutToAppear(): void { this.pageActive = true }
+
+  aboutToDisappear(): void {
+    this.pageActive = false
+    if (this.cooldownTimer !== -1) { clearInterval(this.cooldownTimer); this.cooldownTimer = -1 }
+    this.emailCode = ''
+  }
+
+  @Builder
+  private registrationCodeField() {
+    Column({ space: 4 }) {
+      Text('邮箱验证码').fontSize(13).fontWeight(FontWeight.Medium).fontColor(AppTheme.TEXT).width('100%')
+      Row({ space: 8 }) {
+        TextInput({ text: this.emailCode, placeholder: '请输入 6 位验证码' })
+          .attributeModifier(new AppInputStyle()).type(InputType.Number).maxLength(6)
+          .height(44).layoutWeight(1).id('register-email-code')
+          .onChange((value: string) => { this.emailCode = value })
+        Button(this.sendingCode ? '发送中…' : this.cooldownSeconds > 0 ? this.cooldownSeconds + '秒后重发' : '获取验证码')
+          .attributeModifier(new AppButtonStyle()).height(44).width(120).id('register-send-code')
+          .enabled(!this.sendingCode && this.cooldownSeconds === 0 && !this.submitting)
+          .onClick(() => { this.sendRegistrationCode() })
+      }.width('100%')
+      Text('验证码 15 分钟内有效；完成邮箱验证后才能注册。')
+        .fontSize(12).fontColor(AppTheme.MUTED).width('100%')
+    }.width('100%').margin({ bottom: 8 })
+  }
+
+  private async sendRegistrationCode(): Promise<void> {
+    if (this.sendingCode || this.cooldownSeconds > 0 || this.submitting) { return }
+    this.errorMsg = ''
+    this.tipMsg = ''
+    if (this.username.trim() === '') { this.errorMsg = '请输入账号名'; return }
+    if (!/^1\d{10}$/.test(this.phone.trim())) { this.errorMsg = '请输入正确的 11 位手机号'; return }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(this.email.trim())) { this.errorMsg = '请输入正确的邮箱地址'; return }
+    this.sendingCode = true
+    const result: EmailCodeResult = await requestEmailCodeApi(this.phone.trim(), this.email.trim(), 'register', this.username.trim())
+    this.sendingCode = false
+    if (!this.pageActive) { return }
+    if (!result.success) {
+      this.errorMsg = result.message || '验证码发送失败，请稍后重试'
+      promptAction.showToast({ message: this.errorMsg, duration: 2200 })
+      return
+    }
+    this.tipMsg = '注册验证码已发送，请查看邮箱'
+    promptAction.showToast({ message: this.tipMsg, duration: 1800 })
+    this.cooldownSeconds = 60
+    this.cooldownTimer = setInterval(() => {
+      this.cooldownSeconds = Math.max(0, this.cooldownSeconds - 1)
+      if (this.cooldownSeconds === 0) { clearInterval(this.cooldownTimer); this.cooldownTimer = -1 }
+    }, 1000)
   }
 
   @Builder
@@ -345,6 +417,7 @@ export struct LoginPage {
       return
     }
     this.isLoginMode = loginMode
+    this.emailCode = ''
     if (!this.isLoginMode && this.selectedRole === UserRole.ADMIN) {
       this.selectedRole = UserRole.CUSTOMER
     }
@@ -361,7 +434,7 @@ export struct LoginPage {
     this.submitting = true
     this.errorMsg = ''
     this.tipMsg = ''
-    if (this.phone === '' || this.password === '') {
+    if (this.phone.trim() === '' || this.password === '') {
       logWarn('Auth', '登录/注册提交失败：手机号或密码为空')
       this.errorMsg = '请输入手机号和密码'
       this.submitting = false
@@ -373,6 +446,17 @@ export struct LoginPage {
       this.submitting = false
       return
     }
+    if (!this.isLoginMode && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(this.email.trim())) {
+      logWarn('Auth', '注册提交失败：邮箱格式不正确')
+      this.errorMsg = '请输入正确的邮箱地址'
+      this.submitting = false
+      return
+    }
+    if (!this.isLoginMode && !/^\d{6}$/.test(this.emailCode.trim())) {
+      this.errorMsg = '请输入 6 位邮箱验证码'
+      this.submitting = false
+      return
+    }
     const roleName: string = this.selectedRole === UserRole.ADMIN
       ? '管理端'
       : this.selectedRole === UserRole.MERCHANT ? '商户'
@@ -380,7 +464,7 @@ export struct LoginPage {
     logInfo('Auth', `用户点击${this.isLoginMode ? '登录' : '注册'} phone=${this.phone} role=${roleName}`)
 
     if (this.isLoginMode) {
-      const user = await loginRemote(this.phone, this.password, this.loginTypeName())
+      const user = await loginRemote(this.phone.trim(), this.password, this.loginTypeName())
       if (user !== undefined) {
         if (user.role !== this.selectedRole) {
           this.errorMsg = this.selectedRole === UserRole.ADMIN
@@ -395,17 +479,18 @@ export struct LoginPage {
         this.onLoginSuccess()
       } else {
         const remoteMessage: string = getLastRemoteErrorMessage()
-        this.errorMsg = remoteMessage === '' ? '手机号或密码错误' : remoteMessage
+        this.errorMsg = remoteMessage === '' ? '账号或密码错误' : remoteMessage
         this.submitting = false
       }
     } else {
-      const newUser = await registerRemote(this.username, this.phone, this.password, this.selectedRole)
+      const newUser = await registerRemote(this.username.trim(), this.phone.trim(), this.email.trim(), this.emailCode.trim(), this.password, this.selectedRole)
       if (newUser !== undefined) {
         // 注册成功不自动登录：切回登录态并清空密码，由用户自己再输入一遍完成登录。
-        // 手机号保留便于对照，selectedRole 保持注册时选择的角色，登录才能带上正确的 loginType。
+        // 保留手机号和所选角色，注册后使用手机号登录。
         this.isLoginMode = true
         this.password = ''
-        this.username = ''
+        this.email = ''
+        this.emailCode = ''
         this.tipMsg = '注册成功，请使用该密码登录'
         promptAction.showToast({ message: '注册成功，请登录', duration: 2000 })
         logInfo('Auth', `注册成功，转入登录态等待手动登录 userId=${newUser.id} role=${newUser.role}`)
@@ -413,8 +498,8 @@ export struct LoginPage {
         return
       }
       const remoteMessage: string = getLastRemoteErrorMessage()
-      this.errorMsg = remoteMessage === '' ? '该手机号已注册' : remoteMessage
-      logWarn('Auth', `注册失败：手机号已存在 phone=${this.phone}`)
+      this.errorMsg = remoteMessage === '' ? '该账号已注册' : remoteMessage
+      logWarn('Auth', `注册失败：账号已存在 phone=${this.phone}`)
       this.submitting = false
     }
   }

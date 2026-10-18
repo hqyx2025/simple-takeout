@@ -19,7 +19,9 @@ public record User(
         /** 最后一次改密时间（空=从未改密）；仅服务端签发 token 用，@JsonIgnore 不返回前端。 */
         @JsonIgnore String passwordChangedAt,
         /** 独立支付密码哈希；空值表示尚未设置，永远不返回前端。 */
-        @JsonIgnore String paymentPasswordHash
+        @JsonIgnore String paymentPasswordHash,
+        /** 用于密码找回的邮箱；未绑定邮箱的历史账号为空。 */
+        String email
 ) {
     /** 兼容旧调用点的 9 参构造（视为启用状态）。 */
     public User(long id, String username, String avatar, String phone, String password,
@@ -39,11 +41,19 @@ public record User(
         this(id, username, avatar, phone, password, role, status, balance, createTime, passwordChangedAt, "");
     }
 
+    /** 兼容旧调用点；历史构造不携带邮箱。 */
+    public User(long id, String username, String avatar, String phone, String password,
+                int role, int status, double balance, String createTime, String passwordChangedAt,
+                String paymentPasswordHash) {
+        this(id, username, avatar, phone, password, role, status, balance, createTime,
+                passwordChangedAt, paymentPasswordHash, "");
+    }
+
     /**
      * 脱敏视图：不返回密码
      */
     public User safe() {
         return new User(id, username, avatar, phone, "", role, status, balance, createTime, passwordChangedAt,
-                paymentPasswordHash);
+                paymentPasswordHash, email);
     }
 }

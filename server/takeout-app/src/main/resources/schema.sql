@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(64) NOT NULL,
     avatar VARCHAR(255) DEFAULT '',
     phone VARCHAR(20) NOT NULL UNIQUE,
+    email VARCHAR(254) DEFAULT NULL,
     password VARCHAR(128) NOT NULL,
     role INT NOT NULL DEFAULT 0,
     status INT NOT NULL DEFAULT 1,
@@ -15,6 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_changed_at VARCHAR(32) NOT NULL DEFAULT '',
     -- 与登录密码独立的 6 位支付密码哈希；空值表示尚未设置
     payment_password_hash VARCHAR(128) DEFAULT NULL,
+    UNIQUE KEY uk_users_username (username),
     KEY idx_users_admin_role_status_page (role, status, id),
     KEY idx_users_admin_status_page (status, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

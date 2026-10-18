@@ -11,7 +11,7 @@ takeout:
     mock-enabled: false
     real-enabled: ${TAKEOUT_PAYMENT_REAL_ENABLED:true}
   sms:
-    provider: ${TAKEOUT_SMS_PROVIDER:huawei}
+    provider: ${TAKEOUT_SMS_PROVIDER:qq-email}
     expose-mock-code: ${TAKEOUT_SMS_EXPOSE_MOCK_CODE:false}
   upload:
     provider: ${TAKEOUT_UPLOAD_PROVIDER:obs}

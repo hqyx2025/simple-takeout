@@ -32,6 +32,7 @@ export struct ProfileEditPage {
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State username: string = ''
   @State phone: string = ''
+  @State email: string = ''
   @State role: UserRole = UserRole.CUSTOMER
 
   aboutToAppear() {
@@ -45,6 +46,7 @@ export struct ProfileEditPage {
     if (user !== undefined && user !== null) {
       this.username = user.username
       this.phone = user.phone
+      this.email = user.email ?? ''
       this.role = user.role
     }
   }
@@ -71,7 +73,7 @@ export struct ProfileEditPage {
     }
     const name: string = this.username.trim()
     if (name.length === 0) {
-      promptAction.showToast({ message: '请输入昵称' })
+      promptAction.showToast({ message: '请输入账号' })
       return
     }
     const phoneRegex: RegExp = /^1\d{10}$/
@@ -79,14 +81,18 @@ export struct ProfileEditPage {
       promptAction.showToast({ message: '请输入正确的11位手机号' })
       return
     }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(this.email.trim())) {
+      promptAction.showToast({ message: '请输入正确的邮箱地址' })
+      return
+    }
     this.saving = true
     try {
-      const updated: User | undefined = await updateUserProfileRemote(name, this.phone)
+      const updated: User | undefined = await updateUserProfileRemote(name, this.phone, this.email.trim())
       if (updated === undefined) {
         promptAction.showToast({ message: '保存失败，请检查网络或手机号是否已使用' })
         return
       }
-      logInfo('Profile', `保存个人信息 昵称=${name} 手机号=${this.phone}`)
+      logInfo('Profile', `保存个人信息 账号=${name} 手机号=${this.phone}`)
       promptAction.showToast({ message: '保存成功' })
       // 此页面由“我的”页面进入，保存成功后返回上一页并触发首页 onPageShow 刷新资料。
       router.back()
@@ -157,15 +163,32 @@ export struct ProfileEditPage {
     Column({ space: SPACING.MD }) {
       // 昵称
       Row() {
-        Text('昵称')
+        Text('账号')
           .fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_SECONDARY)
           .width(72)
-        TextInput({ placeholder: '请输入昵称', text: this.username })
+        TextInput({ placeholder: '唯一账号，例如 takeout_user', text: this.username })
           .attributeModifier(new AppInputStyle())
           .layoutWeight(1)
-          .maxLength(20)
+          .maxLength(64)
           .onChange((value: string) => { this.username = value })
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+
+      Divider().color(COLORS.DIVIDER)
+
+      // 找回密码邮箱
+      Row() {
+        Text('邮箱')
+          .fontSize(FONT_SIZE.MD)
+          .fontColor(COLORS.TEXT_SECONDARY)
+          .width(72)
+        TextInput({ placeholder: '用于找回密码', text: this.email })
+          .attributeModifier(new AppInputStyle())
+          .layoutWeight(1)
+          .type(InputType.Email)
+          .onChange((value: string) => { this.email = value })
       }
       .width('100%')
       .alignItems(VerticalAlign.Center)

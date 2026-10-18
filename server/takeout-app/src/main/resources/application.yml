@@ -63,7 +63,7 @@ takeout:
   sms:
     provider: ${TAKEOUT_SMS_PROVIDER:mock}
     expose-mock-code: ${TAKEOUT_SMS_EXPOSE_MOCK_CODE:false}
-    code-ttl-seconds: ${TAKEOUT_SMS_CODE_TTL_SECONDS:300}
+    code-ttl-seconds: ${TAKEOUT_SMS_CODE_TTL_SECONDS:900}
     cooldown-seconds: ${TAKEOUT_SMS_COOLDOWN_SECONDS:60}
     huawei:
       endpoint: ${HUAWEI_SMS_ENDPOINT:}
@@ -73,6 +73,12 @@ takeout:
       signature: ${HUAWEI_SMS_SIGNATURE:}
       template-id: ${HUAWEI_SMS_TEMPLATE_ID:}
       country-code: ${HUAWEI_SMS_COUNTRY_CODE:86}
+    qq:
+      smtp-host: ${TAKEOUT_QQ_SMTP_HOST:smtp.qq.com}
+      smtp-port: ${TAKEOUT_QQ_SMTP_PORT:465}
+      username: ${TAKEOUT_QQ_SMTP_USERNAME:}
+      auth-code: ${TAKEOUT_QQ_SMTP_AUTH_CODE:}
+      from-name: ${TAKEOUT_QQ_SMTP_FROM_NAME:简单外卖}
   push:
     enabled: ${TAKEOUT_PUSH_ENABLED:false}
     token-encryption-key: ${TAKEOUT_PUSH_TOKEN_ENCRYPTION_KEY:}

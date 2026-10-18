@@ -208,6 +208,7 @@ interface ServerUser {
   username: string
   avatar: string
   phone: string
+  email?: string
   password: string
   role: number
   balance: number
@@ -442,6 +443,8 @@ interface LoginRequest {
 interface RegisterRequest {
   username: string
   phone: string
+  email: string
+  code: string
   password: string
   role: number
 }
@@ -454,6 +457,7 @@ interface ChangePasswordRequest {
 interface ProfileUpdateRequest {
   username: string
   phone: string
+  email: string
 }
 
 interface RechargeRequest {
@@ -671,8 +675,8 @@ export async function apiLogin(phone: string, password: string, loginType?: stri
 /**
  * 注册：成功返回用户，失败返回 null
  */
-export async function apiRegister(username: string, phone: string, password: string, role: UserRole): Promise<User | null> {
-  const req: RegisterRequest = { username: username, phone: phone, password: password, role: toServerRole(role) }
+export async function apiRegister(username: string, phone: string, email: string, code: string, password: string, role: UserRole): Promise<User | null> {
+  const req: RegisterRequest = { username: username, phone: phone, email: email, code: code, password: password, role: toServerRole(role) }
   const resp: ApiResponse<ServerUser> = await post<ServerUser>(API_CONFIG.ENDPOINTS['register'], req)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     logWarn('Api', `注册失败：${resp.message}`)
@@ -711,34 +715,34 @@ export async function changePasswordApi(oldPassword: string, newPassword: string
   return true
 }
 
-export interface SmsCodeApiResult { code: string; mock: boolean }
-export interface SmsCodeResult { success: boolean; code: string }
-interface ForgotPasswordRequest { phone: string; code: string; newPassword: string }
-interface ForgotPaymentPasswordRequest { phone: string; code: string; paymentPassword: string }
-interface SmsCodeRequest { phone: string }
+export interface EmailCodeApiResult { code: string; mock: boolean }
+export interface EmailCodeResult { success: boolean; message: string }
+interface ForgotPasswordRequest { phone: string; email: string; code: string; newPassword: string }
+interface ForgotPaymentPasswordRequest { phone: string; email: string; code: string; paymentPassword: string }
+interface EmailCodeRequest { phone: string; email: string; purpose: string; username: string }
 
-export async function requestSmsCodeApi(phone: string): Promise<SmsCodeResult> {
-  const request: SmsCodeRequest = { phone: phone }
-  const response: ApiResponse<SmsCodeApiResult> = await post<SmsCodeApiResult>(
-    '/api/auth/sms-code', request, false)
-  const result: SmsCodeResult = { success: response.code === 200, code: response.data?.code ?? '' }
+export async function requestEmailCodeApi(phone: string, email: string, purpose: string, username: string = ''): Promise<EmailCodeResult> {
+  const request: EmailCodeRequest = { phone: phone, email: email, purpose: purpose, username: username }
+  const response: ApiResponse<EmailCodeApiResult> = await post<EmailCodeApiResult>(
+    '/api/auth/email-code', request, false)
+  const result: EmailCodeResult = { success: response.code === 200, message: response.message ?? '' }
   return result
 }
 
-export async function resetLoginPasswordApi(phone: string, code: string, newPassword: string): Promise<PaymentPasswordResult> {
-  const request: ForgotPasswordRequest = { phone: phone, code: code, newPassword: newPassword }
+export async function resetLoginPasswordApi(phone: string, email: string, code: string, newPassword: string): Promise<PaymentPasswordResult> {
+  const request: ForgotPasswordRequest = { phone: phone, email: email, code: code, newPassword: newPassword }
   const response: ApiResponse<Object> = await post<Object>('/api/auth/password/forgot', request, false)
   return { success: response.code === 200, message: response.message || '' }
 }
 
-export async function resetPaymentPasswordApi(phone: string, code: string, paymentPassword: string): Promise<PaymentPasswordResult> {
-  const request: ForgotPaymentPasswordRequest = { phone: phone, code: code, paymentPassword: paymentPassword }
+export async function resetPaymentPasswordApi(phone: string, email: string, code: string, paymentPassword: string): Promise<PaymentPasswordResult> {
+  const request: ForgotPaymentPasswordRequest = { phone: phone, email: email, code: code, paymentPassword: paymentPassword }
   const response: ApiResponse<Object> = await post<Object>('/api/auth/payment-password/forgot', request, false)
   return { success: response.code === 200, message: response.message || '' }
 }
 
-export async function updateUserProfileApi(username: string, phone: string): Promise<User | undefined> {
-  const req: ProfileUpdateRequest = { username: username, phone: phone }
+export async function updateUserProfileApi(username: string, phone: string, email: string): Promise<User | undefined> {
+  const req: ProfileUpdateRequest = { username: username, phone: phone, email: email }
   const resp: ApiResponse<ServerUser> = await put<ServerUser>('/api/auth/me', req)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     logWarn('Api', `更新个人资料失败：${resp.message}`)
@@ -2053,6 +2057,7 @@ function toUser(u: ServerUser): User {
     username: u.username,
     avatar: u.avatar,
     phone: u.phone,
+    email: u.email ?? '',
     password: '',
     // 角色映射必须覆盖骑手（role=3）：漏掉时骑手会被当成普通用户，
     // 登录页的角色校验（user.role !== 期望角色）随即 logout()，骑手端完全进不去。

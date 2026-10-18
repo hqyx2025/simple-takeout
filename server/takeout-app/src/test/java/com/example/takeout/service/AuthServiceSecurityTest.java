@@ -92,11 +92,11 @@ class AuthServiceSecurityTest {
         User stored = new User(1, "用户", "", "13800138000", "hash-value", 0, 20, "now");
         when(userDao.existsByPhone("13800138000")).thenReturn(false);
         when(userDao.insert(org.mockito.ArgumentMatchers.eq("用户"), org.mockito.ArgumentMatchers.eq("13800138000"),
-                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq(0),
+                org.mockito.ArgumentMatchers.eq("user@example.com"), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq(0),
                 org.mockito.ArgumentMatchers.eq(20.0), org.mockito.ArgumentMatchers.anyString())).thenReturn(stored);
 
-        User response = new AuthService(userDao, jwtUtil)
-                .register("用户", "13800138000", "123456", 0)
+        User response = new AuthService(userDao, jwtUtil, mock(SmsCodeVerifier.class))
+                .register("用户", "13800138000", "user@example.com", "123456", "123456", 0)
                 .safe();
 
         assertEquals("", response.password());
@@ -222,17 +222,17 @@ class AuthServiceSecurityTest {
     }
 
     @Test
-    void smsPasswordResetAlsoAdvancesExistingChangeTimestamp() {
+    void emailPasswordResetAlsoAdvancesExistingChangeTimestamp() {
         UserDao userDao = mock(UserDao.class);
-        User user = new User(1, "用户", "", "13800138000", PasswordUtil.hash("123456"), 0, 20,
-                "now", "2999-01-01 00:00:00");
+        User user = new User(1, "user", "", "13800138000", PasswordUtil.hash("123456"),
+                0, 1, 20, "now", "2999-01-01 00:00:00", "", "751848863@qq.com");
         when(userDao.findByPhoneForUpdate("13800138000")).thenReturn(java.util.Optional.of(user));
 
         SmsCodeVerifier verifier = mock(SmsCodeVerifier.class);
         new AuthService(userDao, mock(JwtUtil.class), verifier)
-                .resetPasswordBySms("13800138000", "123456", "newpass123");
+                .resetPasswordByEmail("13800138000", "751848863@qq.com", "123456", "newpass123");
 
-        verify(verifier).consume("13800138000", "123456");
+        verify(verifier).consume("recovery:1:login:13800138000:751848863@qq.com", "123456");
         verify(userDao).updatePassword(org.mockito.ArgumentMatchers.eq(1L),
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.eq("2999-01-01 00:00:01"));
