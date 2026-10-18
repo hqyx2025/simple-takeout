@@ -76,7 +76,7 @@
 | 消息 | Redis Stream + 事务性 Outbox | 领域事件异步投递，**未引入 RabbitMQ/RocketMQ 等外部 MQ** |
 | 容器化 | Docker · Docker Compose | 后端镜像基于 JDK 25 多阶段构建；MySQL 8.4 + Redis 7 |
 | 地图 | 高德 Web 端 JS API v2.0 | 通过 ArkUI `Web` 组件内嵌运行，模拟器/真机均可用，无 native 依赖 |
-| 测试 | JUnit 5（后端 **463 个用例**，含 28 个门控真 MySQL 用例）、Hypium（前端） | `server/*/src/test`、`entry/src/test`（Local Unit）、`entry/src/ohosTest`（设备 UI 自动化） |
+| 测试 | JUnit 5（后端 **463 个用例**，含 31 个门控真 MySQL 用例）、Hypium（前端） | `server/*/src/test`、`entry/src/test`（Local Unit）、`entry/src/ohosTest`（设备 UI 自动化） |
 
 ## 系统架构
 
