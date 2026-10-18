@@ -70,7 +70,7 @@ services:
       # 容器内用服务名互联；MySQL 端口是容器内 3306（不是宿主映射的 3310）
       TAKEOUT_DB_HOST: mysql
       TAKEOUT_DB_PORT: 3306
-      TAKEOUT_DB_USERNAME: root
+      TAKEOUT_DB_USERNAME: ${TAKEOUT_DB_USERNAME:-root}
       TAKEOUT_DB_PASSWORD: ${TAKEOUT_DB_PASSWORD:?TAKEOUT_DB_PASSWORD must be set}
       TAKEOUT_REDIS_HOST: redis
       TAKEOUT_REDIS_PORT: 6379

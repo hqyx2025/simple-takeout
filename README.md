@@ -135,14 +135,13 @@ simple-takeout/
 
 Compose 默认启用 `develop` 演示 profile，提供种子账号、mock 短信验证码回传、演示充值、本地上传和 mock 支付；真实支付渠道关闭。Compose 不透传 `.env` 中的 `TAKEOUT_PAYMENT_MOCK_ENABLED`，避免本地 profile 被环境文件覆盖。仅用于本地演示，禁止对外部署。生产环境需设置 `SPRING_PROFILES_ACTIVE=production` 并配置真实短信、对象存储及支付凭证；production 会拒绝验证码回传和演示充值。演示管理员初始密码为 `123456`，新建种子账号时可用 `TAKEOUT_DEMO_ADMIN_PASSWORD` 覆盖。
 
-首次启动前，在仓库根目录创建本地 `.env`（不要提交真实密钥）：
+首次启动前，将 `.env.example` 复制为仓库根目录 `.env`，并替换数据库密码和 JWT 密钥。Compose 与后端容器使用 `.env` 中的数据库用户名和密码；不要把真实密钥提交到 Git。项目的 Compose 配置均集中在 `.env`，其中生产短信、OBS、推送和支付凭证仅在启用相应生产服务时填写：
 
-```dotenv
-TAKEOUT_DB_PASSWORD=替换为数据库密码
-TAKEOUT_JWT_SECRET=替换为至少32字节的随机密钥
+```powershell
+Copy-Item .env.example .env
 ```
 
-已有 MySQL 数据卷不会因修改环境变量而自动改密码，需要先用旧凭据修改数据库账号密码。JWT 密钥变更后需重新登录。直接运行 Maven 时也必须向进程注入这两个环境变量，Spring Boot 不自动读取根目录 `.env`。
+`.env.example` 是变量清单和无密钥示例，不包含真实密码或密钥。已有 MySQL 数据卷不会因修改 `.env` 而自动改密码；若密码已变更，需使用卷内数据库当前密码登录后显式修改 MySQL `root` 密码，使其与 `TAKEOUT_DB_PASSWORD` 一致。JWT 密钥变更后需重新登录。直接运行 Maven 时，Spring Boot 不会自动读取根目录 `.env`，需先将 `.env` 导入启动进程环境。
 
 ```bash
 docker compose up -d --build --wait
