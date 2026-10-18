@@ -6,6 +6,7 @@ import com.example.takeout.common.BizException;
 import com.example.takeout.dao.*;
 import com.example.takeout.mapper.CartItemMapper;
 import com.example.takeout.model.Order;
+import com.example.takeout.model.Review;
 import com.example.takeout.service.mq.DomainEventPublisher;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -33,6 +34,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -100,6 +102,8 @@ class OrderConcurrencyMySqlTest {
             jdbc.update("INSERT INTO coupons(id,user_id,name,amount,expire_time,create_time) VALUES(?,?,'test',1,'2099-01-01 00:00:00',?)",
                     id, id, "2026-01-01 00:00:00");
         }
+        jdbc.update("INSERT INTO users(id,username,phone,password,balance,role,create_time) " +
+                        "VALUES(99,'merchant','13900000099','test',1000,1,'2026-01-01 00:00:00')");
         for (int id = 100; id <= 102; id++) {
             jdbc.update("INSERT INTO goods(id,store_id,name,price,stock,create_time) VALUES(?,10,?,10,1000,?)",
                     id, "goods" + id, "2026-01-01 00:00:00");
@@ -138,7 +142,7 @@ class OrderConcurrencyMySqlTest {
         assertEquals(0, count("SELECT SUM(sold) FROM seckills"));
         assertEquals(0, count("SELECT COUNT(*) FROM seckill_orders"));
         assertEquals(0, count("SELECT COUNT(*) FROM coupons WHERE status<>0"));
-        assertEquals(8, count("SELECT COUNT(*) FROM users WHERE balance=1000"));
+        assertEquals(8, count("SELECT COUNT(*) FROM users WHERE id BETWEEN 1 AND 8 AND balance=1000"));
         assertEquals(192, count("SELECT COUNT(*) FROM outbox_events"));
     }
 
@@ -420,6 +424,101 @@ class OrderConcurrencyMySqlTest {
         assertEquals(1, count("SELECT COUNT(*) FROM seckill_orders"));
         assertEquals(1, count("SELECT status FROM coupons WHERE id=1"));
         verify(cache, never()).evictByPattern(anyString());
+    }
+
+    @Test
+    void confirmationAndRefundApplicationCannotBothWinTheEscrowRace() throws Exception {
+        insertDeliveredOrder(900, 1, 0, 26);
+        AtomicInteger confirmations = new AtomicInteger();
+        AtomicInteger refunds = new AtomicInteger();
+
+        runTogether(2, index -> {
+            try {
+                if (index == 0) {
+                    service.confirmOrder(1, 900);
+                    confirmations.incrementAndGet();
+                } else {
+                    service.applyRefund(1, 900, "OTHER", "concurrency test");
+                    refunds.incrementAndGet();
+                }
+            } catch (BizException expectedRaceLoser) {
+                // The losing transaction must not update escrow or create a refund.
+            }
+        });
+
+        assertEquals(1, confirmations.get() + refunds.get());
+        int status = count("SELECT status FROM orders WHERE id=900");
+        int escrow = count("SELECT escrow_status FROM orders WHERE id=900");
+        if (confirmations.get() == 1) {
+            assertEquals(4, status);
+            assertEquals(1, escrow);
+            assertEquals(1020, count("SELECT balance FROM users WHERE id=99"));
+            assertEquals(0, count("SELECT COUNT(*) FROM refund_records WHERE order_id=900"));
+        } else {
+            assertEquals(6, status);
+            assertEquals(0, escrow);
+            assertEquals(1000, count("SELECT balance FROM users WHERE id=99"));
+            assertEquals(1, count("SELECT COUNT(*) FROM refund_records WHERE order_id=900"));
+        }
+    }
+
+    @Test
+    void autoConfirmCommitsEscrowMerchantNetAndOutboxExactlyOnce() {
+        insertDeliveredOrder(901, 2, 0, 25);
+
+        assertEquals(1, service.autoConfirmDeliveredOrders(24));
+        assertEquals(1, count("SELECT escrow_status FROM orders WHERE id=901"));
+        assertEquals(1020, count("SELECT balance FROM users WHERE id=99"));
+        assertEquals(1, count("SELECT COUNT(*) FROM outbox_events WHERE order_id=901 AND event_type='ORDER_SETTLED'"));
+        OrderDao.MerchantStatsAggregate stats = new OrderDao(jdbc).aggregateMerchantStats(10,
+                "2000-01-01 00:00:00", "2099-01-01 00:00:00", "2000-01-01 00:00:00",
+                "2000-01-01 00:00:00", List.of("2000-01-01 00:00:00", "2000-01-01 00:00:00",
+                        "2000-01-01 00:00:00", "2000-01-01 00:00:00", "2000-01-01 00:00:00",
+                        "2000-01-01 00:00:00", "2000-01-01 00:00:00"));
+        assertEquals(20.0, stats.totalIncome(), 0.001);
+
+        assertEquals(0, service.autoConfirmDeliveredOrders(24));
+        assertEquals(1020, count("SELECT balance FROM users WHERE id=99"));
+        assertEquals(1, count("SELECT COUNT(*) FROM outbox_events WHERE order_id=901 AND event_type='ORDER_SETTLED'"));
+    }
+
+    @Test
+    void concurrentReviewsForSameOrderItemCreateOneRowAndAnonymousReadsAreRedacted() throws Exception {
+        insertDeliveredOrder(902, 1, 1, 2,
+                "[{\"goodsId\":100,\"goodsName\":\"goods100\",\"price\":10,\"quantity\":1,\"image\":\"\"}]");
+        AtomicInteger successes = new AtomicInteger();
+        runTogether(2, index -> {
+            try {
+                service.reviewOrder(1, 902, 100, 5, "good", List.of());
+                successes.incrementAndGet();
+            } catch (BizException duplicate) {
+                assertEquals("该商品已评价", duplicate.getMessage());
+            }
+        });
+        assertEquals(1, successes.get());
+        assertEquals(1, count("SELECT COUNT(*) FROM reviews WHERE order_id=902 AND goods_id=100"));
+
+        ReviewDao reviews = new ReviewDao(jdbc);
+        reviews.insert(902, 10, 100, 1, "真实昵称", 5, "匿名", "[]", "[]", 1, "2026-10-18 00:00:00");
+        UserCenterService center = new UserCenterService(null, null, null, reviews, new StoreDao(jdbc),
+                new GoodsDao(jdbc, new GoodsSpecDao(jdbc)), null, new ObjectMapper(), null);
+        Review.ReviewView anonymous = center.storeReviews(10).stream()
+                .filter(view -> view.anonymous() == 1).findFirst().orElseThrow();
+        assertEquals(0, anonymous.userId());
+        assertEquals("", anonymous.userName());
+    }
+
+    private void insertDeliveredOrder(long id, long userId, int escrow, int hoursAgo) {
+        insertDeliveredOrder(id, userId, escrow, hoursAgo, "[]");
+    }
+
+    private void insertDeliveredOrder(long id, long userId, int escrow, int hoursAgo, String items) {
+        jdbc.update("INSERT INTO orders(id,order_no,user_id,store_id,store_name,status,items,address," +
+                        "goods_amount,delivery_fee,discount,pay_amount,reviewed,escrow_status,create_time," +
+                        "pay_time,complete_time,create_time_dt,complete_time_dt) VALUES(?,?,?,10,'test',4,?," +
+                        "'{}',20,3,0,23,0,?,NOW(),NOW(),DATE_FORMAT(DATE_SUB(NOW(),INTERVAL ? HOUR)," +
+                        "'%Y-%m-%d %H:%i:%s'),NOW(),DATE_SUB(NOW(),INTERVAL ? HOUR))",
+                id, "NO" + id, userId, items, escrow, hoursAgo, hoursAgo);
     }
 
     private int count(String sql) {

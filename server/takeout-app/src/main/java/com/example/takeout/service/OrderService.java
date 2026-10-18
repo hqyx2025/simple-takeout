@@ -1054,7 +1054,8 @@ public class OrderService {
     public int autoConfirmDeliveredOrders(int hours) {
         int settled = 0;
         for (long orderId : orderDao.listAutoConfirmCandidates(hours)) {
-            if (autoConfirmOrder(orderId)) settled++;
+            Boolean result = transactions.execute(status -> autoConfirmOrder(orderId));
+            if (Boolean.TRUE.equals(result)) settled++;
         }
         return settled;
     }

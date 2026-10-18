@@ -76,7 +76,7 @@
 | 消息 | Redis Stream + 事务性 Outbox | 领域事件异步投递，**未引入 RabbitMQ/RocketMQ 等外部 MQ** |
 | 容器化 | Docker · Docker Compose | 后端镜像基于 JDK 25 多阶段构建；MySQL 8.4 + Redis 7 |
 | 地图 | 高德 Web 端 JS API v2.0 | 通过 ArkUI `Web` 组件内嵌运行，模拟器/真机均可用，无 native 依赖 |
-| 测试 | JUnit 5（后端 **460 个用例**，含 28 个门控真 MySQL 用例）、Hypium（前端） | `server/*/src/test`、`entry/src/test`（Local Unit）、`entry/src/ohosTest`（设备 UI 自动化） |
+| 测试 | JUnit 5（后端 **463 个用例**，含 28 个门控真 MySQL 用例）、Hypium（前端） | `server/*/src/test`、`entry/src/test`（Local Unit）、`entry/src/ohosTest`（设备 UI 自动化） |
 
 ## 系统架构
 
@@ -133,7 +133,7 @@ simple-takeout/
 
 ### 方式一：Docker Compose 单机双实例
 
-Compose 默认启用 `develop` 演示 profile，提供种子账号、mock 短信验证码回传、演示充值、本地上传；第三方真实支付默认关闭。仅用于本地演示，禁止对外部署。生产环境需设置 `SPRING_PROFILES_ACTIVE=production`、`TAKEOUT_PAYMENT_MOCK_ENABLED=false` 并配置真实短信、对象存储及支付凭证；production 会拒绝验证码回传和演示充值。演示管理员初始密码为 `123456`，新建种子账号时可用 `TAKEOUT_DEMO_ADMIN_PASSWORD` 覆盖。
+Compose 默认启用 `develop` 演示 profile，提供种子账号、mock 短信验证码回传、演示充值、本地上传和 mock 支付；真实支付渠道关闭。Compose 不透传 `.env` 中的 `TAKEOUT_PAYMENT_MOCK_ENABLED`，避免本地 profile 被环境文件覆盖。仅用于本地演示，禁止对外部署。生产环境需设置 `SPRING_PROFILES_ACTIVE=production` 并配置真实短信、对象存储及支付凭证；production 会拒绝验证码回传和演示充值。演示管理员初始密码为 `123456`，新建种子账号时可用 `TAKEOUT_DEMO_ADMIN_PASSWORD` 覆盖。
 
 首次启动前，在仓库根目录创建本地 `.env`（不要提交真实密钥）：
 
