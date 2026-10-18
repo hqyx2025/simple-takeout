@@ -11,7 +11,7 @@ import { AppButtonStyle, AppInputStyle } from '../common/theme/AppTheme'
 import { AppMotion } from '../common/theme/AppMotion'
 import { Address, User } from '../model/Models'
 import { addAddressRemoteAndGet, isLoggedIn } from '../service/AppStorageManager'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, AMAP_CONFIG } from '../common/Constants'
 import { AddressSearchResult, NearbyAddressSearchResult, NearbyAddressSearchPage, GeoPosition, getCurrentPosition,
   reverseGeocodePosition, searchAddress, searchNearbyAddress } from '../service/LocationService'
 import { EmptyState } from '../components/EmptyState'
@@ -708,6 +708,11 @@ export struct LocationPage {
           .javaScriptProxy(this.getProxyOptions())
           .onPageEnd(() => {
             this.isMapReady = true
+            const key: string = JSON.stringify(AMAP_CONFIG.MAP_JS_KEY)
+            const securityCode: string = JSON.stringify(AMAP_CONFIG.MAP_JS_SECURITY_CODE)
+            this.webController.runJavaScript(`configureMap(${key}, ${securityCode})`).catch(() => {
+              promptAction.showToast({ message: '地图配置加载失败，请稍后重试', duration: 1800 })
+            })
             // 地图加载后只移动到本次实时定位或用户主动选择的位置
             // 高德 JS 地图在 Web 页面结束回调后还会延迟初始化，延迟调用避免 moveTo 落在 map=null 时被丢弃。
             setTimeout(() => {

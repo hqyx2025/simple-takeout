@@ -43,7 +43,6 @@ export struct AdminProductPage {
   @State total: number = 0
   @State hasMore: boolean = false
   // 同 AdminUserPage：键只含 id 时刷新回来的新对象会被复用，强制上下架后按钮不刷新。
-  @State renderVersion: number = 0
 
   aboutToAppear(): void {
     if (!this.loggedIn || this.user.role !== UserRole.ADMIN) {
@@ -66,7 +65,6 @@ export struct AdminProductPage {
     this.page = result.page
     this.total = result.total
     this.hasMore = result.hasMore
-    this.renderVersion += 1
     this.loading = false
   }
 
@@ -81,7 +79,6 @@ export struct AdminProductPage {
     this.page = result.page
     this.total = result.total
     this.hasMore = result.hasMore
-    this.renderVersion += 1
     this.loading = false
   }
 
@@ -155,7 +152,7 @@ export struct AdminProductPage {
           ListItem() {
             this.ProductRow(product)
           }
-        }, (product: AdminProduct) => `${this.renderVersion}-${product.id}`)
+        }, (product: AdminProduct) => `${product.id}`)
         if (this.hasMore) {
           ListItem() {
             Button(this.loading ? '加载中…' : `加载更多（已显示 ${this.products.length}/${this.total}）`)

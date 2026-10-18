@@ -75,7 +75,13 @@ public class AuthController {
             String email = authService.registrationEmail(req.username(), req.phone(), req.email());
             result = smsVerificationService.issue(authService.registrationIdentity(req.phone(), email), email);
         } else {
-            User user = authService.recoveryUser(req.phone(), req.email(), false);
+            User user;
+            try {
+                user = authService.recoveryUser(req.phone(), req.email(), false);
+            } catch (BizException e) {
+                // Keep account existence and mailbox ownership indistinguishable on the public endpoint.
+                throw new BizException(e.getCode() == 429 ? 429 : 400, "手机号或邮箱不匹配");
+            }
             result = smsVerificationService.issue(authService.recoveryIdentity(user, req.purpose()), user.email());
         }
         return ApiResponse.ok(new EmailCodeResult(result.code(), result.mock()));
@@ -188,7 +194,8 @@ public class AuthController {
     @PutMapping("/me")
     public ApiResponse<User> updateMe(@RequestAttribute("userId") long userId,
                                       @RequestBody ProfileUpdateRequest req) {
-        return ApiResponse.ok(authService.updateProfile(userId, req.username(), req.phone(), req.email()));
+        return ApiResponse.ok(authService.updateProfile(userId, req.username(), req.phone(), req.email(),
+                req.currentPassword()));
     }
 
     @PostMapping("/recharge")
@@ -220,7 +227,8 @@ public class AuthController {
 
     public record PushRegistrationResult(String profileId) { }
 
-    public record ProfileUpdateRequest(String username, String phone, String email) {
+    public record ProfileUpdateRequest(String username, String phone, String email,
+                                       @JsonProperty(access = JsonProperty.Access.WRITE_ONLY) String currentPassword) {
     }
 
     public record RechargeRequest(double amount) {

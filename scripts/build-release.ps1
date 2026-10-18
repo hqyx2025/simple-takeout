@@ -30,14 +30,14 @@ $signingConfigured = -not ($buildProfile -match '"signingConfigs"\s*:\s*\[\s*\]'
 if (-not $signingConfigured) {
   Write-Host '[FAIL] 未配置发布签名：build-profile.json5 的 signingConfigs 为空。' -ForegroundColor Red
   Write-Host '       请先执行：powershell -ExecutionPolicy Bypass -File scripts/enable-release-signing.ps1 ...' -ForegroundColor Yellow
-  Write-Host '       证书申请流程见 md/上架体检与Release签名.md。' -ForegroundColor Yellow
+  Write-Host '       证书申请流程见 md/archive/上架体检与Release签名.md。' -ForegroundColor Yellow
   if (-not $AllowUnsigned) {
     exit 1
   }
   Write-Host '[WARN] 已指定 -AllowUnsigned：将构建未签名包，仅用于验证 Release 编译通过。' -ForegroundColor Yellow
 }
 
-$devEco = 'C:\Program Files\Huawei\DevEco Studio'
+$devEco = if ($env:DEVECO_HOME) { $env:DEVECO_HOME } else { 'C:\Program Files\Huawei\DevEco Studio' }
 $node = Join-Path $devEco 'tools\node\node.exe'
 $hvigor = Join-Path $devEco 'tools\hvigor\bin\hvigorw.js'
 if (-not (Test-Path $node) -or -not (Test-Path $hvigor)) {
@@ -81,4 +81,4 @@ if ($signed.Count -eq 0) {
   exit 1
 }
 Write-Host ''
-Write-Host '下一步：把已签名的 .app 上传到 AppGallery Connect（详见 md/上架体检与Release签名.md）。' -ForegroundColor Cyan
+Write-Host '下一步：把已签名的 .app 上传到 AppGallery Connect（详见 md/archive/上架体检与Release签名.md）。' -ForegroundColor Cyan

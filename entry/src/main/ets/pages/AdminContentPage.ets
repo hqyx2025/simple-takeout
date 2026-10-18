@@ -5,7 +5,7 @@ import { AppButtonStyle, AppCardStyle, AppInputStyle, AppTextAreaStyle } from '.
 import { AppMotion } from '../common/theme/AppMotion'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, COLORS_PRIMARY_HEX, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
-import { Banner, Announcement } from '../model/Models'
+import { Banner, Announcement, User, UserRole } from '../model/Models'
 import {
   syncAdminBannersRemote, updateBannerStatusRemote, deleteBannerRemote, createBannerRemote,
   syncAdminAnnouncementsRemote, updateAnnouncementStatusRemote, deleteAnnouncementRemote, createAnnouncementRemote
@@ -41,9 +41,16 @@ export struct AdminContentPage {
   @State showAnnouncementDialog: boolean = false
   @State announcementTitle: string = ''
   @State announcementContent: string = ''
+  @StorageLink('isLoggedIn') loggedIn: boolean = false
+  @StorageLink('user') user: User = { id: 0, username: '', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER, balance: 0, coupons: [], orders: [], storeIds: [] }
 
   async aboutToAppear(): Promise<void> {
     logInfo('Page', '进入管理端内容管理 AdminContentPage')
+    if (!this.loggedIn || this.user.role !== UserRole.ADMIN) {
+      promptAction.showToast({ message: '仅管理端账号可以进入内容管理', duration: 1600 })
+      router.replaceUrl({ url: 'pages/Index' })
+      return
+    }
     await this.loadAll()
   }
 

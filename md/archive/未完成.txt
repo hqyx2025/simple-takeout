@@ -12,7 +12,7 @@
 - Release 发布证书申请与签名打包、AGC 上架材料（软著/备案/隐私政策网址/截图）。
 - 正式 HTTPS 域名与证书联调（`API_CONFIG.USE_HTTPS` 仍为 false，`RELEASE_BASE_URL` 仍为示例域名）。
   说明：`scripts/enable-release-signing.ps1`、`scripts/build-release.ps1`、`scripts/release-check.ps1`
-  与 `md/上架体检与Release签名.md` 作为**可选工具**保留在仓库，需要时随时可用，但不属于当前交付要求。
+  与 `md/archive/上架体检与Release签名.md` 作为**可选工具**保留在仓库，需要时随时可用，但不属于当前交付要求。
 
 已完成（业务功能层，均为端到端闭环）：
 

@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const ts = require(path.join(process.env.DEVECO_HOME || 'C:/Program Files/Huawei/DevEco Studio',
   'tools/ohpm/node_modules/typescript'));
-const source = fs.readFileSync(path.join(__dirname, '../entry/src/main/ets/pages/Index.ets'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '../entry/src/main/ets/components/store/StoreDetailContent.ets'), 'utf8');
 const start = source.indexOf('  private enqueueCartOperation(');
 const end = source.indexOf('  // 该菜品是否是多规格菜品', start);
 const code = ts.transpileModule('class Probe {' + source.slice(start, end) + '} exports.Probe = Probe;',

@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const ts = require('C:/Program Files/Huawei/DevEco Studio/tools/ohpm/node_modules/typescript');
+const ts = require(path.join(process.env.DEVECO_HOME || 'C:/Program Files/Huawei/DevEco Studio', 'tools/ohpm/node_modules/typescript'));
 
 // Run the real recharge and balance-write functions with controlled API completion.
 const source = fs.readFileSync(path.join(__dirname, '../entry/src/main/ets/service/AppStorageManager.ets'), 'utf8');

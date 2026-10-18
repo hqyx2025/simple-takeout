@@ -187,7 +187,8 @@ export struct LoginPage {
       promptAction.showToast({ message: this.errorMsg, duration: 2200 })
       return
     }
-    this.tipMsg = '注册验证码已发送，请查看邮箱'
+    this.tipMsg = result.mock === true && result.code !== undefined
+      ? `开发模式验证码：${result.code}` : '注册验证码已发送，请查看邮箱'
     promptAction.showToast({ message: this.tipMsg, duration: 1800 })
     this.cooldownSeconds = 60
     this.cooldownTimer = setInterval(() => {

@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Generic on-device UiTest runner: build (optional) -> install (optional) -> launch app -> run a test class -> print result.
 
@@ -7,7 +7,7 @@
   app, so every case has to start the app itself (that is what UiTestHelper.launchAppUnderTest does).
   This script only owns the device/host plumbing, not the assertions.
 
-  Traps avoided (section 8 of md/设备实测进展与待办.md):
+  Traps avoided (section 8 of md/archive/设备实测进展与待办.md):
     * never passes Chinese through hdc arguments
     * no Join-String, no nested double quotes inside double-quoted strings
     * build success is judged from BUILD SUCCESSFUL plus HAP timestamps, not from $LASTEXITCODE
@@ -38,14 +38,15 @@ param(
 # Continue (not Stop): hvigor writes progress to stderr and PowerShell 5.1 turns native stderr into a
 # terminating error under 'Stop'. Success is judged explicitly below.
 $ErrorActionPreference = 'Continue'
-$hdc = 'C:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony\toolchains\hdc.exe'
-$node = 'C:\Program Files\Huawei\DevEco Studio\tools\node\node.exe'
-$hvigor = 'C:\Program Files\Huawei\DevEco Studio\tools\hvigor\bin\hvigorw.js'
+$envScript = Join-Path $PSScriptRoot 'lib\device-env.ps1'; . $envScript
+$hdc = $script:DevEcoHdc
+$node = $script:DevEcoNode
+$hvigor = $script:DevEcoHvigor
 Set-Location (Split-Path -Parent $PSScriptRoot)
 
 if ($Build) {
   Write-Host '=== build main + ohosTest HAP ===' -ForegroundColor Cyan
-  $env:DEVECO_SDK_HOME = 'C:\Program Files\Huawei\DevEco Studio\sdk'
+  $env:DEVECO_SDK_HOME = $script:DevEcoSdkHome
   $mainOut = & $node $hvigor --mode module -p module=entry@default -p product=default -p requiredDeviceType=phone assembleHap --analyze=normal --parallel --incremental --daemon 2>&1
   if (($mainOut | Out-String) -notmatch 'BUILD SUCCESSFUL') {
     Write-Host '[FAIL] main build failed' -ForegroundColor Red

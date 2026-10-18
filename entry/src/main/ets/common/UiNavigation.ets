@@ -9,6 +9,8 @@ import { navigationThrottle } from './NavigationThrottle'
 import { setCurrentPage, setPageResolver } from '../service/AppLogger'
 
 let cachedUiContext: UIContext | undefined = undefined
+let lastToastMessage: string = ''
+let lastToastAt: number = 0
 
 function resolveUiContext(): UIContext | undefined {
   const callingContext: UIContext | undefined = UIContext.getCallingScopeUIContext()
@@ -85,6 +87,12 @@ export function goBack(): void {
 }
 
 export function showToast(message: string, duration?: number): void {
+  const now: number = Date.now()
+  if (message === lastToastMessage && now - lastToastAt < 3000) {
+    return
+  }
+  lastToastMessage = message
+  lastToastAt = now
   const context: UIContext | undefined = resolveUiContext()
   if (context !== undefined) {
     const options: ToastOptionsCompat = duration === undefined

@@ -52,8 +52,7 @@ export struct MerchantOrdersPage {
   @State loading: boolean = false
   // 列表重建触发器：syncMerchantOrdersFromServer 是**原地修改**同一批 Order 对象，
   // 只重新赋值数组时 ArkUI 按 id 复用旧列表项、不会重绘，于是「点了接单界面仍显示待接单」
-  // （设备实测确认）。把它拼进 ForEach key，强制重建（与购物车 cartRenderVersion 同一套路）。
-  @State renderVersion: number = 0
+  // 行 key 使用订单业务主键，状态更新通过新数组触发行刷新。
   @State merchantId: number = 0
   private statusTabs: OrderStatusTab[] = [
     OrderStatusTab.create(-1, '全部'),
@@ -86,7 +85,6 @@ export struct MerchantOrdersPage {
     this.currentPage = result.page
     this.totalOrders = result.total
     this.hasMoreOrders = result.hasMore
-    this.renderVersion += 1
     this.loading = false
   }
 
@@ -192,7 +190,7 @@ export struct MerchantOrdersPage {
             ListItem() {
               this.OrderCard(order)
             }
-          }, (order: Order) => `${this.renderVersion}-${order.id}`)
+          }, (order: Order) => `${order.id}`)
           ListItem() {
             Row({ space: SPACING.SM }) {
               Text(`已显示 ${this.allOrders.length} / ${this.totalOrders}`)

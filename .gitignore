@@ -33,6 +33,17 @@
 # 目录缺失时由脚本按需重建（如 scripts/device-test.ps1）。详见 AGENTS.md「项目约束」。
 /TemporaryCacheStorage/
 
+# Local DevEco/Node tooling and generated runtime artifacts
+/.build-tools/
+/.codegenie/
+/.corepack-cache/
+/.hvigor-user/
+/.hvigor-user-*/
+/.npm-cache/
+/logs/
+/image/
+/scripts/__pycache__/
+
 # 设备实测本地产物（截图 / 界面元素树）——历史路径，新产物一律写 TemporaryCacheStorage/
 /device-screenshot.jpeg
 /.ui-layout.json

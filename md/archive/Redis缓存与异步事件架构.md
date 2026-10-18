@@ -1,5 +1,7 @@
 # Redis 缓存与领域事件（异步）架构说明
 
+> 历史归档（2026-10-18）：本文保留当时的设计、约定与验证记录，按需查阅。具体配置、状态与操作以当前仓库代码、README 和操作指南为准。
+
 > 本文记录「Redis 热点缓存 + 事务性 Outbox + Redis Stream 异步事件」的落地设计与验证结果。
 > 涉及代码：`HotDataCacheService`、`RedisConfig`、`DomainEventPublisher`、
 > `DomainEventConsumer`、`OutboxRelayJob`、`OutboxEventDao`。

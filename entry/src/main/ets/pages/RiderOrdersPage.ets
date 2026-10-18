@@ -5,7 +5,7 @@ import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 import { AppMotion } from '../common/theme/AppMotion'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
-import { Order, OrderPageData } from '../model/Models'
+import { Order, OrderPageData, User, UserRole } from '../model/Models'
 import { fetchRiderOrdersPageApi } from '../service/ApiService'
 import { pickupOrderRemote, deliverOrderRemote, getLastRemoteErrorMessage, reportRiderLocationRemote, startRiderLocationTimer, stopRiderLocationTimer } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
@@ -32,13 +32,19 @@ export struct RiderOrdersPage {
   @State orders: Order[] = []
   @State loading: boolean = false
   @State acting: boolean = false
-  @State renderVersion: number = 0
   @State currentPage: number = 1
   @State totalOrders: number = 0
   @State hasMoreOrders: boolean = false
+  @StorageLink('isLoggedIn') loggedIn: boolean = false
+  @StorageLink('user') user: User = { id: 0, username: '', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER, balance: 0, coupons: [], orders: [], storeIds: [] }
 
   async aboutToAppear(): Promise<void> {
     logInfo('Page', '进入我的配送单 RiderOrdersPage')
+    if (!this.loggedIn || this.user.role !== UserRole.RIDER) {
+      promptAction.showToast({ message: '仅骑手账号可以查看配送单', duration: 1600 })
+      router.replaceUrl({ url: 'pages/Index' })
+      return
+    }
     await this.loadOrders()
   }
 
@@ -81,7 +87,6 @@ export struct RiderOrdersPage {
     this.currentPage = result.page
     this.totalOrders = result.total
     this.hasMoreOrders = result.hasMore
-    this.renderVersion += 1
     this.loading = false
     // 全局定时器按「有无配送中订单」开关，切页不中断
     if (this.orders.some((order: Order) => order.status === 3)) {
@@ -156,7 +161,7 @@ export struct RiderOrdersPage {
             ListItem() {
               this.OrderCard(order)
             }
-          }, (order: Order) => `${this.renderVersion}-${order.id}`)
+          }, (order: Order) => `${order.id}`)
           ListItem() {
             Row({ space: SPACING.SM }) {
               Text(`已显示 ${this.orders.length} / ${this.totalOrders}`)

@@ -48,7 +48,6 @@ export struct AdminCategoryPage {
   @State deletingCategoryId: number = 0
   @State showDeleteConfirm: boolean = false
   // 键只含 id 时，刷新回来的同 id 新对象会被复用，改名/新建/删除后列表不刷新。
-  @State renderVersion: number = 0
 
   aboutToAppear(): void {
     logInfo('Page', '进入管理端分类管理页 AdminCategoryPage')
@@ -63,7 +62,6 @@ export struct AdminCategoryPage {
   async refresh(): Promise<void> {
     const resp: ApiResponse<Category[]> = await get<Category[]>('/api/admin/categories')
     this.categories = resp.code === 200 && resp.data !== null ? resp.data : []
-    this.renderVersion += 1
   }
 
   async createCategory(): Promise<void> {
@@ -195,7 +193,7 @@ export struct AdminCategoryPage {
                 .attributeModifier(new AppCardStyle())
               .width('100%').padding(SPACING.MD)
             }
-          }, (category: Category) => `${this.renderVersion}-${category.id}`)
+          }, (category: Category) => `${category.id}`)
         }
         .width('100%').layoutWeight(1).scrollBar(BarState.Off)
         .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })

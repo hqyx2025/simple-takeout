@@ -9,7 +9,7 @@ import { ColorMetrics } from '@kit.ArkUI';
 import { routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusColor, MODULE_COLOR, MODULE_BG, accentBg, accentFg } from '../common/Constants'
 import { MerchantStatsData, User, UserRole } from '../model/Models'
-import { getCurrentUser, getMerchantTodayStats, getMerchantWeekStats, getMerchantWeekRevenue, getMerchantTodayStatusOrders, formatPrice, fetchMerchantStatsRemote } from '../service/AppStorageManager'
+import { getCurrentUser, formatPrice, fetchMerchantStatsRemote } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
 
 @Entry
@@ -47,6 +47,7 @@ export struct MerchantStatsPage {
   }
   @State balance: number = 0
   @State loadError: boolean = false
+  @State loading: boolean = true
   // 近7天每日收入（折线图）
   @State weekRevenue: number[] = [0, 0, 0, 0, 0, 0, 0]
   @State weekLabels: string[] = []
@@ -61,10 +62,6 @@ export struct MerchantStatsPage {
     const user: User | undefined = getCurrentUser()
     if (this.loggedIn && user !== undefined && user !== null && user.role === UserRole.MERCHANT) {
       this.balance = user.balance
-      this.todayStats = getMerchantTodayStats(user.id)
-      this.weekStats = getMerchantWeekStats(user.id)
-      this.weekRevenue = getMerchantWeekRevenue(user.id)
-      this.todayStatus = getMerchantTodayStatusOrders(user.id)
       // 生成近7天日期标签
       const now: Date = new Date()
       const labels: string[] = []
@@ -85,6 +82,7 @@ export struct MerchantStatsPage {
 
   // 直接读取服务端聚合，避免统计页为计算图表拉取全部历史订单。
   private async refreshRemoteStats(): Promise<void> {
+    this.loading = true
     this.loadError = false
     try {
       const aggregate = await fetchMerchantStatsRemote()
@@ -98,6 +96,8 @@ export struct MerchantStatsPage {
       this.todayStatus = aggregate.todayStatus.length === 5 ? aggregate.todayStatus : [0, 0, 0, 0, 0]
     } catch (_e) {
       this.loadError = true
+    } finally {
+      this.loading = false
     }
   }
 
@@ -114,20 +114,16 @@ export struct MerchantStatsPage {
             this.ErrorBanner()
           }
 
-          // 今日数据卡片（主色调背景，大卡片）
-          this.TodayCard()
-
-          // 近7天收入趋势折线图
-          this.WeekChartCard()
-
-          // 今日订单状态分布柱状图
-          this.StatusChartCard()
-
-          // 本周数据卡片
-          this.WeekCard()
-
-          // 累计数据卡片
-          this.CumulativeCard()
+          if (this.loading) {
+            Text('正在从服务端加载统计…').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
+              .width('100%').padding(SPACING.XL)
+          } else if (!this.loadError) {
+            this.TodayCard()
+            this.WeekChartCard()
+            this.StatusChartCard()
+            this.WeekCard()
+            this.CumulativeCard()
+          }
 
           // 数据说明 + 账户余额
           this.InfoCard()

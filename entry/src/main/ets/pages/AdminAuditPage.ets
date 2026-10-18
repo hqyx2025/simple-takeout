@@ -32,7 +32,6 @@ export struct AdminAuditPage {
   @State total: number = 0
   @State hasMore: boolean = false
   @State loading: boolean = false
-  @State renderVersion: number = 0
 
   aboutToAppear(): void {
     logInfo('Page', '进入管理操作审计页 AdminAuditPage')
@@ -54,7 +53,6 @@ export struct AdminAuditPage {
     this.logs = result.list
     this.total = result.total
     this.hasMore = result.hasMore
-    this.renderVersion += 1
     this.loading = false
   }
 
@@ -68,7 +66,6 @@ export struct AdminAuditPage {
     this.page = result.page
     this.total = result.total
     this.hasMore = result.hasMore
-    this.renderVersion += 1
     this.loading = false
   }
 
@@ -132,7 +129,7 @@ export struct AdminAuditPage {
               .attributeModifier(new AppCardStyle())
               .width('100%').padding(SPACING.MD)
           }
-        }, (item: AdminOperationLog) => `${this.renderVersion}-${item.id}`)
+        }, (item: AdminOperationLog) => `${item.id}`)
         ListItem() {
           Row({ space: SPACING.SM }) {
             Text(`已显示 ${this.logs.length} / ${this.total}`).fontSize(FONT_SIZE.XS)

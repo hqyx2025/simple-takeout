@@ -53,6 +53,7 @@ springdoc:
 takeout:
   demo:
     recharge-enabled: ${TAKEOUT_DEMO_RECHARGE_ENABLED:false}
+    signup-balance: ${TAKEOUT_DEMO_SIGNUP_BALANCE:20}
     admin-password: ${TAKEOUT_DEMO_ADMIN_PASSWORD:123456}
   openapi:
     server-url: ${TAKEOUT_OPENAPI_SERVER_URL:http://localhost:8087}
@@ -60,11 +61,15 @@ takeout:
     # HS256 密钥（生产环境请通过环境变量注入）
     secret: ${TAKEOUT_JWT_SECRET}
     expire-hours: 72
+  amap:
+    rest-key: ${TAKEOUT_AMAP_REST_KEY:}
   sms:
     provider: ${TAKEOUT_SMS_PROVIDER:mock}
     expose-mock-code: ${TAKEOUT_SMS_EXPOSE_MOCK_CODE:false}
     code-ttl-seconds: ${TAKEOUT_SMS_CODE_TTL_SECONDS:900}
     cooldown-seconds: ${TAKEOUT_SMS_COOLDOWN_SECONDS:60}
+    daily-limit: ${TAKEOUT_SMS_DAILY_LIMIT:5}
+    hourly-limit: ${TAKEOUT_SMS_HOURLY_LIMIT:100}
     huawei:
       endpoint: ${HUAWEI_SMS_ENDPOINT:}
       app-key: ${HUAWEI_SMS_APP_KEY:}

@@ -67,6 +67,7 @@ public class SchemaMigration implements ApplicationRunner {
         addColumnIfMissing("outbox_events", "owner", "VARCHAR(64) NOT NULL DEFAULT ''");
         addColumnIfMissing("outbox_events", "lease_until", "BIGINT NOT NULL DEFAULT 0");
         migrateOrderTimeColumns();
+        migrateLegacyCompleteTime();
         migrateDomainTimeColumns();
         addIndexIfMissing("orders", "idx_orders_user_page", "(user_id, id)");
         addIndexIfMissing("orders", "idx_orders_store_page", "(store_id, id)");
@@ -74,6 +75,7 @@ public class SchemaMigration implements ApplicationRunner {
         addIndexIfMissing("orders", "idx_orders_admin_status_page", "(status, id)");
         addIndexIfMissing("orders", "idx_orders_pending_timeout", "(status, create_time, id)");
         addIndexIfMissing("orders", "idx_orders_rider_pool", "(status, rider_id, ready_time, id)");
+        addIndexIfMissing("orders", "idx_orders_auto_confirm", "(status, escrow_status, complete_time_dt)");
         addIndexIfMissing("refund_records", "idx_refund_status_page", "(status, id)");
         addIndexIfMissing("users", "idx_users_admin_role_status_page", "(role, status, id)");
         addIndexIfMissing("users", "idx_users_admin_status_page", "(status, id)");
@@ -125,6 +127,23 @@ public class SchemaMigration implements ApplicationRunner {
         for (String column : new String[]{"create_time", "pay_time", "accept_time", "deliver_time",
                 "complete_time", "ready_time", "expect_time"}) {
             addColumnIfMissing("orders", column + "_dt", "DATETIME DEFAULT NULL");
+        }
+    }
+
+    /** Backfill the datetime shadow used by auto-confirm for rows written before dual writes existed. */
+    private void migrateLegacyCompleteTime() {
+        int updated;
+        do {
+            updated = jdbc.update("UPDATE orders SET complete_time_dt = STR_TO_DATE(NULLIF(complete_time, ''), "
+                    + "'%Y-%m-%d %H:%i:%s') WHERE status = 4 AND complete_time_dt IS NULL "
+                    + "AND complete_time REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$' "
+                    + "AND STR_TO_DATE(NULLIF(complete_time, ''), '%Y-%m-%d %H:%i:%s') IS NOT NULL LIMIT 500");
+        } while (updated == 500);
+        Integer invalid = jdbc.queryForObject("SELECT COUNT(*) FROM orders WHERE status = 4 "
+                + "AND complete_time_dt IS NULL AND NULLIF(complete_time, '') IS NOT NULL", Integer.class);
+        if (invalid != null && invalid > 0) {
+            org.slf4j.LoggerFactory.getLogger(SchemaMigration.class).warn(
+                    "订单 complete_time_dt 回填跳过无法解析的存量记录 count={}", invalid);
         }
     }
 

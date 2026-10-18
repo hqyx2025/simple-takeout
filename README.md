@@ -76,7 +76,7 @@
 | 消息 | Redis Stream + 事务性 Outbox | 领域事件异步投递，**未引入 RabbitMQ/RocketMQ 等外部 MQ** |
 | 容器化 | Docker · Docker Compose | 后端镜像基于 JDK 25 多阶段构建；MySQL 8.4 + Redis 7 |
 | 地图 | 高德 Web 端 JS API v2.0 | 通过 ArkUI `Web` 组件内嵌运行，模拟器/真机均可用，无 native 依赖 |
-| 测试 | JUnit 5（后端 **463 个用例**，含 31 个门控真 MySQL 用例）、Hypium（前端） | `server/*/src/test`、`entry/src/test`（Local Unit）、`entry/src/ohosTest`（设备 UI 自动化） |
+| 测试 | JUnit 5（后端 **479 个用例**，含 31 个门控真 MySQL 用例与 Redis 验证码用例）、Hypium（前端） | `server/*/src/test`、`entry/src/test`（Local Unit）、`entry/src/ohosTest`（设备 UI 自动化） |
 
 ## 系统架构
 
@@ -122,7 +122,7 @@ simple-takeout/
 ├── docker-compose.yml        # 一键环境：app + MySQL 8.4 + Redis 7
 ├── signing/                  # Release 签名配置模板（勿提交真实证书/密码）
 ├── scripts/                  # 设备实测 / 上架体检等 PowerShell 脚本
-├── md/                       # 设计文档与实施记录
+├── md/                       # 当前开发指南与归档资料（archive/）
 ├── .agents/                  # AI 编码助手技能与功能规格
 ├── AGENTS.md                 # 项目开发记忆（业务口径与陷阱清单，改代码前必读）
 ├── build-profile.json5 / oh-package.json5 / hvigorfile.ts / code-linter.json5   # 工程构建配置
@@ -133,7 +133,7 @@ simple-takeout/
 
 ### 方式一：Docker Compose 单机双实例
 
-Compose 默认启用 `develop` 演示 profile，提供种子账号、mock 短信验证码回传、演示充值、本地上传，以及支付宝沙箱 APP SDK / 扫码支付；真实生产支付关闭。沙箱支付需要配置支付宝沙箱应用密钥、支付宝公钥和可访问的 HTTPS 回调地址，扫码需使用另一台设备上的支付宝沙箱钱包。仅用于本地演示，禁止对外部署。生产环境需设置 `SPRING_PROFILES_ACTIVE=production` 并配置真实短信、对象存储及生产支付凭证；production 会拒绝验证码回传和演示充值。演示管理员初始密码为 `123456`，新建种子账号时可用 `TAKEOUT_DEMO_ADMIN_PASSWORD` 覆盖。
+Compose 不再猜测运行环境，必须在 `.env` 中显式设置 `SPRING_PROFILES_ACTIVE=develop` 或 `production`。develop 提供种子账号、mock 邮箱验证码回传、演示充值、本地上传，以及支付宝沙箱 APP SDK / 扫码支付；真实生产支付关闭。沙箱支付需要配置支付宝沙箱应用密钥、支付宝公钥和可访问的 HTTPS 回调地址，扫码需使用另一台设备上的支付宝沙箱钱包。仅用于本地演示，禁止对外部署。production 需配置真实短信、对象存储及生产支付凭证，并会拒绝验证码回传和演示充值。演示管理员初始密码为 `123456`，新建种子账号时可用 `TAKEOUT_DEMO_ADMIN_PASSWORD` 覆盖。
 
 首次启动前，将 `.env.example` 复制为仓库根目录 `.env`，并替换数据库密码和 JWT 密钥。Compose 与后端容器使用 `.env` 中的数据库用户名和密码；不要把真实密钥提交到 Git。项目的 Compose 配置均集中在 `.env`，其中生产短信、OBS、推送和支付凭证仅在启用相应生产服务时填写：
 
@@ -202,9 +202,8 @@ mvn -f server/pom.xml -pl takeout-gateway spring-boot:run
 
 Release 构建需要签名与证书：参考 `signing/release-signing.template.json5` 在本机安全目录填写真实 p12/p7b 路径（真实证书与密码禁止提交到仓库）。
 
-> 地图能力依赖高德 Key（Web 端 JS API 类型）：`Constants.ets` 的 `AMAP_CONFIG` 与
-> `entry/src/main/resources/rawfile/amap_map.html` 中的 `AMAP_KEY` 需保持一致，
-> Key 含安全密钥时还需填写 `MAP_JS_SECURITY_CODE` / jscode。
+> 地图能力使用客户端 Web JS Key 和 jscode：`Constants.ets` 的 `AMAP_CONFIG` 会在地图 WebView 运行时注入。
+> REST 地点搜索 Key 使用 `TAKEOUT_AMAP_REST_KEY`，只允许放在后端 `.env`，由 `/api/location/*` 代理接口调用，不写入 ArkTS/HAP。
 
 ### 环境变量
 
@@ -214,6 +213,11 @@ Release 构建需要签名与证书：参考 `signing/release-signing.template.j
 | `TAKEOUT_DB_USERNAME` / `TAKEOUT_DB_PASSWORD` | `root` / 必填 | 数据库凭据，密码无默认值 |
 | `TAKEOUT_REDIS_HOST` / `_PORT` / `_PASSWORD` / `_DATABASE` | `127.0.0.1` / `6387` / 空 / `0` | Redis 连接 |
 | `TAKEOUT_JWT_SECRET` | 必填 | 至少 32 字节的签名密钥，建议随机生成 |
+| `SPRING_PROFILES_ACTIVE` | 必填（`develop`/`production`） | Compose 必须显式选择运行环境 |
+| `TAKEOUT_DEMO_RECHARGE_ENABLED` / `TAKEOUT_DEMO_SIGNUP_BALANCE` | `true` / `20`（develop） | 演示充值与注册体验金；production 注册体验金固定为 0 |
+| `TAKEOUT_SMS_PROVIDER` / `TAKEOUT_SMS_EXPOSE_MOCK_CODE` | `mock` / `true`（develop） | 未配置 QQ SMTP 时使用 mock 码；production 禁止回传 |
+| `TAKEOUT_QQ_SMTP_HOST` / `_PORT` / `_USERNAME` / `_AUTH_CODE` | `smtp.qq.com` / `465` / 空 / 空 | `qq-email` provider 的 SMTP 配置 |
+| `TAKEOUT_SMS_DAILY_LIMIT` / `TAKEOUT_SMS_HOURLY_LIMIT` | `5` / `100` | 邮箱验证码目标与全局限额 |
 | `TAKEOUT_CACHE_ENABLED` | `true` | 热点缓存总开关 |
 | `TAKEOUT_MQ_ENABLED` | `true` | 领域事件（Outbox + Stream）总开关 |
 | `TAKEOUT_CACHE_TTL_SECONDS` / `_JITTER_SECONDS` | `300` / `120` | 缓存基础 TTL 与防雪崩抖动上限（秒） |
@@ -226,7 +230,7 @@ Release 构建需要签名与证书：参考 `signing/release-signing.template.j
 
 | 角色 | 手机号 | 说明 |
 | --- | --- | --- |
-| 用户（CUSTOMER） | `13800138000` | 主测试用户，注册赠送 20 元体验余额 |
+| 用户（CUSTOMER） | `13800138000` | 主测试用户，develop 注册赠送 20 元体验余额 |
 | 用户（CUSTOMER） | `13900139000` | 副测试用户（15 元余额） |
 | 商户（MERCHANT） | `13600136000` | 主测试店铺（含商品与订单数据） |
 | 商户（MERCHANT） | `13700137000`、`13500135000` | 其他店铺账号 |
@@ -243,7 +247,7 @@ Release 构建需要签名与证书：参考 `signing/release-signing.template.j
 
 | 分组 | 主要接口 |
 | --- | --- |
-| 认证 `AuthController` | `POST /api/auth/register`、`login`、`GET/PUT /api/auth/me`、`POST /api/auth/recharge` |
+| 认证 `AuthController` | `POST /api/auth/register`、`POST /api/auth/email-code`、`login`、`POST /api/auth/password/forgot`、`GET/PUT /api/auth/me`、`POST /api/auth/recharge` |
 | 浏览 `StoreController` | `GET /api/categories`、`/stores`、`/stores/recommended`、`/stores/{id}`、`/stores/{id}/goods`、`/goods/special`、`/stores/{id}/categories`、`/stores/{id}/bundle`、`/rankings/stores`、`/rankings/goods`、`/seckills` |
 | 内容 `ContentController` | `GET /api/banners`、`GET /api/announcements` |
 | 搜索与评价 `UserCenterController` | `GET /api/search`、店铺/商品评价查询、`GET /api/merchant/reviews`、`PUT /api/merchant/reviews/{id}/reply` |
@@ -302,20 +306,21 @@ Release 构建需要签名与证书：参考 `signing/release-signing.template.j
 
 ## 文档索引
 
+`md/` 保留开发参考与设备实测指南；其余专题参考、旧设计、实施及会话记录统一保存在 `md/archive/`，按需查阅。
+
 | 文档 | 说明 |
 | --- | --- |
-| [md/重构大纲提示词.md](md/重构大纲提示词.md) | 业务设计与演进参考，按当前需求查阅相关章节 |
 | [md/开发参考.md](md/开发参考.md) | 技术栈、业务口径、构建细节与历史排错经验，按需查阅 |
-| [md/UI与图标优化说明.md](md/UI与图标优化说明.md) | 登录页统一视觉、共享组件、SVG 资源与实际验证范围 |
-| [md/简单外卖业务流程落地.md](md/简单外卖业务流程落地.md) | 角色/流程/接口落地口径（Mermaid 流程图） |
-| [md/Redis缓存与异步事件架构.md](md/Redis缓存与异步事件架构.md) | 缓存三类故障防护、事务性 Outbox 设计、降级行为与实测数据 |
-| [md/骑手端设计与实施计划.md](md/骑手端设计与实施计划.md) | 骑手端设计与落地计划 |
-| [md/设备实测指南.md](md/设备实测指南.md) · [md/设备实测进展与待办.md](md/设备实测进展与待办.md) | 设备端 UiTest 实测链路与进展 |
-| [md/权限边界与高并发审计.md](md/权限边界与高并发审计.md) | 全链路权限矩阵、边界条件清单、1000 人高并发分析 |
-| [md/上架体检与Release签名.md](md/上架体检与Release签名.md) | Release 签名与上架前质量自检 |
-| [md/图片资源规范.md](md/图片资源规范.md) | 图片资源目录约定（静态图/上传图位置、命名、统一引用方式与默认占位图） |
+| [md/设备实测指南.md](md/设备实测指南.md) | 模拟器 / 真机构建、安装与 UiTest 操作指南 |
+| [md/archive/Redis缓存与异步事件架构.md](md/archive/Redis缓存与异步事件架构.md) | 缓存三类故障防护、事务性 Outbox 设计、降级行为与实测数据 |
+| [md/archive/权限边界与高并发审计.md](md/archive/权限边界与高并发审计.md) | 全链路权限矩阵、边界条件清单、1000 人高并发分析 |
+| [md/archive/上架体检与Release签名.md](md/archive/上架体检与Release签名.md) | Release 签名与上架前质量自检 |
+| [md/archive/图片资源规范.md](md/archive/图片资源规范.md) | 图片资源目录约定（静态图/上传图位置、命名、统一引用方式与默认占位图） |
 | [md/archive/未完成.txt](md/archive/未完成.txt) | 尚未完成的质量项记录 |
-| [md/archive/](md/archive) | 历史会话记录归档（2026-08-20 ~ 2026-09-19） |
+| [旧设计大纲](md/archive/重构大纲提示词.md) · [骑手实施计划](md/archive/骑手端设计与实施计划.md) · [早期业务流程](md/archive/简单外卖业务流程落地.md) | 历史设计参考，部分口径已被当前实现替代 |
+| [设备实测记录](md/archive/设备实测进展与待办.md) · [UI 优化记录](md/archive/UI与图标优化说明.md) · [评审整改记录](md/archive/代码评审与整改交接.md) | 已有实施和验证记录，按需追溯 |
+| [当前代码评审与整改交接](md/代码评审与整改交接.md) | 当前 P1/P2/P3 整改范围与验收口径 |
+| [md/archive/](md/archive) | 历史设计、实施记录、会话与验收资料；不作为执行门禁 |
 | [AGENTS.md](AGENTS.md) | AI 编码助手直接执行约定及必要工程约束 |
 | [md/archive/specs](md/archive/specs) | 历史功能规格与验收记录（非执行门禁） |
 

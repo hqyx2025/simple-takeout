@@ -42,7 +42,6 @@ export struct AdminUserPage {
   @State hasMore: boolean = false
   // ForEach 键含 id 时，刷新回来的同 id 新对象会被复用而不重建行，
   // 表现为停用后按钮仍显示「停用」；用版本号拼进键强制重建。
-  @State renderVersion: number = 0
 
   aboutToAppear(): void {
     if (!this.loggedIn || this.user.role !== UserRole.ADMIN) {
@@ -66,7 +65,6 @@ export struct AdminUserPage {
     this.users = result.list
     this.total = result.total
     this.hasMore = result.hasMore
-    this.renderVersion += 1
     this.loading = false
   }
 
@@ -83,7 +81,6 @@ export struct AdminUserPage {
     this.page = result.page
     this.total = result.total
     this.hasMore = result.hasMore
-    this.renderVersion += 1
     this.loading = false
   }
 
@@ -181,7 +178,7 @@ export struct AdminUserPage {
           ListItem() {
             this.UserRow(item)
           }
-        }, (item: AdminUser) => `${this.renderVersion}-${item.id}`)
+        }, (item: AdminUser) => `${item.id}`)
         ListItem() {
           Row({ space: SPACING.SM }) {
             Text(`已显示 ${this.users.length} / ${this.total}`)

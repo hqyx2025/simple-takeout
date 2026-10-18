@@ -31,10 +31,11 @@ param(
 
 $ErrorActionPreference = 'Continue'
 $root = Split-Path -Parent $PSScriptRoot
-$hdc = 'C:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony\toolchains\hdc.exe'
-$emulatorExe = 'C:\Program Files\Huawei\DevEco Studio\tools\emulator\Emulator.exe'
-$node = 'C:\Program Files\Huawei\DevEco Studio\tools\node\node.exe'
-$hvigor = 'C:\Program Files\Huawei\DevEco Studio\tools\hvigor\bin\hvigorw.js'
+$envScript = Join-Path $PSScriptRoot 'lib\device-env.ps1'; . $envScript
+$hdc = $script:DevEcoHdc
+$emulatorExe = $script:DevEcoEmulator
+$node = $script:DevEcoNode
+$hvigor = $script:DevEcoHvigor
 # 临时产物统一放 TemporaryCacheStorage（不入库，详见 AGENTS.md「项目约束」）
 $tempDir = Join-Path $root 'TemporaryCacheStorage'
 if (-not (Test-Path $tempDir)) { New-Item -ItemType Directory -Force -Path $tempDir | Out-Null }
@@ -106,7 +107,7 @@ try {
 # ---------- 3. 构建 ----------
 if ($Install -or -not $Dump) {
   Write-Host '[3/5] 构建 HAP（debug）...' -ForegroundColor Cyan
-  $env:DEVECO_SDK_HOME = 'C:\Program Files\Huawei\DevEco Studio\sdk'
+  $env:DEVECO_SDK_HOME = $script:DevEcoSdkHome
   Push-Location $root
   $out = & $node $hvigor --mode module -p module=entry@default -p product=default -p requiredDeviceType=phone `
     assembleHap --analyze=normal --parallel --incremental --daemon 2>&1

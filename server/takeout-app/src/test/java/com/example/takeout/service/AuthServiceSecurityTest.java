@@ -14,6 +14,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 
 class AuthServiceSecurityTest {
 
@@ -104,6 +106,22 @@ class AuthServiceSecurityTest {
     }
 
     @Test
+    void productionSignupBalanceCanBeDisabled() {
+        UserDao userDao = mock(UserDao.class);
+        when(userDao.existsByPhone("13800138000")).thenReturn(false);
+        User stored = new User(1, "用户", "", "13800138000", "hash-value", 0, 0.0, "now");
+        when(userDao.insert(eq("用户"), eq("13800138000"), eq("user@example.com"), anyString(),
+                eq(0), eq(0.0), anyString())).thenReturn(stored);
+
+        User result = new AuthService(userDao, mock(JwtUtil.class), mock(SmsCodeVerifier.class), false, 0.0)
+                .register("用户", "13800138000", "user@example.com", "123456", "123456", 0);
+
+        assertEquals(0.0, result.balance());
+        verify(userDao).insert(eq("用户"), eq("13800138000"), eq("user@example.com"), anyString(),
+                eq(0), eq(0.0), anyString());
+    }
+
+    @Test
     void profileUpdateRejectsPhoneOwnedByAnotherAccount() {
         UserDao userDao = mock(UserDao.class);
         JwtUtil jwtUtil = mock(JwtUtil.class);
@@ -114,6 +132,26 @@ class AuthServiceSecurityTest {
                 () -> new AuthService(userDao, jwtUtil).updateProfile(1, "新昵称", "13900139000"));
 
         assertEquals("该手机号已被其他账号使用", error.getMessage());
+    }
+
+    @Test
+    void profileContactChangeRequiresCurrentPasswordAndRevokesSessions() {
+        UserDao userDao = mock(UserDao.class);
+        User current = new User(1, "用户", "", "13800138000", PasswordUtil.hash("oldpass"),
+                0, 1, 20, "now", "", "", "user@example.com");
+        when(userDao.findById(1)).thenReturn(java.util.Optional.of(current));
+        when(userDao.existsByPhoneExceptUser("13900139000", 1)).thenReturn(false);
+        when(userDao.existsByUsernameExceptUser("新昵称", 1)).thenReturn(false);
+        when(userDao.findById(1)).thenReturn(java.util.Optional.of(current));
+
+        AuthService service = new AuthService(userDao, mock(JwtUtil.class), mock(SmsCodeVerifier.class));
+        BizException missing = assertThrows(BizException.class,
+                () -> service.updateProfile(1, "新昵称", "13900139000", "new@example.com", ""));
+        assertEquals("修改手机号或邮箱需要验证当前密码", missing.getMessage());
+
+        when(userDao.findById(1)).thenReturn(java.util.Optional.of(current));
+        service.updateProfile(1, "新昵称", "13900139000", "new@example.com", "oldpass");
+        verify(userDao).updatePassword(eq(1L), eq(current.password()), anyString());
     }
     @Test
     void rechargeAddsBalanceAndReturnsFreshUser() {

@@ -192,7 +192,7 @@ if ($buildProfile -match '"signingConfigs"\s*:\s*\[\s*\]') {
 $outputDir = Join-Path $root 'entry\build\default\outputs\default'
 if ($Build) {
   Write-Host '--- 执行 Release 构建（hvigor assembleHap -p buildMode=release）...' -ForegroundColor Cyan
-  $devEco = 'C:\Program Files\Huawei\DevEco Studio'
+  $devEco = if ($env:DEVECO_HOME) { $env:DEVECO_HOME } else { 'C:\Program Files\Huawei\DevEco Studio' }
   $node = Join-Path $devEco 'tools\node\node.exe'
   $hvigor = Join-Path $devEco 'tools\hvigor\bin\hvigorw.js'
   if (-not (Test-Path $node) -or -not (Test-Path $hvigor)) {
@@ -283,7 +283,7 @@ if ($failCount -gt 0) {
 [void]$lines.Add('powershell -ExecutionPolicy Bypass -File scripts/release-check.ps1 -Build')
 [void]$lines.Add('```')
 [void]$lines.Add('')
-[void]$lines.Add('> 签名材料（.p12/.cer/.p7b）必须在华为开发者账号下申请，见 `md/上架体检与Release签名.md`。')
+[void]$lines.Add('> 签名材料（.p12/.cer/.p7b）必须在华为开发者账号下申请，见 `md/archive/上架体检与Release签名.md`。')
 
 $outPath = Join-Path $root $OutFile
 [System.IO.File]::WriteAllText($outPath, ($lines -join "`r`n"), $utf8)

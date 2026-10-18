@@ -17,7 +17,6 @@ const PERSISTENCE_KEYS: string[] = [
   'privacyConsent',
   'isLoggedIn',
   'user',
-  'cartItems',
   'orderList',
   'favoriteList',
   'addressList',

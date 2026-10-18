@@ -1,7 +1,7 @@
 import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 import { AppMotion } from '../common/theme/AppMotion'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG } from '../common/Constants'
-import { MarketingActivity, MerchantSeckill, StoreItem } from '../model/Models'
+import { MarketingActivity, MerchantSeckill, StoreItem, User, UserRole } from '../model/Models'
 import { fetchMerchantStoresApi, fetchMerchantActivitiesApi, saveMerchantActivityApi, updateMerchantActivityStatusApi, deleteMerchantActivityApi, fetchMerchantSeckillsApi, saveMerchantSeckillApi, updateMerchantSeckillStatusApi, deleteMerchantSeckillApi, MerchantMarketingInput, MerchantSeckillInput } from '../service/ApiService'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { PageHeader } from '../components/PageHeader'
@@ -33,8 +33,15 @@ export struct MerchantMarketingPage {
   @State seckillQuota: string = '50'
   @State saving: boolean = false
   @State editingActivityId: number = 0
+  @StorageLink('isLoggedIn') loggedIn: boolean = false
+  @StorageLink('user') user: User = { id: 0, username: '', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER, balance: 0, coupons: [], orders: [], storeIds: [] }
 
   async aboutToAppear(): Promise<void> {
+    if (!this.loggedIn || this.user.role !== UserRole.MERCHANT) {
+      promptAction.showToast({ message: '仅商户账号可以管理营销活动', duration: 1600 })
+      router.back()
+      return
+    }
     this.stores = await fetchMerchantStoresApi()
     if (this.stores.length > 0) {
       this.selectedStoreId = this.stores[0].id

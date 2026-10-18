@@ -6,7 +6,7 @@
  */
 import { geoLocationManager } from '@kit.LocationKit'
 import { abilityAccessCtrl, common, Permissions } from '@kit.AbilityKit'
-import axios, { AxiosResponse } from '@ohos/axios'
+import { get, ApiResponse } from './HttpClient'
 import { AMAP_CONFIG } from '../common/Constants'
 import { logInfo, logWarn, logError } from './AppLogger'
 
@@ -92,8 +92,11 @@ export async function searchNearbyAddress(position: GeoPosition, page: number = 
     throw new Error('附近地点页码无效')
   }
   const pageSize: number = 20
-  const url: string = `https://restapi.amap.com/v3/place/around?location=${position.longitude.toFixed(6)},${position.latitude.toFixed(6)}&radius=1000&sortrule=distance&offset=${pageSize}&page=${page}&key=${AMAP_CONFIG.MAP_JS_KEY}`
-  const response: AxiosResponse<AmapPoiResponse> = await axios.get<AmapPoiResponse>(url, { timeout: AMAP_CONFIG.TIMEOUT })
+  const response: ApiResponse<AmapPoiResponse> = await get<AmapPoiResponse>(
+    `/api/location/nearby?longitude=${position.longitude.toFixed(6)}&latitude=${position.latitude.toFixed(6)}&page=${page}`)
+  if (response.code !== 200 || response.data === undefined || response.data === null) {
+    throw new Error(response.message || '附近地点查询失败')
+  }
   const data: AmapPoiResponse = response.data
   if (data.status !== '1' || !Array.isArray(data.pois)) {
     throw new Error('附近地点查询失败')
@@ -132,10 +135,8 @@ export async function searchAddress(keyword: string): Promise<AddressSearchResul
   }
   try {
     // POI 文本搜索优先返回“中关村”这类地名/地标，而不是只返回道路级地理编码。
-    const placeUrl: string = `https://restapi.amap.com/v3/place/text?keywords=${encodeURIComponent(value)}&offset=20&page=1&extensions=all&key=${AMAP_CONFIG.MAP_JS_KEY}`
-    const placeResponse: AxiosResponse<AmapPoiResponse> = await axios.get<AmapPoiResponse>(placeUrl, {
-      timeout: AMAP_CONFIG.TIMEOUT
-    })
+    const placeResponse: ApiResponse<AmapPoiResponse> = await get<AmapPoiResponse>(
+      `/api/location/search?keyword=${encodeURIComponent(value)}`)
     const placeData: AmapPoiResponse = placeResponse.data
     const placeResults: AddressSearchResult[] = []
     if (placeData.status === '1' && placeData.pois !== undefined) {
@@ -161,11 +162,9 @@ export async function searchAddress(keyword: string): Promise<AddressSearchResul
     }
 
     // POI 无结果时再尝试地理编码，兼容道路、门牌号等纯地址关键词。
-    const geocodeUrl: string = `https://restapi.amap.com/v3/geocode/geo?address=${encodeURIComponent(value)}&output=JSON&key=${AMAP_CONFIG.MAP_JS_KEY}`
-    const response: AxiosResponse<AmapGeocodeResponse> = await axios.get<AmapGeocodeResponse>(geocodeUrl, {
-      timeout: AMAP_CONFIG.TIMEOUT
-    })
-    const data: AmapGeocodeResponse = response.data
+    const geocodeResponse: ApiResponse<AmapGeocodeResponse> = await get<AmapGeocodeResponse>(
+      `/api/location/geocode?address=${encodeURIComponent(value)}`)
+    const data: AmapGeocodeResponse = geocodeResponse.data
     if (data.status !== '1' || data.geocodes === undefined) {
       logWarn('Location', `地址搜索无结果 keyword=${value} info=${data.info}`)
       return []

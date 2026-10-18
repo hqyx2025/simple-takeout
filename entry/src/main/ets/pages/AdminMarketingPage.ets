@@ -47,7 +47,6 @@ export struct AdminMarketingPage {
   @State activities: MarketingActivity[] = []
   @State seckills: AdminSeckill[] = []
   @State loading: boolean = false
-  @State renderVersion: number = 0
   @State showDeleteConfirm: boolean = false
   @State pendingDeleteId: number = 0
   @State pendingDeleteType: number = 0
@@ -75,7 +74,6 @@ export struct AdminMarketingPage {
     } else {
       this.seckills = await fetchAdminMarketingSeckillsApi(this.selectedStoreId, this.selectedStatus)
     }
-    this.renderVersion += 1
     this.loading = false
   }
 
@@ -219,7 +217,7 @@ export struct AdminMarketingPage {
                     .onClick(() => { this.requestDelete(1, item.id) })
                 }.width('100%')
               }.attributeModifier(new AppCardStyle()).width('100%').padding(SPACING.MD)
-            }, (item: MarketingActivity) => `${this.renderVersion}-activity-${item.id}`)
+            }, (item: MarketingActivity) => `activity-${item.id}`)
           } else {
             Text(`限时秒杀 · ${this.seckills.length} 条`).fontSize(FONT_SIZE.SM)
               .fontColor(COLORS.TEXT_HINT).width('100%')
@@ -250,7 +248,7 @@ export struct AdminMarketingPage {
                     .onClick(() => { this.requestDelete(2, item.id, item.sold) })
                 }.width('100%')
               }.attributeModifier(new AppCardStyle()).width('100%').padding(SPACING.MD)
-            }, (item: AdminSeckill) => `${this.renderVersion}-seckill-${item.id}`)
+            }, (item: AdminSeckill) => `seckill-${item.id}`)
           }
         }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.XL })
       }.layoutWeight(1).scrollBar(BarState.Off)

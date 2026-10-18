@@ -17,6 +17,8 @@ while true; do
       echo "Database backup failed; retry in one hour" >&2
     fi
     rm -f /backups/dump.tmp.sql
+    # 保留最近 12 个月的月度备份，避免本地卷无限增长。
+    find /backups -maxdepth 1 -type f -name 'takeout-*.sql.gz' -mtime +370 -delete
   fi
   sleep 3600
 done

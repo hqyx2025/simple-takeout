@@ -172,10 +172,10 @@ export class API_CONFIG {
 // 高德地图配置（申请地址：https://lbs.amap.com，创建“Web端(JS API)”类型Key）
 export class AMAP_CONFIG {
   // 高德 Web端(JS API) Key：用于地图显示/选点/逆地理编码/地点搜索（模拟器与真机均可运行）
-  // 注意：更换Key时需同步修改 resources/rawfile/amap_map.html 中的 AMAP_KEY 常量
-  static readonly MAP_JS_KEY: string = 'a0373d4b39b6524b7f80e825339e7a28'
+  // 地图 rawfile 在运行时通过 LocationPage.configureMap 注入此 Key，避免重复配置。
+  static readonly MAP_JS_KEY: string = '744ada1c8bc6f4854234bd752859177f'
   // 高德 JS API 安全密钥（jscode）：若申请Key时生成了安全密钥，请填入并同步修改 amap_map.html
-  static readonly MAP_JS_SECURITY_CODE: string = ''
+  static readonly MAP_JS_SECURITY_CODE: string = 'edc265a033df7b6a5a11a1db5f03b6ba'
   // 网络请求超时（毫秒）
   static readonly TIMEOUT: number = 10000
 }
@@ -183,7 +183,7 @@ export class AMAP_CONFIG {
 /**
  * 商户未上传图片时使用的本地 SVG 占位图。
  * 资源位置：entry/src/main/resources/base/media/food_placeholder.svg
- * 图片资源的目录约定与新增流程见 md/图片资源规范.md。
+ * 图片资源的目录约定与新增流程见 md/archive/图片资源规范.md。
  */
 export const DEFAULT_MERCHANT_IMAGE: Resource = $r('app.media.food_placeholder')
 

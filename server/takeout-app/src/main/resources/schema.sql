@@ -133,7 +133,8 @@ CREATE TABLE IF NOT EXISTS orders (
     KEY idx_orders_rider_page (rider_id, id),
     KEY idx_orders_admin_status_page (status, id),
     KEY idx_orders_pending_timeout (status, create_time, id),
-    KEY idx_orders_rider_pool (status, rider_id, ready_time, id)
+    KEY idx_orders_rider_pool (status, rider_id, ready_time, id),
+    KEY idx_orders_auto_confirm (status, escrow_status, complete_time_dt)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 结构化订单商品快照；orders.items 保留用于旧客户端与存量订单兼容。

@@ -174,7 +174,6 @@ export function addToCart(item: CartItem): void {
     cart.push(item)
   }
   AppStorage.setOrCreate<CartItem[]>('cartItems', cart)
-  saveAllData()
   logInfo('Cart', `加入购物车 goods=${item.goods.name} x${item.quantity} storeId=${item.storeId}`)
 }
 
@@ -196,19 +195,16 @@ export function updateCartItemQuantity(goodsId: number, storeId: number, quantit
     }
   }
   AppStorage.setOrCreate<CartItem[]>('cartItems', cart)
-  saveAllData()
   logInfo('Cart', `更新购物车数量 goodsId=${goodsId} storeId=${storeId} quantity=${quantity}`)
 }
 
 export function clearCart(): void {
   AppStorage.setOrCreate<CartItem[]>('cartItems', [])
-  saveAllData()
   logInfo('Cart', '清空购物车')
 }
 
 function setRemoteCart(cart: CartItem[]): void {
   AppStorage.setOrCreate<CartItem[]>('cartItems', cart)
-  saveAllData()
 }
 
 export async function refreshCartFromServer(): Promise<CartItem[] | null> {
@@ -492,8 +488,9 @@ export async function fetchMerchantStatsRemote(storeId: number = 0): Promise<Mer
   return fetchMerchantStatsApi(storeId)
 }
 
-export async function updateUserProfileRemote(username: string, phone: string, email: string): Promise<User | undefined> {
-  const user: User | undefined = await updateUserProfileApi(username, phone, email)
+export async function updateUserProfileRemote(username: string, phone: string, email: string,
+  currentPassword: string = ''): Promise<User | undefined> {
+  const user: User | undefined = await updateUserProfileApi(username, phone, email, currentPassword)
   if (user === undefined) {
     logWarn('Api', '远程更新个人资料失败')
     return undefined

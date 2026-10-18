@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
 
 class OrderServicePagingTest {
 
@@ -63,5 +64,17 @@ class OrderServicePagingTest {
         verify(orders).listByRider(3, 25, 25L);
 
         assertThrows(BizException.class, () -> service.userOrders(7, 9, 1, 30));
+    }
+
+    @Test
+    void autoConfirmContinuesAfterOneOrderFails() {
+        when(orders.listAutoConfirmCandidates(24)).thenReturn(List.of(101L, 102L));
+        org.springframework.transaction.support.TransactionTemplate transactions =
+                mock(org.springframework.transaction.support.TransactionTemplate.class);
+        when(transactions.execute(any())).thenThrow(new IllegalStateException("broken order"))
+                .thenReturn(true);
+        service.configureTransactions(transactions);
+
+        assertEquals(1, service.autoConfirmDeliveredOrders(24));
     }
 }

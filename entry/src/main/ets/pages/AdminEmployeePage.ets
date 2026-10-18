@@ -35,7 +35,6 @@ export struct AdminEmployeePage {
   @State employees: AdminEmployee[] = []
   @State loading: boolean = false
   // 键只含 id 时，刷新回来的同 id 新对象会被复用，停用/改名后行内容不刷新。
-  @State renderVersion: number = 0
   @State showForm: boolean = false
   // -1 全部 / 1 已启用 / 0 已停用（列表已在内存中，本地筛选即可）
   @State statusFilter: number = -1
@@ -71,7 +70,6 @@ export struct AdminEmployeePage {
     this.displayEmployees = this.statusFilter === -1
       ? this.employees
       : this.employees.filter((employee: AdminEmployee) => employee.status === this.statusFilter)
-    this.renderVersion += 1
   }
 
   private openCreate(): void {
@@ -179,7 +177,7 @@ export struct AdminEmployeePage {
           ListItem() {
             this.EmployeeRow(employee)
           }
-        }, (employee: AdminEmployee) => `${this.renderVersion}-${employee.id}`)
+        }, (employee: AdminEmployee) => `${employee.id}`)
       }
       .width('100%').layoutWeight(1).scrollBar(BarState.Off)
       .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })

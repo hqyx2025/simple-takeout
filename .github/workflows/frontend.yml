@@ -1,0 +1,42 @@
+name: Frontend
+
+on:
+  push:
+    paths:
+      - 'entry/**'
+      - 'AppScope/**'
+      - '*.json5'
+      - '*.ts'
+      - 'oh-package.json5'
+      - '.github/workflows/frontend.yml'
+  pull_request:
+    paths:
+      - 'entry/**'
+      - 'AppScope/**'
+      - '*.json5'
+      - '*.ts'
+      - 'oh-package.json5'
+      - '.github/workflows/frontend.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # DevEco Studio is not available on hosted runners; register a Windows runner with DevEco installed.
+    runs-on: [self-hosted, Windows, DevEco]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build unsigned HAP
+        shell: powershell
+        run: |
+          $devEco = if ($env:DEVECO_HOME) { $env:DEVECO_HOME } else { 'C:\Program Files\Huawei\DevEco Studio' }
+          $env:DEVECO_SDK_HOME = Join-Path $devEco 'sdk'
+          & (Join-Path $devEco 'tools\node\node.exe') `
+            (Join-Path $devEco 'tools\hvigor\bin\hvigorw.js') `
+            --mode module -p module=entry@default -p product=default `
+            -p requiredDeviceType=phone assembleHap --analyze=normal --parallel --incremental --daemon
+      - name: Run script checks
+        shell: powershell
+        run: |
+          Get-ChildItem scripts -Filter '*.cjs' | ForEach-Object { node $_.FullName }

@@ -33,6 +33,7 @@ export struct ProfileEditPage {
   @State username: string = ''
   @State phone: string = ''
   @State email: string = ''
+  @State currentPassword: string = ''
   @State role: UserRole = UserRole.CUSTOMER
 
   aboutToAppear() {
@@ -87,7 +88,7 @@ export struct ProfileEditPage {
     }
     this.saving = true
     try {
-      const updated: User | undefined = await updateUserProfileRemote(name, this.phone, this.email.trim())
+      const updated: User | undefined = await updateUserProfileRemote(name, this.phone, this.email.trim(), this.currentPassword)
       if (updated === undefined) {
         promptAction.showToast({ message: '保存失败，请检查网络或手机号是否已使用' })
         return
@@ -172,6 +173,22 @@ export struct ProfileEditPage {
           .layoutWeight(1)
           .maxLength(64)
           .onChange((value: string) => { this.username = value })
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+
+      Divider().color(COLORS.DIVIDER)
+
+      Row() {
+        Text('当前密码')
+          .fontSize(FONT_SIZE.MD)
+          .fontColor(COLORS.TEXT_SECONDARY)
+          .width(72)
+        TextInput({ placeholder: '修改手机号或邮箱时必填', text: this.currentPassword })
+          .attributeModifier(new AppInputStyle())
+          .layoutWeight(1)
+          .type(InputType.Password)
+          .onChange((value: string) => { this.currentPassword = value })
       }
       .width('100%')
       .alignItems(VerticalAlign.Center)

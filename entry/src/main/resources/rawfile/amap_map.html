@@ -29,18 +29,21 @@
 <div class="err-tip" id="errTip"></div>
 
 <script>
-// ============ 高德地图配置 ============
-// AMAP_KEY：高德 Web端(JS API) 类型 Key（高德开放平台 → 应用管理 → 添加Key → 服务平台选“Web端(JS API)”）
-var AMAP_KEY = 'a0373d4b39b6524b7f80e825339e7a28';
-// AMAP_SECURITY_CODE：安全密钥(jscode)，若该Key申请时生成了安全密钥则必须填写（高德控制台该Key的“安全密钥”处查看），否则留空
-var AMAP_SECURITY_CODE = '';
-
-if (AMAP_SECURITY_CODE !== '') {
-  window._AMapSecurityConfig = { securityJsCode: AMAP_SECURITY_CODE };
+// The host injects the public Web JS API key at runtime. Keeping the key out of
+// this rawfile avoids duplicating configuration and lets builds use an allowlisted key.
+var amapConfigured = false;
+var amapReady = false;
+function configureMap(key, securityCode) {
+  if (amapConfigured) return;
+  amapConfigured = true;
+  if (securityCode) window._AMapSecurityConfig = { securityJsCode: securityCode };
+  window.onAmapLoaded = function () { amapReady = true; initMap(); };
+  var script = document.createElement('script');
+  script.async = true;
+  script.src = 'https://webapi.amap.com/maps?v=2.0&key=' + encodeURIComponent(key) +
+    '&plugin=AMap.Geocoder,AMap.AutoComplete,AMap.PlaceSearch&callback=onAmapLoaded';
+  document.head.appendChild(script);
 }
-</script>
-<script src="https://webapi.amap.com/maps?v=2.0&key=a0373d4b39b6524b7f80e825339e7a28&plugin=AMap.Geocoder,AMap.AutoComplete,AMap.PlaceSearch"></script>
-<script>
 var map = null;
 var lastLng = 0;
 var lastLat = 0;
@@ -289,15 +292,6 @@ function searchKeyword(keyword) {
   searchByGeocoder();
 }
 
-window.addEventListener('load', function () {
-  setTimeout(function () {
-    if (typeof AMap === 'undefined') {
-      showErr('地图加载失败：请确认Key为"Web端(JS API)"类型、安全密钥已配置且网络可用');
-      return;
-    }
-    initMap();
-  }, 200);
-});
 </script>
 </body>
 </html>

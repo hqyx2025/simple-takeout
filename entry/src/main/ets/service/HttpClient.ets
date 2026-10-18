@@ -202,7 +202,7 @@ async function request<T>(method: string, url: string, data?: Object, showErrorT
     let attempt: ApiResponse<T> = await performRequest<T>(method, url, data, timeoutMs, requestToken)
     if (attempt.code === 401 && url !== '/api/auth/refresh' && url !== '/api/auth/logout') {
       const refreshResult: number = await refreshAfterUnauthorized(requestToken, requestRefreshToken, requestEpoch)
-      if (refreshResult === 1 && authSessionEpoch === requestEpoch && method === 'GET') {
+      if (refreshResult === 1 && authSessionEpoch === requestEpoch) {
         attempt = await performRequest<T>(method, url, data, timeoutMs, authToken)
         if (attempt.code === 401 && authSessionEpoch === requestEpoch) {
           await expireLocalSession()

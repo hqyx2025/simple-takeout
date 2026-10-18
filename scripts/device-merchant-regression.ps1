@@ -33,9 +33,10 @@ param(
 )
 
 $ErrorActionPreference = 'Continue'
-$hdc = 'C:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony\toolchains\hdc.exe'
-$node = 'C:\Program Files\Huawei\DevEco Studio\tools\node\node.exe'
-$hvigor = 'C:\Program Files\Huawei\DevEco Studio\tools\hvigor\bin\hvigorw.js'
+$envScript = Join-Path $PSScriptRoot 'lib\device-env.ps1'; . $envScript
+$hdc = $script:DevEcoHdc
+$node = $script:DevEcoNode
+$hvigor = $script:DevEcoHvigor
 Set-Location (Split-Path -Parent $PSScriptRoot)
 
 $script:failures = 0
@@ -78,7 +79,7 @@ Check 'fixture-order-waiting-accept' ([int]$paid.status -eq 1) ("order {0} statu
 # ---------- 2. build ----------
 if ($Build) {
   Write-Host '=== [2/6] build ===' -ForegroundColor Cyan
-  $env:DEVECO_SDK_HOME = 'C:\Program Files\Huawei\DevEco Studio\sdk'
+  $env:DEVECO_SDK_HOME = $script:DevEcoSdkHome
   $mainOut = & $node $hvigor --mode module -p module=entry@default -p product=default -p requiredDeviceType=phone assembleHap --analyze=normal --parallel --incremental --daemon 2>&1
   if (($mainOut | Out-String) -notmatch 'BUILD SUCCESSFUL') {
     Write-Host '[FAIL] main build failed' -ForegroundColor Red

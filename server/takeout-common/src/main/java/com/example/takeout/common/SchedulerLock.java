@@ -14,7 +14,7 @@ import java.time.Duration;
  *
  * <p><b>用途边界（很重要）</b>：这把锁只解决「同一轮扫描被多个实例重复执行」的<b>浪费</b>，
  * <b>不</b>用于防超卖、防重复扣款这类正确性问题。理由与
- * {@code md/Redis缓存与异步事件架构.md} §1 的既有论证一致：
+ * {@code md/archive/Redis缓存与异步事件架构.md} §1 的既有论证一致：
  * 锁覆盖不到数据库写入，Redis 挂掉时反而更弱。真正的正确性由数据库条件更新保证
  * （{@code WHERE status = 0}、{@code WHERE escrow_status = 0}、Outbox 租约）。</p>
  *

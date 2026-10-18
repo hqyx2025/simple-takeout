@@ -13,6 +13,10 @@ takeout:
   sms:
     provider: ${TAKEOUT_SMS_PROVIDER:qq-email}
     expose-mock-code: ${TAKEOUT_SMS_EXPOSE_MOCK_CODE:false}
+    daily-limit: ${TAKEOUT_SMS_DAILY_LIMIT:5}
+    hourly-limit: ${TAKEOUT_SMS_HOURLY_LIMIT:100}
+  demo:
+    signup-balance: 0
   upload:
     provider: ${TAKEOUT_UPLOAD_PROVIDER:obs}
     local-enabled: false

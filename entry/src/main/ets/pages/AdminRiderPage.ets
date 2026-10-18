@@ -5,7 +5,7 @@ import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 import { AppMotion } from '../common/theme/AppMotion'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
-import { Rider } from '../model/Models'
+import { Rider, User, UserRole } from '../model/Models'
 import { syncAdminRidersRemote, updateRiderStatusRemote } from '../service/AppStorageManager'
 import { StatusBadge } from '../components/StatusBadge'
 import { PageHeader } from '../components/PageHeader'
@@ -33,11 +33,17 @@ export struct AdminRiderPage {
   // -1 全部 / 1 已启用 / 0 已停用（列表已在内存中，本地筛选即可）
   @State statusFilter: number = -1
   @State displayRiders: Rider[] = []
-  @State renderVersion: number = 0
   @State loading: boolean = false
+  @StorageLink('isLoggedIn') loggedIn: boolean = false
+  @StorageLink('user') user: User = { id: 0, username: '', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER, balance: 0, coupons: [], orders: [], storeIds: [] }
 
   async aboutToAppear(): Promise<void> {
     logInfo('Page', '进入管理端骑手管理 AdminRiderPage')
+    if (!this.loggedIn || this.user.role !== UserRole.ADMIN) {
+      promptAction.showToast({ message: '仅管理端账号可以进入骑手管理', duration: 1600 })
+      router.replaceUrl({ url: 'pages/Index' })
+      return
+    }
     await this.loadRiders()
   }
 
@@ -57,7 +63,6 @@ export struct AdminRiderPage {
     this.displayRiders = this.statusFilter === -1
       ? this.riders
       : this.riders.filter((rider: Rider) => rider.status === this.statusFilter)
-    this.renderVersion += 1
   }
 
   private async toggleStatus(rider: Rider): Promise<void> {
@@ -122,7 +127,7 @@ export struct AdminRiderPage {
             ListItem() {
               this.RiderCard(rider)
             }
-          }, (rider: Rider) => `${this.renderVersion}-${rider.id}`)
+          }, (rider: Rider) => `${rider.id}`)
         }
         .width('100%').layoutWeight(1).scrollBar(BarState.Off)
         .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.XXL })

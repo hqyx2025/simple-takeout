@@ -3,9 +3,12 @@ takeout:
     enabled: true
   demo:
     recharge-enabled: ${TAKEOUT_DEMO_RECHARGE_ENABLED:true}
+    signup-balance: ${TAKEOUT_DEMO_SIGNUP_BALANCE:20}
   sms:
     provider: ${TAKEOUT_SMS_PROVIDER:mock}
     expose-mock-code: ${TAKEOUT_SMS_EXPOSE_MOCK_CODE:true}
+    daily-limit: ${TAKEOUT_SMS_DAILY_LIMIT:5}
+    hourly-limit: ${TAKEOUT_SMS_HOURLY_LIMIT:100}
   upload:
     provider: local
     local-enabled: true

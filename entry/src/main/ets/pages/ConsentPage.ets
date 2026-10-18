@@ -74,7 +74,7 @@ export struct ConsentPage {
         .width('100%')
         .textAlign(TextAlign.Start)
 
-      Text('为了提供登录、定位、配送、下单与评价服务，我们需要按照《隐私政策》处理必要的账号与订单信息。请阅读并同意后继续使用。')
+      Text('为了提供登录、定位、配送、下单与评价服务，我们需要按照《隐私政策》处理必要的手机号、邮箱、账号与订单信息。邮箱用于注册验证、找回密码和账户资料展示。请阅读并同意后继续使用。')
         .fontSize(FONT_SIZE.MD)
         .fontColor(COLORS.TEXT_SECONDARY)
         .lineHeight(24)

@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
 
@@ -34,11 +35,27 @@ public class SmsVerificationService implements SmsCodeVerifier {
     private final byte[] hmacKey;
     private final Duration ttl;
     private final Duration cooldown;
+    private final long dailyLimit;
+    private final long hourlyLimit;
 
     public SmsVerificationService(StringRedisTemplate redis, SmsSender sender,
                                   @Value("${takeout.jwt.secret}") String signingSecret,
                                   @Value("${takeout.sms.code-ttl-seconds:900}") long ttlSeconds,
-                                  @Value("${takeout.sms.cooldown-seconds:60}") long cooldownSeconds) {
+                                  @Value("${takeout.sms.cooldown-seconds:60}") long cooldownSeconds,
+                                  @Value("${takeout.sms.daily-limit:5}") long dailyLimit,
+                                  @Value("${takeout.sms.hourly-limit:100}") long hourlyLimit) {
+        this(redis, sender, signingSecret, ttlSeconds, cooldownSeconds, dailyLimit, hourlyLimit, true);
+    }
+
+    /** Compatibility constructor used by unit tests and embedded callers. */
+    public SmsVerificationService(StringRedisTemplate redis, SmsSender sender, String signingSecret,
+                                  long ttlSeconds, long cooldownSeconds) {
+        this(redis, sender, signingSecret, ttlSeconds, cooldownSeconds, 5, 100, false);
+    }
+
+    private SmsVerificationService(StringRedisTemplate redis, SmsSender sender, String signingSecret,
+                                   long ttlSeconds, long cooldownSeconds, long dailyLimit,
+                                   long hourlyLimit, boolean ignored) {
         if (signingSecret == null || signingSecret.length() < 32 || ttlSeconds < 60 || cooldownSeconds < 1) {
             throw new IllegalStateException("验证码配置无效");
         }
@@ -47,6 +64,8 @@ public class SmsVerificationService implements SmsCodeVerifier {
         this.hmacKey = signingSecret.getBytes(StandardCharsets.UTF_8);
         this.ttl = Duration.ofSeconds(ttlSeconds);
         this.cooldown = Duration.ofSeconds(cooldownSeconds);
+        this.dailyLimit = dailyLimit;
+        this.hourlyLimit = hourlyLimit;
     }
 
     public IssueResult issue(String identity) {
@@ -60,6 +79,9 @@ public class SmsVerificationService implements SmsCodeVerifier {
         try {
             Boolean allowed = redis.opsForValue().setIfAbsent(cooldownKey, "1", cooldown);
             if (!Boolean.TRUE.equals(allowed)) {
+                throw new BizException(429, "验证码请求过于频繁，请稍后再试");
+            }
+            if (!withinSendLimits(destination, cooldownKey)) {
                 throw new BizException(429, "验证码请求过于频繁，请稍后再试");
             }
             String code = "%06d".formatted(RANDOM.nextInt(1_000_000));
@@ -76,6 +98,40 @@ public class SmsVerificationService implements SmsCodeVerifier {
             throw e;
         } catch (RuntimeException e) {
             throw new BizException(503, "验证码服务暂不可用，请稍后重试");
+        }
+    }
+
+    private boolean withinSendLimits(String destination, String cooldownKey) {
+        try {
+            String destinationHash = digest(destination);
+            if (dailyLimit > 0) {
+                String key = "takeout:verification:daily:" + destinationHash + ":" +
+                        java.time.LocalDate.now(java.time.ZoneOffset.UTC);
+                Long count = redis.opsForValue().increment(key);
+                if (count != null) {
+                    redis.expire(key, Duration.ofDays(1));
+                    if (count > dailyLimit) {
+                        redis.delete(cooldownKey);
+                        return false;
+                    }
+                }
+            }
+            if (hourlyLimit > 0) {
+                String key = "takeout:verification:hourly:" +
+                        (Instant.now().getEpochSecond() / 3600);
+                Long count = redis.opsForValue().increment(key);
+                if (count != null) {
+                    redis.expire(key, Duration.ofHours(1));
+                    if (count > hourlyLimit) {
+                        redis.delete(cooldownKey);
+                        return false;
+                    }
+                }
+            }
+            return true;
+        } catch (RuntimeException e) {
+            // Redis failures are fail-closed for code storage, but do not turn a mock sender test into a false limit.
+            throw e;
         }
     }
 

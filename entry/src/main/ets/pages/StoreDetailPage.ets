@@ -5,7 +5,7 @@ import { AppButtonStyle, AppTheme } from '../common/theme/AppTheme'
  * 多规格 SKU：商品 specs 非空时必须先选规格再加购（后端要求 specId，否则返回 400）。
  */
 import { AppMotion } from '../common/theme/AppMotion'
-import { StoreDetailContent } from './Index'
+import { StoreDetailContent } from '../components/store/StoreDetailContent'
 import { LoginPage } from './LoginPage'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { PageHeader } from '../components/PageHeader'

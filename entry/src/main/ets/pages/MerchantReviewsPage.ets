@@ -6,7 +6,7 @@ import { AppButtonStyle, AppCardStyle, AppTextAreaStyle } from '../common/theme/
 import { AppMotion } from '../common/theme/AppMotion'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
-import { Review } from '../model/Models'
+import { Review, User, UserRole } from '../model/Models'
 import { syncMerchantReviewsRemote, replyReviewRemote } from '../service/AppStorageManager'
 import { RatingStars } from '../components/RatingStars'
 import { logInfo } from '../service/AppLogger'
@@ -36,11 +36,15 @@ export struct MerchantReviewsPage {
   @State replyTarget: Review | null = null
   @State replyText: string = ''
   @State submitting: boolean = false
+  @StorageLink('user') user: User = { id: 0, username: '', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER, balance: 0, coupons: [], orders: [], storeIds: [] }
 
   async aboutToAppear(): Promise<void> {
     logInfo('Page', '进入商户评价管理页 MerchantReviewsPage')
-    if (this.loggedIn) {
+    if (this.loggedIn && this.user.role === UserRole.MERCHANT) {
       await this.loadReviews()
+    } else {
+      promptAction.showToast({ message: '仅商户账号可以查看评价', duration: 1600 })
+      router.back()
     }
   }
 

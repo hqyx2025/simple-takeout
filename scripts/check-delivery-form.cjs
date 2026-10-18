@@ -1,8 +1,9 @@
 // Run: node scripts/check-delivery-form.cjs
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const path = require('node:path');
 const vm = require('node:vm');
-const ts = require('C:/Program Files/Huawei/DevEco Studio/sdk/default/openharmony/ets/build-tools/ets-loader/node_modules/typescript');
+const ts = require(path.join(process.env.DEVECO_SDK_HOME || 'C:/Program Files/Huawei/DevEco Studio/sdk', 'default/openharmony/ets/build-tools/ets-loader/node_modules/typescript'));
 const source = fs.readFileSync('entry/src/main/ets/service/DeliveryFormSync.ets', 'utf8');
 const values = new Map([['privacyConsent', true], ['isLoggedIn', true], ['user', { id: 7, role: 0 }]]);
 const writes = [];

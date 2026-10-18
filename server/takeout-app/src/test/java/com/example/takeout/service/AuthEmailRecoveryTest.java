@@ -35,7 +35,7 @@ class AuthEmailRecoveryTest {
         when(users.findByPhoneForUpdate("13800138000")).thenReturn(Optional.of(user(1, "first", "13800138000")));
         assertThrows(BizException.class, () -> auth.resetPasswordByEmail("13900139000", "751848863@qq.com", "123456", "newpass123"));
         BizException error = assertThrows(BizException.class, () -> auth.resetPasswordByEmail("13800138000", "wrong@qq.com", "123456", "newpass123"));
-        assertEquals("邮箱错误，请输入该手机号绑定的邮箱", error.getMessage());
+        assertEquals("手机号或邮箱不匹配", error.getMessage());
         assertThrows(BizException.class, () -> auth.resetPasswordByEmail("13700137000", "751848863@qq.com", "123456", "newpass123"));
         verifyNoInteractions(codes);
         verify(users, never()).updatePassword(anyLong(), anyString(), anyString());
@@ -52,7 +52,7 @@ class AuthEmailRecoveryTest {
         var request = new com.example.takeout.controller.AuthController.EmailCodeRequest("13800138000", "wrong@qq.com", "login", null);
         BizException error = assertThrows(BizException.class, () -> controller.emailCode(request,
                 mock(jakarta.servlet.http.HttpServletRequest.class)));
-        assertEquals("邮箱错误，请输入该手机号绑定的邮箱", error.getMessage());
+        assertEquals("手机号或邮箱不匹配", error.getMessage());
         verifyNoInteractions(sender);
     }
 

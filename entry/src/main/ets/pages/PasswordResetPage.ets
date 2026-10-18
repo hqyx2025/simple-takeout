@@ -91,7 +91,10 @@ export struct PasswordResetPage {
       this.cooldownSeconds = Math.max(0, this.cooldownSeconds - 1)
       if (this.cooldownSeconds === 0) { clearInterval(this.cooldownTimer); this.cooldownTimer = -1 }
     }, 1000)
-    promptAction.showToast({ message: '验证码已发送', duration: 1500 })
+    promptAction.showToast({
+      message: result.mock === true && result.code !== undefined ? `开发模式验证码：${result.code}` : '验证码已发送',
+      duration: 1800
+    })
   }
 
   private async submit(): Promise<void> {

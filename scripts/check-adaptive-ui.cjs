@@ -45,7 +45,7 @@ page.recomputeTotals();
 assert.equal(page.expandedStoreIds.length, 0, 'remove stale expansion state');
 assert.equal(rows.length, 6, 'presentation must not mutate server rows');
 // ArkUI ForEach retains the builder capture while its key stays unchanged.
-assert(cart.includes('${card.storeId}-${card.expanded}'), 'expanded card must invalidate captured view model');
+assert(cart.includes('(card: CartStoreCard) => `${card.storeId}`'), 'expanded card keys must stay stable by store id');
 
 const nav = read('components/AdaptiveTabBar.ets');
 let timers = new Map(), nextId = 0, subscriptions = 0;

@@ -28,12 +28,23 @@ public class AuthService {
     private final SmsCodeVerifier smsCodeVerifier;
     private final Clock clock;
     private boolean demoRechargeEnabled;
+    private double signupBalance;
 
     @Autowired
     public AuthService(UserDao userDao, JwtUtil jwtUtil, SmsCodeVerifier smsCodeVerifier,
-                       @Value("${takeout.demo.recharge-enabled:false}") boolean demoRechargeEnabled) {
+                       @Value("${takeout.demo.recharge-enabled:false}") boolean demoRechargeEnabled,
+                       @Value("${takeout.demo.signup-balance:20}") double signupBalance) {
         this(userDao, jwtUtil, smsCodeVerifier, Clock.systemDefaultZone());
         this.demoRechargeEnabled = demoRechargeEnabled;
+        this.signupBalance = signupBalance;
+    }
+
+    /** Compatibility constructor for tests and integrations using the previous configuration shape. */
+    public AuthService(UserDao userDao, JwtUtil jwtUtil, SmsCodeVerifier smsCodeVerifier,
+                       boolean demoRechargeEnabled) {
+        this(userDao, jwtUtil, smsCodeVerifier, Clock.systemDefaultZone());
+        this.demoRechargeEnabled = demoRechargeEnabled;
+        this.signupBalance = 20.0;
     }
 
     AuthService(UserDao userDao, JwtUtil jwtUtil, SmsCodeVerifier smsCodeVerifier, Clock clock) {
@@ -45,6 +56,7 @@ public class AuthService {
 
     public AuthService(UserDao userDao, JwtUtil jwtUtil, SmsCodeVerifier smsCodeVerifier) {
         this(userDao, jwtUtil, smsCodeVerifier, Clock.systemDefaultZone());
+        this.signupBalance = 20.0;
     }
 
     /** Unit-test constructor; password reset remains closed unless a verifier is supplied. */
@@ -70,7 +82,7 @@ public class AuthService {
         smsCodeVerifier.consume(registrationIdentity(phone, normalizedEmail), code);
         String now = LocalDateTime.now().format(FMT);
         return userDao.insert(username.trim(), phone, normalizedEmail, PasswordUtil.hash(password),
-                role, role == 0 ? 20.0 : 0.0, now);
+                role, role == 0 ? Math.max(0.0, signupBalance) : 0.0, now);
     }
 
     /** Check duplicates before requesting mail and again before account creation. */
@@ -197,7 +209,7 @@ public class AuthService {
             throw new BizException("手机号或邮箱不匹配");
         }
         if (!normalizedEmail.equals(normalizeEmail(user.email()))) {
-            throw new BizException("邮箱错误，请输入该手机号绑定的邮箱");
+            throw new BizException("手机号或邮箱不匹配");
         }
         return user;
     }
@@ -243,16 +255,25 @@ public class AuthService {
         return userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在")).safe();
     }
 
+    @Transactional
     public User updateProfile(long userId, String username, String phone) {
-        return updateProfileInternal(userId, username, phone, null, false);
+        return updateProfileInternal(userId, username, phone, null, null, false);
     }
 
+    @Transactional
     public User updateProfile(long userId, String username, String phone, String email) {
-        return updateProfileInternal(userId, username, phone, email, true);
+        return updateProfileInternal(userId, username, phone, email, null, true);
+    }
+
+    /** Update profile, requiring the current password when a recovery contact changes. */
+    @Transactional
+    public User updateProfile(long userId, String username, String phone, String email,
+                              String currentPassword) {
+        return updateProfileInternal(userId, username, phone, email, currentPassword, true);
     }
 
     private User updateProfileInternal(long userId, String username, String phone, String email,
-                                       boolean updateEmail) {
+                                       String currentPassword, boolean updateEmail) {
         if (username == null || username.isBlank()) {
             throw new BizException("用户名不能为空");
         }
@@ -268,11 +289,20 @@ public class AuthService {
         if (userDao.existsByUsernameExceptUser(username.trim(), userId)) {
             throw new BizException("该账号已被其他用户使用");
         }
+        User current = userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
+        String normalizedEmail = updateEmail ? requireEmail(email) : normalizeEmail(current.email());
+        boolean contactChanged = !phone.equals(current.phone())
+                || (updateEmail && !normalizedEmail.equals(normalizeEmail(current.email())));
+        if (contactChanged && (currentPassword == null || !PasswordUtil.matches(currentPassword, current.password()))) {
+            throw new BizException("修改手机号或邮箱需要验证当前密码");
+        }
         if (!updateEmail) {
             userDao.updateProfile(userId, username.trim(), phone);
         } else {
-            String normalizedEmail = requireEmail(email);
             userDao.updateProfile(userId, username.trim(), phone, normalizedEmail);
+        }
+        if (contactChanged) {
+            userDao.updatePassword(userId, current.password(), nextPasswordChangedAt(current.passwordChangedAt()));
         }
         return profile(userId);
     }

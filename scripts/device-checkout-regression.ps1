@@ -13,7 +13,7 @@
               exactly one new order, status == 0 (pending payment), payAmount == 22.59,
               balance unchanged (creation does not debit), goods stock -3, cart emptied
 
-  Deliberately avoids the traps listed in section 8 of md/设备实测进展与待办.md:
+  Deliberately avoids the traps listed in section 8 of md/archive/设备实测进展与待办.md:
     * no Chinese passed through hdc arguments
     * no Join-String, no nested double quotes inside double-quoted strings
     * request counts come from device-side `grep -c` on hilog, never from file-offset log tailing
@@ -43,9 +43,10 @@ param(
 # writing to stderr becomes a terminating error when the preference is Stop (build then aborts for
 # no real reason). Build/install success is judged explicitly below instead.
 $ErrorActionPreference = 'Continue'
-$hdc = 'C:\Program Files\Huawei\DevEco Studio\sdk\default\openharmony\toolchains\hdc.exe'
-$node = 'C:\Program Files\Huawei\DevEco Studio\tools\node\node.exe'
-$hvigor = 'C:\Program Files\Huawei\DevEco Studio\tools\hvigor\bin\hvigorw.js'
+$envScript = Join-Path $PSScriptRoot 'lib\device-env.ps1'; . $envScript
+$hdc = $script:DevEcoHdc
+$node = $script:DevEcoNode
+$hvigor = $script:DevEcoHvigor
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
@@ -103,7 +104,7 @@ Check 'fixture-below-min-order' (([double]$cartBefore[0].price * 1) -lt [double]
 # ---------- 2. build ----------
 if ($Build) {
   Write-Host '=== [2/6] build main + ohosTest HAP ===' -ForegroundColor Cyan
-  $env:DEVECO_SDK_HOME = 'C:\Program Files\Huawei\DevEco Studio\sdk'
+  $env:DEVECO_SDK_HOME = $script:DevEcoSdkHome
   $mainOut = & $node $hvigor --mode module -p module=entry@default -p product=default -p requiredDeviceType=phone assembleHap --analyze=normal --parallel --incremental --daemon 2>&1
   if (($mainOut | Out-String) -notmatch 'BUILD SUCCESSFUL') {
     Write-Host '[FAIL] main build did not print BUILD SUCCESSFUL' -ForegroundColor Red

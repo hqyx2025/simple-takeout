@@ -77,7 +77,6 @@ export struct AdminOrderPage {
   @State loading: boolean = false
   @State actioningOrderId: number = 0
   // 拼进 ForEach 键，强制重建同 id 的订单行（否则刷新后状态/按钮文案停留在旧值）
-  @State renderVersion: number = 0
 
   aboutToAppear(): void {
     logInfo('Page', '进入管理端订单管理页 AdminOrderPage')
@@ -128,7 +127,6 @@ export struct AdminOrderPage {
   private applyFilter(): void {
     this.displayOrders = Array.isArray(this.orders) ? this.orders : []
     // 键只含 id 时，刷新回来的同 id 新对象会被 ForEach 复用，退款后状态不刷新。
-    this.renderVersion += 1
   }
 
   /** 切换筛选 Tab。 */
@@ -298,7 +296,7 @@ export struct AdminOrderPage {
               .attributeModifier(new AppCardStyle())
             .width('100%').padding(SPACING.MD)
           }
-        }, (order: AdminOrder) => `${this.renderVersion}-${order.id}`)
+        }, (order: AdminOrder) => `${order.id}`)
         ListItem() {
           Row({ space: SPACING.SM }) {
             Text(`已显示 ${this.displayOrders.length} / ${this.total}`)

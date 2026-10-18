@@ -1054,8 +1054,14 @@ public class OrderService {
     public int autoConfirmDeliveredOrders(int hours) {
         int settled = 0;
         for (long orderId : orderDao.listAutoConfirmCandidates(hours)) {
-            Boolean result = transactions.execute(status -> autoConfirmOrder(orderId));
-            if (Boolean.TRUE.equals(result)) settled++;
+            try {
+                Boolean result = transactions.execute(status -> autoConfirmOrder(orderId));
+                if (Boolean.TRUE.equals(result)) settled++;
+            } catch (RuntimeException e) {
+                // One malformed order must not starve the remainder of the scan; it is retried next round.
+                log.warn("[自动确认收货] 单笔结算失败 orderId={} exception={}", orderId,
+                        e.getClass().getSimpleName(), e);
+            }
         }
         return settled;
     }

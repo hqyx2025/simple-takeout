@@ -5,7 +5,7 @@ import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/App
 import { AppMotion } from '../common/theme/AppMotion'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
-import { Rider, Address } from '../model/Models'
+import { Rider, Address, User, UserRole } from '../model/Models'
 import { fetchRiderProfileRemote, logout, setRiderStatusRemote, reportRiderLocationRemote } from '../service/AppStorageManager'
 import { updateRiderRadiusApi, updateRiderLocationApi } from '../service/ApiService'
 import { joinAddressParts } from '../service/LocationService'
@@ -38,6 +38,7 @@ export struct RiderCenterPage {
   }
 
   @StorageLink('isLoggedIn') loggedIn: boolean = false
+  @StorageLink('user') user: User = { id: 0, username: '', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER, balance: 0, coupons: [], orders: [], storeIds: [] }
   @State rider: Rider | null = null
   @State loading: boolean = false
   @State toggling: boolean = false
@@ -53,8 +54,11 @@ export struct RiderCenterPage {
 
   async aboutToAppear(): Promise<void> {
     logInfo('Page', '进入骑手中心 RiderCenterPage')
-    if (this.loggedIn) {
+    if (this.loggedIn && this.user.role === UserRole.RIDER) {
       await this.loadProfile()
+    } else {
+      promptAction.showToast({ message: '仅骑手账号可以进入骑手中心', duration: 1600 })
+      router.replaceUrl({ url: 'pages/Index' })
     }
   }
 

@@ -61,7 +61,6 @@ export struct CartPage {
   // 多规格：勾选按 (菜品, 规格) 行粒度记录，避免同菜品不同规格互相串选
   @State selectedRowKeys: string[] = []
   @State processing: boolean = false
-  @State cartRenderVersion: number = 0
   @State totalCount: number = 0
   @State totalPrice: number = 0
   // 凑单提示（未达起送价的店铺）
@@ -83,7 +82,6 @@ export struct CartPage {
     if (this.loggedIn) {
       this.cartItems = AppStorage.get<CartItem[]>('cartItems') || []
       this.recomputeTotals()
-      this.cartRenderVersion += 1
     }
   }
 
@@ -94,7 +92,6 @@ export struct CartPage {
     }
     this.cartItems = remoteCart.slice()
     this.recomputeTotals()
-    this.cartRenderVersion += 1
     await this.refreshBundleHints()
     return true
   }
@@ -393,7 +390,7 @@ export struct CartPage {
             ListItem() {
               this.StoreCard(card)
             }
-          }, (card: CartStoreCard) => `${this.cartRenderVersion}-${card.storeId}-${card.expanded}`)
+          }, (card: CartStoreCard) => `${card.storeId}`)
         }
         .width('100%')
         .height('100%')
@@ -482,7 +479,7 @@ export struct CartPage {
       }
       ForEach(card.visibleItems, (item: CartItem) => {
         this.CartItemRow(item)
-      }, (item: CartItem) => `${this.cartRenderVersion}-${item.storeId}-${item.goods.id}-${item.specId ?? 0}`)
+      }, (item: CartItem) => `${item.storeId}-${item.goods.id}-${item.specId ?? 0}`)
 
       if (card.items.length > 2) {
         Button(card.expanded ? '收起商品 ∧' : `展开其余 ${card.items.length - 2} 件商品 ∨`)

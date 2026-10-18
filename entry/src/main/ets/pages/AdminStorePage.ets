@@ -57,7 +57,6 @@ export struct AdminStorePage {
   @State statusFilter: number = -1
   @State displayStores: AdminStore[] = []
   // 刷新回来的同 id 新对象会被 ForEach 复用，营业/推荐状态变更后按钮不刷新。
-  @State renderVersion: number = 0
 
   aboutToAppear(): void {
     logInfo('Page', '进入管理端店铺管理页 AdminStorePage')
@@ -84,7 +83,6 @@ export struct AdminStorePage {
     this.displayStores = this.statusFilter === -1
       ? this.stores
       : this.stores.filter((store: AdminStore) => store.status === this.statusFilter)
-    this.renderVersion += 1
   }
 
   /** 切换店铺营业状态：1 营业中 ↔ 0 已暂停（后端校验 status 合法性）。 */
@@ -188,7 +186,7 @@ export struct AdminStorePage {
               .attributeModifier(new AppCardStyle())
             .width('100%').padding(SPACING.MD)
           }
-        }, (store: AdminStore) => `${this.renderVersion}-${store.id}`)
+        }, (store: AdminStore) => `${store.id}`)
       }
       .width('100%').layoutWeight(1).scrollBar(BarState.Off)
       .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })

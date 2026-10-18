@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Read a `uitest dumpLayout` artifact and print page path + every node that has text or an id.
 

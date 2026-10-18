@@ -2,10 +2,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const ts = require('C:/Program Files/Huawei/DevEco Studio/tools/ohpm/node_modules/typescript');
+const ts = require(path.join(process.env.DEVECO_HOME || 'C:/Program Files/Huawei/DevEco Studio', 'tools/ohpm/node_modules/typescript'));
 
 // Exercise the actual store-detail click handlers with an animation that never finishes.
-const source = fs.readFileSync(path.join(__dirname, '../entry/src/main/ets/pages/Index.ets'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '../entry/src/main/ets/components/store/StoreDetailContent.ets'), 'utf8');
 const methods = source.slice(source.indexOf('  private enqueueCartOperation('),
   source.indexOf('  // 该菜品是否是多规格菜品'));
 const compiled = ts.transpileModule(`class StoreClicks { ${methods} } exports.StoreClicks = StoreClicks;`, {
