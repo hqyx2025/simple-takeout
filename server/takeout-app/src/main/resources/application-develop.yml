@@ -11,5 +11,5 @@ takeout:
     local-enabled: true
   payment:
     real-enabled: ${TAKEOUT_PAYMENT_REAL_ENABLED:false}
-    mock-enabled: true
+    mock-enabled: ${TAKEOUT_PAYMENT_MOCK_ENABLED:false}
     sandbox: true

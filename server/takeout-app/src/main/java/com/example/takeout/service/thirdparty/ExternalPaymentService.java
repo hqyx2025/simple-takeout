@@ -64,11 +64,8 @@ public class ExternalPaymentService {
 
     public PaymentLaunch startPayment(String channel, Order order, String mode) {
         mode = normalizeMode(mode);
-        if (!properties.isRealEnabled() || properties.isMockEnabled()) {
-            throw new BizException(503, "真实支付尚未启用，请联系管理员");
-        }
-        if (PaymentChannels.ALIPAY.equals(channel) && "APP".equals(mode) && properties.isSandbox()) {
-            throw new BizException(503, "支付宝鸿蒙沙箱不支持本机支付，请选择其他设备扫码支付");
+        if (!providerPaymentsEnabled()) {
+            throw new BizException(503, "第三方支付尚未启用，请联系管理员");
         }
         PaymentGateway gateway = requireGateway(channel);
         String paymentMode = mode;
@@ -97,9 +94,7 @@ public class ExternalPaymentService {
             if (order.status() != 0) return;
             PaymentTransaction payment = transactionDao.findActiveByOrder(orderId).orElse(null);
             if (payment == null) return;
-            if (!properties.isRealEnabled() || properties.isMockEnabled()) {
-                throw new BizException(503, "真实支付尚未启用，请联系管理员");
-            }
+            if (!providerPaymentsEnabled()) throw new BizException(503, "第三方支付尚未启用，请联系管理员");
             PaymentGateway.QueryResult result = requireGateway(payment.channel()).query(payment.outTradeNo());
             if (result.paid()) applyVerifiedNotice(payment.channel(), result.notice());
             // 未扫描的支付宝二维码可能尚无交易；只由取消流程关闭本地预支付，避免刷新清掉二维码。
@@ -148,7 +143,7 @@ public class ExternalPaymentService {
     }
 
     public NotificationResult acceptNotification(String channel, String rawBody, Map<String, String> metadata) {
-        if (!properties.isRealEnabled() || properties.isMockEnabled()) {
+        if (!providerPaymentsEnabled()) {
             throw new SecurityException("Payment notifications are disabled");
         }
         PaymentGateway gateway = requireGateway(channel);
@@ -296,6 +291,10 @@ public class ExternalPaymentService {
         PaymentGateway gateway = gateways.get(channel);
         if (gateway == null) throw new BizException(503, "支付渠道暂不可用");
         return gateway;
+    }
+
+    private boolean providerPaymentsEnabled() {
+        return !properties.isMockEnabled() && (properties.isRealEnabled() || properties.isSandbox());
     }
 
     private PaymentLaunch launch(PaymentTransaction payment) {

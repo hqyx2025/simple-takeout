@@ -141,7 +141,7 @@ export struct OrderDetailPage {
       this.paymentUrl = remoteOrder.paymentUrl ?? ''
       this.paymentAttempted = storedChannel === 'ALIPAY'
       this.paymentMessage = storedChannel !== 'ALIPAY' ? '' : remoteOrder.paymentSandbox === true
-        ? '当前沙箱仅支持其他设备的支付宝沙箱钱包扫码支付'
+        ? '当前使用支付宝沙箱，可通过本机支付宝 SDK 支付或使用沙箱钱包扫码'
         : '支付已准备，可使用本机支付宝或选择其他设备扫码'
     } else {
       this.paymentUrl = ''

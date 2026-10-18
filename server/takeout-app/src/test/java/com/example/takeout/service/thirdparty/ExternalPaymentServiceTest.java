@@ -65,14 +65,32 @@ class ExternalPaymentServiceTest {
     }
 
     @Test
-    void rejectsHarmonySandboxAppBeforeCreatingAnyAttempt() {
+    void sandboxAppPaymentWorksWithoutEnablingProductionPayments() {
+        properties.setRealEnabled(false);
+        properties.setMockEnabled(false);
+        paymentFixture(null);
+        when(gateway.createAppPayment(anyString(), anyString(), any(), any())).thenReturn("sandbox-app-order");
+
+        ExternalPaymentService.PaymentLaunch launch = service.startPayment("ALIPAY", pendingOrder(), "APP");
+
+        assertEquals("APP", launch.paymentMode());
+        assertEquals("sandbox-app-order", launch.appOrderInfo());
+        assertTrue(launch.paymentSandbox());
+        verify(gateway).createAppPayment(anyString(), anyString(), any(), any());
+        verify(gateway, never()).createQrPayment(anyString(), anyString(), any(), any());
+    }
+
+    @Test
+    void explicitMockModeStillBlocksSandboxProviderPayments() {
+        properties.setRealEnabled(false);
+        properties.setMockEnabled(true);
+
         BizException error = assertThrows(BizException.class,
                 () -> service.startPayment("ALIPAY", pendingOrder(), "APP"));
+
         assertEquals(503, error.getCode());
-        assertTrue(error.getMessage().contains("其他设备扫码"));
         verify(orderDao, never()).findByIdForUpdate(anyLong());
         verify(gateway, never()).createAppPayment(anyString(), anyString(), any(), any());
-        verify(gateway, never()).createQrPayment(anyString(), anyString(), any(), any());
     }
 
     @Test

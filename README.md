@@ -133,7 +133,7 @@ simple-takeout/
 
 ### 方式一：Docker Compose 单机双实例
 
-Compose 默认启用 `develop` 演示 profile，提供种子账号、mock 短信验证码回传、演示充值、本地上传和 mock 支付；真实支付渠道关闭。Compose 不透传 `.env` 中的 `TAKEOUT_PAYMENT_MOCK_ENABLED`，避免本地 profile 被环境文件覆盖。仅用于本地演示，禁止对外部署。生产环境需设置 `SPRING_PROFILES_ACTIVE=production` 并配置真实短信、对象存储及支付凭证；production 会拒绝验证码回传和演示充值。演示管理员初始密码为 `123456`，新建种子账号时可用 `TAKEOUT_DEMO_ADMIN_PASSWORD` 覆盖。
+Compose 默认启用 `develop` 演示 profile，提供种子账号、mock 短信验证码回传、演示充值、本地上传，以及支付宝沙箱 APP SDK / 扫码支付；真实生产支付关闭。沙箱支付需要配置支付宝沙箱应用密钥、支付宝公钥和可访问的 HTTPS 回调地址，扫码需使用另一台设备上的支付宝沙箱钱包。仅用于本地演示，禁止对外部署。生产环境需设置 `SPRING_PROFILES_ACTIVE=production` 并配置真实短信、对象存储及生产支付凭证；production 会拒绝验证码回传和演示充值。演示管理员初始密码为 `123456`，新建种子账号时可用 `TAKEOUT_DEMO_ADMIN_PASSWORD` 覆盖。
 
 首次启动前，将 `.env.example` 复制为仓库根目录 `.env`，并替换数据库密码和 JWT 密钥。Compose 与后端容器使用 `.env` 中的数据库用户名和密码；不要把真实密钥提交到 Git。项目的 Compose 配置均集中在 `.env`，其中生产短信、OBS、推送和支付凭证仅在启用相应生产服务时填写：
 
