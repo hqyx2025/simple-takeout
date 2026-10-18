@@ -8,8 +8,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class ProductionHuaweiGuardTest {
     @Test
     void productionDoesNotAcceptMockSmsOrLocalUploadOverrides() {
-        assertThrows(IllegalStateException.class, () -> new ProductionHuaweiGuard("mock", "obs"));
-        assertThrows(IllegalStateException.class, () -> new ProductionHuaweiGuard("huawei", "local"));
-        assertDoesNotThrow(() -> new ProductionHuaweiGuard("huawei", "obs"));
+        assertThrows(IllegalStateException.class, () -> new ProductionHuaweiGuard("mock", "obs", false, false));
+        assertThrows(IllegalStateException.class, () -> new ProductionHuaweiGuard("huawei", "local", false, false));
+        assertDoesNotThrow(() -> new ProductionHuaweiGuard("huawei", "obs", false, false));
+        assertThrows(IllegalStateException.class, () -> new ProductionHuaweiGuard("huawei", "obs", true, false));
+        assertThrows(IllegalStateException.class, () -> new ProductionHuaweiGuard("huawei", "obs", false, true));
     }
 }

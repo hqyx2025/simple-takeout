@@ -1,6 +1,7 @@
 package com.example.takeout.service;
 
 import com.example.takeout.dao.UserDao;
+import com.example.takeout.common.BizException;
 import com.example.takeout.model.User;
 import com.example.takeout.security.JwtUtil;
 import com.example.takeout.security.PasswordUtil;
@@ -10,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -121,10 +123,19 @@ class AuthServiceSecurityTest {
         User after = new User(1, "鐢ㄦ埛", "", "13800138000", "", 0, 25.0, "now");
         when(userDao.findById(1)).thenReturn(java.util.Optional.of(before), java.util.Optional.of(after));
 
-        User result = new AuthService(userDao, jwtUtil).recharge(1, 5.0);
+        User result = new AuthService(userDao, jwtUtil, (phone, code) -> {}, true).recharge(1, 5.0);
 
         verify(userDao).addBalance(1, 5.0);
         assertEquals(25.0, result.balance());
+    }
+
+    @Test
+    void rechargeIsDisabledByDefault() {
+        UserDao userDao = mock(UserDao.class);
+        AuthService service = new AuthService(userDao, mock(JwtUtil.class));
+        BizException error = assertThrows(BizException.class, () -> service.recharge(1, 5.0));
+        assertEquals("演示充值未开启", error.getMessage());
+        verifyNoInteractions(userDao);
     }
 
     @Test
@@ -134,7 +145,7 @@ class AuthServiceSecurityTest {
 
         com.example.takeout.common.BizException error = assertThrows(
                 com.example.takeout.common.BizException.class,
-                () -> new AuthService(userDao, jwtUtil).recharge(1, 0));
+                () -> new AuthService(userDao, jwtUtil, (phone, code) -> {}, true).recharge(1, 0));
 
         assertEquals("\u5145\u503c\u91d1\u989d\u9700\u5728 0.01 \u81f3 10000 \u5143\u4e4b\u95f4", error.getMessage());
     }

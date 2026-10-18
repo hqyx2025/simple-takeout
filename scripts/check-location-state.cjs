@@ -26,10 +26,12 @@ function loadModule(file, dependencies) {
 }
 async function testAddressRestore() {
   const models = loadModule('entry/src/main/ets/model/Models.ets', {});
-  const http = { setAuthToken() {}, getAuthToken: () => memory.get('authToken') };
+  const http = { setAuthTokens() {}, getAuthToken: () => memory.get('authToken'),
+    getAuthSessionEpoch: () => 0, registerSessionExpiredHandler() {} };
   const persistence = loadModule('entry/src/main/ets/service/DataPersistence.ets', {
     '@ohos.data.preferences': { default: { getPreferences: async () => prefs } },
-    '../model/Models': models, './AppLogger': logger, './HttpClient': http
+    '../model/Models': models, './AppLogger': logger, './HttpClient': http,
+    './TokenStorage': { loadAuthTokens: async () => null, saveAuthTokens: async () => {}, clearAuthTokens: async () => {} }
   });
   const oldAddress = { id: 9, name: '测试收件人', phone: '', address: '旧地址', detail: '', isDefault: true };
   for (const [key, value] of Object.entries({ privacyConsent: true, authToken: 'test-session-a',
@@ -45,7 +47,10 @@ async function testAddressRestore() {
   const manager = loadModule('entry/src/main/ets/service/AppStorageManager.ets', {
     '../model/Models': models, './DataPersistence': persistence, './AppLogger': logger,
     './HttpClient': http, './ApiService': { fetchAddressesApi: async () => response },
-    '../common/Constants': { API_CONFIG: {} }, './LocationService': {}
+    '../common/Constants': { API_CONFIG: {} }, './LocationService': {},
+    './DeliveryFormSync': { clearDeliveryForms() {}, syncDeliveryForms: async () => {},
+      deliveryCustomerId: () => 0, deliveryRevision: () => '' },
+    './PushKitService': { clearPushIdentity() {}, registerPushForCurrentSession() {} }
   });
   assert.equal(await manager.syncAddressesRemote(), false, 'offline address sync must report failure');
   assert.equal(memory.get('currentAddress'), null);
@@ -107,17 +112,18 @@ async function testLocationFailureAndRace() {
   const code = ts.transpileModule('class PageProbe { ' + source.slice(start, end) + ' }; exports.PageProbe = PageProbe;',
     { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
   const exports = {};
-  let gps = Promise.reject(new Error('permission denied'));
+  let gps = () => Promise.reject(new Error('permission denied'));
   let resolveAddress;
   let reverse = Promise.resolve('address');
-  vm.runInNewContext(code, { exports, getCurrentPosition: () => gps,
+  vm.runInNewContext(code, { exports, getCurrentPosition: () => gps(),
     reverseGeocodePosition: () => reverse, logInfo() {} });
   const page = new exports.PageProbe();
-  Object.assign(page, { locationRequestId: 0, getUIContext: () => ({ getHostContext: () => ({}) }) });
+  Object.assign(page, { locationRequestId: 0, getUIContext: () => ({ getHostContext: () => ({}) }),
+    clearNearby() {}, beginNearby() {} });
   await page.locateCurrent();
   assert.equal(page.isLocating, false, 'permission failure must stop spinner and expose retry');
   assert.equal(page.currentPosition, null);
-  gps = Promise.resolve({ latitude: 30, longitude: 114 });
+  gps = () => Promise.resolve({ latitude: 30, longitude: 114 });
   reverse = new Promise(resolve => { resolveAddress = resolve; });
   const pending = page.locateCurrent();
   await Promise.resolve();

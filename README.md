@@ -58,7 +58,7 @@
   Redis Stream，消费组 + 去重键保证幂等。下单/支付/取消/退款事件异步驱动下游动作，
   **下单主流程保持同步事务**（防超卖依赖数据库条件更新的原子性）。
 - **资金平台托管**：用户支付后资金 `escrow_status=0` 托管，确认收货后才结算给商户。
-- **幂等与并发安全**：退款/结算用条件更新（`WHERE escrow_status=0`）防重复打款；
+- **幂等与并发安全**：下单使用数据库唯一键兜底、Redis 快速拦截；退款/结算使用带状态条件的更新防止竞态和重复入账；
   库存/秒杀名额用乐观锁（`WHERE stock >= ?`、`sold + ? <= quota`）防超卖。
   **刻意不依赖 Redis 锁**：Redis 锁覆盖不到数据库写入，宕机时反而更弱。
 - **容器化**：`docker compose up -d --build` 一条命令拉起后端 + MySQL + Redis（含健康检查与启动顺序）。
@@ -70,13 +70,13 @@
 | 前端 | HarmonyOS NEXT · ArkTS（严格模式）+ ArkUI | `targetSdkVersion` / `compatibleSdkVersion` **26.0.0**，单 HAP；仅依赖 `@ohos/axios`，无第三方 UI 库 |
 | 前端存储 | AppStorage + Preferences | 登录态、购物车展示等本地持久化 |
 | 后端 | Spring Boot 3.5.4 · Java 25 | 分层 Controller / Service / DAO；JWT 认证（jjwt 0.12.6）+ 自定义拦截器（**未引入 Spring Security**） |
-| 后端数据访问 | JdbcTemplate（购物车为 MyBatis-Plus 3.5.12） | `server/src/main/java/.../dao`、`mapper` |
+| 后端数据访问 | JdbcTemplate | `server/takeout-common` 中的 DAO 与 `server/takeout-app` 业务层 |
 | 数据库 | MySQL 8.4 | 库名 `takeout`；启动自动执行 `schema.sql`，`SchemaMigration` 兼容旧库，`DataSeeder` 填充种子数据 |
 | 缓存 | Redis 7（Lettuce 连接池） | 热点浏览数据缓存；故障快速降级（500ms 超时 + 短连接超时） |
 | 消息 | Redis Stream + 事务性 Outbox | 领域事件异步投递，**未引入 RabbitMQ/RocketMQ 等外部 MQ** |
 | 容器化 | Docker · Docker Compose | 后端镜像基于 JDK 25 多阶段构建；MySQL 8.4 + Redis 7 |
 | 地图 | 高德 Web 端 JS API v2.0 | 通过 ArkUI `Web` 组件内嵌运行，模拟器/真机均可用，无 native 依赖 |
-| 测试 | JUnit 5（后端 **151 个**）、Hypium + hamock（前端） | `server/src/test`、`entry/src/test`（Local Unit）、`entry/src/ohosTest`（UI 自动化） |
+| 测试 | JUnit 5（后端 **460 个用例**，含 28 个门控真 MySQL 用例）、Hypium（前端） | `server/*/src/test`、`entry/src/test`（Local Unit）、`entry/src/ohosTest`（设备 UI 自动化） |
 
 ## 系统架构
 
@@ -112,17 +112,12 @@ simple-takeout/
 │       │   └── model/        # 数据模型
 │       ├── test/             # Hypium 本地单元测试
 │       └── ohosTest/         # UiTest 设备端自动化测试
-├── server/                   # Spring Boot 后端（端口 8087）
-│   ├── src/main/
-│   │   ├── java/com/example/takeout/
-│   │   │   ├── controller/   # 对外接口
-│   │   │   ├── service/      # 业务（含 HotDataCacheService、service/mq 事件层）
-│   │   │   ├── dao/ mapper/  # 数据访问
-│   │   │   ├── job/          # 定时任务（Outbox 中继、订单超时取消）
-│   │   │   ├── config/       # RedisConfig、DataSeeder、SchemaMigration 等
-│   │   │   └── security/     # JWT 与拦截器
-│   │   └── resources/        # application.yml、schema.sql
-│   ├── docker/healthcheck.java   # 容器探活（运行镜像无 curl/wget）
+├── server/                   # Spring Boot 多模块后端（应用端口 8087）
+│   ├── takeout-common/        # 共享 model、DAO、安全与通用组件
+│   ├── takeout-app/           # Controller、Service、Job、配置、schema.sql 与应用测试
+│   │   └── docker/healthcheck.java # 容器探活（运行镜像无 curl/wget）
+│   ├── takeout-gateway/       # API 网关
+│   └── pom.xml                # Maven 聚合根
 │   └── Dockerfile            # 多阶段构建（JDK 25）
 ├── docker-compose.yml        # 一键环境：app + MySQL 8.4 + Redis 7
 ├── signing/                  # Release 签名配置模板（勿提交真实证书/密码）
@@ -137,6 +132,8 @@ simple-takeout/
 ## 快速开始
 
 ### 方式一：Docker Compose 单机双实例
+
+Compose 默认启用 `develop` 演示 profile，提供种子账号、mock 短信验证码回传、演示充值、本地上传；第三方真实支付默认关闭。仅用于本地演示，禁止对外部署。生产环境需设置 `SPRING_PROFILES_ACTIVE=production`、`TAKEOUT_PAYMENT_MOCK_ENABLED=false` 并配置真实短信、对象存储及支付凭证；production 会拒绝验证码回传和演示充值。演示管理员初始密码为 `123456`，新建种子账号时可用 `TAKEOUT_DEMO_ADMIN_PASSWORD` 覆盖。
 
 首次启动前，在仓库根目录创建本地 `.env`（不要提交真实密钥）：
 
@@ -177,7 +174,8 @@ docker compose down  # 停止并保留数据卷
 | 运行设备 | HarmonyOS 模拟器或真机 |
 
 ```bash
-# 确保 JAVA_HOME 指向 JDK 25，在仓库根目录执行
+# 确保 JAVA_HOME 指向 JDK 25；本机演示运行需设置 SPRING_PROFILES_ACTIVE=develop
+# PowerShell: $env:SPRING_PROFILES_ACTIVE="develop"
 # 多模块工程：聚合根为 server/pom.xml（含 takeout-common / takeout-app / takeout-gateway）
 mvn -f server/pom.xml -pl takeout-app spring-boot:run
 
@@ -290,7 +288,7 @@ Release 构建需要签名与证书：参考 `signing/release-signing.template.j
   已支付订单取消不退优惠券，仅待付款取消释放优惠券。
 - **骑手配送**：商户出餐（`ready`）后订单进入骑手待取餐池，在线骑手抢单（`/api/rider/orders/pool` → `grab`），
   随后取餐 → 送达，推进 `status` 到 4。
-- **确认收货**：`status` 保持 4，`escrow_status` 0 → 1，金额结算到商户余额。
+- **确认收货**：`status` 保持 4，`escrow_status` 0 → 1；商户实收为 `pay_amount - delivery_fee`，配送费计入骑手收入。超过配置时限仍未确认的订单由自动确认任务结算（默认 24 小时）。
 - **已送达订单退款**：`status=4`、`escrow=0` 且未评价时可申请 → 6 → 管理端审批：
   同意则 `escrow` 0 → 2 并退回用户余额，拒绝则回退 4。
 - **商户列表不展示 `status=0` 订单**（尚未支付，不进入商户待处理队列）。

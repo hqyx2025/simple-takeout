@@ -143,6 +143,45 @@ class OrderConcurrencyMySqlTest {
     }
 
     @Test
+    void sameRequestAcrossConcurrentTransactionsCreatesOnlyOneOrderWithoutRedis() throws Exception {
+        var successes = new java.util.concurrent.atomic.AtomicInteger();
+        runTogether(8, index -> {
+            try {
+                service.createOrder(1, 10, List.of(item(102, 300)), 1, 1, "",
+                        List.of(), "", "same-request", List.of(), "");
+                successes.incrementAndGet();
+            } catch (BizException duplicate) {
+                assertTrue(duplicate.getMessage().contains("请勿重复操作"));
+            }
+        });
+        assertEquals(1, successes.get());
+        assertEquals(1, count("SELECT COUNT(*) FROM orders"));
+        assertEquals(1, count("SELECT COUNT(*) FROM order_create_requests"));
+        assertEquals(999, count("SELECT stock FROM goods WHERE id=102"));
+        assertEquals(999, count("SELECT stock FROM goods_specs WHERE id=300"));
+        assertEquals(1, count("SELECT status FROM coupons WHERE id=1"));
+    }
+
+    @Test
+    void failedRequestRollsBackReservationAndKeysAreIsolatedByAccount() {
+        assertThrows(BizException.class, () -> service.createOrder(1, 10, List.of(), 1, 0, "",
+                List.of(), "", "retry-key", List.of(), ""));
+        assertEquals(0, count("SELECT COUNT(*) FROM order_create_requests"));
+
+        service.createOrder(1, 10, List.of(item(102, 300)), 1, 0, "",
+                List.of(), "", "retry-key", List.of(), "");
+        service.createOrder(2, 10, List.of(item(102, 300)), 2, 0, "",
+                List.of(), "", "retry-key", List.of(), "");
+        // A committed key remains protected after the old Redis window has expired.
+        jdbc.update("UPDATE order_create_requests SET create_time='2020-01-01 00:00:00'");
+        assertThrows(BizException.class, () -> service.createOrder(1, 10, List.of(item(102, 300)), 1, 0, "",
+                List.of(), "", "retry-key", List.of(), ""));
+        assertEquals(2, count("SELECT COUNT(*) FROM orders"));
+        assertEquals(2, count("SELECT COUNT(*) FROM order_create_requests"));
+        assertEquals(998, count("SELECT stock FROM goods WHERE id=102"));
+    }
+
+    @Test
     void simultaneousPayAndCancelNeverDoubleRefundOrLoseStock() throws Exception {
         for (int iteration = 0; iteration < 12; iteration++) {
             long id = service.createOrder(1, 10, List.of(item(102, 300)), 1, 0, "").id();

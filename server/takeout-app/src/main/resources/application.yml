@@ -51,6 +51,9 @@ springdoc:
 
 # 自定义配置
 takeout:
+  demo:
+    recharge-enabled: ${TAKEOUT_DEMO_RECHARGE_ENABLED:false}
+    admin-password: ${TAKEOUT_DEMO_ADMIN_PASSWORD:123456}
   openapi:
     server-url: ${TAKEOUT_OPENAPI_SERVER_URL:http://localhost:8087}
   jwt:
@@ -59,6 +62,7 @@ takeout:
     expire-hours: 72
   sms:
     provider: ${TAKEOUT_SMS_PROVIDER:mock}
+    expose-mock-code: ${TAKEOUT_SMS_EXPOSE_MOCK_CODE:false}
     code-ttl-seconds: ${TAKEOUT_SMS_CODE_TTL_SECONDS:300}
     cooldown-seconds: ${TAKEOUT_SMS_COOLDOWN_SECONDS:60}
     huawei:

@@ -456,7 +456,11 @@ public class UserCenterService {
     }
 
     private Review.ReviewView toReviewView(Review review) {
-        return review.toView(parseList(review.tags()), parseList(review.images()));
+        Review.ReviewView view = review.toView(parseList(review.tags()), parseList(review.images()));
+        if (review.anonymous() != 1) return view;
+        return new Review.ReviewView(view.id(), view.orderId(), view.storeId(), view.goodsId(), 0, "",
+                view.rating(), view.content(), view.tags(), view.images(), view.anonymous(), view.reply(),
+                view.replyTime(), view.createTime());
     }
 
     private List<String> parseList(String json) {

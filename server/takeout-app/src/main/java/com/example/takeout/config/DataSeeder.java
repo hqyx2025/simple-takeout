@@ -29,6 +29,9 @@ public class DataSeeder implements ApplicationRunner {
     @Value("${takeout.data-seed.enabled:true}")
     private boolean seedEnabled = true;
 
+    @Value("${takeout.demo.admin-password:123456}")
+    private String demoAdminPassword = "123456";
+
     public DataSeeder(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
@@ -49,6 +52,7 @@ public class DataSeeder implements ApplicationRunner {
             log.info("演示数据初始化已关闭，跳过分类、测试账号、店铺和商品写入");
             return;
         }
+        log.warn("演示账号与种子数据已启用，禁止对外部署");
         // 分类是首页导航的基础数据，即使已有用户数据，也必须单独补齐。
         ensureCategories();
         Integer userCount = jdbc.queryForObject("SELECT COUNT(*) FROM users", Integer.class);
@@ -177,7 +181,7 @@ public class DataSeeder implements ApplicationRunner {
         if (count == null || count == 0) {
             jdbc.update("INSERT INTO users(username, avatar, phone, password, role, balance, create_time) " +
                             "VALUES(?,?,?,?,?,?,?)",
-                    "平台管理员", "", "13100131000", PasswordUtil.hash("123456"), 2, 0.0, now());
+                    "平台管理员", "", "13100131000", PasswordUtil.hash(demoAdminPassword), 2, 0.0, now());
             log.info("已补充管理端测试账号 phone=13100131000");
         }
     }

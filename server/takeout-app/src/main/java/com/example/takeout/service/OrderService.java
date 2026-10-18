@@ -174,9 +174,8 @@ public class OrderService {
 
     /**
      * 创建订单完整签名：含 idempotencyKey 防重复提交。
-     * 客户端生成一次性 token（如 UUID）随下单请求提交，服务端 Redis SET NX（5 分钟 TTL）拦截连点/网络重放；
-     * Redis 不可用时跳过校验（与登录限流同口径：加固不能反过来让下单不可用）。
-     * 下单失败时释放占位，用户修正后（如减少数量）可用同一 token 立即重试。
+     * 客户端生成一次性 token（如 UUID）；Redis SET NX 快速拦截连点，数据库唯一键保证持久防重。
+     * Redis 不可用或缓存过期时仍由数据库保证正确性；业务失败时数据库占位随事务回滚。
      */
     @Transactional
     public Order.OrderView createOrder(long userId, long storeId, List<Order.OrderItem> items,
@@ -184,12 +183,16 @@ public class OrderService {
                                        List<Long> checkoutGoodsIds, String expectTime,
                                        String idempotencyKey, List<SetmealOrder> setmeals,
                                        String deliveryType) {
+        String requestKey = idempotencyKey == null ? "" : idempotencyKey.trim();
+        if (requestKey.length() > 128) {
+            throw new BizException("下单请求标识不能超过128个字符");
+        }
         StringRedisTemplate redis = null;
         String redisKey = null;
-        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+        if (!requestKey.isEmpty()) {
             redis = redisProvider.getIfAvailable();
             if (redis != null) {
-                redisKey = "takeout:idempotent:order:" + userId + ":" + idempotencyKey.trim();
+                redisKey = "takeout:idempotent:order:" + userId + ":" + requestKey;
                 try {
                     Boolean first = redis.opsForValue().setIfAbsent(redisKey, "1", Duration.ofMinutes(5));
                     if (Boolean.FALSE.equals(first)) {
@@ -199,16 +202,19 @@ public class OrderService {
                     // 真·重复提交：必须抛给用户，不能被下面的 Redis 降级吞掉
                     throw e;
                 } catch (RuntimeException e) {
-                    // Redis 不可用（连接被拒/超时）：跳过防重校验，让下单继续。
-                    // getIfAvailable() 只判断「bean 是否存在」，不代表「真能连上」——
-                    // 少了这层保护，Redis 一挂下单就直接 500，与既有口径
-                    //（「加固不能变成下单不可用」，见 AGENTS.md §4）相违背。
-                    log.warn("[下单防重] Redis 不可用，跳过防重校验 userId={} key={}", userId, idempotencyKey, e);
+                    log.warn("[下单防重] Redis 不可用，使用数据库唯一键防重 userId={}", userId, e);
                     redisKey = null;
                 }
             }
         }
         try {
+            if (!requestKey.isEmpty()) {
+                try {
+                    orderDao.reserveCreateRequest(userId, requestKey);
+                } catch (DuplicateKeyException duplicate) {
+                    throw new BizException("订单已提交，请勿重复操作");
+                }
+            }
             return doCreateOrder(userId, storeId, items, addressId, couponId, remark, checkoutGoodsIds, expectTime, setmeals, deliveryType);
         } catch (RuntimeException e) {
             if (redisKey != null) {
@@ -491,7 +497,7 @@ public class OrderService {
     }
 
     private Order.OrderView startThirdPartyPayment(long userId, long orderId, String channel, String mode) {
-        Order order = requireOrder(orderId);
+        Order order = orderDao.findByIdForUpdate(orderId).orElseThrow(() -> new BizException("订单不存在"));
         if (order.userId() != userId) {
             throw new BizException(403, "无权操作该订单");
         }
@@ -1008,21 +1014,49 @@ public class OrderService {
 
     @Transactional
     public Order.OrderView confirmOrder(long userId, long orderId) {
-        Order order = requireOrder(orderId);
+        Order order = orderDao.findByIdForUpdate(orderId).orElseThrow(() -> new BizException("订单不存在"));
         if (order.userId() != userId) {
             throw new BizException(403, "无权操作该订单");
         }
         if (order.status() != 4) {
             throw new BizException("订单尚未完成，不能确认收货");
         }
-        Store store = storeDao.findById(order.storeId()).orElseThrow(() -> new BizException("店铺不存在"));
         if (!orderDao.releaseEscrow(orderId)) {
             throw new BizException("订单款项已结算或退款，不能重复确认");
         }
-        User merchant = userDao.findById(store.ownerId()).orElseThrow(() -> new BizException("商户不存在"));
-        // 原子加款：并发确认/退款下不会互相覆盖余额
-        userDao.addBalance(merchant.id(), order.payAmount());
+        settleMerchant(order, false);
         return orderDetail(orderId);
+    }
+
+    private double merchantSettlementAmount(Order order) {
+        return Math.max(0, Math.round((order.payAmount() - order.deliveryFee()) * 100.0) / 100.0);
+    }
+
+    @Transactional
+    public boolean autoConfirmOrder(long orderId) {
+        Order order = orderDao.findByIdForUpdate(orderId).orElse(null);
+        if (order == null || order.status() != 4 || order.escrowStatus() != 0 || !orderDao.releaseEscrow(orderId)) {
+            return false;
+        }
+        settleMerchant(order, true);
+        return true;
+    }
+
+    private void settleMerchant(Order order, boolean automatic) {
+        Store store = storeDao.findById(order.storeId()).orElseThrow(() -> new BizException("店铺不存在"));
+        User merchant = userDao.findById(store.ownerId()).orElseThrow(() -> new BizException("商户不存在"));
+        double settled = merchantSettlementAmount(order);
+        userDao.addBalance(merchant.id(), settled);
+        eventPublisher.publish(DomainEventPublisher.ORDER_SETTLED, order.id(),
+                Map.of("merchantId", merchant.id(), "amount", settled, "automatic", automatic));
+    }
+
+    public int autoConfirmDeliveredOrders(int hours) {
+        int settled = 0;
+        for (long orderId : orderDao.listAutoConfirmCandidates(hours)) {
+            if (autoConfirmOrder(orderId)) settled++;
+        }
+        return settled;
     }
 
     /**
@@ -1046,7 +1080,7 @@ public class OrderService {
     @Transactional
     public Review reviewOrder(long userId, long orderId, long goodsId, int rating, String content,
                               List<String> tags, List<String> images, int anonymous) {
-        Order order = requireOrder(orderId);
+        Order order = orderDao.findByIdForUpdate(orderId).orElseThrow(() -> new BizException("订单不存在"));
         if (order.userId() != userId) {
             throw new BizException(403, "无权评价该订单");
         }

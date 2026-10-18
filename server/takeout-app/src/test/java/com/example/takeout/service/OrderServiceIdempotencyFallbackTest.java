@@ -41,15 +41,31 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * 下单防重的 Redis 降级契约测试。
- *
- * <p><b>为什么必须有这组用例</b>：AGENTS.md §4 明确承诺「Redis 不可用时跳过防重校验——
- * 加固不能变成下单不可用」。但 {@code getIfAvailable()} 只判断「bean 是否存在」，
- * 并不代表「真能连上」：Redis 进程挂掉时 bean 依然在，第一次调用就抛
- * {@code RedisConnectionFailureException}，直接把下单打成 500。
- * 真机验证时撞到过这个缺口（Redis 未启动 → POST /api/orders 返回 500），因此在此钉住。</p>
+ * Redis 故障不阻断下单，数据库唯一键继续保证请求防重。
  */
 class OrderServiceIdempotencyFallbackTest {
+
+    @Test
+    void databaseRejectsReplayBeforeReservingStockEvenWithoutRedis() {
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DuplicateKeyException("PRIMARY"))
+                .when(orderDao).reserveCreateRequest(USER_ID, "committed-request");
+
+        BizException error = assertThrows(BizException.class, () -> serviceWithRedis(null).createOrder(
+                USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "", List.of(), "",
+                " committed-request ", List.of(), ""));
+
+        assertEquals("订单已提交，请勿重复操作", error.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(goodsDao, couponDao, storeDao);
+        org.mockito.Mockito.verify(orderDao, org.mockito.Mockito.never()).insert(any(Order.class));
+    }
+
+    @Test
+    void rejectsOversizedRequestKeyBeforeAnyStorageAccess() {
+        assertThrows(BizException.class, () -> serviceWithRedis(null).createOrder(
+                USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "", List.of(), "",
+                "x".repeat(129), List.of(), ""));
+        org.mockito.Mockito.verifyNoInteractions(orderDao, goodsDao, couponDao);
+    }
 
     private final OrderDao orderDao = mock(OrderDao.class);
     private final StoreDao storeDao = mock(StoreDao.class);
@@ -114,7 +130,8 @@ class OrderServiceIdempotencyFallbackTest {
         Order.OrderView view = service.createOrder(USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "",
                 List.of(), "", "idem-key-1", List.of(), "");
 
-        assertEquals(0, view.status(), "Redis 不可用时下单应照常成功，只是少了防重保护");
+        assertEquals(0, view.status(), "Redis 不可用时下单应照常成功，防重仍由数据库保证");
+        org.mockito.Mockito.verify(orderDao).reserveCreateRequest(USER_ID, "idem-key-1");
     }
 
     /** Redis 超时同样只降级、不阻断下单。 */

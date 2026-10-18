@@ -42,10 +42,15 @@ async function waitForText(driver: Driver, id: string, expected: string, timeout
   let waited: number = 0
   let last: string = ''
   while (waited <= timeoutMs) {
-    const component = await scrollUntilVisible(driver, id)
-    last = await textOf(component)
-    if (last === expected) {
-      return last
+    try {
+      const component = await scrollUntilVisible(driver, id)
+      last = await textOf(component)
+      if (last === expected) {
+        return last
+      }
+    } catch (_) {
+      // 列表可能在查找与读取之间重建；重新查找，最终仍由超时后的文本断言判定。
+      console.info('[MerchantFlow] order list rebuilt, retry text id=' + id)
     }
     await driver.delayMs(1500)
     waited += 1500

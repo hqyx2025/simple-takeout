@@ -7,6 +7,7 @@ import com.example.takeout.security.JwtUtil;
 import com.example.takeout.security.PasswordUtil;
 import com.example.takeout.security.PaymentPasswordUtil;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,10 +27,13 @@ public class AuthService {
     private final JwtUtil jwtUtil;
     private final SmsCodeVerifier smsCodeVerifier;
     private final Clock clock;
+    private boolean demoRechargeEnabled;
 
     @Autowired
-    public AuthService(UserDao userDao, JwtUtil jwtUtil, SmsCodeVerifier smsCodeVerifier) {
+    public AuthService(UserDao userDao, JwtUtil jwtUtil, SmsCodeVerifier smsCodeVerifier,
+                       @Value("${takeout.demo.recharge-enabled:false}") boolean demoRechargeEnabled) {
         this(userDao, jwtUtil, smsCodeVerifier, Clock.systemDefaultZone());
+        this.demoRechargeEnabled = demoRechargeEnabled;
     }
 
     AuthService(UserDao userDao, JwtUtil jwtUtil, SmsCodeVerifier smsCodeVerifier, Clock clock) {
@@ -37,6 +41,10 @@ public class AuthService {
         this.jwtUtil = jwtUtil;
         this.smsCodeVerifier = smsCodeVerifier;
         this.clock = clock;
+    }
+
+    public AuthService(UserDao userDao, JwtUtil jwtUtil, SmsCodeVerifier smsCodeVerifier) {
+        this(userDao, jwtUtil, smsCodeVerifier, Clock.systemDefaultZone());
     }
 
     /** Unit-test constructor; password reset remains closed unless a verifier is supplied. */
@@ -215,6 +223,9 @@ public class AuthService {
     /** 测试充值：金额写入用户余额，返回数据库中的最新用户信息。 */
     @Transactional
     public User recharge(long userId, double amount) {
+        if (!demoRechargeEnabled) {
+            throw new BizException(403, "演示充值未开启");
+        }
         if (!Double.isFinite(amount) || amount < 0.01 || amount > 10000) {
             throw new BizException("\u5145\u503c\u91d1\u989d\u9700\u5728 0.01 \u81f3 10000 \u5143\u4e4b\u95f4");
         }

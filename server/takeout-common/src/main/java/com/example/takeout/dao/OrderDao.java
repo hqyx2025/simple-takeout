@@ -50,6 +50,11 @@ public class OrderDao {
         this.jdbc = jdbc;
     }
 
+    /** 与订单、库存和优惠券共用事务；唯一键防重，失败回滚后允许原请求重试。 */
+    public void reserveCreateRequest(long userId, String requestKey) {
+        jdbc.update("INSERT INTO order_create_requests(user_id, request_key) VALUES(?,?)", userId, requestKey);
+    }
+
     private static String dateTimeExpression(String legacyColumn) {
         return JdbcDateTimes.value(legacyColumn);
     }
@@ -257,7 +262,13 @@ public class OrderDao {
 
     /** 将托管款标记为已结算，条件更新避免重复给商户打款。 */
     public boolean releaseEscrow(long id) {
-        return jdbc.update("UPDATE orders SET escrow_status = 1 WHERE id = ? AND escrow_status = 0", id) == 1;
+        return jdbc.update("UPDATE orders SET escrow_status = 1 WHERE id = ? AND status = 4 AND escrow_status = 0", id) == 1;
+    }
+
+    public List<Long> listAutoConfirmCandidates(int hours) {
+        return jdbc.query("SELECT id FROM orders WHERE status = 4 AND escrow_status = 0 " +
+                        "AND complete_time_dt <= DATE_SUB(NOW(), INTERVAL ? HOUR) ORDER BY id LIMIT 200",
+                (rs, rowNum) -> rs.getLong(1), hours);
     }
 
     public List<Order> listSettledByStore(long storeId) {
@@ -327,7 +338,8 @@ public class OrderDao {
     private static void appendAmount(StringBuilder sql, List<Object> args, String alias, String condition,
                                      Object... values) {
         appendComma(sql);
-        sql.append("COALESCE(SUM(CASE WHEN ").append(condition).append(" THEN pay_amount ELSE 0 END), 0) AS ").append(alias);
+        sql.append("COALESCE(SUM(CASE WHEN ").append(condition)
+                .append(" THEN pay_amount - delivery_fee ELSE 0 END), 0) AS ").append(alias);
         for (Object value : values) args.add(value);
     }
 

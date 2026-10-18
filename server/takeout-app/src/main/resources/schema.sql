@@ -80,6 +80,14 @@ CREATE TABLE IF NOT EXISTS goods_specs (
     KEY idx_specs_goods (goods_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 下单防重与业务事务一同提交；不依赖 Redis 可用性或缓存 TTL。
+CREATE TABLE IF NOT EXISTS order_create_requests (
+    user_id BIGINT NOT NULL,
+    request_key VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, request_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS orders (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     order_no VARCHAR(32) NOT NULL UNIQUE,

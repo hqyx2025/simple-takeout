@@ -93,10 +93,11 @@ class OrderServiceSecurityTest {
     void confirmingDeliveredOrderSettlesMerchantOnlyOnce() {
         Order order = new Order(8, "NO8", 1, 10, "测试店铺", 4, "[]",
                 "{\"addressId\":20,\"name\":\"张三\",\"phone\":\"13800138000\",\"detail\":\"宿舍\"}",
-                20, 0, 0, 20, "", 0, 0, "2026-08-16 10:00:00", "2026-08-16 10:00:00", "", "",
+                20, 3, 0, 23, "", 0, 0, "2026-08-16 10:00:00", "2026-08-16 10:00:00", "", "",
                 "2026-08-16 10:10:00", "", 0);
         Store store = new Store(10, "测试店铺", "", 4.5, 0, 0, 0, "30分钟", "1km", "[]", "", 1, "[1]", 2, 1, 0, "");
         User merchant = new User(2, "商户", "", "13600136000", "", 1, 50, "now");
+        when(orderDao.findByIdForUpdate(8)).thenReturn(Optional.of(order));
         when(orderDao.findById(8)).thenReturn(Optional.of(order));
         when(storeDao.findById(10)).thenReturn(Optional.of(store));
         when(userDao.findById(2)).thenReturn(Optional.of(merchant));
@@ -112,7 +113,7 @@ class OrderServiceSecurityTest {
     @Test
     void rejectsReviewForGoodsNotInOrder() {
         Order order = completedOrder(9, 100, 1, 0);
-        when(orderDao.findById(9)).thenReturn(Optional.of(order));
+        when(orderDao.findByIdForUpdate(9)).thenReturn(Optional.of(order));
         when(userDao.findById(1)).thenReturn(Optional.of(testUser()));
 
         BizException error = assertThrows(BizException.class,
@@ -130,7 +131,7 @@ class OrderServiceSecurityTest {
     @Test
     void rejectsReviewBeforeEscrowSettlement() {
         Order order = completedOrder(10, 100, 0, 0);
-        when(orderDao.findById(10)).thenReturn(Optional.of(order));
+        when(orderDao.findByIdForUpdate(10)).thenReturn(Optional.of(order));
 
         BizException error = assertThrows(BizException.class,
                 () -> service.reviewOrder(1, 10, 100, 5, "不错", List.of()));
@@ -142,7 +143,7 @@ class OrderServiceSecurityTest {
     @Test
     void rejectsDuplicateOrderReview() {
         Order order = completedOrder(11, 100, 1, 0);
-        when(orderDao.findById(11)).thenReturn(Optional.of(order));
+        when(orderDao.findByIdForUpdate(11)).thenReturn(Optional.of(order));
         when(userDao.findById(1)).thenReturn(Optional.of(testUser()));
         when(reviewDao.existsByOrderGoods(11, 100)).thenReturn(true);
 
@@ -162,7 +163,7 @@ class OrderServiceSecurityTest {
         Order order = completedOrder(12, 100, 1, 0);
         Review saved = new Review(88, 12, 10, 100, 1, "测试用户", 5, "不错", "[]", "[]", 0, "", "",
                 "2026-08-16 11:00:00");
-        when(orderDao.findById(12)).thenReturn(Optional.of(order));
+        when(orderDao.findByIdForUpdate(12)).thenReturn(Optional.of(order));
         when(userDao.findById(1)).thenReturn(Optional.of(testUser()));
         when(reviewDao.insert(org.mockito.ArgumentMatchers.eq(12L), org.mockito.ArgumentMatchers.eq(10L),
                 org.mockito.ArgumentMatchers.eq(100L), org.mockito.ArgumentMatchers.eq(1L),

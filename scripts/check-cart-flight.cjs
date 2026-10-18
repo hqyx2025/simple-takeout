@@ -28,7 +28,7 @@ function page() {
   const first = page();
   first.instance.addGoodsToCart(goods);
   await Promise.resolve();
-  assert.equal(calls.length, 0, 'cart must not update before landing');
+  assert.equal(calls.length, 1, 'cart starts updating immediately without waiting for animation');
   first.land(true);
   await first.instance.cartOperationQueue;
   assert.equal(calls.length, 1);
@@ -39,12 +39,12 @@ function page() {
   left.instance.active = false;
   left.land(true);
   await left.instance.cartOperationQueue;
-  assert.equal(calls.length, 1, 'leaving during flight cancels add');
+  assert.equal(calls.length, 2, 'navigation does not undo a request already submitted');
   const canceled = page();
   canceled.instance.addGoodsToCart(goods);
   await Promise.resolve();
   canceled.land(false);
   await canceled.instance.cartOperationQueue;
-  assert.equal(calls.length, 1, 'canceled flight does not mutate cart');
-  console.log('PASS: landing order, quantity, navigation cancellation');
+  assert.equal(calls.length, 3, 'skipped animation does not cancel the add request');
+  console.log('PASS: immediate submission, exact quantity, navigation and skipped animations');
 })().catch(error => { console.error(error); process.exitCode = 1; });

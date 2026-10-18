@@ -142,13 +142,14 @@ console.log('PASS: press light follows touch, release position selects exact tab
   const session = { fetch: async req => {
     requests.push(req);
     if (failure) throw Error('offline');
-    return { statusCode, toJSON: () => payload };
+    return { statusCode, headers: {}, toJSON: () => payload };
   }, close: () => { session.closed = true; } };
   const http = run(read('service/HttpClient.ets').replace(/^import .*$/gm, ''), {
     rcp: { Request, createSession: config => { sessions.push(config); return session; } },
     API_CONFIG: { BASE_URL: 'https://example.test', TIMEOUT: 10000 },
     AppStorage: { get: key => storage.get(key), setOrCreate: (key, value) => storage.set(key, value) },
     logInfo() {}, logWarn() {}, logError() {}, clearDeliveryForms() {},
+    clearAuthTokens: async () => {}, saveAuthTokens: async () => {},
     promptAction: { showToast: toast => toasts.push(toast) }
   });
   http.warmColdStartConnection(); assert.equal(requests.length, 0);

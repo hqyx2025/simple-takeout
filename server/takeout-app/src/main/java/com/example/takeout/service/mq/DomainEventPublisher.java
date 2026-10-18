@@ -52,6 +52,7 @@ public class DomainEventPublisher {
     public static final String ORDER_PAID = "ORDER_PAID";
     public static final String ORDER_CANCELLED = "ORDER_CANCELLED";
     public static final String ORDER_REFUNDED = "ORDER_REFUNDED";
+    public static final String ORDER_SETTLED = "ORDER_SETTLED";
 
     private final OutboxEventDao outboxDao;
     private final ObjectProvider<StringRedisTemplate> redisProvider;
