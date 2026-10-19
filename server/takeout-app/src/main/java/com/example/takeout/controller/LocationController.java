@@ -19,9 +19,12 @@ public class LocationController {
 
     private final RestClient client = RestClient.builder().baseUrl("https://restapi.amap.com").build();
     private final String restKey;
+    private final String securityCode;
 
-    public LocationController(@Value("${takeout.amap.rest-key:}") String restKey) {
+    public LocationController(@Value("${takeout.amap.rest-key:}") String restKey,
+                              @Value("${takeout.amap.security-code:}") String securityCode) {
         this.restKey = restKey == null ? "" : restKey.trim();
+        this.securityCode = securityCode == null ? "" : securityCode.trim();
     }
 
     @GetMapping(value = "/nearby", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -54,7 +57,11 @@ public class LocationController {
 
     private ApiResponse<JsonNode> proxy(String path, UriComponentsBuilder builder) {
         if (restKey.isEmpty()) throw new BizException(503, "地图服务未配置，请联系管理员");
-        JsonNode body = client.get().uri(builder.path(path).queryParam("key", restKey).build().toUri())
+        UriComponentsBuilder request = builder.path(path).queryParam("key", restKey);
+        if (!securityCode.isEmpty()) {
+            request.queryParam("jscode", securityCode);
+        }
+        JsonNode body = client.get().uri(request.build().toUri())
                 .retrieve().body(JsonNode.class);
         if (body == null) throw new BizException(503, "地图服务返回为空");
         return ApiResponse.ok(body);

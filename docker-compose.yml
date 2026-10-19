@@ -90,6 +90,7 @@ services:
       TAKEOUT_REDIS_PORT: 6379
       TAKEOUT_JWT_SECRET: ${TAKEOUT_JWT_SECRET:?TAKEOUT_JWT_SECRET must be set}
       TAKEOUT_AMAP_REST_KEY: ${TAKEOUT_AMAP_REST_KEY:-}
+      TAKEOUT_AMAP_SECURITY_CODE: ${TAKEOUT_AMAP_SECURITY_CODE:-}
       TAKEOUT_DEMO_RECHARGE_ENABLED: ${TAKEOUT_DEMO_RECHARGE_ENABLED:-false}
       TAKEOUT_SMS_PROVIDER: ${TAKEOUT_SMS_PROVIDER:-qq-email}
       TAKEOUT_SMS_CODE_TTL_SECONDS: ${TAKEOUT_SMS_CODE_TTL_SECONDS:-900}
@@ -112,12 +113,15 @@ services:
       TAKEOUT_ALIPAY_PUBLIC_KEY: ${TAKEOUT_ALIPAY_PUBLIC_KEY:-}
       TAKEOUT_ALIPAY_NOTIFY_URL: ${TAKEOUT_ALIPAY_NOTIFY_URL:-}
       TAKEOUT_CACHE_ENABLED: "true"
+      TAKEOUT_LOG_DIR: /app/logs
       # 应用在容器内监听 8087；对外由 gateway 暴露同一个 8087（统一对外入口）
       TAKEOUT_APP_PORT: "8087"
       TZ: Asia/Shanghai
     volumes:
       # 评价图片持久化，容器重建不丢
       - uploads-data:/app/uploads
+      # 应用日志持久化到项目根目录 log/，由 Logback 按天和大小轮转
+      - ./log/app:/app/logs
     healthcheck:
       # 运行镜像基于 JRE，没有 curl/wget，用构建阶段编译好的 healthcheck.class 探活
       test: ["CMD", "java", "-cp", "/app", "healthcheck", "127.0.0.1", "8087"]
@@ -166,6 +170,8 @@ services:
         condition: service_healthy
     volumes:
       - ./server/docker/app-upstream.conf:/etc/nginx/conf.d/default.conf:ro
+      # 内部负载均衡日志持久化到项目根目录 log/app-balancer/
+      - ./log/app-balancer:/var/log/nginx
     logging:
       driver: json-file
       options:
@@ -186,6 +192,7 @@ services:
       # 网关监听容器内 8087；转发目标用服务名 app
       TAKEOUT_GATEWAY_PORT: "8087"
       TAKEOUT_APP_URI: http://app-balancer:8087
+      TAKEOUT_LOG_DIR: /app/logs
       TZ: Asia/Shanghai
     ports:
       # 对外契约端口：统一入口
@@ -202,6 +209,9 @@ services:
         max-size: 10m
         max-file: '3'
     entrypoint: ["java", "-jar", "/app/takeout-gateway.jar"]
+    volumes:
+      # 网关日志持久化到项目根目录 log/gateway/
+      - ./log/gateway:/app/logs
 
 volumes:
   mysql-data:

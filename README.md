@@ -120,6 +120,7 @@ simple-takeout/
 │   └── pom.xml                # Maven 聚合根
 │   └── Dockerfile            # 多阶段构建（JDK 25）
 ├── docker-compose.yml        # 一键环境：app + MySQL 8.4 + Redis 7
+├── log/                      # 运行日志（按服务分目录，内容不入库）
 ├── signing/                  # Release 签名配置模板（勿提交真实证书/密码）
 ├── scripts/                  # 设备实测 / 上架体检等 PowerShell 脚本
 ├── md/                       # 当前开发指南与归档资料（archive/）
@@ -157,6 +158,8 @@ docker compose down  # 停止并保留数据卷
 - `docker compose up -d --scale app=3` 可临时扩到三个副本；要永久修改默认数量，请修改 Compose 的 `app.deploy.replicas`。Nginx 每 5 秒重新解析 app 地址，不自动重试业务请求。
 - 备份每个自然月首次运行时生成一次 `takeout-YYYYMM.sql.gz`，保存在 `mysql-backups` 卷；每小时检查并重试失败备份，重启不重复当月已成功的备份，当前不自动删除历史文件。
 - `docker compose logs backup` 查看备份结果；导出副本：`docker compose cp backup:/backups ./TemporaryCacheStorage/mysql-backups`。备份卷与数据库同机，仍需另外保留异机副本。
+- 运行日志统一保存在项目根目录 `log/`：`log/app/app.log`（应用）、`log/gateway/gateway.log`（网关）、`log/app-balancer/`（内部 Nginx）、`log/public-nginx/`（公网 Nginx）。应用和网关按天/单文件 2MB 轮转并保留 30 天；Nginx 每天检查、超过 10MB 提前轮转并保留 14 份。实时查看可用 `Get-Content log/app/app.log -Wait` 或 `tail -f log/app/app.log`。
+- Docker 控制台日志仍可用 `docker compose logs -f app` 查看；`log/` 下的文件日志用于持久化排查，容器重建不会丢失。
 - **不要执行 `docker compose down -v`**，它会删除数据库、Redis、上传图片及备份卷。
 
 #### 公网网页体验
@@ -164,10 +167,10 @@ docker compose down  # 停止并保留数据卷
 网关同时托管一个无需单独构建的浏览器体验页。云服务器完成部署后，访问：
 
 ```text
-https://<云服务器公网IP>/
+http://<云服务器公网IP>/
 ```
 
-页面点击“进入演示”会使用 develop 环境预置的用户账号登录，网页端与 HarmonyOS 客户端共用服务端账号、购物车、地址和订单数据；网页端支持浏览店铺、加入购物车、创建待付款订单、余额支付、取消和确认收货。本次云端演示通过 IP 的 HTTPS 入口访问 `https://103.121.92.193/`。
+页面点击“进入演示”会使用 develop 环境预置的用户账号登录，网页端与 HarmonyOS 客户端共用服务端账号、购物车、地址和订单数据。网页端按登录角色提供用户、商户、骑手和平台管理工作区：用户可浏览/搜索/收藏店铺、领券、维护地址和钱包、加入购物车、创建待付款订单、余额支付、取消、退款、确认收货和评价；商户可处理订单、维护门店商品、库存规格、评价回复和营销活动；骑手可上线、设置接单范围、抢单、取餐和送达；平台可查看总览、审核店铺、处理订单退款、管理用户商品、骑手、内容、员工、日志和营销。本次云端演示使用 HTTP，访问 `http://103.121.92.193/` 或 `http://103.121.92.193:8087/`；HTTP 会明文传输登录凭证，仅适合演示环境。
 
 验证边界：双 app 和网关启动健康；请求已分发至两个副本（未登录请求返回 401）；当月备份通过 gzip 完整性检查。尚未完成备份恢复演练、故障切换与完整多实例下单/支付回归，不代表生产高可用验收。
 
@@ -208,7 +211,7 @@ mvn -f server/pom.xml -pl takeout-gateway spring-boot:run
 
 - 模拟器访问宿主机后端：默认 `http://10.0.2.2:8087`，无需修改
 - 真机联调：将 `BASE_URL` 改为电脑的局域网 IP（如 `http://192.168.1.100:8087`）
-- 云端演示构建：`entry/src/main/ets/common/Constants.ets` 已配置为 `https://103.121.92.193`；云端不可达时回退到模拟器宿主机 `http://10.0.2.2:8087`
+- 云端演示构建：`entry/src/main/ets/common/Constants.ets` 已配置为 `http://103.121.92.193`；云端不可达时回退到模拟器宿主机 `http://10.0.2.2:8087`
 
 Release 构建需要签名与证书：参考 `signing/release-signing.template.json5` 在本机安全目录填写真实 p12/p7b 路径（真实证书与密码禁止提交到仓库）。
 

@@ -63,6 +63,7 @@ takeout:
     expire-hours: 72
   amap:
     rest-key: ${TAKEOUT_AMAP_REST_KEY:}
+    security-code: ${TAKEOUT_AMAP_SECURITY_CODE:}
   sms:
     provider: ${TAKEOUT_SMS_PROVIDER:mock}
     expose-mock-code: ${TAKEOUT_SMS_EXPOSE_MOCK_CODE:false}

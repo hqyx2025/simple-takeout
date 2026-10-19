@@ -46,6 +46,7 @@ services:
       TAKEOUT_ALIPAY_PUBLIC_KEY: ${TAKEOUT_ALIPAY_PUBLIC_KEY:-}
       TAKEOUT_ALIPAY_NOTIFY_URL: ${TAKEOUT_ALIPAY_NOTIFY_URL:-}
       TAKEOUT_AMAP_REST_KEY: ${TAKEOUT_AMAP_REST_KEY:-}
+      TAKEOUT_AMAP_SECURITY_CODE: ${TAKEOUT_AMAP_SECURITY_CODE:-}
       TAKEOUT_UPLOAD_PROVIDER: ${TAKEOUT_UPLOAD_PROVIDER:-local}
       TAKEOUT_OPENAPI_ENABLED: ${TAKEOUT_OPENAPI_ENABLED:-false}
       JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai -XX:MaxRAMPercentage=65 -XX:+ExitOnOutOfMemoryError
@@ -54,7 +55,7 @@ services:
       args:
         MAVEN_SETTINGS: docker/settings-central.xml
     ports: !override
-      - '127.0.0.1:${TAKEOUT_APP_PORT:-8087}:8087'
+      - '${TAKEOUT_APP_PORT:-8087}:8087'
   backup:
     environment:
       MYSQL_PWD: ${TAKEOUT_MYSQL_ROOT_PASSWORD:?Set a separate MySQL root password}
