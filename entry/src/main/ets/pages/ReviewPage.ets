@@ -9,6 +9,7 @@ import { promptCompat as promptAction, routerCompat as router } from '../common/
 import { API_CONFIG, COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, REVIEW_TAGS } from '../common/Constants'
 import { CartItem, Order, Review, User } from '../model/Models'
 import { getCurrentUser, submitReviewRemote, syncStoreReviewsRemote, syncUserOrdersFromServer, uploadReviewImageRemote } from '../service/AppStorageManager'
+import { getApiBaseUrl } from '../service/HttpClient'
 import { logInfo, logWarn } from '../service/AppLogger'
 import { PageHeader } from '../components/PageHeader'
 import { photoAccessHelper } from '@kit.MediaLibraryKit'
@@ -286,7 +287,7 @@ export struct ReviewPage {
           break
         }
         // 服务层正常返回完整地址；若返回相对地址则补全 BASE_URL（防御）
-        const fullUrl: string = uploadedUrl.startsWith('/') ? API_CONFIG.BASE_URL + uploadedUrl : uploadedUrl
+        const fullUrl: string = uploadedUrl.startsWith('/') ? getApiBaseUrl() + uploadedUrl : uploadedUrl
         this.images = this.images.concat([fullUrl])
         addedCount++
       }

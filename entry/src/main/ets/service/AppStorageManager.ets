@@ -4,7 +4,7 @@
 import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, Rider, Banner, Announcement, MerchantStatsData, MerchantStatsAggregateData, Category, RefundRecord, GoodsSpec, SeckillItem, SpecialGoodsItem, BundleInfo, UploadResult, SetmealOrder, createEmptyUser, createDefaultCategories } from '../model/Models'
 import { saveAllData, clearAllData } from './DataPersistence'
 import { apiLogin, apiRegister, updateUserProfileApi, fetchCurrentUserApi, rechargeBalanceApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, fetchMerchantStatsApi, createOrderApi, cancelOrderApi, payOrderApi, queryPaymentApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi, fetchMerchantReviewsApi, replyReviewApi, fetchRiderProfileApi, setRiderStatusApi, fetchRiderPoolApi, fetchRiderOrdersApi, grabOrderApi, pickupOrderApi, deliverOrderApi, fetchBannersApi, fetchAnnouncementsApi, fetchAdminRidersApi, updateRiderStatusApi, fetchAdminBannersApi, createBannerApi, updateBannerStatusApi, deleteBannerApi, fetchAdminAnnouncementsApi, createAnnouncementApi, updateAnnouncementStatusApi, deleteAnnouncementApi, applyRefundApi, fetchCartApi, addCartItemApi, updateCartItemQuantityApi, deleteCartItemApi, deleteCartItemsApi, clearCartApi, uploadImageApi, fetchSeckillsApi, fetchRankStoresApi, fetchRankGoodsApi, fetchBundleApi, updateMerchantGoodsSpecsApi, apiLogout, changePasswordApi, updateRiderLocationApi } from './ApiService'
-import { getAuthToken, setAuthTokens, getLastApiErrorMessage, registerSessionExpiredHandler,
+import { getApiBaseUrl, getAuthToken, setAuthTokens, getLastApiErrorMessage, registerSessionExpiredHandler,
   getAuthSessionEpoch } from './HttpClient'
 import { logInfo, logWarn, logError } from './AppLogger'
 import { GeoPosition, getCurrentPosition, requestLocationPermission, reverseGeocodePosition } from './LocationService'
@@ -836,7 +836,7 @@ export async function uploadReviewImageRemote(fileUri: string): Promise<string> 
   if (result === null || result.url === '') {
     return ''
   }
-  return result.url.startsWith('/') ? API_CONFIG.BASE_URL + result.url : result.url
+  return result.url.startsWith('/') ? getApiBaseUrl() + result.url : result.url
 }
 
 /** 首页限时秒杀专区数据 */

@@ -159,6 +159,16 @@ docker compose down  # 停止并保留数据卷
 - `docker compose logs backup` 查看备份结果；导出副本：`docker compose cp backup:/backups ./TemporaryCacheStorage/mysql-backups`。备份卷与数据库同机，仍需另外保留异机副本。
 - **不要执行 `docker compose down -v`**，它会删除数据库、Redis、上传图片及备份卷。
 
+#### 公网网页体验
+
+网关同时托管一个无需单独构建的浏览器体验页。云服务器完成部署后，访问：
+
+```text
+https://<云服务器公网IP>/
+```
+
+页面点击“进入演示”会使用 develop 环境预置的用户账号登录，网页端与 HarmonyOS 客户端共用服务端账号、购物车、地址和订单数据；网页端支持浏览店铺、加入购物车、创建待付款订单、余额支付、取消和确认收货。本次云端演示通过 IP 的 HTTPS 入口访问 `https://103.121.92.193/`。
+
 验证边界：双 app 和网关启动健康；请求已分发至两个副本（未登录请求返回 401）；当月备份通过 gzip 完整性检查。尚未完成备份恢复演练、故障切换与完整多实例下单/支付回归，不代表生产高可用验收。
 
 ### 方式二：本机开发
@@ -198,7 +208,7 @@ mvn -f server/pom.xml -pl takeout-gateway spring-boot:run
 
 - 模拟器访问宿主机后端：默认 `http://10.0.2.2:8087`，无需修改
 - 真机联调：将 `BASE_URL` 改为电脑的局域网 IP（如 `http://192.168.1.100:8087`）
-- 发布构建：配置真实 HTTPS 域名后，将 `USE_HTTPS` 置为 `true`
+- 云端演示构建：`entry/src/main/ets/common/Constants.ets` 已配置为 `https://103.121.92.193`；云端不可达时回退到模拟器宿主机 `http://10.0.2.2:8087`
 
 Release 构建需要签名与证书：参考 `signing/release-signing.template.json5` 在本机安全目录填写真实 p12/p7b 路径（真实证书与密码禁止提交到仓库）。
 

@@ -137,16 +137,14 @@ export class APP_CONFIG {
   static readonly VERSION: string = '1.0.0'
 }
 
-// API端点常量
-// BASE_URL：模拟器访问宿主机用 10.0.2.2；真机联调改为电脑局域网 IP，如 http://192.168.1.100:8087
+// API 地址按优先级排列：先访问云服务器，云端不可达时回退到本机 IDEA/Docker。
+// 本机地址使用 10.0.2.2，是鸿蒙模拟器访问宿主机的 NAT 别名。
 export class API_CONFIG {
-  static readonly DEV_BASE_URL: string = 'http://10.0.2.2:8087'
-  static readonly RELEASE_BASE_URL: string = 'https://api.example.com'
-  // Release 构建前改为 true，并将 RELEASE_BASE_URL 替换为真实 HTTPS 域名。
-  static readonly USE_HTTPS: boolean = false
-  static readonly BASE_URL: string = API_CONFIG.USE_HTTPS
-    ? API_CONFIG.RELEASE_BASE_URL
-    : API_CONFIG.DEV_BASE_URL
+  static readonly REMOTE_BASE_URL: string = 'https://103.121.92.193'
+  static readonly LOCAL_BASE_URL: string = 'http://10.0.2.2:8087'
+  static readonly BASE_URL: string = API_CONFIG.REMOTE_BASE_URL
+  static readonly BASE_URLS: string[] = [API_CONFIG.REMOTE_BASE_URL, API_CONFIG.LOCAL_BASE_URL]
+  static readonly CONNECT_TIMEOUT: number = 2000
   static readonly TIMEOUT: number = 10000
   static readonly ENDPOINTS: Record<string, string> = {
     'categories': '/api/categories',
@@ -167,6 +165,12 @@ export class API_CONFIG {
     'rankStores': '/api/rankings/stores',
     'rankGoods': '/api/rankings/goods'
   }
+}
+
+let imageBaseUrl: string = API_CONFIG.BASE_URL
+
+export function setApiImageBaseUrl(baseUrl: string): void {
+  imageBaseUrl = baseUrl
 }
 
 // 高德地图配置（申请地址：https://lbs.amap.com，创建“Web端(JS API)”类型Key）
@@ -200,7 +204,7 @@ export function merchantImageSource(image: string | undefined): ResourceStr {
   if (url.indexOf('http://') === 0 || url.indexOf('https://') === 0) {
     return url
   }
-  return url.startsWith('/') ? API_CONFIG.BASE_URL + url : url
+  return url.startsWith('/') ? imageBaseUrl + url : url
 }
 
 /**

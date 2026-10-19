@@ -3,6 +3,7 @@ package com.example.takeout.service;
 import com.example.takeout.common.BizException;
 import com.example.takeout.service.thirdparty.SmsSender;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
@@ -11,6 +12,8 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -23,6 +26,19 @@ import static org.mockito.Mockito.when;
 class SmsVerificationServiceTest {
 
     private static final String SIGNING_SECRET = "a-test-signing-secret-that-is-at-least-32-chars";
+
+    @Test
+    void springCreatesServiceWhenCompatibilityConstructorAlsoExists() {
+        new ApplicationContextRunner()
+                .withBean(StringRedisTemplate.class, () -> mock(StringRedisTemplate.class))
+                .withBean(SmsSender.class, () -> mock(SmsSender.class))
+                .withUserConfiguration(SmsVerificationService.class)
+                .withPropertyValues("takeout.jwt.secret=" + SIGNING_SECRET)
+                .run(context -> {
+                    assertNull(context.getStartupFailure());
+                    assertNotNull(context.getBean(SmsVerificationService.class));
+                });
+    }
 
     @Test
     void mockCodeIsGeneratedAndStoredAsHmacBeforeSending() {

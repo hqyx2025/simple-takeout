@@ -7,11 +7,57 @@ import { clearDeliveryForms } from './DeliveryFormSync'
 import { rcp } from '@kit.RemoteCommunicationKit'
 import http from '@ohos.net.http'
 import fileIo from '@ohos.file.fs'
-import { API_CONFIG } from '../common/Constants'
+import { API_CONFIG, setApiImageBaseUrl } from '../common/Constants'
 import { UploadResult } from '../model/Models'
 import { logInfo, logWarn, logError } from './AppLogger'
 import { promptCompat as promptAction } from '../common/UiNavigation'
 import { clearAuthTokens, saveAuthTokens } from './TokenStorage'
+
+// 云端优先；云端连接失败时只在本次运行切换到本机 IDEA/Docker。
+let activeBaseUrl: string = API_CONFIG.BASE_URLS[0]
+
+export function getApiBaseUrl(): string {
+  return activeBaseUrl
+}
+
+function selectBaseUrl(baseUrl: string): void {
+  if (baseUrl === activeBaseUrl) {
+    return
+  }
+  activeBaseUrl = baseUrl
+  setApiImageBaseUrl(activeBaseUrl)
+  disposeHttpClient()
+  logInfo('Network', `后端地址切换为 ${activeBaseUrl}`)
+}
+
+/** Probe providers once at cold start so a business mutation can never be replayed to another database. */
+export async function initializeApiBaseUrl(): Promise<string> {
+  const candidates: string[] = [API_CONFIG.BASE_URLS[0], API_CONFIG.BASE_URLS[1]]
+  for (let i: number = 0; i < candidates.length; i++) {
+    let session: rcp.Session | null = null
+    try {
+      session = rcp.createSession({ requestConfiguration: {
+        transfer: { timeout: { connectMs: API_CONFIG.CONNECT_TIMEOUT, transferMs: API_CONFIG.CONNECT_TIMEOUT } }
+      } })
+      const probe: rcp.Request = new rcp.Request(candidates[i] + '/api/categories', 'GET' as rcp.HttpMethod)
+      probe.configuration = { transfer: { timeout: { connectMs: API_CONFIG.CONNECT_TIMEOUT, transferMs: API_CONFIG.CONNECT_TIMEOUT } } }
+      const response: rcp.Response = await session.fetch(probe)
+      if (response.statusCode >= 200 && response.statusCode < 500) {
+        selectBaseUrl(candidates[i])
+        logInfo('Network', `启动连接检测通过：${activeBaseUrl}`)
+        return activeBaseUrl
+      }
+    } catch (_) {
+      logInfo('Network', `启动连接检测失败：${candidates[i]}`)
+    } finally {
+      if (session !== null) {
+        try { session.close() } catch (_) {}
+      }
+    }
+  }
+  selectBaseUrl(API_CONFIG.BASE_URLS[0])
+  return activeBaseUrl
+}
 
 // JWT Token（登录成功后由 ApiService 设置，请求时自动注入）
 let authToken: string = ''
@@ -91,7 +137,7 @@ export function warmColdStartConnection(): void {
   }
   coldConnectionStarted = true
   try {
-    const warmup: rcp.Request = new rcp.Request(API_CONFIG.BASE_URL)
+    const warmup: rcp.Request = new rcp.Request(activeBaseUrl)
     warmup.connectOnly = true
     warmup.configuration = { transfer: { timeout: { connectMs: 1500, transferMs: 1500 } } }
     // 不发送 HTTP 业务请求和令牌，不等待预连接完成再绘制首屏。
@@ -199,11 +245,11 @@ async function request<T>(method: string, url: string, data?: Object, showErrorT
   lastApiErrorMessage = ''
   logInfo('Http', `前端请求后端：${operation}（${method} ${url}）`)
   try {
-    let attempt: ApiResponse<T> = await performRequest<T>(method, url, data, timeoutMs, requestToken)
+    let attempt: ApiResponse<T> = await performRequest<T>(method, url, data, timeoutMs, requestToken, activeBaseUrl)
     if (attempt.code === 401 && url !== '/api/auth/refresh' && url !== '/api/auth/logout') {
       const refreshResult: number = await refreshAfterUnauthorized(requestToken, requestRefreshToken, requestEpoch)
       if (refreshResult === 1 && authSessionEpoch === requestEpoch) {
-        attempt = await performRequest<T>(method, url, data, timeoutMs, authToken)
+        attempt = await performRequest<T>(method, url, data, timeoutMs, authToken, activeBaseUrl)
         if (attempt.code === 401 && authSessionEpoch === requestEpoch) {
           await expireLocalSession()
         }
@@ -234,10 +280,10 @@ async function request<T>(method: string, url: string, data?: Object, showErrorT
 }
 
 async function performRequest<T>(method: string, url: string, data: Object | undefined, timeoutMs: number,
-  token: string): Promise<ApiResponse<T>> {
-  const nativeRequest: rcp.Request = new rcp.Request(API_CONFIG.BASE_URL + url,
+  token: string, baseUrl: string): Promise<ApiResponse<T>> {
+  const nativeRequest: rcp.Request = new rcp.Request(baseUrl + url,
     method as rcp.HttpMethod, buildHeaders(token), data === undefined ? undefined : JSON.stringify(data))
-  nativeRequest.configuration = { transfer: { timeout: { connectMs: API_CONFIG.TIMEOUT, transferMs: timeoutMs } } }
+  nativeRequest.configuration = { transfer: { timeout: { connectMs: API_CONFIG.CONNECT_TIMEOUT, transferMs: timeoutMs } } }
   const response: rcp.Response = await getClient().fetch(nativeRequest)
   const dateHeader: string | string[] | undefined = response.headers.date
   const dateText: string = typeof dateHeader === 'string' ? dateHeader : ''
@@ -263,9 +309,9 @@ async function refreshAfterUnauthorized(staleAccessToken: string, staleRefreshTo
   if (refreshInFlight !== null) { return await refreshInFlight }
   refreshInFlight = (async (): Promise<number> => {
     try {
-      const nativeRequest: rcp.Request = new rcp.Request(API_CONFIG.BASE_URL + '/api/auth/refresh',
+      const nativeRequest: rcp.Request = new rcp.Request(activeBaseUrl + '/api/auth/refresh',
         'POST' as rcp.HttpMethod, buildHeaders(''), JSON.stringify({ refreshToken: staleRefreshToken }))
-      nativeRequest.configuration = { transfer: { timeout: { connectMs: API_CONFIG.TIMEOUT, transferMs: API_CONFIG.TIMEOUT } } }
+      nativeRequest.configuration = { transfer: { timeout: { connectMs: API_CONFIG.CONNECT_TIMEOUT, transferMs: API_CONFIG.TIMEOUT } } }
       const response: rcp.Response = await getClient().fetch(nativeRequest)
       if (authSessionEpoch !== epoch || authToken !== staleAccessToken || refreshToken !== staleRefreshToken) { return 2 }
       let parsed: ApiResponse<RefreshedTokenData> | null = null
@@ -364,13 +410,16 @@ export async function uploadFile(url: string, fileUri: string, showErrorToast: b
       header: header,
       multiFormDataList: [formData],
       expectDataType: http.HttpDataType.STRING,
-      connectTimeout: API_CONFIG.TIMEOUT,
+      connectTimeout: API_CONFIG.CONNECT_TIMEOUT,
       readTimeout: API_CONFIG.TIMEOUT
     }
     logInfo('Http', `前端请求后端：上传评价图片（POST ${url}）`)
     const response: http.HttpResponse = await httpRequest.request(url, options)
     const body: string = typeof response.result === 'string' ? response.result as string : ''
-    if (response.responseCode !== 200 || body === '') {
+    if (response.responseCode === 0 || body === '') {
+      throw new Error('上传服务不可达')
+    }
+    if (response.responseCode !== 200) {
       if (response.responseCode === 401) {
         const refreshResult: number = await refreshAfterUnauthorized(requestToken, requestRefreshToken, requestEpoch)
         if (refreshResult === -1 && authSessionEpoch === requestEpoch) { await expireLocalSession() }

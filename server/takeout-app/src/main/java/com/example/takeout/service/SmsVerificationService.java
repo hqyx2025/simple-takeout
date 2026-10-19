@@ -2,6 +2,7 @@ package com.example.takeout.service;
 
 import com.example.takeout.common.BizException;
 import com.example.takeout.service.thirdparty.SmsSender;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
@@ -38,6 +39,7 @@ public class SmsVerificationService implements SmsCodeVerifier {
     private final long dailyLimit;
     private final long hourlyLimit;
 
+    @Autowired
     public SmsVerificationService(StringRedisTemplate redis, SmsSender sender,
                                   @Value("${takeout.jwt.secret}") String signingSecret,
                                   @Value("${takeout.sms.code-ttl-seconds:900}") long ttlSeconds,

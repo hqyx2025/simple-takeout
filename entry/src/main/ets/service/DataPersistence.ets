@@ -7,7 +7,7 @@ import preferences from '@ohos.data.preferences'
 import common from '@ohos.app.ability.common'
 import { User, Order, Address, createEmptyUser } from '../model/Models'
 import { logInfo, logWarn, logError } from './AppLogger'
-import { setAuthTokens } from './HttpClient'
+import { initializeApiBaseUrl, setAuthTokens } from './HttpClient'
 import { clearAuthTokens, loadAuthTokens, saveAuthTokens, StoredAuthTokens } from './TokenStorage'
 
 const PERSISTENCE_NAME: string = 'takeout_app_data'
@@ -181,6 +181,23 @@ export async function loadAllData(): Promise<void> {
       AppStorage.setOrCreate<boolean>('_persistenceReady', true)
       return
     }
+    const previousApiBaseUrl: string = await prefs.get('apiBaseUrl', '') as string
+    const apiBaseUrl: string = await initializeApiBaseUrl()
+    if (previousApiBaseUrl !== '' && previousApiBaseUrl !== apiBaseUrl) {
+      logWarn('Persistence', '后端数据源已切换，清除旧服务器的本地登录与账号缓存')
+      await clearAllData()
+      AppStorage.setOrCreate<boolean>('isLoggedIn', false)
+      AppStorage.setOrCreate<User>('user', createEmptyUser())
+      AppStorage.setOrCreate<Order[]>('orderList', [])
+      AppStorage.setOrCreate<Address[]>('addressList', [])
+      AppStorage.setOrCreate<Address | null>('currentAddress', null)
+      AppStorage.setOrCreate<Object[]>('cartItems', [])
+      AppStorage.setOrCreate<Object[]>('favoriteList', [])
+      AppStorage.setOrCreate<Object[]>('couponList', [])
+      AppStorage.setOrCreate<string>('authToken', '')
+    }
+    await prefs.put('apiBaseUrl', apiBaseUrl)
+    await prefs.flush()
     let storedTokens: StoredAuthTokens | null = null
     try {
       storedTokens = await loadAuthTokens()

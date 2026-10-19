@@ -1,0 +1,84 @@
+# Private Ubuntu demo. Start with both files; access the API through SSH forwarding.
+# Requires Docker Compose >= 2.24.4 and a mounted TAKEOUT_DATA_DIR.
+name: simple-takeout-demo
+services:
+  mysql:
+    ports: !reset []
+    environment:
+      MYSQL_ROOT_PASSWORD: ${TAKEOUT_MYSQL_ROOT_PASSWORD:?Set a separate MySQL root password}
+      MYSQL_ROOT_HOST: '%'
+      MYSQL_USER: ${TAKEOUT_DB_USERNAME:?Set a non-root application database user}
+      MYSQL_PASSWORD: ${TAKEOUT_DB_PASSWORD:?Set an application database password}
+    healthcheck:
+      test: ['CMD-SHELL', 'MYSQL_PWD="$$MYSQL_ROOT_PASSWORD" mysql -h 127.0.0.1 -uroot -e "SELECT 1" >/dev/null']
+  redis:
+    ports: !reset []
+  app:
+    build:
+      args:
+        MAVEN_SETTINGS: docker/settings-central.xml
+    deploy:
+      # Seed a fresh demo database with one instance to avoid concurrent initialization.
+      replicas: 1
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1024M
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-develop}
+      TAKEOUT_DEMO_ADMIN_PASSWORD: ${TAKEOUT_DEMO_ADMIN_PASSWORD:?Set a random demo admin password}
+      TAKEOUT_DEMO_RECHARGE_ENABLED: ${TAKEOUT_DEMO_RECHARGE_ENABLED:-true}
+      TAKEOUT_DEMO_SIGNUP_BALANCE: ${TAKEOUT_DEMO_SIGNUP_BALANCE:-20}
+      TAKEOUT_SMS_PROVIDER: ${TAKEOUT_SMS_PROVIDER:-mock}
+      TAKEOUT_SMS_EXPOSE_MOCK_CODE: ${TAKEOUT_SMS_EXPOSE_MOCK_CODE:-false}
+      TAKEOUT_QQ_SMTP_HOST: ${TAKEOUT_QQ_SMTP_HOST:-smtp.qq.com}
+      TAKEOUT_QQ_SMTP_PORT: ${TAKEOUT_QQ_SMTP_PORT:-465}
+      TAKEOUT_QQ_SMTP_USERNAME: ${TAKEOUT_QQ_SMTP_USERNAME:-}
+      TAKEOUT_QQ_SMTP_AUTH_CODE: ${TAKEOUT_QQ_SMTP_AUTH_CODE:-}
+      TAKEOUT_QQ_SMTP_FROM_NAME: ${TAKEOUT_QQ_SMTP_FROM_NAME:-简单外卖}
+      TAKEOUT_PAYMENT_REAL_ENABLED: ${TAKEOUT_PAYMENT_REAL_ENABLED:-false}
+      TAKEOUT_PAYMENT_MOCK_ENABLED: ${TAKEOUT_PAYMENT_MOCK_ENABLED:-false}
+      TAKEOUT_PAYMENT_SANDBOX: ${TAKEOUT_PAYMENT_SANDBOX:-true}
+      TAKEOUT_ALIPAY_APP_ID: ${TAKEOUT_ALIPAY_APP_ID:-9021000169644800}
+      TAKEOUT_ALIPAY_SELLER_ID: ${TAKEOUT_ALIPAY_SELLER_ID:-2088721115957570}
+      TAKEOUT_ALIPAY_GATEWAY_URL: ${TAKEOUT_ALIPAY_GATEWAY_URL:-https://openapi-sandbox.dl.alipaydev.com/gateway.do}
+      TAKEOUT_ALIPAY_APP_PRIVATE_KEY: ${TAKEOUT_ALIPAY_APP_PRIVATE_KEY:-}
+      TAKEOUT_ALIPAY_PUBLIC_KEY: ${TAKEOUT_ALIPAY_PUBLIC_KEY:-}
+      TAKEOUT_ALIPAY_NOTIFY_URL: ${TAKEOUT_ALIPAY_NOTIFY_URL:-}
+      TAKEOUT_AMAP_REST_KEY: ${TAKEOUT_AMAP_REST_KEY:-}
+      TAKEOUT_UPLOAD_PROVIDER: ${TAKEOUT_UPLOAD_PROVIDER:-local}
+      TAKEOUT_OPENAPI_ENABLED: ${TAKEOUT_OPENAPI_ENABLED:-false}
+      JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai -XX:MaxRAMPercentage=65 -XX:+ExitOnOutOfMemoryError
+  gateway:
+    build:
+      args:
+        MAVEN_SETTINGS: docker/settings-central.xml
+    ports: !override
+      - '127.0.0.1:${TAKEOUT_APP_PORT:-8087}:8087'
+  backup:
+    environment:
+      MYSQL_PWD: ${TAKEOUT_MYSQL_ROOT_PASSWORD:?Set a separate MySQL root password}
+      TZ: Asia/Shanghai
+    volumes:
+      - ./server/docker/mysql-backup-daily.sh:/backup.sh:ro
+volumes:
+  mysql-data:
+    driver_opts:
+      type: none
+      o: bind
+      device: ${TAKEOUT_DATA_DIR:?Set the mounted data directory}/mysql
+  redis-data:
+    driver_opts:
+      type: none
+      o: bind
+      device: ${TAKEOUT_DATA_DIR:?Set the mounted data directory}/redis
+  uploads-data:
+    driver_opts:
+      type: none
+      o: bind
+      device: ${TAKEOUT_DATA_DIR:?Set the mounted data directory}/uploads
+  mysql-backups:
+    driver_opts:
+      type: none
+      o: bind
+      device: ${TAKEOUT_DATA_DIR:?Set the mounted data directory}/backups

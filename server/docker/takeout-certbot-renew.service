@@ -1,0 +1,8 @@
+[Unit]
+Description=Renew the takeout IP certificate
+After=network-online.target nginx.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c '/opt/takeout-certbot/bin/certbot renew --deploy-hook "/usr/sbin/nginx -s reload"'

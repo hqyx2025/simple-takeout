@@ -1,4 +1,4 @@
-import { get, post, put, del, uploadFile, ApiResponse } from '../HttpClient'
+import { get, post, put, del, getApiBaseUrl, uploadFile, ApiResponse } from '../HttpClient'
 
 import { API_CONFIG } from '../../common/Constants'
 import { Order, OrderPageData, CartItem, RefundRecord, SetmealOrder, UploadResult } from '../../model/Models'
@@ -8,7 +8,7 @@ import { toCartItem, toOrder, toOrderPageData } from '../../model/server/Convert
 
 /** 图文评价图片上传：返回相对地址（需拼接 API_CONFIG.BASE_URL 展示）。 */
 export async function uploadImageApi(fileUri: string, showErrorToast: boolean = true): Promise<UploadResult | null> {
-  const url: string = API_CONFIG.BASE_URL + API_CONFIG.ENDPOINTS['upload']
+  const url: string = getApiBaseUrl() + API_CONFIG.ENDPOINTS['upload']
   const result: UploadResult | null = await uploadFile(url, fileUri, showErrorToast)
   return result
 }

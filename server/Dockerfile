@@ -20,7 +20,8 @@
 FROM maven:3.9-eclipse-temurin-25 AS build
 WORKDIR /workspace
 
-COPY docker/settings.xml /usr/share/maven/conf/settings.xml
+ARG MAVEN_SETTINGS=docker/settings.xml
+COPY ${MAVEN_SETTINGS} /usr/share/maven/conf/settings.xml
 
 # Maven 缓存由 package 阶段复用；避免 dependency:go-offline 下载无关插件并卡住构建。
 COPY pom.xml .
