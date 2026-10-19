@@ -12,7 +12,7 @@
   可用环境变量覆盖：TAKEOUT_LOG_DIR / TAKEOUT_LOG_LEVEL / TAKEOUT_LOG_ROOT_LEVEL
 -->
 <configuration>
-    <property name="LOG_DIR" value="${TAKEOUT_LOG_DIR:-logs}"/>
+    <property name="LOG_DIR" value="${TAKEOUT_LOG_DIR:-logs/app}"/>
     <property name="LOG_LEVEL" value="${TAKEOUT_LOG_LEVEL:-INFO}"/>
     <property name="ROOT_LEVEL" value="${TAKEOUT_LOG_ROOT_LEVEL:-INFO}"/>
 

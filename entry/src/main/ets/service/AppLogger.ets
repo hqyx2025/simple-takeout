@@ -2,16 +2,16 @@
  * 应用日志服务（增强版）
  * 功能：
  * 1. 控制台输出（DevEco Studio Log 窗口 / hdc hilog 可见）
- * 2. 日志文件按天分文件：log/app-YYYY-MM-DD.log
+ * 2. 日志文件按天分文件：logs/mobile/app-YYYY-MM-DD.log
  * 3. 单文件大小限制：超过 2MB 自动压缩归档为 zip 并新建文件继续写入
- * 4. 日志文件位于应用沙箱 filesDir/log/，可通过 DevEco Device File Manager 或 hdc 导出查看
+ * 4. 日志文件位于应用沙箱 filesDir/logs/mobile/，可通过 DevEco Device File Manager 或 hdc 导出查看
  */
 import common from '@ohos.app.ability.common'
 import fs from '@ohos.file.fs'
 import zlib from '@ohos.zlib'
 
 const LOG_TAG: string = 'TakeoutApp'
-const LOG_DIR_NAME: string = 'log'
+const LOG_DIR_NAME: string = 'logs/mobile'
 const LOG_FILE_PREFIX: string = 'app'
 const MAX_LOG_SIZE: number = 2 * 1024 * 1024  // 单文件最大 2MB，超过则压缩归档
 

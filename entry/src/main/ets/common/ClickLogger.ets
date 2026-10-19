@@ -3,7 +3,7 @@
  *
  * 用 ArkUI 的 UIObserver 监听 willClick：一次注册覆盖全工程所有 onClick（含以后新增的按钮），
  * 不需要逐个按钮埋点。日志通过 AppLogger 写出，因此自带 [page=<当前页面>] 标识，
- * 可以在 hilog / filesDir/log/app-YYYY-MM-DD.log 里还原"用户在哪个页面点了哪个控件"。
+ * 可以在 hilog / filesDir/logs/mobile/app-YYYY-MM-DD.log 里还原"用户在哪个页面点了哪个控件"。
  *
  * 注意：Observer 需要窗口的 UIContext，因此在 EntryAbility 内容加载完成后再注册。
  */

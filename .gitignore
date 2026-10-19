@@ -40,10 +40,20 @@
 /.hvigor-user/
 /.hvigor-user-*/
 /.npm-cache/
-/logs/
-# 统一运行日志目录：仅保留目录标记，实际日志不入库
-/log/*
-!/log/.gitkeep
+# 统一运行日志目录：保留分类目录，实际日志不入库
+/logs/*
+!/logs/app/
+!/logs/gateway/
+!/logs/app-balancer/
+!/logs/public-nginx/
+/logs/app/*
+!/logs/app/.gitkeep
+/logs/gateway/*
+!/logs/gateway/.gitkeep
+/logs/app-balancer/*
+!/logs/app-balancer/.gitkeep
+/logs/public-nginx/*
+!/logs/public-nginx/.gitkeep
 /image/
 /scripts/__pycache__/
 

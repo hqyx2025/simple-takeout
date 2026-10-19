@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- 网关日志：与应用统一输出到 TAKEOUT_LOG_DIR，并按天/大小轮转。 -->
 <configuration>
-    <property name="LOG_DIR" value="${TAKEOUT_LOG_DIR:-logs}"/>
+    <property name="LOG_DIR" value="${TAKEOUT_LOG_DIR:-logs/gateway}"/>
     <property name="LOG_LEVEL" value="${TAKEOUT_LOG_LEVEL:-INFO}"/>
     <property name="ROOT_LEVEL" value="${TAKEOUT_LOG_ROOT_LEVEL:-INFO}"/>
 

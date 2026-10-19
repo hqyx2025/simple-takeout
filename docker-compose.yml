@@ -120,8 +120,8 @@ services:
     volumes:
       # 评价图片持久化，容器重建不丢
       - uploads-data:/app/uploads
-      # 应用日志持久化到项目根目录 log/，由 Logback 按天和大小轮转
-      - ./log/app:/app/logs
+      # 应用日志持久化到项目根目录 logs/app/，由 Logback 按天和大小轮转
+      - ./logs/app:/app/logs
     healthcheck:
       # 运行镜像基于 JRE，没有 curl/wget，用构建阶段编译好的 healthcheck.class 探活
       test: ["CMD", "java", "-cp", "/app", "healthcheck", "127.0.0.1", "8087"]
@@ -170,8 +170,8 @@ services:
         condition: service_healthy
     volumes:
       - ./server/docker/app-upstream.conf:/etc/nginx/conf.d/default.conf:ro
-      # 内部负载均衡日志持久化到项目根目录 log/app-balancer/
-      - ./log/app-balancer:/var/log/nginx
+      # 内部负载均衡日志持久化到项目根目录 logs/app-balancer/
+      - ./logs/app-balancer:/var/log/nginx
     logging:
       driver: json-file
       options:
@@ -210,8 +210,8 @@ services:
         max-file: '3'
     entrypoint: ["java", "-jar", "/app/takeout-gateway.jar"]
     volumes:
-      # 网关日志持久化到项目根目录 log/gateway/
-      - ./log/gateway:/app/logs
+      # 网关日志持久化到项目根目录 logs/gateway/
+      - ./logs/gateway:/app/logs
 
 volumes:
   mysql-data:
