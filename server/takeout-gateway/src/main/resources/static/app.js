@@ -18,6 +18,7 @@
   const state = {
     token: localStorage.getItem('takeout.demo.token') || '', refreshToken: localStorage.getItem('takeout.demo.refresh') || '',
     user: null, role: 0, page: 'home', search: '', categoryId: 0, stores: [], categories: [], storeId: 0,
+    location: null, locationLabel: '', locating: false, locationVersion: 0,
     goods: [], cart: [], addresses: [], coupons: [], orders: [], favorites: [], rider: null, riderOrders: [],
     merchantStores: [], activeStoreId: 0, merchantGoods: [], editGoods: null, editAddress: null, reviewOrder: null,
     adminUsers: [], adminProducts: [], adminStores: [], adminCategories: [], adminOrders: [], adminRefunds: [],
@@ -31,22 +32,85 @@
   const api = async (path, options = {}) => {
     const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
     if (state.token) headers.Authorization = `Bearer ${state.token}`;
-    const response = await fetch(path, { cache: 'no-store', ...options, headers });
+    const response = await fetch(TakeoutUrls.localPath(path, document.baseURI), { cache: 'no-store', ...options, headers });
     const body = await response.json().catch(() => ({}));
     if (response.status === 401) {
       state.token = ''; state.refreshToken = ''; localStorage.removeItem('takeout.demo.token'); localStorage.removeItem('takeout.demo.refresh');
-      state.user = null; renderShell(); throw new Error('登录已过期，请重新登录');
+      state.user = null; state.location = null; state.locationLabel = ''; renderShell(); throw new Error('登录已过期，请重新登录');
     }
     if (!response.ok || body.code !== 200) throw new Error(body.message || `请求失败 (${response.status})`);
     return body.data;
   };
   const get = (path) => api(path);
   const send = (path, method, data) => api(path, { method, body: data === undefined ? undefined : JSON.stringify(data) });
+  const nearbyPath = path => state.location ? `${path}${path.includes('?') ? '&' : '?'}latitude=${state.location.latitude}&longitude=${state.location.longitude}` : path;
+  const secureLocationLink = () => !window.isSecureContext ? '<a class="btn" href="https://hqyx.website/takeout/">打开 HTTPS 精确定位入口</a>' : '';
+  const locationNotice = () => `<section class="surface section" data-browse-location>
+    <div class="row-between location-heading"><div><strong>${esc(state.locationLabel || '尚未选择位置')}</strong><div class="help-text">${state.location ? '已按此位置查询附近店铺。' : '可手动选择地点，查看其他位置附近的店铺。'}</div></div><div class="td-actions"><button class="btn primary" type="button" data-action="location-change" aria-expanded="false" aria-controls="browseLocationPicker">更换位置</button>${btn('获取当前位置','locate-device')}${state.locationLabel ? btn('清除位置','location-clear') : ''}</div></div>
+    <div data-location-status role="status" class="help-text"></div>
+    <form id="browseLocationPicker" data-form="browse-location" class="inline-form" hidden>
+      <label class="field">搜索其他位置<input class="input" name="locationKeyword" maxlength="80" placeholder="例如：武汉市光谷广场、北京市中关村广场" autocomplete="off"></label>
+      <p class="help-text">输入城市、小区或街道名称，选择搜索结果即可切换浏览位置。</p>
+      <div class="form-actions"><button class="btn" type="button" data-action="location-change">取消</button><button class="btn primary" type="submit">搜索地点</button></div>
+      <div class="location-results" data-location-results aria-live="polite"></div>
+    </form></section>`;
+  async function searchPlaces(form) {
+    const keyword = form.elements.locationKeyword.value.trim();
+    const results = form.querySelector('[data-location-results]');
+    const token = state.token;
+    const request = String(Number(form.dataset.locationRequest || 0) + 1);
+    form.dataset.locationRequest = request;
+    if (!keyword) { results.textContent = '请输入城市、小区或街道名称。'; form.elements.locationKeyword.focus(); return; }
+    const buttons = form.querySelectorAll('[data-action="address-search"],button[type="submit"]');
+    buttons.forEach(button => { button.disabled = true; }); results.textContent = '正在搜索地点…';
+    const active = () => token === state.token && form.isConnected && !form.hidden && form.dataset.locationRequest === request;
+    try {
+      const data = await get(`/api/location/search?keyword=${encodeURIComponent(keyword)}`);
+      if (!active()) return;
+      if (data?.status !== '1') throw new Error('地点搜索暂不可用，请稍后重试。');
+      const places = (Array.isArray(data.pois) ? data.pois : []).map(TakeoutLocation.place).filter(Boolean);
+      const action = form.dataset.form === 'browse-location' ? 'location-select' : 'address-select';
+      results.innerHTML = places.map(place => `<button class="btn location-result" type="button" data-action="${action}" data-address="${esc(place.address)}" data-longitude="${place.longitude}" data-latitude="${place.latitude}">${esc(place.address)}</button>`).join('') || '<p class="help-text">未找到可定位地点，请补充城市名称后重新搜索。</p>';
+    } catch (error) { if (active()) results.textContent = error.message || '地点搜索失败，请稍后重试。'; }
+    finally { buttons.forEach(button => { button.disabled = false; }); }
+  }
+  async function locate(el) {
+    if (!requireUser() || state.locating) return;
+    const form = el.closest('form');
+    const container = form || $('app');
+    const status = container.querySelector('[data-location-status]');
+    const token = state.token;
+    const version = ++state.locationVersion;
+    const active = () => token === state.token && state.locationVersion === version && container.isConnected && status?.isConnected;
+    state.locating = true; el.disabled = true;
+    if (status) status.textContent = '正在获取设备位置，请在浏览器提示中选择允许…';
+    try {
+        const position = await TakeoutLocation.devicePosition(window);
+        if (!active()) return;
+        if (status) status.textContent = '已获取坐标，正在解析地址…';
+        const location = await get(`/api/location/reverse?longitude=${position.longitude}&latitude=${position.latitude}`);
+        if (!active()) return;
+        const coordinate = TakeoutLocation.coordinates(location.longitude, location.latitude);
+        if (!coordinate || !location.address) throw new Error('定位结果无效，请重试或搜索地点。');
+        if (form) {
+          form.elements.latitude.value = coordinate.latitude; form.elements.longitude.value = coordinate.longitude;
+          const address = form.elements.detail || form.elements.address;
+          if (address) address.value = location.address;
+          if (form.dataset.form === 'address') form.dataset.coordinateAddress = location.address;
+          status.textContent = `已填入当前位置${Number.isFinite(position.accuracy) ? `，设备精度约 ${Math.ceil(position.accuracy)} 米` : ''}。请核对地址并补充门牌号，点击保存后生效。`;
+        } else {
+          state.location = coordinate; state.locationLabel = location.address;
+          await renderPage();
+        }
+    } catch (error) { if (active() && status) status.textContent = error.message; }
+    finally { if (state.locationVersion === version) state.locating = false; el.disabled = false; }
+  }
   const pageHead = (title, description = '', actions = '') => `<div class="page-head"><div><h1>${esc(title)}</h1>${description ? `<p>${esc(description)}</p>` : ''}</div><div class="head-actions">${actions}</div></div>`;
   const empty = (text) => `<div class="empty">${esc(text)}</div>`;
   const btn = (label, action, value = '', style = '') => `<button class="btn ${style}" data-action="${esc(action)}" data-id="${esc(value)}">${esc(label)}</button>`;
   const statusTag = (value, kind = '') => `<span class="status ${kind}">${esc(value)}</span>`;
-  const storeImage = (store) => store.image ? `<img src="${esc(store.image)}" alt="">` : '食';
+  const assetURL = value => TakeoutUrls.localPath(value, document.baseURI);
+  const storeImage = (store) => store.image ? `<img src="${esc(assetURL(store.image))}" alt="">` : '食';
   const orderStatus = (o) => o.status === 4 && o.escrowStatus === 1 ? '已完成' : (STATUS[o.status] || '未知');
   const openAuth = (mode = 'login') => {
     $('authTitle').textContent = mode === 'register' ? '注册用户账号' : '登录';
@@ -60,12 +124,14 @@
     const data = await send('/api/auth/login', 'POST', payload);
     state.token = data.token; state.refreshToken = data.refreshToken || '';
     localStorage.setItem('takeout.demo.token', state.token); localStorage.setItem('takeout.demo.refresh', state.refreshToken);
+    state.location = null; state.locationLabel = ''; state.editAddress = null;
     state.user = data.user; state.role = Number(data.user.role); state.page = state.role === 0 ? 'home' : 'overview';
     $('authModal').hidden = true; renderShell(); await renderPage();
   };
   const logout = async () => {
     try { await send('/api/auth/logout', 'POST', { refreshToken: state.refreshToken, pushToken: '' }); } catch (_) {}
     state.token = ''; state.refreshToken = ''; state.user = null; state.role = 0;
+    state.location = null; state.locationLabel = ''; state.editAddress = null;
     localStorage.removeItem('takeout.demo.token'); localStorage.removeItem('takeout.demo.refresh');
     state.page = 'home'; renderShell(); await renderPage(); toast('已退出登录');
   };
@@ -88,6 +154,7 @@
     state.page = page; renderShell(); await renderPage(); window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   const renderPage = async () => {
+    state.locationVersion++; state.locating = false;
     const app = $('app'); app.innerHTML = empty('正在读取服务端数据…');
     try {
       if (state.role === 0 || !state.user) await renderCustomer(state.page);
@@ -114,7 +181,7 @@
       return;
     }
     const [categories, stores, banners, announcements] = await Promise.all([
-      get('/api/categories'), get(page === 'discover' ? `/api/search?keyword=${encodeURIComponent(state.search || '')}` : '/api/stores/recommended?limit=12'),
+      get('/api/categories'), get(nearbyPath(page === 'discover' ? `/api/search?keyword=${encodeURIComponent(state.search || '')}` : state.categoryId ? `/api/stores?categoryId=${state.categoryId}` : '/api/stores/recommended?limit=12')),
       get('/api/banners').catch(() => []), get('/api/announcements').catch(() => [])
     ]);
     state.categories = categories || []; state.stores = stores || [];
@@ -122,7 +189,8 @@
     const bannersHtml = (banners || []).filter(b => b.status === 1).slice(0, 3).map(b => `<div class="surface"><strong>${esc(b.title)}</strong><div class="subtle">${esc(b.subtitle || '')}</div></div>`).join('');
     const annHtml = (announcements || []).filter(a => a.status === 1).slice(0, 3).map(a => `<div class="notice-line" style="margin-bottom:8px"><strong>${esc(a.title)}</strong> · ${esc(a.content)}</div>`).join('');
     $('app').innerHTML = `${pageHead(page === 'home' ? '附近好店' : '发现好味道', '店铺、商品和订单状态均来自共享服务端', `${state.user ? btn('我的订单','go','orders') : btn('登录点餐','login','','primary')}`)}${annHtml}${bannersHtml ? `<div class="grid section">${bannersHtml}</div>` : ''}<div class="toolbar section"><input class="input" id="storeSearch" placeholder="搜索店铺或菜品" value="${esc(state.search)}"><button class="btn primary" data-action="search">搜索</button><select class="select" id="categoryFilter" style="max-width:220px"><option value="0">全部分类</option>${state.categories.map(c => `<option value="${c.id}" ${Number(state.categoryId) === Number(c.id) ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>${page === 'home' ? '' : shortcuts}</div>${page === 'home' ? `<div class="toolbar">${btn('热销榜','rank-stores')} ${btn('热销菜品','rank-goods')} ${btn('特价专区','specials')} ${btn('限时秒杀','seckills')} ${state.user ? btn('优惠券','go','perks') : ''}</div>` : ''}<div class="grid" id="storeGrid">${renderStoreCards(state.stores)}</div><div class="section" id="browseResult"></div>`;
-    $('categoryFilter').onchange = async (e) => { state.categoryId = Number(e.target.value); if (state.categoryId) state.stores = await get(`/api/stores?categoryId=${state.categoryId}`); else state.stores = await get('/api/stores'); $('storeGrid').innerHTML = renderStoreCards(state.stores); bindStoreButtons(); };
+    $('storeGrid').insertAdjacentHTML('beforebegin', locationNotice() + secureLocationLink());
+    $('categoryFilter').onchange = async (e) => { try { state.categoryId = Number(e.target.value); state.stores = await get(nearbyPath(state.categoryId ? `/api/stores?categoryId=${state.categoryId}` : '/api/stores')); $('storeGrid').innerHTML = renderStoreCards(state.stores); bindStoreButtons(); } catch (error) { toast(error.message, true); } };
     bindStoreButtons();
   };
   const renderStoreCards = (stores) => (stores || []).map(s => `<article class="store-card"><div class="store-image">${storeImage(s)}</div><div class="store-body"><h3>${esc(s.name)}</h3><div class="subtle">★ ${Number(s.rating || 0).toFixed(1)} · 月售 ${Number(s.monthlySales || 0)} · ${esc(s.deliveryTime || '配送信息待更新')}</div><div class="tag-list">${(s.tags || []).slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div><div class="row-between"><span class="subtle">起送 ¥${cash(s.minOrder)} · 配送 ¥${cash(s.deliveryFee)}</span><button class="btn small primary" data-action="open-store" data-id="${s.id}">进店</button></div></div></article>`).join('') || empty('暂时没有符合条件的店铺');
@@ -131,7 +199,7 @@
     if (!state.storeId) { state.page = 'home'; return renderBrowse('home'); }
     const [store, goods, categories, reviews] = await Promise.all([get(`/api/stores/${state.storeId}`), get(`/api/stores/${state.storeId}/goods`), get(`/api/stores/${state.storeId}/categories`), get(`/api/stores/${state.storeId}/reviews`)]);
     state.goods = goods || [];
-    $('app').innerHTML = `${pageHead(store.name, store.notice || store.address || '', `${btn('返回首页','go','home')} ${state.user ? btn('收藏店铺','favorite',store.id) : ''}`)}<div class="grid four"><div class="metric"><div class="metric-label">评分</div><div class="metric-value">★ ${Number(store.rating || 0).toFixed(1)}</div></div><div class="metric"><div class="metric-label">月售</div><div class="metric-value">${Number(store.monthlySales || 0)}</div></div><div class="metric"><div class="metric-label">配送费</div><div class="metric-value">¥${cash(store.deliveryFee)}</div></div><div class="metric"><div class="metric-label">起送价</div><div class="metric-value">¥${cash(store.minOrder)}</div></div></div><div class="section">${categories?.length ? `<div class="toolbar">${categories.map(c=>`<span class="tag">${esc(c.name)}</span>`).join('')}</div>`:''}<div class="page-panel">${state.goods.map(g=>`<div class="food-row"><div class="food-image">${g.image?`<img src="${esc(g.image)}" alt="">`:'食'}</div><div class="food-info"><h3>${esc(g.name)} ${g.special?'<span class="tag">特价</span>':''}</h3><p>${esc(g.description || g.tag || '今日推荐')} · 月售 ${g.sales || 0} · 库存 ${g.stock ?? '-'}</p><div class="price">¥${cash(g.price)} ${g.originalPrice>g.price?`<del class="subtle">¥${cash(g.originalPrice)}</del>`:''}</div></div><div class="food-actions">${(g.specs||[]).length?`<select class="select" data-spec-for="${g.id}" style="max-width:150px">${g.specs.map(s=>`<option value="${s.id}">${esc(s.name)} ¥${cash(s.price)}</option>`).join('')}</select>`:''}<button class="btn primary small" data-action="add-cart" data-id="${g.id}">加入购物车</button></div></div>`).join('') || empty('暂时没有上架商品')}</div></div><section class="section"><h2 class="section-title">顾客评价 (${reviews.length})</h2><div class="grid two">${reviews.slice(0,20).map(r=>`<div class="surface"><div class="row-between"><strong>${esc(r.userName || '顾客')}</strong><span class="rating">★ ${r.rating}</span></div><p>${esc(r.content || '')}</p><div class="subtle">${esc(r.createTime || '')}</div>${r.reply?`<div class="notice-line" style="margin-top:8px">商家回复：${esc(r.reply)}</div>`:''}</div>`).join('') || empty('暂无评价')}</div></section>`;
+    $('app').innerHTML = `${pageHead(store.name, store.notice || store.address || '', `${btn('返回首页','go','home')} ${state.user ? btn('收藏店铺','favorite',store.id) : ''}`)}<div class="grid four"><div class="metric"><div class="metric-label">评分</div><div class="metric-value">★ ${Number(store.rating || 0).toFixed(1)}</div></div><div class="metric"><div class="metric-label">月售</div><div class="metric-value">${Number(store.monthlySales || 0)}</div></div><div class="metric"><div class="metric-label">配送费</div><div class="metric-value">¥${cash(store.deliveryFee)}</div></div><div class="metric"><div class="metric-label">起送价</div><div class="metric-value">¥${cash(store.minOrder)}</div></div></div><div class="section">${categories?.length ? `<div class="toolbar">${categories.map(c=>`<span class="tag">${esc(c.name)}</span>`).join('')}</div>`:''}<div class="page-panel">${state.goods.map(g=>`<div class="food-row"><div class="food-image">${g.image?`<img src="${esc(assetURL(g.image))}" alt="">`:'食'}</div><div class="food-info"><h3>${esc(g.name)} ${g.special?'<span class="tag">特价</span>':''}</h3><p>${esc(g.description || g.tag || '今日推荐')} · 月售 ${g.sales || 0} · 库存 ${g.stock ?? '-'}</p><div class="price">¥${cash(g.price)} ${g.originalPrice>g.price?`<del class="subtle">¥${cash(g.originalPrice)}</del>`:''}</div></div><div class="food-actions">${(g.specs||[]).length?`<select class="select" data-spec-for="${g.id}" style="max-width:150px">${g.specs.map(s=>`<option value="${s.id}">${esc(s.name)} ¥${cash(s.price)}</option>`).join('')}</select>`:''}<button class="btn primary small" data-action="add-cart" data-id="${g.id}">加入购物车</button></div></div>`).join('') || empty('暂时没有上架商品')}</div></div><section class="section"><h2 class="section-title">顾客评价 (${reviews.length})</h2><div class="grid two">${reviews.slice(0,20).map(r=>`<div class="surface"><div class="row-between"><strong>${esc(r.userName || '顾客')}</strong><span class="rating">★ ${r.rating}</span></div><p>${esc(r.content || '')}</p><div class="subtle">${esc(r.createTime || '')}</div>${r.reply?`<div class="notice-line" style="margin-top:8px">商家回复：${esc(r.reply)}</div>`:''}</div>`).join('') || empty('暂无评价')}</div></section>`;
   };
   const renderCart = async () => {
     state.cart = await get('/api/cart') || [];
@@ -279,7 +347,10 @@
   const announcementForm = () => `<form data-form="admin-announcement" class="inline-form"><div class="form-grid"><label class="field">标题<input class="input" name="title" required></label><label class="field full">内容<textarea class="textarea" name="content" required></textarea></label><div class="form-actions full"><button class="btn primary">发布公告</button></div></div></form>`;
   const employeeForm = () => `<form data-form="admin-employee" class="inline-form"><div class="form-grid"><label class="field">用户名<input class="input" name="username" required></label><label class="field">手机号<input class="input" name="phone" required></label><label class="field">初始密码<input class="input" name="password" type="password" required minlength="8"></label><div class="form-actions"><button class="btn primary">创建员工</button></div></div></form>`;
   const addressForm = (a = null) => `<form data-form="address" data-id="${a?.id||0}" class="inline-form"><div class="form-grid">
-    <div class="notice-line full" role="note">当前网页不支持自动获取位置，请手动搜索地点或输入完整收货地址。</div>
+    <div class="notice-line full" role="note">${window.isSecureContext ? '点击获取当前位置后，请允许浏览器访问位置。' : '当前 HTTP 页面不支持设备定位，请使用 HTTPS 安全入口，或手动搜索地点。'}</div>
+    <div class="full td-actions"><button class="btn" type="button" data-action="locate-device">获取当前位置</button>${secureLocationLink()}</div>
+    <div class="full help-text" data-location-status role="status"></div>
+    <input type="hidden" name="latitude" value="${esc(a?.latitude ?? '')}"><input type="hidden" name="longitude" value="${esc(a?.longitude ?? '')}">
     <label class="field full">搜索收货地点<input class="input" name="locationKeyword" maxlength="80" placeholder="例如：北京市中关村广场"></label>
     <div class="full"><button class="btn" type="button" data-action="address-search">搜索地点</button></div>
     <div class="full" data-location-results aria-live="polite"></div>
@@ -287,14 +358,18 @@
     <label class="field full">详细地址<input class="input" name="detail" required placeholder="省市区、街道、小区及楼栋门牌号" value="${esc(a?.detail||a?.address||'')}"><span class="help-text">可直接输入完整地址；选择搜索结果后，请补充楼栋和门牌号。</span></label>
     <label><input type="checkbox" name="isDefault" ${a?.isDefault?'checked':''}> 设为默认地址</label><div class="form-actions"><button class="btn primary">保存地址</button><button class="btn" type="button" data-action="address-form-close">取消</button></div></div></form>`;
   const bindForms = () => {
+    document.querySelectorAll('form[data-form="merchant-store"],form[data-form="rider-settings"]').forEach(form => {
+      if (!form.querySelector('[data-location-status]')) form.insertAdjacentHTML('afterbegin', `<div class="full td-actions"><button class="btn" type="button" data-action="locate-device">获取当前位置</button>${secureLocationLink()}</div><div class="full help-text" data-location-status role="status"></div>`);
+    });
     document.querySelectorAll('#app form[data-form]').forEach(form => form.onsubmit = async (event) => {
       event.preventDefault(); const f = new FormData(form); const data = Object.fromEntries(f.entries()); const name=form.dataset.form;
       try {
-        if (name === 'recharge') { state.user = await send('/api/auth/recharge','POST',{ amount:Number(data.amount) }); toast('充值成功'); await renderPage(); }
+        if (name === 'browse-location') { await searchPlaces(form); }
+        else if (name === 'recharge') { state.user = await send('/api/auth/recharge','POST',{ amount:Number(data.amount) }); toast('充值成功'); await renderPage(); }
         else if (name === 'profile') { state.user=await send('/api/auth/me','PUT',{username:data.username,phone:data.phone,email:data.email||'',currentPassword:data.currentPassword||''}); toast('资料已保存'); renderShell(); await renderPage(); }
         else if (name === 'password') { await send('/api/auth/password','PUT',{oldPassword:data.oldPassword,newPassword:data.newPassword}); toast('密码已修改，请重新登录'); await logout(); }
         else if (name === 'payment-password') { await send('/api/auth/payment-password','POST',{loginPassword:data.loginPassword,paymentPassword:data.paymentPassword}); toast('支付密码已设置'); }
-        else if (name === 'address') { const id=Number(form.dataset.id||0); const payload={name:data.name,phone:data.phone,detail:data.detail,isDefault:f.get('isDefault')?'1':'0'}; await send(id?`/api/addresses/${id}`:'/api/addresses',id?'PUT':'POST',payload); state.editAddress=null;toast('地址已保存');await renderPage(); }
+        else if (name === 'address') { const id=Number(form.dataset.id||0); const payload={name:data.name,phone:data.phone,detail:data.detail,isDefault:f.get('isDefault')?'1':'0',...TakeoutLocation.coordinates(data.longitude,data.latitude)}; await send(id?`/api/addresses/${id}`:'/api/addresses',id?'PUT':'POST',payload); state.editAddress=null;toast('地址已保存');await renderPage(); }
         else if (name === 'merchant-store') { const p={name:data.name,categoryId:Number(data.categoryId),deliveryFee:Number(data.deliveryFee),minOrder:Number(data.minOrder),deliveryTime:data.deliveryTime,notice:data.notice,address:data.address,latitude:Number(data.latitude||0),longitude:Number(data.longitude||0),image:data.image||'',deliveryRadius:Number(data.deliveryRadius||0)}; const id=Number(form.dataset.id||0); await send(id?`/api/merchant/stores/${id}`:'/api/merchant/stores',id?'PUT':'POST',id?{...p,status:-1}:p); state.editGoods=null;state.merchantStoreEdit=null;toast('门店已保存');await renderPage(); }
         else if (name === 'merchant-goods') { const p={name:data.name,description:data.description||'',price:Number(data.price),originalPrice:Number(data.originalPrice||data.price),image:data.image||'',categoryId:Number(data.categoryId),merchantCategoryId:Number(data.merchantCategoryId||0),stock:Number(data.stock||0),tag:data.tag||'',special:f.get('special')===null?false:true,status:1}; const id=Number(form.dataset.id||0); await send(id?`/api/merchant/goods/${id}`:`/api/merchant/stores/${state.activeStoreId}/goods`,id?'PUT':'POST',p);state.editGoods=null;toast('商品已保存');await renderPage(); }
         else if (name === 'merchant-activity') { await send(`/api/merchant/activities?storeId=${state.activeStoreId}`,'POST',{type:data.type,title:data.title,discountRate:Number(data.discountRate||0),reduceAmount:Number(data.reduceAmount||0),threshold:Number(data.threshold||0),giftGoodsId:Number(data.giftGoodsId||0),startTime:data.startTime,endTime:data.endTime,status:1});state.editGoods=null;toast('活动已创建');await renderPage(); }
@@ -310,6 +385,21 @@
     });
   };
   const formData = (selector) => { const form=$(selector); return form ? Object.fromEntries(new FormData(form).entries()) : {}; };
+  document.addEventListener('input', e => {
+    if (e.target.matches('[name="locationKeyword"]')) {
+      const form = e.target.form;
+      form.dataset.locationRequest = String(Number(form.dataset.locationRequest || 0) + 1);
+      form.querySelector('[data-location-results]').textContent = '';
+    }
+    if (e.target.matches('form[data-form="address"] [name="detail"]')) {
+      const form = e.target.form;
+      const base = form.dataset.coordinateAddress || state.editAddress?.detail || '';
+      if (!base || !e.target.value.startsWith(base)) {
+        form.elements.longitude.value = ''; form.elements.latitude.value = '';
+        form.querySelector('[data-location-status]').textContent = '地址已修改，请重新搜索或定位以更新坐标。';
+      }
+    }
+  });
   const handleAction = async (action, id, el) => {
     try {
       if (action === 'login') return openAuth();
@@ -317,6 +407,30 @@
       if (action === 'send-code') { const f=el.closest('form');const data=Object.fromEntries(new FormData(f).entries());const r=await send('/api/auth/email-code','POST',{phone:data.phone,email:data.email,purpose:'register',username:data.username});toast(r?.code||'验证码已发送');return; }
       if (action === 'go') return navigate(id);
       if (action === 'refresh') return renderPage();
+      if (action === 'locate-device') return locate(el);
+      if (action === 'location-change') {
+        if (!requireUser()) return;
+        const form = $('browseLocationPicker');
+        state.locationVersion++; state.locating = false;
+        form.hidden = !form.hidden;
+        form.dataset.locationRequest = String(Number(form.dataset.locationRequest || 0) + 1);
+        form.querySelector('[data-location-results]').textContent = '';
+        const section = form.closest('[data-browse-location]');
+        section.querySelector('[data-location-status]').textContent = '';
+        section.querySelector('[data-action="locate-device"]').disabled = false;
+        document.querySelector('[aria-controls="browseLocationPicker"]').setAttribute('aria-expanded', String(!form.hidden));
+        if (!form.hidden) form.elements.locationKeyword.focus();
+        return;
+      }
+      if (action === 'location-select') {
+        if (!requireUser()) return;
+        const coordinate = TakeoutLocation.coordinates(el.dataset.longitude, el.dataset.latitude);
+        if (!coordinate || !el.dataset.address) throw new Error('所选地点坐标无效，请重新搜索。');
+        state.locationVersion++;
+        state.location = coordinate; state.locationLabel = el.dataset.address;
+        await renderPage(); toast('浏览位置已切换'); return;
+      }
+      if (action === 'location-clear') { state.locationVersion++; state.location = null; state.locationLabel = ''; return renderPage(); }
       if (action === 'search') { state.search=$('storeSearch')?.value?.trim()||'';state.page='discover';return renderPage(); }
       if (action === 'open-store') { state.storeId=Number(id);return navigate('store'); }
       if (action === 'add-cart') { if(!requireUser())return;const spec=document.querySelector(`[data-spec-for="${id}"]`);await send('/api/cart/items','POST',{goodsId:Number(id),specId:Number(spec?.value||0),quantity:1});toast('已加入服务端购物车');return; }
@@ -334,26 +448,16 @@
       if (action === 'review') { const content=window.prompt('请输入评价内容','味道很好，配送很快');if(content)await send(`/api/orders/${id}/review`,'POST',{goodsId:state.orders.find(o=>Number(o.id)===Number(id))?.items?.[0]?.goodsId||0,rating:5,content,tags:['味道好'],images:[],anonymous:0});toast('评价已提交');return renderPage(); }
       if (action === 'address-new') { state.editAddress={};return renderPage(); }
       if (action === 'address-search') {
-        const form = el.closest('form');
-        const keyword = form.elements.locationKeyword.value.trim();
-        const results = form.querySelector('[data-location-results]');
-        if (!keyword) { results.textContent = '请输入城市、小区或街道名称，也可以直接填写下方详细地址。'; form.elements.locationKeyword.focus(); return; }
-        el.disabled = true; results.textContent = '正在搜索地点…';
-        try {
-          const data = await get(`/api/location/search?keyword=${encodeURIComponent(keyword)}`);
-          if (data?.status !== '1') throw new Error('地点搜索暂不可用，请直接输入完整收货地址。');
-          const pois = Array.isArray(data.pois) ? data.pois : [];
-          results.innerHTML = pois.map(p => {
-            const address = [p.pname, p.cityname === p.pname ? '' : p.cityname, p.adname, p.address, p.name].filter(v => typeof v === 'string' && v).join('');
-            return `<button class="btn" type="button" data-action="address-select" data-address="${esc(address)}" style="display:block;width:100%;text-align:left;margin-bottom:8px">${esc(address)}</button>`;
-          }).join('') || '<p class="help-text">未找到地点，请补充城市名称重新搜索，或直接输入完整收货地址。</p>';
-        } catch (_) { results.textContent = '地点搜索暂不可用，请直接输入完整收货地址。'; }
-        finally { el.disabled = false; }
-        return;
+        return searchPlaces(el.closest('form'));
       }
       if (action === 'address-select') {
         const form = el.closest('form');
+        state.locationVersion++; state.locating = false;
+        form.querySelector('[data-action="locate-device"]').disabled = false;
         form.elements.detail.value = el.dataset.address;
+        form.dataset.coordinateAddress = el.dataset.address;
+        const coordinate = TakeoutLocation.coordinates(el.dataset.longitude, el.dataset.latitude);
+        form.elements.latitude.value = coordinate?.latitude ?? ''; form.elements.longitude.value = coordinate?.longitude ?? '';
         form.querySelector('[data-location-results]').textContent = '已选择地点，请在详细地址中补充楼栋和门牌号。';
         form.elements.detail.focus(); return;
       }

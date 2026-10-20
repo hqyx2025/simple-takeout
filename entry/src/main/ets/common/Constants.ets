@@ -140,7 +140,7 @@ export class APP_CONFIG {
 // API 地址按优先级排列：先访问云服务器，云端不可达时回退到本机 IDEA/Docker。
 // 本机地址使用 10.0.2.2，是鸿蒙模拟器访问宿主机的 NAT 别名。
 export class API_CONFIG {
-  static readonly REMOTE_BASE_URL: string = 'https://103.121.92.193'
+  static readonly REMOTE_BASE_URL: string = 'https://hqyx.website/takeout'
   static readonly LOCAL_BASE_URL: string = 'http://10.0.2.2:8087'
   static readonly BASE_URL: string = API_CONFIG.REMOTE_BASE_URL
   static readonly BASE_URLS: string[] = [API_CONFIG.REMOTE_BASE_URL, API_CONFIG.LOCAL_BASE_URL]

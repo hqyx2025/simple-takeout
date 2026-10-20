@@ -428,12 +428,13 @@ public class DataSeeder implements ApplicationRunner {
      * 幂等给种子店铺落坐标（南宁基准点 + 确定性环状偏移，约 0.2~1.2 公里）。
      * 覆盖两种情形：① 没有坐标的店（算不出距离，附近推荐会把它们整体丢掉）；
      * ② 还停在**旧武汉基准点**上的店（基准点从武汉改成南宁后，不重新落位的话存量店仍在武汉）。
-     * 条件里用「旧武汉环」而不是「有没有地址」来判定，避免误伤商户用地图正式选过点的门店。
+     * 仅迁移没有填写地址的历史种子行；有明确地址的门店不能因位于武汉而被搬到南宁。
      */
     private void ensureStoreCoordinates() {
         List<java.util.Map<String, Object>> pending = jdbc.queryForList(
-                "SELECT id FROM stores WHERE latitude IS NULL OR longitude IS NULL "
-                        + "OR (latitude BETWEEN 30.5 AND 30.7 AND longitude BETWEEN 114.2 AND 114.4) "
+                "SELECT id FROM stores WHERE (address IS NULL OR TRIM(address) = '') "
+                        + "AND (latitude IS NULL OR longitude IS NULL "
+                        + "OR (latitude BETWEEN 30.5 AND 30.7 AND longitude BETWEEN 114.2 AND 114.4)) "
                         + "ORDER BY id");
         for (int i = 0; i < pending.size(); i++) {
             long storeId = ((Number) pending.get(i).get("id")).longValue();

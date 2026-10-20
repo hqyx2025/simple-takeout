@@ -13,9 +13,9 @@
 | --- | --- |
 | 个人博客 | [hqyx.website](https://hqyx.website/) |
 | 项目介绍 | [查看作品](https://hqyx.website/projects) |
-| 简单外卖网页端 | [在线体验](http://hqyx.website:8087/) |
+| 简单外卖网页端 | [在线体验](https://hqyx.website/takeout/) |
 
-博客支持 HTTPS，输入域名会自动跳转到安全连接。外卖网页端通过域名的 `8087` 端口访问，与 HarmonyOS 客户端共用服务端数据。
+博客支持 HTTPS，输入域名会自动跳转到安全连接。外卖网页端通过同一域名的 `/takeout/` 路径访问，与 HarmonyOS 客户端共用服务端数据。
 
 ## 功能特性
 
@@ -174,11 +174,13 @@ docker compose down  # 停止并保留数据卷
 
 #### 公网网页体验
 
-网关同时托管一个无需单独构建的浏览器体验页，访问 [简单外卖在线体验](http://hqyx.website:8087/)。个人博客与项目介绍分别位于 [博客首页](https://hqyx.website/) 和 [作品页](https://hqyx.website/projects)。
+网关同时托管一个无需单独构建的浏览器体验页，访问 [简单外卖在线体验](https://hqyx.website/takeout/)。个人博客与项目介绍分别位于 [博客首页](https://hqyx.website/) 和 [作品页](https://hqyx.website/projects)。
 
 页面点击“进入演示”会使用 develop 环境预置的用户账号登录，网页端与 HarmonyOS 客户端共用服务端账号、购物车、地址和订单数据。网页端按登录角色提供用户、商户、骑手和平台管理工作区：用户可浏览/搜索/收藏店铺、领券、维护地址和钱包、加入购物车、创建待付款订单、余额支付、取消、退款、确认收货和评价；商户可处理订单、维护门店商品、库存规格、评价回复和营销活动；骑手可上线、设置接单范围、抢单、取餐和送达；平台可查看总览、审核店铺、处理订单退款、管理用户商品、骑手、内容、员工、日志和营销。
 
-网页支持通过“更换位置”搜索并手动选择其他地点；设备定位需浏览器授权及 HTTPS 安全上下文，当前 `8087` 端口的 HTTP 体验入口可使用手动位置。HTTP 会明文传输登录凭证，仅使用演示账号体验。
+网页支持通过“更换位置”搜索并手动选择其他地点；设备定位通过 HTTPS 安全连接请求浏览器授权，也可手动搜索其他位置。站内接口和上传图片使用相对路径，统一经 `/takeout/` 入口访问。
+
+云端由 [域名 Nginx 配置](server/docker/nginx-domain.conf) 统一代理：博客与外卖上游分别仅绑定本机 `9080`、`9087` 端口，演示 Compose 使用 `TAKEOUT_APP_PORT=9087`。旧 IP 入口及 `8080` / `8087` 端口跳转到域名下的 HTTPS 页面。手机端的域名基址统一配置在 `API_CONFIG.REMOTE_BASE_URL`。
 
 验证边界：双 app 和网关启动健康；请求已分发至两个副本（未登录请求返回 401）；当月备份通过 gzip 完整性检查。尚未完成备份恢复演练、故障切换与完整多实例下单/支付回归，不代表生产高可用验收。
 
@@ -347,7 +349,7 @@ Release 构建需要签名与证书：参考 `signing/release-signing.template.j
 
 ## 已知未完成项
 
-来自 [md/archive/未完成.txt](md/archive/未完成.txt)：真机 UI 自动化、AppAnalyzer、Release 签名和 HTTPS 联调尚未完成，分别受设备、工具 CLI、证书和 HTTPS 密钥缺失影响。
+网页 HTTPS、域名入口与相对路径访问已接通。来自 [md/archive/未完成.txt](md/archive/未完成.txt) 的真机 UI 自动化、AppAnalyzer 和 Release 签名仍待完成；手机端 HTTPS 尚未进行真机验证。
 
 ## 说明
 

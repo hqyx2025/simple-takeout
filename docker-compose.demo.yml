@@ -55,7 +55,7 @@ services:
       args:
         MAVEN_SETTINGS: docker/settings-central.xml
     ports: !override
-      - '${TAKEOUT_APP_PORT:-8087}:8087'
+      - '127.0.0.1:${TAKEOUT_APP_PORT:-9087}:8087'
   backup:
     environment:
       MYSQL_PWD: ${TAKEOUT_MYSQL_ROOT_PASSWORD:?Set a separate MySQL root password}

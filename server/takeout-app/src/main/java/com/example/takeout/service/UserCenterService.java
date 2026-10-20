@@ -336,14 +336,16 @@ public class UserCenterService {
                                  Double latitude, Double longitude) {
         validateAddress(name, phone, detail, isDefault);
         validateCoords(latitude, longitude);
-        // 未传坐标时保留已有坐标（纯改姓名/电话等字段不丢定位）
+        // 仅修改联系人时保留坐标；改成另一个地址后不能沿用旧地址的定位。
         if (latitude == null && longitude == null) {
             Address existing = addressDao.listByUser(userId).stream()
                     .filter(a -> a.id() == id)
                     .findFirst()
                     .orElseThrow(() -> new BizException("地址不存在"));
-            latitude = existing.latitude();
-            longitude = existing.longitude();
+            if (existing.detail().equals(detail)) {
+                latitude = existing.latitude();
+                longitude = existing.longitude();
+            }
         }
         addressDao.update(userId, id, name, phone, detail, isDefault, latitude, longitude);
         return addressDao.listByUser(userId).stream()

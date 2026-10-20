@@ -3,28 +3,78 @@ package com.example.takeout.controller;
 import com.example.takeout.common.ApiResponse;
 import com.example.takeout.common.BizException;
 import com.fasterxml.jackson.databind.JsonNode;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.util.UriComponentsBuilder;
+import java.time.Duration;
+import java.util.Locale;
 
 /** Server-side proxy for Amap Web Service APIs; the REST key never reaches the app. */
 @RestController
 @RequestMapping("/api/location")
 public class LocationController {
 
-    private final RestClient client = RestClient.builder().baseUrl("https://restapi.amap.com").build();
+    private final RestClient client;
     private final String restKey;
     private final String securityCode;
 
+    @Autowired
     public LocationController(@Value("${takeout.amap.rest-key:}") String restKey,
                               @Value("${takeout.amap.security-code:}") String securityCode) {
+        this(restKey, securityCode, mapClient());
+    }
+
+    LocationController(String restKey, String securityCode, RestClient client) {
+        this.client = client;
         this.restKey = restKey == null ? "" : restKey.trim();
         this.securityCode = securityCode == null ? "" : securityCode.trim();
+    }
+
+    private static RestClient mapClient() {
+        var factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(4));
+        factory.setReadTimeout(Duration.ofSeconds(8));
+        return RestClient.builder().baseUrl("https://restapi.amap.com").requestFactory(factory).build();
+    }
+
+    /** Browser coordinates are WGS84; convert before querying Amap or saving GCJ02 data. */
+    @GetMapping("/reverse")
+    public ApiResponse<BrowserLocation> reverse(@RequestParam double longitude, @RequestParam double latitude) {
+        validateCoordinate(longitude, latitude);
+        JsonNode converted = checked("/v3/assistant/coordinate/convert", UriComponentsBuilder.newInstance()
+                .queryParam("locations", String.format(Locale.ROOT, "%.7f,%.7f", longitude, latitude))
+                .queryParam("coordsys", "gps"));
+        String[] coordinates = converted.path("locations").asText().split(",");
+        if (coordinates.length != 2) throw new BizException(503, "地图坐标转换失败，请重试或搜索地点");
+        double lng;
+        double lat;
+        try { lng = Double.parseDouble(coordinates[0]); lat = Double.parseDouble(coordinates[1]); }
+        catch (NumberFormatException e) { throw new BizException(503, "地图坐标转换失败，请重试或搜索地点"); }
+        validateCoordinate(lng, lat);
+        JsonNode result = checked("/v3/geocode/regeo", UriComponentsBuilder.newInstance()
+                .queryParam("location", String.format(Locale.ROOT, "%.7f,%.7f", lng, lat))
+                .queryParam("extensions", "base"));
+        String address = result.path("regeocode").path("formatted_address").asText("");
+        if (address.isBlank()) throw new BizException(503, "当前位置暂无可用地址，请手动搜索地点");
+        return ApiResponse.ok(new BrowserLocation(lng, lat, address));
+    }
+
+    public record BrowserLocation(double longitude, double latitude, String address) {}
+
+    private JsonNode checked(String path, UriComponentsBuilder builder) {
+        JsonNode result = proxy(path, builder).data();
+        if (!"1".equals(result.path("status").asText())) {
+            throw new BizException(503, "地图定位服务暂不可用，请稍后重试或搜索地点");
+        }
+        return result;
     }
 
     @GetMapping(value = "/nearby", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -61,8 +111,9 @@ public class LocationController {
         if (!securityCode.isEmpty()) {
             request.queryParam("jscode", securityCode);
         }
-        JsonNode body = client.get().uri(request.build().toUri())
-                .retrieve().body(JsonNode.class);
+        JsonNode body;
+        try { body = client.get().uri(request.scheme("https").host("restapi.amap.com").build().encode().toUri()).retrieve().body(JsonNode.class); }
+        catch (RestClientException e) { throw new BizException(503, "地图服务连接失败，请稍后重试或手动输入地址"); }
         if (body == null) throw new BizException(503, "地图服务返回为空");
         return ApiResponse.ok(body);
     }

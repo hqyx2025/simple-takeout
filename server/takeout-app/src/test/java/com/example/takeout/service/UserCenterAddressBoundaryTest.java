@@ -31,6 +31,22 @@ class UserCenterAddressBoundaryTest {
             null, null, addressDao, null, null, null, null, new ObjectMapper(), null);
 
     @Test
+    void changedAddressCannotKeepOldCoordinates() {
+        var existing = new Address(1, 1, "张三", "13800138000", "旧地址", 0, "", 30.5, 114.3);
+        when(addressDao.listByUser(1)).thenReturn(List.of(existing));
+        service.updateAddress(1, 1, "张三", "13800138000", "新地址", 0, null, null);
+        verify(addressDao).update(1, 1, "张三", "13800138000", "新地址", 0, null, null);
+    }
+
+    @Test
+    void contactOnlyEditKeepsCoordinates() {
+        var existing = new Address(1, 1, "张三", "13800138000", "原地址", 0, "", 30.5, 114.3);
+        when(addressDao.listByUser(1)).thenReturn(List.of(existing));
+        service.updateAddress(1, 1, "李四", "13800138000", "原地址", 0, null, null);
+        verify(addressDao).update(1, 1, "李四", "13800138000", "原地址", 0, 30.5, 114.3);
+    }
+
+    @Test
     void rejectsAddressWhenAlreadyAtTwenty() {
         List<Address> twenty = IntStream.range(0, 20)
                 .mapToObj(i -> new Address(i + 1, 1, "张三", "13800138000", "测试地址", 0, ""))
