@@ -1,21 +1,16 @@
 name: Frontend
 
 on:
+  workflow_dispatch:
   push:
+    branches: [master]
     paths:
       - 'entry/**'
       - 'AppScope/**'
       - '*.json5'
       - '*.ts'
       - 'oh-package.json5'
-      - '.github/workflows/frontend.yml'
-  pull_request:
-    paths:
-      - 'entry/**'
-      - 'AppScope/**'
-      - '*.json5'
-      - '*.ts'
-      - 'oh-package.json5'
+      - 'scripts/**'
       - '.github/workflows/frontend.yml'
 
 permissions:
@@ -23,10 +18,33 @@ permissions:
 
 jobs:
   build:
-    # DevEco Studio is not available on hosted runners; register a Windows runner with DevEco installed.
+    # The runner is a personal Windows machine: only trusted master pushes or manual runs.
     runs-on: [self-hosted, Windows, DevEco]
+    timeout-minutes: 30
+    concurrency:
+      group: frontend-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configure DevEco toolchain
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $devEco = if ($env:DEVECO_HOME) { $env:DEVECO_HOME } else { 'C:\Program Files\Huawei\DevEco Studio' }
+          foreach ($tool in @('tools\node\node.exe', 'tools\ohpm\bin\ohpm.bat', 'tools\hvigor\bin\hvigorw.js', 'sdk')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $devEco $tool))) { throw "Missing DevEco tool: $tool" }
+          }
+          "DEVECO_HOME=$devEco" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "DEVECO_SDK_HOME=$(Join-Path $devEco 'sdk')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          (Join-Path $devEco 'tools\node') | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          (Join-Path $devEco 'tools\ohpm\bin') | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Install HarmonyOS dependencies
+        shell: powershell
+        run: |
+          & (Join-Path $env:DEVECO_HOME 'tools\ohpm\bin\ohpm.bat') install --all --strict_ssl true
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build unsigned HAP
         shell: powershell
         run: |
@@ -36,7 +54,18 @@ jobs:
             (Join-Path $devEco 'tools\hvigor\bin\hvigorw.js') `
             --mode module -p module=entry@default -p product=default `
             -p requiredDeviceType=phone assembleHap --analyze=normal --parallel --incremental --daemon
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Run script checks
         shell: powershell
         run: |
-          Get-ChildItem scripts -Filter '*.cjs' | ForEach-Object { node $_.FullName }
+          Get-ChildItem scripts -Filter '*.cjs' | Sort-Object Name | ForEach-Object {
+            node $_.FullName
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - name: Upload unsigned debug HAP
+        uses: actions/upload-artifact@v4
+        with:
+          name: entry-unsigned-debug-hap
+          path: entry/build/default/outputs/default/entry-default-unsigned.hap
+          if-no-files-found: error
+          retention-days: 7

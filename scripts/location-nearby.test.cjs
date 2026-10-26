@@ -10,15 +10,20 @@ const source = fs.readFileSync(path.join(__dirname, '../entry/src/main/ets/servi
 const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS } }).outputText;
 const center = { longitude: 108.32, latitude: 22.82 };
 
-// Exercise the shipped service with deterministic provider responses, without native/device dependencies.
+// Exercise the shipped service through its backend proxy, without native/device dependencies.
 function service(response) {
   const urls = [];
   const exports = {};
   const requireStub = name => {
-    if (name === '@ohos/axios') return { default: { async get(url) {
+    if (name === './HttpClient') return { async get(url) {
       urls.push(url);
-      return { data: await response(new URL(url)) };
-    } } };
+      const request = new URL(url, 'https://example.test');
+      assert.equal(request.pathname, '/api/location/nearby');
+      assert.equal(request.searchParams.get('longitude'), center.longitude.toFixed(6));
+      assert.equal(request.searchParams.get('latitude'), center.latitude.toFixed(6));
+      assert.equal(request.searchParams.has('key'), false, 'provider credentials remain on the server');
+      return { code: 200, data: await response(request) };
+    } };
     if (name.endsWith('/Constants')) return { AMAP_CONFIG: { MAP_JS_KEY: 'test-key', TIMEOUT: 1000 } };
     if (name.endsWith('/AppLogger')) return { logInfo() {}, logWarn() {}, logError() {} };
     if (name.startsWith('@kit.')) return {};
@@ -35,29 +40,28 @@ function poi(index, extra = {}) {
 
 test('a full nearest page exposes more results and requests the next provider page', async () => {
   const api = service(url => {
-    assert.equal(url.searchParams.get('radius'), '1000');
-    const size = Number(url.searchParams.get('offset'));
+    const size = 20;
     const page = Number(url.searchParams.get('page'));
     assert.ok(size > 0);
     return { status: '1', count: `${size * 3}`, pois: Array.from({ length: size }, (_, i) => poi((page - 1) * size + i + 1)) };
   });
   const first = await api.search(center);
-  const size = Number(new URL(api.urls[0]).searchParams.get('offset'));
+  const size = 20;
   assert.equal(first.places.length, size);
   assert.equal(first.hasMore, true);
   const next = await api.search(center, 2);
-  assert.equal(new URL(api.urls[1]).searchParams.get('page'), '2');
+  assert.equal(new URL(api.urls[1], 'https://example.test').searchParams.get('page'), '2');
   assert.equal(next.places[0].name, `地点 ${size + 1}`);
   assert.equal(next.hasMore, true);
 });
 
 test('pagination stops at the provider total rather than at the first nearby batch', async () => {
   const api = service(url => {
-    const size = Number(url.searchParams.get('offset'));
+    const size = 20;
     return { status: '1', count: `${size * 2 + 3}`, pois: [poi(size * 2 + 1), poi(size * 2 + 2), poi(size * 2 + 3)] };
   });
   const last = await api.search(center, 3);
-  assert.equal(new URL(api.urls[0]).searchParams.get('page'), '3');
+  assert.equal(new URL(api.urls[0], 'https://example.test').searchParams.get('page'), '3');
   assert.equal(last.places.length, 3);
   assert.equal(last.hasMore, false);
 });
@@ -84,7 +88,7 @@ test('invalid, duplicate and outside-radius POIs are filtered without losing usa
 
 test('filtered entries do not hide subsequent provider pages', async () => {
   const api = service(url => {
-    const size = Number(url.searchParams.get('offset'));
+    const size = 20;
     return { status: '1', count: `${size * 2}`, pois: Array.from({ length: size }, () => poi(10)) };
   });
   const result = await api.search(center);

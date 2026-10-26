@@ -27,6 +27,7 @@ function loadModule(file, dependencies) {
 async function testAddressRestore() {
   const models = loadModule('entry/src/main/ets/model/Models.ets', {});
   const http = { setAuthTokens() {}, getAuthToken: () => memory.get('authToken'),
+    initializeApiBaseUrl: async () => 'https://example.test',
     getAuthSessionEpoch: () => 0, registerSessionExpiredHandler() {} };
   const persistence = loadModule('entry/src/main/ets/service/DataPersistence.ets', {
     '@ohos.data.preferences': { default: { getPreferences: async () => prefs } },
@@ -50,7 +51,8 @@ async function testAddressRestore() {
     '../common/Constants': { API_CONFIG: {} }, './LocationService': {},
     './DeliveryFormSync': { clearDeliveryForms() {}, syncDeliveryForms: async () => {},
       deliveryCustomerId: () => 0, deliveryRevision: () => '' },
-    './PushKitService': { clearPushIdentity() {}, registerPushForCurrentSession() {} }
+    './PushKitService': { clearPushIdentity() {}, registerPushForCurrentSession() {} },
+    './api/OrdersApi': {}
   });
   assert.equal(await manager.syncAddressesRemote(), false, 'offline address sync must report failure');
   assert.equal(memory.get('currentAddress'), null);
@@ -59,10 +61,14 @@ async function testAddressRestore() {
   assert.equal(memory.get('currentAddress').id, 9);
   response = null;
   assert.equal(await manager.syncAddressesRemote(), false);
-  assert.equal(memory.get('currentAddress'), null, 'failed refresh must invalidate an earlier address');
+  assert.equal(memory.get('currentAddress').id, 9, 'failed refresh preserves the address already confirmed in this session');
+  assert.equal(memory.get('addressList').length, 1, 'a network failure must not erase confirmed addresses');
+  assert.equal(memory.get('addressSyncState'), 'failed', 'preserved data must not disguise a failed refresh');
+  assert.equal(memory.get('pendingAddressId'), 9, 'retry remembers the selected address');
   response = [];
   assert.equal(await manager.syncAddressesRemote(), true, 'empty list is a successful response');
   assert.equal(memory.get('currentAddress'), null);
+  assert.equal(memory.get('addressSyncState'), 'ready', 'a confirmed empty response is different from a network failure');
   assert.equal(disk.get('currentAddress'), 'null', 'clearing an address must clear persistent selection');
   let finish;
   response = new Promise(resolve => { finish = resolve; });
