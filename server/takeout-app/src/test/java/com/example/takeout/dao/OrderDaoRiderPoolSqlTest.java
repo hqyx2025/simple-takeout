@@ -41,10 +41,11 @@ class OrderDaoRiderPoolSqlTest {
         dao.listRiderPool();
 
         String sql = captureQuerySql();
-        // 池子的三个条件缺一不可：制作中(2) + 已出餐(ready_time 非空) + 未分配骑手(rider_id=0)
+        // 池子的四个条件缺一不可：制作中 + 已出餐 + 未分配骑手 + 仅外卖配送。
         assertTrue(sql.contains("status = 2"), "池子必须只取制作中的订单：" + sql);
         assertTrue(sql.contains("ready_time <> ''"), "池子必须只取商家已出餐的订单：" + sql);
         assertTrue(sql.contains("rider_id = 0"), "池子必须只取尚未被接走的订单：" + sql);
+        assertTrue(sql.contains("delivery_type = 'DELIVERY'"), "历史或伪造自取单不得进入骑手池：" + sql);
         // 关键回归点：出餐后状态若被改成 3，这条筛查会把订单永久排除在池外
         assertFalse(sql.contains("status = 3"), "池子不能要求 status=3：" + sql);
     }
@@ -78,6 +79,7 @@ class OrderDaoRiderPoolSqlTest {
         assertTrue(statement.contains("rider_id = 0"), statement);
         assertTrue(statement.contains("status = 2"), statement);
         assertTrue(statement.contains("ready_time <> ''"), statement);
+        assertTrue(statement.contains("delivery_type = 'DELIVERY'"), "历史或伪造自取单不得被抢：" + statement);
     }
 
     @Test

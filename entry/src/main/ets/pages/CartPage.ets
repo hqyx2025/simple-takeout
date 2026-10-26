@@ -2,6 +2,7 @@ import { AppMotion } from '../common/theme/AppMotion'
 import { FloatingTabBarTheme } from '../common/theme/FloatingTabBarTheme'
 import { PageHeader } from '../components/PageHeader'
 import { AppButtonStyle } from '../common/theme/AppTheme'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 /**
  * 购物车页面。
  *
@@ -11,7 +12,7 @@ import { AppButtonStyle } from '../common/theme/AppTheme'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, merchantImageSource, DEFAULT_MERCHANT_IMAGE, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { CartItem, BundleInfo, GoodsItem } from '../model/Models'
-import { deleteCartItemRemote, deleteCartItemsRemote, refreshCartFromServer, updateCartItemQuantityRemote, fetchBundleRemote } from '../service/AppStorageManager'
+import { addCartItemRemote, deleteCartItemRemote, deleteCartItemsRemote, refreshCartFromServer, updateCartItemQuantityRemote, fetchBundleRemote } from '../service/AppStorageManager'
 import { EmptyState } from '../components/EmptyState'
 import { logInfo } from '../service/AppLogger'
 
@@ -63,15 +64,30 @@ export struct CartPage {
   @State processing: boolean = false
   @State totalCount: number = 0
   @State totalPrice: number = 0
+  @State undoMessage: string = ''
+  @State showDeleteConfirm: boolean = false
+  @State deleteConfirmTitle: string = ''
+  @State deleteConfirmContent: string = ''
+  private pendingUndoItem: CartItem | null = null
+  private undoTimer: number = -1
+  private pendingDeleteMode: number = 0
+  private pendingDeleteStoreId: number = 0
+  private pendingDeleteRowKeys: string[] = []
   // 凑单提示（未达起送价的店铺）
   @State bundleHints: BundleHint[] = []
   // 上次凑单查询对应的「店铺+金额」签名，避免数量微调时重复请求
   private bundleHintSignature: string = ''
   private bundleFetching: boolean = false
+  private bundleRefreshPending: boolean = false
 
   async aboutToAppear(): Promise<void> {
     logInfo('Page', `进入购物车页面 CartPage，商品种类=${this.cartItems.length}`)
     await this.refreshFromDatabase()
+  }
+
+  aboutToDisappear(): void {
+    this.clearUndo()
+    this.cancelPendingDelete()
   }
 
   /**
@@ -85,14 +101,14 @@ export struct CartPage {
     }
   }
 
-  private async refreshFromDatabase(): Promise<boolean> {
-    const remoteCart: CartItem[] | null = await refreshCartFromServer()
+  private async refreshFromDatabase(showErrorToast: boolean = true): Promise<boolean> {
+    const remoteCart: CartItem[] | null = await refreshCartFromServer(showErrorToast)
     if (remoteCart === null) {
       return false
     }
     this.cartItems = remoteCart.slice()
     this.recomputeTotals()
-    await this.refreshBundleHints()
+    await this.refreshBundleHints(showErrorToast)
     return true
   }
 
@@ -132,11 +148,15 @@ export struct CartPage {
   }
 
   /** 凑单提示：对未达起送价的店铺查询还差多少元并给出可凑单菜品。 */
-  private async refreshBundleHints(): Promise<void> {
+  private async refreshBundleHints(showErrorToast: boolean = true): Promise<void> {
     const storeIds: number[] = this.getStoreIds()
     // 数量增减会让 refreshFromDatabase 被连续调用多次，这里按「店铺+金额」签名去重，避免重复请求凑单接口
     const signature: string = storeIds.map((storeId: number) => `${storeId}:${this.getStoreTotal(storeId)}`).join('|')
-    if (signature === this.bundleHintSignature || this.bundleFetching) {
+    if (signature === this.bundleHintSignature) {
+      return
+    }
+    if (this.bundleFetching) {
+      this.bundleRefreshPending = true
       return
     }
     this.bundleFetching = true
@@ -144,7 +164,7 @@ export struct CartPage {
     try {
       for (let i = 0; i < storeIds.length && i < 3; i++) {
         const storeId: number = storeIds[i]
-        const info: BundleInfo | null = await fetchBundleRemote(storeId, this.getStoreTotal(storeId))
+        const info: BundleInfo | null = await fetchBundleRemote(storeId, this.getStoreTotal(storeId), showErrorToast)
         if (info !== null && info.gap > 0) {
           hints.push(BundleHint.create(info))
         }
@@ -153,6 +173,10 @@ export struct CartPage {
       this.bundleHintSignature = signature
     } finally {
       this.bundleFetching = false
+      if (this.bundleRefreshPending) {
+        this.bundleRefreshPending = false
+        await this.refreshBundleHints(false)
+      }
     }
   }
 
@@ -199,6 +223,22 @@ export struct CartPage {
     return Array.isArray(this.cartItems) ? this.cartItems : []
   }
 
+  private findCurrentItem(item: CartItem): CartItem | undefined {
+    return this.getCurrentCartItems().find((cartItem: CartItem) =>
+      cartItem.storeId === item.storeId && this.rowKey(cartItem) === this.rowKey(item))
+  }
+
+  private getCurrentRowQuantity(item: CartItem): number {
+    const matched: CartItem | undefined = this.findCurrentItem(item)
+    return matched === undefined ? 0 : matched.quantity
+  }
+
+  private async useStoredCart(): Promise<void> {
+    this.cartItems = (AppStorage.get<CartItem[]>('cartItems') || []).slice()
+    this.recomputeTotals()
+    await this.refreshBundleHints(false)
+  }
+
   private getCurrentQuantity(goodsId: number, storeId: number): number {
     const item: CartItem | undefined = this.getCurrentCartItems().find((cartItem: CartItem) =>
       cartItem.goods.id === goodsId && cartItem.storeId === storeId)
@@ -243,34 +283,54 @@ export struct CartPage {
   }
 
   private async changeQuantity(item: CartItem, delta: number): Promise<void> {
-    const displayedQuantity: number = this.getRowQuantity(item)
-    if (delta < 0 && displayedQuantity <= 1) {
-      promptAction.showToast({ message: '商品数量最少为1，如需移除请点击删除', duration: 1800 })
-      return
-    }
     if (this.processing) {
       promptAction.showToast({ message: '购物车操作正在处理，请稍候', duration: 1500 })
       return
     }
     this.processing = true
-    const synced: boolean = await this.refreshFromDatabase()
-    if (!synced) {
+    try {
+      if (!await this.refreshFromDatabase(false)) {
+        promptAction.showToast({ message: '购物车同步失败，请重试', duration: 2200 })
+        return
+      }
+      const currentQuantity: number = this.getCurrentRowQuantity(item)
+      if (currentQuantity <= 0 && delta < 0) {
+        promptAction.showToast({ message: '商品已不在购物车', duration: 1600 })
+        return
+      }
+      if (delta < 0 && currentQuantity <= 1) {
+        promptAction.showToast({ message: '商品数量最少为1，如需移除请点击删除', duration: 1800 })
+        return
+      }
+      const nextQuantity: number = currentQuantity + delta
+      let ok: boolean = false
+      try {
+        ok = await updateCartItemQuantityRemote(item.goods.id, nextQuantity, item.specId ?? 0, false)
+      } catch (_) {
+        ok = false
+      }
+      let reconciled: boolean = ok
+      if (ok) {
+        await this.useStoredCart()
+      } else {
+        reconciled = await this.refreshFromDatabase(false)
+      }
+      if (!reconciled) {
+        promptAction.showToast({ message: '修改结果待确认，请稍后刷新购物车', duration: 2400 })
+        return
+      }
+      const afterQuantity: number = this.getCurrentRowQuantity(item)
+      if (afterQuantity === nextQuantity) {
+        return
+      }
+      if (afterQuantity !== currentQuantity) {
+        promptAction.showToast({ message: '商品数量已变化，请以当前购物车为准', duration: 2400 })
+      } else {
+        promptAction.showToast({ message: '修改购物车失败，请稍后重试', duration: 2200 })
+      }
+    } finally {
       this.processing = false
-      promptAction.showToast({ message: '购物车同步失败，请重试', duration: 2200 })
-      return
     }
-    const currentCart: CartItem[] = this.getCurrentCartItems()
-    const currentItem: CartItem | undefined = currentCart.find((cartItem: CartItem) =>
-      this.rowKey(cartItem) === this.rowKey(item) && cartItem.storeId === item.storeId)
-    const currentQuantity: number = currentItem === undefined ? 0 : currentItem.quantity
-    const nextQuantity: number = currentQuantity + delta
-    const ok: boolean = await updateCartItemQuantityRemote(item.goods.id, nextQuantity, item.specId ?? 0)
-    await this.refreshFromDatabase()
-    if (!ok) {
-      await this.refreshFromDatabase()
-      promptAction.showToast({ message: '修改购物车失败，请稍后重试', duration: 2200 })
-    }
-    this.processing = false
   }
 
   private async deleteOne(item: CartItem): Promise<void> {
@@ -279,46 +339,203 @@ export struct CartPage {
       return
     }
     this.processing = true
-    const ok: boolean = await deleteCartItemRemote(item.goods.id, item.specId ?? 0)
-    await this.refreshFromDatabase()
-    if (ok) {
-      this.selectedRowKeys = this.selectedRowKeys.filter((key: string) => key !== this.rowKey(item))
-      promptAction.showToast({ message: '商品已删除', duration: 1500 })
-    } else {
-      await this.refreshFromDatabase()
-      promptAction.showToast({ message: '删除商品失败，请稍后重试', duration: 2200 })
+    try {
+      if (!await this.refreshFromDatabase(false)) {
+        promptAction.showToast({ message: '购物车同步失败，请检查网络后重试', duration: 2200 })
+        return
+      }
+      const currentItem: CartItem | undefined = this.findCurrentItem(item)
+      if (currentItem === undefined) {
+        this.selectedRowKeys = this.selectedRowKeys.filter((key: string) => key !== this.rowKey(item))
+        promptAction.showToast({ message: '商品已不在购物车', duration: 1600 })
+        return
+      }
+      const deletedItem: CartItem = {
+        goods: currentItem.goods,
+        quantity: currentItem.quantity,
+        storeId: currentItem.storeId,
+        storeName: currentItem.storeName,
+        specId: currentItem.specId ?? 0,
+        specName: currentItem.specName ?? '',
+        price: currentItem.price ?? currentItem.goods.price,
+        stock: currentItem.stock ?? currentItem.goods.stock ?? 0
+      }
+      let ok: boolean = false
+      try {
+        ok = await deleteCartItemRemote(currentItem.goods.id, currentItem.specId ?? 0, false)
+      } catch (_) {
+        ok = false
+      }
+      let reconciled: boolean = ok
+      if (ok) {
+        await this.useStoredCart()
+      } else {
+        reconciled = await this.refreshFromDatabase(false)
+      }
+      const afterQuantity: number = this.getCurrentRowQuantity(currentItem)
+      if (reconciled && afterQuantity === 0) {
+        this.selectedRowKeys = this.selectedRowKeys.filter((key: string) => key !== this.rowKey(currentItem))
+        this.showUndo(deletedItem)
+      } else if (!reconciled) {
+        promptAction.showToast({ message: '删除结果待确认，请稍后刷新购物车', duration: 2400 })
+      } else if (afterQuantity !== deletedItem.quantity) {
+        promptAction.showToast({ message: '商品数量已变化，请以当前购物车为准', duration: 2400 })
+      } else {
+        promptAction.showToast({ message: '删除商品失败，请稍后重试', duration: 2200 })
+      }
+    } finally {
+      this.processing = false
     }
-    this.processing = false
   }
 
-  private async deleteStore(storeId: number): Promise<void> {
-    const items: CartItem[] = this.getStoreItems(storeId)
-    const ids: number[] = []
-    for (let i = 0; i < items.length; i++) {
-      ids.push(items[i].goods.id)
+  private showUndo(item: CartItem): void {
+    this.clearUndo()
+    this.pendingUndoItem = item
+    this.undoMessage = `已移除「${item.goods.name}」`
+    this.armUndoTimer()
+  }
+
+  private armUndoTimer(): void {
+    if (this.undoTimer >= 0) {
+      clearTimeout(this.undoTimer)
     }
-    if (ids.length === 0) {
+    this.undoTimer = setTimeout(() => { this.clearUndo() }, 6000)
+  }
+
+  private clearUndo(): void {
+    if (this.undoTimer >= 0) {
+      clearTimeout(this.undoTimer)
+      this.undoTimer = -1
+    }
+    this.pendingUndoItem = null
+    this.undoMessage = ''
+  }
+
+  private async undoDelete(): Promise<void> {
+    if (this.processing || this.pendingUndoItem === null) {
+      return
+    }
+    const item: CartItem = this.pendingUndoItem
+    if (this.undoTimer >= 0) {
+      clearTimeout(this.undoTimer)
+      this.undoTimer = -1
+    }
+    this.processing = true
+    let keepUndo: boolean = false
+    try {
+      if (!await this.refreshFromDatabase(false)) {
+        keepUndo = true
+        this.armUndoTimer()
+        promptAction.showToast({ message: '购物车同步失败，可再次撤销', duration: 2200 })
+        return
+      }
+      const beforeQuantity: number = this.getCurrentRowQuantity(item)
+      if (beforeQuantity >= item.quantity) {
+        promptAction.showToast({ message: `「${item.goods.name}」已在购物车`, duration: 1600 })
+        return
+      }
+      const restoreItem: CartItem = {
+        goods: item.goods,
+        quantity: item.quantity - beforeQuantity,
+        storeId: item.storeId,
+        storeName: item.storeName,
+        specId: item.specId ?? 0,
+        specName: item.specName ?? '',
+        price: item.price ?? item.goods.price,
+        stock: item.stock ?? item.goods.stock ?? 0
+      }
+      let ok: boolean = false
+      try {
+        ok = await addCartItemRemote(restoreItem, false)
+      } catch (_) {
+        ok = false
+      }
+      let reconciled: boolean = ok
+      if (ok) {
+        await this.useStoredCart()
+      } else {
+        reconciled = await this.refreshFromDatabase(false)
+      }
+      const afterQuantity: number = this.getCurrentRowQuantity(item)
+      if (reconciled && afterQuantity >= item.quantity) {
+        promptAction.showToast({ message: `已恢复「${item.goods.name}」`, duration: 1600 })
+      } else if (!reconciled) {
+        promptAction.showToast({ message: '恢复结果待确认，请稍后查看购物车', duration: 2400 })
+      } else if (afterQuantity !== beforeQuantity) {
+        promptAction.showToast({ message: '商品数量已变化，请以当前购物车为准', duration: 2400 })
+      } else {
+        promptAction.showToast({ message: '恢复失败，商品可能已下架、规格失效或库存不足', duration: 2400 })
+      }
+    } finally {
+      if (!keepUndo) {
+        this.clearUndo()
+      }
+      this.processing = false
+    }
+  }
+
+  private requestDeleteStore(storeId: number): void {
+    const items: CartItem[] = this.getStoreItems(storeId)
+    if (items.length === 0) {
       return
     }
     if (this.processing) {
       promptAction.showToast({ message: '\u8d2d\u7269\u8f66\u64cd\u4f5c\u6b63\u5728\u5904\u7406\uff0c\u8bf7\u7a0d\u5019', duration: 1500 })
       return
     }
-    this.processing = true
-    const ok: boolean = await deleteCartItemsRemote(ids)
-    await this.refreshFromDatabase()
-    if (ok) {
-      // 勾选按 (菜品, 规格) 行记录，删除整店时清掉该店所有行的勾选
-      const storeKeys: string[] = items.map((item: CartItem) => this.rowKey(item))
-      this.selectedRowKeys = this.selectedRowKeys.filter((key: string) => storeKeys.indexOf(key) < 0)
-      promptAction.showToast({ message: '\u5df2\u5220\u9664\u8be5\u5e97\u94fa\u7684\u8d2d\u7269\u8f66\u5546\u54c1', duration: 1600 })
-    } else {
-      promptAction.showToast({ message: '\u5220\u9664\u5e97\u94fa\u5546\u54c1\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5', duration: 2200 })
-    }
-    this.processing = false
+    const quantity: number = items.reduce((sum: number, item: CartItem) => sum + item.quantity, 0)
+    this.pendingDeleteMode = 1
+    this.pendingDeleteStoreId = storeId
+    this.pendingDeleteRowKeys = []
+    this.deleteConfirmTitle = '删除店铺商品？'
+    this.deleteConfirmContent = `确认删除「${this.getStoreName(storeId)}」的 ${items.length} 项商品（共 ${quantity} 件）？`
+    this.showDeleteConfirm = true
   }
 
-  private async deleteSelected(): Promise<void> {
+  private async deleteStore(storeId: number): Promise<void> {
+    if (this.processing) {
+      return
+    }
+    this.processing = true
+    try {
+      if (!await this.refreshFromDatabase(false)) {
+        promptAction.showToast({ message: '\u8d2d\u7269\u8f66\u540c\u6b65\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u7f51\u7edc\u540e\u91cd\u8bd5', duration: 2200 })
+        return
+      }
+      const items: CartItem[] = this.getStoreItems(storeId)
+      const ids: number[] = items.map((current: CartItem) => current.goods.id)
+      if (ids.length === 0) {
+        return
+      }
+      let ok: boolean = false
+      try {
+        ok = await deleteCartItemsRemote(ids, false)
+      } catch (_) {
+        ok = false
+      }
+      let reconciled: boolean = ok
+      if (ok) {
+        await this.useStoredCart()
+      } else {
+        reconciled = await this.refreshFromDatabase(false)
+      }
+      const remaining: CartItem[] = items.filter((current: CartItem) => this.findCurrentItem(current) !== undefined)
+      if (reconciled && remaining.length === 0) {
+        const storeKeys: string[] = items.map((item: CartItem) => this.rowKey(item))
+        this.selectedRowKeys = this.selectedRowKeys.filter((key: string) => storeKeys.indexOf(key) < 0)
+        this.clearUndo()
+        promptAction.showToast({ message: '\u5df2\u5220\u9664\u8be5\u5e97\u94fa\u7684\u8d2d\u7269\u8f66\u5546\u54c1', duration: 1600 })
+      } else if (!reconciled) {
+        promptAction.showToast({ message: '\u5220\u9664\u7ed3\u679c\u5f85\u786e\u8ba4\uff0c\u8bf7\u7a0d\u540e\u5237\u65b0\u8d2d\u7269\u8f66', duration: 2400 })
+      } else {
+        promptAction.showToast({ message: `部分商品未删除，仍有 ${remaining.length} 项保留在购物车`, duration: 2400 })
+      }
+    } finally {
+      this.processing = false
+    }
+  }
+
+  private requestDeleteSelected(): void {
     if (this.selectedRowKeys.length === 0) {
       promptAction.showToast({ message: '请先选择要删除的商品', duration: 1600 })
       return
@@ -327,25 +544,96 @@ export struct CartPage {
       promptAction.showToast({ message: '购物车操作正在处理，请稍候', duration: 1500 })
       return
     }
-    this.processing = true
     const keys: string[] = this.selectedRowKeys.slice()
     const rows: CartItem[] = this.getCurrentCartItems().filter((item: CartItem) => keys.indexOf(this.rowKey(item)) >= 0)
-    let allDeleted: boolean = true
+    if (rows.length === 0) {
+      this.selectedRowKeys = []
+      return
+    }
+    const storeNames: string[] = []
+    let quantity: number = 0
     for (let i = 0; i < rows.length; i++) {
-      const ok: boolean = await deleteCartItemRemote(rows[i].goods.id, rows[i].specId ?? 0)
-      if (!ok) {
-        allDeleted = false
+      quantity += rows[i].quantity
+      if (storeNames.indexOf(rows[i].storeName) < 0) {
+        storeNames.push(rows[i].storeName)
       }
     }
-    await this.refreshFromDatabase()
-    if (allDeleted) {
-      this.selectedRowKeys = []
-      promptAction.showToast({ message: `已删除 ${rows.length} 件商品`, duration: 1600 })
-    } else {
-      await this.refreshFromDatabase()
-      promptAction.showToast({ message: '批量删除失败，请稍后重试', duration: 2200 })
+    this.pendingDeleteMode = 2
+    this.pendingDeleteStoreId = 0
+    this.pendingDeleteRowKeys = keys
+    this.deleteConfirmTitle = '删除选中商品？'
+    this.deleteConfirmContent = `确认删除 ${rows.length} 项商品（共 ${quantity} 件）？涉及店铺：${storeNames.join('、')}`
+    this.showDeleteConfirm = true
+  }
+
+  private async deleteSelected(keys: string[]): Promise<void> {
+    if (keys.length === 0 || this.processing) {
+      return
     }
-    this.processing = false
+    this.processing = true
+    try {
+      if (!await this.refreshFromDatabase(false)) {
+        promptAction.showToast({ message: '购物车同步失败，请检查网络后重试', duration: 2200 })
+        return
+      }
+      const rows: CartItem[] = this.getCurrentCartItems().filter((item: CartItem) => keys.indexOf(this.rowKey(item)) >= 0)
+      if (rows.length === 0) {
+        this.selectedRowKeys = this.selectedRowKeys.filter((key: string) => keys.indexOf(key) < 0)
+        return
+      }
+      let allResponsesReceived: boolean = true
+      for (let i = 0; i < rows.length; i++) {
+        let ok: boolean = false
+        try {
+          ok = await deleteCartItemRemote(rows[i].goods.id, rows[i].specId ?? 0, false)
+        } catch (_) {
+          ok = false
+        }
+        if (!ok) {
+          allResponsesReceived = false
+        }
+      }
+      let reconciled: boolean = allResponsesReceived
+      if (allResponsesReceived) {
+        await this.useStoredCart()
+      } else {
+        reconciled = await this.refreshFromDatabase(false)
+      }
+      const currentKeys: string[] = this.getCurrentCartItems().map((item: CartItem) => this.rowKey(item))
+      this.selectedRowKeys = this.selectedRowKeys.filter((key: string) => currentKeys.indexOf(key) >= 0)
+      const remaining: CartItem[] = rows.filter((item: CartItem) => this.findCurrentItem(item) !== undefined)
+      const deletedCount: number = rows.length - remaining.length
+      if (reconciled && remaining.length === 0) {
+        this.clearUndo()
+        promptAction.showToast({ message: `已删除 ${rows.length} 项商品`, duration: 1600 })
+      } else if (!reconciled) {
+        promptAction.showToast({ message: '删除结果待确认，请稍后刷新购物车', duration: 2400 })
+      } else {
+        promptAction.showToast({ message: deletedCount > 0
+          ? `已删除 ${deletedCount} 项，${remaining.length} 项仍保留` : '选中商品未删除，请稍后重试', duration: 2400 })
+      }
+    } finally {
+      this.processing = false
+    }
+  }
+
+  private cancelPendingDelete(): void {
+    this.showDeleteConfirm = false
+    this.pendingDeleteMode = 0
+    this.pendingDeleteStoreId = 0
+    this.pendingDeleteRowKeys = []
+  }
+
+  private async confirmPendingDelete(): Promise<void> {
+    const mode: number = this.pendingDeleteMode
+    const storeId: number = this.pendingDeleteStoreId
+    const keys: string[] = this.pendingDeleteRowKeys.slice()
+    this.cancelPendingDelete()
+    if (mode === 1) {
+      await this.deleteStore(storeId)
+    } else if (mode === 2) {
+      await this.deleteSelected(keys)
+    }
   }
 
   private checkoutAll(): void {
@@ -360,19 +648,45 @@ export struct CartPage {
   }
 
   build() {
-    Column() {
-      PageHeader({ title: '购物车', showBack: false, topPadding: 0, actionLabel: this.editing ? '完成' : '管理',
-        onAction: () => {
-          this.editing = !this.editing
-          if (!this.editing) { this.selectedRowKeys = [] }
-        } })
+    Stack() {
+      Column() {
+        PageHeader({ title: '购物车', showBack: false, topPadding: 0, actionLabel: this.editing ? '完成' : '管理',
+          onAction: () => {
+            this.editing = !this.editing
+            if (!this.editing) { this.selectedRowKeys = [] }
+          } })
 
-      if (!this.loggedIn) {
-        EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', description: '请登录后查看购物车' })
-      } else if (this.getCurrentCartItems().length === 0) {
-        EmptyState({ icon: $r('app.media.home_nav_cart'), title: '购物车是空的', description: '去首页挑选喜欢的商品吧' })
-      } else {
-        Stack({ alignContent: Alignment.Bottom }) {
+        if (this.undoMessage !== '') {
+          Row({ space: SPACING.SM }) {
+            Text(this.undoMessage)
+              .fontSize(FONT_SIZE.MD)
+              .fontColor(COLORS.TEXT_PRIMARY)
+              .maxLines(2)
+              .layoutWeight(1)
+            Button(this.processing ? '恢复中' : '撤销')
+              .attributeModifier(new AppButtonStyle())
+              .height(44)
+              .fontSize(FONT_SIZE.MD)
+              .fontColor(COLORS.PRIMARY)
+              .backgroundColor(Color.Transparent)
+              .enabled(!this.processing)
+              .id('cart-undo')
+              .onClick(() => { this.undoDelete() })
+          }
+          .width('100%')
+          .padding({ left: SPACING.MD, right: SPACING.SM })
+          .margin({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM })
+          .backgroundColor(COLORS.BG_WHITE)
+          .border({ width: 1, color: COLORS.DIVIDER })
+          .borderRadius(BORDER_RADIUS.MD)
+        }
+
+        if (!this.loggedIn) {
+          EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', description: '请登录后查看购物车' })
+        } else if (this.getCurrentCartItems().length === 0) {
+          EmptyState({ icon: $r('app.media.home_nav_cart'), title: '购物车是空的', description: '去首页挑选喜欢的商品吧' })
+        } else {
+          Stack({ alignContent: Alignment.Bottom }) {
         // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
         List({ space: SPACING.SM }) {
           ListItem() {
@@ -408,12 +722,12 @@ export struct CartPage {
               .layoutWeight(1)
             Button('删除选中')
               .attributeModifier(new AppButtonStyle())
-              .height(40)
+              .height(44)
               .fontSize(FONT_SIZE.MD)
               .fontColor(COLORS.ON_PRIMARY)
               .backgroundColor(COLORS.ERROR)
               .borderRadius(BORDER_RADIUS.ROUND)
-              .onClick(() => { this.deleteSelected() })
+              .onClick(() => { this.requestDeleteSelected() })
           } else {
             Column({ space: SPACING.XS }) {
               Text(`共${this.getTotalCount()}件`)
@@ -428,7 +742,7 @@ export struct CartPage {
             .layoutWeight(1)
             Button('\u53bb\u7ed3\u7b97')
               .attributeModifier(new AppButtonStyle())
-              .height(40)
+              .height(44)
               .fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
               .backgroundColor(MODULE_COLOR.CART)
               .borderRadius(BORDER_RADIUS.ROUND)
@@ -449,12 +763,25 @@ export struct CartPage {
           const height: number = Number(area.height)
           if (height > 0 && height !== this.actionBarHeight) { this.actionBarHeight = height }
         })
-        }.width('100%').layoutWeight(1)
+          }.width('100%').layoutWeight(1)
+        }
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor(COLORS.BG_PRIMARY)
+
+      if (this.showDeleteConfirm) {
+        ConfirmDialog({
+          title: this.deleteConfirmTitle,
+          content: this.deleteConfirmContent,
+          confirmText: '确认删除',
+          cancelText: '取消',
+          onConfirm: () => { this.confirmPendingDelete() },
+          onCancel: () => { this.cancelPendingDelete() }
+        })
       }
     }
-    .width('100%')
-    .height('100%')
-    .backgroundColor(COLORS.BG_PRIMARY)
+    .width('100%').height('100%')
   }
 
   @Builder
@@ -470,12 +797,12 @@ export struct CartPage {
           .fontColor(MODULE_COLOR.CART)
           .layoutWeight(1)
         Button('删除')
-          .attributeModifier(new AppButtonStyle()).height(40)
+          .attributeModifier(new AppButtonStyle()).height(44)
           .fontSize(FONT_SIZE.SM)
           .fontColor(COLORS.ERROR)
           .backgroundColor(COLORS.ERROR_LIGHT)
           .borderRadius(BORDER_RADIUS.ROUND)
-          .onClick(() => { this.deleteStore(card.storeId) })
+          .onClick(() => { this.requestDeleteStore(card.storeId) })
       }
       ForEach(card.visibleItems, (item: CartItem) => {
         this.CartItemRow(item)
@@ -483,7 +810,7 @@ export struct CartPage {
 
       if (card.items.length > 2) {
         Button(card.expanded ? '收起商品 ∧' : `展开其余 ${card.items.length - 2} 件商品 ∨`)
-          .attributeModifier(new AppButtonStyle()).height(40).width('100%')
+          .attributeModifier(new AppButtonStyle()).height(44).width('100%')
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
           .backgroundColor(COLORS.BG_PRIMARY)
           .id(`cart-expand-${card.storeId}`)
@@ -515,7 +842,7 @@ export struct CartPage {
       Row({ space: SPACING.SM }) {
         if (this.editing) {
           Checkbox({ name: this.rowKey(item) })
-            .select(this.isSelected(item)).width(22).height(22)
+            .select(this.isSelected(item)).width(44).height(44)
             .onChange(() => { this.toggleSelected(item) })
         }
         Image(merchantImageSource(item.goods.image)).alt(DEFAULT_MERCHANT_IMAGE)
@@ -535,14 +862,14 @@ export struct CartPage {
         Text(`¥${(item.price ?? item.goods.price).toFixed(2)}`)
           .fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.PRICE_RED)
           .maxLines(1).layoutWeight(1)
-        Button('删除').attributeModifier(new AppButtonStyle()).height(36)
+        Button('删除').attributeModifier(new AppButtonStyle()).height(44)
           .padding({ left: 8, right: 8 }).fontSize(FONT_SIZE.SM)
           .fontColor(COLORS.TEXT_HINT).backgroundColor(Color.Transparent)
           .onClick(() => { this.deleteOne(item) })
         Button({ type: ButtonType.Normal }) {
           Text('−').fontSize(22).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
             .textAlign(TextAlign.Center).width('100%')
-        }.attributeModifier(new AppButtonStyle()).width(36).height(36).padding(0)
+        }.attributeModifier(new AppButtonStyle()).width(44).height(44).padding(0)
           .backgroundColor(COLORS.BG_PRIMARY)
           .id(`cart-minus-${item.goods.id}-${item.specId ?? 0}`)
           .accessibilityText(`减少${item.goods.name}`)
@@ -553,7 +880,7 @@ export struct CartPage {
         Button({ type: ButtonType.Normal }) {
           Text('+').fontSize(22).fontWeight(FontWeight.Bold).fontColor(COLORS.ON_PRIMARY)
             .textAlign(TextAlign.Center).width('100%')
-        }.attributeModifier(new AppButtonStyle()).width(36).height(36).padding(0)
+        }.attributeModifier(new AppButtonStyle()).width(44).height(44).padding(0)
           .backgroundColor(COLORS.PRIMARY)
           .id(`cart-plus-${item.goods.id}-${item.specId ?? 0}`)
           .accessibilityText(`增加${item.goods.name}`)
@@ -574,7 +901,10 @@ export struct CartPage {
           .fontWeight(FontWeight.Bold)
           .layoutWeight(1)
           .id('cart-bundle-gap')
-        Text('去凑单 ›')
+        Button('去凑单 ›')
+          .attributeModifier(new AppButtonStyle())
+          .height(44)
+          .backgroundColor(Color.Transparent)
           .fontSize(FONT_SIZE.SM)
           .fontColor(COLORS.PRIMARY)
           .onClick(() => { this.goBundle(hint) })

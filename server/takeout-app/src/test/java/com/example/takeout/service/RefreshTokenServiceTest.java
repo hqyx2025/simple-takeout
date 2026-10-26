@@ -91,7 +91,9 @@ class RefreshTokenServiceTest {
     void passwordResetBetweenCredentialCheckAndRefreshIssueRejectsTheOldLogin() {
         TokenBlacklistDao tokenDao = mock(TokenBlacklistDao.class);
         UserDao users = mock(UserDao.class);
-        JwtUtil jwt = new JwtUtil("test-signing-key-at-least-thirty-two-bytes-long", 72);
+        byte[] signingBytes = new byte[32];
+        new java.security.SecureRandom().nextBytes(signingBytes);
+        JwtUtil jwt = new JwtUtil(java.util.Base64.getEncoder().encodeToString(signingBytes), 72);
         String staleAccess = jwt.generateToken(7, 0, "");
         when(users.findByIdForUpdate(7)).thenReturn(Optional.of(new User(7, "user", "", "13800138000", "",
                 0, 20, "now", "2026-10-14 12:00:00")));

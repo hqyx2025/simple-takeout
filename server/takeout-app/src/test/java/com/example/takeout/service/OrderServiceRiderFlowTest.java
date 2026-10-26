@@ -17,6 +17,7 @@ import com.example.takeout.mapper.CartItemMapper;
 import com.example.takeout.model.Order;
 import com.example.takeout.model.Rider;
 import com.example.takeout.model.Store;
+import com.example.takeout.service.thirdparty.ExternalPaymentService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
@@ -76,11 +77,12 @@ class OrderServiceRiderFlowTest {
     /** 库中订单（25 个组件：id..couponId 为模型字段，rider_id / ready_time 由 DAO 单独读写）。 */
     private Order storedOrder(int status) {
         return new Order(ORDER_ID, "NO500", 1L, STORE_ID, "测试店", status, ITEMS, ADDRESS_JSON,
-                10, 5, 0, 15, "", 0, 0, "2026-09-15 10:00:00",
+                10, 5, 0, 15, "门牌备注隐私", 0, 0, "2026-09-15 10:00:00",
                 "2026-09-15 10:01:00", "", "", "", "", 0);
     }
 
     private void stubStore() {
+        when(storeDao.hasMerchantAccess(OWNER_ID, STORE_ID)).thenReturn(true);
         // 门店与骑手相距约 60 米，落在默认 25 公里骑手半径内
         when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(
                 new Store(STORE_ID, "测试店", "", 4.5, 0, 5, 10, "30分钟", "1km", "[]", "",
@@ -116,6 +118,49 @@ class OrderServiceRiderFlowTest {
 
         assertEquals(1, pool.size());
         assertEquals(ORDER_ID, pool.get(0).id());
+        assertEquals("", pool.get(0).address().name());
+        assertEquals("", pool.get(0).address().phone());
+        assertTrue(pool.get(0).items().isEmpty());
+        assertEquals("", pool.get(0).remark());
+        assertEquals(0, pool.get(0).userId());
+        assertTrue(!pool.get(0).address().detail().contains("测试地址"));
+    }
+
+    /** 抢单前的响应只提供接单决策所需信息，序列化输出也不能夹带顾客或商品隐私。 */
+    @Test
+    void riderPoolRedactsCustomerDataButKeepsDispatchDecisionFields() throws Exception {
+        stubActiveRider();
+        stubStore();
+        when(orderDao.listRiderPool()).thenReturn(List.of(storedOrder(2)));
+
+        Order.OrderView order = service.riderPool(RIDER_ID).get(0);
+
+        assertEquals(0, order.userId());
+        assertEquals(0, order.address().addressId());
+        assertEquals("", order.address().name());
+        assertEquals("", order.address().phone());
+        assertEquals("抢单后可查看收货信息", order.address().detail());
+        assertEquals(List.of(), order.items());
+        assertEquals("", order.remark());
+        assertEquals("", order.orderNo());
+        assertEquals(0, order.storeId());
+        assertEquals(0, order.goodsAmount());
+        assertEquals(0, order.discount());
+        assertEquals(0, order.payAmount());
+        assertEquals(0, order.escrowStatus());
+        assertEquals("", order.readyTime());
+        assertEquals("", order.deliveryType());
+
+        assertEquals("测试店", order.storeName());
+        assertEquals(5.0, order.deliveryFee());
+        assertEquals(2, order.status());
+
+        String responseJson = new ObjectMapper().writeValueAsString(order);
+        assertTrue(!responseJson.contains("张三"));
+        assertTrue(!responseJson.contains("13800138000"));
+        assertTrue(!responseJson.contains("测试地址"));
+        assertTrue(!responseJson.contains("测试商品"));
+        assertTrue(!responseJson.contains("门牌备注隐私"));
     }
 
     /** 骑手没设置接单位置时无法判定半径 → 不派任何单（前端提示先去设置）。 */
@@ -196,6 +241,34 @@ class OrderServiceRiderFlowTest {
     }
 
     @Test
+    void riderActionResponsesNeverExposePaymentLaunchData() {
+        stubActiveRider();
+        stubStore();
+        ExternalPaymentService payments = mock(ExternalPaymentService.class);
+        when(payments.paymentDetails(ORDER_ID)).thenReturn(new ExternalPaymentService.PaymentLaunch(
+                "ALIPAY", "trade-secret", "https://pay.example/secret", "PENDING",
+                "app-order-secret", "APP", false));
+        service.configureExternalPaymentService(payments);
+
+        when(orderDao.tryAssignRider(ORDER_ID, RIDER_ID)).thenReturn(true);
+        when(orderDao.findById(ORDER_ID)).thenReturn(Optional.of(storedOrder(2)));
+        Order.OrderView grabbed = service.riderGrab(RIDER_ID, ORDER_ID);
+
+        when(orderDao.riderPickup(eq(ORDER_ID), eq(RIDER_ID), anyString())).thenReturn(true);
+        when(orderDao.findById(ORDER_ID)).thenReturn(Optional.of(storedOrder(3)));
+        Order.OrderView pickedUp = service.riderPickup(RIDER_ID, ORDER_ID);
+
+        for (Order.OrderView response : List.of(grabbed, pickedUp)) {
+            assertEquals("", response.paymentChannel());
+            assertEquals("", response.outTradeNo());
+            assertEquals("", response.paymentUrl());
+            assertEquals("", response.appOrderInfo());
+            assertEquals("", response.paymentMode());
+        }
+        verify(payments, never()).paymentDetails(ORDER_ID);
+    }
+
+    @Test
     void fullChainFromReadyToDeliveredAccumulatesRiderIncome() {
         stubActiveRider();
         stubStore();
@@ -213,10 +286,52 @@ class OrderServiceRiderFlowTest {
 
         when(orderDao.riderDeliver(eq(ORDER_ID), eq(RIDER_ID), anyString())).thenReturn(true);
         when(orderDao.findById(ORDER_ID)).thenReturn(Optional.of(storedOrder(4)));
-        assertEquals(4, service.riderDeliver(RIDER_ID, ORDER_ID).status());
+        Order.OrderView delivered = service.riderDeliver(RIDER_ID, ORDER_ID);
+        assertEquals(4, delivered.status());
+        assertEquals("", delivered.address().name());
+        assertEquals("", delivered.address().phone());
+        assertEquals("收货信息已隐藏", delivered.address().detail());
 
         // 单量/收入在同一事务内按订单配送费累加
         verify(riderDao).addCompleted(eq(RIDER_ID), anyDouble());
+    }
+
+    @Test
+    void riderOrderHistoryOnlyExposesDeliveryContactForActiveStatuses() {
+        when(orderDao.listByRider(RIDER_ID)).thenReturn(List.of(
+                storedOrder(2), storedOrder(3), storedOrder(4), storedOrder(5), storedOrder(6)));
+
+        List<Order.OrderView> orders = service.riderOrders(RIDER_ID);
+
+        assertEquals("张三", orders.get(0).address().name());
+        assertEquals("张三", orders.get(1).address().name());
+        for (int i = 2; i < orders.size(); i++) {
+            Order.OrderView history = orders.get(i);
+            assertEquals(0, history.userId());
+            assertEquals(0, history.address().addressId());
+            assertEquals("", history.address().name());
+            assertEquals("", history.address().phone());
+            assertEquals("收货信息已隐藏", history.address().detail());
+            assertEquals("", history.remark());
+            assertEquals("", history.paymentChannel());
+            assertEquals("", history.outTradeNo());
+            assertEquals("", history.paymentUrl());
+            assertEquals("", history.appOrderInfo());
+            assertEquals("测试店", history.storeName());
+            assertEquals(5.0, history.deliveryFee());
+        }
+    }
+
+    @Test
+    void riderIncomeNeverExceedsActualOrderPayment() {
+        stubActiveRider();
+        stubStore();
+        when(orderDao.riderDeliver(eq(ORDER_ID), eq(RIDER_ID), anyString())).thenReturn(true);
+        when(orderDao.findById(ORDER_ID)).thenReturn(Optional.of(new Order(ORDER_ID, "NO500", 1L, STORE_ID,
+                "测试店", 4, ITEMS, ADDRESS_JSON, 10, 5, 13, 2, "", 0, 0,
+                "2026-09-15 10:00:00", "2026-09-15 10:01:00", "", "", "", "", 0)));
+        service.riderDeliver(RIDER_ID, ORDER_ID);
+        verify(riderDao).addCompleted(RIDER_ID, 2.0);
     }
 
     @Test
@@ -270,7 +385,7 @@ class OrderServiceRiderFlowTest {
     @Test
     void merchantOrderListExposesRiderSoMerchantKnowsWhoTookIt() {
         stubStore();
-        when(storeDao.listByOwner(OWNER_ID)).thenReturn(List.of(
+        when(storeDao.listAccessibleByMerchant(OWNER_ID)).thenReturn(List.of(
                 new Store(STORE_ID, "测试店", "", 4.5, 0, 5, 10, "30分钟", "1km", "[]", "",
                         1, "[1]", OWNER_ID, 1, 0, "")));
         when(orderDao.listByStore(STORE_ID)).thenReturn(List.of(storedOrder(3)));

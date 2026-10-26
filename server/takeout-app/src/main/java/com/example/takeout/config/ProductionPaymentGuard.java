@@ -1,21 +1,18 @@
 package com.example.takeout.config;
 
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/** Production supports ALIPAY only; WECHAT remains hard-disabled until durable asynchronous refund handling exists. */
+/** 所有 profile 均校验已启用的支付宝渠道；按项目约定保留沙箱与余额支付。 */
 @Component
-@Profile("production")
 public class ProductionPaymentGuard {
 
     public ProductionPaymentGuard(PaymentProperties properties) {
+        if (properties.isMockEnabled()) throw new IllegalStateException("模拟支付已停用，任何 profile 均须关闭");
+        if (!properties.isRealEnabled() && !properties.isSandbox()) return;
         List<String> missing = new ArrayList<>();
-        if (!properties.isRealEnabled()) missing.add("TAKEOUT_PAYMENT_REAL_ENABLED=true");
-        if (properties.isMockEnabled()) missing.add("TAKEOUT_PAYMENT_MOCK_ENABLED=false");
-        if (properties.isSandbox()) missing.add("TAKEOUT_PAYMENT_SANDBOX=false");
 
         PaymentProperties.Alipay alipay = properties.getAlipay();
         require(missing, alipay.getAppId(), "TAKEOUT_ALIPAY_APP_ID");
@@ -23,11 +20,13 @@ public class ProductionPaymentGuard {
         require(missing, alipay.getAppPrivateKey(), "TAKEOUT_ALIPAY_APP_PRIVATE_KEY");
         require(missing, alipay.getPublicKey(), "TAKEOUT_ALIPAY_PUBLIC_KEY");
         require(missing, https(alipay.getNotifyUrl()), "TAKEOUT_ALIPAY_NOTIFY_URL (HTTPS)");
-        require(missing, "https://openapi.alipay.com/gateway.do".equals(alipay.getGatewayUrl()),
-                "TAKEOUT_ALIPAY_GATEWAY_URL (production gateway)");
+        String expectedGateway = properties.isSandbox() ? "https://openapi-sandbox.dl.alipaydev.com/gateway.do"
+                : "https://openapi.alipay.com/gateway.do";
+        require(missing, expectedGateway.equals(alipay.getGatewayUrl()),
+                "TAKEOUT_ALIPAY_GATEWAY_URL (must match sandbox setting)");
 
         if (!missing.isEmpty()) {
-            throw new IllegalStateException("Production payment supports ALIPAY only; WECHAT is disabled until " +
+            throw new IllegalStateException("Payment supports ALIPAY only; WECHAT is disabled until " +
                     "durable asynchronous refunds are implemented. Configure: " + String.join(", ", missing));
         }
     }

@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-/** Approval and rejection must serialize on the same refund, including their money/stock side effects. */
+/** Approval and rejection must serialize on the same refund, including their money side effects. */
 @EnabledIfEnvironmentVariable(named = "TAKEOUT_MYSQL_CONCURRENCY_TEST", matches = "1")
 class AdminRefundConcurrencyMySqlTest {
 
@@ -116,7 +116,7 @@ class AdminRefundConcurrencyMySqlTest {
             assertEquals(approveFirst ? 6 : 4,
                     jdbc.queryForObject("SELECT status FROM orders WHERE id=7", Integer.class));
             verify(orders, times(approveFirst ? 1 : 0)).refundOrderPayment(any(Order.class));
-            verify(orders, times(approveFirst ? 1 : 0)).rollbackStock(any(Order.class));
+            verify(orders, never()).rollbackStock(any(Order.class));
             assertFalse(new RefundDao(jdbc).updateStatus(9, "PENDING", "", ""),
                     "A completed refund must not be overwritten by an unconditional status update");
         } finally {

@@ -98,7 +98,7 @@ public class UserCenterController {
     public ApiResponse<Address> addAddress(@RequestAttribute("userId") long userId,
                                            @RequestBody AddressRequest req) {
         return ApiResponse.ok(service.addAddress(userId, req.name(), req.phone(), req.detail(), req.isDefault(),
-                req.latitude(), req.longitude()));
+                req.latitude(), req.longitude(), req.mapAddress(), req.doorDetail(), req.tag()));
     }
 
     @DeleteMapping("/addresses/{id}")
@@ -112,7 +112,7 @@ public class UserCenterController {
                                               @PathVariable long id,
                                               @RequestBody AddressRequest req) {
         return ApiResponse.ok(service.updateAddress(userId, id, req.name(), req.phone(), req.detail(), req.isDefault(),
-                req.latitude(), req.longitude()));
+                req.latitude(), req.longitude(), req.mapAddress(), req.doorDetail(), req.tag()));
     }
 
     @PutMapping("/addresses/{id}/default")
@@ -156,23 +156,14 @@ public class UserCenterController {
         response.setHeader("Cache-Control", "no-store");
         response.setHeader("Pragma", "no-cache");
         String action = "bank-card-reveal";
-        String identity = userId + ":" + LoginRateLimiter.clientIp(http);
+        String identity = "u" + userId;
         if (loginRateLimiter != null && loginRateLimiter.isBlocked(action, identity)) {
             throw new BizException(429, "支付密码尝试过于频繁，请稍后再试");
         }
-        try {
-            var result = new RevealedBankCard(service.revealBankCard(userId, id, request.paymentPassword()));
-            if (loginRateLimiter != null) {
-                loginRateLimiter.reset(action, identity);
-            }
-            return ApiResponse.ok(result);
-        } catch (BizException e) {
-            if (loginRateLimiter != null && ("支付密码不正确".equals(e.getMessage())
-                    || "支付密码必须为 6 位数字".equals(e.getMessage()))) {
-                loginRateLimiter.recordAttempt(action, identity);
-            }
-            throw e;
-        }
+        if (loginRateLimiter != null) loginRateLimiter.recordAttempt(action, identity);
+        var result = new RevealedBankCard(service.revealBankCard(userId, id, request.paymentPassword()));
+        if (loginRateLimiter != null) loginRateLimiter.reset(action, identity);
+        return ApiResponse.ok(result);
     }
 
     // ============ 评价浏览 ============
@@ -218,7 +209,7 @@ public class UserCenterController {
     }
 
     public record AddressRequest(String name, String phone, String detail, int isDefault,
-                                 Double latitude, Double longitude) {
+                                 Double latitude, Double longitude, String mapAddress, String doorDetail, String tag) {
     }
 
     public record ReplyRequest(String reply) {

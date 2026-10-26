@@ -106,8 +106,9 @@ export default function checkoutFlowTest() {
       console.info('[CheckoutFlow] pay amount (above min order) = ' + payAmountHigh)
       expect(payAmountHigh).assertEqual('¥22.59')
 
-      // 预约送达使用服务端校准时间，模拟器系统时间偏差不应拦截提交。
-      expect(await clickByIdOrText(driver, 'checkout-delivery-1', '半小时后')).assertTrue()
+      const deliveryPolicy: Component = requireComponent(
+        await driver.findComponent(ON.id('checkout-delivery-policy')), 'checkout-delivery-policy')
+      expect(await deliveryPolicy.getText()).assertEqual('当前仅支持立即配送')
 
       expect(await clickByIdOrText(driver, 'checkout-submit', '提交订单')).assertTrue()
 

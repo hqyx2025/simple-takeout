@@ -41,7 +41,14 @@ public class OrderDao {
             rs.getString("complete_time"),
             rs.getString("expect_time"),
             rs.getLong("coupon_id"),
-            rs.getString("delivery_type")
+            rs.getString("delivery_type"),
+            rs.getString("cancel_source"),
+            rs.getString("cancel_reason_code"),
+            rs.getString("cancel_reason"),
+            rs.getString("reject_note"),
+            rs.getLong("reject_goods_id"),
+            rs.getLong("reject_spec_id"),
+            rs.getLong("cancel_operator_id")
     );
 
     private final JdbcTemplate jdbc;
@@ -53,6 +60,33 @@ public class OrderDao {
     /** 与订单、库存和优惠券共用事务；唯一键防重，失败回滚后允许原请求重试。 */
     public void reserveCreateRequest(long userId, String requestKey) {
         jdbc.update("INSERT INTO order_create_requests(user_id, request_key) VALUES(?,?)", userId, requestKey);
+    }
+
+    /** 已完成请求映射到原订单；FOR SHARE 等待首个事务提交且避免重复插入后的锁升级死锁。 */
+    public Optional<Long> findCompletedCreateRequest(long userId, String requestKey) {
+        List<Long> rows = jdbc.query(
+                "SELECT order_id FROM order_create_requests WHERE user_id = ? AND request_key = ? FOR SHARE",
+                (rs, rowNum) -> rs.getObject("order_id", Long.class), userId, requestKey);
+        return rows.isEmpty() || rows.getFirst() == null ? Optional.empty() : Optional.of(rows.getFirst());
+    }
+
+    /** 旧版本已受理但没有 order_id 映射的历史占位，继续阻止重复创建并给出可操作提示。 */
+    public boolean isHistoricalCreateRequest(long userId, String requestKey, String recentCutoff) {
+        List<Boolean> rows = jdbc.query(
+                "SELECT create_time < ? FROM order_create_requests " +
+                        "WHERE user_id = ? AND request_key = ? FOR SHARE",
+                (rs, rowNum) -> rs.getBoolean(1), recentCutoff, userId, requestKey);
+        return !rows.isEmpty() && rows.getFirst();
+    }
+
+    /** 与订单创建同事务写入，响应丢失后的相同请求可返回原订单。 */
+    public void bindCreateRequest(long userId, String requestKey, long orderId) {
+        int updated = jdbc.update("UPDATE order_create_requests SET order_id = ? " +
+                        "WHERE user_id = ? AND request_key = ? AND order_id IS NULL",
+                orderId, userId, requestKey);
+        if (updated != 1) {
+            throw new IllegalStateException("下单请求未能绑定订单");
+        }
     }
 
     private static String dateTimeExpression(String legacyColumn) {
@@ -126,23 +160,27 @@ public class OrderDao {
 
     public int countByMerchant(long ownerId, Integer status) {
         String sql = "SELECT COUNT(*) FROM orders o JOIN stores s ON s.id = o.store_id " +
-                "WHERE s.owner_id = ? AND o.status <> 0" + (status == null ? "" : " AND o.status = ?");
-        Integer count = status == null ? jdbc.queryForObject(sql, Integer.class, ownerId)
-                : jdbc.queryForObject(sql, Integer.class, ownerId, status);
+                "WHERE (s.owner_id = ? OR EXISTS (SELECT 1 FROM employees e WHERE e.store_id = s.id " +
+                "AND e.user_id = ? AND e.status = 1)) AND o.status <> 0" +
+                (status == null ? "" : " AND o.status = ?");
+        Integer count = status == null ? jdbc.queryForObject(sql, Integer.class, ownerId, ownerId)
+                : jdbc.queryForObject(sql, Integer.class, ownerId, ownerId, status);
         return count == null ? 0 : count;
     }
 
     public List<AdminOrderRow> listByMerchant(long ownerId, Integer status, int pageSize, long offset) {
         String sql = "SELECT o.*, COALESCE(r.name, '') AS rider_name, COALESCE(r.phone, '') AS rider_phone " +
                 "FROM orders o JOIN stores s ON s.id = o.store_id LEFT JOIN riders r ON r.id = o.rider_id " +
-                "WHERE s.owner_id = ? AND o.status <> 0" + (status == null ? "" : " AND o.status = ?") +
+                "WHERE (s.owner_id = ? OR EXISTS (SELECT 1 FROM employees e WHERE e.store_id = s.id " +
+                "AND e.user_id = ? AND e.status = 1)) AND o.status <> 0" +
+                (status == null ? "" : " AND o.status = ?") +
                 " ORDER BY o.id DESC LIMIT ? OFFSET ?";
         org.springframework.jdbc.core.RowMapper<AdminOrderRow> mapper = (rs, rowNum) ->
                 new AdminOrderRow(MAPPER.mapRow(rs, rowNum), rs.getString("rider_name"),
                         rs.getString("rider_phone"), rs.getString("ready_time"));
         return status == null
-                ? jdbc.query(sql, mapper, ownerId, pageSize, offset)
-                : jdbc.query(sql, mapper, ownerId, status, pageSize, offset);
+                ? jdbc.query(sql, mapper, ownerId, ownerId, pageSize, offset)
+                : jdbc.query(sql, mapper, ownerId, ownerId, status, pageSize, offset);
     }
 
     public List<Order> listAll() {
@@ -245,10 +283,31 @@ public class OrderDao {
     }
 
     /** 取消待付款订单：0 → 5（条件更新，防止与用户手动支付/取消并发冲突）。 */
-    public boolean cancelPending(long id, String now) {
+    public boolean cancelPending(long id, String now, String source, String reasonCode, String reason) {
         return jdbc.update("UPDATE orders SET status = 5, complete_time = ?, complete_time_dt = " + DATE_PARAMETER +
-                        " WHERE id = ? AND status = 0",
-                now, now, id) == 1;
+                        ", cancel_source = ?, cancel_reason_code = ?, cancel_reason = ? " +
+                        "WHERE id = ? AND status = 0",
+                now, now, source, reasonCode, reason, id) == 1;
+    }
+
+    /** 已支付取消：资金托管已由调用方条件更新，状态与取消元数据再做条件流转。 */
+    public boolean cancelPaidFrom(long id, int fromStatus, String now, String source,
+                                  String reasonCode, String reason, long operatorId) {
+        return jdbc.update("UPDATE orders SET status = 5, complete_time = ?, complete_time_dt = " + DATE_PARAMETER +
+                        ", cancel_source = ?, cancel_reason_code = ?, cancel_reason = ?, cancel_operator_id = ? " +
+                        "WHERE id = ? AND status = ?",
+                now, now, source, reasonCode, reason, operatorId, id, fromStatus) == 1;
+    }
+
+    /** 商家拒单：1/托管中 → 5/已退款，并原子保存拒单元数据。 */
+    public boolean rejectByMerchant(long id, long operatorId, String reasonCode, String reason, String note,
+                                    long goodsId, long specId, String now) {
+        return jdbc.update("UPDATE orders SET status = 5, escrow_status = 2, complete_time = ?, " +
+                        "complete_time_dt = " + DATE_PARAMETER + ", cancel_source = 'MERCHANT', " +
+                        "cancel_reason_code = ?, cancel_reason = ?, reject_note = ?, reject_goods_id = ?, " +
+                        "reject_spec_id = ?, cancel_operator_id = ? " +
+                        "WHERE id = ? AND status = 1 AND escrow_status = 0",
+                now, now, reasonCode, reason, note, goodsId, specId, operatorId, id) == 1;
     }
 
     public void markReviewed(long id) {
@@ -339,7 +398,7 @@ public class OrderDao {
                                      Object... values) {
         appendComma(sql);
         sql.append("COALESCE(SUM(CASE WHEN ").append(condition)
-                .append(" THEN pay_amount - delivery_fee ELSE 0 END), 0) AS ").append(alias);
+                .append(" THEN GREATEST(pay_amount - delivery_fee, 0) ELSE 0 END), 0) AS ").append(alias);
         for (Object value : values) args.add(value);
     }
 
@@ -384,14 +443,14 @@ public class OrderDao {
     /** 待取餐池：已出餐但尚未分配骑手。 */
     public List<Order> listRiderPool() {
         return jdbc.query("SELECT * FROM orders WHERE status = 2 AND ready_time <> '' " +
-                        "AND rider_id = 0 ORDER BY " + dateTimeExpression("ready_time"),
+                        "AND rider_id = 0 AND delivery_type = 'DELIVERY' ORDER BY " + dateTimeExpression("ready_time"),
                 MAPPER);
     }
 
     /** 骑手抢单：条件更新，防并发重复抢单（失败=已被他人抢走）。 */
     public boolean tryAssignRider(long id, long riderId) {
         return jdbc.update("UPDATE orders SET rider_id = ? WHERE id = ? AND rider_id = 0 AND status = 2 " +
-                        "AND ready_time <> ''",
+                        "AND ready_time <> '' AND delivery_type = 'DELIVERY'",
                 riderId, id) == 1;
     }
 

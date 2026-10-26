@@ -164,6 +164,11 @@ export interface ServerOrder {
   appOrderInfo?: string
   paymentMode?: string
   paymentSandbox?: boolean
+  cancelSource?: string
+  cancelReasonCode?: string
+  cancelReason?: string
+  rejectGoodsId?: number
+  rejectSpecId?: number
 }
 
 export interface ServerOrderPage {
@@ -223,6 +228,9 @@ export interface ServerAddress {
   name: string
   phone: string
   detail: string
+  mapAddress?: string
+  doorDetail?: string
+  tag?: string
   isDefault: number
   latitude?: number
   longitude?: number
@@ -523,6 +531,9 @@ export interface AddressRequest {
   name: string
   phone: string
   detail: string
+  mapAddress?: string
+  doorDetail?: string
+  tag?: string
   isDefault: number
   latitude?: number
   longitude?: number
@@ -598,6 +609,15 @@ export interface GoodsSpecsRequest {
 export interface RefundRequest {
   reasonType: string
   reason: string
+  idempotencyKey?: string
+}
+
+/** 商家拒绝待接单订单；餐品缺货时 goodsId/specId 必须定位到订单内 SKU。 */
+export interface MerchantRejectOrderRequest {
+  reasonCode: string
+  note?: string
+  goodsId?: number
+  specId?: number
 }
 
 export interface MerchantEmployeeBody {

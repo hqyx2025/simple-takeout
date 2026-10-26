@@ -24,12 +24,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -308,53 +311,165 @@ public class UserCenterService {
         return addressDao.listByUser(userId);
     }
 
+    @Transactional
     public Address addAddress(long userId, String name, String phone, String detail, int isDefault) {
-        return addAddress(userId, name, phone, detail, isDefault, null, null);
+        return addAddress(userId, name, phone, detail, isDefault, null, null, null, null, "");
     }
 
+    @Transactional
     public Address addAddress(long userId, String name, String phone, String detail, int isDefault,
                               Double latitude, Double longitude) {
-        validateAddress(name, phone, detail, isDefault);
+        return addAddress(userId, name, phone, detail, isDefault, latitude, longitude, null, null, "");
+    }
+
+    @Transactional
+    public Address addAddress(long userId, String name, String phone, String detail, int isDefault,
+                              Double latitude, Double longitude, String mapAddress, String doorDetail) {
+        return addAddress(userId, name, phone, detail, isDefault, latitude, longitude, mapAddress, doorDetail, "");
+    }
+
+    @Transactional
+    public Address addAddress(long userId, String name, String phone, String detail, int isDefault,
+                              Double latitude, Double longitude, String mapAddress, String doorDetail, String tag) {
+        name = normalizeAddressText(name);
+        phone = normalizeAddressText(phone);
+        AddressParts parts = normalizeAddressParts(detail, mapAddress, doorDetail);
+        String normalizedTag = normalizeAddressTag(tag);
+        validateAddress(name, phone, parts.fullDetail(), isDefault);
         validateCoords(latitude, longitude);
+        latitude = normalizeCoordinate(latitude);
+        longitude = normalizeCoordinate(longitude);
+        lockAddressAccount(userId);
+        List<Address> addresses = addressDao.listByUser(userId);
+        for (Address address : addresses) {
+            if (sameAddressIdentity(address, name, phone, parts, latitude, longitude)) {
+                return address;
+            }
+        }
         // 大纲 20.1：每个用户最多 20 个地址；超了先删再加（防止脚本刷成整库地址）
-        if (addressDao.listByUser(userId).size() >= 20) {
+        if (addresses.size() >= 20) {
             throw new BizException("收货地址最多保存 20 个，请先删除部分地址");
         }
-        long id = addressDao.insert(userId, name, phone, detail, isDefault, latitude, longitude,
-                LocalDateTime.now().format(FMT));
-        return addressDao.listByUser(userId).stream()
-                .filter(a -> a.id() == id)
-                .findFirst()
+        long id = addressDao.insert(userId, name, phone, parts.fullDetail(), isDefault, latitude, longitude,
+                parts.mapAddress(), parts.doorDetail(), normalizedTag, LocalDateTime.now().format(FMT));
+        return addressDao.findByIdAndUser(id, userId)
                 .orElseThrow(() -> new BizException("地址添加失败"));
     }
 
+    @Transactional
     public Address updateAddress(long userId, long id, String name, String phone, String detail, int isDefault) {
-        return updateAddress(userId, id, name, phone, detail, isDefault, null, null);
+        return updateAddress(userId, id, name, phone, detail, isDefault, null, null, null, null, null);
     }
 
+    @Transactional
     public Address updateAddress(long userId, long id, String name, String phone, String detail, int isDefault,
                                  Double latitude, Double longitude) {
-        validateAddress(name, phone, detail, isDefault);
+        return updateAddress(userId, id, name, phone, detail, isDefault, latitude, longitude, null, null, null);
+    }
+
+    @Transactional
+    public Address updateAddress(long userId, long id, String name, String phone, String detail, int isDefault,
+                                 Double latitude, Double longitude, String mapAddress, String doorDetail) {
+        return updateAddress(userId, id, name, phone, detail, isDefault, latitude, longitude,
+                mapAddress, doorDetail, null);
+    }
+
+    @Transactional
+    public Address updateAddress(long userId, long id, String name, String phone, String detail, int isDefault,
+                                 Double latitude, Double longitude, String mapAddress, String doorDetail, String tag) {
+        name = normalizeAddressText(name);
+        phone = normalizeAddressText(phone);
+        AddressParts parts = normalizeAddressParts(detail, mapAddress, doorDetail);
+        String requestedTag = tag == null ? null : normalizeAddressTag(tag);
+        validateAddress(name, phone, parts.fullDetail(), isDefault);
         validateCoords(latitude, longitude);
-        // 仅修改联系人时保留坐标；改成另一个地址后不能沿用旧地址的定位。
+        latitude = normalizeCoordinate(latitude);
+        longitude = normalizeCoordinate(longitude);
+        lockAddressAccount(userId);
+        Address existing = addressDao.findByIdAndUser(id, userId)
+                .orElseThrow(() -> new BizException("地址不存在"));
+        String persistedMapAddress = parts.mapAddress();
+        String persistedDoorDetail = parts.doorDetail();
+        boolean structuredRequest = persistedMapAddress != null;
+        String existingMapAddress = existing.mapAddress() == null || existing.mapAddress().isBlank()
+                ? existing.detail() : existing.mapAddress().trim();
+        boolean sameMapAddress = structuredRequest
+                ? existingMapAddress.equals(persistedMapAddress)
+                : existing.detail().equals(parts.fullDetail());
+        // 新客户端单独修改联系人或门牌时保留定位；地图位置文本改变且未重新定位时清除旧坐标。
         if (latitude == null && longitude == null) {
-            Address existing = addressDao.listByUser(userId).stream()
-                    .filter(a -> a.id() == id)
-                    .findFirst()
-                    .orElseThrow(() -> new BizException("地址不存在"));
-            if (existing.detail().equals(detail)) {
+            if (sameMapAddress) {
                 latitude = existing.latitude();
                 longitude = existing.longitude();
             }
         }
-        addressDao.update(userId, id, name, phone, detail, isDefault, latitude, longitude);
-        return addressDao.listByUser(userId).stream()
-                .filter(a -> a.id() == id)
-                .findFirst()
+        // 旧客户端只提交完整 detail。内容未变时不能擦掉已经保存的结构化字段。
+        if (!structuredRequest && existing.detail().equals(parts.fullDetail())) {
+            persistedMapAddress = existing.mapAddress();
+            persistedDoorDetail = existing.doorDetail();
+        }
+        String persistedTag = requestedTag == null ? normalizeAddressTag(existing.tag()) : requestedTag;
+        if (!addressDao.update(userId, id, name, phone, parts.fullDetail(), isDefault, latitude, longitude,
+                persistedMapAddress, persistedDoorDetail, persistedTag)) {
+            throw new BizException("地址更新失败，请重试");
+        }
+        return addressDao.findByIdAndUser(id, userId)
                 .orElseThrow(() -> new BizException("地址不存在"));
     }
 
+    private AddressParts normalizeAddressParts(String legacyDetail, String mapAddress, String doorDetail) {
+        String map = mapAddress == null ? "" : mapAddress.trim();
+        String door = doorDetail == null ? "" : doorDetail.trim();
+        if (map.isEmpty()) {
+            if (!door.isEmpty()) {
+                throw new BizException("请先填写地图位置，再填写楼层门牌");
+            }
+            return new AddressParts(legacyDetail == null ? "" : legacyDetail.trim(), null, null);
+        }
+        String full = door.isEmpty() ? map : map + " " + door;
+        return new AddressParts(full, map, door);
+    }
+
+    private record AddressParts(String fullDetail, String mapAddress, String doorDetail) {
+    }
+
+    private boolean sameAddressIdentity(Address address, String name, String phone, AddressParts parts,
+                                        Double latitude, Double longitude) {
+        String existingMap = normalizeAddressText(address.mapAddress());
+        String existingDoor = normalizeAddressText(address.doorDetail());
+        if (existingMap.isEmpty()) {
+            existingMap = normalizeAddressText(address.detail());
+            existingDoor = "";
+        }
+        String requestedMap = parts.mapAddress() == null ? parts.fullDetail() : parts.mapAddress();
+        String requestedDoor = parts.mapAddress() == null ? "" : parts.doorDetail();
+        return normalizeAddressText(address.name()).equals(name)
+                && normalizeAddressText(address.phone()).equals(phone)
+                && existingMap.equals(requestedMap)
+                && existingDoor.equals(requestedDoor)
+                && Objects.equals(normalizeCoordinate(address.latitude()), latitude)
+                && Objects.equals(normalizeCoordinate(address.longitude()), longitude);
+    }
+
+    private String normalizeAddressText(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private String normalizeAddressTag(String tag) {
+        String normalized = normalizeAddressText(tag);
+        if (normalized.length() > 16 || normalized.chars().anyMatch(Character::isISOControl)) {
+            throw new BizException("地址标签最多 16 个字且不能包含控制字符");
+        }
+        return normalized;
+    }
+
+    private Double normalizeCoordinate(Double value) {
+        return value == null ? null : BigDecimal.valueOf(value).setScale(7, RoundingMode.HALF_UP).doubleValue();
+    }
+
+    @Transactional
     public void deleteAddress(long userId, long id) {
+        lockAddressAccount(userId);
         addressDao.delete(userId, id);
     }
 
@@ -370,8 +485,21 @@ public class UserCenterService {
         }
     }
 
+    @Transactional
     public void setDefaultAddress(long userId, long id) {
-        addressDao.setDefault(userId, id);
+        lockAddressAccount(userId);
+        if (addressDao.findByIdAndUser(id, userId).isEmpty()) {
+            throw new BizException("地址不存在");
+        }
+        if (!addressDao.setDefault(userId, id)) {
+            throw new BizException("默认地址更新失败，请重试");
+        }
+    }
+
+    private void lockAddressAccount(long userId) {
+        if (userDao == null || userDao.findByIdForUpdate(userId).isEmpty()) {
+            throw new BizException(401, "用户不存在，请重新登录");
+        }
     }
 
     private void validateAddress(String name, String phone, String detail, int isDefault) {

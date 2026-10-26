@@ -41,7 +41,7 @@ public class SmsVerificationService implements SmsCodeVerifier {
 
     @Autowired
     public SmsVerificationService(StringRedisTemplate redis, SmsSender sender,
-                                  @Value("${takeout.jwt.secret}") String signingSecret,
+                                  @Value("${takeout.sms.hmac-secret}") String signingSecret,
                                   @Value("${takeout.sms.code-ttl-seconds:900}") long ttlSeconds,
                                   @Value("${takeout.sms.cooldown-seconds:60}") long cooldownSeconds,
                                   @Value("${takeout.sms.daily-limit:5}") long dailyLimit,
@@ -77,7 +77,7 @@ public class SmsVerificationService implements SmsCodeVerifier {
     public IssueResult issue(String identity, String destination) {
         String identityHash = digest(identity);
         String codeKey = "takeout:verification:code:" + identityHash;
-        String cooldownKey = "takeout:verification:cooldown:" + digest(destination);
+        String cooldownKey = "takeout:verification:cooldown:" + digest(recipientBudgetIdentity(destination));
         try {
             Boolean allowed = redis.opsForValue().setIfAbsent(cooldownKey, "1", cooldown);
             if (!Boolean.TRUE.equals(allowed)) {
@@ -105,7 +105,7 @@ public class SmsVerificationService implements SmsCodeVerifier {
 
     private boolean withinSendLimits(String destination, String cooldownKey) {
         try {
-            String destinationHash = digest(destination);
+            String destinationHash = digest(recipientBudgetIdentity(destination));
             if (dailyLimit > 0) {
                 String key = "takeout:verification:daily:" + destinationHash + ":" +
                         java.time.LocalDate.now(java.time.ZoneOffset.UTC);
@@ -119,7 +119,12 @@ public class SmsVerificationService implements SmsCodeVerifier {
                 }
             }
             if (hourlyLimit > 0) {
-                String key = "takeout:verification:hourly:" +
+                String globalKey = "takeout:verification:global-hourly:" + (Instant.now().getEpochSecond() / 3600);
+                Long globalCount = redis.opsForValue().increment(globalKey);
+                if (globalCount == null) throw new IllegalStateException("Missing verification counter");
+                redis.expire(globalKey, Duration.ofHours(1));
+                if (globalCount > hourlyLimit) return false;
+                String key = "takeout:verification:hourly:" + destinationHash + ":" +
                         (Instant.now().getEpochSecond() / 3600);
                 Long count = redis.opsForValue().increment(key);
                 if (count != null) {
@@ -135,6 +140,22 @@ public class SmsVerificationService implements SmsCodeVerifier {
             // Redis failures are fail-closed for code storage, but do not turn a mock sender test into a false limit.
             throw e;
         }
+    }
+
+    /** 仅归并发送预算，绝不改写验证码的绑定身份或真正投递地址。 */
+    static String recipientBudgetIdentity(String destination) {
+        String value = destination.trim().toLowerCase(java.util.Locale.ROOT);
+        int at = value.lastIndexOf('@');
+        if (at < 0) return value;
+        String name = value.substring(0, at);
+        String domain = value.substring(at + 1);
+        int tag = name.indexOf('+');
+        if (tag >= 0) name = name.substring(0, tag);
+        if ("gmail.com".equals(domain) || "googlemail.com".equals(domain)) {
+            name = name.replace(".", "");
+            domain = "gmail.com";
+        }
+        return name + "@" + domain;
     }
 
     @Override

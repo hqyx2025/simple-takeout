@@ -2,6 +2,12 @@ server:
   # 应用默认监听 8087；可通过 TAKEOUT_APP_PORT 覆盖。
   # 与网关同机同跑时把应用挪开（如 TAKEOUT_APP_PORT=9100），由网关占住对外的 8087。
   port: ${TAKEOUT_APP_PORT:8087}
+  forward-headers-strategy: native
+  tomcat:
+    remoteip:
+      remote-ip-header: x-forwarded-for
+      # 容器只信任内部代理；裸跑须收窄到实际网关地址，绝不能使用 .*
+      internal-proxies: '${TAKEOUT_INTERNAL_PROXY_REGEX:127\.0\.0\.1|::1|0:0:0:0:0:0:0:1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+}'
 
 spring:
   application:
@@ -10,7 +16,7 @@ spring:
     # 主机/端口可用环境变量覆盖：本机开发默认 localhost:3310，
     # 容器编排（docker-compose）下指向服务名 mysql:3306
     url: jdbc:mysql://${TAKEOUT_DB_HOST:localhost}:${TAKEOUT_DB_PORT:3310}/takeout?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8&allowPublicKeyRetrieval=true
-    username: ${TAKEOUT_DB_USERNAME:root}
+    username: ${TAKEOUT_DB_USERNAME:takeout}
     password: ${TAKEOUT_DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
   sql:
@@ -29,6 +35,7 @@ spring:
     redis:
       host: ${TAKEOUT_REDIS_HOST:127.0.0.1}
       port: ${TAKEOUT_REDIS_PORT:6387}
+      username: ${TAKEOUT_REDIS_USERNAME:}
       password: ${TAKEOUT_REDIS_PASSWORD:}
       database: ${TAKEOUT_REDIS_DATABASE:0}
       # 短超时 + 关闭自动重连：Redis 故障时立刻回源数据库（实测单请求 ~550ms，而非默认重试下的 ~10s）
@@ -51,10 +58,16 @@ springdoc:
 
 # 自定义配置
 takeout:
+  data-seed:
+    enabled: ${TAKEOUT_DATA_SEED_ENABLED:false}
+  assistant:
+    encryption-secret: ${TAKEOUT_ASSISTANT_ENCRYPTION_SECRET}
+  wallet:
+    encryption-secret: ${TAKEOUT_WALLET_ENCRYPTION_SECRET}
   demo:
     recharge-enabled: ${TAKEOUT_DEMO_RECHARGE_ENABLED:false}
-    signup-balance: ${TAKEOUT_DEMO_SIGNUP_BALANCE:20}
-    admin-password: ${TAKEOUT_DEMO_ADMIN_PASSWORD:123456}
+    signup-balance: ${TAKEOUT_DEMO_SIGNUP_BALANCE:0}
+    admin-password: ${TAKEOUT_DEMO_ADMIN_PASSWORD:}
   openapi:
     server-url: ${TAKEOUT_OPENAPI_SERVER_URL:http://localhost:8087}
   jwt:
@@ -65,7 +78,8 @@ takeout:
     rest-key: ${TAKEOUT_AMAP_REST_KEY:}
     security-code: ${TAKEOUT_AMAP_SECURITY_CODE:}
   sms:
-    provider: ${TAKEOUT_SMS_PROVIDER:mock}
+    hmac-secret: ${TAKEOUT_VERIFICATION_HMAC_SECRET}
+    provider: ${TAKEOUT_SMS_PROVIDER:qq-email}
     expose-mock-code: ${TAKEOUT_SMS_EXPOSE_MOCK_CODE:false}
     code-ttl-seconds: ${TAKEOUT_SMS_CODE_TTL_SECONDS:900}
     cooldown-seconds: ${TAKEOUT_SMS_COOLDOWN_SECONDS:60}
@@ -96,11 +110,26 @@ takeout:
   security:
     rate-limit:
       # 登录/注册按来源 IP 限流（计数存 Redis，多实例共享、重启不丢）；
-      # Redis 不可用时放行，绝不因为限流把正常用户挡在门外
+      # Redis 不可用时由有界本地窗口继续限流
       enabled: ${TAKEOUT_RATE_LIMIT_ENABLED:true}
+      login-failure-limit: ${TAKEOUT_LOGIN_FAILURE_LIMIT:10}
+      login-failure-window-seconds: ${TAKEOUT_LOGIN_FAILURE_WINDOW_SECONDS:60}
+      login-failure-block-seconds: ${TAKEOUT_LOGIN_FAILURE_BLOCK_SECONDS:600}
+      login-total-limit: ${TAKEOUT_LOGIN_TOTAL_LIMIT:60}
+      login-total-window-seconds: ${TAKEOUT_LOGIN_TOTAL_WINDOW_SECONDS:60}
+      login-total-block-seconds: ${TAKEOUT_LOGIN_TOTAL_BLOCK_SECONDS:60}
+      login-account-limit: ${TAKEOUT_LOGIN_ACCOUNT_LIMIT:10}
+      login-account-window-seconds: ${TAKEOUT_LOGIN_ACCOUNT_WINDOW_SECONDS:60}
+      login-account-block-seconds: ${TAKEOUT_LOGIN_ACCOUNT_BLOCK_SECONDS:600}
+      login-account-total-limit: ${TAKEOUT_LOGIN_ACCOUNT_TOTAL_LIMIT:30}
+      login-account-total-window-seconds: ${TAKEOUT_LOGIN_ACCOUNT_TOTAL_WINDOW_SECONDS:60}
+      login-account-total-block-seconds: ${TAKEOUT_LOGIN_ACCOUNT_TOTAL_BLOCK_SECONDS:60}
+      login-verify-max-concurrent: ${TAKEOUT_LOGIN_VERIFY_MAX_CONCURRENT:2}
+      login-verify-wait-millis: ${TAKEOUT_LOGIN_VERIFY_WAIT_MILLIS:5000}
   cache:
     # 热点数据缓存总开关；Redis 不可用时写缓存/失效为尽力而为，读缓存异常自动回源数据库
     enabled: ${TAKEOUT_CACHE_ENABLED:true}
+    max-entry-bytes: ${TAKEOUT_CACHE_MAX_ENTRY_BYTES:1048576}
     # 缓存键前缀（多环境共用同一 Redis 时用它隔离）
     key-prefix: ${TAKEOUT_CACHE_PREFIX:takeout:}
     # 基础 TTL（秒）：实际 TTL = 基础值 + [0, jitter) 随机秒数，防止同一时刻批量过期（缓存雪崩）

@@ -80,6 +80,7 @@ export class BORDER_RADIUS {
 // 订单状态文本（status=4 时需结合托管状态 escrowStatus 区分：
 // 0=已送达待用户确认收货，1=已结算完成；与大纲 6.4/21.6 口径一致）
 export function getOrderStatusText(status: number, escrowStatus?: number): string {
+  if (escrowStatus === 2) { return '已退款' }
   if (status === 0) { return '待付款' }
   if (status === 1) { return '待接单' }
   if (status === 2) { return '制作中' }
@@ -92,6 +93,7 @@ export function getOrderStatusText(status: number, escrowStatus?: number): strin
 
 // 订单状态颜色（status=4 时按托管状态区分，待确认用橙色醒目标识）
 export function getOrderStatusColor(status: number, escrowStatus?: number): ResourceColor {
+  if (escrowStatus === 2) { return $r('app.color.text_hint') }
   if (status === 0) { return $r('app.color.primary') }
   if (status === 1) { return $r('app.color.warning') }
   if (status === 2) { return COLORS.INFO }

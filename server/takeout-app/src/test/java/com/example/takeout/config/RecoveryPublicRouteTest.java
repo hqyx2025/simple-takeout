@@ -22,7 +22,8 @@ class RecoveryPublicRouteTest {
     void emailCodeAndBothRecoveryEndpointsArePublicButProfileIsProtected() {
         AuthInterceptor auth = mock(AuthInterceptor.class);
         Registry registry = new Registry();
-        new WebConfig(auth, mock(ApiRequestLoggingInterceptor.class), mock(ObjectProvider.class)).addInterceptors(registry);
+        new WebConfig(auth, mock(ApiRequestLoggingInterceptor.class), mock(ObjectProvider.class),
+                mock(com.example.takeout.security.LoginRateLimiter.class)).addInterceptors(registry);
         MappedInterceptor mapped = registry.interceptors().stream().map(value -> (MappedInterceptor) value)
                 .filter(value -> value.getInterceptor() == auth).findFirst().orElseThrow();
         for (String path : new String[]{"/api/auth/email-code", "/api/auth/password/forgot", "/api/auth/payment-password/forgot"}) {

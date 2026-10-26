@@ -39,7 +39,7 @@ class OrderDaoRolePagingSqlTest {
     }
 
     @Test
-    void merchantPageUsesOwnerJoinExcludesUnpaidAndJoinsRiderInOneQuery() {
+    void merchantPageUsesOwnerOrEmployeeAccessExcludesUnpaidAndJoinsRiderInOneQuery() {
         when(jdbc.query(anyString(), any(RowMapper.class), any(Object[].class))).thenReturn(List.of());
 
         dao.listByMerchant(17, 2, 30, 90L);
@@ -49,12 +49,15 @@ class OrderDaoRolePagingSqlTest {
         verify(jdbc).query(sql.capture(), any(RowMapper.class), args.capture());
         assertTrue(sql.getValue().contains("JOIN stores s ON s.id = o.store_id"));
         assertTrue(sql.getValue().contains("LEFT JOIN riders r ON r.id = o.rider_id"));
-        assertTrue(sql.getValue().contains("WHERE s.owner_id = ? AND o.status <> 0 AND o.status = ?"));
+        assertTrue(sql.getValue().contains("s.owner_id = ? OR EXISTS"));
+        assertTrue(sql.getValue().contains("e.user_id = ? AND e.status = 1"));
+        assertTrue(sql.getValue().contains("AND o.status <> 0 AND o.status = ?"));
         assertTrue(sql.getValue().endsWith("ORDER BY o.id DESC LIMIT ? OFFSET ?"));
         assertEquals(17L, args.getValue()[0]);
-        assertEquals(2, args.getValue()[1]);
-        assertEquals(30, args.getValue()[2]);
-        assertEquals(90L, args.getValue()[3]);
+        assertEquals(17L, args.getValue()[1]);
+        assertEquals(2, args.getValue()[2]);
+        assertEquals(30, args.getValue()[3]);
+        assertEquals(90L, args.getValue()[4]);
     }
 
     @Test

@@ -5,7 +5,7 @@ import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
  * 各模块为独立页面，避免单页堆叠过长；退出登录后回到登录页
  */
 import { AppMotion } from '../common/theme/AppMotion'
-import { User, UserRole, Category } from '../model/Models'
+import { User, UserRole, Category, RefundPageData } from '../model/Models'
 import { logout } from '../service/AppStorageManager'
 import { ApiResponse, get } from '../service/HttpClient'
 import { fetchAdminRefundsPageApi } from '../service/ApiService'
@@ -121,7 +121,10 @@ export struct AdminCenterPage {
     this.stores = storeResp.code === 200 && storeResp.data !== null ? storeResp.data : []
     this.orderCount = orderResp.code === 200 && orderResp.data !== null ? orderResp.data.total : 0
     this.employees = employeeResp.code === 200 && employeeResp.data !== null ? employeeResp.data.length : 0
-    this.pendingRefundCount = (await fetchAdminRefundsPageApi('PENDING', 1, 1)).total
+    const refunds: RefundPageData | null = await fetchAdminRefundsPageApi('PENDING', 1, 1)
+    if (refunds !== null) {
+      this.pendingRefundCount = refunds.total
+    }
     this.loading = false
   }
 

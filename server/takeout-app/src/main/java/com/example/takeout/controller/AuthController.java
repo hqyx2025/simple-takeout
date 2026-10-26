@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 认证接口：注册 / 登录 / 登出 / 改密 / 个人信息
  *
  * <p>限流放在这一层：它需要来源 IP（HTTP 层信息），而 AuthService 只处理业务规则。
- * 登录对**失败**计数、成功即清零；注册对每次提交计数。</p>
+ * 来源总量在验密前限流，来源失败只在认证失败后计数，成功不清除共享预算。</p>
  */
 @RestController
 @RequestMapping("/api/auth")
@@ -70,11 +70,16 @@ public class AuthController {
         }
         loginRateLimiter.recordAttempt("email-code", ip);
         if (req == null) throw new BizException("请填写手机号和邮箱");
-        SmsVerificationService.IssueResult result;
+        AuthService.requirePhone(req.phone());
+        String identity;
+        String destination;
         if ("register".equals(req.purpose())) {
-            String email = authService.registrationEmail(req.username(), req.phone(), req.email());
-            result = smsVerificationService.issue(authService.registrationIdentity(req.phone(), email), email);
+            destination = authService.registrationEmail(req.username(), req.phone(), req.email());
+            identity = authService.registrationIdentity(req.phone(), destination);
         } else {
+            if (!"login".equals(req.purpose()) && !"payment".equals(req.purpose())) {
+                throw new BizException("验证码用途不正确");
+            }
             User user;
             try {
                 user = authService.recoveryUser(req.phone(), req.email(), false);
@@ -82,8 +87,12 @@ public class AuthController {
                 // Keep account existence and mailbox ownership indistinguishable on the public endpoint.
                 throw new BizException(e.getCode() == 429 ? 429 : 400, "手机号或邮箱不匹配");
             }
-            result = smsVerificationService.issue(authService.recoveryIdentity(user, req.purpose()), user.email());
+            destination = user.email();
+            identity = authService.recoveryIdentity(user, req.purpose());
         }
+        // 校验通过才占用；注册未验证手机号归属，日预算必须同时绑定来源。
+        loginRateLimiter.recordAttempt("email-code-phone", ip + ":" + req.phone());
+        SmsVerificationService.IssueResult result = smsVerificationService.issue(identity, destination);
         return ApiResponse.ok(new EmailCodeResult(result.code(), result.mock()));
     }
 
@@ -112,22 +121,44 @@ public class AuthController {
     @PostMapping("/login")
     public ApiResponse<AuthSessionResult> login(@RequestBody LoginRequest req, HttpServletRequest http) {
         String ip = LoginRateLimiter.clientIp(http);
-        if (loginRateLimiter.isBlocked("login", ip)) {
+        if (loginRateLimiter.isBlocked("login", ip) || loginRateLimiter.isBlocked("login-total", ip)) {
             throw new BizException(429, "登录尝试过于频繁，请稍后再试");
         }
+        AuthService.LoginResult result;
+        // 请求内捕获回调解析的稳定身份，失败记账沿用同一次查询结果。
+        String[] accountKey = {null};
         try {
-            AuthService.LoginResult result = authService.login(req.phone(), req.password(), req.loginType());
-            loginRateLimiter.reset("login", ip);
-            return ApiResponse.ok(new AuthSessionResult(result.token(), refreshTokenService.issue(result.user().id(), result.token()),
-                    result.user()));
+            if (req == null) throw new BizException("账号或密码错误");
+            result = authService.login(req.phone(), req.password(), req.loginType(), resolved -> {
+                accountKey[0] = resolved;
+                // 等待期间可能新触发来源封禁，取到许可后重检；503 不会执行此回调。
+                if (loginRateLimiter.isBlocked("login", ip)) {
+                    throw new BizException(429, "登录尝试过于频繁，请稍后再试");
+                }
+                loginRateLimiter.recordAttempt("login-total", ip);
+                if (loginRateLimiter.isBlocked("login-account-fail", resolved)) {
+                    throw new BizException(429, "登录尝试过于频繁，请稍后再试");
+                }
+                loginRateLimiter.recordAttempt("login-account-total", resolved);
+            });
         } catch (BizException e) {
-            loginRateLimiter.recordAttempt("login", ip);
+            // 已验证密码后的端角色 403、限流与服务故障均不算口令失败；成功不清除失败。
+            if (e.getCode() == 400 || e.getCode() == 401) {
+                try {
+                    loginRateLimiter.recordAttempt("login", ip);
+                } finally {
+                    if (accountKey[0] != null) loginRateLimiter.recordAttempt("login-account-fail", accountKey[0]);
+                }
+            }
             throw e;
         }
+        return ApiResponse.ok(new AuthSessionResult(result.token(), refreshTokenService.issue(result.user().id(), result.token()),
+                result.user()));
     }
 
     @PostMapping("/refresh")
-    public ApiResponse<RefreshTokenService.RefreshResult> refresh(@RequestBody RefreshRequest req) {
+    public ApiResponse<RefreshTokenService.RefreshResult> refresh(@RequestBody RefreshRequest req, HttpServletRequest http) {
+        limitSessionEndpoint("refresh", http);
         return ApiResponse.ok(refreshTokenService.refresh(req == null ? null : req.refreshToken()));
     }
 
@@ -144,7 +175,8 @@ public class AuthController {
      */
     @PostMapping("/logout")
     public ApiResponse<Void> logout(@RequestHeader(value = "Authorization", required = false) String authorization,
-                                    @RequestBody(required = false) LogoutRequest req) {
+                                    @RequestBody(required = false) LogoutRequest req, HttpServletRequest http) {
+        limitSessionEndpoint("logout", http);
         String token = authorization != null && authorization.startsWith("Bearer ")
                 ? authorization.substring(7) : null;
         java.util.OptionalLong userId = tokenRevocationService.userIdIfValid(token);
@@ -152,6 +184,14 @@ public class AuthController {
         refreshTokenService.revoke(req == null ? null : req.refreshToken());
         if (userId.isPresent() && req != null) pushTokenService.unregister(userId.getAsLong(), req.pushToken());
         return ApiResponse.ok();
+    }
+
+    private void limitSessionEndpoint(String action, HttpServletRequest http) {
+        String ip = LoginRateLimiter.clientIp(http);
+        if (loginRateLimiter.isBlocked(action, ip)) {
+            throw new BizException(429, "操作过于频繁，请稍后再试");
+        }
+        loginRateLimiter.recordAttempt(action, ip);
     }
 
     /**
@@ -169,21 +209,15 @@ public class AuthController {
     public ApiResponse<Void> setPaymentPassword(@RequestAttribute("userId") long userId,
                                                 @RequestBody PaymentPasswordRequest req,
                                                 HttpServletRequest http) {
-        String action = "payment-password";
-        String identity = userId + ":" + LoginRateLimiter.clientIp(http);
+        String action = "payment-password-set";
+        String identity = "u" + userId;
         if (loginRateLimiter.isBlocked(action, identity)) {
             throw new BizException(429, "密码尝试过于频繁，请稍后再试");
         }
-        try {
-            authService.setPaymentPassword(userId, req.loginPassword(), req.paymentPassword());
-            loginRateLimiter.reset(action, identity);
-            return ApiResponse.ok();
-        } catch (BizException e) {
-            if ("登录密码不正确".equals(e.getMessage())) {
-                loginRateLimiter.recordAttempt(action, identity);
-            }
-            throw e;
-        }
+        loginRateLimiter.recordAttempt(action, identity);
+        authService.setPaymentPassword(userId, req.loginPassword(), req.paymentPassword());
+        loginRateLimiter.reset(action, identity);
+        return ApiResponse.ok();
     }
 
     @GetMapping("/me")

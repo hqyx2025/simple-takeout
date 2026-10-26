@@ -3,7 +3,7 @@ import { get, post, put, del, ApiResponse } from '../HttpClient'
 import { API_CONFIG } from '../../common/Constants'
 import { StoreItem, GoodsItem, Category, Order, OrderPageData, Review, MarketingActivity, Setmeal, Employee, GoodsSpec, MerchantStatsAggregateData, MerchantSeckill } from '../../model/Models'
 
-import { ServerStore, ServerGoods, ServerOrder, ServerOrderPage, ServerMerchantStats, ServerReview, MerchantStoreRequest, MerchantStorePatch, GoodsSpecsRequest, MerchantEmployeeBody, MerchantCategoryRequest, MerchantMarketingInput, MerchantSeckillInput, StatusUpdateRequest } from '../../model/server/Contracts'
+import { ServerStore, ServerGoods, ServerOrder, ServerOrderPage, ServerMerchantStats, ServerReview, MerchantStoreRequest, MerchantStorePatch, GoodsSpecsRequest, MerchantEmployeeBody, MerchantCategoryRequest, MerchantMarketingInput, MerchantSeckillInput, StatusUpdateRequest, MerchantRejectOrderRequest } from '../../model/server/Contracts'
 import { toMerchantGoodsRequest, toSpecInputs, toStoreItem, toGoodsItem, toOrder, toOrderPageData, toReview } from '../../model/server/Converters'
 
 /** 凑单提示：还差多少元起送 + 店内可凑单菜品。 */
@@ -143,6 +143,13 @@ export async function deleteMerchantSeckillApi(storeId: number, seckillId: numbe
  */
 export async function merchantActionApi(orderId: number, action: string): Promise<boolean> {
   const resp: ApiResponse<ServerOrder> = await put<ServerOrder>(`/api/merchant/orders/${orderId}/${action}`, undefined)
+  return resp.code === 200
+}
+
+/** 商家只能拒绝待接单订单；原因和缺货 SKU 由服务端校验并写入订单。 */
+export async function rejectMerchantOrderApi(orderId: number,
+  request: MerchantRejectOrderRequest): Promise<boolean> {
+  const resp: ApiResponse<ServerOrder> = await post<ServerOrder>(`/api/merchant/orders/${orderId}/reject`, request)
   return resp.code === 200
 }
 

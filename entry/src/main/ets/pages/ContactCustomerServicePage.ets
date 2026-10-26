@@ -1,25 +1,24 @@
 import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 /**
- * 客服中心页面：提供客服说明、联系方式和常见问题。
- * 即时通讯等第三方能力暂未接入，页面先提供可用的本地客服指引。
+ * 售后帮助页面：只提供当前真实可用的订单售后入口和规则说明。
  */
 import { AppMotion } from '../common/theme/AppMotion'
-import { routerCompat as router, promptCompat as promptAction } from '../common/UiNavigation'
+import { routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { PageHeader } from '../components/PageHeader'
 
 const FAQ_QUESTIONS: string[] = [
-  '\u5982\u4f55\u4fee\u6539\u6536\u8d27\u5730\u5740\uff1f',
-  '\u8ba2\u5355\u63d0\u4ea4\u5931\u8d25\u600e\u4e48\u529e\uff1f',
-  '\u5982\u4f55\u7533\u8bf7\u9000\u6b3e\uff1f',
-  '\u4f18\u60e0\u5238\u4e3a\u4ec0\u4e48\u4e0d\u80fd\u4f7f\u7528\uff1f'
+  '如何发起售后？',
+  '怎样查看处理进度？',
+  '餐品漏送、错送或洒漏怎么办？',
+  '退款会退到哪里？'
 ]
 
 const FAQ_ANSWERS: string[] = [
-  '\u8fdb\u5165\u201c\u6211\u7684\u201d\u9875\u9762\uff0c\u6253\u5f00\u6536\u8d27\u5730\u5740\u5373\u53ef\u65b0\u589e\u3001\u7f16\u8f91\u6216\u9009\u62e9\u5df2\u4fdd\u5b58\u5730\u5740\u3002',
-  '\u8bf7\u5148\u68c0\u67e5\u8d26\u6237\u4f59\u989d\u3001\u6536\u8d27\u5730\u5740\u548c\u5e97\u94fa\u8d77\u9001\u4ef7\u3002\u5982\u4ecd\u65e0\u6cd5\u63d0\u4ea4\uff0c\u8bf7\u8054\u7cfb\u5ba2\u670d\u5e76\u63d0\u4f9b\u8ba2\u5355\u53f7\u3002',
-  '\u5df2\u9001\u8fbe\u7684\u8ba2\u5355\u53ef\u5728\u8ba2\u5355\u8be6\u60c5\u9875\u63d0\u4ea4\u9000\u6b3e\u7533\u8bf7\uff0c\u5e73\u53f0\u5ba1\u6838\u540e\u4f1a\u66f4\u65b0\u8ba2\u5355\u72b6\u6001\u3002',
-  '\u4f18\u60e0\u5238\u9700\u6ee1\u8db3\u4f7f\u7528\u95e8\u69db\u3001\u6709\u6548\u671f\u548c\u9002\u7528\u5e97\u94fa\u6761\u4ef6\uff0c\u4e14\u6bcf\u5f20\u4f18\u60e0\u5238\u53ea\u80fd\u4f7f\u7528\u4e00\u6b21\u3002'
+  '进入“我的订单”，打开对应订单。已送达且未确认收货、未评价的订单，可在详情页提交退款申请。',
+  '退款申请提交后，订单会显示“退款中”。进入对应订单详情即可查看当前处理状态。',
+  '请保留餐品和包装，在对应订单详情选择与问题相符的退款原因，并补充实际情况。',
+  '审批同意后，款项按原支付渠道退回。最终结果以订单资金状态和支付渠道到账记录为准。'
 ]
 
 @Entry
@@ -46,26 +45,23 @@ export struct ContactCustomerServicePage {
     this.expandedQuestion = this.expandedQuestion === index ? -1 : index
   }
 
-  private showHotline(): void {
-    promptAction.showToast({ message: '\u5ba2\u670d\u70ed\u7ebf\uff1a400-123-4567\uff0c\u670d\u52a1\u65f6\u95f4\uff1a09:00-22:00', duration: 3000 })
-  }
-
-  private showOnlineService(): void {
-    promptAction.showToast({ message: '\u5728\u7ebf\u5ba2\u670d\u901a\u9053\u5f85\u63a5\u5165\uff0c\u8bf7\u5148\u62e8\u6253\u5ba2\u670d\u70ed\u7ebf', duration: 2400 })
+  private openOrders(status: number): void {
+    AppStorage.setOrCreate<number>('orderFilterStatus', status)
+    router.pushUrl({ url: 'pages/OrderListPage' })
   }
 
   build() {
     Column() {
-      PageHeader({ title: '联系客服', onBack: () => { router.back() } })
+      PageHeader({ title: '售后帮助', onBack: () => { router.back() } })
 
       Scroll() {
         Column({ space: SPACING.MD }) {
           Column({ space: SPACING.SM }) {
-            Text('\u5ba2\u670d\u4e2d\u5fc3')
+            Text('订单售后')
               .fontSize(FONT_SIZE.XXL)
               .fontWeight(FontWeight.Bold)
               .fontColor(COLORS.ON_PRIMARY)
-            Text('\u9047\u5230\u95ee\u9898\u8bf7\u5148\u67e5\u770b\u5e38\u89c1\u95ee\u9898\uff0c\u4e5f\u53ef\u76f4\u63a5\u8054\u7cfb\u5ba2\u670d')
+            Text('从对应订单发起申请，可保留完整的商品、配送和处理记录')
               .fontSize(FONT_SIZE.MD)
               .fontColor(COLORS.ON_PRIMARY)
           }
@@ -75,68 +71,54 @@ export struct ContactCustomerServicePage {
           .borderRadius(BORDER_RADIUS.LG)
           .alignItems(HorizontalAlign.Start)
 
-          Row({ space: SPACING.SM }) {
-            Button('\u62e8\u6253\u5ba2\u670d\u70ed\u7ebf')
+          Column({ space: SPACING.SM }) {
+            Button('从订单发起售后')
               .attributeModifier(new AppButtonStyle())
-              .layoutWeight(1)
+              .width('100%')
+              .height(44)
+              .fontSize(FONT_SIZE.MD)
+              .fontColor(COLORS.ON_PRIMARY)
+              .backgroundColor(COLORS.PRIMARY)
+              .borderRadius(BORDER_RADIUS.ROUND)
+              .onClick(() => { this.openOrders(4) })
+            Button('查看退款 / 售后进度')
+              .attributeModifier(new AppButtonStyle())
+              .width('100%')
               .height(44)
               .fontSize(FONT_SIZE.MD)
               .fontColor(COLORS.PRIMARY)
               .backgroundColor(COLORS.BG_WHITE)
+              .border({ width: 1, color: COLORS.PRIMARY })
               .borderRadius(BORDER_RADIUS.ROUND)
-              .onClick(() => { this.showHotline() })
-            Button('\u5728\u7ebf\u5ba2\u670d')
-              .attributeModifier(new AppButtonStyle())
-              .layoutWeight(1)
-              .height(44)
-              .fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
-              .backgroundColor(COLORS.PRIMARY_DARK)
-              .borderRadius(BORDER_RADIUS.ROUND)
-              .onClick(() => { this.showOnlineService() })
+              .onClick(() => { this.openOrders(6) })
           }
           .width('100%')
 
           Column({ space: SPACING.SM }) {
-            Text('\u8054\u7cfb\u65b9\u5f0f')
+            Text('处理说明')
               .fontSize(FONT_SIZE.LG)
               .fontWeight(FontWeight.Bold)
               .fontColor(COLORS.TEXT_PRIMARY)
-            Row() {
-              Text('\u5ba2\u670d\u70ed\u7ebf')
-                .fontSize(FONT_SIZE.MD)
-                .fontColor(COLORS.TEXT_SECONDARY)
-                .layoutWeight(1)
-              Text('400-123-4567')
-                .fontSize(FONT_SIZE.LG)
-                .fontWeight(FontWeight.Bold)
-                .fontColor(COLORS.PRIMARY)
-            }
-            .width('100%')
-            Row() {
-              Text('\u670d\u52a1\u65f6\u95f4')
-                .fontSize(FONT_SIZE.MD)
-                .fontColor(COLORS.TEXT_SECONDARY)
-                .layoutWeight(1)
-              Text('09:00-22:00')
-                .fontSize(FONT_SIZE.MD)
-                .fontColor(COLORS.TEXT_PRIMARY)
-            }
-            .width('100%')
+            Text('选择对应订单后再提交问题，避免重复填写订单号，也能准确展示退款状态。')
+              .fontSize(FONT_SIZE.MD)
+              .fontColor(COLORS.TEXT_SECONDARY)
+              .lineHeight(22)
+              .width('100%')
           }
-            .attributeModifier(new AppCardStyle())
+          .attributeModifier(new AppCardStyle())
           .width('100%')
           .padding(SPACING.LG)
 
           Column({ space: SPACING.SM }) {
-            Text('\u5e38\u89c1\u95ee\u9898')
+            Text('常见问题')
               .fontSize(FONT_SIZE.LG)
               .fontWeight(FontWeight.Bold)
               .fontColor(COLORS.TEXT_PRIMARY)
             ForEach(FAQ_QUESTIONS, (question: string, index: number) => {
               this.FaqRow(question, FAQ_ANSWERS[index], index)
-            }, (question: string, index: number) => `${index}-${question}`)
+            }, (question: string, index: number) => index.toString() + '-' + question)
           }
-            .attributeModifier(new AppCardStyle())
+          .attributeModifier(new AppCardStyle())
           .width('100%')
           .padding(SPACING.LG)
         }

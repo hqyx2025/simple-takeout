@@ -95,7 +95,7 @@ class AuthServiceSecurityTest {
         when(userDao.existsByPhone("13800138000")).thenReturn(false);
         when(userDao.insert(org.mockito.ArgumentMatchers.eq("用户"), org.mockito.ArgumentMatchers.eq("13800138000"),
                 org.mockito.ArgumentMatchers.eq("user@example.com"), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq(0),
-                org.mockito.ArgumentMatchers.eq(20.0), org.mockito.ArgumentMatchers.anyString())).thenReturn(stored);
+                org.mockito.ArgumentMatchers.eq(0.0), org.mockito.ArgumentMatchers.anyString())).thenReturn(stored);
 
         User response = new AuthService(userDao, jwtUtil, mock(SmsCodeVerifier.class))
                 .register("用户", "13800138000", "user@example.com", "123456", "123456", 0)
@@ -154,17 +154,13 @@ class AuthServiceSecurityTest {
         verify(userDao).updatePassword(eq(1L), eq(current.password()), anyString());
     }
     @Test
-    void rechargeAddsBalanceAndReturnsFreshUser() {
+    void rechargeNeverAddsBalance() {
         UserDao userDao = mock(UserDao.class);
         JwtUtil jwtUtil = mock(JwtUtil.class);
-        User before = new User(1, "鐢ㄦ埛", "", "13800138000", "", 0, 20.0, "now");
-        User after = new User(1, "鐢ㄦ埛", "", "13800138000", "", 0, 25.0, "now");
-        when(userDao.findById(1)).thenReturn(java.util.Optional.of(before), java.util.Optional.of(after));
-
-        User result = new AuthService(userDao, jwtUtil, (phone, code) -> {}, true).recharge(1, 5.0);
-
-        verify(userDao).addBalance(1, 5.0);
-        assertEquals(25.0, result.balance());
+        BizException error = assertThrows(BizException.class,
+                () -> new AuthService(userDao, jwtUtil).recharge(1, 5.0));
+        assertEquals(403, error.getCode());
+        verifyNoInteractions(userDao);
     }
 
     @Test
@@ -172,7 +168,7 @@ class AuthServiceSecurityTest {
         UserDao userDao = mock(UserDao.class);
         AuthService service = new AuthService(userDao, mock(JwtUtil.class));
         BizException error = assertThrows(BizException.class, () -> service.recharge(1, 5.0));
-        assertEquals("演示充值未开启", error.getMessage());
+        assertEquals("演示充值已停用", error.getMessage());
         verifyNoInteractions(userDao);
     }
 
@@ -183,9 +179,9 @@ class AuthServiceSecurityTest {
 
         com.example.takeout.common.BizException error = assertThrows(
                 com.example.takeout.common.BizException.class,
-                () -> new AuthService(userDao, jwtUtil, (phone, code) -> {}, true).recharge(1, 0));
+                () -> new AuthService(userDao, jwtUtil).recharge(1, 0));
 
-        assertEquals("\u5145\u503c\u91d1\u989d\u9700\u5728 0.01 \u81f3 10000 \u5143\u4e4b\u95f4", error.getMessage());
+        assertEquals(403, error.getCode());
     }
 
     @Test

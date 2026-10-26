@@ -137,7 +137,7 @@ export struct ProfileMainPage {
                 this.ProfileMenuRow($r('app.media.home_heart'), '我的收藏', () => {
                   router.pushUrl({ url: 'pages/FavoriteListPage' })
                 })
-                this.ProfileMenuRow($r('app.media.profile_headset'), '联系客服', () => {
+                this.ProfileMenuRow($r('app.media.profile_headset'), '售后帮助', () => {
                   router.pushUrl({ url: 'pages/ContactCustomerServicePage' })
                 })
                 this.ProfileMenuRow($r('app.media.profile_settings'), '设置', () => {

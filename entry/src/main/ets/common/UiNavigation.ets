@@ -1,5 +1,5 @@
 /**
- * API 24 UI 导航与提示适配层。
+ * API 26 UI 导航与提示适配层。
  * 通过当前 UIContext 调用新路由/提示 API，避免继续依赖已废弃的全局 router/promptAction。
  * UIContext.getCallingScopeUIContext() 在 await 后可能无法取得调用作用域，因此缓存首次获取到的上下文，
  * 确保异步请求完成后的返回、跳转和 Toast 仍然使用同一个页面上下文。

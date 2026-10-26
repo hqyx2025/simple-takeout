@@ -326,21 +326,19 @@ public class StoreService {
     }
 
     public List<Store.StoreView> listStores(Integer categoryId, Double latitude, Double longitude) {
+        requireBrowseCoordinates(latitude, longitude);
         if (categoryId != null && categoryId < 0) {
             throw new BizException("分类参数不合法");
         }
         if (categoryId != null && categoryId > 0 && !storeDao.categoryExists(categoryId)) {
             throw new BizException(404, "分类不存在");
         }
-        return cache.get(HotDataCacheService.Keys.storeList(categoryId, latitude, longitude),
-                new TypeReference<List<Store.StoreView>>() {
-                },
-                () -> {
-                    List<Store> stores = categoryId == null || categoryId == 0
-                            ? storeDao.listAll()
-                            : storeDao.listByCategory(categoryId);
-                    return stores.stream().map(store -> toView(store, latitude, longitude)).toList();
-                });
+        return sourceStores(categoryId).stream().map(store -> toView(store, latitude, longitude)).toList();
+    }
+
+    private List<Store> sourceStores(Integer categoryId) {
+        return cache.get(HotDataCacheService.Keys.storeList(categoryId), new TypeReference<List<Store>>() {},
+                () -> categoryId == null || categoryId == 0 ? storeDao.listAll() : storeDao.listByCategory(categoryId));
     }
 
     public List<Store.StoreView> recommendedStores(double maxDistanceKm, int limit) {
@@ -349,35 +347,32 @@ public class StoreService {
 
     public List<Store.StoreView> recommendedStores(double maxDistanceKm, int limit,
                                                    Double latitude, Double longitude) {
+        requireBrowseCoordinates(latitude, longitude);
         if (!Double.isFinite(maxDistanceKm) || maxDistanceKm <= 0 || maxDistanceKm > 20) {
             throw new BizException("查询距离范围必须在 0 到 20 公里之间");
         }
         if (limit <= 0 || limit > 50) {
             throw new BizException("推荐店铺数量必须在 1 到 50 之间");
         }
-        return cache.get(HotDataCacheService.Keys.recommendedStores(maxDistanceKm, limit, latitude, longitude),
-                new TypeReference<List<Store.StoreView>>() {
-                },
-                () -> storeDao.listRecommended().stream()
-                        .map(store -> store.withDistance(latitude, longitude))
-                        .filter(store -> parseDistance(store.distance()) <= maxDistanceKm)
-                        // 配送半径判定：商户填了按商户的，没填按默认 2 公里
-                        .filter(store -> store.canDeliver(latitude, longitude))
-                        .sorted(Comparator.comparingDouble((Store store) -> parseDistance(store.distance()))
-                                .thenComparing(Comparator.comparingDouble(Store::rating).reversed()))
-                        .limit(limit)
-                        // 必须带坐标再转视图：旧写法 toView(store) 会用 null 坐标重算一次距离，
-                        // 把刚算好的「距你 X km」覆盖掉（主页附近推荐因此一直显示库里的旧字符串/未知距离）
-                        .map(store -> toView(store, latitude, longitude))
-                        .toList());
+        List<Store> candidates = cache.get(HotDataCacheService.Keys.RECOMMENDED_STORES,
+                new TypeReference<List<Store>>() {}, storeDao::listRecommended);
+        return candidates.stream()
+                .map(store -> store.withDistance(latitude, longitude))
+                .filter(store -> parseDistance(store.distance()) <= maxDistanceKm)
+                .filter(store -> store.canDeliver(latitude, longitude))
+                .sorted(Comparator.comparingDouble((Store store) -> parseDistance(store.distance()))
+                        .thenComparing(Comparator.comparingDouble(Store::rating).reversed()))
+                .limit(limit).map(store -> toView(store, latitude, longitude)).toList();
     }
 
     public Store.StoreView storeDetail(long id) {
-        // 热点：店铺详情页高频访问；店铺不存在时由缓存写入空值占位防穿透
-        return cache.get(HotDataCacheService.Keys.storeDetail(id),
-                new TypeReference<Store.StoreView>() {
-                },
-                () -> storeDao.findById(id).map(this::toView).orElse(null));
+        Store store = sourceStore(id);
+        return store == null ? null : toView(store);
+    }
+
+    private Store sourceStore(long id) {
+        return cache.get(HotDataCacheService.Keys.storeSource(id), new TypeReference<Store>() {},
+                () -> storeDao.findById(id).orElse(null));
     }
 
     public List<Goods> listGoods(long storeId) {
@@ -408,39 +403,34 @@ public class StoreService {
     }
 
     public List<SpecialGoods> listSpecialGoods(int limit, Double latitude, Double longitude) {
+        requireBrowseCoordinates(latitude, longitude);
         if (limit <= 0 || limit > 50) {
             throw new BizException("特价团购商品数量必须在 1 到 50 之间");
         }
-        return cache.get(HotDataCacheService.Keys.specialGoods(limit, latitude, longitude),
-                new TypeReference<List<SpecialGoods>>() {
-                },
-                () -> withDistance(goodsDao.listSpecialGoods(limit), latitude, longitude));
+        List<SpecialGoods> items = cache.get(HotDataCacheService.Keys.SPECIAL_GOODS,
+                new TypeReference<List<SpecialGoods>>() {}, () -> goodsDao.listSpecialGoods(50));
+        return withDistance(items.stream().limit(limit).toList(), latitude, longitude);
     }
 
     // ============ 营销：榜单 / 限时秒杀 / 凑单 ============
 
     /** 店铺榜：按累计月销量与评分排序（仅营业店铺）。 */
     public List<Store.StoreView> rankStores(int limit, Double latitude, Double longitude) {
+        requireBrowseCoordinates(latitude, longitude);
         requireRankLimit(limit);
-        return cache.get(HotDataCacheService.Keys.rankStores(limit, latitude, longitude),
-                new TypeReference<List<Store.StoreView>>() {
-                },
-                () -> storeDao.listAll().stream()
-                        .filter(store -> store.status() == 1)
-                        .sorted(Comparator.comparingInt(Store::monthlySales).reversed()
-                                .thenComparing(Comparator.comparingDouble(Store::rating).reversed()))
-                        .limit(limit)
-                        .map(store -> toView(store, latitude, longitude))
-                        .toList());
+        return sourceStores(null).stream().filter(store -> store.status() == 1)
+                .sorted(Comparator.comparingInt(Store::monthlySales).reversed()
+                        .thenComparing(Comparator.comparingDouble(Store::rating).reversed()))
+                .limit(limit).map(store -> toView(store, latitude, longitude)).toList();
     }
 
     /** 菜品榜（热销榜）：跨店铺按累计销量排序。 */
     public List<SpecialGoods> rankGoods(int limit, Double latitude, Double longitude) {
+        requireBrowseCoordinates(latitude, longitude);
         requireRankLimit(limit);
-        return cache.get(HotDataCacheService.Keys.rankGoods(limit, latitude, longitude),
-                new TypeReference<List<SpecialGoods>>() {
-                },
-                () -> withDistance(goodsDao.listTopGoods(limit), latitude, longitude));
+        List<SpecialGoods> items = cache.get(HotDataCacheService.Keys.RANK_GOODS,
+                new TypeReference<List<SpecialGoods>>() {}, () -> goodsDao.listTopGoods(50));
+        return withDistance(items.stream().limit(limit).toList(), latitude, longitude);
     }
 
     /**
@@ -448,22 +438,19 @@ public class StoreService {
      * 秒杀名额（sold）会随下单变化，因此 TTL 取较短值由下单/取消时显式失效兜底。
      */
     public List<Seckill.SeckillView> listSeckills(int limit, Double latitude, Double longitude) {
+        requireBrowseCoordinates(latitude, longitude);
         if (limit <= 0 || limit > 50) {
             throw new BizException("秒杀商品数量必须在 1 到 50 之间");
         }
-        return cache.get(HotDataCacheService.Keys.seckills(limit, latitude, longitude),
-                new TypeReference<List<Seckill.SeckillView>>() {
-                },
-                () -> {
-                    String now = LocalDateTime.now().format(FMT);
-                    return seckillDao.listActiveViews(limit, now).stream()
-                            .map(view -> new Seckill.SeckillView(view.id(), view.goodsId(), view.goodsName(),
-                                    view.image(), view.originalPrice(), view.price(), view.quota(), view.sold(),
-                                    view.startTime(), view.endTime(), view.storeId(), view.storeName(),
-                                    normalizeDistance(view.storeId(), view.storeDistance(), latitude, longitude),
-                                    view.remainSeconds()))
-                            .toList();
-                });
+        List<Seckill.SeckillView> items = cache.get(HotDataCacheService.Keys.SECKILLS,
+                new TypeReference<List<Seckill.SeckillView>>() {},
+                () -> seckillDao.listActiveViews(50, LocalDateTime.now().format(FMT)));
+        return items.stream().limit(limit)
+                .map(view -> new Seckill.SeckillView(view.id(), view.goodsId(), view.goodsName(),
+                        view.image(), view.originalPrice(), view.price(), view.quota(), view.sold(),
+                        view.startTime(), view.endTime(), view.storeId(), view.storeName(),
+                        normalizeDistance(view.storeId(), view.storeDistance(), latitude, longitude),
+                        view.remainSeconds())).toList();
     }
 
     /**
@@ -488,7 +475,7 @@ public class StoreService {
 
     private List<SpecialGoods> withDistance(List<SpecialGoods> items, Double latitude, Double longitude) {
         return items.stream().map(item -> {
-            Store store = storeDao.findById(item.goods().storeId()).orElse(null);
+            Store store = sourceStore(item.goods().storeId());
             String distance = store != null
                     ? store.withDistance(latitude, longitude).distance()
                     : Store.normalizeDistance(item.storeDistance());
@@ -500,8 +487,8 @@ public class StoreService {
         if (latitude == null || longitude == null) {
             return Store.normalizeDistance(fallback);
         }
-        return storeDao.findById(storeId).map(store -> store.withDistance(latitude, longitude).distance())
-                .orElseGet(() -> Store.normalizeDistance(fallback));
+        Store store = sourceStore(storeId);
+        return store == null ? Store.normalizeDistance(fallback) : store.withDistance(latitude, longitude).distance();
     }
 
     private double round2(double value) {
@@ -514,7 +501,7 @@ public class StoreService {
     }
 
     public List<Store.StoreView> merchantStores(long ownerId) {
-        return storeDao.listByOwner(ownerId).stream().map(this::toView).toList();
+        return storeDao.listAccessibleByMerchant(ownerId).stream().map(this::toView).toList();
     }
 
     public List<Goods> merchantGoods(long ownerId, long storeId) {
@@ -798,7 +785,9 @@ public class StoreService {
 
     public void removeStoreEmployee(long ownerId, long storeId, long employeeId) {
         requireOwned(ownerId, storeId);
-        employeeDao.delete(employeeId);
+        if (!employeeDao.delete(storeId, employeeId)) {
+            throw new BizException(404, "员工不存在或不属于该店铺");
+        }
     }
 
     private Store requireOwned(long ownerId, long storeId) {
@@ -880,6 +869,11 @@ public class StoreService {
         } catch (NumberFormatException ignored) {
             return Double.MAX_VALUE;
         }
+    }
+
+    private void requireBrowseCoordinates(Double latitude, Double longitude) {
+        if (latitude == null && longitude == null) return;
+        if (!validCoordinates(latitude, longitude)) throw new BizException("定位坐标必须同时提供，纬度为 -90 到 90，经度为 -180 到 180");
     }
 
     private boolean validCoordinates(Double latitude, Double longitude) {

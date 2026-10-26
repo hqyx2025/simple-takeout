@@ -12,6 +12,7 @@ import { confirmOrderRemote, cancelOrderRemote, getLastRemoteErrorMessage } from
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, MODULE_COLOR, MODULE_BG } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
 import { PageHeader } from '../components/PageHeader'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
 
@@ -87,6 +88,8 @@ struct OrderListPage {
   @State isRefreshing: boolean = false
   @State filteredCount: number = 0
   @State expandedOrderIds: number[] = []
+  @State showConfirmDialog: boolean = false
+  private confirmingOrderId: number = 0
   private ordersLoading: boolean = false
 
   aboutToAppear() {
@@ -199,84 +202,118 @@ struct OrderListPage {
     router.pushUrl({ url: 'pages/OrderDetailPage' })
   }
 
-  /** 取消待付款订单：尚未扣款，仅释放库存与优惠券。 */
+  /** 取消待付款订单：平台尚未扣款，仅释放库存与优惠券。 */
   private async cancelPendingOrder(order: Order): Promise<void> {
     const ok: boolean = await cancelOrderRemote(order.id)
     await this.refreshOrders()
     if (ok) {
-      promptAction.showToast({ message: '订单已取消，库存与优惠券已释放', duration: 2400 })
+      promptAction.showToast({ message: '订单已取消，平台未扣款；库存与优惠券已释放', duration: 2400 })
     } else {
       const errorMessage: string = getLastRemoteErrorMessage()
       promptAction.showToast({ message: errorMessage === '' ? '取消订单失败，请稍后重试' : errorMessage, duration: 3000 })
     }
   }
 
+  private async confirmSelectedOrder(): Promise<void> {
+    const orderId: number = this.confirmingOrderId
+    this.showConfirmDialog = false
+    this.confirmingOrderId = 0
+    if (orderId <= 0) {
+      return
+    }
+    const ok: boolean = await confirmOrderRemote(orderId)
+    await this.refreshOrders()
+    if (ok) {
+      promptAction.showToast({ message: '已确认收到，订单已完成', duration: 1800 })
+    } else {
+      const errorMessage: string = getLastRemoteErrorMessage()
+      promptAction.showToast({ message: errorMessage === '' ? '确认收货失败，请稍后重试' : errorMessage, duration: 2200 })
+    }
+  }
+
   build() {
-    Column() {
-      // 导航栏：独立路由页必须自带返回
-      PageHeader({ title: '我的订单', backId: 'order-list-back', onBack: () => { router.back() } })
+    Stack() {
+      Column() {
+        // 导航栏：独立路由页必须自带返回
+        PageHeader({ title: '我的订单', backId: 'order-list-back', onBack: () => { router.back() } })
 
-      Scroll() {
-        Row({ space: SPACING.SM }) {
-          ForEach([
-            OrderTabItem.create('全部', -1),
-            OrderTabItem.create('待付款', 0),
-            OrderTabItem.create('待接单', 1),
-            OrderTabItem.create('配送中', 3),
-            OrderTabItem.create('已完成', 4),
-          ], (item: OrderTabItem) => {
-            this.FilterTab(item)
-          }, (item: OrderTabItem) => item.title)
-        }
-        .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
-      }
-      .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
-      .width('100%').backgroundColor(COLORS.BG_WHITE)
-
-      if (!this.loggedIn) {
-        EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', description: '请登录后查看订单' })
-      } else {
-        Refresh({ refreshing: $$this.isRefreshing }) {
-          List({ space: SPACING.SM }) {
-            if (this.filteredCount === 0 && !this.isRefreshing) {
-              ListItem() {
-                EmptyState({ icon: $r('app.media.ui_gift'), title: '暂无订单',
-                  description: this.currentStatus === -1 ? '快去点一份美味吧' : '当前分类暂无订单，可下拉刷新' })
-                  .height(300)
-              }
-            }
-            LazyForEach(this.orderDataSource, (order: Order) => {
-              ListItem() {
-                this.OrderCard(order)
-              }
-            }, (item: Order) => item.id.toString())
-            ListItem() {
-              Row({ space: SPACING.SM }) {
-                Text(`已显示 ${this.pageOrders.length} / ${this.totalOrders}`)
-                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).layoutWeight(1)
-                if (this.hasMoreOrders) {
-                  Button(this.ordersLoading ? '加载中' : '加载更多')
-                    .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
-                    .enabled(!this.ordersLoading).id('customer-order-load-more')
-                    .onClick(() => { this.loadMoreOrders() })
-                }
-              }.width('100%').padding({ top: SPACING.SM, bottom: SPACING.MD })
-            }
+        Scroll() {
+          Row({ space: SPACING.SM }) {
+            ForEach([
+              OrderTabItem.create('全部', -1),
+              OrderTabItem.create('待付款', 0),
+              OrderTabItem.create('待接单', 1),
+              OrderTabItem.create('配送中', 3),
+              OrderTabItem.create('已完成', 4),
+            ], (item: OrderTabItem) => {
+              this.FilterTab(item)
+            }, (item: OrderTabItem) => item.title)
           }
-          .height('100%')
-          .width('100%')
-          .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.LG })
-          .scrollBar(BarState.Off).divider({ strokeWidth: 0 })
-          .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
-          .cachedCount(5)
+          .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
         }
-        .layoutWeight(1)
-        .attributeModifier(new AppRefreshStyle())
-        .onRefreshing(() => { this.refreshOrders() })
+        .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
+        .width('100%').backgroundColor(COLORS.BG_WHITE)
+
+        if (!this.loggedIn) {
+          EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', description: '请登录后查看订单' })
+        } else {
+          Refresh({ refreshing: $$this.isRefreshing }) {
+            List({ space: SPACING.SM }) {
+              if (this.filteredCount === 0 && !this.isRefreshing) {
+                ListItem() {
+                  EmptyState({ icon: $r('app.media.ui_gift'), title: '暂无订单',
+                    description: this.currentStatus === -1 ? '快去点一份美味吧' : '当前分类暂无订单，可下拉刷新' })
+                    .height(300)
+                }
+              }
+              LazyForEach(this.orderDataSource, (order: Order) => {
+                ListItem() {
+                  this.OrderCard(order)
+                }
+              }, (item: Order) => item.id.toString())
+              ListItem() {
+                Row({ space: SPACING.SM }) {
+                  Text(`已显示 ${this.pageOrders.length} / ${this.totalOrders}`)
+                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).layoutWeight(1)
+                  if (this.hasMoreOrders) {
+                    Button(this.ordersLoading ? '加载中' : '加载更多')
+                      .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
+                      .enabled(!this.ordersLoading).id('customer-order-load-more')
+                      .onClick(() => { this.loadMoreOrders() })
+                  }
+                }.width('100%').padding({ top: SPACING.SM, bottom: SPACING.MD })
+              }
+            }
+            .height('100%')
+            .width('100%')
+            .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.LG })
+            .scrollBar(BarState.Off).divider({ strokeWidth: 0 })
+            .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })
+            .cachedCount(5)
+          }
+          .layoutWeight(1)
+          .attributeModifier(new AppRefreshStyle())
+          .onRefreshing(() => { this.refreshOrders() })
+        }
+      }
+      .width('100%').height('100%')
+      .backgroundColor(COLORS.BG_PRIMARY)
+
+      if (this.showConfirmDialog) {
+        ConfirmDialog({
+          title: '确认收到餐品？',
+          content: '确认后订单款项将结算；如有缺漏或餐损，请先申请退款',
+          confirmText: '确认收到',
+          cancelText: '暂不确认',
+          onConfirm: () => { this.confirmSelectedOrder() },
+          onCancel: () => {
+            this.showConfirmDialog = false
+            this.confirmingOrderId = 0
+          }
+        })
       }
     }
     .width('100%').height('100%')
-    .backgroundColor(COLORS.BG_PRIMARY)
   }
 
   @Builder
@@ -296,11 +333,19 @@ struct OrderListPage {
       Row() {
         Text(order.storeName)
           .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
-        Text(getOrderStatusText(order.status, order.escrowStatus ?? 0))
+        Text((order.cancelSource ?? '') === 'MERCHANT'
+          ? '商家未能接单' : getOrderStatusText(order.status, order.escrowStatus ?? 0))
           .fontSize(FONT_SIZE.MD).fontColor(getOrderStatusColor(order.status, order.escrowStatus ?? 0)).fontWeight(FontWeight.Bold)
       }
       Text(`订单号：${order.orderNo ?? order.id}`).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
         .width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+      if ((order.cancelSource ?? '') === 'MERCHANT') {
+        Column({ space: 2 }) {
+          Text(`原因：${(order.cancelReason ?? '').trim() === '' ? '商家无法承接本次订单' : order.cancelReason}`)
+            .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+        }
+        .width('100%').padding(SPACING.SM).backgroundColor(MODULE_BG.ORDER).borderRadius(BORDER_RADIUS.MD)
+      }
       ForEach(this.expandedOrderIds.indexOf(order.id) >= 0 ? (order.items ?? []) : (order.items ?? []).slice(0, 2), (item: CartItem) => {
         Row() {
           // 多规格：订单行附带下单时锁定的规格快照
@@ -340,26 +385,25 @@ struct OrderListPage {
             .backgroundColor(MODULE_COLOR.ORDER).borderRadius(BORDER_RADIUS.ROUND)
             .onClick(() => { this.payPendingOrder(order) })
         } else if (order.status === 4 && (order.escrowStatus ?? 0) === 0) {
-          Button('确认收货并结算')
+          Button('确认收到')
             .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)
             .backgroundColor(MODULE_COLOR.CART).borderRadius(BORDER_RADIUS.ROUND)
-            .onClick(async () => {
-              const ok: boolean = await confirmOrderRemote(order.id)
-              await this.refreshOrders()
-              if (ok) {
-                promptAction.showToast({ message: '已确认收货，订单已完成', duration: 1800 })
-              } else {
-                const errorMessage: string = getLastRemoteErrorMessage()
-                promptAction.showToast({ message: errorMessage === '' ? '确认收货失败，请稍后重试' : errorMessage, duration: 2200 })
-              }
+            .onClick(() => {
+              this.confirmingOrderId = order.id
+              this.showConfirmDialog = true
             })
+        } else if (order.status === 1) {
+          Text('等待商家接单，可在订单详情取消')
+            .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+        } else if (order.status === 2) {
+          Text('订单已进入制作，如需处理请联系平台')
+            .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
         } else if (order.status === 3) {
-          Text('配送中，送达后可确认收货')
+          Text('订单已进入配送，如需处理请联系平台')
             .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
         } else if (order.status === 5) {
-          Button('已取消')
-            .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
-            .backgroundColor(COLORS.BG_PRIMARY).borderRadius(BORDER_RADIUS.ROUND)
+          Text((order.cancelSource ?? '') === 'MERCHANT' ? '商家未能接单' : '已取消')
+            .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
         }
       }.width('100%')
     }

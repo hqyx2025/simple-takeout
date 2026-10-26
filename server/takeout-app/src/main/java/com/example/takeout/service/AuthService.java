@@ -19,7 +19,7 @@ import java.time.format.DateTimeFormatter;
  * 认证服务：注册、登录
  */
 @Service
-public class AuthService {
+public class AuthService implements org.springframework.beans.factory.InitializingBean {
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -27,24 +27,38 @@ public class AuthService {
     private final JwtUtil jwtUtil;
     private final SmsCodeVerifier smsCodeVerifier;
     private final Clock clock;
-    private boolean demoRechargeEnabled;
-    private double signupBalance;
+
+    @Value("${takeout.security.rate-limit.login-verify-max-concurrent:2}")
+    private int loginVerifyMaxConcurrent = 2;
+    @Value("${takeout.security.rate-limit.login-verify-wait-millis:5000}")
+    private int loginVerifyWaitMillis = 5000;
+    private java.util.concurrent.Semaphore loginVerificationPermits = new java.util.concurrent.Semaphore(2, true);
+    // 等待最多 32 个请求，延长等待时不能把所有 HTTP 工作线程留给登录队列。
+    private java.util.concurrent.Semaphore loginAdmissionSlots = new java.util.concurrent.Semaphore(34);
+
+    @Override public void afterPropertiesSet() {
+        if (loginVerifyMaxConcurrent < 1 || loginVerifyMaxConcurrent > 16
+                || loginVerifyWaitMillis < 0 || loginVerifyWaitMillis > 10000) {
+            throw new IllegalStateException("登录验密并发必须为 1 至 16，等待必须为 0 至 10000 毫秒");
+        }
+        loginVerificationPermits = new java.util.concurrent.Semaphore(loginVerifyMaxConcurrent, true);
+        loginAdmissionSlots = new java.util.concurrent.Semaphore(loginVerifyMaxConcurrent + 32);
+    }
 
     @Autowired
     public AuthService(UserDao userDao, JwtUtil jwtUtil, SmsCodeVerifier smsCodeVerifier,
                        @Value("${takeout.demo.recharge-enabled:false}") boolean demoRechargeEnabled,
-                       @Value("${takeout.demo.signup-balance:20}") double signupBalance) {
+                       @Value("${takeout.demo.signup-balance:0}") double signupBalance) {
         this(userDao, jwtUtil, smsCodeVerifier, Clock.systemDefaultZone());
-        this.demoRechargeEnabled = demoRechargeEnabled;
-        this.signupBalance = signupBalance;
+        if (demoRechargeEnabled || signupBalance != 0) {
+            throw new IllegalStateException("演示充值与注册赠金已停用，请关闭相关配置");
+        }
     }
 
     /** Compatibility constructor for tests and integrations using the previous configuration shape. */
     public AuthService(UserDao userDao, JwtUtil jwtUtil, SmsCodeVerifier smsCodeVerifier,
                        boolean demoRechargeEnabled) {
-        this(userDao, jwtUtil, smsCodeVerifier, Clock.systemDefaultZone());
-        this.demoRechargeEnabled = demoRechargeEnabled;
-        this.signupBalance = 20.0;
+        this(userDao, jwtUtil, smsCodeVerifier, demoRechargeEnabled, 0);
     }
 
     AuthService(UserDao userDao, JwtUtil jwtUtil, SmsCodeVerifier smsCodeVerifier, Clock clock) {
@@ -56,7 +70,6 @@ public class AuthService {
 
     public AuthService(UserDao userDao, JwtUtil jwtUtil, SmsCodeVerifier smsCodeVerifier) {
         this(userDao, jwtUtil, smsCodeVerifier, Clock.systemDefaultZone());
-        this.signupBalance = 20.0;
     }
 
     /** Unit-test constructor; password reset remains closed unless a verifier is supplied. */
@@ -69,20 +82,23 @@ public class AuthService {
     /** Register only after consuming an email code bound to the proposed phone and mailbox. */
     @Transactional
     public User register(String username, String phone, String email, String code, String password, int role) {
+        if (role != 0) {
+            throw new BizException(403, "商户、骑手与管理员账号须由平台开通");
+        }
         String normalizedEmail = registrationEmail(username, phone, email);
         if (password == null || password.length() < 6 || password.length() > 64) {
             throw new BizException("密码长度应为 6 至 64 位");
-        }
-        if (role != 0 && role != 1 && role != 3) {
-            throw new BizException("角色不合法");
         }
         if (code == null || !code.matches("[0-9]{6}")) {
             throw new BizException("请输入 6 位邮箱验证码");
         }
         smsCodeVerifier.consume(registrationIdentity(phone, normalizedEmail), code);
+        if (userDao.existsByUsername(username.trim()) || userDao.existsByPhone(phone)) {
+            throw new BizException("注册信息校验未通过");
+        }
         String now = LocalDateTime.now().format(FMT);
         return userDao.insert(username.trim(), phone, normalizedEmail, PasswordUtil.hash(password),
-                role, role == 0 ? Math.max(0.0, signupBalance) : 0.0, now);
+                0, 0.0, now);
     }
 
     /** Check duplicates before requesting mail and again before account creation. */
@@ -93,16 +109,8 @@ public class AuthService {
         if (username.trim().length() > 64) {
             throw new BizException("账号名最多 64 个字符");
         }
-        if (phone == null || !phone.matches("1\\d{10}")) {
-            throw new BizException("手机号格式不正确");
-        }
+        requirePhone(phone);
         String normalizedEmail = requireEmail(email);
-        if (userDao.existsByUsername(username.trim())) {
-            throw new BizException("该账号已注册");
-        }
-        if (userDao.existsByPhone(phone)) {
-            throw new BizException("该手机号已注册");
-        }
         return normalizedEmail;
     }
 
@@ -119,13 +127,44 @@ public class AuthService {
 
     /** 按登录端校验账号角色，loginType 为空时兼容旧客户端。 */
     public LoginResult login(String phone, String password, String loginType) {
-        User user = userDao.findByPhone(phone)
-                .orElseThrow(() -> new BizException("账号或密码错误"));
-        // status 已随 findByPhone 一并取回，无需再查一次库；禁用用户的存量 token 由 AuthInterceptor 统一失效
-        if (user.status() != 1) {
-            throw new BizException("账号已停用，请联系平台管理员");
+        return login(phone, password, loginType, accountKey -> {});
+    }
+
+    /** 先取许可，再查一次账号；HTTP 层在回调中准入预算，之后才开始验密。 */
+    public LoginResult login(String phone, String password, String loginType,
+                             java.util.function.Consumer<String> admitAccount) {
+        requirePhone(phone);
+        if (password == null || password.length() > 64) throw new BizException("账号或密码错误");
+        var permits = loginVerificationPermits;
+        var slots = loginAdmissionSlots;
+        if (!slots.tryAcquire()) {
+            throw new BizException(503, "登录服务繁忙，请稍后重试");
         }
-        if (!PasswordUtil.matches(password, user.password())) {
+        try {
+            try {
+                if (!permits.tryAcquire(loginVerifyWaitMillis, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                    throw new BizException(503, "登录服务繁忙，请稍后重试");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new BizException(503, "登录服务繁忙，请稍后重试");
+            }
+            try {
+                User user = userDao.findByPhone(phone).filter(found -> phone.equals(found.phone())).orElse(null);
+                admitAccount.accept(user == null ? "unknown:" + phone : "u" + user.id());
+                return authenticate(user, password, loginType);
+            } finally {
+                permits.release();
+            }
+        } finally {
+            slots.release();
+        }
+    }
+
+    private LoginResult authenticate(User user, String password, String loginType) {
+        boolean matched = PasswordUtil.matchesForLogin(password, user == null ? null : user.password());
+        // 账号存在性与停用状态均不在匿名登录失败文案中区分。
+        if (user == null || user.status() != 1 || !matched) {
             throw new BizException("账号或密码错误");
         }
         if (loginType != null && !loginType.isBlank()) {
@@ -139,6 +178,11 @@ public class AuthService {
             userDao.upgradePasswordHash(user.id(), user.password(), PasswordUtil.hash(password));
         }
         return new LoginResult(token, user.safe());
+    }
+
+    /** 严格身份输入；不 trim、不移除隐形字符，避免与数据库等价比较产生不同口径。 */
+    public static void requirePhone(String phone) {
+        if (phone == null || !phone.matches("1[0-9]{10}")) throw new BizException("手机号格式不正确");
     }
 
     /**
@@ -166,7 +210,7 @@ public class AuthService {
     /** 设置或重置独立支付密码；每次都用登录密码确认，绝不把登录密码当支付密码。 */
     @Transactional
     public void setPaymentPassword(long userId, String loginPassword, String paymentPassword) {
-        User user = userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
+        User user = userDao.findByIdForUpdate(userId).orElseThrow(() -> new BizException("用户不存在"));
         if (loginPassword == null || !PasswordUtil.matches(loginPassword, user.password())) {
             throw new BizException("登录密码不正确");
         }
@@ -174,6 +218,7 @@ public class AuthService {
             throw new BizException("支付密码必须为 6 位数字");
         }
         userDao.updatePaymentPassword(userId, PaymentPasswordUtil.hash(paymentPassword));
+        userDao.updatePassword(userId, user.password(), nextPasswordChangedAt(user.passwordChangedAt()));
     }
 
     /** Codes are bound to immutable user ID, password purpose, and current contact details. */
@@ -196,10 +241,11 @@ public class AuthService {
         User user = recoveryUser(phone, email, true);
         smsCodeVerifier.consume(recoveryIdentity(user, "payment"), code);
         userDao.updatePaymentPassword(user.id(), PaymentPasswordUtil.hash(paymentPassword));
+        userDao.updatePassword(user.id(), user.password(), nextPasswordChangedAt(user.passwordChangedAt()));
     }
 
     public User recoveryUser(String phone, String email, boolean lock) {
-        if (phone == null || !phone.matches("1\\d{10}")) {
+        if (phone == null || !phone.matches("1[0-9]{10}")) {
             throw new BizException("手机号或邮箱不匹配");
         }
         String normalizedEmail = requireEmail(email);
@@ -277,9 +323,7 @@ public class AuthService {
         if (username == null || username.isBlank()) {
             throw new BizException("用户名不能为空");
         }
-        if (phone == null || !phone.matches("1\\d{10}")) {
-            throw new BizException("手机号格式不正确");
-        }
+        requirePhone(phone);
         if (username.trim().length() > 64) {
             throw new BizException("账号最多 64 个字符");
         }
@@ -323,22 +367,9 @@ public class AuthService {
                 ? normalized : "";
     }
 
-    /** 测试充值：金额写入用户余额，返回数据库中的最新用户信息。 */
-    @Transactional
+    /** 保留旧客户端入口，任何配置和 profile 下均不得凭空增加可结算余额。 */
     public User recharge(long userId, double amount) {
-        if (!demoRechargeEnabled) {
-            throw new BizException(403, "演示充值未开启");
-        }
-        if (!Double.isFinite(amount) || amount < 0.01 || amount > 10000) {
-            throw new BizException("\u5145\u503c\u91d1\u989d\u9700\u5728 0.01 \u81f3 10000 \u5143\u4e4b\u95f4");
-        }
-        userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
-        userDao.addBalance(userId, round2(amount));
-        return profile(userId);
-    }
-
-    private double round2(double value) {
-        return Math.round(value * 100.0) / 100.0;
+        throw new BizException(403, "演示充值已停用");
     }
 
     public record LoginResult(String token, User user) {

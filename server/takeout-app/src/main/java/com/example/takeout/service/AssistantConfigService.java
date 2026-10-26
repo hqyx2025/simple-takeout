@@ -32,7 +32,7 @@ public class AssistantConfigService {
     private final SecretKeySpec encryptionKey;
     private final SecureRandom random = new SecureRandom();
 
-    public AssistantConfigService(JdbcTemplate jdbc, @Value("${takeout.jwt.secret}") String secret) {
+    public AssistantConfigService(JdbcTemplate jdbc, @Value("${takeout.assistant.encryption-secret}") String secret) {
         this.jdbc = jdbc;
         if (secret == null || secret.isBlank()) {
             throw new IllegalStateException("AI 配置加密需要服务端密钥");

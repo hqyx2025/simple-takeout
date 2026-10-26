@@ -75,7 +75,7 @@ class UserCenterBankCardControllerTest {
     }
 
     @Test
-    void malformedCardBodyIsFixedErrorAndWrongPinOnlyIsCounted() throws Exception {
+    void malformedCardBodyIsFixedErrorAndRevealReservesBudgetBeforeBusinessValidation() throws Exception {
         var limiter = mock(LoginRateLimiter.class);
         var mvc = MockMvcBuilders.standaloneSetup(new UserCenterController(service, limiter))
                 .setControllerAdvice(new com.example.takeout.common.GlobalExceptionHandler()).build();
@@ -86,6 +86,20 @@ class UserCenterBankCardControllerTest {
         mvc.perform(post("/api/wallet/bank-cards/11/reveal").requestAttr("userId", 7L)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"paymentPassword\":\"135790\"}"))
                 .andExpect(status().isBadRequest());
-        verify(limiter, never()).recordAttempt("bank-card-reveal", "7:127.0.0.1");
+        var order = org.mockito.Mockito.inOrder(limiter, service);
+        order.verify(limiter).recordAttempt("bank-card-reveal", "u7");
+        order.verify(service).revealBankCard(7, 11, "135790");
+    }
+
+    @Test
+    void concurrentAdmissionDenialNeverAttemptsToRevealTheCard() throws Exception {
+        var limiter = mock(LoginRateLimiter.class);
+        org.mockito.Mockito.doThrow(new BizException(429, "limited")).when(limiter).recordAttempt("bank-card-reveal", "u7");
+        var mvc = MockMvcBuilders.standaloneSetup(new UserCenterController(service, limiter))
+                .setControllerAdvice(new com.example.takeout.common.GlobalExceptionHandler()).build();
+        mvc.perform(post("/api/wallet/bank-cards/11/reveal").requestAttr("userId", 7L)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"paymentPassword\":\"135790\"}"))
+                .andExpect(status().isTooManyRequests());
+        verifyNoInteractions(service);
     }
 }

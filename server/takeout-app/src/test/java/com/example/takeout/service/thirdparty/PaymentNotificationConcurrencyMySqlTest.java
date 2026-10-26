@@ -95,6 +95,8 @@ class PaymentNotificationConcurrencyMySqlTest {
             }).when(payments).findByOutTradeNo("ALI123");
             PaymentProperties properties = new PaymentProperties();
             properties.setRealEnabled(true);
+            properties.setSandbox(false);
+            properties.getAlipay().setGatewayUrl("https://openapi.alipay.com/gateway.do");
             properties.getAlipay().setAppPrivateKey("test-private");
             properties.getAlipay().setPublicKey("test-public");
             properties.getAlipay().setNotifyUrl("https://callback.example.test/api/payment/alipay/notify");

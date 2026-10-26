@@ -9,6 +9,8 @@ import com.example.takeout.dao.RefundDao;
 import com.example.takeout.dao.StoreDao;
 import com.example.takeout.dao.UserDao;
 import com.example.takeout.model.Order;
+import com.example.takeout.model.RefundRecord;
+import com.example.takeout.service.mq.DomainEventPublisher;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
@@ -18,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -36,10 +39,12 @@ class AdminServiceOrderFlowTest {
     private static final long ORDER_ID = 500L;
 
     private final OrderDao orderDao = mock(OrderDao.class);
+    private final RefundDao refundDao = mock(RefundDao.class);
     private final OrderService orderService = mock(OrderService.class);
+    private final DomainEventPublisher eventPublisher = mock(DomainEventPublisher.class);
     private final AdminService service = new AdminService(mock(StoreDao.class), orderDao, mock(UserDao.class),
-            mock(GoodsDao.class), mock(RefundDao.class), orderService, mock(AdminStatsDao.class),
-            mock(HotDataCacheService.class), mock(com.example.takeout.service.mq.DomainEventPublisher.class),
+            mock(GoodsDao.class), refundDao, orderService, mock(AdminStatsDao.class),
+            mock(HotDataCacheService.class), eventPublisher,
             mock(PaymentRecordDao.class));
 
     private Order storedOrder(int status) {
@@ -67,6 +72,26 @@ class AdminServiceOrderFlowTest {
 
         verify(orderService).cancelOrderByAdmin(ORDER_ID);
         verify(orderDao, never()).refundEscrow(anyLong());
+    }
+
+    @Test
+    void approvingDeliveredOrderRefundDoesNotRestoreConsumedStock() {
+        long refundId = 900L;
+        RefundRecord pending = new RefundRecord(refundId, ORDER_ID, 1L, 2L, "DAMAGED", "餐损",
+                15, "PENDING", "2026-09-15 11:00:00", "", "");
+        RefundRecord refunded = new RefundRecord(refundId, ORDER_ID, 1L, 2L, "DAMAGED", "餐损",
+                15, "REFUNDED", "2026-09-15 11:00:00", "2026-09-15 11:05:00", "");
+        Order delivered = storedOrder(6);
+        when(refundDao.findByIdForUpdate(refundId)).thenReturn(Optional.of(pending));
+        when(refundDao.updateStatus(eq(refundId), eq("REFUNDED"), anyString(), eq(""))).thenReturn(true);
+        when(orderDao.findById(ORDER_ID)).thenReturn(Optional.of(delivered));
+        when(orderDao.refundEscrow(ORDER_ID)).thenReturn(true);
+        when(refundDao.findById(refundId)).thenReturn(Optional.of(refunded));
+
+        assertEquals("REFUNDED", service.approveRefund(refundId).status());
+
+        verify(orderService).refundOrderPayment(delivered);
+        verify(orderService, never()).rollbackStock(any(Order.class));
     }
 
     @Test

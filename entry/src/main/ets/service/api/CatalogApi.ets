@@ -144,8 +144,10 @@ export async function fetchSeckillsApi(limit: number = 6, latitude?: number, lon
   })
 }
 
-export async function fetchBundleApi(storeId: number, amount: number): Promise<BundleInfo | null> {
-  const resp: ApiResponse<ServerBundle> = await get<ServerBundle>(`/api/stores/${storeId}/bundle?amount=${amount}`)
+export async function fetchBundleApi(storeId: number, amount: number,
+  showErrorToast: boolean = true): Promise<BundleInfo | null> {
+  const resp: ApiResponse<ServerBundle> = await get<ServerBundle>(
+    `/api/stores/${storeId}/bundle?amount=${amount}`, showErrorToast)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     return null
   }
@@ -231,13 +233,26 @@ export async function deleteAnnouncementApi(announcementId: number): Promise<boo
   return resp.code === 200
 }
 
-export async function searchStoresApi(keyword: string, latitude?: number, longitude?: number): Promise<StoreItem[]> {
+export interface StoreSearchResult {
+  success: boolean
+  stores: StoreItem[]
+}
+
+/** 搜索结果显式携带请求状态，避免把请求失败误判为成功的空结果。 */
+export async function searchStoresResultApi(keyword: string, latitude?: number,
+  longitude?: number): Promise<StoreSearchResult> {
   const baseUrl: string = `${API_CONFIG.ENDPOINTS['search']}?keyword=${encodeURIComponent(keyword)}`
   const resp: ApiResponse<ServerStore[]> = await get<ServerStore[]>(appendCoordinates(baseUrl, latitude, longitude))
-  if (resp.code !== 200 || resp.data === null) {
-    return []
+  if (resp.code !== 200 || !Array.isArray(resp.data)) {
+    return { success: false, stores: [] }
   }
-  return resp.data.map((s: ServerStore) => toStoreItem(s))
+  return { success: true, stores: resp.data.map((s: ServerStore) => toStoreItem(s)) }
+}
+
+/** 保留原数组返回契约，供现有非交互调用继续使用。 */
+export async function searchStoresApi(keyword: string, latitude?: number, longitude?: number): Promise<StoreItem[]> {
+  const result: StoreSearchResult = await searchStoresResultApi(keyword, latitude, longitude)
+  return result.stores
 }
 
 /** 查询第三方支付结果；服务端会向支付渠道查单并在确认成功后推进订单状态。 */
@@ -258,10 +273,10 @@ export async function updateGoodsStockApi(goodsId: number, stock: number): Promi
 
 // ==================== 用户中心（需登录） ====================
 
-export async function fetchCouponsApi(): Promise<Coupon[]> {
-  const resp: ApiResponse<ServerCoupon[]> = await get<ServerCoupon[]>(API_CONFIG.ENDPOINTS['coupons'])
-  if (resp.code !== 200 || resp.data === null) {
-    return []
+export async function fetchCouponsApi(showErrorToast: boolean = true): Promise<Coupon[] | null> {
+  const resp: ApiResponse<ServerCoupon[]> = await get<ServerCoupon[]>(API_CONFIG.ENDPOINTS['coupons'], showErrorToast)
+  if (resp.code !== 200 || !Array.isArray(resp.data)) {
+    return null
   }
   return resp.data.map((c: ServerCoupon) => toCoupon(c))
 }
@@ -295,8 +310,9 @@ export async function toggleFavoriteApi(storeId: number): Promise<boolean> {
   return resp.code === 200 ? (resp.data === true) : false
 }
 
-export async function fetchAddressesApi(): Promise<Address[] | null> {
-  const resp: ApiResponse<ServerAddress[]> = await get<ServerAddress[]>(API_CONFIG.ENDPOINTS['addresses'])
+export async function fetchAddressesApi(showErrorToast: boolean = true): Promise<Address[] | null> {
+  const resp: ApiResponse<ServerAddress[]> = await get<ServerAddress[]>(
+    API_CONFIG.ENDPOINTS['addresses'], showErrorToast)
   if (resp.code !== 200 || !Array.isArray(resp.data)) {
     return null
   }
@@ -304,20 +320,21 @@ export async function fetchAddressesApi(): Promise<Address[] | null> {
 }
 
 export async function addAddressApi(name: string, phone: string, detail: string, isDefault: boolean,
-  latitude?: number, longitude?: number): Promise<boolean> {
+  latitude?: number, longitude?: number, mapAddress?: string, doorDetail?: string, tag?: string): Promise<boolean> {
   const req: AddressRequest = {
     name: name, phone: phone, detail: detail, isDefault: isDefault ? 1 : 0,
-    latitude: latitude, longitude: longitude
+    latitude: latitude, longitude: longitude, mapAddress: mapAddress, doorDetail: doorDetail, tag: tag
   }
   const resp: ApiResponse<ServerAddress> = await post<ServerAddress>(API_CONFIG.ENDPOINTS['addresses'], req)
   return resp.code === 200
 }
 
 export async function addAddressAndFetchApi(name: string, phone: string, detail: string, isDefault: boolean,
-  latitude?: number, longitude?: number): Promise<Address | null> {
+  latitude?: number, longitude?: number, mapAddress?: string, doorDetail?: string,
+  tag?: string): Promise<Address | null> {
   const req: AddressRequest = {
     name: name, phone: phone, detail: detail, isDefault: isDefault ? 1 : 0,
-    latitude: latitude, longitude: longitude
+    latitude: latitude, longitude: longitude, mapAddress: mapAddress, doorDetail: doorDetail, tag: tag
   }
   const resp: ApiResponse<ServerAddress> = await post<ServerAddress>(API_CONFIG.ENDPOINTS['addresses'], req)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
@@ -331,8 +348,13 @@ export async function deleteAddressApi(addressId: number): Promise<boolean> {
   return resp.code === 200
 }
 
-export async function updateAddressApi(addressId: number, name: string, phone: string, detail: string, isDefault: boolean): Promise<boolean> {
-  const req: AddressRequest = { name: name, phone: phone, detail: detail, isDefault: isDefault ? 1 : 0 }
+export async function updateAddressApi(addressId: number, name: string, phone: string, detail: string,
+  isDefault: boolean, latitude?: number, longitude?: number, mapAddress?: string,
+  doorDetail?: string, tag?: string): Promise<boolean> {
+  const req: AddressRequest = {
+    name: name, phone: phone, detail: detail, isDefault: isDefault ? 1 : 0,
+    latitude: latitude, longitude: longitude, mapAddress: mapAddress, doorDetail: doorDetail, tag: tag
+  }
   const resp: ApiResponse<ServerAddress> = await put<ServerAddress>(`/api/addresses/${addressId}`, req)
   return resp.code === 200
 }

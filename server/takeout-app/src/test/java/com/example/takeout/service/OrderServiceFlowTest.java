@@ -15,6 +15,7 @@ import com.example.takeout.dao.StoreDao;
 import com.example.takeout.dao.UserDao;
 import com.example.takeout.mapper.CartItemMapper;
 import com.example.takeout.model.Address;
+import com.example.takeout.model.CartItemEntity;
 import com.example.takeout.model.Goods;
 import com.example.takeout.model.GoodsSpec;
 import com.example.takeout.model.Order;
@@ -70,10 +71,11 @@ class OrderServiceFlowTest {
     private final RefundDao refundDao = mock(RefundDao.class);
     private final GoodsSpecDao specDao = mock(GoodsSpecDao.class);
     private final SeckillDao seckillDao = mock(SeckillDao.class);
+    private final CartItemMapper cartItemMapper = mock(CartItemMapper.class);
     private final HotDataCacheService cache = mock(HotDataCacheService.class);
     private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     private final OrderService service = new OrderService(orderDao, storeDao, goodsDao, addressDao,
-            couponDao, reviewDao, userDao, refundDao, new ObjectMapper(), mock(CartItemMapper.class),
+            couponDao, reviewDao, userDao, refundDao, new ObjectMapper(), cartItemMapper,
             mock(RiderDao.class), specDao, seckillDao, cache,
             mock(com.example.takeout.service.mq.DomainEventPublisher.class),
             mock(org.springframework.beans.factory.ObjectProvider.class), mock(PaymentRecordDao.class));
@@ -105,11 +107,53 @@ class OrderServiceFlowTest {
     }
 
     private User user(double balance) {
-        return new User(USER_ID, "测试用户", "", "13800138000", "", 0, balance, "2026-08-16 10:00:00");
+        return new User(USER_ID, "测试用户", "", "13800138000", "", 0, 1, balance, "2026-08-16 10:00:00", "",
+                com.example.takeout.security.PaymentPasswordUtil.hash("135790"));
+    }
+
+    @Test void zeroAmountFromNewUserPromotionWithoutCouponCannotCreateAnOrder() {
+        stubCommon(10, 0, 3);
+        when(storeDao.listActiveMarketingActivities(eq(STORE_ID), anyString())).thenReturn(List.of(
+                new com.example.takeout.model.MarketingActivity(1, STORE_ID, "NEW_USER", "新客", 1, 13, 0, 0,
+                        "", "", 1, "")));
+        assertEquals("优惠后应付金额必须大于 0", assertThrows(BizException.class, () -> service.createOrder(
+                USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "")).getMessage());
+        verify(orderDao, never()).insert(any(Order.class));
+        verify(goodsDao, never()).deductStock(anyLong(), anyInt());
+    }
+
+    @Test void historicalZeroAmountOrderCannotBeMarkedPaidOrDeductBalance() {
+        Order zero = new Order(13, "ZERO", USER_ID, STORE_ID, "测试店", 0, ITEMS, ADDRESS_JSON,
+                10, 3, 13, 0, "", 0, 0, LocalDateTime.now().format(FMT), "", "", "", "", "", 0);
+        when(orderDao.findById(13)).thenReturn(Optional.of(zero));
+        assertThrows(BizException.class, () -> service.payOrder(USER_ID, 13, "BALANCE", "QR", "135790"));
+        verify(orderDao, never()).markPaid(anyLong(), anyString());
+        verify(userDao, never()).deductBalance(anyLong(), anyDouble());
+    }
+
+    @Test
+    void stolenBearerWithoutCorrectPaymentPasswordCannotMoveMoney() {
+        when(orderDao.findById(13)).thenReturn(Optional.of(storedOrder(13, 0, ITEMS, "")));
+        when(userDao.findById(USER_ID)).thenReturn(Optional.of(user(50)));
+        for (String pin : new String[]{null, "", "000000"}) {
+            assertEquals(403, assertThrows(BizException.class,
+                    () -> service.payOrder(USER_ID, 13, "BALANCE", "QR", pin)).getCode());
+        }
+        verify(orderDao, never()).markPaid(anyLong(), anyString());
+        verify(userDao, never()).deductBalance(anyLong(), anyDouble());
     }
 
     private Order.OrderItem item() {
         return new Order.OrderItem(GOODS_ID, "测试商品", 10, 1, "");
+    }
+
+    private CartItemEntity cartItem(long goodsId, long specId, int quantity) {
+        CartItemEntity item = new CartItemEntity();
+        item.setUserId(USER_ID);
+        item.setGoodsId(goodsId);
+        item.setSpecId(specId);
+        item.setQuantity(quantity);
+        return item;
     }
 
     /** 库中已落库的订单（状态与时间按用例传入）。 */
@@ -163,6 +207,7 @@ class OrderServiceFlowTest {
         verify(orderDao).insert(captor.capture());
         assertEquals(8.0, captor.getValue().goodsAmount(), 0.001);
         assertEquals(11.0, captor.getValue().payAmount(), 0.001);
+        verify(cartItemMapper, never()).delete(any());
     }
 
     @Test
@@ -196,19 +241,14 @@ class OrderServiceFlowTest {
     }
 
     @Test
-    void pickupOrderChargesNoDeliveryFee() {
-        stubCommon(10, 0, 3);
-        when(orderDao.insert(any(Order.class))).thenReturn(13L);
-        when(orderDao.findById(13)).thenReturn(Optional.of(storedOrder(13, 0, ITEMS, "")));
+    void pickupOrderIsRejectedUntilPickupLifecycleExists() {
+        BizException error = assertThrows(BizException.class, () -> service.createOrder(
+                USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "", List.of(), "", "",
+                List.of(), "PICKUP"));
 
-        service.createOrder(USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "", List.of(), "", "",
-                List.of(), "PICKUP");
-
-        org.mockito.ArgumentCaptor<Order> captor = org.mockito.ArgumentCaptor.forClass(Order.class);
-        verify(orderDao).insert(captor.capture());
-        assertEquals(0.0, captor.getValue().deliveryFee(), 0.001);
-        assertEquals(10.0, captor.getValue().payAmount(), 0.001);
-        assertEquals("PICKUP", captor.getValue().deliveryType());
+        assertEquals("当前版本暂不支持到店自取，请选择外卖配送", error.getMessage());
+        verify(orderDao, never()).insert(any(Order.class));
+        verify(goodsDao, never()).deductStock(anyLong(), anyInt());
     }
 
     @Test
@@ -219,7 +259,7 @@ class OrderServiceFlowTest {
         when(orderDao.markPaid(eq(13L), anyString())).thenReturn(true);
         when(userDao.deductBalance(USER_ID, 13.0)).thenReturn(true);
 
-        service.payOrder(USER_ID, 13);
+        service.payOrder(USER_ID, 13, "BALANCE", "QR", "135790");
 
         // 条件扣款（余额不足会返回 false），不再用「读余额→减→整值写回」
         verify(userDao).deductBalance(eq(USER_ID), eq(13.0));
@@ -230,7 +270,7 @@ class OrderServiceFlowTest {
     void rejectsPayingCancelledOrder() {
         when(orderDao.findById(13)).thenReturn(Optional.of(storedOrder(13, 5, ITEMS, "")));
 
-        BizException error = assertThrows(BizException.class, () -> service.payOrder(USER_ID, 13));
+        BizException error = assertThrows(BizException.class, () -> service.payOrder(USER_ID, 13, "BALANCE", "QR", "135790"));
 
         assertEquals("订单已取消，无法支付", error.getMessage());
         verify(userDao, never()).deductBalance(anyLong(), anyDouble());
@@ -322,7 +362,7 @@ class OrderServiceFlowTest {
                 10, 3, 0, 13, "", 0, 0, expired, "", "", "", "", "", 0);
         when(orderDao.findById(13)).thenReturn(Optional.of(overdue));
 
-        BizException error = assertThrows(BizException.class, () -> service.payOrder(USER_ID, 13));
+        BizException error = assertThrows(BizException.class, () -> service.payOrder(USER_ID, 13, "BALANCE", "QR", "135790"));
 
         assertEquals("订单已超过支付时限，请重新下单", error.getMessage());
         verify(orderDao, never()).markPaid(anyLong(), anyString());
@@ -337,7 +377,7 @@ class OrderServiceFlowTest {
         // 并发支付另一笔订单已抢先扣完余额：条件扣款失败必须整体回滚（订单状态一并回滚）
         when(userDao.deductBalance(USER_ID, 13.0)).thenReturn(false);
 
-        BizException error = assertThrows(BizException.class, () -> service.payOrder(USER_ID, 13));
+        BizException error = assertThrows(BizException.class, () -> service.payOrder(USER_ID, 13, "BALANCE", "QR", "135790"));
 
         assertEquals("余额不足，请先充值", error.getMessage());
         verify(userDao).deductBalance(USER_ID, 13.0);
@@ -348,7 +388,7 @@ class OrderServiceFlowTest {
         when(orderDao.findById(13)).thenReturn(Optional.of(storedOrder(13, 0, ITEMS, "")));
         when(userDao.findById(USER_ID)).thenReturn(Optional.of(user(5)));
 
-        BizException error = assertThrows(BizException.class, () -> service.payOrder(USER_ID, 13));
+        BizException error = assertThrows(BizException.class, () -> service.payOrder(USER_ID, 13, "BALANCE", "QR", "135790"));
 
         assertEquals("余额不足，请先充值", error.getMessage());
         verify(orderDao, never()).markPaid(anyLong(), anyString());
@@ -357,7 +397,8 @@ class OrderServiceFlowTest {
     @Test
     void cancellingPendingOrderReleasesStockWithoutRefund() {
         when(orderDao.findById(13)).thenReturn(Optional.of(storedOrder(13, 0, ITEMS, "")));
-        when(orderDao.cancelPending(eq(13L), anyString())).thenReturn(true);
+        when(orderDao.cancelPending(eq(13L), anyString(), eq("USER"), eq("USER_CANCELLED"),
+                eq("用户取消订单"))).thenReturn(true);
 
         service.cancelOrder(USER_ID, 13);
 
@@ -365,7 +406,8 @@ class OrderServiceFlowTest {
         verify(userDao, never()).deductBalance(anyLong(), anyDouble());
         verify(userDao, never()).addBalance(anyLong(), anyDouble());
         verify(goodsDao).restoreStock(GOODS_ID, 1);
-        verify(orderDao).cancelPending(eq(13L), anyString());
+        verify(orderDao).cancelPending(eq(13L), anyString(), eq("USER"), eq("USER_CANCELLED"),
+                eq("用户取消订单"));
     }
 
     @Test
@@ -375,7 +417,8 @@ class OrderServiceFlowTest {
         doReturn(Optional.of(pending), Optional.of(paid)).when(orderDao).findByIdForUpdate(13);
         when(orderDao.findById(13)).thenReturn(Optional.of(paid));
         when(orderDao.refundEscrow(13)).thenReturn(true);
-        when(orderDao.updateStatusFrom(eq(13L), eq(1), eq(5), eq("complete_time"), anyString())).thenReturn(true);
+        when(orderDao.cancelPaidFrom(eq(13L), eq(1), anyString(), eq("USER"), eq("USER_CANCELLED"),
+                eq("用户取消订单"), eq(USER_ID))).thenReturn(true);
         ExternalPaymentService external = mock(ExternalPaymentService.class);
         when(external.refundOriginalPayment(paid)).thenReturn("ALIPAY");
         service.configureExternalPaymentService(external);
@@ -387,7 +430,7 @@ class OrderServiceFlowTest {
         sequence.verify(external).closePendingPayment(13);
         sequence.verify(orderDao).findByIdForUpdate(13);
         verify(external).refundOriginalPayment(paid);
-        verify(orderDao, never()).cancelPending(anyLong(), anyString());
+        verify(orderDao, never()).cancelPending(anyLong(), anyString(), anyString(), anyString(), anyString());
         verify(userDao, never()).addBalance(anyLong(), anyDouble());
     }
 
@@ -406,11 +449,30 @@ class OrderServiceFlowTest {
     }
 
     @Test
+    void userCannotCancelOrdersAlreadyInProductionOrDelivery() {
+        for (int status : new int[]{2, 3}) {
+            long orderId = 20L + status;
+            when(orderDao.findById(orderId)).thenReturn(Optional.of(storedOrder(orderId, status, ITEMS, "")));
+
+            BizException error = assertThrows(BizException.class, () -> service.cancelOrder(USER_ID, orderId));
+
+            assertEquals(status == 2
+                    ? "订单已进入制作，如需处理请联系平台"
+                    : "订单已进入配送，如需处理请联系平台", error.getMessage());
+        }
+        verify(orderDao, never()).refundEscrow(anyLong());
+        verify(orderDao, never()).updateStatusFrom(anyLong(), anyInt(), anyInt(), anyString(), anyString());
+        verify(goodsDao, never()).restoreStock(anyLong(), anyInt());
+        verify(userDao, never()).addBalance(anyLong(), anyDouble());
+    }
+
+    @Test
     void cancellingPendingOrderReleasesCoupon() {
         Order pending = new Order(14, "NO14", USER_ID, STORE_ID, "测试店", 0, ITEMS, ADDRESS_JSON,
                 10, 3, 3, 10, "", 0, 0, "2026-08-16 10:00:00", "", "", "", "", "", 66);
         when(orderDao.findById(14)).thenReturn(Optional.of(pending));
-        when(orderDao.cancelPending(eq(14L), anyString())).thenReturn(true);
+        when(orderDao.cancelPending(eq(14L), anyString(), eq("USER"), eq("USER_CANCELLED"),
+                eq("用户取消订单"))).thenReturn(true);
 
         service.cancelOrder(USER_ID, 14);
 
@@ -422,7 +484,8 @@ class OrderServiceFlowTest {
         Order pending = new Order(14, "NO14", USER_ID, STORE_ID, "测试店", 0, ITEMS, ADDRESS_JSON,
                 10, 3, 3, 10, "", 0, 0, LocalDateTime.now().format(FMT), "", "", "", "", "", 66);
         when(orderDao.findById(14)).thenReturn(Optional.of(pending));
-        when(orderDao.cancelPending(eq(14L), anyString())).thenReturn(true);
+        when(orderDao.cancelPending(eq(14L), anyString(), eq("ADMIN"), eq("PLATFORM_CANCELLED"),
+                eq("平台取消订单"))).thenReturn(true);
 
         service.cancelOrderByAdmin(14);
 
@@ -438,7 +501,8 @@ class OrderServiceFlowTest {
                 10, 3, 3, 10, "", 0, 0, LocalDateTime.now().format(FMT), "", "", "", "", "", 66);
         when(orderDao.findById(14)).thenReturn(Optional.of(paid));
         when(orderDao.refundEscrow(14)).thenReturn(true);
-        when(orderDao.updateStatusFrom(eq(14L), eq(1), eq(5), eq("complete_time"), anyString())).thenReturn(true);
+        when(orderDao.cancelPaidFrom(eq(14L), eq(1), anyString(), eq("ADMIN"), eq("PLATFORM_CANCELLED"),
+                eq("平台取消订单"), eq(0L))).thenReturn(true);
         ExternalPaymentService external = mock(ExternalPaymentService.class);
         when(external.refundOriginalPayment(paid)).thenReturn("ALIPAY");
         service.configureExternalPaymentService(external);
@@ -449,6 +513,24 @@ class OrderServiceFlowTest {
         verify(goodsDao).restoreStock(GOODS_ID, 1);
         verify(couponDao, never()).release(anyLong(), anyString());
         verify(userDao, never()).addBalance(anyLong(), anyDouble());
+    }
+
+    @Test
+    void adminCanStillCancelProductionAndDeliveryOrders() {
+        for (int status : new int[]{2, 3}) {
+            long orderId = 20L + status;
+            when(orderDao.findById(orderId)).thenReturn(Optional.of(storedOrder(orderId, status, ITEMS, "")));
+            when(orderDao.refundEscrow(orderId)).thenReturn(true);
+            when(orderDao.cancelPaidFrom(eq(orderId), eq(status), anyString(), eq("ADMIN"),
+                    eq("PLATFORM_CANCELLED"), eq("平台取消订单"), eq(0L)))
+                    .thenReturn(true);
+
+            service.cancelOrderByAdmin(orderId);
+
+            verify(orderDao).refundEscrow(orderId);
+            verify(orderDao).cancelPaidFrom(eq(orderId), eq(status), anyString(), eq("ADMIN"),
+                    eq("PLATFORM_CANCELLED"), eq("平台取消订单"), eq(0L));
+        }
     }
 
     @Test
@@ -464,7 +546,8 @@ class OrderServiceFlowTest {
     @Test
     void timeoutJobCancelsExpiredPendingOrders() {
         when(orderDao.listExpiredPending(anyString())).thenReturn(List.of(storedOrder(15, 0, ITEMS, "")));
-        when(orderDao.cancelPending(eq(15L), anyString())).thenReturn(true);
+        when(orderDao.cancelPending(eq(15L), anyString(), eq("SYSTEM"), eq("PAYMENT_TIMEOUT"),
+                eq("超时未支付，订单已自动取消"))).thenReturn(true);
 
         int cancelled = service.cancelExpiredPendingOrders();
 
@@ -475,7 +558,8 @@ class OrderServiceFlowTest {
     @Test
     void timeoutJobSkipsOrderPaidInTheMeantime() {
         when(orderDao.listExpiredPending(anyString())).thenReturn(List.of(storedOrder(16, 0, ITEMS, "")));
-        when(orderDao.cancelPending(eq(16L), anyString())).thenReturn(false);
+        when(orderDao.cancelPending(eq(16L), anyString(), eq("SYSTEM"), eq("PAYMENT_TIMEOUT"),
+                eq("超时未支付，订单已自动取消"))).thenReturn(false);
 
         int cancelled = service.cancelExpiredPendingOrders();
 
@@ -487,9 +571,11 @@ class OrderServiceFlowTest {
     void timeoutJobRollsBackOneFailedOrderAndContinuesWithNextTransaction() {
         when(orderDao.listExpiredPending(anyString())).thenReturn(List.of(
                 storedOrder(15, 0, ITEMS, ""), storedOrder(16, 0, ITEMS, "")));
-        when(orderDao.cancelPending(eq(15L), anyString())).thenThrow(
+        when(orderDao.cancelPending(eq(15L), anyString(), eq("SYSTEM"), eq("PAYMENT_TIMEOUT"),
+                eq("超时未支付，订单已自动取消"))).thenThrow(
                 new org.springframework.dao.CannotAcquireLockException("deadlock"));
-        when(orderDao.cancelPending(eq(16L), anyString())).thenReturn(true);
+        when(orderDao.cancelPending(eq(16L), anyString(), eq("SYSTEM"), eq("PAYMENT_TIMEOUT"),
+                eq("超时未支付，订单已自动取消"))).thenReturn(true);
 
         assertEquals(1, service.cancelExpiredPendingOrders());
 
@@ -519,6 +605,7 @@ class OrderServiceFlowTest {
         verify(goodsDao).deductStock(GOODS_ID, 2);
         verify(orderDao).insert(org.mockito.ArgumentMatchers.argThat(o ->
                 o.goodsAmount() == 24.0 && o.items().contains("\"specName\":\"大份\"")));
+        verify(cartItemMapper, never()).delete(any());
     }
 
     @Test
@@ -538,18 +625,18 @@ class OrderServiceFlowTest {
     }
 
     @Test
-    void savesFutureExpectTimeForScheduledDelivery() {
-        stubCommon(10, 0, 3);
+    void rejectsFutureExpectTimeBeforeReservingOrderResources() {
         String future = java.time.LocalDateTime.now().plusHours(2)
                 .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-        when(orderDao.insert(any(Order.class))).thenReturn(13L);
-        when(orderDao.findById(13)).thenReturn(Optional.of(storedOrder(13, 0, ITEMS, future)));
 
-        Order.OrderView view = service.createOrder(USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "",
-                List.of(), future);
+        BizException error = assertThrows(BizException.class,
+                () -> service.createOrder(USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "",
+                        List.of(), future));
 
-        assertEquals(future, view.expectTime());
-        verify(orderDao).insert(org.mockito.ArgumentMatchers.argThat(o -> future.equals(o.expectTime())));
+        assertEquals("当前仅支持立即配送，暂不支持预约送达", error.getMessage());
+        verify(orderDao, never()).insert(any(Order.class));
+        verify(couponDao, never()).markUsed(anyLong());
+        verify(goodsDao, never()).deductStock(anyLong(), anyInt());
     }
 
     @Test
@@ -560,7 +647,7 @@ class OrderServiceFlowTest {
                 () -> service.createOrder(USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "",
                         List.of(), "2020-01-01 10:00:00"));
 
-        assertEquals("预约送达时间必须晚于当前时间", error.getMessage());
+        assertEquals("当前仅支持立即配送，暂不支持预约送达", error.getMessage());
     }
 
     @Test
@@ -571,18 +658,114 @@ class OrderServiceFlowTest {
                 () -> service.createOrder(USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "",
                         List.of(), "明天下午3点"));
 
-        assertEquals("预约送达时间格式不正确", error.getMessage());
+        assertEquals("当前仅支持立即配送，暂不支持预约送达", error.getMessage());
+    }
+
+    @Test
+    void acceptsImmediateDeliveryLiteralFromOlderClients() {
+        stubCommon(10, 0, 3);
+        when(orderDao.insert(any(Order.class))).thenReturn(13L);
+        when(orderDao.findById(13)).thenReturn(Optional.of(storedOrder(13, 0, ITEMS, "")));
+
+        Order.OrderView view = service.createOrder(USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "",
+                List.of(), "立即送达");
+
+        assertEquals("", view.expectTime());
+        verify(orderDao).insert(org.mockito.ArgumentMatchers.argThat(o -> o.expectTime().isEmpty()));
     }
 
     @Test
     void rejectsOrderBelowMinimumOrder() {
-        stubCommon(10, 20, 3);
+        stubCommon(10, 20.5, 3);
 
         BizException error = assertThrows(BizException.class,
                 () -> service.createOrder(USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "", List.of()));
 
-        assertEquals("未达到店铺起送价（满20元起送）", error.getMessage());
+        assertEquals("未达到店铺起送价（满20.50元起送）", error.getMessage());
         verify(orderDao, never()).insert(any(Order.class));
+    }
+
+    @Test
+    void cartCheckoutCannotUseUnorderedQuantityToReachMinimumOrder() {
+        stubCommon(10, 15, 0);
+        when(cartItemMapper.selectList(any())).thenReturn(List.of(cartItem(GOODS_ID, 0, 2)));
+
+        BizException error = assertThrows(BizException.class, () -> service.createOrder(
+                USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "", List.of(GOODS_ID)));
+
+        assertEquals("购物车商品已变化，请刷新后重试", error.getMessage());
+        verify(orderDao, never()).insert(any(Order.class));
+        verify(goodsDao, never()).deductStock(anyLong(), anyInt());
+        verify(cartItemMapper, never()).delete(any());
+    }
+
+    @Test
+    void cartCheckoutRequiresEverySelectedSpecAndIgnoresOtherStores() {
+        GoodsSpec large = new GoodsSpec(300, GOODS_ID, "大份", 12, 5, 0, 0, 1, "");
+        GoodsSpec small = new GoodsSpec(301, GOODS_ID, "小份", 10, 5, 0, 0, 1, "");
+        Goods multi = shelfGoods(10, STORE_ID).withSpecs(List.of(large, small));
+        when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore(0, 0)));
+        when(addressDao.listByUser(USER_ID)).thenReturn(List.of(
+                new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "")));
+        when(goodsDao.findById(GOODS_ID)).thenReturn(Optional.of(multi));
+        when(goodsDao.findById(200L)).thenReturn(Optional.of(
+                new Goods(200, 11, "别店商品", "", 20, 20, "", 1, 0, 9, 0, 0, 4.5, "", false, 1, "")));
+        when(cartItemMapper.selectList(any())).thenReturn(List.of(
+                cartItem(GOODS_ID, 300, 1), cartItem(GOODS_ID, 301, 1), cartItem(200, 0, 4)));
+
+        BizException error = assertThrows(BizException.class, () -> service.createOrder(
+                USER_ID, STORE_ID,
+                List.of(new Order.OrderItem(GOODS_ID, "测试商品", 0, 1, "", 300, "", 0)),
+                ADDRESS_ID, 0, "", List.of(GOODS_ID, GOODS_ID, 200L)));
+
+        assertEquals("购物车商品已变化，请刷新后重试", error.getMessage());
+        verify(orderDao, never()).insert(any(Order.class));
+        verify(cartItemMapper, never()).delete(any());
+    }
+
+    @Test
+    void cartCheckoutAcceptsTwoSpecsOfTheSameGoods() {
+        GoodsSpec large = new GoodsSpec(300, GOODS_ID, "大份", 12, 5, 0, 0, 1, "");
+        GoodsSpec small = new GoodsSpec(301, GOODS_ID, "小份", 10, 5, 0, 0, 1, "");
+        Goods multi = shelfGoods(10, STORE_ID).withSpecs(List.of(large, small));
+        when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore(20, 0)));
+        when(addressDao.listByUser(USER_ID)).thenReturn(List.of(
+                new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "")));
+        when(goodsDao.findById(GOODS_ID)).thenReturn(Optional.of(multi));
+        when(cartItemMapper.selectList(any())).thenReturn(List.of(
+                cartItem(GOODS_ID, 300, 1), cartItem(GOODS_ID, 301, 1)));
+        when(goodsDao.deductStock(GOODS_ID, 1)).thenReturn(true);
+        when(specDao.deductStock(300, 1)).thenReturn(true);
+        when(specDao.deductStock(301, 1)).thenReturn(true);
+        when(orderDao.insert(any(Order.class))).thenReturn(13L);
+        when(orderDao.findById(13L)).thenReturn(Optional.of(storedOrder(13, 0, ITEMS, "")));
+
+        Order.OrderView created = service.createOrder(USER_ID, STORE_ID, List.of(
+                        new Order.OrderItem(GOODS_ID, "测试商品", 0, 1, "", 300, "", 0),
+                        new Order.OrderItem(GOODS_ID, "测试商品", 0, 1, "", 301, "", 0)),
+                ADDRESS_ID, 0, "", List.of(GOODS_ID, GOODS_ID));
+
+        assertEquals(13L, created.id());
+        verify(specDao).deductStock(300, 1);
+        verify(specDao).deductStock(301, 1);
+        verify(cartItemMapper, org.mockito.Mockito.times(2)).delete(any());
+    }
+
+    @Test
+    void cartCheckoutComparesOnlyCurrentStoreRows() {
+        stubCommon(10, 0, 0);
+        when(goodsDao.findById(200L)).thenReturn(Optional.of(
+                new Goods(200, 11, "别店商品", "", 20, 20, "", 1, 0, 9, 0, 0, 4.5, "", false, 1, "")));
+        when(cartItemMapper.selectList(any())).thenReturn(List.of(
+                cartItem(GOODS_ID, 0, 1), cartItem(200, 0, 4)));
+        when(orderDao.insert(any(Order.class))).thenReturn(13L);
+        when(orderDao.findById(13L)).thenReturn(Optional.of(storedOrder(13, 0, ITEMS, "")));
+
+        Order.OrderView created = service.createOrder(USER_ID, STORE_ID, List.of(item()),
+                ADDRESS_ID, 0, "", List.of(GOODS_ID, 200L));
+
+        assertEquals(13L, created.id());
+        verify(goodsDao).deductStock(GOODS_ID, 1);
     }
 
     @Test
@@ -604,7 +787,8 @@ class OrderServiceFlowTest {
         Order order = storedOrder(7, 1, ITEMS, "");
         when(orderDao.findById(7)).thenReturn(Optional.of(order));
         when(orderDao.refundEscrow(7)).thenReturn(true, false);
-        when(orderDao.updateStatusFrom(eq(7L), eq(1), eq(5), eq("complete_time"), anyString())).thenReturn(true);
+        when(orderDao.cancelPaidFrom(eq(7L), eq(1), anyString(), eq("USER"), eq("USER_CANCELLED"),
+                eq("用户取消订单"), eq(USER_ID))).thenReturn(true);
         when(userDao.findById(USER_ID)).thenReturn(Optional.of(user(37)));
 
         service.cancelOrder(USER_ID, 7);
@@ -613,7 +797,8 @@ class OrderServiceFlowTest {
         verify(goodsDao).restoreStock(GOODS_ID, 1);
         // 退款用原子自增，避免与并发退款互相覆盖
         verify(userDao).addBalance(eq(USER_ID), eq(13.0));
-        verify(orderDao).updateStatusFrom(eq(7L), eq(1), eq(5), eq("complete_time"), anyString());
+        verify(orderDao).cancelPaidFrom(eq(7L), eq(1), anyString(), eq("USER"), eq("USER_CANCELLED"),
+                eq("用户取消订单"), eq(USER_ID));
 
         BizException error = assertThrows(BizException.class, () -> service.cancelOrder(USER_ID, 7));
         assertEquals("订单资金已处理，不能重复退款", error.getMessage());
@@ -625,7 +810,8 @@ class OrderServiceFlowTest {
         when(orderDao.findById(7)).thenReturn(Optional.of(order));
         when(orderDao.refundEscrow(7)).thenReturn(true);
         // 期间骑手/商户已把订单推进到已送达：条件状态更新失败 → 必须抛异常回滚退款
-        when(orderDao.updateStatusFrom(eq(7L), eq(1), eq(5), eq("complete_time"), anyString())).thenReturn(false);
+        when(orderDao.cancelPaidFrom(eq(7L), eq(1), anyString(), eq("USER"), eq("USER_CANCELLED"),
+                eq("用户取消订单"), eq(USER_ID))).thenReturn(false);
 
         BizException error = assertThrows(BizException.class, () -> service.cancelOrder(USER_ID, 7));
 
@@ -636,7 +822,7 @@ class OrderServiceFlowTest {
 
     @Test
     void merchantOrdersHideUnpaidOrders() {
-        when(storeDao.listByOwner(USER_ID)).thenReturn(List.of(openStore(0, 3)));
+        when(storeDao.listAccessibleByMerchant(USER_ID)).thenReturn(List.of(openStore(0, 3)));
         Order pending = storedOrder(21, 0, ITEMS, "");
         Order paid = storedOrder(22, 1, ITEMS, "");
         when(orderDao.listByStore(STORE_ID)).thenReturn(List.of(pending, paid));
@@ -658,7 +844,7 @@ class OrderServiceFlowTest {
         assertTrue(error.getMessage().contains("库存不足"));
     }
 
-    /** 下单防重 token：同一 idempotencyKey 第二次提交被拒；首次提交失败时释放占位允许重试。 */
+    /** 下单防重 token：进行中的同一请求被拒；首次提交失败时释放 Redis 占位允许重试。 */
     @Test
     void rejectsDuplicateIdempotencyKeyAndReleasesKeyOnFailure() {
         @SuppressWarnings("unchecked")
@@ -679,7 +865,7 @@ class OrderServiceFlowTest {
         when(ops.setIfAbsent(anyString(), anyString(), any(java.time.Duration.class))).thenReturn(false);
         BizException dup = assertThrows(BizException.class, () -> svc.createOrder(USER_ID, STORE_ID,
                 List.of(item()), ADDRESS_ID, 0, "", List.of(), "", "key-1", List.of(), ""));
-        assertTrue(dup.getMessage().contains("请勿重复操作"), dup.getMessage());
+        assertEquals("订单正在提交中，请稍后重试", dup.getMessage());
         verify(orderDao, never()).insert(any(Order.class));
 
         // 首次提交但下单失败（空 items）：占位必须被释放，用户修正后可用同一 token 重试

@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS users (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(64) NOT NULL,
     avatar VARCHAR(255) DEFAULT '',
-    phone VARCHAR(20) NOT NULL UNIQUE,
+    phone VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL UNIQUE,
     email VARCHAR(254) DEFAULT NULL,
     password VARCHAR(128) NOT NULL,
     role INT NOT NULL DEFAULT 0,
@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS goods_specs (
 CREATE TABLE IF NOT EXISTS order_create_requests (
     user_id BIGINT NOT NULL,
     request_key VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+    order_id BIGINT DEFAULT NULL,
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, request_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -113,6 +114,13 @@ CREATE TABLE IF NOT EXISTS orders (
     accept_time VARCHAR(32) DEFAULT '',
     deliver_time VARCHAR(32) DEFAULT '',
     complete_time VARCHAR(32) DEFAULT '',
+    cancel_source VARCHAR(16) NOT NULL DEFAULT '',
+    cancel_reason_code VARCHAR(32) NOT NULL DEFAULT '',
+    cancel_reason VARCHAR(255) NOT NULL DEFAULT '',
+    reject_note VARCHAR(255) NOT NULL DEFAULT '',
+    reject_goods_id BIGINT NOT NULL DEFAULT 0,
+    reject_spec_id BIGINT NOT NULL DEFAULT 0,
+    cancel_operator_id BIGINT NOT NULL DEFAULT 0,
     rider_id BIGINT NOT NULL DEFAULT 0,
     ready_time VARCHAR(32) DEFAULT '',
     expect_time VARCHAR(32) DEFAULT '',
@@ -328,6 +336,9 @@ CREATE TABLE IF NOT EXISTS addresses (
     is_default INT NOT NULL DEFAULT 0,
     latitude DECIMAL(10,7) DEFAULT NULL,
     longitude DECIMAL(10,7) DEFAULT NULL,
+    map_address VARCHAR(255) DEFAULT NULL,
+    door_detail VARCHAR(255) DEFAULT NULL,
+    tag VARCHAR(16) NOT NULL DEFAULT '',
     create_time VARCHAR(32) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -350,14 +361,25 @@ CREATE TABLE IF NOT EXISTS refund_records (
     merchant_id BIGINT NOT NULL,
     reason VARCHAR(255) DEFAULT '',
     reason_type VARCHAR(32) NOT NULL DEFAULT 'OTHER',
+    request_key VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
     amount DECIMAL(10,2) NOT NULL DEFAULT 0,
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     apply_time VARCHAR(32) NOT NULL,
     process_time VARCHAR(32) DEFAULT '',
     reject_reason VARCHAR(255) DEFAULT '',
     KEY idx_refund_order (order_id),
+    UNIQUE KEY uk_refund_order_request (order_id, request_key),
     KEY idx_refund_status_page (status, id),
     KEY idx_refund_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 每个已接受的退款请求都固定指向原申请，包括复用同一 PENDING 的并发请求。
+CREATE TABLE IF NOT EXISTS refund_apply_requests (
+    order_id BIGINT NOT NULL,
+    request_key VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+    refund_id BIGINT NOT NULL,
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (order_id, request_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS cart_items (
@@ -524,3 +546,9 @@ CREATE TABLE IF NOT EXISTS assistant_config (
 
 INSERT IGNORE INTO assistant_config (id, enabled, endpoint, model, api_key_encrypted)
 VALUES (1, 0, '', '', '');
+
+-- 上传历史容量预算；user_id=0 为全局预算。历史文件上线前须补录。
+CREATE TABLE IF NOT EXISTS upload_usage (
+    user_id BIGINT PRIMARY KEY,
+    used_bytes BIGINT NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

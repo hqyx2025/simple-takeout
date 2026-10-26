@@ -5,9 +5,9 @@ import { LoadingIndicator } from '../components/LoadingIndicator'
  * 搜索页 - 热门搜索、历史搜索、店铺搜索结果
  */
 import { AppMotion } from '../common/theme/AppMotion'
-import { StoreItem } from '../model/Models'
+import { Address, StoreItem } from '../model/Models'
 import { formatSales } from '../common/Constants'
-import { searchStoresRemote } from '../service/AppStorageManager'
+import { searchStoresResultApi, StoreSearchResult } from '../service/api/CatalogApi'
 import { getSearchHistory, addSearchHistory, clearSearchHistory } from '../service/PreferencesHelper'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, accentFg, accentIndexFromText, merchantImageSource, DEFAULT_MERCHANT_IMAGE } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
@@ -38,6 +38,8 @@ export struct SearchPage {
   @State searchResults: StoreItem[] = []
   @State hasSearched: boolean = false
   @State searching: boolean = false
+  @State searchFailed: boolean = false
+  private lastSearchKeyword: string = ''
   private searchRequest: number = 0
   // 直接压栈独立 StoreDetailPage，返回时回到搜索页（不再 back 给首页代跳）
   onStoreClick: (store: StoreItem) => void = (store: StoreItem) => {
@@ -74,14 +76,24 @@ export struct SearchPage {
     const request: number = ++this.searchRequest
     this.searching = true
     this.hasSearched = true
+    this.searchFailed = false
+    this.lastSearchKeyword = keyword
     try {
       // 清除输入、切换关键词或退出登录后，旧请求不能覆盖新界面。
-      const remote: StoreItem[] = await searchStoresRemote(keyword)
+      const currentAddress: Address | null = AppStorage.get<Address>('currentAddress') ?? null
+      const latitude: number | undefined = currentAddress !== null ? currentAddress.latitude : undefined
+      const longitude: number | undefined = currentAddress !== null ? currentAddress.longitude : undefined
+      const remote: StoreSearchResult = await searchStoresResultApi(keyword, latitude, longitude)
       if (request !== this.searchRequest || !this.loggedIn) {
         return
       }
-      this.searchResults = remote
-      logInfo('Search', `执行搜索 keyword=${keyword} 命中${remote.length}家店铺`)
+      this.searchFailed = !remote.success
+      this.searchResults = remote.stores
+      if (!remote.success) {
+        logInfo('Search', `搜索请求失败 keyword=${keyword}`)
+        return
+      }
+      logInfo('Search', `执行搜索 keyword=${keyword} 命中${remote.stores.length}家店铺`)
       await addSearchHistory(keyword)
       await this.loadHistory()
     } finally {
@@ -95,6 +107,7 @@ export struct SearchPage {
     this.searchRequest += 1
     this.searching = false
     this.hasSearched = false
+    this.searchFailed = false
     this.searchResults = []
   }
 
@@ -104,6 +117,14 @@ export struct SearchPage {
 
   searchByKeyword(keyword: string) {
     this.searchText = keyword
+    this.doSearch()
+  }
+
+  retrySearch(): void {
+    if (this.lastSearchKeyword === '') {
+      return
+    }
+    this.searchText = this.lastSearchKeyword
     this.doSearch()
   }
 
@@ -161,7 +182,11 @@ export struct SearchPage {
           }
         } else {
           // 搜索结果
-          if (this.searchResults.length === 0) {
+          if (this.searchFailed) {
+            ListItem() {
+              this.FailedResult()
+            }
+          } else if (this.searchResults.length === 0) {
             ListItem() {
               this.EmptyResult()
             }
@@ -276,6 +301,32 @@ export struct SearchPage {
     .alignItems(HorizontalAlign.Center)
     .margin({ top: 80 })
     .id('search-empty')
+  }
+
+  @Builder
+  FailedResult() {
+    Column({ space: SPACING.SM }) {
+      Image($r('app.media.home_search')).width(60).height(60).objectFit(ImageFit.Contain)
+      Text('搜索未完成')
+        .fontSize(FONT_SIZE.LG)
+        .fontColor(COLORS.TEXT_PRIMARY)
+        .margin({ top: SPACING.MD })
+      Text('暂时无法加载搜索结果，请检查网络后重试。你的搜索词已保留。')
+        .fontSize(FONT_SIZE.MD)
+        .fontColor(COLORS.TEXT_HINT)
+        .textAlign(TextAlign.Center)
+      Button('重新搜索')
+        .attributeModifier(new AppButtonStyle())
+        .height(44)
+        .margin({ top: SPACING.SM })
+        .id('search-retry')
+        .onClick(() => { this.retrySearch() })
+    }
+    .width('100%')
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .margin({ top: 80 })
+    .id('search-failed')
   }
 
   @Builder

@@ -51,6 +51,7 @@ class ExternalPaymentServiceTest {
     @BeforeEach
     void setUp() {
         properties.setRealEnabled(true);
+        productionMode();
         properties.getAlipay().setAppPrivateKey("mock-private-key");
         properties.getAlipay().setPublicKey("mock-public-key");
         properties.getAlipay().setNotifyUrl("https://callback.example/api/payment/alipay/notify");
@@ -66,13 +67,13 @@ class ExternalPaymentServiceTest {
 
     @Test
     void sandboxAppPaymentWorksWithoutEnablingProductionPayments() {
+        properties.setSandbox(true);
+        properties.getAlipay().setGatewayUrl("https://openapi-sandbox.dl.alipaydev.com/gateway.do");
         properties.setRealEnabled(false);
         properties.setMockEnabled(false);
         paymentFixture(null);
         when(gateway.createAppPayment(anyString(), anyString(), any(), any())).thenReturn("sandbox-app-order");
-
-        ExternalPaymentService.PaymentLaunch launch = service.startPayment("ALIPAY", pendingOrder(), "APP");
-
+        var launch = service.startPayment("ALIPAY", pendingOrder(), "APP");
         assertEquals("APP", launch.paymentMode());
         assertEquals("sandbox-app-order", launch.appOrderInfo());
         assertTrue(launch.paymentSandbox());

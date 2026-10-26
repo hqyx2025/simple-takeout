@@ -238,6 +238,11 @@ public class GoodsDao {
         jdbc.update("UPDATE goods SET status = ? WHERE id = ?", status, id);
     }
 
+    /** 缺货拒单只允许下架订单所属店铺的当前商品，不跨店修改。 */
+    public void disableForStore(long id, long storeId) {
+        jdbc.update("UPDATE goods SET status = 0 WHERE id = ? AND store_id = ? AND deleted = 0", id, storeId);
+    }
+
     /** 评价后重算商品平均评分（保留一位小数）。 */
     public void updateRating(long goodsId, double rating) {
         jdbc.update("UPDATE goods SET rating = ? WHERE id = ?", rating, goodsId);

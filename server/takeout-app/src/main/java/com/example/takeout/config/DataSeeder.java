@@ -26,11 +26,16 @@ public class DataSeeder implements ApplicationRunner {
 
     private final JdbcTemplate jdbc;
 
-    @Value("${takeout.data-seed.enabled:true}")
-    private boolean seedEnabled = true;
+    @Value("${takeout.data-seed.enabled:false}")
+    private boolean seedEnabled = false;
 
-    @Value("${takeout.demo.admin-password:123456}")
-    private String demoAdminPassword = "123456";
+    @Value("${takeout.demo.admin-password:}")
+    private String demoAdminPassword = "";
+
+    // 普通种子账号不再共享公开口令；需使用时由管理员重置。
+    private String seedPasswordHash() {
+        return PasswordUtil.hash(java.util.UUID.randomUUID().toString());
+    }
 
     public DataSeeder(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
@@ -53,6 +58,9 @@ public class DataSeeder implements ApplicationRunner {
             return;
         }
         log.warn("演示账号与种子数据已启用，禁止对外部署");
+        if (demoAdminPassword == null || demoAdminPassword.length() < 16) {
+            throw new IllegalStateException("启用种子数据须设置至少 16 位独立管理员口令");
+        }
         // 分类是首页导航的基础数据，即使已有用户数据，也必须单独补齐。
         ensureCategories();
         Integer userCount = jdbc.queryForObject("SELECT COUNT(*) FROM users", Integer.class);
@@ -125,10 +133,13 @@ public class DataSeeder implements ApplicationRunner {
         if (count == null || count == 0) {
             jdbc.execute("CREATE TABLE IF NOT EXISTS refund_records (" +
                     "id BIGINT AUTO_INCREMENT PRIMARY KEY, order_id BIGINT NOT NULL, user_id BIGINT NOT NULL, " +
-                    "merchant_id BIGINT NOT NULL, reason VARCHAR(255) DEFAULT '', amount DECIMAL(10,2) NOT NULL DEFAULT 0, " +
+                    "merchant_id BIGINT NOT NULL, reason VARCHAR(255) DEFAULT '', reason_type VARCHAR(32) NOT NULL DEFAULT 'OTHER', " +
+                    "request_key VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL, " +
+                    "amount DECIMAL(10,2) NOT NULL DEFAULT 0, " +
                     "status VARCHAR(20) NOT NULL DEFAULT 'PENDING', apply_time VARCHAR(32) NOT NULL, " +
                     "process_time VARCHAR(32) DEFAULT '', reject_reason VARCHAR(255) DEFAULT '', " +
-                    "KEY idx_refund_order (order_id), KEY idx_refund_status (status)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+                    "KEY idx_refund_order (order_id), UNIQUE KEY uk_refund_order_request (order_id, request_key), " +
+                    "KEY idx_refund_status (status)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
             log.info("已创建退款记录表 refund_records");
         }
     }
@@ -201,7 +212,7 @@ public class DataSeeder implements ApplicationRunner {
         if (userId == null) {
             jdbc.update("INSERT INTO users(username, avatar, phone, password, role, balance, create_time) " +
                             "VALUES(?,?,?,?,?,?,?)",
-                    name, "", phone, PasswordUtil.hash("123456"), 3, 0.0, now());
+                    name, "", phone, seedPasswordHash(), 3, 0.0, now());
             userId = jdbc.queryForObject("SELECT id FROM users WHERE phone = ?", Long.class, phone);
             log.info("已补充骑手端测试账号 phone={}", phone);
         }
@@ -479,7 +490,7 @@ public class DataSeeder implements ApplicationRunner {
             if (existing.isEmpty()) {
                 jdbc.update("INSERT INTO users(username, avatar, phone, password, role, balance, create_time) " +
                                 "VALUES(?,?,?,?,?,?,?)",
-                        merchants[i][0], "", merchants[i][1], PasswordUtil.hash("123456"), 1, 0.0, now());
+                        merchants[i][0], "", merchants[i][1], seedPasswordHash(), 1, 0.0, now());
                 ids[i] = jdbc.queryForObject("SELECT id FROM users WHERE phone = ?", Long.class, merchants[i][1]);
             } else {
                 ids[i] = existing.get(0);
@@ -544,7 +555,7 @@ public class DataSeeder implements ApplicationRunner {
         for (int i = 0; i < accounts.length; i++) {
             String[] a = accounts[i];
             jdbc.update("INSERT INTO users(username, avatar, phone, password, role, balance, create_time) VALUES(?,?,?,?,?,?,?)",
-                    a[0], "", a[1], PasswordUtil.hash("123456"), Integer.parseInt(a[2]),
+                    a[0], "", a[1], seedPasswordHash(), Integer.parseInt(a[2]),
                     Double.parseDouble(a[3]), now());
             ids[i] = jdbc.queryForObject("SELECT id FROM users WHERE phone = ?", Long.class, a[1]);
         }

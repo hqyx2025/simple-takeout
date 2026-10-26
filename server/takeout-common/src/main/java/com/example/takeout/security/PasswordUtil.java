@@ -57,6 +57,29 @@ public final class PasswordUtil {
         }
     }
 
+    /** 调用方校验输入长度；登录统一使用当前 PBKDF2 成本，超成本旧哈希须走现有找回。 */
+    public static boolean matchesForLogin(String rawPassword, String encoded) {
+        if (rawPassword == null) return false;
+        int rounds = verificationRounds(encoded);
+        // 不能把高轮数密文直接按低轮数验证；拒绝该格式并做同成本填充，不改写原哈希。
+        boolean supported = rounds <= ITERATIONS;
+        boolean matched = supported && matches(rawPassword, encoded);
+        if (!supported) rounds = 0;
+        if (rounds < ITERATIONS) derive(rawPassword, new byte[SALT_BYTES], ITERATIONS - rounds);
+        return matched;
+    }
+
+    private static int verificationRounds(String encoded) {
+        if (encoded == null) return 0;
+        String[] fields = encoded.split("\\$", -1);
+        if (fields.length != 4 || !ALGORITHM.equals(fields[0])
+                || !fields[2].matches("[0-9a-fA-F]{32}") || !fields[3].matches("[0-9a-fA-F]{64}")) return 0;
+        try {
+            int rounds = Integer.parseInt(fields[1]);
+            return rounds >= 1 && rounds <= MAX_ITERATIONS ? rounds : 0;
+        } catch (NumberFormatException e) { return 0; }
+    }
+
     public static boolean needsRehash(String encoded) {
         if (isLegacy(encoded)) {
             return true;

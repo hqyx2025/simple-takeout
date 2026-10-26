@@ -57,6 +57,11 @@ class HotDataCacheServiceTest {
     private static final TypeReference<List<Category>> CATEGORY_LIST = new TypeReference<>() {
     };
 
+    private String entry(String key, String value) {
+        return new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode()
+                .put("key", key).put("value", value).toString();
+    }
+
     private List<Category> oneCategory() {
         return List.of(new Category(1, "美食", "", "#FF6B35", "PLATFORM", 0, 1, 1));
     }
@@ -65,7 +70,7 @@ class HotDataCacheServiceTest {
     @Test
     void returnsCachedValueWithoutHittingLoader() throws Exception {
         String json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(oneCategory());
-        when(valueOps.get("takeout:categories")).thenReturn(json);
+        when(valueOps.get(cache.storageKey("categories"))).thenReturn(entry("categories", json));
 
         AtomicInteger loads = new AtomicInteger();
         List<Category> result = cache.get("categories", CATEGORY_LIST, () -> {
@@ -95,12 +100,12 @@ class HotDataCacheServiceTest {
         assertEquals(1, loads.get());
 
         // 占位已写入：验证写的是空值标记且 TTL 为短 TTL
-        verify(valueOps).set(org.mockito.ArgumentMatchers.eq("takeout:store:999"),
-                org.mockito.ArgumentMatchers.eq("\u0000NULL\u0000"),
+        verify(valueOps).set(org.mockito.ArgumentMatchers.eq(cache.storageKey("store:999")),
+                org.mockito.ArgumentMatchers.eq(entry("store:999", "\u0000NULL\u0000")),
                 org.mockito.ArgumentMatchers.eq(Duration.ofSeconds(60)));
 
         // 第二次读取命中占位，数据库不再被访问（第二次不存在记录也算穿透成功）
-        when(valueOps.get("takeout:store:999")).thenReturn("\u0000NULL\u0000");
+        when(valueOps.get(cache.storageKey("store:999"))).thenReturn(entry("store:999", "\u0000NULL\u0000"));
         Category second = cache.get("store:999", new TypeReference<Category>() {
         }, () -> {
             loads.incrementAndGet();
@@ -143,7 +148,7 @@ class HotDataCacheServiceTest {
     void waitsForRebuildWhenLockNotAcquired() throws Exception {
         String json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(oneCategory());
         // 第一次读未命中，之后等待期间能读到别人回填的值
-        when(valueOps.get("takeout:categories")).thenReturn(null, json);
+        when(valueOps.get(cache.storageKey("categories"))).thenReturn(null, entry("categories", json));
         // 抢锁失败 + 锁被他人持有
         when(valueOps.setIfAbsent(anyString(), anyString(), any(Duration.class))).thenReturn(false);
         ReflectionTestUtils.setField(cache, "rebuildWaitMs", 500L);

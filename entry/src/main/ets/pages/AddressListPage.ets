@@ -8,9 +8,12 @@ import { Address } from '../model/Models'
 import { addAddressRemote, deleteAddressRemote, updateAddressRemote, setDefaultAddressRemote, syncAddressesRemote, deduplicateAddresses, isLoggedIn, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { PageHeader } from '../components/PageHeader'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { common } from '@kit.AbilityKit'
 import { GeoPosition, getCurrentPosition, reverseGeocodePosition } from '../service/LocationService'
+
+const MAX_ADDRESS_COUNT: number = 20
 
 // 表单数据类（用于避免无类型对象字面量）
 class AddressFormData {
@@ -18,7 +21,9 @@ class AddressFormData {
   phone: string = ''
   address: string = ''
   detail: string = ''
-  tag: string = '学校'
+  latitude?: number
+  longitude?: number
+  tag: string = ''
   isDefault: boolean = false
 
   static create(): AddressFormData {
@@ -31,8 +36,7 @@ class AddressFormData {
     form.phone = addr.phone
     const addressText: string = addr.address.trim()
     const detailText: string = addr.detail.trim()
-    // 服务端将地址和详细地址保存为一个 detail 字段，编辑时把完整原文回填到地址输入框，
-    // 避免再次保存时重复拼接。
+    // 存量服务端只有合并后的 detail；新服务端会分别返回地图位置和门牌。
     if (addressText === '') {
       form.address = detailText
       form.detail = ''
@@ -40,7 +44,9 @@ class AddressFormData {
       form.address = addressText
       form.detail = detailText
     }
-    form.tag = addr.tag || '学校'
+    form.latitude = addr.latitude
+    form.longitude = addr.longitude
+    form.tag = addr.tag ?? ''
     form.isDefault = addr.isDefault
     return form
   }
@@ -81,6 +87,8 @@ export struct AddressListPage {
   @State editingAddress: Address | null = null
   @State formData: AddressFormData = new AddressFormData()
   @State locatingCurrent: boolean = false
+  @State saving: boolean = false
+  @State pendingDeleteAddress: Address | null = null
 
   onBack: () => void = () => { router.back() }
   onSelectAddress: (address: Address) => void = () => {}
@@ -185,20 +193,32 @@ export struct AddressListPage {
                         .borderRadius(BORDER_RADIUS.SM)
                     }
                     Blank()
-                    Text('编辑')
+                    Button('编辑', { type: ButtonType.Normal })
+                      .attributeModifier(new AppButtonStyle())
+                      .height(44)
+                      .constraintSize({ minWidth: 52 })
                       .fontSize(FONT_SIZE.SM)
                       .fontColor(COLORS.PRIMARY)
+                      .backgroundColor(Color.Transparent)
                       .padding({ left: SPACING.SM, right: SPACING.SM })
                       .onClick(() => { this.openEditForm(addr) })
-                    Text('删除')
+                    Button('删除', { type: ButtonType.Normal })
+                      .attributeModifier(new AppButtonStyle())
+                      .height(44)
+                      .constraintSize({ minWidth: 52 })
                       .fontSize(FONT_SIZE.SM)
                       .fontColor(COLORS.ERROR)
+                      .backgroundColor(Color.Transparent)
                       .padding({ left: SPACING.SM, right: SPACING.SM })
-                      .onClick(() => { this.deleteAddress(addr) })
+                      .onClick(() => { this.requestDeleteAddress(addr) })
                     if (!addr.isDefault) {
-                      Text('设为默认')
+                      Button('设为默认', { type: ButtonType.Normal })
+                        .attributeModifier(new AppButtonStyle())
+                        .height(44)
+                        .constraintSize({ minWidth: 76 })
                         .fontSize(FONT_SIZE.SM)
                         .fontColor(COLORS.TEXT_SECONDARY)
+                        .backgroundColor(Color.Transparent)
                         .padding({ left: SPACING.SM, right: SPACING.SM })
                         .onClick(() => { this.setDefault(addr) })
                     }
@@ -227,16 +247,23 @@ export struct AddressListPage {
           .divider({ strokeWidth: 0 })
         }
 
-        // 新增收货地址按钮
-        Button('+ 新增收货地址')
-          .attributeModifier(new AppButtonStyle())
-          .width('90%').constraintSize({ maxWidth: 460 })
-          .height(48)
-          .fontSize(FONT_SIZE.LG).fontColor(COLORS.ON_PRIMARY)
-          .backgroundColor(COLORS.PRIMARY)
-          .borderRadius(BORDER_RADIUS.ROUND)
-          .margin({ top: SPACING.MD, bottom: SPACING.SM })
-          .onClick(() => { this.openAddForm() })
+        if (this.addressList.length >= MAX_ADDRESS_COUNT) {
+          Text(`已保存 ${MAX_ADDRESS_COUNT} 个收货地址，请先删除不再使用的地址后再新增`)
+            .width('90%').constraintSize({ maxWidth: 460 })
+            .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+            .textAlign(TextAlign.Center)
+            .padding({ top: SPACING.MD, bottom: SPACING.MD })
+        } else {
+          Button('+ 新增收货地址')
+            .attributeModifier(new AppButtonStyle())
+            .width('90%').constraintSize({ maxWidth: 460 })
+            .height(48)
+            .fontSize(FONT_SIZE.LG).fontColor(COLORS.ON_PRIMARY)
+            .backgroundColor(COLORS.PRIMARY)
+            .borderRadius(BORDER_RADIUS.ROUND)
+            .margin({ top: SPACING.MD, bottom: SPACING.SM })
+            .onClick(() => { this.openAddForm() })
+        }
 
       }
       .width('100%')
@@ -247,48 +274,60 @@ export struct AddressListPage {
       if (this.showAddForm) {
         Column() {
           Column({ space: SPACING.MD }) {
-            Text(this.editingAddress === null ? '新增地址' : '编辑地址')
-              .fontSize(FONT_SIZE.XL)
-              .fontWeight(FontWeight.Bold)
-              .fontColor(COLORS.TEXT_PRIMARY)
-              .width('100%')
-              .textAlign(TextAlign.Center)
+            Scroll() {
+              Column({ space: SPACING.MD }) {
+              Text(this.editingAddress === null ? '新增地址' : '编辑地址')
+                .fontSize(FONT_SIZE.XL)
+                .fontWeight(FontWeight.Bold)
+                .fontColor(COLORS.TEXT_PRIMARY)
+                .width('100%')
+                .textAlign(TextAlign.Center)
 
-            TextInput({ placeholder: '姓名', text: this.formData.name })
+            TextInput({ placeholder: '收货人姓名（如：张女士）', text: this.formData.name })
               .attributeModifier(new AppInputStyle())
               .width('100%')
               .onChange((v: string) => { this.formData.name = v })
 
-            TextInput({ placeholder: '电话', text: this.formData.phone })
+            TextInput({ placeholder: '11 位手机号（如：13800138000）', text: this.formData.phone })
               .attributeModifier(new AppInputStyle())
               .width('100%')
               .type(InputType.PhoneNumber)
               .onChange((v: string) => { this.formData.phone = v })
 
-            if (this.editingAddress === null) {
               Row() {
-                Text('地址')
+                Text('地图位置')
                   .fontSize(FONT_SIZE.MD)
                   .fontColor(COLORS.TEXT_SECONDARY)
                 Blank()
-                Image($r('app.media.home_location')).width(FONT_SIZE.MD).height(FONT_SIZE.MD).objectFit(ImageFit.Contain)
-          Text(' 定位选择当前位置')
+                Image($r('app.media.home_location')).width(FONT_SIZE.MD).height(FONT_SIZE.MD)
+                  .objectFit(ImageFit.Contain)
+                Text(this.locatingCurrent ? ' 正在定位…' : ' 定位选择当前位置')
                   .fontSize(FONT_SIZE.SM)
                   .fontColor(this.locatingCurrent ? COLORS.TEXT_HINT : COLORS.PRIMARY)
                   .onClick(() => { this.fillCurrentLocation() })
               }
               .width('100%')
-            }
 
-            TextInput({ placeholder: '地址（如：北京市海淀区）', text: this.formData.address })
+            TextInput({ placeholder: '地图位置（如：南宁学院东门）', text: this.formData.address })
               .attributeModifier(new AppInputStyle())
               .width('100%')
-              .onChange((v: string) => { this.formData.address = v })
+              .onChange((v: string) => { this.changeMapAddress(v) })
 
-            TextInput({ placeholder: '详细地址（如：XX路XX号）', text: this.formData.detail })
+            Text(this.hasFormCoordinates() ? '已记录地图坐标，可用于配送范围判断'
+              : '手动修改地图位置后，请重新定位以更新坐标')
+              .fontSize(FONT_SIZE.XS)
+              .fontColor(this.hasFormCoordinates() ? COLORS.TEXT_SECONDARY : COLORS.TEXT_HINT)
+              .width('100%')
+
+            TextInput({ placeholder: '楼栋、楼层或门牌（如：3 栋 1206，东门进入）', text: this.formData.detail })
               .attributeModifier(new AppInputStyle())
               .width('100%')
               .onChange((v: string) => { this.formData.detail = v })
+
+            Text('学校、园区请填写宿舍楼或取餐点；确无门牌可留空')
+              .fontSize(FONT_SIZE.XS)
+              .fontColor(COLORS.TEXT_HINT)
+              .width('100%')
 
             // 标签选择
             Row() {
@@ -319,8 +358,14 @@ export struct AddressListPage {
                 .onChange((isOn: boolean) => { this.formData.isDefault = isOn })
             }
             .width('100%')
+              }
+              .width('100%')
+              .enabled(!this.saving)
+            }
+            .width('100%')
+            .layoutWeight(1)
+            .scrollBar(BarState.Auto)
 
-            // 按钮组
             Row({ space: SPACING.MD }) {
               Button('取消')
                 .attributeModifier(new AppButtonStyle())
@@ -330,20 +375,24 @@ export struct AddressListPage {
                 .fontColor(COLORS.TEXT_SECONDARY)
                 .backgroundColor(COLORS.BG_PRIMARY)
                 .borderRadius(BORDER_RADIUS.ROUND)
+                .enabled(!this.saving)
                 .onClick(() => { this.showAddForm = false })
-              Button('保存')
+              Button(this.saving ? '保存中…' : '保存')
                 .attributeModifier(new AppButtonStyle())
                 .layoutWeight(1)
                 .height(44)
                 .fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
                 .backgroundColor(COLORS.PRIMARY)
                 .borderRadius(BORDER_RADIUS.ROUND)
+                .enabled(!this.saving)
                 .onClick(() => { this.doSave() })
             }
             .width('100%')
           }
-            .attributeModifier(new AppCardStyle())
-          .width('90%').constraintSize({ maxWidth: 460 })
+          .attributeModifier(new AppCardStyle())
+          .width('90%')
+          .height('88%')
+          .constraintSize({ maxWidth: 460 })
           .padding(SPACING.XL)
         }
         .width('100%')
@@ -352,6 +401,17 @@ export struct AddressListPage {
         .justifyContent(FlexAlign.Center)
         .alignItems(HorizontalAlign.Center)
       }
+
+      if (this.pendingDeleteAddress !== null) {
+        ConfirmDialog({
+          title: '删除收货地址',
+          content: this.getDeleteConfirmContent(),
+          confirmText: '确认删除',
+          cancelText: '取消',
+          onConfirm: () => { this.confirmDeleteAddress() },
+          onCancel: () => { this.pendingDeleteAddress = null }
+        })
+      }
     }
     .width('100%')
     .height('100%')
@@ -359,6 +419,12 @@ export struct AddressListPage {
 
   // 打开新增表单
   openAddForm(): void {
+    if (this.addressList.length >= MAX_ADDRESS_COUNT) {
+      promptAction.showToast({
+        message: `最多保存 ${MAX_ADDRESS_COUNT} 个收货地址，请先删除不再使用的地址`, duration: 1800
+      })
+      return
+    }
     this.editingAddress = null
     this.formData = AddressFormData.create()
     this.locatingCurrent = false
@@ -394,7 +460,9 @@ export struct AddressListPage {
       nextForm.name = this.formData.name
       nextForm.phone = this.formData.phone
       nextForm.address = addressText
-      nextForm.detail = ''
+      nextForm.detail = this.formData.detail
+      nextForm.latitude = position.latitude
+      nextForm.longitude = position.longitude
       nextForm.tag = this.formData.tag
       nextForm.isDefault = this.formData.isDefault
       this.formData = nextForm
@@ -413,8 +481,30 @@ export struct AddressListPage {
     form.phone = this.formData.phone
     form.address = this.formData.address
     form.detail = this.formData.detail
+    form.latitude = this.formData.latitude
+    form.longitude = this.formData.longitude
     form.tag = tag
     form.isDefault = this.formData.isDefault
+    this.formData = form
+  }
+
+  private hasFormCoordinates(): boolean {
+    return this.formData.latitude !== undefined && this.formData.longitude !== undefined
+      && Number.isFinite(this.formData.latitude) && Number.isFinite(this.formData.longitude)
+  }
+
+  private changeMapAddress(value: string): void {
+    const form: AddressFormData = new AddressFormData()
+    form.name = this.formData.name
+    form.phone = this.formData.phone
+    form.address = value
+    form.detail = this.formData.detail
+    form.tag = this.formData.tag
+    form.isDefault = this.formData.isDefault
+    if (value.trim() === this.formData.address.trim()) {
+      form.latitude = this.formData.latitude
+      form.longitude = this.formData.longitude
+    }
     this.formData = form
   }
 
@@ -480,22 +570,46 @@ export struct AddressListPage {
       return
     }
     const editingId: number = this.editingAddress.id
+    const mapAddressChanged: boolean = this.editingAddress.address.trim() !== this.formData.address.trim()
     const source: Address[] = AppStorage.get<Address[]>('addressList') || this.addressList
     const updated: Address[] = this.copyAddresses(source)
-    const savedDetail: string = this.getFormAddressDetail()
     updated.forEach((item: Address) => {
       if (item.id === editingId) {
         item.name = this.formData.name.trim()
         item.phone = this.formData.phone.trim()
-        item.address = savedDetail
-        item.detail = ''
+        item.address = this.formData.address.trim()
+        item.detail = this.formData.detail.trim()
         item.tag = this.formData.tag
         item.isDefault = this.formData.isDefault
+        if (this.hasFormCoordinates()) {
+          item.latitude = this.formData.latitude
+          item.longitude = this.formData.longitude
+        } else if (mapAddressChanged) {
+          item.latitude = undefined
+          item.longitude = undefined
+        }
       } else if (this.formData.isDefault) {
         item.isDefault = false
       }
     })
     this.applyAddressList(updated)
+  }
+
+  private requestDeleteAddress(addr: Address): void {
+    this.pendingDeleteAddress = addr
+  }
+
+  private getDeleteConfirmContent(): string {
+    const addr: Address | null = this.pendingDeleteAddress
+    return addr === null ? '' : `确认删除“${this.getDisplayAddress(addr)}”？删除后无法恢复。`
+  }
+
+  private confirmDeleteAddress(): void {
+    const addr: Address | null = this.pendingDeleteAddress
+    this.pendingDeleteAddress = null
+    if (addr !== null) {
+      this.deleteAddress(addr)
+    }
   }
 
   // 设为默认地址
@@ -537,6 +651,9 @@ export struct AddressListPage {
 
   // 保存地址
   async doSave(): Promise<void> {
+    if (this.saving) {
+      return
+    }
     if (!isLoggedIn()) {
       this.showLoginRequired()
       return
@@ -557,44 +674,60 @@ export struct AddressListPage {
     const isNewAddress: boolean = this.editingAddress === null
     const returnToMerchant: boolean = isNewAddress
       && (AppStorage.get<boolean>('merchantAddressSelectionMode') || false)
+    const editingAddress: Address | null = this.editingAddress
+    const submittedForm: AddressFormData = new AddressFormData()
+    submittedForm.name = name
+    submittedForm.phone = phone
+    submittedForm.address = address
+    submittedForm.detail = this.formData.detail.trim()
+    submittedForm.latitude = this.formData.latitude
+    submittedForm.longitude = this.formData.longitude
+    submittedForm.tag = this.formData.tag
+    submittedForm.isDefault = this.formData.isDefault
+    this.saving = true
+    try {
+      if (editingAddress === null) {
+        const ok: boolean = await addAddressRemote(name, phone, this.getFormAddressDetail(),
+          submittedForm.isDefault, submittedForm.latitude, submittedForm.longitude,
+          address, submittedForm.detail, submittedForm.tag)
+        if (!ok) {
+          this.showOperationFailure('新增地址', getLastRemoteErrorMessage())
+          return
+        }
+      } else {
+        const ok: boolean = await updateAddressRemote(editingAddress.id, name, phone,
+          this.getFormAddressDetail(), submittedForm.isDefault, submittedForm.latitude, submittedForm.longitude,
+          address, submittedForm.detail, submittedForm.tag)
+        if (!ok) {
+          this.showOperationFailure('更新地址', getLastRemoteErrorMessage())
+          return
+        }
+      }
 
-    if (this.editingAddress === null) {
-      // 新增
-      const ok: boolean = await addAddressRemote(this.formData.name, this.formData.phone,
-        this.getFormAddressDetail(), this.formData.isDefault)
-      if (!ok) {
-        this.showOperationFailure('新增地址', getLastRemoteErrorMessage())
-        return
+      this.formData = submittedForm
+      if (editingAddress !== null) {
+        // 直接将本次提交的表单值写回本地列表，避免服务端查询延迟导致 UI 仍显示旧内容。
+        this.applyEditedAddress()
+      } else {
+        const syncedAddresses: Address[] = AppStorage.get<Address[]>('addressList') || this.addressList
+        this.applyAddressList(syncedAddresses)
       }
-    } else {
-      const ok: boolean = await updateAddressRemote(this.editingAddress.id, this.formData.name, this.formData.phone,
-        this.getFormAddressDetail(), this.formData.isDefault)
-      if (!ok) {
-        this.showOperationFailure('更新地址', getLastRemoteErrorMessage())
-        return
+      this.showAddForm = false
+      if (returnToMerchant) {
+        const savedText: string = this.getFormAddressDetail()
+        const selectedAddress: Address | undefined = this.addressList.find((item: Address) =>
+          item.name === name && item.phone === phone && this.getDisplayAddress(item) === savedText)
+        if (selectedAddress !== undefined) {
+          AppStorage.setOrCreate<Address>('currentAddress', selectedAddress)
+          AppStorage.setOrCreate<boolean>('addressSelectionMode', false)
+          promptAction.showToast({ message: '地址已保存，已返回店铺表单', duration: 1400 })
+          router.back()
+          return
+        }
       }
+      promptAction.showToast({ message: isNewAddress ? '地址新增成功' : '地址更新成功', duration: 1200 })
+    } finally {
+      this.saving = false
     }
-
-    if (this.editingAddress !== null) {
-      // 直接将本次提交的表单值写回本地列表，避免服务端查询延迟导致 UI 仍显示旧内容。
-      this.applyEditedAddress()
-    } else {
-      const syncedAddresses: Address[] = AppStorage.get<Address[]>('addressList') || this.addressList
-      this.applyAddressList(syncedAddresses)
-    }
-    this.showAddForm = false
-    if (returnToMerchant) {
-      const savedText: string = this.getFormAddressDetail()
-      const selectedAddress: Address | undefined = this.addressList.find((item: Address) =>
-        item.name === name && item.phone === phone && this.getDisplayAddress(item) === savedText)
-      if (selectedAddress !== undefined) {
-        AppStorage.setOrCreate<Address>('currentAddress', selectedAddress)
-        AppStorage.setOrCreate<boolean>('addressSelectionMode', false)
-        promptAction.showToast({ message: '地址已保存，已返回店铺表单', duration: 1400 })
-        router.back()
-        return
-      }
-    }
-    promptAction.showToast({ message: this.editingAddress === null ? '地址新增成功' : '地址更新成功', duration: 1200 })
   }
 }

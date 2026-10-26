@@ -17,7 +17,7 @@ import java.util.Base64;
 
 /**
  * 银行卡完整卡号的服务端加密。列表和日志永远只使用后四位；解密只在支付密码
- * 校验通过的揭示请求中发生。密钥从 JWT secret 派生，数据库不保存密钥。
+ * 校验通过的揭示请求中发生。密钥使用独立 wallet secret，数据库不保存密钥。
  */
 @Component
 public final class BankCardCrypto {
@@ -25,7 +25,7 @@ public final class BankCardCrypto {
     private final SecretKeySpec key;
     private final SecureRandom random = new SecureRandom();
 
-    public BankCardCrypto(@Value("${takeout.jwt.secret}") String secret) {
+    public BankCardCrypto(@Value("${takeout.wallet.encryption-secret}") String secret) {
         if (secret == null || secret.isBlank()) {
             throw new IllegalStateException("银行卡加密需要服务端密钥");
         }

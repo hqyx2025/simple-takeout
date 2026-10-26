@@ -69,6 +69,13 @@ class RecoveryCodeRedisTest {
             assertThrows(BizException.class, () -> codes.consume(registration.replace("13800138000", "13900139000"), signupCode));
             codes.consume(registration, signupCode);
             assertThrows(BizException.class, () -> codes.consume(registration, signupCode));
+            String name = UUID.randomUUID().toString().replace("-", "");
+            String mailbox = name + "@gmail.com";
+            String alias = name.substring(0, 8) + "." + name.substring(8) + "+tag@googlemail.com";
+            codes.issue("registration:13800138000:" + mailbox, mailbox);
+            assertEquals(429, assertThrows(BizException.class,
+                    () -> codes.issue("registration:13900139000:" + alias, alias)).getCode());
+            verify(sender, never()).sendVerificationCode(eq(alias), anyString(), anyString());
         } finally {
             redis.delete(List.of(codeKey, attemptsKey, cooldownKey,
                     "takeout:verification:code:" + registrationHash, "takeout:verification:attempts:" + registrationHash));

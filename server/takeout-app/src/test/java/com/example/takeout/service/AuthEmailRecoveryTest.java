@@ -71,7 +71,7 @@ class AuthEmailRecoveryTest {
     @Test
     void registrationAcceptsSharedEmailButRejectsDuplicateAccountOrPhone() {
         User stored = user(2, "second", "13900139000");
-        when(users.insert(eq("second"), eq("13900139000"), eq("751848863@qq.com"), anyString(), eq(0), eq(20.0), anyString())).thenReturn(stored);
+        when(users.insert(eq("second"), eq("13900139000"), eq("751848863@qq.com"), anyString(), eq(0), eq(0.0), anyString())).thenReturn(stored);
         assertEquals(2, auth.register("second", "13900139000", "751848863@qq.com", "123456", "newpass123", 0).id());
         verify(codes).consume("registration:13900139000:751848863@qq.com", "123456");
         when(users.existsByUsername("first")).thenReturn(true);
@@ -91,7 +91,7 @@ class AuthEmailRecoveryTest {
     }
 
     @Test
-    void duplicateUsernameIsRejectedBeforeRegistrationMailIsGenerated() {
+    void registrationCodeRequestDoesNotRevealAccountExistence() {
         when(users.existsByUsername("existing")).thenReturn(true);
         SmsVerificationService sender = mock(SmsVerificationService.class);
         var controller = new com.example.takeout.controller.AuthController(auth,
@@ -100,9 +100,11 @@ class AuthEmailRecoveryTest {
                 mock(RefreshTokenService.class), sender, mock(PushTokenService.class));
         var request = new com.example.takeout.controller.AuthController.EmailCodeRequest(
                 "13900139000", "user@example.com", "register", "existing");
-        BizException error = assertThrows(BizException.class, () -> controller.emailCode(request,
-                mock(jakarta.servlet.http.HttpServletRequest.class)));
-        assertEquals("该账号已注册", error.getMessage());
-        verifyNoInteractions(sender);
+        when(sender.issue("registration:13900139000:user@example.com", "user@example.com"))
+                .thenReturn(new SmsVerificationService.IssueResult("", false));
+        assertDoesNotThrow(() -> controller.emailCode(request, mock(jakarta.servlet.http.HttpServletRequest.class)));
+        verify(sender).issue("registration:13900139000:user@example.com", "user@example.com");
+        verify(users, never()).existsByUsername(anyString());
+        verify(users, never()).existsByPhone(anyString());
     }
 }

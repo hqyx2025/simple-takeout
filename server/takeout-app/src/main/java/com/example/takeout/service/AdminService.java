@@ -455,7 +455,7 @@ public class AdminService {
         return refundDao.findById(refundId).orElseThrow(() -> new BizException("退款申请不存在"));
     }
 
-    /** 同意退款：escrow 0→2（条件更新）→ 退用户余额 → 回滚库存 → 退款记录 REFUNDED。 */
+    /** 同意已送达订单退款：escrow 0→2（条件更新）→ 按原支付渠道退款 → 退款记录 REFUNDED。 */
     @Transactional
     public RefundRecord approveRefund(long refundId) {
         RefundRecord record = requirePending(refundId);
@@ -466,11 +466,8 @@ public class AdminService {
         if (!orderDao.refundEscrow(order.id())) {
             throw new BizException("订单资金已处理，不能重复退款");
         }
-        // 复用统一回滚：goods 库存 + 规格库存 + 秒杀名额，避免规格库存与秒杀名额泄漏
-        orderService.rollbackStock(order);
+        // 售后申请只来自已送达订单，餐品已被制作和消费，不能恢复为可售库存。
         orderService.refundOrderPayment(order);
-        // 同意退款已回滚库存，失效相关展示缓存
-        invalidateStoreAndGoodsCache();
         // 领域事件：与退款状态更新同事务写入 Outbox，提交后异步投递
         eventPublisher.publish(DomainEventPublisher.ORDER_REFUNDED, order.id(),
                 java.util.Map.of("userId", order.userId(), "refundId", refundId));
@@ -480,8 +477,11 @@ public class AdminService {
     /** 拒绝退款：退款记录 REJECTED，订单状态回退到已送达（status=4），escrow 保持不变。 */
     @Transactional
     public RefundRecord rejectRefund(long refundId, String rejectReason) {
+        String safeReason = rejectReason == null ? "" : rejectReason.trim();
+        if (safeReason.isBlank()) throw new BizException("请填写拒绝原因");
+        if (safeReason.length() > 255) throw new BizException("拒绝原因最多 255 个字符");
         RefundRecord record = requirePending(refundId);
-        if (!refundDao.updateStatus(refundId, "REJECTED", now(), rejectReason == null ? "" : rejectReason)) {
+        if (!refundDao.updateStatus(refundId, "REJECTED", now(), safeReason)) {
             throw new BizException("该退款申请已处理");
         }
         // 订单回退到已送达：仅当仍处于退款中(6) 时回退，已是 4 则按幂等处理（退款记录才是审批事实）

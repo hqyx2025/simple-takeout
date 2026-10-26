@@ -18,19 +18,21 @@ services:
     container_name: takeout-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${TAKEOUT_DB_PASSWORD:?TAKEOUT_DB_PASSWORD must be set}
+      MYSQL_ROOT_PASSWORD: ${TAKEOUT_MYSQL_ROOT_PASSWORD:?Set a separate MySQL root password}
       MYSQL_DATABASE: takeout
+      MYSQL_USER: ${TAKEOUT_DB_USERNAME:-takeout}
+      MYSQL_PASSWORD: ${TAKEOUT_DB_PASSWORD:?TAKEOUT_DB_PASSWORD must be set}
       TZ: Asia/Shanghai
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
     ports:
       # 映射到宿主 3310，避免与宿主机已装的 MySQL84（3306）冲突
-      - "${TAKEOUT_MYSQL_PORT:-3310}:3306"
+      - "127.0.0.1:${TAKEOUT_MYSQL_PORT:-3310}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${TAKEOUT_DB_PASSWORD:?TAKEOUT_DB_PASSWORD must be set}"]
+      test: ['CMD-SHELL', 'MYSQL_PWD="$$MYSQL_ROOT_PASSWORD" mysqladmin ping -h 127.0.0.1 -uroot']
       interval: 5s
       timeout: 5s
       retries: 20
@@ -42,16 +44,24 @@ services:
         max-file: '3'
 
   redis:
-    image: redis:7.4.5-alpine
+    image: redis:7.4.11-alpine
     container_name: takeout-redis-compose
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    environment:
+      TAKEOUT_REDIS_PASSWORD: ${TAKEOUT_REDIS_PASSWORD:?Set a Redis password}
+      TAKEOUT_REDIS_MAXMEMORY: ${TAKEOUT_REDIS_MAXMEMORY:-256mb}
+      TAKEOUT_REDIS_MAXMEMORY_POLICY: ${TAKEOUT_REDIS_MAXMEMORY_POLICY:-noeviction}
+    command: ['sh', '-c', 'exec redis-server --maxmemory "$$TAKEOUT_REDIS_MAXMEMORY" --maxmemory-policy "$$TAKEOUT_REDIS_MAXMEMORY_POLICY" --appendonly yes --auto-aof-rewrite-percentage 100 --auto-aof-rewrite-min-size 64mb --requirepass "$$TAKEOUT_REDIS_PASSWORD" --rename-command CONFIG "" --rename-command FLUSHALL "" --rename-command FLUSHDB ""']
+    deploy:
+      resources:
+        limits:
+          memory: 768M
     ports:
-      - "${TAKEOUT_REDIS_PORT:-6387}:6379"
+      - "127.0.0.1:${TAKEOUT_REDIS_PORT:-6387}:6379"
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD-SHELL', 'REDISCLI_AUTH="$$TAKEOUT_REDIS_PASSWORD" redis-cli ping | grep -q PONG']
       interval: 5s
       timeout: 3s
       retries: 10
@@ -65,7 +75,7 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
-    image: takeout-server:1.0.0
+    image: takeout-server:${TAKEOUT_RELEASE:-1.0.0}
     # 无 container_name，允许 Compose 启动多个 app 副本。
     restart: unless-stopped
     deploy:
@@ -84,11 +94,33 @@ services:
       # 容器内用服务名互联；MySQL 端口是容器内 3306（不是宿主映射的 3310）
       TAKEOUT_DB_HOST: mysql
       TAKEOUT_DB_PORT: 3306
-      TAKEOUT_DB_USERNAME: ${TAKEOUT_DB_USERNAME:-root}
+      TAKEOUT_DB_USERNAME: ${TAKEOUT_DB_USERNAME:-takeout}
       TAKEOUT_DB_PASSWORD: ${TAKEOUT_DB_PASSWORD:?TAKEOUT_DB_PASSWORD must be set}
       TAKEOUT_REDIS_HOST: redis
       TAKEOUT_REDIS_PORT: 6379
+      TAKEOUT_REDIS_USERNAME: ${TAKEOUT_REDIS_USERNAME:-}
+      TAKEOUT_REDIS_PASSWORD: ${TAKEOUT_REDIS_PASSWORD:?Set a Redis password}
       TAKEOUT_JWT_SECRET: ${TAKEOUT_JWT_SECRET:?TAKEOUT_JWT_SECRET must be set}
+      TAKEOUT_LOGIN_FAILURE_LIMIT: ${TAKEOUT_LOGIN_FAILURE_LIMIT:-10}
+      TAKEOUT_LOGIN_FAILURE_WINDOW_SECONDS: ${TAKEOUT_LOGIN_FAILURE_WINDOW_SECONDS:-60}
+      TAKEOUT_LOGIN_FAILURE_BLOCK_SECONDS: ${TAKEOUT_LOGIN_FAILURE_BLOCK_SECONDS:-600}
+      TAKEOUT_LOGIN_TOTAL_LIMIT: ${TAKEOUT_LOGIN_TOTAL_LIMIT:-60}
+      TAKEOUT_LOGIN_TOTAL_WINDOW_SECONDS: ${TAKEOUT_LOGIN_TOTAL_WINDOW_SECONDS:-60}
+      TAKEOUT_LOGIN_TOTAL_BLOCK_SECONDS: ${TAKEOUT_LOGIN_TOTAL_BLOCK_SECONDS:-60}
+      TAKEOUT_LOGIN_ACCOUNT_LIMIT: ${TAKEOUT_LOGIN_ACCOUNT_LIMIT:-10}
+      TAKEOUT_LOGIN_ACCOUNT_WINDOW_SECONDS: ${TAKEOUT_LOGIN_ACCOUNT_WINDOW_SECONDS:-60}
+      TAKEOUT_LOGIN_ACCOUNT_BLOCK_SECONDS: ${TAKEOUT_LOGIN_ACCOUNT_BLOCK_SECONDS:-600}
+      TAKEOUT_LOGIN_ACCOUNT_TOTAL_LIMIT: ${TAKEOUT_LOGIN_ACCOUNT_TOTAL_LIMIT:-30}
+      TAKEOUT_LOGIN_ACCOUNT_TOTAL_WINDOW_SECONDS: ${TAKEOUT_LOGIN_ACCOUNT_TOTAL_WINDOW_SECONDS:-60}
+      TAKEOUT_LOGIN_ACCOUNT_TOTAL_BLOCK_SECONDS: ${TAKEOUT_LOGIN_ACCOUNT_TOTAL_BLOCK_SECONDS:-60}
+      TAKEOUT_LOGIN_VERIFY_MAX_CONCURRENT: ${TAKEOUT_LOGIN_VERIFY_MAX_CONCURRENT:-2}
+      TAKEOUT_LOGIN_VERIFY_WAIT_MILLIS: ${TAKEOUT_LOGIN_VERIFY_WAIT_MILLIS:-5000}
+      TAKEOUT_VERIFICATION_HMAC_SECRET: ${TAKEOUT_VERIFICATION_HMAC_SECRET:?Set a separate verification key}
+      TAKEOUT_ASSISTANT_ENCRYPTION_SECRET: ${TAKEOUT_ASSISTANT_ENCRYPTION_SECRET:?Set a separate AI encryption key}
+      TAKEOUT_WALLET_ENCRYPTION_SECRET: ${TAKEOUT_WALLET_ENCRYPTION_SECRET:?Set a separate wallet encryption key}
+      TAKEOUT_DEMO_SIGNUP_BALANCE: "0"
+      TAKEOUT_DATA_SEED_ENABLED: ${TAKEOUT_DATA_SEED_ENABLED:-false}
+      TAKEOUT_DEMO_ADMIN_PASSWORD: ${TAKEOUT_DEMO_ADMIN_PASSWORD:-}
       TAKEOUT_AMAP_REST_KEY: ${TAKEOUT_AMAP_REST_KEY:-}
       TAKEOUT_AMAP_SECURITY_CODE: ${TAKEOUT_AMAP_SECURITY_CODE:-}
       TAKEOUT_DEMO_RECHARGE_ENABLED: ${TAKEOUT_DEMO_RECHARGE_ENABLED:-false}
@@ -113,9 +145,11 @@ services:
       TAKEOUT_ALIPAY_PUBLIC_KEY: ${TAKEOUT_ALIPAY_PUBLIC_KEY:-}
       TAKEOUT_ALIPAY_NOTIFY_URL: ${TAKEOUT_ALIPAY_NOTIFY_URL:-}
       TAKEOUT_CACHE_ENABLED: "true"
+      TAKEOUT_CACHE_MAX_ENTRY_BYTES: ${TAKEOUT_CACHE_MAX_ENTRY_BYTES:-1048576}
       TAKEOUT_LOG_DIR: /app/logs
       # 应用在容器内监听 8087；对外由 gateway 暴露同一个 8087（统一对外入口）
       TAKEOUT_APP_PORT: "8087"
+      TAKEOUT_INTERNAL_PROXY_REGEX: ${TAKEOUT_INTERNAL_PROXY_REGEX:-127\.0\.0\.1|::1|0:0:0:0:0:0:0:1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+}
       TZ: Asia/Shanghai
     volumes:
       # 评价图片持久化，容器重建不丢
@@ -144,7 +178,7 @@ services:
       mysql:
         condition: service_healthy
     environment:
-      MYSQL_PWD: ${TAKEOUT_DB_PASSWORD:?TAKEOUT_DB_PASSWORD must be set}
+      MYSQL_PWD: ${TAKEOUT_MYSQL_ROOT_PASSWORD:?Set a separate MySQL root password}
     volumes:
       - mysql-backups:/backups
       - ./server/docker/mysql-backup.sh:/backup.sh:ro
@@ -163,7 +197,7 @@ services:
   # API 网关：对外唯一入口，保持 :8087 契约与前端 BASE_URL 一致。
   # 与应用共用同一镜像，只换启动的 jar。
   app-balancer:
-    image: nginx:1.28.0-alpine
+    image: nginx:1.28.3-alpine
     restart: unless-stopped
     depends_on:
       app:
@@ -182,7 +216,7 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
-    image: takeout-server:1.0.0
+    image: takeout-server:${TAKEOUT_RELEASE:-1.0.0}
     container_name: takeout-gateway
     restart: unless-stopped
     depends_on:
@@ -192,11 +226,12 @@ services:
       # 网关监听容器内 8087；转发目标用服务名 app
       TAKEOUT_GATEWAY_PORT: "8087"
       TAKEOUT_APP_URI: http://app-balancer:8087
+      TAKEOUT_GATEWAY_TRUSTED_PROXY_REGEX: ${TAKEOUT_GATEWAY_TRUSTED_PROXY_REGEX:-127\.0\.0\.1|::1|0:0:0:0:0:0:0:1}
       TAKEOUT_LOG_DIR: /app/logs
       TZ: Asia/Shanghai
     ports:
       # 对外契约端口：统一入口
-      - "${TAKEOUT_APP_PORT:-8087}:8087"
+      - "127.0.0.1:${TAKEOUT_APP_PORT:-8087}:8087"
     healthcheck:
       test: ["CMD", "java", "-cp", "/app", "healthcheck", "127.0.0.1", "8087"]
       interval: 10s

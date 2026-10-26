@@ -127,7 +127,11 @@ export struct AccountSecurityPage {
     this.paymentPassword = ''
     this.paymentConfirm = ''
     if (!this.active || token !== getAuthToken() || userId !== this.user.id) { return }
-    promptAction.showToast({ message: result.success ? '支付密码已保存' : (result.message || '支付密码保存失败'), duration: 2000 })
+    promptAction.showToast({ message: result.success ? '支付密码已保存，请重新登录' : (result.message || '支付密码保存失败'), duration: 2000 })
+    if (result.success) {
+      logout()
+      router.replaceUrl({ url: 'pages/Index' })
+    }
   }
 
   build() {

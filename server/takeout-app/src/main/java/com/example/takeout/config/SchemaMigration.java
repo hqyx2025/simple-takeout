@@ -35,6 +35,15 @@ public class SchemaMigration implements ApplicationRunner {
         addColumnIfMissing("orders", "delivery_type", "VARCHAR(16) NOT NULL DEFAULT 'DELIVERY'");
         // 待付款支付模型：订单与所用优惠券解绑时需要用 coupon_id 释放优惠券
         addColumnIfMissing("orders", "coupon_id", "BIGINT NOT NULL DEFAULT 0");
+        // 取消/商家拒单元数据：来源与服务端原因文案随订单持久化，供重放与用户查询。
+        addColumnIfMissing("orders", "cancel_source", "VARCHAR(16) NOT NULL DEFAULT ''");
+        addColumnIfMissing("orders", "cancel_reason_code", "VARCHAR(32) NOT NULL DEFAULT ''");
+        addColumnIfMissing("orders", "cancel_reason", "VARCHAR(255) NOT NULL DEFAULT ''");
+        addColumnIfMissing("orders", "reject_note", "VARCHAR(255) NOT NULL DEFAULT ''");
+        addColumnIfMissing("orders", "reject_goods_id", "BIGINT NOT NULL DEFAULT 0");
+        addColumnIfMissing("orders", "reject_spec_id", "BIGINT NOT NULL DEFAULT 0");
+        addColumnIfMissing("orders", "cancel_operator_id", "BIGINT NOT NULL DEFAULT 0");
+        migrateOrderCreateRequests();
         addColumnIfMissing("payment_transactions", "payment_mode", "VARCHAR(8) NOT NULL DEFAULT 'QR'");
         // 多规格 SKU：购物车按 (用户,菜品,规格) 唯一
         addColumnIfMissing("cart_items", "spec_id", "BIGINT NOT NULL DEFAULT 0");
@@ -48,6 +57,7 @@ public class SchemaMigration implements ApplicationRunner {
         addColumnIfMissing("bank_cards", "full_card_encrypted", "TEXT DEFAULT NULL");
         // 退款原因结构化：枚举 code + 文本备注
         addColumnIfMissing("refund_records", "reason_type", "VARCHAR(32) NOT NULL DEFAULT 'OTHER'");
+        migrateRefundRequests();
         // 逻辑删除：内容类表软删除字段，删除改打标、查询过滤 deleted=0
         addColumnIfMissing("goods", "deleted", "INT NOT NULL DEFAULT 0");
         addColumnIfMissing("categories", "deleted", "INT NOT NULL DEFAULT 0");
@@ -57,6 +67,9 @@ public class SchemaMigration implements ApplicationRunner {
         addColumnIfMissing("stores", "delivery_radius", "INT NOT NULL DEFAULT 0");
         addColumnIfMissing("addresses", "latitude", "DECIMAL(10,7) DEFAULT NULL");
         addColumnIfMissing("addresses", "longitude", "DECIMAL(10,7) DEFAULT NULL");
+        addColumnIfMissing("addresses", "map_address", "VARCHAR(255) DEFAULT NULL");
+        addColumnIfMissing("addresses", "door_detail", "VARCHAR(255) DEFAULT NULL");
+        addColumnIfMissing("addresses", "tag", "VARCHAR(16) NOT NULL DEFAULT ''");
         // 骑手配送半径与接单位置：配单要同时落在商家半径与骑手半径内
         addColumnIfMissing("riders", "delivery_radius", "INT NOT NULL DEFAULT 25000");
         addColumnIfMissing("riders", "latitude", "DOUBLE DEFAULT NULL");
@@ -83,6 +96,28 @@ public class SchemaMigration implements ApplicationRunner {
         rebuildCartUniqueKey();
     }
 
+    void migrateOrderCreateRequests() {
+        addColumnIfMissing("order_create_requests", "order_id", "BIGINT DEFAULT NULL");
+    }
+
+    void migrateRefundRequests() {
+        jdbc.execute("CREATE TABLE IF NOT EXISTS refund_apply_requests (order_id BIGINT NOT NULL, " +
+                "request_key VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL, " +
+                "refund_id BIGINT NOT NULL, create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, " +
+                "PRIMARY KEY(order_id, request_key)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        addColumnIfMissing("refund_records", "request_key",
+                "VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL");
+        if (!indexExists("refund_records", "uk_refund_order_request")) {
+            try {
+                jdbc.execute("ALTER TABLE refund_records ADD UNIQUE KEY uk_refund_order_request (order_id, request_key)");
+            } catch (org.springframework.dao.DataAccessException e) {
+                Throwable cause = e.getMostSpecificCause();
+                if (!(cause instanceof java.sql.SQLException sqlException) || sqlException.getErrorCode() != 1061
+                        || !indexExists("refund_records", "uk_refund_order_request")) throw e;
+            }
+        }
+    }
+
     private void migrateAccountIndexes() {
         // Serialize multi-replica DDL on one connection; release with the connection even on failure.
         jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Void>) connection -> {
@@ -93,6 +128,13 @@ public class SchemaMigration implements ApplicationRunner {
                     }
                 }
                 try {
+                    boolean binaryPhone;
+                    try (var result = statement.executeQuery("SELECT COLLATION_NAME FROM information_schema.COLUMNS "
+                            + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'phone'")) {
+                        binaryPhone = result.next() && "utf8mb4_0900_bin".equals(result.getString(1));
+                    }
+                    if (!binaryPhone) statement.execute("ALTER TABLE users MODIFY phone VARCHAR(20) "
+                            + "CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL");
                     java.util.List<String> oldIndexes = new java.util.ArrayList<>();
                     try (var result = statement.executeQuery("SELECT INDEX_NAME FROM information_schema.STATISTICS "
                             + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND NON_UNIQUE = 0 "

@@ -5,8 +5,9 @@ import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 import { AppMotion } from '../common/theme/AppMotion'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
-import { Order, Rider, User, UserRole } from '../model/Models'
-import { syncRiderPoolRemote, grabOrderRemote, getLastRemoteErrorMessage, fetchRiderProfileRemote, reportRiderLocationRemote, startRiderLocationTimer } from '../service/AppStorageManager'
+import { Order, OrderPageData, Rider, User, UserRole } from '../model/Models'
+import { grabOrderRemote, getLastRemoteErrorMessage, fetchRiderProfileRemote, reportRiderLocationRemote, startRiderLocationTimer } from '../service/AppStorageManager'
+import { fetchRiderOrdersPageResultApi, fetchRiderPoolResultApi } from '../service/api/RiderApi'
 import { logInfo } from '../service/AppLogger'
 import { PageHeader } from '../components/PageHeader'
 
@@ -30,10 +31,12 @@ export struct RiderOrderPoolPage {
 
   @State orders: Order[] = []
   @State loading: boolean = false
-  @State grabbing: boolean = false
+  @State loadFailed: boolean = false
+  @State grabbingOrderId: number = 0
   @State rider: Rider | null = null
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @StorageLink('user') user: User = { id: 0, username: '', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER, balance: 0, coupons: [], orders: [], storeIds: [] }
+  private poolRequestVersion: number = 0
 
   async aboutToAppear(): Promise<void> {
     logInfo('Page', '进入抢单大厅 RiderOrderPoolPage')
@@ -45,11 +48,29 @@ export struct RiderOrderPoolPage {
     await this.loadPool()
   }
 
-  private async loadPool(): Promise<void> {
+  private async loadPool(): Promise<boolean> {
+    const requestVersion: number = this.poolRequestVersion + 1
+    this.poolRequestVersion = requestVersion
     this.loading = true
-    this.rider = await fetchRiderProfileRemote()
-    this.orders = await syncRiderPoolRemote()
-    this.loading = false
+    this.loadFailed = false
+    try {
+      const rider: Rider | null = await fetchRiderProfileRemote(false)
+      const orders: Order[] | null = await fetchRiderPoolResultApi(false)
+      if (requestVersion !== this.poolRequestVersion) {
+        return false
+      }
+      if (rider === null || orders === null) {
+        this.loadFailed = true
+        return false
+      }
+      this.rider = rider
+      this.orders = orders
+      return true
+    } finally {
+      if (requestVersion === this.poolRequestVersion) {
+        this.loading = false
+      }
+    }
   }
 
   /** 接单范围摘要：没有接单位置就抢不到任何单。 */
@@ -80,28 +101,47 @@ export struct RiderOrderPoolPage {
   }
 
   private async grab(order: Order): Promise<void> {
-    if (this.grabbing) {
+    if (this.grabbingOrderId !== 0) {
       promptAction.showToast({ message: '正在抢单，请稍候', duration: 1200 })
       return
     }
-    this.grabbing = true
-    const ok: boolean = await grabOrderRemote(order.id)
-    this.grabbing = false
-    if (ok) {
-      // 接单时定位一次 + 启动全局定时器（切页不中断）+ 直接跳转配送单页
-      reportRiderLocationRemote()
-      startRiderLocationTimer()
-      promptAction.showToast({ message: '抢单成功，请及时取餐', duration: 1500 })
-      router.replaceUrl({ url: 'pages/RiderOrdersPage' })
-    } else {
-      // 抢单失败可能因为被抢走、未上线、账号停用等，优先展示后端原因，避免全部误报成"手慢了"
-      const errorMessage: string = getLastRemoteErrorMessage()
-      promptAction.showToast({
-        message: errorMessage === '' ? '手慢了，该订单已被其他骑手接走' : errorMessage,
-        duration: 2500
-      })
-      await this.loadPool()
+    this.grabbingOrderId = order.id
+    try {
+      let ok: boolean = false
+      try {
+        ok = await grabOrderRemote(order.id, false)
+      } catch (_) {
+        ok = false
+      }
+      if (ok) {
+        this.finishGrab()
+      } else {
+        const errorMessage: string = getLastRemoteErrorMessage()
+        const result: OrderPageData | null = await fetchRiderOrdersPageResultApi(1, 30, false)
+        const assigned: Order | undefined = result === null ? undefined
+          : result.list.find((item: Order) => item.id === order.id && item.status >= 2 && item.status <= 4)
+        if (assigned !== undefined) {
+          this.finishGrab()
+        } else if (result === null) {
+          promptAction.showToast({ message: '抢单结果待确认，请到“我的配送单”查看', duration: 2800 })
+        } else {
+          promptAction.showToast({
+            message: errorMessage === '' ? '手慢了，该订单已被其他骑手接走' : errorMessage,
+            duration: 2500
+          })
+          await this.loadPool()
+        }
+      }
+    } finally {
+      this.grabbingOrderId = 0
     }
+  }
+
+  private finishGrab(): void {
+    reportRiderLocationRemote()
+    startRiderLocationTimer()
+    promptAction.showToast({ message: '抢单成功，请及时取餐', duration: 1500 })
+    router.replaceUrl({ url: 'pages/RiderOrdersPage' })
   }
 
   build() {
@@ -120,6 +160,15 @@ export struct RiderOrderPoolPage {
       if (this.loading) {
         Column() {
           Text('正在加载可抢订单…').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
+        }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+      } else if (this.loadFailed) {
+        Column({ space: SPACING.MD }) {
+          Text('抢单信息暂时无法加载').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_PRIMARY)
+          Text('请检查网络后重试').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
+          Button('重新加载')
+            .attributeModifier(new AppButtonStyle()).height(44)
+            .id('rider-pool-retry')
+            .onClick(() => { this.loadPool() })
         }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
       } else if (this.orders.length === 0) {
         Column({ space: SPACING.SM }) {
@@ -164,18 +213,16 @@ export struct RiderOrderPoolPage {
           .fontSize(FONT_SIZE.SM).fontColor(MODULE_COLOR.RIDER).fontWeight(FontWeight.Bold)
       }.width('100%')
 
-      Text(`收货：${order.address.name} ${order.address.phone}`)
+      Text('抢单后显示收货信息')
         .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-      Text(`地址：${order.address.detail}`)
-        .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).width('100%').maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
 
       Row() {
         Text(`${getOrderStatusText(order.status)} · ${order.createTime}`)
           .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).layoutWeight(1)
-        Button('抢单')
-          .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.RIDER)
+        Button(this.grabbingOrderId === order.id ? '抢单中…' : '抢单')
+          .attributeModifier(new AppButtonStyle()).height(44).fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.RIDER)
           .borderRadius(BORDER_RADIUS.ROUND)
+          .enabled(this.grabbingOrderId === 0)
           .id(`rider-grab-${order.id}`)
           .onClick(() => { this.grab(order) })
       }.width('100%')

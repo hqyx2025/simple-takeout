@@ -42,6 +42,8 @@ class OrderDaoRolePagingMySqlTest {
         jdbc.update("INSERT INTO stores(id,name,owner_id,create_time) VALUES(10,'merchant store',9,'2026-01-01')");
         jdbc.update("INSERT INTO stores(id,name,owner_id,create_time) VALUES(11,'merchant store two',9,'2026-01-01')");
         jdbc.update("INSERT INTO stores(id,name,owner_id,create_time) VALUES(12,'other store',10,'2026-01-01')");
+        jdbc.update("INSERT INTO employees(store_id,user_id,role_name,status,create_time) " +
+                "VALUES(12,21,'店员',1,'2026-01-01')");
         insertOrder(1, 7, 10, 1, 0, "", "");
         insertOrder(2, 7, 11, 0, 0, "", "");
         insertOrder(3, 7, 12, 4, 0, "", "2026-10-14 12:00:00");
@@ -66,6 +68,8 @@ class OrderDaoRolePagingMySqlTest {
         assertEquals(5, dao.countByMerchant(9, null));
         assertEquals(2, dao.countByMerchant(9, 4));
         assertEquals(7, dao.listByMerchant(9, 4, 1, 0).get(0).order().id());
+        assertEquals(1, dao.countByMerchant(21, null));
+        assertEquals(3, dao.listByMerchant(21, null, 10, 0).get(0).order().id());
     }
 
     @Test

@@ -14,6 +14,22 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class AuthPaymentPasswordControllerTest {
     @Test
+    void admissionDenialHappensBeforeCheckingTheLoginPassword() throws Exception {
+        var limiter = mock(LoginRateLimiter.class);
+        doThrow(new com.example.takeout.common.BizException(429, "limited")).when(limiter).recordAttempt("payment-password-set", "u7");
+        var auth = mock(AuthService.class);
+        var controller = new AuthController(auth, limiter, mock(TokenRevocationService.class),
+                mock(com.example.takeout.service.RefreshTokenService.class), mock(SmsVerificationService.class),
+                mock(com.example.takeout.service.PushTokenService.class));
+        var mvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new com.example.takeout.common.GlobalExceptionHandler()).build();
+        mvc.perform(post("/api/auth/payment-password").requestAttr("userId", 7L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"loginPassword\":\"test-only\",\"paymentPassword\":\"135790\"}"))
+                .andExpect(status().isTooManyRequests());
+        verifyNoInteractions(auth);
+    }
+    @Test
     void setUsesAuthenticatedAccountAndReturnsNoSecrets() throws Exception {
         AuthService service = mock(AuthService.class);
         var limiter = mock(LoginRateLimiter.class);
@@ -26,7 +42,7 @@ class AuthPaymentPasswordControllerTest {
                         .content("{\"userId\":99,\"loginPassword\":\"login-secret\",\"paymentPassword\":\"135790\"}"))
                 .andExpect(status().isOk()).andExpect(content().json("{\"code\":200,\"message\":\"success\",\"data\":null}"));
         verify(service).setPaymentPassword(7, "login-secret", "135790");
-        verify(limiter).reset("payment-password", "7:127.0.0.1");
+        verify(limiter).reset("payment-password-set", "u7");
     }
 
     @Test

@@ -353,8 +353,8 @@ async function expireLocalSession(): Promise<void> {
 }
 
 // GET请求
-export async function get<T>(url: string): Promise<ApiResponse<T>> {
-  return request<T>('GET', url)
+export async function get<T>(url: string, showErrorToast: boolean = true): Promise<ApiResponse<T>> {
+  return request<T>('GET', url, undefined, showErrorToast)
 }
 
 // POST请求
@@ -364,13 +364,13 @@ export async function post<T>(url: string, data?: Object, showErrorToast: boolea
 }
 
 // PUT请求
-export async function put<T>(url: string, data?: Object): Promise<ApiResponse<T>> {
-  return request<T>('PUT', url, data)
+export async function put<T>(url: string, data?: Object, showErrorToast: boolean = true): Promise<ApiResponse<T>> {
+  return request<T>('PUT', url, data, showErrorToast)
 }
 
 // DELETE请求
-export async function del<T>(url: string): Promise<ApiResponse<T>> {
-  return request<T>('DELETE', url)
+export async function del<T>(url: string, showErrorToast: boolean = true): Promise<ApiResponse<T>> {
+  return request<T>('DELETE', url, undefined, showErrorToast)
 }
 
 /**

@@ -46,17 +46,49 @@ import static org.mockito.Mockito.when;
 class OrderServiceIdempotencyFallbackTest {
 
     @Test
-    void databaseRejectsReplayBeforeReservingStockEvenWithoutRedis() {
+    void databaseReturnsCompletedReplayBeforeReservingStockEvenWithoutRedis() {
         org.mockito.Mockito.doThrow(new org.springframework.dao.DuplicateKeyException("PRIMARY"))
                 .when(orderDao).reserveCreateRequest(USER_ID, "committed-request");
+        when(orderDao.findCompletedCreateRequest(USER_ID, "committed-request")).thenReturn(Optional.of(13L));
+        when(orderDao.findById(13L)).thenReturn(Optional.of(storedOrder(13L)));
+
+        Order.OrderView replay = serviceWithRedis(null).createOrder(
+                USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "", List.of(), "",
+                " committed-request ", List.of(), "");
+
+        assertEquals(13L, replay.id());
+        org.mockito.Mockito.verifyNoInteractions(goodsDao, couponDao, storeDao);
+        org.mockito.Mockito.verify(orderDao, org.mockito.Mockito.never()).insert(any(Order.class));
+    }
+
+    @Test
+    void databaseDuplicateWithoutCompletedOrderReportsInProgress() {
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DuplicateKeyException("PRIMARY"))
+                .when(orderDao).reserveCreateRequest(USER_ID, "in-progress");
+        when(orderDao.findCompletedCreateRequest(USER_ID, "in-progress")).thenReturn(Optional.empty());
 
         BizException error = assertThrows(BizException.class, () -> serviceWithRedis(null).createOrder(
                 USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "", List.of(), "",
-                " committed-request ", List.of(), ""));
+                "in-progress", List.of(), ""));
 
-        assertEquals("订单已提交，请勿重复操作", error.getMessage());
+        assertEquals("订单正在提交中，请稍后重试", error.getMessage());
         org.mockito.Mockito.verifyNoInteractions(goodsDao, couponDao, storeDao);
-        org.mockito.Mockito.verify(orderDao, org.mockito.Mockito.never()).insert(any(Order.class));
+    }
+
+    @Test
+    void databaseLegacyPlaceholderDirectsUserToOrderList() {
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DuplicateKeyException("PRIMARY"))
+                .when(orderDao).reserveCreateRequest(USER_ID, "legacy-request");
+        when(orderDao.findCompletedCreateRequest(USER_ID, "legacy-request")).thenReturn(Optional.empty());
+        when(orderDao.isHistoricalCreateRequest(org.mockito.ArgumentMatchers.eq(USER_ID),
+                org.mockito.ArgumentMatchers.eq("legacy-request"), anyString())).thenReturn(true);
+
+        BizException error = assertThrows(BizException.class, () -> serviceWithRedis(null).createOrder(
+                USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "", List.of(), "",
+                "legacy-request", List.of(), ""));
+
+        assertEquals("订单可能已提交，请在订单列表核对，不要重复下单", error.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(goodsDao, couponDao, storeDao);
     }
 
     @Test
@@ -109,6 +141,12 @@ class OrderServiceIdempotencyFallbackTest {
         return new Order.OrderItem(GOODS_ID, "测试商品", 10, 1, "");
     }
 
+    private Order storedOrder(long id) {
+        return new Order(id, "NO" + id, USER_ID, STORE_ID, "测试店", 0,
+                "[]", "{}", 10, 0, 0, 10, "", 0, 0,
+                LocalDateTime.now().format(FMT), "", "", "", "", "", 0);
+    }
+
     /** Redis 不可用时下单必须继续（契约：加固不能变成下单不可用）。 */
     @Test
     @SuppressWarnings("unchecked")
@@ -132,6 +170,7 @@ class OrderServiceIdempotencyFallbackTest {
 
         assertEquals(0, view.status(), "Redis 不可用时下单应照常成功，防重仍由数据库保证");
         org.mockito.Mockito.verify(orderDao).reserveCreateRequest(USER_ID, "idem-key-1");
+        org.mockito.Mockito.verify(orderDao).bindCreateRequest(USER_ID, "idem-key-1", 13L);
     }
 
     /** Redis 超时同样只降级、不阻断下单。 */
@@ -156,7 +195,7 @@ class OrderServiceIdempotencyFallbackTest {
         assertEquals(0, view.status());
     }
 
-    /** 但真·重复提交仍必须被拦住——降级不能把防重功能整个吃掉。 */
+    /** Redis 命中进行中占位、数据库尚无完成映射时，明确提示稍后重试。 */
     @Test
     @SuppressWarnings("unchecked")
     void duplicateSubmitStillRejectedWhenRedisWorks() {
@@ -173,7 +212,24 @@ class OrderServiceIdempotencyFallbackTest {
                 service.createOrder(USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "",
                         List.of(), "", "idem-key-3", List.of(), ""));
 
-        assertEquals("订单正在提交中，请勿重复操作", error.getMessage(),
-                "Redis 正常时重复提交必须被拦，且提示文案不变（前端依赖它）");
+        assertEquals("订单正在提交中，请稍后重试", error.getMessage());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void redisDuplicateReturnsCompletedOrderAfterLostResponse() {
+        StringRedisTemplate redis = mock(StringRedisTemplate.class);
+        ValueOperations<String, String> ops = mock(ValueOperations.class);
+        when(redis.opsForValue()).thenReturn(ops);
+        when(ops.setIfAbsent(anyString(), anyString(), any(Duration.class))).thenReturn(false);
+        when(orderDao.findCompletedCreateRequest(USER_ID, "lost-response")).thenReturn(Optional.of(13L));
+        when(orderDao.findById(13L)).thenReturn(Optional.of(storedOrder(13L)));
+
+        Order.OrderView replay = serviceWithRedis(redis).createOrder(USER_ID, STORE_ID, List.of(item()),
+                ADDRESS_ID, 0, "", List.of(), "", "lost-response", List.of(), "");
+
+        assertEquals(13L, replay.id());
+        org.mockito.Mockito.verify(orderDao, org.mockito.Mockito.never()).reserveCreateRequest(org.mockito.ArgumentMatchers.anyLong(), anyString());
+        org.mockito.Mockito.verifyNoInteractions(goodsDao, couponDao, storeDao);
     }
 }

@@ -21,19 +21,19 @@ class AuthPaymentPasswordTest {
 
     @Test
     void currentLoginPasswordIsRequiredAndPaymentPinIsSaltedIndependently() {
-        when(users.findById(7)).thenReturn(Optional.of(user()));
+        when(users.findByIdForUpdate(7)).thenReturn(Optional.of(user()));
         auth.setPaymentPassword(7, "login-secret", "135790");
         ArgumentCaptor<String> hash = ArgumentCaptor.forClass(String.class);
         verify(users).updatePaymentPassword(eq(7L), hash.capture());
         assertTrue(PaymentPasswordUtil.matches("135790", hash.getValue()));
         assertFalse(hash.getValue().contains("135790"));
         assertNotEquals(PasswordUtil.hash("135790"), hash.getValue());
-        verify(users, never()).updatePassword(anyLong(), anyString(), anyString());
+        verify(users).updatePassword(eq(7L), anyString(), anyString());
     }
 
     @Test
     void incorrectLoginPasswordAndInvalidPinCannotChangeAnything() {
-        when(users.findById(7)).thenReturn(Optional.of(user()));
+        when(users.findByIdForUpdate(7)).thenReturn(Optional.of(user()));
         assertEquals("登录密码不正确", assertThrows(BizException.class,
                 () -> auth.setPaymentPassword(7, "wrong", "135790")).getMessage());
         for (String pin : new String[]{null, "", "12345", "1234567", "１２３４５６", "12a456"}) {

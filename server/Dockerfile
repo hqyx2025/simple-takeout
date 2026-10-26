@@ -40,6 +40,14 @@ RUN javac -d /workspace /workspace/healthcheck.java
 
 # ---------- 运行阶段 ----------
 FROM eclipse-temurin:25-jre
+# The upstream image tag still carries 25.0.4.1. Install the published security
+# release from Adoptium and verify its official SHA-256 before using it.
+ADD --checksum=sha256:6fac98f0c8202efc3135a9e9e42aa61963ec42d1c5cbb40caf231e7b14a24ef6 https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.5%2B8/OpenJDK25U-jre_x64_linux_hotspot_25.0.5_8.tar.gz /tmp/temurin-security.tar.gz
+RUN mkdir -p /opt/java/temurin-25.0.5 \
+    && tar -xzf /tmp/temurin-security.tar.gz -C /opt/java/temurin-25.0.5 --strip-components=1 \
+    && rm /tmp/temurin-security.tar.gz
+ENV JAVA_HOME=/opt/java/temurin-25.0.5
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
 WORKDIR /app
 
 # 时区与编码：日志与数据库时间统一为东八区

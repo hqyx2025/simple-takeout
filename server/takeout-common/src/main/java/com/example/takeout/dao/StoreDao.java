@@ -205,8 +205,25 @@ public class StoreDao {
         return jdbc.query("SELECT * FROM stores WHERE owner_id = ? ORDER BY id", MAPPER, ownerId);
     }
 
+    /** 商家工作台可见门店：店主本人或该店启用员工。 */
+    public List<Store> listAccessibleByMerchant(long userId) {
+        return jdbc.query("SELECT * FROM stores s WHERE s.owner_id = ? OR EXISTS (" +
+                        "SELECT 1 FROM employees e WHERE e.store_id = s.id AND e.user_id = ? AND e.status = 1) " +
+                        "ORDER BY s.id",
+                MAPPER, userId, userId);
+    }
+
     public Optional<Store> findById(long id) {
         return jdbc.query("SELECT * FROM stores WHERE id = ?", MAPPER, id).stream().findFirst();
+    }
+
+    /** 店主或该店启用员工均可执行商家侧订单操作。 */
+    public boolean hasMerchantAccess(long userId, long storeId) {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM stores s WHERE s.id = ? AND (s.owner_id = ? OR EXISTS (" +
+                        "SELECT 1 FROM employees e WHERE e.store_id = s.id AND e.user_id = ? AND e.status = 1))",
+                Integer.class, storeId, userId, userId);
+        return count != null && count > 0;
     }
 
     public long insert(Store s) {

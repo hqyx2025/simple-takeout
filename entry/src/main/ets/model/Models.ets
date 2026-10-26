@@ -194,6 +194,15 @@ export interface Order {
   appOrderInfo?: string
   paymentMode?: string
   paymentSandbox?: boolean
+  /** 取消来源：USER / MERCHANT / ADMIN / SYSTEM。 */
+  cancelSource?: string
+  /** 服务端记录的结构化取消原因编码。 */
+  cancelReasonCode?: string
+  /** 服务端根据原因编码生成的可信展示文案。 */
+  cancelReason?: string
+  /** 缺货原因关联的订单商品与规格；非缺货拒单为 0。 */
+  rejectGoodsId?: number
+  rejectSpecId?: number
   address: Address
   remark: string
 }

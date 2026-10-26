@@ -214,6 +214,11 @@ export function toOrder(o: ServerOrder): Order {
     appOrderInfo: o.appOrderInfo ?? '',
     paymentMode: o.paymentMode ?? '',
     paymentSandbox: o.paymentSandbox ?? false,
+    cancelSource: o.cancelSource ?? '',
+    cancelReasonCode: o.cancelReasonCode ?? '',
+    cancelReason: o.cancelReason ?? '',
+    rejectGoodsId: o.rejectGoodsId ?? 0,
+    rejectSpecId: o.rejectSpecId ?? 0,
     address: addr,
     remark: o.remark
   }
@@ -252,14 +257,17 @@ export function toCoupon(c: ServerCoupon): Coupon {
 }
 
 export function toAddress(a: ServerAddress): Address {
+  const mapAddress: string = (a.mapAddress ?? '').trim()
+  const doorDetail: string = (a.doorDetail ?? '').trim()
   const addr: Address = {
     id: a.id,
     name: a.name,
     phone: a.phone,
-    // 服务端仅保存合并后的地址文本，回填到 address 字段可保证列表展示和编辑内容一致。
-    address: a.detail,
-    detail: '',
+    // 新服务端返回结构化字段；旧服务端只有 detail 时仍按完整地址兼容展示。
+    address: mapAddress === '' ? a.detail : mapAddress,
+    detail: mapAddress === '' ? '' : doorDetail,
     isDefault: a.isDefault === 1,
+    tag: (a.tag ?? '').trim(),
     latitude: a.latitude,
     longitude: a.longitude
   }

@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.example.takeout.service.thirdparty.PaymentChannels;
 
 import java.util.List;
 
@@ -40,7 +42,7 @@ public class OrderController {
     @PostMapping("/orders")
     public ApiResponse<Order.OrderView> createOrder(@RequestAttribute("userId") long userId,
                                                     @RequestBody CreateOrderRequest req) {
-        // 下单按账号限流（脚本刷单防护）；Identifier 用 userId，Redis 不可用时自动放行
+        // 下单按账号限流；Redis 不可用时由本地窗口继续保护。
         if (orderRateLimiter.isBlocked("order", "u" + userId)) {
             throw new BizException(429, "下单过于频繁，请稍后再试");
         }
@@ -79,13 +81,33 @@ public class OrderController {
     @PostMapping("/orders/{id}/pay")
     public ApiResponse<Order.OrderView> pay(@RequestAttribute("userId") long userId, @PathVariable long id,
                                             @RequestParam String channel,
-                                            @RequestParam(defaultValue = "QR") String mode) {
-        return ApiResponse.ok(orderService.payOrder(userId, id, channel, mode));
+                                            @RequestParam(defaultValue = "QR") String mode,
+                                            @RequestBody(required = false) PaymentRequest request) {
+        if (!PaymentChannels.BALANCE.equals(PaymentChannels.normalize(channel))) {
+            return ApiResponse.ok(orderService.payOrder(userId, id, channel, mode));
+        }
+        String identity = "u" + userId;
+        if (orderRateLimiter.isBlocked("payment-password", identity)) {
+            throw new BizException(429, "支付密码尝试过于频繁，请稍后再试");
+        }
+        orderRateLimiter.recordAttempt("payment-password", identity);
+        Order.OrderView result = orderService.payOrder(userId, id, channel, mode,
+                request == null ? null : request.paymentPassword());
+        orderRateLimiter.reset("payment-password", identity);
+        return ApiResponse.ok(result);
+    }
+
+    public record PaymentRequest(@JsonProperty(access = JsonProperty.Access.WRITE_ONLY) String paymentPassword) {
+        @Override public String toString() { return "PaymentRequest[redacted]"; }
     }
 
     @PostMapping("/orders/{id}/payment/query")
     public ApiResponse<Order.OrderView> queryPayment(@RequestAttribute("userId") long userId,
                                                     @PathVariable long id) {
+        if (orderRateLimiter.isBlocked("payment-query", "u" + userId)) {
+            throw new BizException(429, "支付查询过于频繁，请稍后再试");
+        }
+        orderRateLimiter.recordAttempt("payment-query", "u" + userId);
         return ApiResponse.ok(orderService.refreshPaymentStatus(userId, id));
     }
 
@@ -102,11 +124,21 @@ public class OrderController {
     }
 
     @PostMapping("/orders/{id}/refund")
-    public ApiResponse<RefundRecord> refund(@RequestAttribute("userId") long userId, @PathVariable long id,
+    public ApiResponse<RefundRecord> refund(@RequestAttribute("userId") long userId,
+                                            @RequestAttribute("role") int role, @PathVariable long id,
                                             @RequestBody(required = false) RefundRequest req) {
+        requireCustomer(role);
         String reasonType = req == null ? null : req.reasonType();
         String reason = req == null ? "" : req.reason();
-        return ApiResponse.ok(orderService.applyRefund(userId, id, reasonType, reason));
+        return ApiResponse.ok(orderService.applyRefund(userId, id, reasonType, reason,
+                req == null ? null : req.idempotencyKey()));
+    }
+
+    @GetMapping("/orders/{id}/refunds")
+    public ApiResponse<List<RefundRecord>> refunds(@RequestAttribute("userId") long userId,
+                                                  @RequestAttribute("role") int role, @PathVariable long id) {
+        requireCustomer(role);
+        return ApiResponse.ok(orderService.refundHistory(userId, id));
     }
 
     // ============ 商户端 ============
@@ -137,6 +169,17 @@ public class OrderController {
         return ApiResponse.ok(orderService.merchantFlow(userId, id, action));
     }
 
+    @PostMapping("/merchant/orders/{id}/reject")
+    public ApiResponse<Order.OrderView> merchantReject(@RequestAttribute("userId") long userId,
+                                                       @RequestAttribute("role") int role,
+                                                       @PathVariable long id,
+                                                       @RequestBody(required = false) MerchantRejectRequest req) {
+        requireMerchant(role);
+        return ApiResponse.ok(orderService.merchantReject(userId, id,
+                req == null ? null : req.reasonCode(), req == null ? null : req.note(),
+                req == null ? null : req.goodsId(), req == null ? null : req.specId()));
+    }
+
     @GetMapping("/merchant/stats")
     public ApiResponse<OrderService.MerchantStats> stats(@RequestAttribute("userId") long userId,
                                                          @RequestAttribute("role") int role,
@@ -156,12 +199,19 @@ public class OrderController {
                                 List<String> images, int anonymous) {
     }
 
-    public record RefundRequest(String reasonType, String reason) {
+    public record RefundRequest(String reasonType, String reason, String idempotencyKey) {
+    }
+
+    public record MerchantRejectRequest(String reasonCode, String note, Long goodsId, Long specId) {
     }
 
     private void requireMerchant(int role) {
         if (role != 1) {
             throw new com.example.takeout.common.BizException(403, "仅商户可以执行该操作");
         }
+    }
+
+    private void requireCustomer(int role) {
+        if (role != 0) throw new BizException(403, "仅用户可以操作退款申请");
     }
 }

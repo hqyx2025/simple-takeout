@@ -88,4 +88,9 @@ public class GoodsSpecDao {
     public void restoreStock(long specId, int quantity) {
         jdbc.update("UPDATE goods_specs SET stock = stock + ? WHERE id = ?", quantity, specId);
     }
+
+    /** 缺货拒单仅下架指定商品下的对应规格，goods_id 条件防止跨商品误操作。 */
+    public void disable(long goodsId, long specId) {
+        jdbc.update("UPDATE goods_specs SET status = 0 WHERE id = ? AND goods_id = ?", specId, goodsId);
+    }
 }

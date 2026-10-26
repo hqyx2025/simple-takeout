@@ -47,6 +47,63 @@ import static org.mockito.ArgumentMatchers.*;
  */
 @EnabledIfEnvironmentVariable(named = "TAKEOUT_MYSQL_CONCURRENCY_TEST", matches = "1")
 class OrderConcurrencyMySqlTest {
+    @Test @EnabledIfEnvironmentVariable(named = "TAKEOUT_TEST_REDIS_PORT", matches = "\\d+")
+    void loginCollationVariantsAndOwnAccountCannotBypassRealSqlAndRedisBudgets() {
+        jdbc.execute("ALTER TABLE users MODIFY phone VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL");
+        String victim = "13800000001", own = "13800000002";
+        var users = spy(new UserDao(jdbc));
+        var jwt = mock(com.example.takeout.security.JwtUtil.class);
+        when(jwt.generateToken(anyLong(), anyInt(), anyString())).thenReturn("test-token");
+        String hash = com.example.takeout.security.PasswordUtil.hash("test-own-password");
+        jdbc.update("UPDATE users SET password = ?, role = 2 WHERE id = 1", hash);
+        jdbc.update("UPDATE users SET password = ? WHERE id = 2", hash);
+        var auth = new AuthService(users, jwt);
+        var connection = new org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory(
+                "127.0.0.1", Integer.parseInt(System.getenv("TAKEOUT_TEST_REDIS_PORT")));
+        connection.afterPropertiesSet(); connection.start();
+        try {
+            var redis = new org.springframework.data.redis.core.StringRedisTemplate(connection);
+            ObjectProvider<org.springframework.data.redis.core.StringRedisTemplate> provider = mock(ObjectProvider.class);
+            when(provider.getIfAvailable()).thenReturn(redis);
+            var limiter = new com.example.takeout.security.LoginRateLimiter(provider);
+            var controller = new com.example.takeout.controller.AuthController(auth, limiter,
+                    mock(com.example.takeout.security.TokenRevocationService.class), mock(RefreshTokenService.class),
+                    mock(SmsVerificationService.class), mock(PushTokenService.class));
+            int source = 1;
+            for (char ignored : new char[]{0x200b, 0xad, 0x200c, 0x200d, 0x2060, 0xfeff, 0}) {
+                for (int position = 0; position <= 11; position++) {
+                    String variant = victim.substring(0, position) + ignored + victim.substring(position);
+                    assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM users WHERE phone = ?", Integer.class, variant));
+                    var http = new org.springframework.mock.web.MockHttpServletRequest();
+                    http.setRemoteAddr("192.0.2." + source++);
+                    assertEquals(400, assertThrows(BizException.class, () -> controller.login(
+                            new com.example.takeout.controller.AuthController.LoginRequest(variant, "wrong", "ADMIN"), http)).getCode());
+                }
+            }
+            verify(users, never()).findByPhone(anyString());
+            var http = new org.springframework.mock.web.MockHttpServletRequest();
+            http.setRemoteAddr("198.51.100.10");
+            var guess = new com.example.takeout.controller.AuthController.LoginRequest(victim, "wrong", "ADMIN");
+            for (int i = 0; i < 9; i++) assertEquals(400, assertThrows(BizException.class,
+                    () -> controller.login(guess, http)).getCode());
+            controller.login(new com.example.takeout.controller.AuthController.LoginRequest(own, "test-own-password", "USER"), http);
+            http.setRemoteAddr("198.51.100.11");
+            assertEquals(400, assertThrows(BizException.class, () -> controller.login(guess, http)).getCode());
+            http.setRemoteAddr("198.51.100.12");
+            assertEquals(429, assertThrows(BizException.class, () -> controller.login(guess, http)).getCode());
+            http.setRemoteAddr("198.51.100.10");
+            assertEquals(400, assertThrows(BizException.class, () -> controller.login(
+                    new com.example.takeout.controller.AuthController.LoginRequest("13800000003", "wrong", "USER"), http)).getCode());
+            assertEquals(429, assertThrows(BizException.class, () -> controller.login(
+                    new com.example.takeout.controller.AuthController.LoginRequest(own, "test-own-password", "USER"), http)).getCode());
+            new com.example.takeout.config.SchemaMigration(jdbc).run(null);
+            assertEquals("utf8mb4_0900_bin", jdbc.queryForObject("SELECT COLLATION_NAME FROM information_schema.COLUMNS "
+                    + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'phone'", String.class));
+            for (char ignored : new char[]{0x200b, 0xad, 0x200c, 0x200d, 0x2060, 0xfeff, 0})
+                assertTrue(users.findByPhone(victim + ignored).isEmpty());
+        } finally { connection.destroy(); }
+    }
+
     private JdbcTemplate admin;
     private JdbcTemplate jdbc;
     private String database;
@@ -55,9 +112,10 @@ class OrderConcurrencyMySqlTest {
     private PaymentRecordDao paymentRecords;
     private OutboxEventDao outbox;
     private HotDataCacheService cache;
+    private CartItemMapper cartItems;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         String host = System.getenv().getOrDefault("TAKEOUT_DB_HOST", "127.0.0.1");
         String port = System.getenv().getOrDefault("TAKEOUT_DB_PORT", "3310");
         String base = "jdbc:mysql://" + host + ":" + port + "/";
@@ -70,6 +128,12 @@ class OrderConcurrencyMySqlTest {
         var source = new DriverManagerDataSource(base + database + options, username, password);
         new ResourceDatabasePopulator(new ClassPathResource("schema.sql")).execute(source);
         jdbc = new JdbcTemplate(source);
+        var cartFactory = new MybatisSqlSessionFactoryBean();
+        cartFactory.setDataSource(source);
+        cartFactory.setConfiguration(new MybatisConfiguration());
+        var cartSessions = cartFactory.getObject();
+        cartSessions.getConfiguration().addMapper(CartItemMapper.class);
+        cartItems = new SqlSessionTemplate(cartSessions).getMapper(CartItemMapper.class);
         var transactions = new TransactionTemplate(new DataSourceTransactionManager(source));
         paymentRecords = spy(new PaymentRecordDao(jdbc));
         outbox = spy(new OutboxEventDao(jdbc, transactions));
@@ -77,7 +141,7 @@ class OrderConcurrencyMySqlTest {
         var specs = new GoodsSpecDao(jdbc);
         var target = new OrderService(new OrderDao(jdbc), new StoreDao(jdbc), new GoodsDao(jdbc, specs),
                 new AddressDao(jdbc), new CouponDao(jdbc), new ReviewDao(jdbc), new UserDao(jdbc),
-                new RefundDao(jdbc), new ObjectMapper(), mock(CartItemMapper.class), new RiderDao(jdbc),
+                new RefundDao(jdbc), new ObjectMapper(), cartItems, new RiderDao(jdbc),
                 specs, new SeckillDao(jdbc), cache,
                 new DomainEventPublisher(outbox, mock(ObjectProvider.class), new ObjectMapper()),
                 mock(ObjectProvider.class), paymentRecords);
@@ -102,6 +166,8 @@ class OrderConcurrencyMySqlTest {
             jdbc.update("INSERT INTO coupons(id,user_id,name,amount,expire_time,create_time) VALUES(?,?,'test',1,'2099-01-01 00:00:00',?)",
                     id, id, "2026-01-01 00:00:00");
         }
+        jdbc.update("UPDATE users SET payment_password_hash = ? WHERE id = 1",
+                com.example.takeout.security.PaymentPasswordUtil.hash("135790"));
         jdbc.update("INSERT INTO users(id,username,phone,password,balance,role,create_time) " +
                         "VALUES(99,'merchant','13900000099','test',1000,1,'2026-01-01 00:00:00')");
         for (int id = 100; id <= 102; id++) {
@@ -121,6 +187,65 @@ class OrderConcurrencyMySqlTest {
         if (database != null) {
             admin.execute("DROP DATABASE `" + database + "`");
         }
+    }
+
+    private UploadService uploads(com.example.takeout.service.thirdparty.ObjectStorage storage, long perUser, long total) {
+        var target = new UploadService(jdbc, storage, new com.example.takeout.security.LoginRateLimiter(mock(ObjectProvider.class)), perUser, total);
+        var proxy = new ProxyFactory(target);
+        proxy.addAdvice(new TransactionInterceptor(new DataSourceTransactionManager(jdbc.getDataSource()),
+                new AnnotationTransactionAttributeSource()));
+        return (UploadService) proxy.getProxy();
+    }
+
+    private org.springframework.mock.web.MockMultipartFile uploadImage() {
+        return new org.springframework.mock.web.MockMultipartFile("file", "photo.jpg", "image/jpeg",
+                new byte[]{(byte)255, (byte)216, (byte)255});
+    }
+
+    @Test void concurrentUploadInstancesShareAccountQuota() throws Exception {
+        AtomicInteger stored = new AtomicInteger();
+        var storage = (com.example.takeout.service.thirdparty.ObjectStorage) file -> { stored.incrementAndGet(); return "/uploads/test.jpg"; };
+        List<UploadService> instances = List.of(uploads(storage, 8, 100), uploads(storage, 8, 100));
+        runTogether(16, index -> {
+            try { instances.get(index % 2).store(7, uploadImage()); }
+            catch (BizException e) { assertEquals(429, e.getCode()); }
+        });
+        assertEquals(2, stored.get());
+        assertEquals(6L, jdbc.queryForObject("SELECT used_bytes FROM upload_usage WHERE user_id=7", Long.class));
+        assertEquals(6L, jdbc.queryForObject("SELECT used_bytes FROM upload_usage WHERE user_id=0", Long.class));
+    }
+
+    @Test void globalUploadQuotaCannotBeBypassedByChangingAccounts() throws Exception {
+        AtomicInteger stored = new AtomicInteger();
+        var service = uploads(file -> { stored.incrementAndGet(); return "/uploads/test.jpg"; }, 8, 8);
+        runTogether(16, index -> {
+            try { service.store(index % 8 + 1, uploadImage()); }
+            catch (BizException e) { assertEquals(429, e.getCode()); }
+        });
+        assertEquals(2, stored.get());
+        assertEquals(6L, jdbc.queryForObject("SELECT used_bytes FROM upload_usage WHERE user_id=0", Long.class));
+    }
+
+    @Test void failedUserReservationAndStorageFailureBothRollBackGlobalQuota() {
+        jdbc.update("INSERT INTO upload_usage(user_id,used_bytes) VALUES(0,11),(7,7)");
+        AtomicInteger writes = new AtomicInteger();
+        var exhausted = uploads(file -> { writes.incrementAndGet(); return "/uploads/test.jpg"; }, 8, 100);
+        assertEquals(429, assertThrows(BizException.class, () -> exhausted.store(7, uploadImage())).getCode());
+        assertEquals(0, writes.get());
+        assertEquals(11L, jdbc.queryForObject("SELECT used_bytes FROM upload_usage WHERE user_id=0", Long.class));
+        var failing = uploads(file -> { throw new IllegalStateException("test storage failure"); }, 100, 100);
+        assertThrows(IllegalStateException.class, () -> failing.store(7, uploadImage()));
+        assertEquals(11L, jdbc.queryForObject("SELECT used_bytes FROM upload_usage WHERE user_id=0", Long.class));
+        assertEquals(7L, jdbc.queryForObject("SELECT used_bytes FROM upload_usage WHERE user_id=7", Long.class));
+    }
+
+    @Test void employeeFromAnotherStoreSurvivesAuthorizedStoreDeletionAttempt() {
+        jdbc.update("INSERT INTO stores(id,name,owner_id,create_time) VALUES(11,'other',98,NOW())");
+        jdbc.update("INSERT INTO employees(id,store_id,user_id,role_name,status,create_time) VALUES(1,11,2,'clerk',1,NOW())");
+        var stores = new StoreService(new StoreDao(jdbc), mock(GoodsDao.class), mock(GoodsSpecDao.class),
+                mock(SeckillDao.class), new ObjectMapper(), mock(HotDataCacheService.class), new EmployeeDao(jdbc));
+        assertEquals(404, assertThrows(BizException.class, () -> stores.removeStoreEmployee(99, 10, 1)).getCode());
+        assertEquals(1, count("SELECT COUNT(*) FROM employees WHERE id=1 AND store_id=11"));
     }
 
     @Test
@@ -148,19 +273,17 @@ class OrderConcurrencyMySqlTest {
 
     @Test
     void sameRequestAcrossConcurrentTransactionsCreatesOnlyOneOrderWithoutRedis() throws Exception {
-        var successes = new java.util.concurrent.atomic.AtomicInteger();
+        var orderIds = java.util.concurrent.ConcurrentHashMap.<Long>newKeySet();
         runTogether(8, index -> {
-            try {
-                service.createOrder(1, 10, List.of(item(102, 300)), 1, 1, "",
-                        List.of(), "", "same-request", List.of(), "");
-                successes.incrementAndGet();
-            } catch (BizException duplicate) {
-                assertTrue(duplicate.getMessage().contains("请勿重复操作"));
-            }
+            Order.OrderView replay = service.createOrder(1, 10, List.of(item(102, 300)), 1, 1, "",
+                    List.of(), "", "same-request", List.of(), "");
+            orderIds.add(replay.id());
         });
-        assertEquals(1, successes.get());
+        assertEquals(1, orderIds.size());
         assertEquals(1, count("SELECT COUNT(*) FROM orders"));
         assertEquals(1, count("SELECT COUNT(*) FROM order_create_requests"));
+        assertEquals(orderIds.iterator().next().longValue(),
+                jdbc.queryForObject("SELECT order_id FROM order_create_requests", Long.class));
         assertEquals(999, count("SELECT stock FROM goods WHERE id=102"));
         assertEquals(999, count("SELECT stock FROM goods_specs WHERE id=300"));
         assertEquals(1, count("SELECT status FROM coupons WHERE id=1"));
@@ -176,10 +299,12 @@ class OrderConcurrencyMySqlTest {
                 List.of(), "", "retry-key", List.of(), "");
         service.createOrder(2, 10, List.of(item(102, 300)), 2, 0, "",
                 List.of(), "", "retry-key", List.of(), "");
-        // A committed key remains protected after the old Redis window has expired.
+        // A committed key returns the original order after the old Redis window has expired.
         jdbc.update("UPDATE order_create_requests SET create_time='2020-01-01 00:00:00'");
-        assertThrows(BizException.class, () -> service.createOrder(1, 10, List.of(item(102, 300)), 1, 0, "",
-                List.of(), "", "retry-key", List.of(), ""));
+        Order.OrderView replay = service.createOrder(1, 10, List.of(item(102, 300)), 1, 0, "",
+                List.of(), "", "retry-key", List.of(), "");
+        assertEquals(jdbc.queryForObject("SELECT order_id FROM order_create_requests WHERE user_id=1", Long.class),
+                replay.id());
         assertEquals(2, count("SELECT COUNT(*) FROM orders"));
         assertEquals(2, count("SELECT COUNT(*) FROM order_create_requests"));
         assertEquals(998, count("SELECT stock FROM goods WHERE id=102"));
@@ -191,7 +316,7 @@ class OrderConcurrencyMySqlTest {
             long id = service.createOrder(1, 10, List.of(item(102, 300)), 1, 0, "").id();
             runTogether(3, index -> {
                 try {
-                    if (index == 0) service.payOrder(1, id, "BALANCE");
+                    if (index == 0) service.payOrder(1, id, "BALANCE", "QR", "135790");
                     else service.cancelOrder(1, id);
                 } catch (BizException expectedStateConflict) {
                     // Only the winner may change the state, balance and stock.
@@ -204,6 +329,29 @@ class OrderConcurrencyMySqlTest {
             assertEquals(1000, count("SELECT stock FROM goods WHERE id=102"));
             assertEquals(1000, count("SELECT stock FROM goods_specs WHERE id=300"));
         }
+    }
+
+    @Test
+    void concurrentMerchantRejectReplaysOneRefundAndOneResourceRollback() throws Exception {
+        long id = service.createOrder(1, 10, List.of(item(102, 300)), 1, 1, "").id();
+        service.payOrder(1, id, "BALANCE", "QR", "135790");
+
+        var returnedOrderIds = java.util.concurrent.ConcurrentHashMap.<Long>newKeySet();
+        runTogether(8, index -> returnedOrderIds.add(
+                service.merchantReject(99, id, "OTHER", "internal note", null, null).id()));
+
+        assertEquals(java.util.Set.of(id), returnedOrderIds);
+        Order.OrderView rejected = service.orderDetail(id);
+        assertEquals(5, rejected.status());
+        assertEquals(2, rejected.escrowStatus());
+        assertEquals("MERCHANT", rejected.cancelSource());
+        assertEquals("OTHER", rejected.cancelReasonCode());
+        assertEquals(1000, count("SELECT balance FROM users WHERE id=1"));
+        assertEquals(1000, count("SELECT stock FROM goods WHERE id=102"));
+        assertEquals(1000, count("SELECT stock FROM goods_specs WHERE id=300"));
+        assertEquals(0, count("SELECT status FROM coupons WHERE id=1"));
+        assertEquals(1, count("SELECT COUNT(*) FROM payment_records WHERE type='REFUND' AND order_id=" + id));
+        assertEquals(1, count("SELECT COUNT(*) FROM outbox_events WHERE event_type='ORDER_CANCELLED' AND order_id=" + id));
     }
 
     private Order.OrderItem item(long goodsId, long specId) {
@@ -258,6 +406,115 @@ class OrderConcurrencyMySqlTest {
             assertEquals(3, count("SELECT quantity FROM cart_items WHERE user_id=1 AND goods_id=101 AND spec_id=0"));
         }
         assertEquals(3, count("SELECT COUNT(*) FROM goods WHERE stock=1000"));
+    }
+
+    @Test
+    void directOrderDoesNotDeleteMatchingCartSku() {
+        jdbc.update("INSERT INTO goods_specs(id,goods_id,name,price,stock,create_time) " +
+                "VALUES(301,102,'small',10,1000,'2026-01-01 00:00:00')");
+        jdbc.update("INSERT INTO stores(id,name,owner_id,create_time) VALUES(11,'other-store',99,'2026-01-01 00:00:00')");
+        jdbc.update("INSERT INTO goods(id,store_id,name,price,stock,create_time) " +
+                "VALUES(200,11,'other-goods',10,1000,'2026-01-01 00:00:00')");
+        jdbc.update("INSERT INTO cart_items(user_id,goods_id,spec_id,quantity,create_time,update_time) " +
+                "VALUES(1,102,300,1,NOW(),NOW()),(1,102,301,1,NOW(),NOW())," +
+                "(1,200,0,1,NOW(),NOW()),(2,102,300,1,NOW(),NOW())");
+
+        service.createOrder(1, 10, List.of(item(102, 300)), 1, 0, "");
+
+        assertEquals(1, count("SELECT COUNT(*) FROM cart_items WHERE user_id=1 AND goods_id=102 AND spec_id=300"));
+        assertEquals(1, count("SELECT COUNT(*) FROM cart_items WHERE user_id=1 AND goods_id=102 AND spec_id=301"));
+        assertEquals(1, count("SELECT COUNT(*) FROM cart_items WHERE user_id=1 AND goods_id=200 AND spec_id=0"));
+        assertEquals(1, count("SELECT COUNT(*) FROM cart_items WHERE user_id=2 AND goods_id=102 AND spec_id=300"));
+    }
+
+    @Test
+    void cartCheckoutLocksAndConsumesExactLocalSkuSetAcrossStores() {
+        jdbc.update("INSERT INTO goods_specs(id,goods_id,name,price,stock,create_time) " +
+                "VALUES(301,102,'small',10,1000,'2026-01-01 00:00:00')");
+        jdbc.update("INSERT INTO stores(id,name,owner_id,create_time) VALUES(11,'other-store',99,'2026-01-01 00:00:00')");
+        jdbc.update("INSERT INTO goods(id,store_id,name,price,stock,create_time) " +
+                "VALUES(200,11,'other-goods',10,1000,'2026-01-01 00:00:00')");
+        jdbc.update("INSERT INTO cart_items(user_id,goods_id,spec_id,quantity,create_time,update_time) " +
+                "VALUES(1,102,300,1,NOW(),NOW()),(1,102,301,2,NOW(),NOW()),(1,200,0,4,NOW(),NOW())");
+
+        Order.OrderView created = service.createOrder(1, 10, List.of(
+                        item(102, 300),
+                        new Order.OrderItem(102, "test", 0, 2, "", 301, "", 0)),
+                1, 0, "", List.of(102L, 102L, 200L));
+
+        assertEquals(30.0, created.goodsAmount(), 0.001);
+        assertEquals(0, count("SELECT COUNT(*) FROM cart_items WHERE user_id=1 AND goods_id=102"));
+        assertEquals(1, count("SELECT COUNT(*) FROM cart_items WHERE user_id=1 AND goods_id=200 AND spec_id=0"));
+        assertEquals(997, count("SELECT stock FROM goods WHERE id=102"));
+        assertEquals(999, count("SELECT stock FROM goods_specs WHERE id=300"));
+        assertEquals(998, count("SELECT stock FROM goods_specs WHERE id=301"));
+    }
+
+    @Test
+    void multiStoreCheckoutCreatesSecondOrderAfterFirstStoreRowsWereDeleted() {
+        jdbc.update("INSERT INTO stores(id,name,owner_id,create_time) VALUES(11,'other-store',99,'2026-01-01 00:00:00')");
+        jdbc.update("INSERT INTO goods(id,store_id,name,price,stock,create_time) " +
+                "VALUES(200,11,'other-goods',10,1000,'2026-01-01 00:00:00')");
+        jdbc.update("INSERT INTO cart_items(user_id,goods_id,spec_id,quantity,create_time,update_time) " +
+                "VALUES(1,102,300,1,NOW(),NOW()),(1,200,0,1,NOW(),NOW())");
+        List<Long> allSelectedGoods = List.of(102L, 200L);
+
+        service.createOrder(1, 10, List.of(item(102, 300)), 1, 0, "", allSelectedGoods);
+        service.createOrder(1, 11,
+                List.of(new Order.OrderItem(200, "other-goods", 0, 1, "", 0, "", 0)),
+                1, 0, "", allSelectedGoods);
+
+        assertEquals(2, count("SELECT COUNT(*) FROM orders"));
+        assertEquals(0, count("SELECT COUNT(*) FROM cart_items WHERE user_id=1"));
+    }
+
+    @Test
+    void concurrentCartQuantityChangeIsNeverLostByCheckout() throws Exception {
+        jdbc.update("INSERT INTO cart_items(user_id,goods_id,spec_id,quantity,create_time,update_time) " +
+                "VALUES(1,102,300,1,NOW(),NOW())");
+        var source = jdbc.getDataSource();
+        var specs = new GoodsSpecDao(jdbc);
+        var target = new CartService(cartItems, new GoodsDao(jdbc, specs), new StoreDao(jdbc), specs);
+        var proxy = new ProxyFactory(target);
+        proxy.addAdvice(new TransactionInterceptor(new DataSourceTransactionManager(source),
+                new AnnotationTransactionAttributeSource()));
+        var cart = (CartService) proxy.getProxy();
+        AtomicInteger orderCreated = new AtomicInteger(-1);
+
+        runTogether(2, index -> {
+            if (index == 0) {
+                try {
+                    service.createOrder(1, 10, List.of(item(102, 300)), 1, 0, "", List.of(102L));
+                    orderCreated.set(1);
+                } catch (BizException changed) {
+                    assertEquals("购物车商品已变化，请刷新后重试", changed.getMessage());
+                    orderCreated.set(0);
+                }
+            } else {
+                cart.setQuantity(1, 102, 300, 2);
+            }
+        });
+
+        assertTrue(orderCreated.get() == 0 || orderCreated.get() == 1);
+        assertEquals(2, count("SELECT quantity FROM cart_items WHERE user_id=1 AND goods_id=102 AND spec_id=300"));
+        assertEquals(orderCreated.get(), count("SELECT COUNT(*) FROM orders"));
+        assertEquals(1000 - orderCreated.get(), count("SELECT stock FROM goods WHERE id=102"));
+        assertEquals(1000 - orderCreated.get(), count("SELECT stock FROM goods_specs WHERE id=300"));
+    }
+
+    @Test
+    void unresolvedCreateRequestDistinguishesRecentAndHistoricalPlaceholders() {
+        jdbc.update("INSERT INTO order_create_requests(user_id,request_key,order_id,create_time) " +
+                "VALUES(1,'historical',NULL,'2020-01-01 00:00:00'),(2,'recent',NULL,NOW())");
+
+        BizException historical = assertThrows(BizException.class, () -> service.createOrder(
+                1, 10, List.of(item(102, 300)), 1, 0, "", List.of(), "", "historical", List.of(), ""));
+        BizException recent = assertThrows(BizException.class, () -> service.createOrder(
+                2, 10, List.of(item(102, 300)), 2, 0, "", List.of(), "", "recent", List.of(), ""));
+
+        assertEquals("订单可能已提交，请在订单列表核对，不要重复下单", historical.getMessage());
+        assertEquals("订单正在提交中，请稍后重试", recent.getMessage());
+        assertEquals(0, count("SELECT COUNT(*) FROM orders"));
     }
 
     @Test
@@ -344,7 +601,7 @@ class OrderConcurrencyMySqlTest {
 
         runTogether(8, index -> {
             try {
-                if (index == 0) service.payOrder(1, id);
+                if (index == 0) service.payOrder(1, id, "BALANCE", "QR", "135790");
                 else if (index % 2 == 0) service.cancelOrder(1, id);
                 else adminService.orderFlow(id, "cancel");
             } catch (BizException alreadyProcessed) {
@@ -401,7 +658,7 @@ class OrderConcurrencyMySqlTest {
         doThrow(new DataAccessResourceFailureException("injected ledger failure"))
                 .when(paymentRecords).insert(eq(id), anyLong(), anyDouble(), eq("PAY"), anyString(), anyString(), anyString());
 
-        assertThrows(DataAccessResourceFailureException.class, () -> service.payOrder(1, id, "BALANCE"));
+        assertThrows(DataAccessResourceFailureException.class, () -> service.payOrder(1, id, "BALANCE", "QR", "135790"));
 
         assertEquals(0, service.orderDetail(id).status());
         assertEquals(1000, count("SELECT balance FROM users WHERE id=1"));
@@ -460,6 +717,89 @@ class OrderConcurrencyMySqlTest {
             assertEquals(1000, count("SELECT balance FROM users WHERE id=99"));
             assertEquals(1, count("SELECT COUNT(*) FROM refund_records WHERE order_id=900"));
         }
+    }
+
+    @Test
+    void concurrentRefundRetriesReturnOnePersistentApplicationAndProcessedReplay() throws Exception {
+        insertDeliveredOrder(903, 1, 0, 1);
+        var ids = java.util.concurrent.ConcurrentHashMap.<Long>newKeySet();
+        runTogether(8, index -> ids.add(service.applyRefund(1, 903, "QUALITY_ISSUE", "汤洒了", "same-key").id()));
+        assertEquals(1, ids.size());
+        assertEquals(1, count("SELECT COUNT(*) FROM refund_records WHERE order_id=903"));
+        assertEquals(1, count("SELECT COUNT(*) FROM refund_apply_requests WHERE order_id=903"));
+        long firstId = ids.iterator().next();
+        assertTrue(firstId > 0);
+        assertEquals(firstId, new RefundDao(jdbc).findById(firstId).orElseThrow().id());
+
+        adminService.rejectRefund(firstId, "  请补充具体情况  ");
+        assertEquals("REJECTED", service.applyRefund(1, 903, "OTHER", "", "same-key").status());
+        assertEquals(4, count("SELECT status FROM orders WHERE id=903"));
+        assertEquals(1, count("SELECT COUNT(*) FROM refund_records WHERE order_id=903"));
+
+        long nextId = service.applyRefund(1, 903, "OTHER", "补充：汤盒破损", "new-key").id();
+        assertNotEquals(firstId, nextId);
+        assertEquals(List.of(nextId, firstId), service.refundHistory(1, 903).stream()
+                .map(com.example.takeout.model.RefundRecord::id).toList());
+        assertEquals("请补充具体情况", service.refundHistory(1, 903).get(1).rejectReason());
+        assertEquals(403, assertThrows(BizException.class, () -> service.refundHistory(2, 903)).getCode());
+        assertEquals(403, assertThrows(BizException.class,
+                () -> service.applyRefund(2, 903, "OTHER", "餐损", "new-key")).getCode());
+    }
+
+    @Test
+    void concurrentDistinctRefundIntentsReusePendingAndRefundedReplayNeverChangesMoneyOrStock() throws Exception {
+        insertDeliveredOrder(904, 1, 0, 1);
+        var ids = java.util.concurrent.ConcurrentHashMap.<Long>newKeySet();
+        runTogether(8, index -> ids.add(service.applyRefund(1, 904, "OTHER", "餐损", "key-" + index).id()));
+        assertEquals(1, ids.size());
+        assertEquals(1, count("SELECT COUNT(*) FROM refund_records WHERE order_id=904"));
+        assertEquals(8, count("SELECT COUNT(*) FROM refund_apply_requests WHERE order_id=904"));
+        long id = ids.iterator().next();
+        String winningKey = jdbc.queryForObject("SELECT request_key FROM refund_records WHERE id=?", String.class, id);
+        adminService.approveRefund(id);
+        assertEquals("REFUNDED", service.applyRefund(1, 904, null, null, winningKey).status());
+        assertEquals(1023, count("SELECT balance FROM users WHERE id=1"));
+        assertEquals(1000, count("SELECT stock FROM goods WHERE id=100"));
+        assertEquals(1, count("SELECT COUNT(*) FROM payment_records WHERE order_id=904 AND type='REFUND'"));
+        assertEquals(1, count("SELECT COUNT(*) FROM refund_records WHERE order_id=904"));
+        for (int index = 0; index < 8; index++) {
+            assertEquals(id, service.applyRefund(1, 904, null, null, "key-" + index).id());
+        }
+    }
+
+    @Test
+    void rejectedPendingAliasesReplayTheOriginalRefundAndNeverBecomeNewApplications() throws Exception {
+        insertDeliveredOrder(907, 1, 0, 1);
+        var ids = java.util.concurrent.ConcurrentHashMap.<Long>newKeySet();
+        runTogether(8, index -> ids.add(service.applyRefund(1, 907, "OTHER", "餐损", "intent-" + index).id()));
+        assertEquals(1, ids.size());
+        long originalId = ids.iterator().next();
+        assertEquals(8, count("SELECT COUNT(*) FROM refund_apply_requests WHERE order_id=907"));
+        adminService.rejectRefund(originalId, "请补充说明");
+        for (int index = 0; index < 8; index++) {
+            var replay = service.applyRefund(1, 907, "OTHER", "", "intent-" + index);
+            assertEquals(originalId, replay.id());
+            assertEquals("REJECTED", replay.status());
+        }
+        assertEquals(1, count("SELECT COUNT(*) FROM refund_records WHERE order_id=907"));
+        assertEquals(4, count("SELECT status FROM orders WHERE id=907"));
+        long newId = service.applyRefund(1, 907, "OTHER", "新申请补充餐损情况", "intent-new").id();
+        assertNotEquals(originalId, newId);
+        assertEquals(originalId, service.applyRefund(1, 907, null, null, "intent-0").id());
+        assertEquals(2, count("SELECT COUNT(*) FROM refund_records WHERE order_id=907"));
+    }
+
+    @Test
+    void refundDaoReturnsGeneratedKeyOutsideATransactionAcrossIndependentConnections() {
+        RefundDao dao = new RefundDao(jdbc);
+        long first = dao.insert(905, 1, 99, "OTHER", "餐损", 13, "2026-10-26 12:00:00");
+        long second = dao.insert(906, 2, 99, "OTHER", "餐损", 15, "2026-10-26 12:00:01", "key");
+        assertTrue(first > 0);
+        assertTrue(second > first);
+        assertEquals(905, dao.findById(first).orElseThrow().orderId());
+        assertEquals(906, dao.findById(second).orElseThrow().orderId());
+        assertEquals(second, dao.findByRequestKey(906, "key").orElseThrow().id(),
+                "主请求 key 应兼容未建立别名映射的存量申请");
     }
 
     @Test

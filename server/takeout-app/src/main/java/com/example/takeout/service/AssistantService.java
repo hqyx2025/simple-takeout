@@ -64,7 +64,8 @@ public class AssistantService {
         }
 
         // 先识别具体操作，避免「取消订单」落到订单查询、「退钱」落到钱包。
-        if (hit(lower, "退款", "退钱", "取消订单", "取消外卖", "售后")) {
+        if (hit(lower, "退款", "退钱", "取消订单", "取消外卖", "售后",
+                "漏送", "少送", "缺漏", "洒漏", "撒漏", "错送", "送错", "餐损", "破损")) {
             return refundReply();
         }
         if (hit(lower, "支付", "付款", "付不了", "超时")) {
@@ -128,7 +129,8 @@ public class AssistantService {
 
     private static boolean businessHistory(String content) {
         return hit(content.toLowerCase(Locale.ROOT), "订单", "order", "余额", "balance", "钱包", "地址", "收货", "退款",
-                "退钱", "支付", "付款", "充值", "优惠券", "手机号", "手机号码", "账号", "账户", "密码", "¥", "￥");
+                "退钱", "售后", "漏送", "少送", "缺漏", "洒漏", "撒漏", "错送", "送错", "餐损", "破损",
+                "支付", "付款", "充值", "优惠券", "手机号", "手机号码", "账号", "账户", "密码", "¥", "￥");
     }
 
     private AssistantReply navigationReply(String lower) {
@@ -144,7 +146,7 @@ public class AssistantService {
         if (hit(lower, "搜索")) return local("点下面的按钮搜索店铺和商品。", List.of(), "打开搜索", "SEARCH");
         if (hit(lower, "首页", "主页")) return local("点下面的按钮回到首页。", List.of(), "回到首页", "HOME");
         if (hit(lower, "设置")) return local("点下面的按钮打开设置。", List.of(), "打开设置", "SETTINGS");
-        if (hit(lower, "客服")) return local("点下面的按钮联系客服。", List.of(), "联系客服", "SUPPORT");
+        if (hit(lower, "客服", "售后帮助")) return local("点下面的按钮打开售后帮助。", List.of(), "打开售后帮助", "SUPPORT");
         if (hit(lower, "个人", "我的页面", "资料")) return local("点下面的按钮打开我的页面。", List.of(), "打开我的页面", "PROFILE");
         return null;
     }
@@ -187,7 +189,7 @@ public class AssistantService {
                 .mapToDouble(Order::payAmount)
                 .sum();
         return local(String.format(Locale.ROOT,
-                "你的余额是 ¥%.2f，当前未退款订单已支付 ¥%.2f。余额可以直接用于支付订单，退款也会退回余额；充值入口在钱包页面。",
+                "你的余额是 ¥%.2f，当前未退款订单已支付 ¥%.2f。余额可以直接用于支付订单；退款审批同意后，款项按原支付渠道退回。充值入口在钱包页面。",
                 user.balance(), spent),
                 List.of("我的订单到哪了", "推荐几家店"), "打开钱包", "WALLET");
     }
@@ -214,9 +216,11 @@ public class AssistantService {
     }
 
     private AssistantReply refundReply() {
-        return local("退款分两种：待付款订单可以直接取消（还没扣钱，只释放库存和优惠券）；已支付的订单在待接单/制作/配送阶段可取消并即时退款。"
-                + "已送达但未确认收货、未评价的订单可以申请退款，等待平台审批；请在确认收货前申请。审批同意后款项回到余额，订单状态和资金退款状态共同表示退款结果。",
-                List.of("我的订单到哪了", "余额还有多少"), "查看订单与退款入口", "ORDERS");
+        return local("退款分两种：待付款订单可以直接取消（平台尚未扣款，只释放库存和优惠券）；已支付且待商家接单的订单可以取消，款项按原支付渠道全额退回。"
+                + "订单进入制作或配送后不能直接取消，如需处理请进入「我的 → 订单」，打开对应订单，通过退款/售后入口联系平台。"
+                + "餐品漏送、少送、错送、洒漏或餐损时，也请在订单详情使用退款/售后入口。"
+                + "已送达但未确认收货、未评价的订单可以申请退款；请在确认收货前申请。审批同意后款项按原支付渠道退回，处理进度也在订单详情查看。",
+                List.of("我的订单到哪了", "余额还有多少"), "打开订单详情处理售后", "ORDERS");
     }
 
     private AssistantReply payReply() {

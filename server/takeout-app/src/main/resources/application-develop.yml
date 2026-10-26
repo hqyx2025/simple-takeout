@@ -1,12 +1,12 @@
 takeout:
   data-seed:
-    enabled: true
+    enabled: ${TAKEOUT_DATA_SEED_ENABLED:false}
   demo:
-    recharge-enabled: ${TAKEOUT_DEMO_RECHARGE_ENABLED:true}
-    signup-balance: ${TAKEOUT_DEMO_SIGNUP_BALANCE:20}
+    recharge-enabled: ${TAKEOUT_DEMO_RECHARGE_ENABLED:false}
+    signup-balance: ${TAKEOUT_DEMO_SIGNUP_BALANCE:0}
   sms:
     provider: ${TAKEOUT_SMS_PROVIDER:mock}
-    expose-mock-code: ${TAKEOUT_SMS_EXPOSE_MOCK_CODE:true}
+    expose-mock-code: ${TAKEOUT_SMS_EXPOSE_MOCK_CODE:false}
     daily-limit: ${TAKEOUT_SMS_DAILY_LIMIT:5}
     hourly-limit: ${TAKEOUT_SMS_HOURLY_LIMIT:100}
   upload:

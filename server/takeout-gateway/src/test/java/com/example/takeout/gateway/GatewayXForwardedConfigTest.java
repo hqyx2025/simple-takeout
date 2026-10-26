@@ -15,18 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * 网关配置契约测试（直接读 application.yml，不启动 Spring 上下文）。
- *
- * <p><b>为什么必须钉住</b>：网关是信任边界，两处配置错了都会**静默**造成安全/可用性回归，
- * 且症状离配置很远——表现为「限流莫名其妙不管用」或「所有人一起被限流」，
- * 排查时很难联想到 YAML：</p>
- * <ul>
- *   <li>{@code trusted-proxies} 写成 CIDR（如 {@code 0.0.0.0/0}）而匹配不上直连地址时，
- *       Spring Cloud Gateway 会调用 RemoveXForwardedHeadersFilter 把 X-Forwarded-* **整体剔除**
- *       → 后端退化为用网关地址，全站共用一个限流桶（一个人触发封禁让所有人登录失败，DoS）。</li>
- *   <li>{@code for-append=true} 时，客户端自带的伪造 {@code X-Forwarded-For: 1.2.3.4}
- *       会被保留在列表最前，而后端 {@code clientIp()} 取 {@code split(",")[0]}
- *       → 攻击者每换一个伪造 IP 就重置一个限流桶，**无限绕过登录限流**。</li>
- * </ul>
+ * 来源 IP 由 ClientIpHeadersFilter 生成，行为测试另见 ClientIpHeadersFilterTest。
  */
 class GatewayXForwardedConfigTest {
 
@@ -59,12 +48,10 @@ class GatewayXForwardedConfigTest {
         Object forEnabled = dig(root, "spring", "cloud", "gateway", "server", "webflux", "x-forwarded", "for-enabled");
         Object forAppend = dig(root, "spring", "cloud", "gateway", "server", "webflux", "x-forwarded", "for-append");
 
-        assertTrue(Boolean.TRUE.equals(enabled), "x-forwarded.enabled 必须为 true，否则客户端 IP 传不到后端");
-        assertTrue(Boolean.TRUE.equals(forEnabled), "x-forwarded.for-enabled 必须为 true，限流依赖它");
-        // 安全不变量：必须是覆写语义。改成 true 会让客户端伪造的 XFF 排在最前，
-        // 而后端 clientIp() 取第一个值 —— 限流可被任意绕过。
+        assertTrue(Boolean.TRUE.equals(enabled), "保留 Gateway 的其他转发头处理");
+        assertFalse(Boolean.TRUE.equals(forEnabled), "来源地址由 ClientIpHeadersFilter 统一生成");
         assertFalse(Boolean.TRUE.equals(forAppend),
-                "x-forwarded.for-append 必须为 false（覆写）——true 会让客户端伪造 XFF 生效，绕过登录限流");
+                "不再由 Gateway 内置过滤器追加来源 IP");
     }
 
     @Test
@@ -72,15 +59,15 @@ class GatewayXForwardedConfigTest {
         Map<String, Object> root = loadGatewayConfig();
 
         Object trusted = dig(root, "spring", "cloud", "gateway", "server", "webflux", "trusted-proxies");
-        assertNotNull(trusted, "trusted-proxies 必须显式配置；不配时网关会剔除 X-Forwarded-*，"
-                + "后端只能看到网关地址（全站共用一个限流桶）");
+        assertNotNull(trusted, "必须明确指定可声明转发来源的受控代理");
 
-        String pattern = String.valueOf(trusted);
+        String pattern = new org.springframework.mock.env.MockEnvironment().resolveRequiredPlaceholders(String.valueOf(trusted));
         // 该属性是**正则**，匹配直连网关的远端地址字符串，不是 CIDR 网段。
         // 写成 "0.0.0.0/0" 会因匹配不上 "127.0.0.1" 而静默失效（实测踩过）。
         assertFalse(pattern.contains("0.0.0.0/0"),
                 "trusted-proxies 是正则不是 CIDR；写成 0.0.0.0/0 不匹配任何真实地址：pattern=" + pattern);
-        assertTrue(pattern.equals(".*") || "127.0.0.1".matches(pattern),
+        assertFalse("192.0.2.10".matches(pattern), "不能信任公网直连来源的转发头");
+        assertTrue("127.0.0.1".matches(pattern),
                 "trusted-proxies 必须能匹配直连地址（如 127.0.0.1），否则 X-Forwarded-For 会被网关丢弃：pattern=" + pattern);
     }
 

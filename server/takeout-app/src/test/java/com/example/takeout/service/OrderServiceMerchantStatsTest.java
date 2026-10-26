@@ -30,7 +30,7 @@ class OrderServiceMerchantStatsTest {
     void merchantStatsUsesAggregateQueryAndMapsChartData() {
         Store store = new Store(12, "店铺", "", 5, 0, 3, 20, "30分钟", "未知距离", "", "",
                 1, "[]", 7, 1, 0, "2026-01-01 00:00:00");
-        when(stores.listByOwner(7)).thenReturn(List.of(store));
+        when(stores.listAccessibleByMerchant(7)).thenReturn(List.of(store));
         List<Double> revenue = List.of(1d, 2d, 3d, 4d, 5d, 6d, 7d);
         List<Long> statuses = List.of(1L, 2L, 3L, 4L, 5L);
         when(orders.aggregateMerchantStats(any(Long.class), any(String.class), any(String.class), any(String.class),

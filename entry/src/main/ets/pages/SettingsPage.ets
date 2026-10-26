@@ -219,7 +219,7 @@ export struct SettingsPage {
               SettingsItemRow({ icon: $r('app.media.ui_info'), title: '关于简单外卖', value: `v${this.version}`,
                 action: () => { this.showAbout = true }, itemId: 'settings-about' })
               this.SettingDivider()
-              SettingsItemRow({ icon: $r('app.media.profile_headset'), title: '帮助与客服',
+              SettingsItemRow({ icon: $r('app.media.profile_headset'), title: '售后帮助',
                 action: () => { router.pushUrl({ url: 'pages/ContactCustomerServicePage' }) }, itemId: 'settings-help' })
             }.attributeModifier(new AppCardStyle()).width('100%').padding(SPACING.XS)
           }.width('100%').constraintSize({ maxWidth: 680 }).padding(SPACING.LG)

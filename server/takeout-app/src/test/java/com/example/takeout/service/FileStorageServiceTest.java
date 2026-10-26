@@ -22,6 +22,14 @@ class FileStorageServiceTest {
 
     private FileStorageService storage;
 
+    @Test
+    void insufficientDiskReserveStopsWriting() {
+        ReflectionTestUtils.setField(storage, "minFreeBytes", Long.MAX_VALUE);
+        BizException error = assertThrows(BizException.class, () -> storage.store(
+                new MockMultipartFile("file", "photo.jpg", "image/jpeg", bytes(0xFF, 0xD8, 0xFF))));
+        org.junit.jupiter.api.Assertions.assertEquals(503, error.getCode());
+    }
+
     @BeforeEach
     void setUp() throws IOException {
         storage = new FileStorageService(tempDir.toString());

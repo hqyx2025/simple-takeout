@@ -21,6 +21,22 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    /** 缺失静态资源是正常 404；匿名请求不得触发 ERROR 堆栈或污染审计日志。 */
+    @ExceptionHandler({org.springframework.web.servlet.resource.NoResourceFoundException.class,
+            org.springframework.web.servlet.NoHandlerFoundException.class})
+    public ResponseEntity<ApiResponse<Void>> handleMissingResource() {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error(404, "资源不存在"));
+    }
+
+    /** 保留框架显式 HTTP 状态，4xx 不应变成服务器异常；不向客户端回传异常 reason。 */
+    @ExceptionHandler(org.springframework.web.ErrorResponseException.class)
+    public ResponseEntity<ApiResponse<Void>> handleHttpStatus(org.springframework.web.ErrorResponseException e) {
+        int code = e.getStatusCode().value();
+        if (code >= 500) log.error("服务器 HTTP 错误 status={}", code, e);
+        String message = code == 404 ? "资源不存在" : code < 500 ? "请求参数或操作不正确" : "服务器内部错误，请稍后重试";
+        return ResponseEntity.status(e.getStatusCode()).body(ApiResponse.error(code, message));
+    }
+
     @ExceptionHandler(BizException.class)
     public ResponseEntity<ApiResponse<Void>> handleBiz(BizException e) {
         log.warn("业务请求失败 code={} message={}", e.getCode(), e.getMessage());
@@ -31,6 +47,7 @@ public class GlobalExceptionHandler {
             case 404 -> HttpStatus.NOT_FOUND;
             // 限流：保持 429 语义，前端才能把「太频繁」与普通参数错误区分开
             case 429 -> HttpStatus.TOO_MANY_REQUESTS;
+            case 503 -> HttpStatus.SERVICE_UNAVAILABLE;
             default -> HttpStatus.BAD_REQUEST;
         };
         return ResponseEntity.status(status).body(ApiResponse.error(e.getCode(), e.getMessage()));

@@ -218,9 +218,7 @@ public class StoreController {
                                                      @RequestParam(required = false) Double latitude,
                                                      @RequestParam(required = false) Double longitude) {
         List<Store.StoreView> stores = storeService.listStores(categoryId, latitude, longitude);
-        log.info("[数据] 店铺查询 categoryId={} 返回 count={} items={}", categoryId,
-                stores.size(), stores.stream().map(s -> s.id() + ":" + s.name() + ":cat=" + s.categoryId())
-                        .collect(Collectors.joining(",")));
+        log.debug("[数据] 店铺查询 categoryId={} count={}", categoryId, stores.size());
         return ApiResponse.ok(stores);
     }
 

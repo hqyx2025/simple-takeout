@@ -41,17 +41,22 @@ export async function fetchAdminRefundsApi(status?: string): Promise<RefundRecor
 }
 
 export async function fetchAdminRefundsPageApi(status?: string, page: number = 1,
-  pageSize: number = 50): Promise<RefundPageData> {
+  pageSize: number = 50): Promise<RefundPageData | null> {
   const params: string[] = [`page=${page}`, `pageSize=${pageSize}`]
   if (status !== undefined && status !== '') {
     params.push(`status=${encodeURIComponent(status)}`)
   }
   const resp: ApiResponse<ServerRefundPage> = await get<ServerRefundPage>(`/api/admin/refunds/page?${params.join('&')}`)
   if (resp.code !== 200 || resp.data === null) {
-    return { list: [], total: 0, page: page, pageSize: pageSize, hasMore: false }
+    return null
   }
   return { list: resp.data.list, total: resp.data.total, page: resp.data.page,
     pageSize: resp.data.pageSize, hasMore: resp.data.hasMore }
+}
+
+export async function fetchAdminRefundDetailApi(refundId: number): Promise<RefundRecord | null> {
+  const resp: ApiResponse<RefundRecord> = await get<RefundRecord>(`/api/admin/refunds/${refundId}`)
+  return resp.code === 200 ? resp.data : null
 }
 
 export async function approveRefundApi(refundId: number): Promise<boolean> {

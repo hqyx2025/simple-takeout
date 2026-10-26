@@ -113,10 +113,24 @@ export default function riderFlowTest() {
       const pickupId: string = 'rider-pickup-' + orderId
       const deliverId: string = 'rider-deliver-' + orderId
       requireComponent(await waitForOrderAction(driver, pickupId, 12000), pickupId)
+      const readyStatus: Component = requireComponent(
+        await driver.findComponent(ON.id('rider-order-status-' + orderId)), 'assigned order status')
+      expect(await readyStatus.getText()).assertEqual('待取餐')
+      requireComponent(await scrollUntilVisible(driver, 'rider-copy-address-' + orderId), 'copy recipient address')
+      requireComponent(await scrollUntilVisible(driver, 'rider-store-location-' + orderId), 'store location entry')
+      requireComponent(await scrollUntilVisible(driver, pickupId), pickupId)
       expect(await clickByIdOrText(driver, pickupId, '取餐')).assertTrue()
       await driver.waitForIdle(800, 8000)
       requireComponent(await waitForOrderAction(driver, deliverId, 12000), deliverId)
       expect(await clickByIdOrText(driver, deliverId, '送达')).assertTrue()
+      requireComponent(await waitAny(driver, ['rider-deliver-confirm-dialog'], 5000), 'delivery confirmation')
+      expect(await clickByIdOrText(driver, '', '尚未交付')).assertTrue()
+      const afterCancel: Order[] = await syncRiderOrdersRemote()
+      const stillDelivering: Order | undefined = afterCancel.find((order: Order) => order.id === orderId)
+      expect(stillDelivering?.status).assertEqual(3)
+      requireComponent(await waitForOrderAction(driver, deliverId, 12000), deliverId)
+      expect(await clickByIdOrText(driver, deliverId, '送达')).assertTrue()
+      expect(await clickByIdOrText(driver, '', '确认已交付')).assertTrue()
       await driver.delayMs(5000)
 
       const mine: Order[] = await syncRiderOrdersRemote()
@@ -128,6 +142,9 @@ export default function riderFlowTest() {
       }
       console.info('[RiderFlow] order ' + orderId + ' status after deliver = ' + (delivered === null ? 'not-found' : delivered.status.toString()))
       expect(delivered !== null).assertTrue()
+      expect(delivered?.status).assertEqual(4)
+      requireComponent(await scrollUntilVisible(driver, 'rider-contact-hidden-' + orderId), 'recipient hidden after delivery')
+      expect(isFound(await driver.findComponent(ON.id('rider-contact-' + orderId)))).assertFalse()
     })
   })
 }

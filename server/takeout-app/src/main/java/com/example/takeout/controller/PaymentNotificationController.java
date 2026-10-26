@@ -40,6 +40,9 @@ public class PaymentNotificationController {
         try {
             paymentService.acceptNotification(PaymentChannels.WECHAT, rawBody, headers);
             return ResponseEntity.ok(WECHAT_SUCCESS);
+        } catch (com.example.takeout.common.BizException e) {
+            return ResponseEntity.status(e.getCode() == 503 ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.BAD_REQUEST)
+                    .body("{\"code\":\"FAIL\",\"message\":\"通知未受理\"}");
         } catch (SecurityException e) {
             log.warn("Rejected WeChat Pay notification: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("{\"code\":\"FAIL\",\"message\":\"通知校验失败\"}");
@@ -56,6 +59,8 @@ public class PaymentNotificationController {
         try {
             paymentService.acceptNotification(PaymentChannels.ALIPAY, "", parameters);
             return ResponseEntity.ok("success");
+        } catch (com.example.takeout.common.BizException e) {
+            return ResponseEntity.status(e.getCode() == 503 ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.BAD_REQUEST).body("failure");
         } catch (SecurityException e) {
             log.warn("Rejected Alipay notification: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("failure");

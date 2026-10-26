@@ -118,8 +118,9 @@ class OrderBoundaryTest {
                 + "\"image\":\"\",\"specId\":300,\"specName\":\"大份\",\"seckillId\":400}]";
         when(orderDao.findById(33)).thenReturn(Optional.of(storedOrder(33, 1, 0, items)));
         when(orderDao.refundEscrow(33)).thenReturn(true);
-        when(orderDao.updateStatusFrom(eq(33L), eq(1), eq(5), eq("complete_time"), anyString())).thenReturn(true);
-        when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore(0, 3)));
+        when(orderDao.cancelPaidFrom(eq(33L), eq(1), anyString(), eq("ADMIN"), eq("PLATFORM_CANCELLED"),
+                eq("平台取消订单"), eq(0L))).thenReturn(true);
+        when(storeDao.hasMerchantAccess(OWNER_ID, STORE_ID)).thenReturn(true);
 
         adminService.refundOrder(33);
 
@@ -135,7 +136,7 @@ class OrderBoundaryTest {
     @Test
     void merchantAcceptRollsBackWhenOrderAdvancedConcurrently() {
         when(orderDao.findById(7)).thenReturn(Optional.of(storedOrder(7, 1, 0)));
-        when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore(0, 3)));
+        when(storeDao.hasMerchantAccess(OWNER_ID, STORE_ID)).thenReturn(true);
         // 期间用户已取消：条件状态更新失败必须整单回滚，而不是把已取消订单改回制作中
         when(orderDao.updateStatusFrom(eq(7L), eq(1), eq(2), eq("accept_time"), anyString())).thenReturn(false);
 
@@ -201,16 +202,19 @@ class OrderBoundaryTest {
         when(addressDao.listByUser(USER_ID)).thenReturn(List.of(
                 new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "")));
         when(goodsDao.findById(GOODS_ID)).thenReturn(Optional.of(multiSpec));
-        when(goodsDao.deductStock(GOODS_ID, 2)).thenReturn(true);
-        when(specDao.deductStock(300, 2)).thenReturn(true);
+        when(goodsDao.deductStock(eq(GOODS_ID), anyInt())).thenReturn(true);
+        when(specDao.deductStock(300, 1)).thenReturn(true);
+        when(specDao.deductStock(301, 2)).thenReturn(true);
         when(cartItemMapper.selectList(any())).thenReturn(List.of(
                 cartRow(GOODS_ID, 300, 1), cartRow(GOODS_ID, 301, 2)));
         when(orderDao.insert(any(Order.class))).thenReturn(13L);
         when(orderDao.findById(13)).thenReturn(Optional.of(storedOrder(13, 0, 0)));
 
-        // 结算上报以菜品为粒度，同一菜品的两个规格会重复上报同一个 goodsId，不能因此拒单
+        // 同一菜品的两个购物车规格都必须与请求的 SKU 和数量逐行一致。
         service.createOrder(USER_ID, STORE_ID,
-                List.of(new Order.OrderItem(GOODS_ID, "测试商品", 10, 2, "", 300, "小份", 0)),
+                List.of(
+                        new Order.OrderItem(GOODS_ID, "测试商品", 10, 1, "", 300, "小份", 0),
+                        new Order.OrderItem(GOODS_ID, "测试商品", 15, 2, "", 301, "大份", 0)),
                 ADDRESS_ID, 0, "", List.of(GOODS_ID, GOODS_ID));
 
         verify(orderDao).insert(any(Order.class));
@@ -297,6 +301,7 @@ class OrderBoundaryTest {
 
     @Test
     void applyRefundRejectsUnknownReasonType() {
+        when(orderDao.findById(8)).thenReturn(Optional.of(storedOrder(8, 4, 0)));
         BizException error = assertThrows(BizException.class,
                 () -> service.applyRefund(USER_ID, 8, "HACK", ""));
 
@@ -327,6 +332,77 @@ class OrderBoundaryTest {
                 List.of(item()), ADDRESS_ID, 66, "", List.of()));
 
         assertEquals("优惠券抵扣后应付金额为 0，请更换优惠券", error.getMessage());
+        verify(couponDao, never()).markUsed(anyLong());
+        verify(orderDao, never()).insert(any(Order.class));
+    }
+
+    @Test
+    void couponMayCoverGoodsWhileDeliveryKeepsTheOrderPayable() {
+        stubCouponOrder(10, 3);
+        // createTime 是发券记录时间，不是未来生效时间；使用资格只由到期时间等实际规则决定。
+        when(couponDao.listByUser(USER_ID)).thenReturn(List.of(
+                new Coupon(66, USER_ID, STORE_ID, "抵货款券", 10, 10, 0,
+                        "2100-01-01 00:00:00", "", "2099-01-01 00:00:00")));
+
+        Order.OrderView order = service.createOrder(USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 66, "", List.of());
+
+        assertEquals(3.0, order.payAmount(), 0.0001);
+        assertEquals(0, order.status());
+        verify(orderDao).insert(org.mockito.ArgumentMatchers.argThat(created ->
+                created.goodsAmount() == 10 && created.deliveryFee() == 3 && created.discount() == 10 && created.payAmount() == 3));
+        verify(couponDao).markUsed(66);
+        verify(userDao, never()).deductBalance(anyLong(), anyDouble());
+    }
+
+    @Test
+    void oneCentPayableAfterCouponIsValid() {
+        stubCouponOrder(12.99, 0.01);
+        when(couponDao.listByUser(USER_ID)).thenReturn(List.of(
+                new Coupon(66, USER_ID, 0, "临界券", 10, 12.99, 0,
+                        "2100-01-01 00:00:00", "", "2026-01-01 00:00:00")));
+
+        Order.OrderView order = service.createOrder(USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 66, "", List.of());
+
+        assertEquals(0.01, order.payAmount(), 0.0001);
+        verify(orderDao).insert(org.mockito.ArgumentMatchers.argThat(created -> created.payAmount() == 0.01));
+        verify(couponDao).markUsed(66);
+    }
+
+    @Test
+    void deliveryFeeCannotMakeAnUnmetGoodsThresholdEligible() {
+        stubMinimalOrderContext();
+        when(couponDao.listByUser(USER_ID)).thenReturn(List.of(
+                new Coupon(66, USER_ID, 0, "门槛券", 10.01, 1, 0,
+                        "2100-01-01 00:00:00", "", "2026-01-01 00:00:00")));
+
+        assertTrue(assertThrows(BizException.class, () -> service.createOrder(USER_ID, STORE_ID,
+                List.of(item()), ADDRESS_ID, 66, "", List.of())).getMessage().contains("未达到优惠券使用门槛"));
+        verify(couponDao, never()).markUsed(anyLong());
+        verify(orderDao, never()).insert(any(Order.class));
+    }
+
+    @Test
+    void couponBeyondGoodsAndDeliveryIsRejectedBeforeReservation() {
+        stubMinimalOrderContext();
+        when(couponDao.listByUser(USER_ID)).thenReturn(List.of(
+                new Coupon(66, USER_ID, 0, "超额券", 0, 13.01, 0,
+                        "2100-01-01 00:00:00", "", "2026-01-01 00:00:00")));
+
+        assertEquals("优惠金额不能超过订单金额", assertThrows(BizException.class, () -> service.createOrder(
+                USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 66, "", List.of())).getMessage());
+        verify(couponDao, never()).markUsed(anyLong());
+        verify(goodsDao, never()).deductStock(anyLong(), anyInt());
+    }
+
+    @Test
+    void missingOrMalformedCouponExpiryCannotBeUsed() {
+        stubMinimalOrderContext();
+        for (String expiry : new String[]{null, "", "not-a-date"}) {
+            when(couponDao.listByUser(USER_ID)).thenReturn(List.of(
+                    new Coupon(66, USER_ID, 0, "时间异常券", 0, 1, 0, expiry, "", "2026-01-01 00:00:00")));
+            assertEquals("优惠券已过期", assertThrows(BizException.class, () -> service.createOrder(
+                    USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 66, "", List.of())).getMessage());
+        }
         verify(couponDao, never()).markUsed(anyLong());
         verify(orderDao, never()).insert(any(Order.class));
     }
@@ -373,5 +449,14 @@ class OrderBoundaryTest {
         when(userDao.findById(USER_ID)).thenReturn(Optional.of(
                 new User(USER_ID, "测试用户", "", "13800138000", "", 0, 50, "2026-08-16 10:00:00")));
         when(goodsDao.deductStock(GOODS_ID, 1)).thenReturn(true);
+    }
+
+    private void stubCouponOrder(double discount, double payable) {
+        stubMinimalOrderContext();
+        when(couponDao.markUsed(66)).thenReturn(true);
+        when(orderDao.insert(any(Order.class))).thenReturn(13L);
+        when(orderDao.findById(13)).thenReturn(Optional.of(new Order(13, "NO13", USER_ID, STORE_ID,
+                "测试店", 0, ITEMS, ADDRESS_JSON, 10, 3, discount, payable, "", 0, 0,
+                "2026-10-26 10:00:00", "", "", "", "", "", 66)));
     }
 }

@@ -33,6 +33,8 @@ public class FileStorageService implements ObjectStorage {
 
     @Value("${takeout.upload.local-enabled:true}")
     private boolean localStorageEnabled = true;
+    @Value("${takeout.upload.min-free-bytes:536870912}")
+    private long minFreeBytes = 536870912L;
 
     public FileStorageService(@Value("${takeout.upload.dir:uploads}") String uploadDir) {
         this.root = Paths.get(uploadDir).toAbsolutePath().normalize();
@@ -67,6 +69,9 @@ public class FileStorageService implements ObjectStorage {
                 throw new BizException("非法的上传路径");
             }
             Files.createDirectories(targetDir);
+            if (Files.getFileStore(root).getUsableSpace() - file.getSize() < Math.max(0, minFreeBytes)) {
+                throw new BizException(503, "存储空间不足，请稍后重试");
+            }
             Path target = targetDir.resolve(fileName);
             try (var in = file.getInputStream()) {
                 Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);

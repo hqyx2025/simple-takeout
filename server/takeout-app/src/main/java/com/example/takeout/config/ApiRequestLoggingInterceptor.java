@@ -51,10 +51,9 @@ public class ApiRequestLoggingInterceptor implements HandlerInterceptor {
         TraceContext.bind(traceId);
         // 回写响应头：前端报错时可直接带上该值，服务端一次 grep 即可定位
         response.setHeader(TraceContext.HEADER, traceId);
-        log.info("[接口请求开始] traceId={} method={} uri={} query={} client={} auth={}",
+        log.info("[接口请求开始] traceId={} method={} uri={} auth={}",
                 traceId,
-                request.getMethod(), request.getRequestURI(), query(request),
-                request.getRemoteAddr(), hasBearerToken(request) ? "Bearer" : "None");
+                request.getMethod(), request.getRequestURI(), hasBearerToken(request) ? "Bearer" : "None");
         return true;
     }
 
@@ -130,11 +129,6 @@ public class ApiRequestLoggingInterceptor implements HandlerInterceptor {
             }
         }
         return 0;
-    }
-
-    private String query(HttpServletRequest request) {
-        String query = request.getQueryString();
-        return query == null || query.isBlank() ? "-" : query;
     }
 
     private boolean hasBearerToken(HttpServletRequest request) {

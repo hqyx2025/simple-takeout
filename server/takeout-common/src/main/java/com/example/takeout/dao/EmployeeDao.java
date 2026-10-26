@@ -48,7 +48,7 @@ public class EmployeeDao {
         return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 
-    public void delete(long id) {
-        jdbc.update("DELETE FROM employees WHERE id = ?", id);
+    public boolean delete(long storeId, long id) {
+        return jdbc.update("DELETE FROM employees WHERE id = ? AND store_id = ?", id, storeId) == 1;
     }
 }

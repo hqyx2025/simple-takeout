@@ -126,6 +126,8 @@ class AssistantServiceTest {
         // 已取消订单不计入累计支付
         assertTrue(answer.contains("20.00"), answer);
         assertFalse(answer.contains("119.00"), answer);
+        assertTrue(answer.contains("按原支付渠道退回"), answer);
+        assertFalse(answer.contains("退回余额"), answer);
     }
 
     @Test
@@ -185,8 +187,30 @@ class AssistantServiceTest {
             assertFalse(reply.answer().contains("你的余额"), reply.answer());
             assertFalse(reply.answer().contains("还没有订单"), reply.answer());
         }
-        assertTrue(assistant.reply(1, "退款").answer().contains("确认收货前申请"));
-        assertFalse(assistant.reply(1, "退款").answer().contains("先确认收货"));
+        String refundAnswer = assistant.reply(1, "退款").answer();
+        assertTrue(refundAnswer.contains("确认收货前申请"));
+        assertFalse(refundAnswer.contains("先确认收货"));
+        assertTrue(refundAnswer.contains("按原支付渠道全额退回"));
+        assertTrue(refundAnswer.contains("进入制作或配送后不能直接取消"));
+        assertTrue(refundAnswer.contains("通过退款/售后入口联系平台"));
+        assertFalse(refundAnswer.contains("待接单/制作/配送阶段可取消"));
+    }
+
+    @Test
+    void foodDamageKeywordsStayLocalAndGuideToOrderAfterSales() {
+        AssistantConfigService configService = mock(AssistantConfigService.class);
+        AssistantAiClient client = mock(AssistantAiClient.class);
+        AssistantService assistant = new AssistantService(new FakeOrderDao(List.of()), new FakeUserDao(user(20)),
+                new FakeStoreService(List.of()), configService, client);
+
+        for (String question : List.of("餐品漏送", "餐品少送", "汤洒漏了", "商家错送", "出现餐损")) {
+            AssistantService.AssistantReply reply = assistant.reply(1, question);
+            assertEquals("LOCAL", reply.source(), question);
+            assertEquals("ORDERS", reply.actions().getFirst().target(), question);
+            assertTrue(reply.answer().contains("订单详情"), reply.answer());
+            assertTrue(reply.answer().contains("退款/售后入口"), reply.answer());
+        }
+        verifyNoInteractions(configService, client);
     }
 
     @Test

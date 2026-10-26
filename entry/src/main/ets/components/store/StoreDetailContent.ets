@@ -3,8 +3,8 @@ import { AppButtonStyle, AppCardStyle, AppFilterStyle, AppTheme } from '../../co
  * 主页面 - 简单外卖App
  * 包含：搜索栏、分类导航、店铺列表、店铺详情、购物车、订单列表、个人中心、底部Tab导航
  */
-import { Category, StoreItem, GoodsItem, GoodsSpec, SeckillItem, CartItem, Order, Review, Address, MarketingActivity, Setmeal, SetmealItem, SetmealOrder } from '../../model/Models'
-import { addCartItemRemote, updateCartItemQuantityRemote, createOrderRemote, refreshCartFromServer, isLoggedIn, getAllStoresList, getGoodsForStore, isFavorited, syncCartRemote, syncStoreReviewsRemote, syncGoodsFromServer, toggleFavoriteRemote, fetchSeckillsRemote, getLastRemoteErrorMessage } from '../../service/AppStorageManager'
+import { Category, StoreItem, GoodsItem, GoodsSpec, SeckillItem, CartItem, Order, Review, MarketingActivity, Setmeal, SetmealItem } from '../../model/Models'
+import { addCartItemRemote, updateCartItemQuantityRemote, refreshCartFromServer, isLoggedIn, getAllStoresList, getGoodsForStore, isFavorited, syncCartRemote, syncStoreReviewsRemote, syncGoodsFromServer, toggleFavoriteRemote, fetchSeckillsRemote, getLastRemoteErrorMessage } from '../../service/AppStorageManager'
 import { fetchStoreMerchantCategoriesApi, fetchStoreDetailApi, fetchStoreActivitiesApi, fetchStoreSetmealsApi } from '../../service/ApiService'
 
 import { CartAddAnimator, CartAddFlight } from '../../components/CartAddFlight'
@@ -177,24 +177,6 @@ export struct StoreDetailContent {
       return
     }
     this.storeSetmeals = await fetchStoreSetmealsApi(this.storeId)
-  }
-
-  /** 预订套餐：直接下单（items 为空 + setmeals），成功后提示去订单详情支付。 */
-  private async buySetmeal(sm: Setmeal): Promise<void> {
-    const addr: Address | null | undefined = AppStorage.get<Address | null>('currentAddress')
-    if (addr === null || addr === undefined || addr.id <= 0) {
-      promptAction.showToast({ message: '请先选择收货地址', duration: 1800 })
-      return
-    }
-    const setmeals: SetmealOrder[] = [ { setmealId: sm.id, quantity: 1 } ]
-    const key: string = `sm-${Date.now()}-${Math.floor(Math.random() * 100000)}`
-    const order: Order | null = await createOrderRemote(this.storeId, [], addr.id, 0, '', [], '', key, 'DELIVERY', setmeals)
-    if (order === null) {
-      const err: string = getLastRemoteErrorMessage()
-      promptAction.showToast({ message: err === '' ? '套餐下单失败，请稍后重试' : err, duration: 2200 })
-      return
-    }
-    promptAction.showToast({ message: '套餐已下单，请在订单详情完成支付', duration: 2000 })
   }
 
   /** 菜品当前秒杀价（无秒杀返回 0）。 */
@@ -534,12 +516,12 @@ export struct StoreDetailContent {
       if (this.storeSetmeals.length > 0) {
         Column({ space: SPACING.SM }) {
           Text('超值套餐').fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.SPECIAL).width('100%')
+          Text('套餐下单即将开放').fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%')
           ForEach(this.storeSetmeals, (sm: Setmeal, index: number) => {
             Column({ space: SPACING.XS }) {
               Row() {
                 Text(sm.name).fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1).maxLines(1)
                 Text(`¥${sm.price.toFixed(2)}`).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.PRICE_RED)
-                  .onClick(() => { this.buySetmeal(sm) })
               }.width('100%')
               Text(sm.items.map((it: SetmealItem) => it.goodsName).join(' + ')).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
               if (sm.originalPrice > sm.price) {

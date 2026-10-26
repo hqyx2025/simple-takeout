@@ -570,7 +570,7 @@ export struct LocationPage {
     const phone: string = user !== undefined && user !== null ? user.phone : ''
     const fullAddress: string = `${addressText} ${detail}`.trim()
     const persistedAddress: Address | null = await addAddressRemoteAndGet(name, phone, fullAddress, true,
-      pos.latitude, pos.longitude)
+      pos.latitude, pos.longitude, addressText, detail)
     if (!isLoggedIn() || session !== (AppStorage.get<string>('authToken') ?? '')
       || user?.id !== AppStorage.get<User>('user')?.id) {
       return

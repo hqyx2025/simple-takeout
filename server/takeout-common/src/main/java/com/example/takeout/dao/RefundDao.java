@@ -3,8 +3,10 @@ package com.example.takeout.dao;
 import com.example.takeout.model.RefundRecord;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.stereotype.Repository;
 
+import java.sql.Statement;
 import java.util.List;
 import java.util.Optional;
 
@@ -35,9 +37,54 @@ public class RefundDao {
     }
 
     public long insert(long orderId, long userId, long merchantId, String reasonType, String reason, double amount, String applyTime) {
-        jdbc.update("INSERT INTO refund_records(order_id, user_id, merchant_id, reason_type, reason, amount, status, apply_time, process_time, reject_reason) VALUES(?,?,?,?,?,?,?,?,?,?)",
-                orderId, userId, merchantId, reasonType, reason, amount, "PENDING", applyTime, "", "");
-        return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+        return insert(orderId, userId, merchantId, reasonType, reason, amount, applyTime, null);
+    }
+
+    public long insert(long orderId, long userId, long merchantId, String reasonType, String reason,
+                       double amount, String applyTime, String requestKey) {
+        GeneratedKeyHolder keys = new GeneratedKeyHolder();
+        jdbc.update(connection -> {
+            var statement = connection.prepareStatement("INSERT INTO refund_records(order_id, user_id, merchant_id, " +
+                    "reason_type, reason, amount, status, apply_time, process_time, reject_reason, request_key) " +
+                    "VALUES(?,?,?,?,?,?,'PENDING',?,'','',?)", Statement.RETURN_GENERATED_KEYS);
+            statement.setLong(1, orderId);
+            statement.setLong(2, userId);
+            statement.setLong(3, merchantId);
+            statement.setString(4, reasonType);
+            statement.setString(5, reason);
+            statement.setDouble(6, amount);
+            statement.setString(7, applyTime);
+            statement.setString(8, requestKey);
+            return statement;
+        }, keys);
+        Number key = keys.getKey();
+        if (key == null) throw new IllegalStateException("退款申请主键未返回");
+        return key.longValue();
+    }
+
+    public List<RefundRecord> listByOrder(long orderId) {
+        return jdbc.query("SELECT * FROM refund_records WHERE order_id = ? ORDER BY id DESC", MAPPER, orderId);
+    }
+
+    public Optional<RefundRecord> findByRequestKey(long orderId, String requestKey) {
+        Optional<RefundRecord> mapped = jdbc.query("SELECT r.* FROM refund_apply_requests q " +
+                        "JOIN refund_records r ON r.id = q.refund_id AND r.order_id = q.order_id " +
+                        "WHERE q.order_id = ? AND q.request_key = ?", MAPPER, orderId, requestKey).stream().findFirst();
+        if (mapped.isPresent()) return mapped;
+        // 兼容映射表上线前已写入的申请；已有主请求 key 的重放仍然有效。
+        return jdbc.query("SELECT * FROM refund_records WHERE order_id = ? AND request_key = ?",
+                MAPPER, orderId, requestKey).stream().findFirst();
+    }
+
+    /** 持有订单行锁时调用，与新申请或复用 PENDING 的响应同事务持久化；绝不重定向已有 key。 */
+    public void bindApplyRequest(long orderId, String requestKey, long refundId) {
+        jdbc.update("INSERT INTO refund_apply_requests(order_id, request_key, refund_id) VALUES(?,?,?)",
+                orderId, requestKey, refundId);
+    }
+
+    public Optional<RefundRecord> findPending(long orderId) {
+        return jdbc.query("SELECT * FROM refund_records WHERE order_id = ? AND status = 'PENDING' " +
+                "ORDER BY id DESC LIMIT 1", MAPPER, orderId).stream().findFirst();
     }
 
     public Optional<RefundRecord> findById(long id) {

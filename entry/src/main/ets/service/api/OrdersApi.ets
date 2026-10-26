@@ -13,8 +13,8 @@ export async function uploadImageApi(fileUri: string, showErrorToast: boolean = 
   return result
 }
 
-export async function fetchCartApi(): Promise<CartItem[] | null> {
-  const resp: ApiResponse<ServerCartItem[]> = await get<ServerCartItem[]>('/api/cart')
+export async function fetchCartApi(showErrorToast: boolean = true): Promise<CartItem[] | null> {
+  const resp: ApiResponse<ServerCartItem[]> = await get<ServerCartItem[]>('/api/cart', showErrorToast)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     return null
   }
@@ -22,35 +22,40 @@ export async function fetchCartApi(): Promise<CartItem[] | null> {
 }
 
 /** 加入购物车：多规格菜品必须传 specId（无规格传 0）。 */
-export async function addCartItemApi(goodsId: number, specId: number, quantity: number): Promise<CartItem[] | null> {
+export async function addCartItemApi(goodsId: number, specId: number, quantity: number,
+  showErrorToast: boolean = true): Promise<CartItem[] | null> {
   const req: CartItemRequest = { goodsId: goodsId, specId: specId, quantity: quantity }
-  const resp: ApiResponse<ServerCartItem[]> = await post<ServerCartItem[]>('/api/cart/items', req)
+  const resp: ApiResponse<ServerCartItem[]> = await post<ServerCartItem[]>('/api/cart/items', req, showErrorToast)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     return null
   }
   return resp.data.map((item: ServerCartItem) => toCartItem(item))
 }
 
-export async function updateCartItemQuantityApi(goodsId: number, specId: number, quantity: number): Promise<CartItem[] | null> {
+export async function updateCartItemQuantityApi(goodsId: number, specId: number, quantity: number,
+  showErrorToast: boolean = true): Promise<CartItem[] | null> {
   const req: CartQuantityRequest = { quantity: quantity }
-  const resp: ApiResponse<ServerCartItem[]> = await put<ServerCartItem[]>(`/api/cart/items/${goodsId}?specId=${specId}`, req)
+  const resp: ApiResponse<ServerCartItem[]> = await put<ServerCartItem[]>(
+    `/api/cart/items/${goodsId}?specId=${specId}`, req, showErrorToast)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     return null
   }
   return resp.data.map((item: ServerCartItem) => toCartItem(item))
 }
 
-export async function deleteCartItemApi(goodsId: number, specId: number): Promise<CartItem[] | null> {
-  const resp: ApiResponse<ServerCartItem[]> = await del<ServerCartItem[]>(`/api/cart/items/${goodsId}?specId=${specId}`)
+export async function deleteCartItemApi(goodsId: number, specId: number,
+  showErrorToast: boolean = true): Promise<CartItem[] | null> {
+  const resp: ApiResponse<ServerCartItem[]> = await del<ServerCartItem[]>(
+    `/api/cart/items/${goodsId}?specId=${specId}`, showErrorToast)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     return null
   }
   return resp.data.map((item: ServerCartItem) => toCartItem(item))
 }
 
-export async function deleteCartItemsApi(goodsIds: number[]): Promise<CartItem[] | null> {
+export async function deleteCartItemsApi(goodsIds: number[], showErrorToast: boolean = true): Promise<CartItem[] | null> {
   const query: string = goodsIds.map((goodsId: number) => `goodsIds=${goodsId}`).join('&')
-  const resp: ApiResponse<ServerCartItem[]> = await del<ServerCartItem[]>(`/api/cart/items?${query}`)
+  const resp: ApiResponse<ServerCartItem[]> = await del<ServerCartItem[]>(`/api/cart/items?${query}`, showErrorToast)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     return null
   }
@@ -70,7 +75,12 @@ export async function clearCartApi(): Promise<CartItem[] | null> {
 /**
  * 创建订单：items 为购物车项，返回服务端订单（已转换）
  */
-export async function createOrderApi(storeId: number, cartItems: CartItem[], addressId: number, couponId: number, remark: string, checkoutGoodsIds: number[], expectTime: string, idempotencyKey: string, deliveryType: string = 'DELIVERY', setmeals: SetmealOrder[] = []): Promise<Order | null> {
+export interface OrderCreateFeedback {
+  failureConfirmed: boolean
+  message: string
+}
+
+export async function createOrderApi(storeId: number, cartItems: CartItem[], addressId: number, couponId: number, remark: string, checkoutGoodsIds: number[], expectTime: string, idempotencyKey: string, deliveryType: string = 'DELIVERY', setmeals: SetmealOrder[] = [], feedback: OrderCreateFeedback | undefined = undefined): Promise<Order | null> {
   const items: OrderItemRequest[] = cartItems.map((c: CartItem) => {
     const item: OrderItemRequest = {
       goodsId: c.goods.id,
@@ -97,7 +107,17 @@ export async function createOrderApi(storeId: number, cartItems: CartItem[], add
   }
   // 下单失败由结算页统一提示，避免 HttpClient 与结算页连续弹出两个 Toast 互相覆盖。
   const resp: ApiResponse<ServerOrder> = await post<ServerOrder>(API_CONFIG.ENDPOINTS['orders'], req, false)
-  if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
+  if (feedback !== undefined) {
+    feedback.message = resp.message ?? ''
+    feedback.failureConfirmed = resp.code >= 400 && resp.code < 500 && resp.code !== 408
+      && resp.code !== 409 && resp.code !== 429 && feedback.message.indexOf('订单正在提交中') < 0
+      && feedback.message.indexOf('订单可能已提交') < 0
+  }
+  if (resp.code !== 200 || resp.data === null || resp.data === undefined
+    || !Number.isInteger(resp.data.id) || resp.data.id <= 0 || resp.data.storeId !== storeId
+    || !Number.isInteger(resp.data.status) || resp.data.status < 0 || resp.data.status > 6
+    || !Number.isFinite(resp.data.payAmount) || resp.data.payAmount <= 0
+    || !Array.isArray(resp.data.items) || resp.data.items.length === 0) {
     logWarn('Api', `下单失败：${resp.message}`)
     return null
   }
@@ -120,8 +140,8 @@ export async function fetchUserOrdersPageApi(status?: number, page: number = 1,
   return toOrderPageData(resp, page, pageSize)
 }
 
-export async function fetchOrderDetailApi(orderId: number): Promise<Order | null> {
-  const resp: ApiResponse<ServerOrder> = await get<ServerOrder>(`/api/orders/${orderId}`)
+export async function fetchOrderDetailApi(orderId: number, showErrorToast: boolean = true): Promise<Order | null> {
+  const resp: ApiResponse<ServerOrder> = await get<ServerOrder>(`/api/orders/${orderId}`, showErrorToast)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     return null
   }
@@ -134,9 +154,14 @@ export async function cancelOrderApi(orderId: number): Promise<boolean> {
 }
 
 /** 按明确选择的渠道支付：余额即时扣款，第三方返回待扫码支付信息。 */
-export async function payOrderApi(orderId: number, channel: string, mode: string = 'QR'): Promise<Order | null> {
+interface BalancePaymentRequest {
+  paymentPassword: string
+}
+
+export async function payOrderApi(orderId: number, channel: string, mode: string = 'QR', paymentPassword: string = ''): Promise<Order | null> {
+  const request: BalancePaymentRequest = { paymentPassword: paymentPassword }
   const resp: ApiResponse<ServerOrder> = await post<ServerOrder>(
-    `/api/orders/${orderId}/pay?channel=${channel}&mode=${mode}`, undefined, false)
+    `/api/orders/${orderId}/pay?channel=${channel}&mode=${mode}`, channel === 'BALANCE' ? request : undefined, false)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     return null
   }
@@ -157,8 +182,16 @@ export async function submitReviewApi(orderId: number, goodsId: number, rating: 
 // ==================== 退款（演进项，见大纲 7.11/9.7） ====================
 
 /** 用户申请退款：订单 status=4 且 escrow=0 且未评价时可用。 */
-export async function applyRefundApi(orderId: number, reasonType: string, reason: string): Promise<RefundRecord | null> {
-  const req: RefundRequest = { reasonType: reasonType, reason: reason }
-  const resp: ApiResponse<RefundRecord> = await post<RefundRecord>(`/api/orders/${orderId}/refund`, req)
-  return resp.code === 200 && resp.data !== null ? resp.data : null
+export async function applyRefundApi(orderId: number, reasonType: string, reason: string,
+  idempotencyKey: string = ''): Promise<RefundRecord | null> {
+  const req: RefundRequest = { reasonType: reasonType, reason: reason, idempotencyKey: idempotencyKey }
+  // 页面保留失败原因与输入，统一反馈一次；相同 key 可核对响应丢失前已创建的申请。
+  const resp: ApiResponse<RefundRecord> = await post<RefundRecord>(`/api/orders/${orderId}/refund`, req, false)
+  return resp.code === 200 && resp.data !== null && resp.data !== undefined ? resp.data : null
+}
+
+/** 当前账号的订单退款历史；null 表示读取失败，不能解释为没有申请。 */
+export async function fetchOrderRefundsApi(orderId: number): Promise<RefundRecord[] | null> {
+  const resp: ApiResponse<RefundRecord[]> = await get<RefundRecord[]>(`/api/orders/${orderId}/refunds`, false)
+  return resp.code === 200 && resp.data !== null && resp.data !== undefined ? resp.data : null
 }

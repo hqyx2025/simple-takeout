@@ -29,8 +29,27 @@ public record Order(
         String completeTime,
         String expectTime,
         long couponId,
-        String deliveryType
+        String deliveryType,
+        String cancelSource,
+        String cancelReasonCode,
+        String cancelReason,
+        String rejectNote,
+        long rejectGoodsId,
+        long rejectSpecId,
+        long cancelOperatorId
 ) {
+    /** 兼容现有订单构造：取消元数据默认为空。 */
+    public Order(long id, String orderNo, long userId, long storeId, String storeName, int status,
+                 String items, String address, double goodsAmount, double deliveryFee, double discount,
+                 double payAmount, String remark, int reviewed, int escrowStatus, String createTime,
+                 String payTime, String acceptTime, String deliverTime, String completeTime,
+                 String expectTime, long couponId, String deliveryType) {
+        this(id, orderNo, userId, storeId, storeName, status, items, address, goodsAmount, deliveryFee,
+                discount, payAmount, remark, reviewed, escrowStatus, createTime, payTime, acceptTime,
+                deliverTime, completeTime, expectTime, couponId, deliveryType,
+                "", "", "", "", 0, 0, 0);
+    }
+
     /** 兼容存量调用：默认外卖配送（DELIVERY）。 */
     public Order(long id, String orderNo, long userId, long storeId, String storeName, int status,
                  String items, String address, double goodsAmount, double deliveryFee, double discount,
@@ -39,7 +58,8 @@ public record Order(
                  String expectTime, long couponId) {
         this(id, orderNo, userId, storeId, storeName, status, items, address, goodsAmount, deliveryFee,
                 discount, payAmount, remark, reviewed, escrowStatus, createTime, payTime, acceptTime,
-                deliverTime, completeTime, expectTime, couponId, "DELIVERY");
+                deliverTime, completeTime, expectTime, couponId, "DELIVERY",
+                "", "", "", "", 0, 0, 0);
     }
 
     /**
@@ -51,7 +71,9 @@ public record Order(
     public Order withOrderNo(String newOrderNo) {
         return new Order(id, newOrderNo, userId, storeId, storeName, status, items, address, goodsAmount,
                 deliveryFee, discount, payAmount, remark, reviewed, escrowStatus, createTime,
-                payTime, acceptTime, deliverTime, completeTime, expectTime, couponId, deliveryType);
+                payTime, acceptTime, deliverTime, completeTime, expectTime, couponId, deliveryType,
+                cancelSource, cancelReasonCode, cancelReason, rejectNote, rejectGoodsId, rejectSpecId,
+                cancelOperatorId);
     }
     /**
      * 订单商品项（对应客户端 CartItem 结构；多规格下单记录 specId/specName 规格快照，
@@ -135,8 +157,30 @@ public record Order(
             String paymentUrl,
             String appOrderInfo,
             String paymentMode,
-            boolean paymentSandbox
+            boolean paymentSandbox,
+            String cancelSource,
+            String cancelReasonCode,
+            String cancelReason,
+            long rejectGoodsId,
+            long rejectSpecId
     ) {
+        /** 兼容现有完整视图构造：取消元数据默认为空。 */
+        public OrderView(long id, String orderNo, long userId, long storeId, String storeName, int status,
+                         List<OrderItem> items, AddressInfo address, double goodsAmount, double deliveryFee,
+                         double discount, double payAmount, String remark, int reviewed, int escrowStatus,
+                         String createTime, String payTime, String acceptTime, String deliverTime,
+                         String completeTime, String expectTime, long couponId, String payDeadline,
+                         long payDeadlineEpochMs, long serverNowEpochMs, String riderName, String riderPhone,
+                         String readyTime, String deliveryType, String paymentChannel, String outTradeNo,
+                         String paymentUrl, String appOrderInfo, String paymentMode, boolean paymentSandbox) {
+            this(id, orderNo, userId, storeId, storeName, status, items, address, goodsAmount, deliveryFee,
+                    discount, payAmount, remark, reviewed, escrowStatus, createTime, payTime, acceptTime,
+                    deliverTime, completeTime, expectTime, couponId, payDeadline, payDeadlineEpochMs,
+                    serverNowEpochMs, riderName, riderPhone, readyTime, deliveryType, paymentChannel,
+                    outTradeNo, paymentUrl, appOrderInfo, paymentMode, paymentSandbox,
+                    "", "", "", 0, 0);
+        }
+
         public OrderView(long id, String orderNo, long userId, long storeId, String storeName, int status,
                          List<OrderItem> items, AddressInfo address, double goodsAmount, double deliveryFee,
                          double discount, double payAmount, String remark, int reviewed, int escrowStatus,
@@ -167,13 +211,31 @@ public record Order(
             return withPayment(channel, tradeNo, url, "", "QR", false);
         }
 
+        /** 未接单的骑手只看配送报价，收货信息、备注和账号标识在分配后开放。 */
+        public OrderView forRiderPool() {
+            return new OrderView(id, "", 0, 0, storeName, status, List.of(),
+                    new AddressInfo(0, "", "", "抢单后可查看收货信息"), 0, deliveryFee, 0,
+                    0, "", 0, 0, createTime, "", "", "", "", "", 0,
+                    "", 0, "", "", "", "");
+        }
+
+        /** 履约结束后不再向骑手永久暴露顾客身份、门牌和订单备注。 */
+        public OrderView forRiderHistory() {
+            return new OrderView(id, orderNo, 0, storeId, storeName, status, items,
+                    new AddressInfo(0, "", "", "收货信息已隐藏"), goodsAmount, deliveryFee, discount,
+                    payAmount, "", reviewed, escrowStatus, createTime, payTime, acceptTime, deliverTime,
+                    completeTime, expectTime, couponId, payDeadline, payDeadlineEpochMs, serverNowEpochMs,
+                    riderName, riderPhone, readyTime, deliveryType, "", "", "", "", "", false);
+        }
+
         public OrderView withPayment(String channel, String tradeNo, String url, String orderInfo,
                                      String mode, boolean sandbox) {
             return new OrderView(id, orderNo, userId, storeId, storeName, status, items, address,
                     goodsAmount, deliveryFee, discount, payAmount, remark, reviewed, escrowStatus,
                     createTime, payTime, acceptTime, deliverTime, completeTime, expectTime, couponId,
                     payDeadline, payDeadlineEpochMs, serverNowEpochMs, riderName, riderPhone, readyTime, deliveryType,
-                    channel, tradeNo, url, orderInfo, mode, sandbox);
+                    channel, tradeNo, url, orderInfo, mode, sandbox, cancelSource, cancelReasonCode,
+                    cancelReason, rejectGoodsId, rejectSpecId);
         }
     }
 
@@ -188,6 +250,7 @@ public record Order(
                 createTime, payTime, acceptTime, deliverTime, completeTime, expectTime, couponId,
                 payDeadline, payDeadlineEpochMs,
                 status == 0 && payDeadlineEpochMs > 0 ? System.currentTimeMillis() : 0L,
-                riderName, riderPhone, readyTime, deliveryType);
+                riderName, riderPhone, readyTime, deliveryType, "", "", "", "", "", false,
+                cancelSource, cancelReasonCode, cancelReason, rejectGoodsId, rejectSpecId);
     }
 }

@@ -99,7 +99,7 @@ public class RefreshTokenService {
 
     @Transactional(noRollbackFor = BizException.class)
     public void revoke(String rawToken) {
-        if (rawToken == null || rawToken.isBlank()) {
+        if (rawToken == null || rawToken.isBlank() || rawToken.length() > 128) {
             return;
         }
         Optional<RefreshTokenRecord> found = tokenDao.findRefreshTokenForUpdate(hash(rawToken));

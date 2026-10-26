@@ -25,7 +25,32 @@ import static org.mockito.Mockito.when;
 
 class SmsVerificationServiceTest {
 
+    @Test void quotaAliasesAreCanonicalButDistinctOrdinaryMailboxesStayDistinct() {
+        assertEquals("firstlast@gmail.com", SmsVerificationService.recipientBudgetIdentity("First.Last+tag@GoogleMail.com"));
+        assertEquals("first.last@example.com", SmsVerificationService.recipientBudgetIdentity("first.last+tag@example.com"));
+        assertNotEquals(SmsVerificationService.recipientBudgetIdentity("first.last@example.com"),
+                SmsVerificationService.recipientBudgetIdentity("firstlast@example.com"));
+    }
+
     private static final String SIGNING_SECRET = "a-test-signing-secret-that-is-at-least-32-chars";
+
+    @Test
+    void hourlyBudgetsAreIsolatedByRecipient() {
+        StringRedisTemplate redis = mock(StringRedisTemplate.class);
+        ValueOperations<String, String> values = mock(ValueOperations.class);
+        when(redis.opsForValue()).thenReturn(values);
+        when(values.setIfAbsent(anyString(), eq("1"), any(Duration.class))).thenReturn(true);
+        when(values.increment(anyString())).thenReturn(1L);
+        var service = new SmsVerificationService(redis, mock(SmsSender.class), SIGNING_SECRET, 300, 60);
+        service.issue("first@example.com");
+        service.issue("second@example.com");
+        var keys = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(values, org.mockito.Mockito.times(6)).increment(keys.capture());
+        assertEquals(2, keys.getAllValues().stream().filter(k -> k.startsWith("takeout:verification:hourly:"))
+                .distinct().count());
+        assertEquals(1, keys.getAllValues().stream().filter(k -> k.startsWith("takeout:verification:global-hourly:"))
+                .distinct().count());
+    }
 
     @Test
     void springCreatesServiceWhenCompatibilityConstructorAlsoExists() {
@@ -33,7 +58,7 @@ class SmsVerificationServiceTest {
                 .withBean(StringRedisTemplate.class, () -> mock(StringRedisTemplate.class))
                 .withBean(SmsSender.class, () -> mock(SmsSender.class))
                 .withUserConfiguration(SmsVerificationService.class)
-                .withPropertyValues("takeout.jwt.secret=" + SIGNING_SECRET)
+                .withPropertyValues("takeout.sms.hmac-secret=" + SIGNING_SECRET)
                 .run(context -> {
                     assertNull(context.getStartupFailure());
                     assertNotNull(context.getBean(SmsVerificationService.class));

@@ -13,6 +13,13 @@ services:
       test: ['CMD-SHELL', 'MYSQL_PWD="$$MYSQL_ROOT_PASSWORD" mysql -h 127.0.0.1 -uroot -e "SELECT 1" >/dev/null']
   redis:
     ports: !reset []
+    command: ["redis-server", "--maxmemory", "${TAKEOUT_REDIS_MAXMEMORY:-256mb}", "--maxmemory-policy", "${TAKEOUT_REDIS_MAXMEMORY_POLICY:-noeviction}", "--appendonly", "yes", "--auto-aof-rewrite-percentage", "100", "--auto-aof-rewrite-min-size", "64mb", "--aclfile", "/usr/local/etc/redis/users.acl"]
+    environment:
+      TAKEOUT_REDIS_PASSWORD: ${TAKEOUT_REDIS_PASSWORD:?Set the Redis application password}
+    volumes:
+      - ${TAKEOUT_REDIS_ACL_FILE:?Set the private Redis ACL file}:/usr/local/etc/redis/users.acl:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'REDISCLI_AUTH="$$TAKEOUT_REDIS_PASSWORD" redis-cli --user takeout ping | grep -q PONG']
   app:
     build:
       args:
@@ -25,11 +32,13 @@ services:
           cpus: '2.0'
           memory: 1024M
     environment:
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-develop}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:?SPRING_PROFILES_ACTIVE must be explicitly set}
       TAKEOUT_DEMO_ADMIN_PASSWORD: ${TAKEOUT_DEMO_ADMIN_PASSWORD:?Set a random demo admin password}
-      TAKEOUT_DEMO_RECHARGE_ENABLED: ${TAKEOUT_DEMO_RECHARGE_ENABLED:-true}
-      TAKEOUT_DEMO_SIGNUP_BALANCE: ${TAKEOUT_DEMO_SIGNUP_BALANCE:-20}
-      TAKEOUT_SMS_PROVIDER: ${TAKEOUT_SMS_PROVIDER:-mock}
+      TAKEOUT_REDIS_USERNAME: takeout
+      TAKEOUT_REDIS_PASSWORD: ${TAKEOUT_REDIS_PASSWORD:?Set the Redis application password}
+      TAKEOUT_DEMO_RECHARGE_ENABLED: "false"
+      TAKEOUT_DEMO_SIGNUP_BALANCE: "0"
+      TAKEOUT_SMS_PROVIDER: ${TAKEOUT_SMS_PROVIDER:-qq-email}
       TAKEOUT_SMS_EXPOSE_MOCK_CODE: ${TAKEOUT_SMS_EXPOSE_MOCK_CODE:-false}
       TAKEOUT_QQ_SMTP_HOST: ${TAKEOUT_QQ_SMTP_HOST:-smtp.qq.com}
       TAKEOUT_QQ_SMTP_PORT: ${TAKEOUT_QQ_SMTP_PORT:-465}
@@ -51,6 +60,8 @@ services:
       TAKEOUT_OPENAPI_ENABLED: ${TAKEOUT_OPENAPI_ENABLED:-false}
       JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai -XX:MaxRAMPercentage=65 -XX:+ExitOnOutOfMemoryError
   gateway:
+    environment:
+      TAKEOUT_GATEWAY_TRUSTED_PROXY_REGEX: ${TAKEOUT_GATEWAY_TRUSTED_PROXY_REGEX:?Set the exact host nginx proxy address regex}
     build:
       args:
         MAVEN_SETTINGS: docker/settings-central.xml

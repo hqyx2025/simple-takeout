@@ -6,23 +6,31 @@ import { AppButtonStyle, AppCardStyle, AppTextAreaStyle, AppTheme } from '../com
  */
 import { AppMotion } from '../common/theme/AppMotion'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
-import { CartItem, Order, Address, Coupon, StoreItem } from '../model/Models'
-import { createOrderRemote, deleteCartItemRemote, syncCartRemote, getAllStoresList, syncCouponsRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText } from '../common/Constants'
+import { CartItem, Order, Address, Coupon, StoreItem, User, createEmptyUser } from '../model/Models'
+import { createOrderRemote, syncCartRemote, getAllStoresList, syncCouponsRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { LoadingIndicator } from '../components/LoadingIndicator'
 import { PageHeader } from '../components/PageHeader'
 import { logInfo } from '../service/AppLogger'
 import { calculatePayAmount } from '../service/OrderCalculations'
-import { getServerNowEpochMs } from '../service/HttpClient'
-import { webview } from '@kit.ArkWeb'
+import { getAuthSessionEpoch, getServerNowEpochMs } from '../service/HttpClient'
+import { checkoutCents, checkoutCouponReason } from '../service/CheckoutCouponRules'
+import { OrderCreateFeedback } from '../service/api/OrdersApi'
 
-class DeliveryTypeOption {
-  code: string
-  label: string
-  constructor(code: string, label: string) {
-    this.code = code
-    this.label = label
-  }
+interface UnavailableCheckoutCoupon {
+  coupon: Coupon
+  reason: string
+}
+
+interface PendingCheckoutSubmission {
+  storeId: number
+  items: CartItem[]
+  addressId: number
+  couponId: number
+  remark: string
+  checkoutGoodsIds: number[]
+  key: string
+  expectedPay: number
 }
 
 @Entry
@@ -43,42 +51,52 @@ export struct CheckoutPage {
       .opacity(0)
   }
 
-  @StorageLink('isLoggedIn') loggedIn: boolean = false
+  @StorageLink('isLoggedIn') @Watch('onAccountChanged') loggedIn: boolean = false
+  @StorageLink('user') @Watch('onAccountChanged') sessionUser: User = createEmptyUser()
   @State checkoutStoreId: number = 0
   @State checkoutStoreIds: number[] = []
   @State storeItems: CartItem[] = []
   @State storeInfo: StoreItem | null = null
   @State currentAddress: Address | null = null
+  @StorageLink('couponList') @Watch('onCouponListChanged') couponList: Coupon[] = []
   @State selectedCoupon: Coupon | null = null
+  @State availableCoupons: Coupon[] = []
+  @State unavailableCoupons: UnavailableCheckoutCoupon[] = []
+  @State bestCouponId: number = 0
+  @State couponSummary: string = '有 0 张可用，预估最多省 ¥0.00'
+  @State couponChoiceMode: string = 'AUTO'
+  private couponOptionsReady: boolean = false
+  private rejectedCouponId: number = 0
   @State remark: string = ''
-  @State selectedDelivery: number = 0
-  @State customDeliveryTime: number = 0
-  @State customDeliveryLabel: string = ''
-  @State deliveryTimeChosen: boolean = false
-  private pendingCalendarDate: Date | null = null
-  private deliveryOptions: string[] = ['立即送达', '半小时后', '1小时后', '2小时后', '5小时后']
-  private deliveryOffsetsMinutes: number[] = [0, 30, 60, 120, 300]
-  @State deliveryType: string = 'DELIVERY'
-  private deliveryTypeOptions: DeliveryTypeOption[] = [
-    new DeliveryTypeOption('DELIVERY', '外卖配送'),
-    new DeliveryTypeOption('PICKUP', '到店自取')
-  ]
   @State showCouponDialog: boolean = false
   @State submitting: boolean = false
-  // 防重提交 token：每个结算页实例生成一次，本次结算的所有重试共用（服务端下单失败会释放，
-  // 成功后保留 5 分钟）；多店结算按 storeId 派生子 key，避免第二家店被误判为重复提交
+  // 每个结算页实例生成一次，重试共用；服务端持久幂等记录可在响应丢失后返回原单。
+  // 多店按 storeId 派生子 key，避免把第二家店当作重复提交。
   private submitKey: string = Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 10)
   @State showOrderFailureDialog: boolean = false
   @State orderFailureMessage: string = ''
-  private orderFailureWebController: webview.WebviewController = new webview.WebviewController()
+  @State createdOrderCount: number = 0
+  @State reconciledOrderStatus: string = ''
+  @State retryNeedsReview: boolean = false
+  @State sessionChanged: boolean = false
+  @State submissionUncertain: boolean = false
+  private pendingSubmission: PendingCheckoutSubmission | null = null
+  private pageActive: boolean = false
+  private pageOwnerId: number = 0
+  private pageSessionEpoch: number = 0
+  private requestVersion: number = 0
 
-  aboutToAppear() {
+  async aboutToAppear(): Promise<void> {
+    this.pageActive = true
     logInfo('Page', '进入结算页 CheckoutPage')
-    if (!this.loggedIn) {
+    if (!this.loggedIn || (this.sessionUser?.id ?? 0) <= 0) {
       promptAction.showToast({ message: '请先登录后提交订单', duration: 1800 })
       router.back()
       return
     }
+    this.pageOwnerId = this.sessionUser?.id ?? 0
+    this.pageSessionEpoch = getAuthSessionEpoch()
+    const requestVersion: number = this.requestVersion
     this.checkoutStoreId = AppStorage.get<number>('checkoutStoreId') || 0
     const cart: CartItem[] = AppStorage.get<CartItem[]>('cartItems') || []
     const stores: StoreItem[] = getAllStoresList()
@@ -99,15 +117,83 @@ export struct CheckoutPage {
       ? stores.find((s: StoreItem) => s.id === this.checkoutStoreIds[0]) || null
       : null
     this.currentAddress = AppStorage.get<Address>('currentAddress') ?? null
-    this.selectedCoupon = AppStorage.get<Coupon | null>('selectedCoupon') ?? null
+    const storedCoupon: Coupon | null = AppStorage.get<Coupon | null>('selectedCoupon') ?? null
+    this.selectedCoupon = storedCoupon
+    this.couponChoiceMode = storedCoupon === null ? 'AUTO' : 'COUPON'
+    this.couponOptionsReady = true
+    this.refreshCouponOptions()
+    // 结算权益以服务端为准；拉取失败时 syncCouponsRemote 会保留账号隔离后的本地缓存。
+    await syncCouponsRemote(false)
+    if (!this.isCheckoutCurrent(requestVersion)) { return }
+    this.refreshCouponOptions()
   }
 
   onPageShow(): void {
+    this.pageActive = true
+    if (!this.hasCheckoutSession()) {
+      if (this.pageOwnerId > 0) { this.clearCheckoutSession() }
+      return
+    }
     // 从地址管理页返回后，立即刷新本次结算使用的地址。
+    if (this.submitting || this.submissionUncertain) { return }
     this.currentAddress = AppStorage.get<Address>('currentAddress') ?? null
+    this.refreshCouponOptions()
+  }
+
+  onPageHide(): void {
+    if (this.pendingSubmission !== null) { this.submissionUncertain = true }
+    this.pageActive = false
+    this.requestVersion += 1
+    this.submitting = false
+    this.showCouponDialog = false
+    this.showOrderFailureDialog = false
+  }
+
+  aboutToDisappear(): void { this.onPageHide() }
+
+  onBackPress(): boolean {
+    if (!this.submitting) { return false }
+    promptAction.showToast({ message: '订单正在提交，请稍候', duration: 1500 })
+    return true
+  }
+
+  private hasCheckoutSession(): boolean {
+    return this.loggedIn && this.pageOwnerId > 0 && this.pageOwnerId === (this.sessionUser?.id ?? 0)
+      && this.pageSessionEpoch === getAuthSessionEpoch()
+  }
+
+  private isCheckoutCurrent(requestVersion: number): boolean {
+    return this.pageActive && requestVersion === this.requestVersion && this.hasCheckoutSession()
+  }
+
+  private onAccountChanged(): void {
+    if (this.pageOwnerId > 0 && !this.hasCheckoutSession()) { this.clearCheckoutSession() }
+  }
+
+  private clearCheckoutSession(): void {
+    this.requestVersion += 1
+    this.couponOptionsReady = false
+    this.sessionChanged = true
+    this.submitting = false
+    this.showCouponDialog = false
+    this.showOrderFailureDialog = false
+    this.currentAddress = null
+    this.remark = ''
+    this.selectedCoupon = null
+    this.availableCoupons = []
+    this.unavailableCoupons = []
+    this.storeItems = []
+    this.checkoutStoreIds = []
+    this.storeInfo = null
+    this.createdOrderCount = 0
+    this.reconciledOrderStatus = ''
+    this.retryNeedsReview = false
+    this.submissionUncertain = false
+    this.pendingSubmission = null
   }
 
   private openAddressSelector(): void {
+    if (this.submitting || this.submissionUncertain || !this.isCheckoutCurrent(this.requestVersion)) { return }
     AppStorage.setOrCreate<boolean>('addressSelectionMode', true)
     router.pushUrl({ url: 'pages/AddressListPage' })
   }
@@ -119,7 +205,7 @@ export struct CheckoutPage {
       // 多规格菜品必须用行单价（规格价），goods.price 是规格最低价，用它算会少算金额
       total += (this.storeItems[i].price ?? this.storeItems[i].goods.price) * this.storeItems[i].quantity
     }
-    return total
+    return checkoutCents(total) / 100
   }
 
   private getDeliveryFee(): number {
@@ -131,7 +217,7 @@ export struct CheckoutPage {
         total += store.deliveryFee
       }
     }
-    return total
+    return checkoutCents(total) / 100
   }
 
   private getStoreGoodsTotalPrice(storeId: number): number {
@@ -140,7 +226,12 @@ export struct CheckoutPage {
     for (let i = 0; i < items.length; i++) {
       total += (items[i].price ?? items[i].goods.price) * items[i].quantity
     }
-    return total
+    return checkoutCents(total) / 100
+  }
+
+  private getStoreDeliveryFee(storeId: number): number {
+    const store: StoreItem | undefined = getAllStoresList().find((item: StoreItem) => item.id === storeId)
+    return store?.deliveryFee ?? 0
   }
 
   private getCheckoutMinOrder(): number {
@@ -174,8 +265,36 @@ export struct CheckoutPage {
     return itemStoreName !== '' ? itemStoreName : this.getStoreName(item.storeId)
   }
 
+  /** 返回优惠券实际抵扣的单个店铺；0 表示当前结算商品中不可用。 */
+  private getCouponStoreId(coupon: Coupon): number {
+    for (let i = 0; i < this.checkoutStoreIds.length; i++) {
+      const storeId: number = this.checkoutStoreIds[i]
+      if (checkoutCouponReason(coupon, storeId, this.getStoreGoodsTotalPrice(storeId),
+        this.getStoreDeliveryFee(storeId), getServerNowEpochMs(), this.rejectedCouponId) === '') {
+        return storeId
+      }
+    }
+    return 0
+  }
+
+  private couponUnavailableReason(coupon: Coupon): string {
+    let reason: string = '当前没有可结算商品'
+    const couponStoreId: number = coupon.storeId ?? 0
+    if (couponStoreId > 0 && this.checkoutStoreIds.indexOf(couponStoreId) < 0) {
+      return '仅限指定店铺使用'
+    }
+    for (let i = 0; i < this.checkoutStoreIds.length; i++) {
+      const storeId: number = this.checkoutStoreIds[i]
+      if (couponStoreId > 0 && couponStoreId !== storeId) { continue }
+      reason = checkoutCouponReason(coupon, storeId, this.getStoreGoodsTotalPrice(storeId),
+        this.getStoreDeliveryFee(storeId), getServerNowEpochMs(), this.rejectedCouponId)
+      if (reason === '') { return '' }
+    }
+    return reason
+  }
+
   private getDiscountAmount(): number {
-    if (this.selectedCoupon !== null) {
+    if (this.selectedCoupon !== null && this.getCouponStoreId(this.selectedCoupon) > 0) {
       return this.selectedCoupon.amount
     }
     return 0
@@ -186,28 +305,72 @@ export struct CheckoutPage {
   }
 
   // ============ 优惠券筛选 ============
-  private getAvailableCoupons(): Coupon[] {
-    const coupons: Coupon[] = AppStorage.get<Coupon[]>('couponList') || []
-    const total: number = this.getGoodsTotalPrice()
-    // 面额吃掉全部货款（券后应付 0 元）的券服务端会拒绝，这里直接不列出来，
-    // 免得用户选中后才被「请更换优惠券」拦下
-    return coupons.filter((c: Coupon) => !c.used && c.minOrder <= total && c.amount < total)
+  private onCouponListChanged(): void {
+    if (this.couponOptionsReady && !this.submitting && !this.submissionUncertain && this.hasCheckoutSession()) {
+      // 只有成功同步才会替换 couponList；此时允许服务端最新状态重新参与筛选。
+      this.rejectedCouponId = 0
+      this.refreshCouponOptions()
+    }
   }
 
-  // ============ 时间格式化 YYYY-MM-DD HH:mm:ss ============
-  private formatDeliveryTime(date: Date): string {
-    const y: number = date.getFullYear()
-    const m: string = String(date.getMonth() + 1).padStart(2, '0')
-    const d: string = String(date.getDate()).padStart(2, '0')
-    const h: string = String(date.getHours()).padStart(2, '0')
-    const min: string = String(date.getMinutes()).padStart(2, '0')
-    const s: string = String(date.getSeconds()).padStart(2, '0')
-    return `${y}-${m}-${d} ${h}:${min}:${s}`
+  private refreshCouponOptions(): void {
+    if (!this.couponOptionsReady || this.submitting || this.submissionUncertain || !this.hasCheckoutSession()) { return }
+    const coupons: Coupon[] = Array.isArray(this.couponList) ? this.couponList : []
+    const goodsTotal: number = this.getGoodsTotalPrice()
+    const deliveryFee: number = this.getDeliveryFee()
+    const available: Coupon[] = coupons
+      .filter((coupon: Coupon) => this.getCouponStoreId(coupon) > 0)
+      .sort((left: Coupon, right: Coupon): number => {
+        const leftPay: number = calculatePayAmount(goodsTotal, deliveryFee, left.amount)
+        const rightPay: number = calculatePayAmount(goodsTotal, deliveryFee, right.amount)
+        if (leftPay !== rightPay) {
+          return leftPay - rightPay
+        }
+        if (left.amount !== right.amount) {
+          return right.amount - left.amount
+        }
+        return left.id - right.id
+      })
+    this.availableCoupons = available
+    this.unavailableCoupons = coupons.filter((coupon: Coupon) => this.getCouponStoreId(coupon) === 0)
+      .map((coupon: Coupon): UnavailableCheckoutCoupon => {
+        return { coupon: coupon, reason: this.couponUnavailableReason(coupon) }
+      })
+    const bestCoupon: Coupon | null = available.length > 0 ? available[0] : null
+    this.bestCouponId = bestCoupon === null ? 0 : bestCoupon.id
+    const maxSaving: number = bestCoupon === null ? 0 : bestCoupon.amount
+    this.couponSummary = `有 ${available.length} 张可用，预估最多省 ¥${maxSaving.toFixed(2)}`
+
+    let currentCoupon: Coupon | null = null
+    if (this.selectedCoupon !== null) {
+      const selectedCouponId: number = this.selectedCoupon.id
+      currentCoupon = available.find((coupon: Coupon) => coupon.id === selectedCouponId) ?? null
+    }
+    if (this.couponChoiceMode === 'COUPON' && this.selectedCoupon !== null && currentCoupon === null) {
+      // 缓存券已失效或不适用于当前店铺时，恢复为自动推荐；只有用户明确“不使用”才保持空选。
+      this.couponChoiceMode = 'AUTO'
+    }
+    if (this.couponChoiceMode === 'AUTO') {
+      currentCoupon = bestCoupon
+    } else if (this.couponChoiceMode === 'NONE') {
+      currentCoupon = null
+    }
+    this.selectedCoupon = currentCoupon
+    // 自动优选仅属于当前结算对象，不伪装成用户的显式选择带到下次结算。
+    AppStorage.setOrCreate<Coupon | null>('selectedCoupon', this.couponChoiceMode === 'AUTO' ? null : currentCoupon)
   }
 
   // ============ 优惠券选择 ============
   private selectCoupon(coupon: Coupon | null): void {
+    if (this.submitting || this.submissionUncertain || !this.isCheckoutCurrent(this.requestVersion)) { return }
+    if (coupon !== null && this.getCouponStoreId(coupon) === 0) {
+      promptAction.showToast({ message: this.couponUnavailableReason(coupon), duration: 2500 })
+      this.refreshCouponOptions()
+      return
+    }
+    this.couponChoiceMode = coupon === null ? 'NONE' : 'COUPON'
     this.selectedCoupon = coupon
+    this.retryNeedsReview = false
     AppStorage.setOrCreate<Coupon | null>('selectedCoupon', coupon)
     this.showCouponDialog = false
   }
@@ -216,13 +379,37 @@ export struct CheckoutPage {
     if (coupon !== null) {
       return this.selectedCoupon !== null && this.selectedCoupon.id === coupon.id ? COLORS.TAG_BG : COLORS.BG_PRIMARY
     }
-    return this.selectedCoupon === null ? COLORS.TAG_BG : COLORS.BG_PRIMARY
+    return this.couponChoiceMode === 'NONE' ? COLORS.TAG_BG : COLORS.BG_PRIMARY
   }
 
   // ============ 提交订单 ============
   private submitOrder(): void {
+    if (!this.isCheckoutCurrent(this.requestVersion)) {
+      this.clearCheckoutSession()
+      return
+    }
     if (this.submitting) {
       promptAction.showToast({ message: '订单正在提交，请稍候', duration: 1500 })
+      return
+    }
+    if (this.submissionUncertain && this.pendingSubmission !== null) {
+      this.submitting = true
+      this.showOrderFailureDialog = false
+      this.requestVersion += 1
+      this.doSubmitOrder(this.requestVersion)
+      return
+    }
+    const previousCouponId: number = this.selectedCoupon?.id ?? 0
+    const previousPayAmount: number = this.getPayAmount()
+    // 提交前再校验一次缓存券的有效期与当前单店门槛；变化时必须让用户重新核对。
+    this.refreshCouponOptions()
+    const currentCouponId: number = this.selectedCoupon?.id ?? 0
+    const currentPayAmount: number = this.getPayAmount()
+    if (previousCouponId !== currentCouponId || Math.abs(previousPayAmount - currentPayAmount) >= 0.01) {
+      const message: string = currentPayAmount > previousPayAmount + 0.009
+        ? `优惠条件已变化，应付从 ¥${previousPayAmount.toFixed(2)} 调整为 ¥${currentPayAmount.toFixed(2)}，请核对后再次提交`
+        : `优惠方案已更新，应付 ¥${currentPayAmount.toFixed(2)}，请核对后再次提交`
+      promptAction.showToast({ message: message, duration: 3000 })
       return
     }
     // 起送价以服务端下单校验为唯一权威：多店结算时服务端按店逐个判断，
@@ -236,116 +423,194 @@ export struct CheckoutPage {
       promptAction.showToast({ message: '该定位地址尚未保存，请先在地址管理中保存' })
       return
     }
-    if (this.isCustomDelivery() && this.customDeliveryTime <= getServerNowEpochMs()) {
-      promptAction.showToast({ message: '自选送达时间已过，请重新选择' })
-      return
-    }
     this.submitting = true
+    this.showCouponDialog = false
+    this.retryNeedsReview = false
     logInfo('Checkout', `开始统一提交订单 店铺数=${this.checkoutStoreIds.length} 商品数=${this.storeItems.length} 应付=${this.getPayAmount()} 优惠=${this.getDiscountAmount()}`)
-    // 调用后端下单（余额扣减+优惠券抵扣由服务端完成）
-    this.doSubmitOrder()
+    // 服务端创建待付款订单并占用库存、优惠券，支付成功后才扣款。
+    this.requestVersion += 1
+    this.doSubmitOrder(this.requestVersion)
   }
 
   // 调后端创建订单并跳转
-  private async doSubmitOrder(): Promise<void> {
-    const address: Address = this.currentAddress as Address
-    const expectTime: string = this.getExpectTime()
+  private async doSubmitOrder(requestVersion: number): Promise<void> {
+    const addressId: number = this.currentAddress?.id ?? 0
+    const remark: string = this.remark
+    const storeIds: number[] = this.checkoutStoreIds.slice()
+    const submitItems: CartItem[] = this.storeItems.map((item: CartItem): CartItem => {
+      return { goods: { id: item.goods.id, name: item.goods.name, description: item.goods.description,
+        price: item.goods.price, image: item.goods.image, categoryId: item.goods.categoryId,
+        sales: item.goods.sales, rating: item.goods.rating },
+        quantity: item.quantity, storeId: item.storeId, storeName: item.storeName,
+        specId: item.specId ?? 0, specName: item.specName ?? '', price: item.price ?? item.goods.price,
+        stock: item.stock }
+    })
+    const submittedCouponId: number = this.selectedCoupon?.id ?? 0
+    const submittedCouponAmount: number = this.selectedCoupon?.amount ?? 0
     let firstOrder: Order | null = null
     let couponUsed: boolean = false
     const checkoutGoodsIds: number[] = []
-    for (let i = 0; i < this.storeItems.length; i++) {
-      checkoutGoodsIds.push(this.storeItems[i].goods.id)
+    for (let i = 0; i < submitItems.length; i++) {
+      checkoutGoodsIds.push(submitItems[i].goods.id)
     }
-    // 已下单成功的购物车行（按菜品+规格精确清理，避免连带删除未结算的其他规格）
-    const successfulRows: CartItem[] = []
     // 服务端活动价（如限时秒杀）可能低于本地预估，累计差额用于明确告知用户
     let activitySaved: number = 0
     const stores: StoreItem[] = getAllStoresList()
-    for (let i = 0; i < this.checkoutStoreIds.length; i++) {
-      const storeId: number = this.checkoutStoreIds[i]
-      const items: CartItem[] = this.getStoreItems(storeId)
-      const groupTotal: number = this.getStoreGoodsTotalPrice(storeId)
-      const couponCanApply: boolean = this.selectedCoupon !== null
-        && !couponUsed
-        && (this.selectedCoupon.storeId === undefined || this.selectedCoupon.storeId === 0 || this.selectedCoupon.storeId === storeId)
-        && groupTotal >= this.selectedCoupon.minOrder
-      const couponId: number = couponCanApply && this.selectedCoupon !== null ? this.selectedCoupon.id : 0
-      const serverOrder: Order | null = await createOrderRemote(storeId, items, address.id, couponId, this.remark, checkoutGoodsIds, expectTime, `${this.submitKey}-${storeId}`, this.deliveryType)
-      if (serverOrder === null) {
-        if (successfulRows.length > 0) {
-          await this.removeCartRows(successfulRows)
+    const couponStoreId: number = this.selectedCoupon === null ? 0 : this.getCouponStoreId(this.selectedCoupon)
+    try {
+      for (let i = 0; i < storeIds.length; i++) {
+        if (!this.isCheckoutCurrent(requestVersion)) { return }
+        const storeId: number = storeIds[i]
+        const items: CartItem[] = submitItems.filter((item: CartItem) => item.storeId === storeId)
+        const groupTotal: number = this.getStoreGoodsTotalPrice(storeId)
+        const couponCanApply: boolean = submittedCouponId > 0
+          && !couponUsed
+          && couponStoreId === storeId
+        const couponId: number = couponCanApply ? submittedCouponId : 0
+        const store: StoreItem | undefined = stores.find((item: StoreItem) => item.id === storeId)
+        const snapshot: PendingCheckoutSubmission = this.pendingSubmission ?? {
+          storeId: storeId, items: items, addressId: addressId, couponId: couponId, remark: remark,
+          checkoutGoodsIds: checkoutGoodsIds.slice(), key: `${this.submitKey}-${storeId}`,
+          expectedPay: checkoutCents(groupTotal + (store?.deliveryFee ?? 0)
+            - (couponId > 0 ? submittedCouponAmount : 0)) / 100
         }
+        if (snapshot.storeId !== storeId) { throw new Error('待核对订单与当前店铺不一致') }
+        this.pendingSubmission = snapshot
+        const feedback: OrderCreateFeedback = { failureConfirmed: false, message: '' }
+        const serverOrder: Order | null = await createOrderRemote(snapshot.storeId, snapshot.items,
+          snapshot.addressId, snapshot.couponId, snapshot.remark, snapshot.checkoutGoodsIds, '', snapshot.key,
+          'DELIVERY', [], feedback)
+        if (!this.isCheckoutCurrent(requestVersion)) { return }
+        if (serverOrder === null) {
+          const errorMessage: string = feedback.message || getLastRemoteErrorMessage()
+          if (!feedback.failureConfirmed) {
+            this.submissionUncertain = true
+            this.orderFailureMessage = `${this.createdOrderCount > 0 ? `已核对${this.createdOrderCount}笔订单；` : ''}`
+              + `当前店铺提交结果尚未确认。${errorMessage === '' ? '' : `${errorMessage}。`}`
+              + '地址、备注和优惠已锁定，请按原信息核对提交结果，系统会返回原订单，避免重复下单。'
+            this.showOrderFailureDialog = true
+            return
+          }
+          this.pendingSubmission = null
+          this.submissionUncertain = false
+          let cartSynced: boolean = true
+          if (this.createdOrderCount > 0) {
+            cartSynced = await syncCartRemote(false)
+            if (!this.isCheckoutCurrent(requestVersion)) { return }
+          }
+          const couponNeedsRefresh: boolean = snapshot.couponId > 0 || couponUsed
+          if (couponNeedsRefresh) {
+            const rejectedId: number = snapshot.couponId > 0 ? snapshot.couponId : submittedCouponId
+            this.rejectedCouponId = rejectedId
+            if (this.couponChoiceMode !== 'NONE') {
+              this.couponChoiceMode = 'AUTO'
+            }
+            this.selectedCoupon = null
+            AppStorage.setOrCreate<Coupon | null>('selectedCoupon', null)
+            await syncCouponsRemote(false)
+            if (!this.isCheckoutCurrent(requestVersion)) { return }
+          }
+          this.submitting = false
+          this.refreshCouponOptions()
+          this.retryNeedsReview = this.createdOrderCount > 0 && couponNeedsRefresh
+          const reason: string = errorMessage === ''
+            ? '请检查起送价、账户余额、收货地址或网络连接'
+            : errorMessage
+          let failureMessage: string = this.createdOrderCount > 0
+            ? `已确认${this.createdOrderCount}笔订单，可在“我的订单”中核对状态；当前店铺“${this.getStoreName(storeId)}”提交失败：${reason}`
+            : `提交订单失败：${reason}`
+          if (!cartSynced) {
+            failureMessage += '；已创建订单的购物车状态待同步，请勿重复结算'
+          }
+          this.orderFailureMessage = failureMessage
+          this.showOrderFailureDialog = true
+          return
+        }
+        // 成交金额以服务端为准（秒杀等在服务端生效），差额主动提示，避免用户以为结算页金额算错
+        const expectedPay: number = snapshot.expectedPay
+        this.pendingSubmission = null
+        this.submissionUncertain = false
+        if (serverOrder.payAmount < expectedPay - 0.01) {
+          activitySaved += expectedPay - serverOrder.payAmount
+        }
+        if (firstOrder === null) {
+          firstOrder = serverOrder
+        }
+        if (serverOrder.status !== 0) {
+          this.reconciledOrderStatus = getOrderStatusText(serverOrder.status, serverOrder.escrowStatus)
+        }
+        this.createdOrderCount += 1
+        // 逐店记录已确认结果。页面中断后，剩余店铺仍使用原 key 对账，已成功店铺不再提交或计数。
+        const remainingStoreIds: number[] = storeIds.slice(i + 1)
+        this.checkoutStoreIds = remainingStoreIds
+        this.storeItems = submitItems.filter((item: CartItem) => remainingStoreIds.indexOf(item.storeId) >= 0)
+        this.checkoutStoreId = remainingStoreIds.length === 1 ? remainingStoreIds[0] : 0
+        this.storeInfo = remainingStoreIds.length > 0
+          ? stores.find((store: StoreItem) => store.id === remainingStoreIds[0]) ?? null : null
+        if (snapshot.couponId > 0) {
+          couponUsed = true
+        }
+      }
+      if (firstOrder === null) {
         this.submitting = false
-        const errorMessage: string = getLastRemoteErrorMessage()
-        const failureMessage: string = errorMessage === ''
-          ? '提交订单失败，请检查起送价、账户余额、收货地址或网络连接'
-          : `提交订单失败：${errorMessage}`
-        this.orderFailureMessage = failureMessage
+        this.orderFailureMessage = '购物车没有可结算的商品'
         this.showOrderFailureDialog = true
         return
       }
-      // 成交金额以服务端为准（秒杀等在服务端生效），差额主动提示，避免用户以为结算页金额算错
-      const matchedStore: StoreItem[] = stores.filter((store: StoreItem) => store.id === storeId)
-      const deliveryFee: number = matchedStore.length > 0 ? matchedStore[0].deliveryFee : 0
-      const couponAmount: number = couponId > 0 && this.selectedCoupon !== null ? this.selectedCoupon.amount : 0
-      const expectedPay: number = Math.round((groupTotal + deliveryFee - couponAmount) * 100) / 100
-      if (serverOrder.payAmount < expectedPay - 0.01) {
-        activitySaved += expectedPay - serverOrder.payAmount
+
+      // 创建订单的事务已按本次商品数量更新购物车；这里只读取服务端权威状态，
+      // 避免响应等待期间新加购的同菜品、同规格被客户端整行删除。
+      const cartSynced: boolean = await syncCartRemote(false)
+      if (!this.isCheckoutCurrent(requestVersion)) { return }
+
+      // 后端已处理优惠券状态，重新同步真实优惠券列表
+      if (submittedCouponId > 0 || couponUsed) {
+        await syncCouponsRemote(false)
+        if (!this.isCheckoutCurrent(requestVersion)) { return }
       }
-      if (firstOrder === null) {
-        firstOrder = serverOrder
-      }
-      if (couponId > 0) {
-        couponUsed = true
-      }
-      for (let j = 0; j < items.length; j++) {
-        successfulRows.push(items[j])
-      }
-    }
-    if (firstOrder === null) {
+
+      // 存入 currentOrder 供订单详情页读取
+      AppStorage.setOrCreate<number>('currentOrderId', firstOrder.id)
+      AppStorage.setOrCreate<Order>('currentOrder', firstOrder)
+      // 重置已选优惠券
+      AppStorage.setOrCreate<Coupon | null>('selectedCoupon', null)
+      this.selectedCoupon = null
+      this.checkoutStoreId = 0
+      this.checkoutStoreIds = []
+      this.storeItems = []
+      this.storeInfo = null
       this.submitting = false
-      this.orderFailureMessage = '购物车没有可结算的商品'
-      this.showOrderFailureDialog = true
-      return
-    }
-
-    await this.removeCartRows(successfulRows)
-
-    // 后端已处理优惠券状态，重新同步真实优惠券列表
-    if (this.selectedCoupon !== null) {
-      await syncCouponsRemote()
-    }
-
-    // 存入 currentOrder 供订单详情页读取
-    AppStorage.setOrCreate<number>('currentOrderId', firstOrder.id)
-    AppStorage.setOrCreate<Order>('currentOrder', firstOrder)
-    // 重置已选优惠券
-    AppStorage.setOrCreate<Coupon | null>('selectedCoupon', null)
-    this.submitting = false
-    const submittedCount: number = this.checkoutStoreIds.length
-    promptAction.showToast({
-      message: activitySaved > 0.01
-        ? `订单提交成功，已按活动价结算，比预估少付 ¥${activitySaved.toFixed(2)}，请在 15 分钟内完成支付`
-        : (submittedCount > 1
-          ? `已提交${submittedCount}笔订单，请分别完成支付`
-          : '订单提交成功，请在 15 分钟内完成支付'),
-      duration: 3000
-    })
-    router.pushUrl({ url: 'pages/OrderDetailPage' })
-  }
-
-  /** 下单成功后按 (菜品, 规格) 精确清理购物车行。 */
-  private async removeCartRows(rows: CartItem[]): Promise<void> {
-    let allCleared: boolean = true
-    for (let i = 0; i < rows.length; i++) {
-      const row: CartItem = rows[i]
-      const ok: boolean = await deleteCartItemRemote(row.goods.id, row.specId ?? 0)
-      if (!ok) {
-        allCleared = false
+      const submittedCount: number = this.createdOrderCount
+      const cartMessage: string = cartSynced ? '' : '；购物车状态待同步，请勿重复结算'
+      promptAction.showToast({
+        message: this.reconciledOrderStatus !== ''
+          ? (submittedCount > 1
+            ? `已核对到${submittedCount}笔订单，其中原订单当前状态：${this.reconciledOrderStatus}，请查看订单列表${cartMessage}`
+            : `已核对到原订单，当前状态：${this.reconciledOrderStatus}，请查看详情${cartMessage}`)
+          : submittedCount > 1
+          ? (activitySaved > 0.01
+            ? `已提交${submittedCount}笔订单，比预估少付 ¥${activitySaved.toFixed(2)}，请分别完成支付${cartMessage}`
+            : `已提交${submittedCount}笔订单，请分别完成支付${cartMessage}`)
+          : (activitySaved > 0.01
+            ? `订单提交成功，已按活动价结算，比预估少付 ¥${activitySaved.toFixed(2)}，请在 15 分钟内完成支付${cartMessage}`
+            : `订单提交成功，请在 15 分钟内完成支付${cartMessage}`),
+        duration: 3000
+      })
+      if (submittedCount > 1) {
+        AppStorage.setOrCreate<number>('orderFilterStatus', this.reconciledOrderStatus === '' ? 0 : -1)
+        router.replaceUrl({ url: 'pages/OrderListPage' })
+      } else {
+        router.replaceUrl({ url: 'pages/OrderDetailPage' })
       }
-    }
-    if (!allCleared) {
-      await syncCartRemote()
+    } catch (_) {
+      if (!this.isCheckoutCurrent(requestVersion)) { return }
+      this.submissionUncertain = this.pendingSubmission !== null
+      this.orderFailureMessage = this.createdOrderCount > 0
+        ? `已核对${this.createdOrderCount}笔订单，请到“我的订单”查看；剩余店铺可使用本页重试，备注和地址已保留`
+        : '提交结果暂未确认，请检查网络后在本页重试，系统会核对原订单；备注和地址已保留'
+      this.showOrderFailureDialog = true
+    } finally {
+      if (this.isCheckoutCurrent(requestVersion)) { this.submitting = false }
     }
   }
 
@@ -359,6 +624,12 @@ export struct CheckoutPage {
         } else {
           Scroll() {
             Column({ space: SPACING.SM }) {
+              if (this.submissionUncertain) {
+                Text('上次提交结果尚未确认，地址、备注和优惠已锁定。请按原信息核对提交结果。')
+                  .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_PRIMARY)
+                  .width('100%').padding(SPACING.MD)
+                  .id('checkout-submission-uncertain')
+              }
               this.AddressCard()
               this.StoreAndItemsCard()
               this.CouponCard()
@@ -379,10 +650,10 @@ export struct CheckoutPage {
       .height('100%')
       .backgroundColor(COLORS.BG_PRIMARY)
 
-      // 提交订单加载遮罩（模拟支付中）
+      // 提交订单加载遮罩
       if (this.submitting) {
         Column() {
-          LoadingIndicator({ text: '支付处理中...' })
+          LoadingIndicator({ text: '正在提交订单…' })
         }
         .width('100%')
         .height('100%')
@@ -409,17 +680,33 @@ export struct CheckoutPage {
 
   @Builder
   NavBar() {
-    PageHeader({ title: '确认订单', backId: 'checkout-back', onBack: () => { router.back() } })
+    PageHeader({ title: '确认订单', backId: 'checkout-back', onBack: () => {
+      if (!this.onBackPress()) { router.back() }
+    } })
   }
 
   @Builder
   EmptyState() {
     Column() {
       Image($r('app.media.home_nav_cart')).width(60).height(60).objectFit(ImageFit.Contain)
-      Text('暂无结算商品')
+      Text(this.sessionChanged ? '登录状态已变化，请返回购物车重新结算'
+        : this.createdOrderCount > 0 ? `已核对到${this.createdOrderCount}笔订单` : '暂无结算商品')
         .fontSize(FONT_SIZE.LG)
         .fontColor(COLORS.TEXT_HINT)
         .margin({ top: SPACING.MD })
+        .textAlign(TextAlign.Center)
+      if (!this.sessionChanged && this.createdOrderCount > 0) {
+        Button('查看订单')
+          .attributeModifier(new AppButtonStyle())
+          .height(44)
+          .margin({ top: SPACING.MD })
+          .id('checkout-created-orders')
+          .onClick(() => {
+            if (!this.isCheckoutCurrent(this.requestVersion)) { return }
+            AppStorage.setOrCreate<number>('orderFilterStatus', this.reconciledOrderStatus === '' ? 0 : -1)
+            router.replaceUrl({ url: 'pages/OrderListPage' })
+          })
+      }
     }
     .width('100%')
     .layoutWeight(1)
@@ -465,6 +752,7 @@ Image($r('app.media.home_location')).width(FONT_SIZE.XL).height(FONT_SIZE.XL).ob
     .width('100%')
     .padding(SPACING.LG)
     .alignItems(VerticalAlign.Center)
+    .enabled(!this.submitting && !this.submissionUncertain)
     .onClick(() => { this.openAddressSelector() })
   }
 
@@ -529,19 +817,30 @@ Image($r('app.media.home_location')).width(FONT_SIZE.XL).height(FONT_SIZE.XL).ob
   @Builder
   CouponCard() {
     Row() {
-Image($r('app.media.home_coupon')).width(FONT_SIZE.MD).height(FONT_SIZE.MD).objectFit(ImageFit.Contain)
+      Image($r('app.media.home_coupon')).width(FONT_SIZE.MD).height(FONT_SIZE.MD).objectFit(ImageFit.Contain)
+      Column({ space: 2 }) {
         Text('优惠券')
           .fontSize(FONT_SIZE.MD)
-        .fontColor(COLORS.TEXT_PRIMARY)
+          .fontColor(COLORS.TEXT_PRIMARY)
+        Text(this.couponSummary)
+          .id('checkout-coupon-summary')
+          .fontSize(FONT_SIZE.XS)
+          .fontColor(COLORS.TEXT_HINT)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+      }
         .layoutWeight(1)
         .margin({ left: SPACING.SM })
-      if (this.selectedCoupon !== null) {
+        .alignItems(HorizontalAlign.Start)
+      if (this.getDiscountAmount() > 0 && this.selectedCoupon !== null) {
         // 券 amount 缺失时 toFixed 会渲染成 ¥NaN；与项目其余兜底口径统一
         Text(`-¥${(Number.isFinite(this.selectedCoupon.amount) ? this.selectedCoupon.amount : 0).toFixed(2)}`)
           .fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.PRIMARY)
       } else {
-        Text('请选择')
+        Text(this.couponChoiceMode === 'NONE'
+          ? '不使用'
+          : (this.availableCoupons.length === 0 ? '暂无可用' : '请选择'))
           .fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_HINT)
       }
@@ -554,7 +853,12 @@ Image($r('app.media.home_coupon')).width(FONT_SIZE.MD).height(FONT_SIZE.MD).obje
     .width('100%')
     .padding(SPACING.LG)
     .alignItems(VerticalAlign.Center)
-    .onClick(() => { this.showCouponDialog = true })
+    .enabled(!this.submitting && !this.submissionUncertain)
+    .onClick(() => {
+      if (!this.submitting && !this.submissionUncertain && this.isCheckoutCurrent(this.requestVersion)) {
+        this.showCouponDialog = true
+      }
+    })
   }
 
   @Builder
@@ -594,6 +898,9 @@ Image($r('app.media.home_coupon')).width(FONT_SIZE.MD).height(FONT_SIZE.MD).obje
         }
         .width('100%')
       }
+      Text('以上为预估金额。店铺活动与优惠券叠加后可能需要换券，提交后请核对订单实际金额再付款。')
+        .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+        .id('checkout-estimate-policy')
     }
       .attributeModifier(new AppCardStyle())
     .width('100%')
@@ -606,136 +913,32 @@ Image($r('app.media.home_coupon')).width(FONT_SIZE.MD).height(FONT_SIZE.MD).obje
       Text('送达时间')
         .fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
         .width('100%')
-      Flex({ wrap: FlexWrap.Wrap, alignItems: ItemAlign.Center }) {
-        ForEach(this.deliveryOptions, (label: string, index: number) => {
-          this.DeliveryOption(index, label)
-        }, (label: string) => label)
-        Button('自选时间')
-          .attributeModifier(new AppButtonStyle())
-          .id('checkout-delivery-custom')
-          .accessibilitySelected(this.isCustomDelivery())
-          .height(24)
-          .fontSize(FONT_SIZE.SM)
-          .fontColor(this.isCustomDelivery() ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
-          .backgroundColor(this.isCustomDelivery() ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
-          .padding({ left: SPACING.MD, right: SPACING.MD, top: SPACING.XS, bottom: SPACING.XS })
-          .borderRadius(BORDER_RADIUS.ROUND)
-          .margin({ bottom: SPACING.XS })
-          .onClick(() => { this.selectCustomDeliveryTime() })
-      }
-      .width('100%')
-      if (this.deliveryTimeChosen) {
-        Text(`预约送达：${this.customDeliveryLabel}`)
-          .id('checkout-delivery-selected-time')
-          .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY).width('100%')
-      }
+      Text('立即送达')
+        .id('checkout-delivery-immediate')
+        .fontSize(FONT_SIZE.SM)
+        .fontColor(COLORS.ON_PRIMARY)
+        .backgroundColor(COLORS.PRIMARY)
+        .padding({ left: SPACING.MD, right: SPACING.MD, top: SPACING.XS, bottom: SPACING.XS })
+        .borderRadius(BORDER_RADIUS.ROUND)
+        .alignSelf(ItemAlign.Start)
+      Text('当前仅支持立即配送')
+        .id('checkout-delivery-policy')
+        .fontSize(FONT_SIZE.XS)
+        .fontColor(COLORS.TEXT_HINT)
+        .width('100%')
       Text('送达方式')
         .fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
         .width('100%')
-      Row({ space: SPACING.SM }) {
-        ForEach(this.deliveryTypeOptions, (opt: DeliveryTypeOption) => {
-          Text(this.deliveryType === opt.code && opt.code === 'PICKUP' ? `${opt.label}（免配送费）` : opt.label)
-            .fontSize(FONT_SIZE.XS)
-            .fontColor(this.deliveryType === opt.code ? COLORS.ON_PRIMARY : COLORS.TEXT_PRIMARY)
-            .backgroundColor(this.deliveryType === opt.code ? COLORS.PRIMARY : COLORS.TAG_BG)
-            .padding({ left: SPACING.SM, right: SPACING.SM, top: 4, bottom: 4 })
-            .borderRadius(BORDER_RADIUS.SM)
-            .onClick(() => { this.deliveryType = opt.code })
-        }, (opt: DeliveryTypeOption) => opt.code)
-      }
-      .width('100%')
+      Text('外卖配送')
+        .fontSize(FONT_SIZE.XS)
+        .fontColor(COLORS.ON_PRIMARY)
+        .backgroundColor(COLORS.PRIMARY)
+        .padding({ left: SPACING.SM, right: SPACING.SM, top: 4, bottom: 4 })
+        .borderRadius(BORDER_RADIUS.SM)
+        .alignSelf(ItemAlign.Start)
     }
       .attributeModifier(new AppCardStyle())
     .width('100%').padding(SPACING.LG)
-  }
-
-  @Builder
-  DeliveryOption(index: number, label: string) {
-    Text(label)
-      .fontSize(FONT_SIZE.SM)
-      .fontColor(this.selectedDelivery === index ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
-      .backgroundColor(this.selectedDelivery === index ? COLORS.PRIMARY : COLORS.BG_PRIMARY)
-      .padding({ left: SPACING.MD, right: SPACING.MD, top: SPACING.XS, bottom: SPACING.XS })
-      .borderRadius(BORDER_RADIUS.ROUND)
-      .margin({ right: SPACING.SM, bottom: SPACING.XS })
-      .id(`checkout-delivery-${index}`)
-      .onClick(() => { this.selectPresetDelivery(index) })
-  }
-
-  private isCustomDelivery(): boolean {
-    return this.selectedDelivery === this.deliveryOptions.length
-  }
-
-  private selectPresetDelivery(index: number): void {
-    this.selectedDelivery = index
-    const offsetMinutes: number = this.deliveryOffsetsMinutes[index] ?? 0
-    const target: Date = new Date(getServerNowEpochMs() + offsetMinutes * 60 * 1000)
-    this.customDeliveryTime = target.getTime()
-    this.customDeliveryLabel = this.formatDeliveryTime(target).substring(0, 16)
-    this.deliveryTimeChosen = true
-  }
-
-  private selectCustomDeliveryTime(): void {
-    const serverNowMs: number = getServerNowEpochMs()
-    const initial: Date = new Date(this.isCustomDelivery() && this.customDeliveryTime > serverNowMs
-      ? this.customDeliveryTime : serverNowMs)
-    const today: Date = new Date()
-    this.pendingCalendarDate = null
-    CalendarPickerDialog.show({
-      selected: initial,
-      start: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
-      markToday: true,
-      backgroundColor: AppTheme.CARD,
-      backgroundBlurStyle: BlurStyle.NONE,
-      acceptButtonStyle: { fontColor: AppTheme.PRIMARY_TEXT, backgroundColor: AppTheme.PRIMARY },
-      cancelButtonStyle: { fontColor: AppTheme.MUTED, backgroundColor: AppTheme.INPUT },
-      onAccept: (date: Date): void => {
-        this.pendingCalendarDate = new Date(date.getFullYear(), date.getMonth(), date.getDate(),
-          initial.getHours(), initial.getMinutes())
-      },
-      onDidDisappear: (): void => {
-        const date: Date | null = this.pendingCalendarDate
-        this.pendingCalendarDate = null
-        if (date !== null) {
-          this.selectDeliveryClockTime(date)
-        }
-      }
-    })
-  }
-
-  private selectDeliveryClockTime(date: Date): void {
-    this.getUIContext().showTimePickerDialog({
-      selected: date,
-      useMilitaryTime: true,
-      backgroundColor: AppTheme.CARD,
-      backgroundBlurStyle: BlurStyle.NONE,
-      selectedTextStyle: { color: AppTheme.PRIMARY },
-      textStyle: { color: AppTheme.TEXT },
-      acceptButtonStyle: { fontColor: AppTheme.PRIMARY_TEXT, backgroundColor: AppTheme.PRIMARY },
-      cancelButtonStyle: { fontColor: AppTheme.MUTED, backgroundColor: AppTheme.INPUT },
-      onAccept: (time: TimePickerResult): void => {
-        const target: Date = new Date(date.getFullYear(), date.getMonth(), date.getDate(),
-          time.hour, time.minute)
-        if (target.getTime() <= getServerNowEpochMs()) {
-          promptAction.showToast({ message: '请选择晚于当前时间的送达时间' })
-          return
-        }
-        this.customDeliveryTime = target.getTime()
-        this.customDeliveryLabel = this.formatDeliveryTime(target).substring(0, 16)
-        this.selectedDelivery = this.deliveryOptions.length
-        this.deliveryTimeChosen = true
-      }
-    })
-  }
-
-  private getExpectTime(): string {
-    if (this.selectedDelivery === 0) {
-      return ''
-    }
-    const offsetMinutes: number = this.deliveryOffsetsMinutes[this.selectedDelivery] ?? 0
-    const target: Date = new Date(this.isCustomDelivery() ? this.customDeliveryTime
-      : getServerNowEpochMs() + offsetMinutes * 60 * 1000)
-    return this.formatDeliveryTime(target)
   }
 
   @Builder
@@ -745,13 +948,15 @@ Image($r('app.media.home_coupon')).width(FONT_SIZE.MD).height(FONT_SIZE.MD).obje
         .fontSize(FONT_SIZE.MD)
         .fontWeight(FontWeight.Bold)
         .fontColor(COLORS.TEXT_PRIMARY)
-      TextArea({ placeholder: '选填，请输入备注信息（最多50字）' })
+      TextArea({ placeholder: '例如：少辣、不要香菜（选填，最多50字）', text: this.remark })
         .attributeModifier(new AppTextAreaStyle())
         .width('100%')
         .height(80)
         .maxLength(50)
+        .enabled(!this.submitting && !this.submissionUncertain)
+        .id('checkout-remark')
         .onChange((value: string) => {
-          this.remark = value
+          if (!this.submitting && !this.submissionUncertain) { this.remark = value }
         })
     }
       .attributeModifier(new AppCardStyle())
@@ -764,7 +969,7 @@ Image($r('app.media.home_coupon')).width(FONT_SIZE.MD).height(FONT_SIZE.MD).obje
   SubmitBar() {
     Row() {
       Row() {
-        Text('实付')
+        Text('预估应付')
           .fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_SECONDARY)
         Text(`¥${this.getPayAmount().toFixed(2)}`)
@@ -772,18 +977,19 @@ Image($r('app.media.home_coupon')).width(FONT_SIZE.MD).height(FONT_SIZE.MD).obje
           .fontColor(COLORS.PRICE_RED)
           .fontWeight(FontWeight.Bold)
           .margin({ left: SPACING.XS })
-          // 设备端 UiTest 用：断言结算实付金额（组件匹配器比坐标点击可靠）
+          // 设备端 UiTest 用：断言结算应付金额（组件匹配器比坐标点击可靠）
           .id('checkout-pay-amount')
       }
       .layoutWeight(1)
 
-      Button('提交订单')
+      Button(this.submitting ? '提交中…' : this.submissionUncertain ? '核对上次提交结果' : '提交订单')
         .attributeModifier(new AppButtonStyle())
         .height(44)
         .fontSize(FONT_SIZE.LG).fontColor(COLORS.ON_PRIMARY)
         .backgroundColor(COLORS.PRIMARY)
         .borderRadius(BORDER_RADIUS.ROUND)
         .id('checkout-submit')
+        .enabled(!this.submitting && !this.sessionChanged)
         .onClick(() => { this.submitOrder() })
     }
     .width('100%')
@@ -795,33 +1001,41 @@ Image($r('app.media.home_coupon')).width(FONT_SIZE.MD).height(FONT_SIZE.MD).obje
   @Builder
   CouponDialog() {
       Column() {
-        if (this.getAvailableCoupons().length === 0) {
-          Column() {
-            Text('暂无可用优惠券')
-              .fontSize(FONT_SIZE.MD)
-              .fontColor(COLORS.TEXT_HINT)
-          }
-          .width('100%')
-          .layoutWeight(1)
-          .justifyContent(FlexAlign.Center)
-          .alignItems(HorizontalAlign.Center)
-        } else {
           // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
           List({ space: SPACING.SM }) {
             ListItem() {
+              Text('按当前商品与配送费预估，最终以服务端计价为准')
+                .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+            }
+            ListItem() {
               this.CouponOption(null)
             }
-            ForEach(this.getAvailableCoupons(), (coupon: Coupon) => {
+            if (this.availableCoupons.length === 0) {
+              ListItem() {
+                Text('当前暂无可用优惠券')
+                  .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_SECONDARY)
+              }
+            }
+            ForEach(this.availableCoupons, (coupon: Coupon) => {
               ListItem() {
                 this.CouponOption(coupon)
               }
             }, (coupon: Coupon) => `${coupon.id}`)
+            if (this.unavailableCoupons.length > 0) {
+              ListItem() {
+                Text('本次不可用')
+                  .fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Medium).fontColor(COLORS.TEXT_PRIMARY)
+                  .padding({ top: SPACING.MD, bottom: SPACING.XS })
+              }
+              ForEach(this.unavailableCoupons, (item: UnavailableCheckoutCoupon) => {
+                ListItem() { this.UnavailableCouponOption(item) }
+              }, (item: UnavailableCheckoutCoupon) => `unavailable-${item.coupon.id}-${item.reason}`)
+            }
           }
           .width('100%')
           .layoutWeight(1)
           .scrollBar(BarState.Off)
           .edgeEffect(EdgeEffect.Spring)
-        }
       }
       .width('100%')
       .height('100%')
@@ -838,15 +1052,10 @@ Image($r('app.media.home_coupon')).width(FONT_SIZE.MD).height(FONT_SIZE.MD).obje
         .onClick(() => { this.showOrderFailureDialog = false })
 
       Column({ space: SPACING.MD }) {
-        Text('提交订单失败')
+        Text(this.submissionUncertain ? '提交结果待核对' : this.createdOrderCount > 0 ? '部分订单已确认' : '提交订单失败')
           .fontSize(FONT_SIZE.XL)
           .fontWeight(FontWeight.Bold)
           .fontColor(COLORS.TEXT_PRIMARY)
-
-        Web({ src: $rawfile('order_failure_lottie.html'), controller: this.orderFailureWebController })
-          .width(120)
-          .height(120)
-          .backgroundColor(COLORS.BG_WHITE)
 
         Text('失败原因')
           .width('100%')
@@ -865,14 +1074,53 @@ Image($r('app.media.home_coupon')).width(FONT_SIZE.MD).height(FONT_SIZE.MD).obje
         .height(72)
         .scrollBar(BarState.Off)
 
-        Button('知道了')
-          .attributeModifier(new AppButtonStyle())
-          .width('100%')
-          .height(44)
-          .fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
-          .backgroundColor(COLORS.PRIMARY)
-          .borderRadius(BORDER_RADIUS.ROUND)
-          .onClick(() => { this.showOrderFailureDialog = false })
+        if (this.createdOrderCount > 0) {
+          Button('查看订单')
+            .attributeModifier(new AppButtonStyle())
+            .width('100%')
+            .height(44)
+            .fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
+            .backgroundColor(COLORS.PRIMARY)
+            .borderRadius(BORDER_RADIUS.ROUND)
+            .id('checkout-partial-orders')
+            .onClick(() => {
+              this.showOrderFailureDialog = false
+              AppStorage.setOrCreate<number>('orderFilterStatus', this.reconciledOrderStatus === '' ? 0 : -1)
+              router.pushUrl({ url: 'pages/OrderListPage' })
+            })
+          Button(this.submissionUncertain ? '按原信息核对提交结果' : '重试剩余店铺')
+            .attributeModifier(new AppButtonStyle())
+            .width('100%')
+            .height(44)
+            .fontSize(FONT_SIZE.MD).fontColor(COLORS.PRIMARY)
+            .backgroundColor(COLORS.TAG_BG)
+            .borderRadius(BORDER_RADIUS.ROUND)
+            .id('checkout-partial-retry')
+            .onClick(() => {
+              this.showOrderFailureDialog = false
+              if (this.retryNeedsReview) {
+                this.retryNeedsReview = false
+                promptAction.showToast({
+                  message: `优惠方案已更新，应付 ¥${this.getPayAmount().toFixed(2)}，请核对后再次提交`,
+                  duration: 3000
+                })
+                return
+              }
+              this.submitOrder()
+            })
+        } else {
+          Button(this.submissionUncertain ? '按原信息核对提交结果' : '知道了')
+            .attributeModifier(new AppButtonStyle())
+            .width('100%')
+            .height(44)
+            .fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
+            .backgroundColor(COLORS.PRIMARY)
+            .borderRadius(BORDER_RADIUS.ROUND)
+            .onClick(() => {
+              this.showOrderFailureDialog = false
+              if (this.submissionUncertain) { this.submitOrder() }
+            })
+        }
       }
         .attributeModifier(new AppCardStyle())
       .width('84%').constraintSize({ maxWidth: 460 })
@@ -889,7 +1137,7 @@ Image($r('app.media.home_coupon')).width(FONT_SIZE.MD).height(FONT_SIZE.MD).obje
     Row() {
       Column() {
         if (coupon !== null) {
-          Text(`¥${coupon.amount.toFixed(0)}`)
+          Text(`¥${coupon.amount.toFixed(2)}`)
             .fontSize(FONT_SIZE.XXL)
             .fontWeight(FontWeight.Bold)
             .fontColor(COLORS.ON_PRIMARY)
@@ -909,10 +1157,25 @@ Image($r('app.media.home_coupon')).width(FONT_SIZE.MD).height(FONT_SIZE.MD).obje
 
       Column({ space: SPACING.XS }) {
         if (coupon !== null) {
-          Text(coupon.condition)
-            .fontSize(FONT_SIZE.MD)
-            .fontColor(COLORS.TEXT_PRIMARY)
-          Text(`满${coupon.minOrder}元可用`)
+          Row({ space: SPACING.XS }) {
+            Text(coupon.condition)
+              .fontSize(FONT_SIZE.MD)
+              .fontColor(COLORS.TEXT_PRIMARY)
+              .layoutWeight(1)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+            if (coupon.id === this.bestCouponId) {
+              Text('预估最省')
+                .fontSize(FONT_SIZE.XS)
+                .fontColor(COLORS.PRIMARY)
+                .backgroundColor(COLORS.TAG_BG)
+                .borderRadius(BORDER_RADIUS.SM)
+                .padding({ left: SPACING.XS, right: SPACING.XS, top: 2, bottom: 2 })
+            }
+          }
+          .width('100%')
+          .alignItems(VerticalAlign.Center)
+          Text(`商品满 ¥${coupon.minOrder.toFixed(2)} 可用`)
             .fontSize(FONT_SIZE.SM)
             .fontColor(COLORS.TEXT_SECONDARY)
         } else {
@@ -929,7 +1192,7 @@ Image($r('app.media.home_coupon')).width(FONT_SIZE.MD).height(FONT_SIZE.MD).obje
         Text('✓')
           .fontSize(FONT_SIZE.LG)
           .fontColor(COLORS.PRIMARY)
-      } else if (coupon === null && this.selectedCoupon === null) {
+      } else if (coupon === null && this.couponChoiceMode === 'NONE') {
         Text('✓')
           .fontSize(FONT_SIZE.LG)
           .fontColor(COLORS.PRIMARY)
@@ -940,6 +1203,25 @@ Image($r('app.media.home_coupon')).width(FONT_SIZE.MD).height(FONT_SIZE.MD).obje
     .backgroundColor(this.couponRowBg(coupon))
     .borderRadius(BORDER_RADIUS.MD)
     .alignItems(VerticalAlign.Center)
+    .enabled(!this.submitting && !this.submissionUncertain)
     .onClick(() => { this.selectCoupon(coupon) })
+  }
+
+  @Builder
+  UnavailableCouponOption(item: UnavailableCheckoutCoupon) {
+    Column({ space: SPACING.XS }) {
+      Text(item.coupon.condition)
+        .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
+      Text(item.reason)
+        .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+        .id(`checkout-coupon-unavailable-${item.coupon.id}`)
+    }
+    .width('100%')
+    .constraintSize({ minHeight: 44 })
+    .alignItems(HorizontalAlign.Start)
+    .padding(SPACING.MD)
+    .backgroundColor(COLORS.BG_PRIMARY)
+    .borderRadius(BORDER_RADIUS.MD)
+    .accessibilityDescription(`不可用，${item.coupon.condition}，${item.reason}`)
   }
 }

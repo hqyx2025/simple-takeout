@@ -7,7 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Date;
 import java.util.UUID;
 
@@ -21,13 +21,15 @@ public class JwtUtil {
 
     /** 改密时间声明名：值为 users.password_changed_at 原文（yyyy-MM-dd HH:mm:ss，空=从未改密）。 */
     public static final String CLAIM_PWD_AT = "pwdAt";
+    private static final String ISSUER = "simple-takeout";
 
     private final SecretKey key;
     private final long expireMillis;
 
     public JwtUtil(@Value("${takeout.jwt.secret}") String secret,
                    @Value("${takeout.jwt.expire-hours}") long expireHours) {
-        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        this.key = Keys.hmacShaKeyFor(decodeSecret(secret));
+        if (expireHours < 1 || expireHours > 72) throw new IllegalStateException("JWT 有效期须在 1 至 72 小时之间");
         this.expireMillis = expireHours * 3600_000L;
     }
 
@@ -47,12 +49,13 @@ public class JwtUtil {
         Date now = new Date();
         return Jwts.builder()
                 .id(UUID.randomUUID().toString())
+                .issuer(ISSUER)
                 .subject(String.valueOf(userId))
                 .claim("role", role)
                 .claim(CLAIM_PWD_AT, passwordChangedAt == null ? "" : passwordChangedAt)
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + expireMillis))
-                .signWith(key)
+                .signWith(key, Jwts.SIG.HS256)
                 .compact();
     }
 
@@ -60,11 +63,31 @@ public class JwtUtil {
      * 解析 Token，非法/过期抛出异常
      */
     public Claims parseToken(String token) {
-        return Jwts.parser()
+        var signed = Jwts.parser()
                 .verifyWith(key)
+                .requireIssuer(ISSUER)
                 .build()
-                .parseSignedClaims(token)
-                .getPayload();
+                .parseSignedClaims(token);
+        if (!Jwts.SIG.HS256.getId().equals(signed.getHeader().getAlgorithm())) {
+            throw new io.jsonwebtoken.UnsupportedJwtException("不支持的签名算法");
+        }
+        return signed.getPayload();
+    }
+
+    /** 只接收规范 Base64 编码的 32 字节随机材料；此检查不能证明生成源具有随机性。 */
+    public static byte[] decodeSecret(String secret) {
+        try {
+            byte[] bytes = Base64.getDecoder().decode(secret == null ? "" : secret);
+            if (bytes.length != 32 || !Base64.getEncoder().encodeToString(bytes).equals(secret)) {
+                throw new IllegalArgumentException();
+            }
+            java.util.Set<Byte> distinct = new java.util.HashSet<>();
+            for (byte value : bytes) distinct.add(value);
+            if (distinct.size() < 16) throw new IllegalArgumentException();
+            return bytes;
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("服务密钥必须为独立生成的 32 字节随机材料的 Base64 编码");
+        }
     }
 
     public long getUserId(Claims claims) {

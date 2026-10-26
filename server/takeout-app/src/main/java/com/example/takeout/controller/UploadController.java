@@ -1,7 +1,8 @@
 package com.example.takeout.controller;
 
 import com.example.takeout.common.ApiResponse;
-import com.example.takeout.service.thirdparty.ObjectStorage;
+import com.example.takeout.service.UploadService;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -16,15 +17,15 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api")
 public class UploadController {
 
-    private final ObjectStorage storageService;
+    private final UploadService storageService;
 
-    public UploadController(ObjectStorage storageService) {
+    public UploadController(UploadService storageService) {
         this.storageService = storageService;
     }
 
     @PostMapping("/upload")
-    public ApiResponse<UploadResult> upload(@RequestParam("file") MultipartFile file) {
-        return ApiResponse.ok(new UploadResult(storageService.store(file), file.getSize()));
+    public ApiResponse<UploadResult> upload(@RequestAttribute("userId") long userId, @RequestParam("file") MultipartFile file) {
+        return ApiResponse.ok(new UploadResult(storageService.store(userId, file), file.getSize()));
     }
 
     /**
