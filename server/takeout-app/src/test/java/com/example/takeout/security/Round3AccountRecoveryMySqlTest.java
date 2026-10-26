@@ -43,6 +43,7 @@ class Round3AccountRecoveryMySqlTest {
         var accountKeys = java.util.stream.Stream.of("login-account", "login-account-fail", "login-account-total")
                 .flatMap(action -> java.util.stream.Stream.of("takeout:rl:" + action + ":u" + userId,
                         "takeout:rl:" + action + ":u" + userId + ":blocked")).toList();
+        List<String> warmupKeys = new ArrayList<>();
         String attacker = "198.51.100.179", owner = "192.0.2.179";
         try {
             admin.execute("CREATE DATABASE `" + database + "`");
@@ -66,12 +67,15 @@ class Round3AccountRecoveryMySqlTest {
                 byte[] bytes = new byte[32]; new java.security.SecureRandom().nextBytes(bytes); env.put(key, Base64.getEncoder().encodeToString(bytes));
             }
             start("before"); long beforePid = process.pid();
+            awaitDistributedLoginBudgets(redis, warmupKeys);
             for (int i = 0; i < 10; i++) assertEquals(400, login(attacker, "wrong-password"));
             assertEquals(429, login(owner, correct));
             assertTrue(Boolean.TRUE.equals(redis.hasKey(accountKey + ":blocked")));
             redis.delete(accountKeys);
             assertEquals(429, login(owner, correct), "Redis-only clear cannot remove the app's local mirror");
             stop(); start("after");
+            redis.delete(warmupKeys); warmupKeys.clear();
+            awaitDistributedLoginBudgets(redis, warmupKeys);
             assertNotEquals(beforePid, process.pid());
             assertEquals(200, login(owner, correct));
             assertEquals(429, login(attacker, "wrong-password"));
@@ -80,6 +84,7 @@ class Round3AccountRecoveryMySqlTest {
         } finally {
             stop();
             redis.delete(accountKeys);
+            if (!warmupKeys.isEmpty()) redis.delete(warmupKeys);
             redis.delete(List.of(accountKey, accountKey + ":blocked", "takeout:rl:login:" + attacker,
                     "takeout:rl:login:" + attacker + ":blocked", "takeout:rl:login-total:" + attacker,
                     "takeout:rl:login-total:" + attacker + ":blocked", "takeout:rl:login-total:" + owner,
@@ -109,10 +114,33 @@ class Round3AccountRecoveryMySqlTest {
         }
         fail("Isolated child app did not become ready");
     }
+    private void awaitDistributedLoginBudgets(StringRedisTemplate redis, List<String> warmupKeys) throws Exception {
+        long deadline = System.nanoTime() + Duration.ofSeconds(15).toNanos();
+        for (int attempt = 1; attempt <= 254 && System.nanoTime() < deadline; attempt++) {
+            String source = "203.0.113." + attempt;
+            String failureKey = "takeout:rl:login:" + source;
+            String totalKey = "takeout:rl:login-total:" + source;
+            warmupKeys.addAll(List.of(failureKey, failureKey + ":blocked", totalKey, totalKey + ":blocked"));
+            String warmupPhone = String.format(Locale.ROOT, "1388888%04d", attempt);
+            for (String action : List.of("login-account-fail", "login-account-total")) {
+                String accountKey = "takeout:rl:" + action + ":unknown:" + warmupPhone;
+                warmupKeys.addAll(List.of(accountKey, accountKey + ":blocked"));
+            }
+            assertEquals(400, login(warmupPhone, source, "isolated-warmup-password"));
+            if (Boolean.TRUE.equals(redis.hasKey(failureKey)) && Boolean.TRUE.equals(redis.hasKey(totalKey))) return;
+            // Cold connection/script loading can activate the intended five-second local fallback.
+            // Start the distributed recovery drill only once this child demonstrably writes Redis.
+            Thread.sleep(100);
+        }
+        fail("Isolated child app did not start recording distributed login budgets");
+    }
     private int login(String source, String password) throws Exception {
+        return login(phone, source, password);
+    }
+    private int login(String accountPhone, String source, String password) throws Exception {
         var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/api/auth/login"))
                 .timeout(Duration.ofSeconds(10)).header("Content-Type", "application/json").header("X-Forwarded-For", source)
-                .POST(HttpRequest.BodyPublishers.ofString("{\"phone\":\"" + phone + "\",\"password\":\"" + password + "\",\"loginType\":\"ADMIN\"}")).build();
+                .POST(HttpRequest.BodyPublishers.ofString("{\"phone\":\"" + accountPhone + "\",\"password\":\"" + password + "\",\"loginType\":\"ADMIN\"}")).build();
         return client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
     }
     private void stop() throws Exception {

@@ -20,6 +20,7 @@ class Round9CacheEfficiencyTest {
     static class Fixture {
         final Map<String,String> values = new ConcurrentHashMap<>();
         final CountDownLatch contended = new CountDownLatch(1);
+        final ValueOperations<String,String> ops = mock(ValueOperations.class);
         final HotDataCacheService cache;
         final StoreDao stores = mock(StoreDao.class);
         final GoodsDao goods = mock(GoodsDao.class);
@@ -29,7 +30,6 @@ class Round9CacheEfficiencyTest {
         final List<Store> rows = new ArrayList<>();
         Fixture() {
             var redis = mock(StringRedisTemplate.class);
-            ValueOperations<String,String> ops = mock(ValueOperations.class);
             when(redis.opsForValue()).thenReturn(ops);
             when(ops.get(anyString())).thenAnswer(c -> values.get(c.getArgument(0)));
             doAnswer(c -> { values.put(c.getArgument(0), c.getArgument(1)); return null; })
@@ -158,5 +158,27 @@ class Round9CacheEfficiencyTest {
             assertEquals("shared",first.get(3,TimeUnit.SECONDS));assertEquals("shared",second.get(3,TimeUnit.SECONDS));
             assertEquals(1,loads.get());System.out.println("[RT-37/same] concurrent=2 loader-calls=1 shared-result=true");
         }
+    }
+
+    @Test void ownerFinishingBetweenMissAndLockReadStillReusesTheCompletedValue() {
+        var f = new Fixture();
+        String cacheKey = f.cache.storageKey("categories"), lockKey = cacheKey + ":lock";
+        var mapper = new ObjectMapper();
+        f.values.put(lockKey, mapper.createObjectNode().put("key", "categories").put("value", "owner").toString());
+        var reads = new AtomicInteger();
+        when(f.ops.get(anyString())).thenAnswer(call -> {
+            String key = call.getArgument(0), observed = f.values.get(key);
+            if (cacheKey.equals(key) && reads.incrementAndGet() == 2) {
+                f.values.put(cacheKey, mapper.createObjectNode().put("key", "categories")
+                        .put("value", "\"shared\"").toString());
+                f.values.remove(lockKey);
+            }
+            return observed;
+        });
+        var loads = new AtomicInteger();
+        assertEquals("shared", f.cache.get("categories", TEXT, () -> {
+            loads.incrementAndGet(); return "unexpected";
+        }));
+        assertEquals(0, loads.get(), "a just-completed cache rebuild must not trigger a duplicate database load");
     }
 }

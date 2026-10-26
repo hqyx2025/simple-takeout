@@ -190,7 +190,11 @@ public class HotDataCacheService implements org.springframework.beans.factory.In
             if (NULL_MARKER.equals(cached)) return null;
             if (cached != null) return deserialize(cached, typeRef);
             // 同槽不同业务键不共享重建结果；锁记录完整身份，值尚未回填时也能区分。
-            if (!key.equals(lockOwner(redis, redisKey))) return null;
+            if (!key.equals(lockOwner(redis, redisKey))) {
+                // 持有者可能刚好在上次读取后完成回填并释放锁，再核对一次已完成的结果。
+                String completed = safeGet(redis, redisKey, key);
+                return completed == null || NULL_MARKER.equals(completed) ? null : deserialize(completed, typeRef);
+            }
             try {
                 long remaining = deadline - System.currentTimeMillis();
                 if (remaining <= 0) return null;
