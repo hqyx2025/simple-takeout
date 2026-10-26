@@ -21,6 +21,9 @@ jobs:
     # The runner is a personal Windows machine: only trusted master pushes or manual runs.
     runs-on: [self-hosted, Windows, DevEco]
     timeout-minutes: 30
+    defaults:
+      run:
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File {0}
     concurrency:
       group: frontend-${{ github.ref }}
       cancel-in-progress: true
@@ -29,7 +32,6 @@ jobs:
         with:
           persist-credentials: false
       - name: Configure DevEco toolchain
-        shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           $devEco = if ($env:DEVECO_HOME) { $env:DEVECO_HOME } else { 'C:\Program Files\Huawei\DevEco Studio' }
@@ -41,12 +43,10 @@ jobs:
           (Join-Path $devEco 'tools\node') | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           (Join-Path $devEco 'tools\ohpm\bin') | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Install HarmonyOS dependencies
-        shell: powershell
         run: |
           & (Join-Path $env:DEVECO_HOME 'tools\ohpm\bin\ohpm.bat') install --all --strict_ssl true
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build unsigned HAP
-        shell: powershell
         run: |
           $devEco = if ($env:DEVECO_HOME) { $env:DEVECO_HOME } else { 'C:\Program Files\Huawei\DevEco Studio' }
           $env:DEVECO_SDK_HOME = Join-Path $devEco 'sdk'
@@ -56,7 +56,6 @@ jobs:
             -p requiredDeviceType=phone assembleHap --analyze=normal --parallel --incremental --daemon
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Run script checks
-        shell: powershell
         run: |
           Get-ChildItem scripts -Filter '*.cjs' | Sort-Object Name | ForEach-Object {
             node $_.FullName
