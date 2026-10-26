@@ -88,7 +88,8 @@ class Round3AccountRecoveryMySqlTest {
         }
     }
     private void start(String phase) throws Exception {
-        String java = Path.of(System.getProperty("java.home"), "bin", "java.exe").toString();
+        String executable = System.getProperty("os.name").toLowerCase(Locale.ROOT).startsWith("windows") ? "java.exe" : "java";
+        String java = Path.of(System.getProperty("java.home"), "bin", executable).toString();
         var builder = new ProcessBuilder(java, "-cp", System.getProperty("surefire.test.class.path", System.getProperty("java.class.path")),
                 "com.example.takeout.TakeoutApplication", "--server.address=127.0.0.1", "--server.port=" + port,
                 "--server.tomcat.protocol=org.apache.coyote.http11.Http11Nio2Protocol", "--takeout.payment.sandbox=false",

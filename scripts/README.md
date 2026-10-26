@@ -20,7 +20,7 @@
 
 2026-10-25 安全复测基线版本为 `defense-20261025-225329`。[终轮报告](../md/audit/round10/第十轮防御-回复.md) 对应的临时执行脚本与原始输出保存在 `TemporaryCacheStorage/round10-defense/`，文档原稿和更新证据在 `TemporaryCacheStorage/docs-current-sync/`；用户要求留存，不清理这些证据。历史线上验收脚本会创建 QA 账号，不能当作只读探活重复执行。
 
-2026-10-26 已完成六批业务与交互源码改造，涵盖错店 / 多店结算、地址与搜索恢复、优惠资格、商家拒单、退款申请审批闭环及骑手交付确认，实际改动和限制见 [诊断与实施记录](../md/人性化改造诊断与实施方案.md)。本次服务器 / GitHub 同步仍在核验，尚未在此声明新版本发布成功。正式支付、物理真机、Release 签名、完整证据工单与结算后售后政策仍需专项完成。
+六批业务与交互改造已于 2026-10-26 19:57:59 +0800 随 `ux-20261026-1950-sync` 发布到体验站，发布源提交 `e6190a9`；实际改动和限制见 [诊断与实施记录](../md/人性化改造诊断与实施方案.md)。HTTPS 首页与 4 个静态资源哈希匹配构建，管理员只读接口与服务健康核验通过；线上未启用其他角色作测试，也未运行线上交易链。GitHub Actions 尚未全部通过，不能把服务器上线当作工作流全绿。正式支付、物理真机、Release 签名、完整证据工单与结算后售后政策仍需专项完成。
 
 从仓库根目录执行 Web 与结算规则回归：
 
@@ -31,4 +31,4 @@ node --check server/takeout-gateway/src/main/resources/static/location.js
 node --check server/takeout-gateway/src/main/resources/static/urls.js
 ```
 
-本次发版前上述四套回归 76 / 76 通过，三个静态脚本语法检查通过；debug HAP 为 `BUILD SUCCESSFUL`，API 顺序为正式域名优先、本地回退，产物未签名。日志为 `TemporaryCacheStorage/publish-web-tests.log` 和 `publish-hap-build.log`。模拟器链路、后端全量及真实 MySQL 回归需分别看实施记录，不以 Node 通过推断全端验收完成。
+本次发版前上述四套回归 76 / 76 通过，三个静态脚本语法检查通过；debug HAP 为 `BUILD SUCCESSFUL`，API 顺序为正式域名优先、本地回退，产物未签名，已保存在服务器 release 的 `artifacts/mobile/`，没有公开下载或 AppGallery 发布。Maven 应用模块 646 项（61 项条件跳过）和网关 9 项零失败，独立真实 MySQL 回归 36 项、0 跳过。前端日志为 `TemporaryCacheStorage/publish-web-tests.log` 和 `publish-hap-build.log`；本地模拟器链路与线上只读核验须分开，不以 Node 通过推断全端线上验收完成。
