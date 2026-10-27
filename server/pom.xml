@@ -47,6 +47,7 @@
     <module>takeout-common</module>
     <module>takeout-app</module>
     <module>takeout-gateway</module>
+    <module>takeout-erp</module>
   </modules>
 
   <dependencyManagement>

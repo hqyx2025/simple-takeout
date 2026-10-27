@@ -53,10 +53,14 @@ public class OutboxEventDao {
     }
 
     public long insert(String eventType, long orderId, String payload, String now) {
-        jdbc.update("INSERT INTO outbox_events(event_type, order_id, payload, status, retry_count, create_time, " +
-                        "create_time_dt) VALUES(?,?,?,0,0,?," + JdbcDateTimes.PARAMETER + ")",
-                eventType, orderId, payload, now, now);
-        return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+        var keys=new org.springframework.jdbc.support.GeneratedKeyHolder();
+        jdbc.update(connection->{
+            var statement=connection.prepareStatement("INSERT INTO outbox_events(event_type,order_id,payload,status,retry_count,create_time,"+
+                    "create_time_dt) VALUES(?,?,?,0,0,?,"+JdbcDateTimes.PARAMETER+")",java.sql.Statement.RETURN_GENERATED_KEYS);
+            statement.setString(1,eventType);statement.setLong(2,orderId);statement.setString(3,payload);
+            statement.setString(4,now);statement.setString(5,now);return statement;
+        },keys);
+        return java.util.Objects.requireNonNull(keys.getKey(),"Outbox generated event ID").longValue();
     }
 
     /**
@@ -111,6 +115,16 @@ public class OutboxEventDao {
     /** 标记投递成功。 */
     public void markSent(long id) {
         jdbc.update("UPDATE outbox_events SET status = 1, lease_until = 0 WHERE id = ?", id);
+    }
+
+    public void markSent(long id, String owner) {
+        jdbc.update("UPDATE outbox_events SET status=1,lease_until=0 WHERE id=? AND owner=? AND status=0",id,owner);
+    }
+
+    public void markRetry(long id,String owner,int attempts) {
+        long delay=Math.min(60000L,1000L << Math.min(Math.max(attempts,0),6));
+        jdbc.update("UPDATE outbox_events SET retry_count=retry_count+1,lease_until=?,owner='' WHERE id=? AND owner=? AND status=0",
+                System.currentTimeMillis()+delay,id,owner);
     }
 
     /**

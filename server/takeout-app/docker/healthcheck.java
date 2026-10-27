@@ -9,12 +9,24 @@
  */
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 
 public final class healthcheck {
 
     public static void main(String[] args) {
         String host = args.length > 0 ? args[0] : "127.0.0.1";
         int port = args.length > 1 ? Integer.parseInt(args[1]) : 8087;
+
+        if (args.length > 2) {
+            try (var client=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build()) {
+                var request=HttpRequest.newBuilder(URI.create("http://"+host+":"+port+args[2])).timeout(Duration.ofSeconds(3)).build();
+                System.exit(client.send(request,HttpResponse.BodyHandlers.discarding()).statusCode()==200?0:1);
+            }catch(Exception e){System.exit(1);}
+        }
 
         try (Socket socket = new Socket()) {
             socket.connect(new InetSocketAddress(host, port), 3000);

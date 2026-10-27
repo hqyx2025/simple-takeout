@@ -58,7 +58,10 @@ services:
       TAKEOUT_AMAP_SECURITY_CODE: ${TAKEOUT_AMAP_SECURITY_CODE:-}
       TAKEOUT_UPLOAD_PROVIDER: ${TAKEOUT_UPLOAD_PROVIDER:-local}
       TAKEOUT_OPENAPI_ENABLED: ${TAKEOUT_OPENAPI_ENABLED:-false}
-      JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai -XX:MaxRAMPercentage=65 -XX:+ExitOnOutOfMemoryError
+      JAVA_TOOL_OPTIONS: >-
+        -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai
+        -Xms64m -Xmx384m -XX:+ExitOnOutOfMemoryError
+        -Xlog:gc*,safepoint:file=/app/diagnostics/gc.log:time,uptime,level,tags:filecount=5,filesize=5M
   gateway:
     environment:
       TAKEOUT_GATEWAY_TRUSTED_PROXY_REGEX: ${TAKEOUT_GATEWAY_TRUSTED_PROXY_REGEX:?Set the exact host nginx proxy address regex}
@@ -94,3 +97,8 @@ volumes:
       type: none
       o: bind
       device: ${TAKEOUT_DATA_DIR:?Set the mounted data directory}/backups
+  erp-mysql-data:
+    driver_opts:
+      type: none
+      o: bind
+      device: ${TAKEOUT_DATA_DIR:?Set the mounted data directory}/erp-mysql

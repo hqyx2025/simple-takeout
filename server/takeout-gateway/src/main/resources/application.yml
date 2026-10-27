@@ -9,6 +9,13 @@ spring:
     gateway:
       server:
         webflux:
+          httpclient:
+            connect-timeout: 500
+            response-timeout: 8s
+            pool:
+              type: fixed
+              max-connections: 128
+              acquire-timeout: 1000
           # 仅受控反向代理可保留传入 XFF；外网直连头先由 Gateway 移除。
           # Docker 的宿主代理地址应按实际网络通过环境变量精确指定。
           trusted-proxies: '${TAKEOUT_GATEWAY_TRUSTED_PROXY_REGEX:127\.0\.0\.1|::1|0:0:0:0:0:0:0:1}'
@@ -21,6 +28,14 @@ spring:
             port-enabled: true
             proto-enabled: true
           routes:
+            - id: takeout-erp-api
+              uri: ${TAKEOUT_ERP_URI:http://127.0.0.1:9200}
+              predicates:
+                - Path=/api/erp/**
+              filters:
+                - name: RequestSize
+                  args:
+                    maxSize: 256KB
             # 全部 API 路由到后端应用（Phase 2 只有一个后端；Phase 3 起按域细分）
             - id: takeout-app-api
               uri: ${TAKEOUT_APP_URI:http://127.0.0.1:9100}

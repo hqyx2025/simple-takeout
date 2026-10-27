@@ -7,8 +7,8 @@
 #   docker compose down -v            # 停止并清空数据库数据
 #
 # 说明：
-# - 后端 schema.sql 在启动时自动建表（spring.sql.init.mode=always），
-#   因此不需要手工导入 SQL；DataSeeder 会自动补齐演示数据与测试账号。
+# - schema.sql / erp-schema.sql 自动建表，旧应用库由 SchemaMigration 增量迁移。
+#   默认关闭数据播种，不导入演示账号或覆盖已有业务数据。
 # - app 依赖 MySQL/Redis 的健康检查通过后才启动，避免启动即连接失败。
 # - 若只想跑基础设施（本机用 Maven 起后端），执行：docker compose up -d mysql redis
 
@@ -149,6 +149,14 @@ services:
       TAKEOUT_LOG_DIR: /app/logs
       # 应用在容器内监听 8087；对外由 gateway 暴露同一个 8087（统一对外入口）
       TAKEOUT_APP_PORT: "8087"
+      TAKEOUT_ERP_ENABLED: "true"
+      TAKEOUT_ERP_URI: http://erp:9200
+      TAKEOUT_INTEGRATION_SECRET: ${TAKEOUT_INTEGRATION_SECRET:?Set a separate integration secret of at least 32 characters}
+      JAVA_TOOL_OPTIONS: >-
+        -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai
+        -Xms64m -Xmx384m -XX:+ExitOnOutOfMemoryError
+        -Xlog:gc*,safepoint:file=/app/diagnostics/gc.log:time,uptime,level,tags:filecount=5,filesize=5M
+        -XX:ErrorFile=/app/diagnostics/hs_err_pid%p.log
       TAKEOUT_INTERNAL_PROXY_REGEX: ${TAKEOUT_INTERNAL_PROXY_REGEX:-127\.0\.0\.1|::1|0:0:0:0:0:0:0:1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+}
       TZ: Asia/Shanghai
     volumes:
@@ -156,9 +164,11 @@ services:
       - uploads-data:/app/uploads
       # 应用日志持久化到项目根目录 logs/app/，由 Logback 按天和大小轮转
       - ./logs/app:/app/logs
+    tmpfs:
+      - /app/diagnostics:size=64m,mode=1777
     healthcheck:
       # 运行镜像基于 JRE，没有 curl/wget，用构建阶段编译好的 healthcheck.class 探活
-      test: ["CMD", "java", "-cp", "/app", "healthcheck", "127.0.0.1", "8087"]
+      test: ["CMD", "java", "-cp", "/app", "healthcheck", "127.0.0.1", "8087", "/health"]
       interval: 10s
       timeout: 8s
       retries: 12
@@ -226,12 +236,21 @@ services:
       # 网关监听容器内 8087；转发目标用服务名 app
       TAKEOUT_GATEWAY_PORT: "8087"
       TAKEOUT_APP_URI: http://app-balancer:8087
+      TAKEOUT_ERP_URI: http://erp:9200
+      JAVA_TOOL_OPTIONS: >-
+        -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai
+        -Xms64m -Xmx192m -XX:+ExitOnOutOfMemoryError
       TAKEOUT_GATEWAY_TRUSTED_PROXY_REGEX: ${TAKEOUT_GATEWAY_TRUSTED_PROXY_REGEX:-127\.0\.0\.1|::1|0:0:0:0:0:0:0:1}
       TAKEOUT_LOG_DIR: /app/logs
       TZ: Asia/Shanghai
     ports:
       # 对外契约端口：统一入口
       - "127.0.0.1:${TAKEOUT_APP_PORT:-8087}:8087"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 384M
     healthcheck:
       test: ["CMD", "java", "-cp", "/app", "healthcheck", "127.0.0.1", "8087"]
       interval: 10s
@@ -248,8 +267,97 @@ services:
       # 网关日志持久化到项目根目录 logs/gateway/
       - ./logs/gateway:/app/logs
 
+  erp-mysql:
+    image: mysql:8.4.6
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${TAKEOUT_ERP_MYSQL_ROOT_PASSWORD:?Set a separate ERP MySQL root password}
+      MYSQL_DATABASE: takeout_erp
+      MYSQL_USER: takeout_erp
+      MYSQL_PASSWORD: ${TAKEOUT_ERP_DB_PASSWORD:?Set an ERP database password}
+      TZ: Asia/Shanghai
+    volumes:
+      - erp-mysql-data:/var/lib/mysql
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+    healthcheck:
+      test: ['CMD-SHELL', 'MYSQL_PWD="$$MYSQL_ROOT_PASSWORD" mysqladmin ping -h 127.0.0.1 -uroot']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+
+  erp:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    image: takeout-server:${TAKEOUT_RELEASE:-1.0.0}
+    restart: unless-stopped
+    depends_on:
+      erp-mysql:
+        condition: service_healthy
+    environment:
+      TAKEOUT_BIND_ADDRESS: 0.0.0.0
+      TAKEOUT_ERP_DB_URL: jdbc:mysql://erp-mysql:3306/takeout_erp?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+      TAKEOUT_ERP_DB_USERNAME: takeout_erp
+      TAKEOUT_ERP_DB_PASSWORD: ${TAKEOUT_ERP_DB_PASSWORD:?Set an ERP database password}
+      TAKEOUT_INTEGRATION_SECRET: ${TAKEOUT_INTEGRATION_SECRET:?Set a separate integration secret of at least 32 characters}
+      TAKEOUT_APP_URI: http://app-balancer:8087
+      JAVA_TOOL_OPTIONS: >-
+        -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai
+        -Xms64m -Xmx192m -XX:+ExitOnOutOfMemoryError
+        -Xlog:gc*,safepoint:file=/app/diagnostics/gc.log:time,uptime,level,tags:filecount=5,filesize=5M
+    entrypoint: ["java", "-jar", "/app/takeout-erp.jar"]
+    tmpfs:
+      - /app/diagnostics:size=64m,mode=1777
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 384M
+    healthcheck:
+      test: ["CMD", "java", "-cp", "/app", "healthcheck", "127.0.0.1", "9200", "/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+
+  erp-backup:
+    image: mysql:8.4.6
+    restart: unless-stopped
+    depends_on:
+      erp-mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_PWD: ${TAKEOUT_ERP_MYSQL_ROOT_PASSWORD:?Set a separate ERP MySQL root password}
+      MYSQL_BACKUP_HOST: erp-mysql
+      MYSQL_BACKUP_DATABASE: takeout_erp
+      MYSQL_BACKUP_PREFIX: takeout-erp
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql-backups:/backups
+      - ./server/docker/mysql-backup-daily.sh:/backup.sh:ro
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+
 volumes:
   mysql-data:
   redis-data:
   uploads-data:
   mysql-backups:
+  erp-mysql-data:

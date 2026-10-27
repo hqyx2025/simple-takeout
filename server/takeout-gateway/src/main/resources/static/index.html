@@ -18,7 +18,9 @@
     .location-results{max-height:320px;overflow:auto;margin-top:12px}.location-result{display:flex;width:100%;min-height:44px;height:auto;text-align:left;justify-content:flex-start;padding:10px 12px;margin-bottom:8px;white-space:normal;overflow-wrap:anywhere}.location-heading>div:first-child{min-width:0;overflow-wrap:anywhere}.location-heading .td-actions{flex-shrink:0}@media(max-width:680px){.location-heading{align-items:flex-start;flex-direction:column}.location-heading .td-actions{width:100%}}
     .sidebar-head{display:flex;align-items:center;justify-content:space-between;gap:4px;flex-shrink:0;margin-bottom:8px}.sidebar-head .nav-caption{min-width:0;padding:8px 6px}.sidebar-toggle{flex-shrink:0}.sidebar-toggle svg{width:20px;height:20px}.nav-item{flex-shrink:0}.nav-label{min-width:0}
     .layout.sidebar-collapsed{--sidebar-width:64px}.sidebar-collapsed .nav-caption,.sidebar-collapsed .nav-label{display:none}.sidebar-collapsed .sidebar-head,.sidebar-collapsed .nav-item{justify-content:center}.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}.sidebar-collapsed .nav-item{padding:11px 0}.sidebar-collapsed .nav-icon{font-size:19px}
-    .btn[hidden]{display:none}
+    .btn[hidden],#storeGrid[hidden]{display:none}
+    #browseResult .item-card{margin-top:0;min-width:0}#browseResult .price{white-space:nowrap}@media(prefers-color-scheme:dark){#browseResult .price{color:#f5a17d}}
+    .browse-good{display:grid;grid-template-columns:76px minmax(0,1fr) auto;align-items:center;gap:12px}.browse-good .food-image{font-size:12px}.browse-good .food-info{overflow-wrap:anywhere}.browse-good .td-actions{justify-content:flex-end}@media(max-width:680px){.browse-good{grid-template-columns:60px minmax(0,1fr)}.browse-good .td-actions{grid-column:2}}@media(prefers-color-scheme:dark){.browse-good .food-image{background:#493126;color:#f0c5a1}}
     #checkoutForm .btn,#checkoutForm .select,.order-card .btn{min-height:44px}#checkoutForm summary{min-height:44px;padding:11px 0;cursor:pointer}#checkoutForm .btn.primary,.order-card .btn.primary{background:var(--accent-dark);border-color:var(--accent-dark)}@media(prefers-color-scheme:dark){.address-option.selected{background:#493126}}
     .refund-dialog{width:min(560px,calc(100% - 24px));overflow-wrap:anywhere;color:var(--ink);color-scheme:light dark}.refund-dialog .form-actions{flex-wrap:wrap}.refund-dialog .btn{min-height:44px}.refund-dialog .btn.primary{background:var(--accent-dark);border-color:var(--accent-dark)}.refund-dialog input::placeholder,.refund-dialog textarea::placeholder{color:var(--muted);opacity:1}.refund-details{margin:0;display:grid;gap:10px;font-variant-numeric:tabular-nums}.refund-details>div{display:grid;grid-template-columns:7em minmax(0,1fr);gap:12px}.refund-details dt{color:var(--muted)}.refund-details dd{margin:0;white-space:pre-wrap}.refund-record+.refund-record{margin-top:22px;padding-top:22px;border-top:1px solid var(--line)}.refund-ack{display:flex;align-items:flex-start;gap:8px;min-height:44px}.refund-ack input{margin-top:4px;flex-shrink:0}.refund-dialog [role="alert"]{color:var(--red)}.refund-dialog [role="alert"]:empty{display:none}.refund-dialog [hidden]{display:none}@media(prefers-color-scheme:dark){.refund-dialog [role="alert"]{color:#f3b6a6}}@media(max-width:360px){.refund-details>div{grid-template-columns:1fr;gap:2px}}
     @media(max-width:680px){
@@ -43,6 +45,8 @@
   <div class="modal" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authTitle" hidden><div class="dialog"><div class="dialog-head"><div><h2 id="authTitle">登录</h2><p class="help-text">网页与手机端共用同一账号和服务端数据。</p></div><button class="btn icon" data-close="authModal" aria-label="关闭">×</button></div><form id="authForm" class="field-stack"></form></div></div>
   <script src="urls.js?v=20261020-relative" defer></script>
   <script src="location.js?v=20261020-manual" defer></script>
-  <script src="app.js?v=20261026-checkout-rider" defer></script>
+  <link rel="stylesheet" href="erp.css?v=20261027">
+  <script src="erp.js?v=20261027" defer></script>
+  <script src="app.js?v=20261027-erp" defer></script>
 </body>
 </html>

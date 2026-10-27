@@ -11,6 +11,28 @@ import static org.junit.jupiter.api.Assertions.*;
 class ClientIpHeadersFilterTest {
     private final ClientIpHeadersFilter filter = new ClientIpHeadersFilter("127\\.0\\.0\\.1");
 
+    @Test void directBrowserOriginSurvivesInternalRoutingAndIgnoresForgedHeaders() {
+        var request = MockServerHttpRequest.get("http://localhost:19087/api/auth/login")
+                .remoteAddress(new InetSocketAddress("192.0.2.10", 1234))
+                .header("X-Forwarded-Host", "attacker.invalid")
+                .header("X-Forwarded-Proto", "https").header("X-Forwarded-Port", "443").build();
+        var result = filter.filter(new HttpHeaders(), MockServerWebExchange.from(request));
+        assertEquals("localhost:19087", result.getFirst("X-Forwarded-Host"));
+        assertEquals("http", result.getFirst("X-Forwarded-Proto"));
+        assertEquals("19087", result.getFirst("X-Forwarded-Port"));
+    }
+
+    @Test void trustedTlsProxyPreservesExternalOriginWithoutAppendingInternalOrigin() {
+        var request = MockServerHttpRequest.get("http://localhost:8087/api/auth/login")
+                .remoteAddress(new InetSocketAddress("127.0.0.1", 1234))
+                .header("X-Forwarded-Host", "hqyx.website")
+                .header("X-Forwarded-Proto", "https").header("X-Forwarded-Port", "443").build();
+        var result = filter.filter(new HttpHeaders(), MockServerWebExchange.from(request));
+        assertEquals("hqyx.website", result.getFirst("X-Forwarded-Host"));
+        assertEquals("https", result.getFirst("X-Forwarded-Proto"));
+        assertEquals("443", result.getFirst("X-Forwarded-Port"));
+    }
+
     private String resolve(String peer, String xff) {
         var request = MockServerHttpRequest.get("http://localhost/api/auth/login")
                 .remoteAddress(new InetSocketAddress(peer, 1234))

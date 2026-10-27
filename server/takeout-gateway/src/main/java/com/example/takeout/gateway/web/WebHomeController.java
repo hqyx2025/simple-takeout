@@ -11,6 +11,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class WebHomeController {
 
+    @GetMapping("/health")
+    public java.util.Map<String,String> health(){return java.util.Map.of("status","UP","service","takeout-gateway");}
+
     private final Resource index = new ClassPathResource("static/index.html");
 
     @GetMapping(value = {"/", "/index.html"}, produces = MediaType.TEXT_HTML_VALUE)

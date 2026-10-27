@@ -78,9 +78,9 @@ class OrderServiceOrderNoTest {
 
     private void stubCommon() {
         when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(new Store(STORE_ID, "测试店", "", 4.5, 0, 0, 0,
-                "30分钟", "1km", "[]", "", 1, "[1]", 99, 1, 0, "")));
+                "30分钟", "1km", "[]", "", "测试地址", 30.5, 114.3, 1, "[1]", 99, 1, 0, "", 0)));
         when(addressDao.listByUser(USER_ID)).thenReturn(List.of(
-                new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "")));
+                new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "", 30.5, 114.3)));
         when(goodsDao.findById(GOODS_ID)).thenReturn(Optional.of(
                 new Goods(GOODS_ID, STORE_ID, "测试商品", "", 10, 10, "", 1, 0, 999, 0, 0, 4.5, "", false, 1, "")));
         when(goodsDao.deductStock(GOODS_ID, 1)).thenReturn(true);

@@ -8,6 +8,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
+import org.springframework.util.AntPathMatcher;
+
+import java.util.List;
 
 /**
  * 认证拦截器：校验 Authorization: Bearer <token>，
@@ -21,6 +24,10 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     public static final String ATTR_USER_ID = "userId";
     public static final String ATTR_ROLE = "role";
+    public static final List<String> PUBLIC_BROWSE_PATHS = List.of(
+            "/api/stores", "/api/stores/**", "/api/categories", "/api/search", "/api/goods/special",
+            "/api/rankings/**", "/api/seckills", "/api/banners", "/api/announcements");
+    private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
 
     private final JwtUtil jwtUtil;
     private final UserDao userDao;
@@ -39,6 +46,14 @@ public class AuthInterceptor implements HandlerInterceptor {
             return true;
         }
         String auth = request.getHeader("Authorization");
+        String path = request.getRequestURI();
+        if (auth == null && "GET".equalsIgnoreCase(request.getMethod()) && path != null) {
+            String applicationPath = path.substring(request.getContextPath().length());
+            if (PUBLIC_BROWSE_PATHS.stream().anyMatch(pattern -> PATH_MATCHER.match(pattern, applicationPath))
+                    || PATH_MATCHER.match("/api/location/**", applicationPath)) {
+                return true;
+            }
+        }
         if (auth == null || !auth.startsWith("Bearer ")) {
             throw new BizException(401, "未登录或登录已过期");
         }

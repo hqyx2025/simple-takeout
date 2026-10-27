@@ -76,13 +76,13 @@ class DomainEventPublisherTest {
         verify(outboxDao, never()).insert(anyString(), anyLong(), anyString(), anyString());
     }
 
-    /** Outbox 落库失败必须被吞掉：不能因为记不下事件就让下单失败。 */
+    /** Durable cross-service events must roll back with the business when persistence fails. */
     @Test
-    void swallowsOutboxFailureToProtectBusiness() {
+    void propagatesOutboxFailureToPreserveAtomicity() {
         when(outboxDao.insert(anyString(), anyLong(), anyString(), anyString()))
                 .thenThrow(new RuntimeException("db down"));
 
-        assertDoesNotThrow(() ->
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () ->
                 publisher.publish(DomainEventPublisher.ORDER_CREATED, 42L, Map.of("userId", 1L)));
     }
 
@@ -96,9 +96,9 @@ class DomainEventPublisherTest {
                         () -> publisher.publish(DomainEventPublisher.ORDER_CREATED, 42L, Map.of())));
     }
 
-    /** payload 无法序列化时也不得抛异常。 */
+    /** An event that cannot be serialized must not disappear behind business success. */
     @Test
-    void swallowsSerializationFailure() {
+    void propagatesSerializationFailure() {
         Object selfReferencing = new Object() {
             @SuppressWarnings("unused")
             public Object getSelf() {
@@ -106,7 +106,7 @@ class DomainEventPublisherTest {
             }
         };
 
-        assertDoesNotThrow(() ->
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () ->
                 publisher.publish(DomainEventPublisher.ORDER_CREATED, 42L, Map.of("bad", selfReferencing)));
     }
 

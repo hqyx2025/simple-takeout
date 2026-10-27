@@ -1,7 +1,12 @@
 # 脚本说明
 
+2026-10-27 当前验证：后端 Docker/JDK 25 全量 676 项、Web 四套 82 项、API 26 模拟器六个用例类通过；范围与限制见 [本次会话归档](../md/archive/会话记录-2026-10-27-微服务ERP并发JVM与部署.md)。下文 2026-10-25 / 26 的发布数字保留为历史基线。
+
 | 脚本 | 用途 | 前置条件 / 产物 |
 | --- | --- | --- |
+| `start-service.ps1` | 分别启动 app / erp / gateway | JDK 25，已导入私有配置；先构建对应模块及 common |
+| `governance-load.py` | 有上限的本机阶梯 / 定速混合负载，分别统计业务错误、429 和过载 503 | 写入只允许显式启用的隔离环境；禁止指向体验站或生产数据；日志写入 `TemporaryCacheStorage/` |
+| `jvm-diagnostics.ps1` | 进程快照、线程转储、按需 JFR；堆转储需显式选择 | JDK 25，本项目 Java 进程；产物限制在私有临时目录，禁止公开下载 |
 | `device-uitest.ps1`、`device-test.ps1` | 构建、安装并运行设备 UiTest | DevEco Studio、hdc、已连接设备；日志写入 `TemporaryCacheStorage/` |
 | `device-checkout-regression.ps1`、`device-merchant-regression.ps1`、`device-review-regression.ps1`、`device-role-regression.ps1`、`rider-chain-regression.ps1` | 四端设备链路回归 | 已启动后端和设备；截图/日志写入 `TemporaryCacheStorage/` |
 | `build-release.ps1`、`enable-release-signing.ps1`、`release-check.ps1` | Release 构建与签名检查 | `DEVECO_HOME` 或默认 DevEco 安装目录；报告为生成物 |

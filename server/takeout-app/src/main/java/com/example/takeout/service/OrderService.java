@@ -275,7 +275,17 @@ public class OrderService {
                 .filter(a -> a.id() == addressId)
                 .findFirst()
                 .orElseThrow(() -> new BizException("收货地址不存在"));
-        // 商户配送半径：商户填了按商户的，没填按默认 2 公里；地址/门店缺坐标时无法判断，不拦截
+        // 浏览不受位置限制；下单必须能用收货地址和门店坐标核验配送范围。
+        if (address.latitude() == null || address.longitude() == null
+                || !Double.isFinite(address.latitude()) || !Double.isFinite(address.longitude())
+                || Math.abs(address.latitude()) > 90 || Math.abs(address.longitude()) > 180
+                || (address.latitude() == 0 && address.longitude() == 0)) {
+            throw new BizException("请先为收货地址定位，再提交订单");
+        }
+        if (store.distanceKmTo(address.latitude(), address.longitude()) < 0
+                || (store.latitude() == 0 && store.longitude() == 0)) {
+            throw new BizException("店铺尚未设置有效位置，暂时无法配送下单");
+        }
         if (!store.canDeliver(address.latitude(), address.longitude())) {
             throw new BizException("超距，请重新选择地点");
         }
@@ -1227,7 +1237,8 @@ public class OrderService {
     }
 
     private double merchantSettlementAmount(Order order) {
-        return Math.max(0, Math.round((order.payAmount() - order.deliveryFee()) * 100.0) / 100.0);
+        return BigDecimal.valueOf(order.payAmount()).subtract(BigDecimal.valueOf(order.deliveryFee()))
+                .max(BigDecimal.ZERO).setScale(2,RoundingMode.HALF_UP).doubleValue();
     }
 
     @Transactional

@@ -69,10 +69,15 @@ export default function searchFlowTest() {
       expect(isFound(resultList) || isFound(emptyState)).assertTrue()
 
       // 原生 Search 清除输入后应回到历史搜索，不能继续显示上次结果或加载状态。
-      const clearInput: Component = requireComponent(
-        await driver.findComponent(ON.id('search-input')), 'search-input before clear')
-      await clearInput.clearText()
+      // Search 容器自身的 text 始终为空；clearText() 会直接跳过。
+      // 点击真实原生清除按钮，验证用户操作而不是改写容器属性。
+      const clearButton: Component = requireComponent(
+        await driver.findComponent(ON.id('__SearchField__CancelButton__search-input')), 'native search clear button')
+      await clearButton.click()
       await driver.delayMs(800)
+      const searchField: Component = requireComponent(
+        await driver.findComponent(ON.id('__SearchField__search-input')), 'native search field')
+      expect(await searchField.getText()).assertEqual('')
       expect(isFound(await driver.findComponent(ON.text('历史搜索')))).assertTrue()
       expect(isFound(await driver.findComponent(ON.id('search-store-1')))).assertFalse()
       expect(isFound(await driver.findComponent(ON.id('search-empty')))).assertFalse()

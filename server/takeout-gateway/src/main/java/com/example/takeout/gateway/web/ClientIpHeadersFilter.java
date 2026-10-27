@@ -30,8 +30,9 @@ public class ClientIpHeadersFilter implements HttpHeadersFilter, Ordered {
         var remote = request.getRemoteAddress();
         String peer = remote == null || remote.getAddress() == null ? "unknown" : remote.getAddress().getHostAddress();
         String client = peer;
+        boolean trustedPeer = trusted.matcher(peer).matches();
         String forwarded = request.getHeaders().getFirst("X-Forwarded-For");
-        if (trusted.matcher(peer).matches() && forwarded != null) {
+        if (trustedPeer && forwarded != null) {
             if (forwarded.length() > 2048) throw invalidForwarding();
             String[] hops = forwarded.split(",", -1);
             if (hops.length > 32) throw invalidForwarding();
@@ -44,6 +45,28 @@ public class ClientIpHeadersFilter implements HttpHeadersFilter, Ordered {
                 }
             }
         }
+        // Gateway's built-in filter omits these for untrusted direct clients.
+        // Recover their real origin from the request, never from client-supplied forwarding headers.
+        var uri = request.getURI();
+        String host = uri.getRawAuthority();
+        String proto = uri.getScheme();
+        String port = String.valueOf(uri.getPort() < 0 ? ("https".equals(proto) ? 443 : 80) : uri.getPort());
+        if (trustedPeer) {
+            var headers = request.getHeaders();
+            host = headers.getFirst("X-Forwarded-Host") == null ? host : headers.getFirst("X-Forwarded-Host");
+            proto = headers.getFirst("X-Forwarded-Proto") == null ? proto : headers.getFirst("X-Forwarded-Proto");
+            port = headers.getFirst("X-Forwarded-Port") == null ? port : headers.getFirst("X-Forwarded-Port");
+        }
+        try {
+            var origin = java.net.URI.create(proto + "://" + host);
+            int number = Integer.parseInt(port);
+            if (!("http".equals(proto) || "https".equals(proto)) || origin.getHost() == null
+                    || origin.getRawUserInfo() != null || !host.equals(origin.getRawAuthority())
+                    || number < 1 || number > 65535) throw invalidForwarding();
+        } catch (IllegalArgumentException e) { throw invalidForwarding(); }
+        result.set("X-Forwarded-Host", host);
+        result.set("X-Forwarded-Proto", proto);
+        result.set("X-Forwarded-Port", port);
         result.set("X-Forwarded-For", client);
         result.remove("X-Real-IP");
         result.remove("Forwarded");

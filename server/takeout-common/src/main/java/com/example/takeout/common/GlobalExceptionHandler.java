@@ -45,6 +45,7 @@ public class GlobalExceptionHandler {
             case 401 -> HttpStatus.UNAUTHORIZED;
             case 403 -> HttpStatus.FORBIDDEN;
             case 404 -> HttpStatus.NOT_FOUND;
+            case 409 -> HttpStatus.CONFLICT;
             // 限流：保持 429 语义，前端才能把「太频繁」与普通参数错误区分开
             case 429 -> HttpStatus.TOO_MANY_REQUESTS;
             case 503 -> HttpStatus.SERVICE_UNAVAILABLE;

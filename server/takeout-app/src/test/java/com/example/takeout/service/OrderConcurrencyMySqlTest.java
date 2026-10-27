@@ -157,11 +157,11 @@ class OrderConcurrencyMySqlTest {
         adminProxy.addAdvice(new TransactionInterceptor(new DataSourceTransactionManager(source),
                 new AnnotationTransactionAttributeSource()));
         adminService = (AdminService) adminProxy.getProxy();
-        jdbc.update("INSERT INTO stores(id,name,owner_id,create_time) VALUES(10,'test',99,'2026-01-01 00:00:00')");
+        jdbc.update("INSERT INTO stores(id,name,owner_id,create_time,latitude,longitude) VALUES(10,'test',99,'2026-01-01 00:00:00',30.5,114.3)");
         for (int id = 1; id <= 8; id++) {
             jdbc.update("INSERT INTO users(id,username,phone,password,balance,create_time) VALUES(?,?,?,'test',1000,?)",
                     id, "user" + id, "1380000000" + id, "2026-01-01 00:00:00");
-            jdbc.update("INSERT INTO addresses(id,user_id,name,phone,detail,create_time) VALUES(?,?,'test','test','test',?)",
+            jdbc.update("INSERT INTO addresses(id,user_id,name,phone,detail,create_time,latitude,longitude) VALUES(?,?,'test','test','test',?,30.5,114.3)",
                     id, id, "2026-01-01 00:00:00");
             jdbc.update("INSERT INTO coupons(id,user_id,name,amount,expire_time,create_time) VALUES(?,?,'test',1,'2099-01-01 00:00:00',?)",
                     id, id, "2026-01-01 00:00:00");
@@ -187,6 +187,19 @@ class OrderConcurrencyMySqlTest {
         if (database != null) {
             admin.execute("DROP DATABASE `" + database + "`");
         }
+    }
+
+    @Test
+    void expiredOutboxOwnerCannotAcknowledgeOrRescheduleNewLease() {
+        long id=outbox.insert("ORDER_CREATED",0,"{}","2026-10-27 00:00:00");long now=System.currentTimeMillis();
+        assertEquals(1,outbox.claimPending(10,"old-owner",now,now+10).size());
+        assertEquals(1,outbox.claimPending(10,"new-owner",now+20,now+30000).size());
+        outbox.markSent(id,"old-owner");outbox.markRetry(id,"old-owner",0);
+        assertEquals(0,outbox.findById(id).orElseThrow().status());
+        assertEquals(0,outbox.findById(id).orElseThrow().retryCount());
+        outbox.markRetry(id,"new-owner",3);
+        assertEquals(1,outbox.findById(id).orElseThrow().retryCount());
+        assertTrue(outbox.claimPending(10,"third-owner",now+100,now+30000).isEmpty());
     }
 
     private UploadService uploads(com.example.takeout.service.thirdparty.ObjectStorage storage, long perUser, long total) {
@@ -452,7 +465,7 @@ class OrderConcurrencyMySqlTest {
 
     @Test
     void multiStoreCheckoutCreatesSecondOrderAfterFirstStoreRowsWereDeleted() {
-        jdbc.update("INSERT INTO stores(id,name,owner_id,create_time) VALUES(11,'other-store',99,'2026-01-01 00:00:00')");
+        jdbc.update("INSERT INTO stores(id,name,owner_id,create_time,latitude,longitude) VALUES(11,'other-store',99,'2026-01-01 00:00:00',30.5,114.3)");
         jdbc.update("INSERT INTO goods(id,store_id,name,price,stock,create_time) " +
                 "VALUES(200,11,'other-goods',10,1000,'2026-01-01 00:00:00')");
         jdbc.update("INSERT INTO cart_items(user_id,goods_id,spec_id,quantity,create_time,update_time) " +

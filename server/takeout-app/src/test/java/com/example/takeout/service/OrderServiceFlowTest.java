@@ -99,7 +99,7 @@ class OrderServiceFlowTest {
 
     private Store openStore(double minOrder, double deliveryFee) {
         return new Store(STORE_ID, "测试店", "", 4.5, 0, deliveryFee, minOrder, "30分钟", "1km", "[]", "",
-                1, "[1]", 99, 1, 0, "");
+                "测试地址", 30.5, 114.3, 1, "[1]", 99, 1, 0, "", 0);
     }
 
     private Goods shelfGoods(double price, long storeId) {
@@ -165,10 +165,40 @@ class OrderServiceFlowTest {
 
     private void stubCommon(double price, double minOrder, double deliveryFee) {
         when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore(minOrder, deliveryFee)));
-        when(addressDao.listByUser(USER_ID)).thenReturn(List.of(new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "")));
+        when(addressDao.listByUser(USER_ID)).thenReturn(List.of(new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "", 30.5, 114.3)));
         when(goodsDao.findById(GOODS_ID)).thenReturn(Optional.of(shelfGoods(price, STORE_ID)));
         when(userDao.findById(USER_ID)).thenReturn(Optional.of(user(50)));
         when(goodsDao.deductStock(GOODS_ID, 1)).thenReturn(true);
+    }
+
+    @Test
+    void rejectsCheckoutWithoutUsableDeliveryCoordinatesBeforeReservingStock() {
+        stubCommon(10, 0, 3);
+        for (Double latitude : new Double[]{null, Double.NaN, Double.POSITIVE_INFINITY, 91.0}) {
+            when(addressDao.listByUser(USER_ID)).thenReturn(List.of(new Address(
+                    ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "", latitude, 114.3)));
+            assertEquals("请先为收货地址定位，再提交订单", assertThrows(BizException.class,
+                    () -> service.createOrder(USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "")).getMessage());
+        }
+        when(addressDao.listByUser(USER_ID)).thenReturn(List.of(new Address(
+                ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "", 30.5, 114.3)));
+        when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(new Store(STORE_ID, "测试店", "", 4.5,
+                0, 3, 0, "30分钟", "1km", "[]", "", 1, "[1]", 99, 1, 0, "")));
+        assertEquals("店铺尚未设置有效位置，暂时无法配送下单", assertThrows(BizException.class,
+                () -> service.createOrder(USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "")).getMessage());
+        verify(goodsDao, never()).lockStockRows(any());
+        verify(orderDao, never()).insert(any(Order.class));
+    }
+
+    @Test
+    void rejectsFarAwayCheckoutEvenThoughTheStoreIsBrowsable() {
+        stubCommon(10, 0, 3);
+        when(addressDao.listByUser(USER_ID)).thenReturn(List.of(new Address(
+                ADDRESS_ID, USER_ID, "张三", "13800138000", "远方地址", 1, "", 39.9, 116.4)));
+        assertEquals("超距，请重新选择地点", assertThrows(BizException.class,
+                () -> service.createOrder(USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "")).getMessage());
+        verify(goodsDao, never()).lockStockRows(any());
+        verify(orderDao, never()).insert(any(Order.class));
     }
 
     @Test
@@ -591,7 +621,7 @@ class OrderServiceFlowTest {
         Goods multi = new Goods(GOODS_ID, STORE_ID, "测试商品", "", 10, 10, "", 1, 0, 5, 0, 0, 4.5, "", false, 1, "")
                 .withSpecs(List.of(spec));
         when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore(0, 0)));
-        when(addressDao.listByUser(USER_ID)).thenReturn(List.of(new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "")));
+        when(addressDao.listByUser(USER_ID)).thenReturn(List.of(new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "", 30.5, 114.3)));
         when(goodsDao.findById(GOODS_ID)).thenReturn(Optional.of(multi));
         when(goodsDao.deductStock(GOODS_ID, 2)).thenReturn(true);
         when(specDao.deductStock(300, 2)).thenReturn(true);
@@ -614,7 +644,7 @@ class OrderServiceFlowTest {
         Goods multi = new Goods(GOODS_ID, STORE_ID, "测试商品", "", 10, 10, "", 1, 0, 5, 0, 0, 4.5, "", false, 1, "")
                 .withSpecs(List.of(spec));
         when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore(0, 0)));
-        when(addressDao.listByUser(USER_ID)).thenReturn(List.of(new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "")));
+        when(addressDao.listByUser(USER_ID)).thenReturn(List.of(new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "", 30.5, 114.3)));
         when(goodsDao.findById(GOODS_ID)).thenReturn(Optional.of(multi));
 
         BizException error = assertThrows(BizException.class,
@@ -706,7 +736,7 @@ class OrderServiceFlowTest {
         Goods multi = shelfGoods(10, STORE_ID).withSpecs(List.of(large, small));
         when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore(0, 0)));
         when(addressDao.listByUser(USER_ID)).thenReturn(List.of(
-                new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "")));
+                new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "", 30.5, 114.3)));
         when(goodsDao.findById(GOODS_ID)).thenReturn(Optional.of(multi));
         when(goodsDao.findById(200L)).thenReturn(Optional.of(
                 new Goods(200, 11, "别店商品", "", 20, 20, "", 1, 0, 9, 0, 0, 4.5, "", false, 1, "")));
@@ -730,7 +760,7 @@ class OrderServiceFlowTest {
         Goods multi = shelfGoods(10, STORE_ID).withSpecs(List.of(large, small));
         when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore(20, 0)));
         when(addressDao.listByUser(USER_ID)).thenReturn(List.of(
-                new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "")));
+                new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "", 30.5, 114.3)));
         when(goodsDao.findById(GOODS_ID)).thenReturn(Optional.of(multi));
         when(cartItemMapper.selectList(any())).thenReturn(List.of(
                 cartItem(GOODS_ID, 300, 1), cartItem(GOODS_ID, 301, 1)));
@@ -772,7 +802,7 @@ class OrderServiceFlowTest {
     void rejectsOrderWhenStoreClosed() {
         when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(
                 new Store(STORE_ID, "测试店", "", 4.5, 0, 3, 0, "30分钟", "1km", "[]", "", 1, "[1]", 99, 0, 0, "")));
-        when(addressDao.listByUser(USER_ID)).thenReturn(List.of(new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "")));
+        when(addressDao.listByUser(USER_ID)).thenReturn(List.of(new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "", 30.5, 114.3)));
         when(goodsDao.findById(GOODS_ID)).thenReturn(Optional.of(shelfGoods(10, STORE_ID)));
 
         BizException error = assertThrows(BizException.class,

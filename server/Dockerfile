@@ -28,11 +28,13 @@ COPY pom.xml .
 COPY takeout-common/pom.xml takeout-common/pom.xml
 COPY takeout-app/pom.xml takeout-app/pom.xml
 COPY takeout-gateway/pom.xml takeout-gateway/pom.xml
+COPY takeout-erp/pom.xml takeout-erp/pom.xml
 
 COPY takeout-common/src ./takeout-common/src
 COPY takeout-app/src ./takeout-app/src
 COPY takeout-gateway/src ./takeout-gateway/src
-RUN --mount=type=cache,target=/root/.m2 mvn -B -q clean package -DskipTests
+COPY takeout-erp/src ./takeout-erp/src
+RUN --mount=type=cache,target=/root/.m2 mvn -B clean package -DskipTests
 
 # 健康检查类在构建阶段编译（运行镜像是 JRE，没有 javac）
 COPY takeout-app/docker/healthcheck.java /workspace/healthcheck.java
@@ -42,7 +44,11 @@ RUN javac -d /workspace /workspace/healthcheck.java
 FROM eclipse-temurin:25-jre
 # The upstream image tag still carries 25.0.4.1. Install the published security
 # release from Adoptium and verify its official SHA-256 before using it.
-ADD --checksum=sha256:6fac98f0c8202efc3135a9e9e42aa61963ec42d1c5cbb40caf231e7b14a24ef6 https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.5%2B8/OpenJDK25U-jre_x64_linux_hotspot_25.0.5_8.tar.gz /tmp/temurin-security.tar.gz
+# The JDK distribution also supplies jcmd/jfr for controlled, in-container diagnostics.
+ARG TEMURIN_JDK_ARCHIVE_URL=https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.5%2B8/OpenJDK25U-jdk_x64_linux_hotspot_25.0.5_8.tar.gz
+# A local cache can supply the same archive when builder network access is restricted.
+# The pinned checksum applies equally to the official URL and a cache override.
+ADD --checksum=sha256:68982529869257d0ee6b824ec5aa270ff8b118bb438670da0b97ebdab178d7fb ${TEMURIN_JDK_ARCHIVE_URL} /tmp/temurin-security.tar.gz
 RUN mkdir -p /opt/java/temurin-25.0.5 \
     && tar -xzf /tmp/temurin-security.tar.gz -C /opt/java/temurin-25.0.5 --strip-components=1 \
     && rm /tmp/temurin-security.tar.gz
@@ -56,12 +62,13 @@ ENV TZ=Asia/Shanghai \
 
 # 运行期需要写评价图片与日志，用非 root 用户并预建可写目录
 RUN groupadd -r takeout && useradd -r -g takeout takeout \
-    && mkdir -p /app/uploads /app/logs \
+    && mkdir -p /app/uploads /app/logs /app/diagnostics \
     && chown -R takeout:takeout /app
 
 # 两个角色各自的 jar（默认入口是应用；网关由 compose 覆盖 ENTRYPOINT）
 COPY --from=build /workspace/takeout-app/target/takeout-app-*.jar /app/takeout-app.jar
 COPY --from=build /workspace/takeout-gateway/target/takeout-gateway-*.jar /app/takeout-gateway.jar
+COPY --from=build /workspace/takeout-erp/target/takeout-erp-*.jar /app/takeout-erp.jar
 
 # 健康检查类（已在构建阶段编译好）：运行镜像无 curl/wget，用它探活
 COPY --from=build /workspace/healthcheck.class /app/healthcheck.class

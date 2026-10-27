@@ -1,0 +1,42 @@
+server:
+  port: ${TAKEOUT_ERP_PORT:9200}
+  address: ${TAKEOUT_BIND_ADDRESS:127.0.0.1}
+  tomcat:
+    threads:
+      max: 48
+      min-spare: 4
+    max-connections: 128
+    accept-count: 32
+    connection-timeout: 3s
+spring:
+  application:
+    name: takeout-erp
+  datasource:
+    url: ${TAKEOUT_ERP_DB_URL:jdbc:mysql://localhost:3310/takeout_erp?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai}
+    username: ${TAKEOUT_ERP_DB_USERNAME:takeout_erp}
+    password: ${TAKEOUT_ERP_DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 8
+      connection-timeout: 2000
+      data-source-properties:
+        connectTimeout: 2000
+        socketTimeout: 10000
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:erp-schema.sql
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+  jdbc:
+    template:
+      query-timeout: 5s
+  transaction:
+    default-timeout: 5s
+  mvc:
+    async:
+      request-timeout: 3s
+takeout:
+  erp:
+    app-uri: ${TAKEOUT_APP_URI:http://127.0.0.1:9100}
+    integration-secret: ${TAKEOUT_INTEGRATION_SECRET}

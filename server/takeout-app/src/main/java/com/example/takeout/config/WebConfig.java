@@ -57,25 +57,26 @@ public class WebConfig implements WebMvcConfigurer {
                         "/api/payment/wechat/notify",
                         "/api/payment/alipay/notify"
                 );
-        // 浏览请求在认证之后、查询缓存和数据库之前共用账号预算；写操作不计入。
+        // 公开浏览按账号或游客来源共享预算；写操作仍需认证且不计入浏览预算。
         registry.addInterceptor(new org.springframework.web.servlet.HandlerInterceptor() {
             @Override public boolean preHandle(jakarta.servlet.http.HttpServletRequest request,
                     jakarta.servlet.http.HttpServletResponse response, Object handler) {
                 if (!"GET".equalsIgnoreCase(request.getMethod())) return true;
                 Object userId = request.getAttribute("userId");
-                if (!(userId instanceof Long)) throw new com.example.takeout.common.BizException(401, "请先登录");
-                limiter.recordAttempt("browse", "u" + userId);
+                String identity = userId instanceof Long ? "u" + userId
+                        : "ip:" + com.example.takeout.security.LoginRateLimiter.clientIp(request);
+                limiter.recordAttempt("browse", identity);
                 return true;
             }
-        }).addPathPatterns("/api/stores/**", "/api/categories", "/api/goods/special", "/api/rankings/**",
-                "/api/seckills", "/api/banners", "/api/announcements");
-        // 在认证之后、任何地图上游请求之前，所有定位入口共享账号预算。
+        }).addPathPatterns(AuthInterceptor.PUBLIC_BROWSE_PATHS.toArray(String[]::new));
+        // 地点查询也是公开读取；所有定位入口按账号或游客来源共享预算。
         registry.addInterceptor(new org.springframework.web.servlet.HandlerInterceptor() {
             @Override public boolean preHandle(jakarta.servlet.http.HttpServletRequest request,
                     jakarta.servlet.http.HttpServletResponse response, Object handler) {
                 Object userId = request.getAttribute("userId");
-                if (!(userId instanceof Long)) throw new com.example.takeout.common.BizException(401, "请先登录");
-                limiter.recordAttempt("location", "u" + userId);
+                String identity = userId instanceof Long ? "u" + userId
+                        : "ip:" + com.example.takeout.security.LoginRateLimiter.clientIp(request);
+                limiter.recordAttempt("location", identity);
                 return true;
             }
         }).addPathPatterns("/api/location/**");

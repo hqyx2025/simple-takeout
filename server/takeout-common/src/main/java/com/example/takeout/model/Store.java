@@ -71,8 +71,8 @@ public record Store(
 
     /**
      * 能否配送到用户当前位置。
-     * 半径取商户填写的值；**商户没填（0）按默认 2 公里**，不再表示"不限"。
-     * 用户没定位、或门店没坐标时无法判断，返回 true（是否展示由调用方按距离另行决定）。
+     * 半径取商户填写的值；商户没填（0）按默认 30 公里，不表示"不限"。
+     * 缺坐标时返回 true 以允许浏览；下单入口必须先校验双方坐标。
      */
     public boolean canDeliver(Double userLatitude, Double userLongitude) {
         if (!validCoordinates(userLatitude, userLongitude) || !validCoordinates(latitude, longitude)) {

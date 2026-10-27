@@ -50,9 +50,9 @@ class OrderServiceSecurityTest {
 
     @Test
     void rejectsNonPositiveQuantity() {
-        Store store = new Store(10, "测试店", "", 4.5, 0, 3, 0, "30分钟", "1km", "[]", "", 1, "[1]", 99, 1, 0, "");
+        Store store = new Store(10, "测试店", "", 4.5, 0, 3, 0, "30分钟", "1km", "[]", "", "测试地址", 30.5, 114.3, 1, "[1]", 99, 1, 0, "", 0);
         when(storeDao.findById(10)).thenReturn(Optional.of(store));
-        when(addressDao.listByUser(1)).thenReturn(List.of(new Address(20, 1, "张三", "13800138000", "测试地址", 1, "")));
+        when(addressDao.listByUser(1)).thenReturn(List.of(new Address(20, 1, "张三", "13800138000", "测试地址", 1, "", 30.5, 114.3)));
 
         Order.OrderItem item = new Order.OrderItem(100, "商品", 10, 0, "");
         BizException error = assertThrows(BizException.class,
@@ -65,7 +65,7 @@ class OrderServiceSecurityTest {
     void rejectsOrderDetailBelongingToAnotherUser() {
         Order order = new Order(7, "NO7", 2, 10, "测试店", 1, "[]", "{}", 10, 3, 0, 13,
                 "", 0, 0, "", "", "", "", "", "", 0);
-        Store store = new Store(10, "测试店", "", 4.5, 0, 3, 0, "30分钟", "1km", "[]", "", 1, "[1]", 99, 1, 0, "");
+        Store store = new Store(10, "测试店", "", 4.5, 0, 3, 0, "30分钟", "1km", "[]", "", "测试地址", 30.5, 114.3, 1, "[1]", 99, 1, 0, "", 0);
         when(orderDao.findById(7)).thenReturn(Optional.of(order));
         when(storeDao.findById(10)).thenReturn(Optional.of(store));
 
@@ -76,10 +76,10 @@ class OrderServiceSecurityTest {
 
     @Test
     void rejectsGoodsFromAnotherStore() {
-        Store store = new Store(10, "测试店", "", 4.5, 0, 3, 0, "30分钟", "1km", "[]", "", 1, "[1]", 99, 1, 0, "");
+        Store store = new Store(10, "测试店", "", 4.5, 0, 3, 0, "30分钟", "1km", "[]", "", "测试地址", 30.5, 114.3, 1, "[1]", 99, 1, 0, "", 0);
         Goods goods = new Goods(100, 11, "串店商品", "", 10, 10, "", 1, 0, 999, 0, 0, 4.5, "", false, 1, "");
         when(storeDao.findById(10)).thenReturn(Optional.of(store));
-        when(addressDao.listByUser(1)).thenReturn(List.of(new Address(20, 1, "张三", "13800138000", "测试地址", 1, "")));
+        when(addressDao.listByUser(1)).thenReturn(List.of(new Address(20, 1, "张三", "13800138000", "测试地址", 1, "", 30.5, 114.3)));
         when(goodsDao.findById(100)).thenReturn(Optional.of(goods));
 
         Order.OrderItem item = new Order.OrderItem(100, "串店商品", 10, 1, "");

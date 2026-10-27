@@ -7,13 +7,13 @@
   const STATUS = ['待付款', '待接单', '制作中', '配送中', '已送达', '已取消', '退款中'];
   const NAV = {
     0: [['首页', 'home', '⌂'], ['搜索与榜单', 'discover', '⌕'], ['购物车', 'cart', '▣'], ['我的订单', 'orders', '▤'], ['收藏与优惠券', 'perks', '♡'], ['地址与钱包', 'account', '◎'], ['个人设置', 'settings', '⚙'], ['智能客服', 'assistant', '?']],
-    1: [['经营概况', 'overview', '▦'], ['订单处理', 'merchant-orders', '▤'], ['门店与商品', 'catalog', '▣'], ['评价回复', 'reviews', '☆'], ['营销活动', 'marketing', '◇']],
-    2: [['平台总览', 'overview', '▦'], ['分类管理', 'categories', '▦'], ['店铺审核', 'stores', '⌂'], ['全平台订单', 'admin-orders', '▤'], ['退款审批', 'refunds', '↩'], ['用户与商品', 'users', '♙'], ['骑手管理', 'riders', '➤'], ['内容管理', 'content', '▧'], ['员工管理', 'employees', '♧'], ['操作日志', 'audit', '≡'], ['营销监管', 'admin-marketing', '◇']],
+    1: [['经营概况', 'overview', '▦'], ['订单处理', 'merchant-orders', '▤'], ['门店与商品', 'catalog', '▣'], ['采购与库存', 'erp', '▤'], ['评价回复', 'reviews', '☆'], ['营销活动', 'marketing', '◇']],
+    2: [['平台总览', 'overview', '▦'], ['分类管理', 'categories', '▦'], ['店铺审核', 'stores', '⌂'], ['全平台订单', 'admin-orders', '▤'], ['退款审批', 'refunds', '↩'], ['用户与商品', 'users', '♙'], ['骑手管理', 'riders', '➤'], ['内容管理', 'content', '▧'], ['员工管理', 'employees', '♧'], ['采购与库存', 'erp', '▤'], ['操作日志', 'audit', '≡'], ['营销监管', 'admin-marketing', '◇']],
     3: [['待抢订单', 'rider-pool', '⌖'], ['配送订单', 'rider-orders', '➤'], ['骑手资料', 'rider-profile', '♙']]
   };
   const TITLES = {
     home: '首页', discover: '搜索与榜单', cart: '购物车', checkout: '确认订单', orders: '我的订单', perks: '收藏与优惠券', account: '地址与钱包', settings: '个人设置', assistant: '智能客服',
-    overview: '经营概况', 'merchant-orders': '订单处理', catalog: '门店与商品', reviews: '评价回复', marketing: '营销活动',
+    erp: '采购与库存', overview: '经营概况', 'merchant-orders': '订单处理', catalog: '门店与商品', reviews: '评价回复', marketing: '营销活动',
     categories: '分类管理', stores: '店铺审核', 'admin-orders': '全平台订单', refunds: '退款审批', users: '用户与商品', riders: '骑手管理', content: '内容管理', employees: '员工管理', audit: '操作日志', 'admin-marketing': '营销监管',
     'rider-pool': '待抢订单', 'rider-orders': '配送订单', 'rider-profile': '骑手资料'
   };
@@ -108,7 +108,7 @@
   const send = (path, method, data) => api(path, { method, body: data === undefined ? undefined : JSON.stringify(data) });
   const secureLocationLink = () => !window.isSecureContext ? '<a class="btn" href="https://hqyx.website/takeout/">打开 HTTPS 精确定位入口</a>' : '';
   const locationNotice = () => `<section class="surface section" data-browse-location>
-    <div class="row-between location-heading"><div><strong>${esc(state.locationLabel || '全部店铺')}</strong><div class="help-text">展示全部营业店铺，位置和距离不影响浏览。</div></div><div class="td-actions"><button class="btn primary" type="button" data-action="location-change" aria-expanded="false" aria-controls="browseLocationPicker">更换位置</button>${btn('获取当前位置','locate-device')}${state.locationLabel ? btn('清除位置','location-clear') : ''}</div></div>
+    <div class="row-between location-heading"><div><strong>${esc(state.locationLabel || '全部店铺')}</strong><div class="help-text">展示全部营业店铺，位置和距离不影响浏览。下单时需定位收货地址，超出商家配送范围无法下单。</div></div><div class="td-actions"><button class="btn primary" type="button" data-action="location-change" aria-expanded="false" aria-controls="browseLocationPicker">更换位置</button>${btn('获取当前位置','locate-device')}${state.locationLabel ? btn('清除位置','location-clear') : ''}</div></div>
     <div data-location-status role="status" class="help-text"></div>
     <form id="browseLocationPicker" data-form="browse-location" class="inline-form" hidden>
       <label class="field">搜索其他位置<input class="input" name="locationKeyword" maxlength="80" placeholder="例如：武汉市光谷广场、北京市中关村广场" autocomplete="off"></label>
@@ -137,7 +137,7 @@
     finally { buttons.forEach(button => { button.disabled = false; }); }
   }
   async function locate(el) {
-    if (!requireUser() || state.locating) return;
+    if (state.locating) return;
     const form = el.closest('form');
     const container = form || $('app');
     const status = container.querySelector('[data-location-status]');
@@ -506,7 +506,7 @@
     $('topLogin').onclick = () => openAuth(); $('topLogout').onclick = logout;
   }
   const navigate = async (page) => {
-    if (page !== 'home' && page !== 'discover' && !requireUser()) return;
+    if (!['home', 'discover', 'store'].includes(page) && !requireUser()) return;
     const allowed = (NAV[state.role] || NAV[0]).some(item => item[1] === page);
     if (!allowed && page !== 'store' && page !== 'checkout') { toast('当前账号无此页面权限', true); return; }
     if (state.page === 'checkout' && page !== 'checkout') {
@@ -516,6 +516,14 @@
   };
   let storeObserver = null;
   let visibleStoreCount = 0;
+  let browseVersion = 0;
+  const browseViews = [
+    ['browse-all', '全部店铺', ''],
+    ['rank-stores', '热销榜', '/api/rankings/stores?limit=50'],
+    ['rank-goods', '热销菜品', '/api/rankings/goods?limit=20'],
+    ['specials', '特价专区', '/api/goods/special?limit=20'],
+    ['seckills', '限时秒杀', '/api/seckills?limit=20']
+  ];
   const staleRender = Symbol('stale-render');
   const isCurrentRender = (version, page, role) =>
     version === renderVersion && page === state.page && role === state.role;
@@ -550,7 +558,12 @@
       return data;
     };
     try {
-      if (role === 0 || !state.user) await renderCustomer(page, load);
+      if (page === 'erp' && state.user && [1,2].includes(role)) {
+        const token=state.token;
+        const stores=await load(role===1?'/api/merchant/stores':'/api/admin/stores');
+        await TakeoutErp.mount({root:app,api,toast,role,stores:stores||[],live:()=>isCurrentRender(version,page,role) && state.token===token});
+      }
+      else if (role === 0 || !state.user) await renderCustomer(page, load);
       else if (role === 1) await renderMerchant(page, load);
       else if (role === 2) await renderAdmin(page, load);
       else if (role === 3) await renderRider(page, load);
@@ -573,10 +586,7 @@
     if (page === 'assistant') return renderAssistant();
   };
   const renderBrowse = async (page, load = get) => {
-    if (!state.user || !state.token) {
-      $('app').innerHTML = `${pageHead('简单外卖', '登录后浏览真实店铺、优惠活动和订单', btn('登录并开始点餐', 'login', '', 'primary'))}<div class="grid four"><div class="metric"><div class="metric-label">用户端</div><div class="metric-value">点餐</div><div class="metric-note">浏览店铺、购物车、订单与评价</div></div><div class="metric"><div class="metric-label">商户端</div><div class="metric-value">经营</div><div class="metric-note">接单、出餐、商品和营销</div></div><div class="metric"><div class="metric-label">骑手端</div><div class="metric-value">配送</div><div class="metric-note">抢单、取餐、送达</div></div><div class="metric"><div class="metric-label">平台端</div><div class="metric-value">管理</div><div class="metric-note">审核、退款、统计和内容</div></div></div><div class="page-panel section"><div class="notice-line">网页端与 HarmonyOS 客户端共用同一套账号、购物车、地址、订单和配送状态。请先登录再进入对应工作区。</div></div>`;
-      return;
-    }
+    ++browseVersion;
     const [categories, stores, banners, announcements] = await Promise.all([
       load('/api/categories'), load(page === 'discover' && state.search.trim() ? `/api/search?keyword=${encodeURIComponent(state.search.trim())}` : state.categoryId ? `/api/stores?categoryId=${state.categoryId}` : '/api/stores'),
       load('/api/banners').catch(error => error === staleRender ? Promise.reject(error) : []),
@@ -584,10 +594,10 @@
     ]);
     state.categories = categories || [];
     state.stores = (stores || []).filter(store => !state.categoryId || Number(store.categoryId) === state.categoryId || (store.categoryIds || []).map(Number).includes(state.categoryId));
-    const shortcuts = page === 'discover' ? `<div class="toolbar">${btn('热销店铺', 'rank-stores')} ${btn('热销菜品', 'rank-goods')} ${btn('特价商品', 'specials')} ${btn('限时秒杀', 'seckills')}</div>` : '';
+    const shortcuts = `<div class="toolbar" id="browseShortcuts" role="group" aria-label="浏览专区">${browseViews.map(([action, label]) => `<button class="btn ${action === 'browse-all' ? 'primary' : ''}" type="button" data-action="${action}" aria-pressed="${action === 'browse-all'}">${label}</button>`).join('')}${state.user ? btn('优惠券','go','perks') : ''}</div>`;
     const bannersHtml = (banners || []).filter(b => b.status === 1).slice(0, 3).map(b => `<div class="surface"><strong>${esc(b.title)}</strong><div class="subtle">${esc(b.subtitle || '')}</div></div>`).join('');
     const annHtml = (announcements || []).filter(a => a.status === 1).slice(0, 3).map(a => `<div class="notice-line" style="margin-bottom:8px"><strong>${esc(a.title)}</strong> · ${esc(a.content)}</div>`).join('');
-    $('app').innerHTML = `${pageHead(page === 'home' ? '全部店铺' : '发现好味道', '店铺、商品和订单状态均来自共享服务端', `${state.user ? btn('我的订单','go','orders') : btn('登录点餐','login','','primary')}`)}${annHtml}${bannersHtml ? `<div class="grid section">${bannersHtml}</div>` : ''}<form class="toolbar section" id="storeSearchForm" role="search"><input class="input" id="storeSearch" name="keyword" aria-label="搜索店铺或菜品" placeholder="搜索店铺或菜品" value="${esc(state.search)}"><button class="btn primary" type="submit">搜索</button><select class="select" id="categoryFilter" aria-label="店铺分类" style="max-width:220px"><option value="0">全部分类</option>${state.categories.map(c => `<option value="${c.id}" ${Number(state.categoryId) === Number(c.id) ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></form>${page === 'home' ? `<div class="toolbar">${btn('热销榜','rank-stores')} ${btn('热销菜品','rank-goods')} ${btn('特价专区','specials')} ${btn('限时秒杀','seckills')} ${state.user ? btn('优惠券','go','perks') : ''}</div>` : shortcuts}<div class="grid" id="storeGrid"></div><div class="form-actions"><button class="btn" id="storeLoadMore" data-action="stores-more" type="button">加载更多店铺</button></div><div class="section" id="browseResult"></div>`;
+    $('app').innerHTML = `${pageHead(page === 'home' ? '全部店铺' : '发现好味道', '店铺、商品和订单状态均来自共享服务端', `${state.user ? btn('我的订单','go','orders') : btn('登录点餐','login','','primary')}`)}${annHtml}${bannersHtml ? `<div class="grid section">${bannersHtml}</div>` : ''}<form class="toolbar section" id="storeSearchForm" role="search"><input class="input" id="storeSearch" name="keyword" aria-label="搜索店铺或菜品" placeholder="搜索店铺或菜品" value="${esc(state.search)}"><button class="btn primary" type="submit">搜索</button><select class="select" id="categoryFilter" aria-label="店铺分类" style="max-width:220px"><option value="0">全部分类</option>${state.categories.map(c => `<option value="${c.id}" ${Number(state.categoryId) === Number(c.id) ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></form>${shortcuts}<section class="section" id="browseResult" aria-label="浏览结果" aria-live="polite"></section><div class="grid" id="storeGrid"></div><div class="form-actions"><button class="btn" id="storeLoadMore" data-action="stores-more" type="button">加载更多店铺</button></div>`;
     $('storeGrid').insertAdjacentHTML('beforebegin', locationNotice() + secureLocationLink());
     $('storeSearchForm').onsubmit = async event => {
       event.preventDefault(); state.search = $('storeSearch').value.trim(); await navigate('discover');
@@ -654,7 +664,7 @@
       ${message?`<div class="notice-line section" role="status">${esc(message)}</div>`:''}
       <form id="checkoutForm" class="grid two"><section class="page-panel"><h2 class="section-title">收货方式</h2><p>外卖配送</p><h2 class="section-title">配送时间</h2><p>立即配送</p><p class="help-text">当前仅支持立即配送</p>
       <h2 class="section-title">收货地址</h2>${data.addresses.map(a=>`<label class="address-option ${Number(a.id)===draft.addressId?'selected':''}" style="display:block;margin:8px 0"><input type="radio" name="addressId" value="${a.id}" ${Number(a.id)===draft.addressId?'checked':''} ${disabled} required> <strong>${esc(a.name)} ${esc(a.phone)}</strong><div class="subtle" style="margin-left:23px">${esc(addressText(a))}</div></label>`).join('') || empty('请在“地址与钱包”添加收货地址')}
-      <button class="btn" type="button" data-action="go" data-id="account" ${disabled}>管理地址</button></section>
+      <p class="help-text">下单前请为收货地址定位，配送距离按收货地址计算；超出商家配送范围无法下单。</p><button class="btn" type="button" data-action="go" data-id="account" ${disabled}>管理地址</button></section>
       <section class="page-panel"><h2 class="section-title">商品清单</h2>${items.map(x=>`<div class="row-between" style="padding:8px 0"><span>${esc(x.goods?.name)} ${x.specName?`· ${esc(x.specName)}`:''} × ${x.quantity}</span><strong>¥${cash(moneyCents(x.price)*Number(x.quantity)/100)}</strong></div>`).join('')}
       <div class="muted-sep"></div><label class="field">优惠券<select class="select" id="checkoutCoupon" ${disabled}><option value="0" ${!draft.couponId?'selected':''}>不使用</option>${available.map(c=>`<option value="${c.id}" ${Number(c.id)===draft.couponId?'selected':''}>${esc(c.name)} · 满${cash(c.threshold)}减${cash(c.amount)}</option>`).join('')}</select></label>
       <p class="help-text">${draft.couponManual&&!draft.couponId?'已保留“不使用优惠券”的选择，可随时改选。':available.length?'默认推荐本单可用券中预计实付最低的一张，可改选或不使用。':'本单暂无可用优惠券。'}</p>${unavailable.length?`<details><summary>${unavailable.length} 张券本单不可用</summary>${unavailable.map(c=>`<p class="help-text">${esc(c.name)}：${esc(couponUnavailableReason(c,storeId,subtotal,deliveryFee))}</p>`).join('')}</details>`:''}
@@ -938,7 +948,6 @@
       if (action === 'refresh') return renderPage();
       if (action === 'locate-device') return locate(el);
       if (action === 'location-change') {
-        if (!requireUser()) return;
         const form = $('browseLocationPicker');
         state.locationVersion++; state.locating = false;
         form.hidden = !form.hidden;
@@ -952,7 +961,6 @@
         return;
       }
       if (action === 'location-select') {
-        if (!requireUser()) return;
         const coordinate = TakeoutLocation.coordinates(el.dataset.longitude, el.dataset.latitude);
         if (!coordinate || !el.dataset.address) throw new Error('所选地点坐标无效，请重新搜索。');
         state.locationVersion++;
@@ -1064,13 +1072,47 @@
       if (action === 'bank-reveal') { const paymentPassword=window.prompt('请输入支付密码以查看完整卡号','');if(paymentPassword){const result=await actionSend(`/api/wallet/bank-cards/${id}/reveal`,'POST',{paymentPassword});if(result?.cardNumber)toast(`完整卡号：${result.cardNumber}`);else toast('支付密码校验失败',true);}return; }
       if (action === 'bank-delete') { await actionSend(`/api/wallet/bank-cards/${id}`,'DELETE');return renderPage(); }
       if (action === 'claim-coupon') { await actionSend('/api/coupons/claim','POST',{storeId:0,name:'网页领取券',threshold:Number(el.dataset.threshold),amount:Number(el.dataset.amount)});toast('优惠券已领取');return renderPage(); }
-      if (action === 'rank-stores') {
-        const stores = await actionLoad('/api/rankings/stores?limit=50');
-        state.stores = stores || []; resetStoreCards(); return;
+      const browseView = browseViews.find(view => view[0] === action);
+      if (browseView) {
+        if (action === 'browse-all') return renderPage();
+        const version = ++browseVersion;
+        const [, title, path] = browseView;
+        const result = $('browseResult');
+        const heading = `<h2 class="section-title">${title}</h2>`;
+        storeObserver?.disconnect(); storeObserver = null;
+        $('storeGrid').hidden = true; $('storeLoadMore').hidden = true;
+        $('browseShortcuts').querySelectorAll('button[data-action]').forEach(button => {
+          const selected = button.dataset.action === action;
+          button.setAttribute('aria-pressed', String(selected));
+          button.classList.toggle('primary', selected);
+        });
+        result.innerHTML = heading + empty('正在加载…');
+        result.setAttribute('aria-busy', 'true');
+        try {
+          const items = await actionLoad(path);
+          if (version !== browseVersion) return;
+          if (action === 'rank-stores') {
+            state.stores = items || [];
+            result.innerHTML = heading;
+            $('storeGrid').hidden = false; resetStoreCards();
+          } else {
+            result.innerHTML = heading + `<div class="grid two">${(items || []).map(item => {
+              const goods = item.goods || item;
+              const storeId = Number(goods.storeId || item.storeId);
+              const name = goods.name || item.goodsName;
+              const photo = goods.image ? `<img data-product-image loading="lazy" decoding="async" src="${esc(assetURL(goods.image))}" alt="${esc(name)}">` : '暂无图片';
+              const detail = action === 'rank-goods' ? ` · 月售 ${Number(goods.sales || 0)}` : action === 'seckills' ? ` · 剩余 ${Math.max(0, Number(item.quota || 0) - Number(item.sold || 0))}` : '';
+              return `<article class="item-card browse-good"><div class="food-image">${photo}</div><div class="food-info"><strong>${esc(name)}</strong><div class="subtle">${esc(item.storeName)}${detail}</div></div><div class="td-actions"><span class="price">¥${cash(goods.price)}</span>${storeId > 0 ? btn('进店', 'open-store', storeId, 'small primary') : ''}</div></article>`;
+            }).join('') || empty('暂无' + title + '，可以切换其他专区或查看全部店铺')}</div>`;
+          }
+        } catch (error) {
+          if (error === staleRender || version !== browseVersion) return;
+          result.innerHTML = heading + `<div class="notice-line">${esc(error.message || '加载失败，请重试')}</div><div class="form-actions">${btn('重试', action)}</div>`;
+        } finally {
+          if (version === browseVersion && isCurrentContext(context)) result.setAttribute('aria-busy', 'false');
+        }
+        return;
       }
-      if (action === 'rank-goods') { const goods=await actionLoad('/api/rankings/goods?limit=20');$('browseResult').innerHTML=`<h2 class="section-title">热销菜品</h2><div class="grid two">${goods.map(x=>`<article class="item-card row-between"><div><strong>${esc(x.goods.name)}</strong><div class="subtle">${esc(x.storeName)} · 月售 ${x.goods.sales||0}</div></div><span class="price">¥${cash(x.goods.price)}</span></article>`).join('')}</div>`;return; }
-      if (action === 'specials') { const goods=await actionLoad('/api/goods/special?limit=20');$('browseResult').innerHTML=`<h2 class="section-title">特价专区</h2><div class="grid two">${goods.map(x=>`<article class="item-card row-between"><div><strong>${esc(x.goods.name)}</strong><div class="subtle">${esc(x.storeName)}</div></div><span class="price">¥${cash(x.goods.price)}</span></article>`).join('')}</div>`;return; }
-      if (action === 'seckills') { const items=await actionLoad('/api/seckills?limit=20');$('browseResult').innerHTML=`<h2 class="section-title">限时秒杀</h2><div class="grid two">${items.map(x=>`<article class="item-card row-between"><div><strong>${esc(x.goodsName)}</strong><div class="subtle">${esc(x.storeName)} · 剩余 ${x.quota-x.sold}</div></div><span class="price">¥${cash(x.price)}</span></article>`).join('')}</div>`;return; }
       if (action === 'merchant-store-new') { state.editGoods='store';state.merchantStoreEdit=null;return renderPage(); }
       if (action === 'merchant-store-edit') { state.editGoods=null;state.merchantStoreEdit=state.merchantStores.find(s=>Number(s.id)===Number(id));return renderPage(); }
       if (action === 'merchant-goods-new') { state.editGoods={};return renderPage(); }
@@ -1156,6 +1198,9 @@
       if (action === 'admin-seckill-delete') {await actionSend(`/api/admin/marketing/seckills/${id}`,'DELETE');return renderPage();}
     } catch(error) { if (error !== staleRender) toast(error.message,true); }
   };
+  document.addEventListener('error', e => {
+    if (e.target?.matches?.('img[data-product-image]')) e.target.parentElement.textContent = '暂无图片';
+  }, true);
   document.addEventListener('click', e => { const target=e.target.closest('[data-action]'); if(target) handleAction(target.dataset.action,target.dataset.id,target); const nav=e.target.closest('[data-page]'); if(nav) navigate(nav.dataset.page); const close=e.target.closest('[data-close]'); if(close) close.dataset.close==='authModal'?closeAuth():$(close.dataset.close).hidden=true; });
   document.addEventListener('keydown', e => {
     const modal = $('authModal');

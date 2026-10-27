@@ -178,7 +178,7 @@ class OrderBoundaryTest {
     void minOrderCheckIgnoresOtherStoreCartRows() {
         when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore(50, 3)));
         when(addressDao.listByUser(USER_ID)).thenReturn(List.of(
-                new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "")));
+                new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "", 30.5, 114.3)));
         when(goodsDao.findById(GOODS_ID)).thenReturn(Optional.of(goods(GOODS_ID, STORE_ID, 10)));
         when(goodsDao.findById(OTHER_STORE_GOODS_ID))
                 .thenReturn(Optional.of(goods(OTHER_STORE_GOODS_ID, 99, 100)));
@@ -200,7 +200,7 @@ class OrderBoundaryTest {
         Goods multiSpec = goods(GOODS_ID, STORE_ID, 10).withSpecs(List.of(small, large));
         when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore(0, 3)));
         when(addressDao.listByUser(USER_ID)).thenReturn(List.of(
-                new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "")));
+                new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "", 30.5, 114.3)));
         when(goodsDao.findById(GOODS_ID)).thenReturn(Optional.of(multiSpec));
         when(goodsDao.deductStock(eq(GOODS_ID), anyInt())).thenReturn(true);
         when(specDao.deductStock(300, 1)).thenReturn(true);
@@ -224,7 +224,7 @@ class OrderBoundaryTest {
     void discountActivityPreservesGoodsSnapshotAndRecordsPromotionInDiscount() {
         when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore(0, 3)));
         when(addressDao.listByUser(USER_ID)).thenReturn(List.of(
-                new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "")));
+                new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "", 30.5, 114.3)));
         when(goodsDao.findById(GOODS_ID)).thenReturn(Optional.of(goods(GOODS_ID, STORE_ID, 10)));
         when(goodsDao.deductStock(GOODS_ID, 1)).thenReturn(true);
         when(storeDao.listActiveMarketingActivities(eq(STORE_ID), anyString())).thenReturn(List.of(
@@ -248,7 +248,7 @@ class OrderBoundaryTest {
     void promotionRoundsHalfACentUsingDecimalMoneyInsteadOfBinaryArithmetic() {
         when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore(0, 0)));
         when(addressDao.listByUser(USER_ID)).thenReturn(List.of(
-                new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "")));
+                new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "", 30.5, 114.3)));
         when(goodsDao.findById(GOODS_ID)).thenReturn(Optional.of(goods(GOODS_ID, STORE_ID, 0.29)));
         when(goodsDao.deductStock(GOODS_ID, 1)).thenReturn(true);
         when(storeDao.listActiveMarketingActivities(eq(STORE_ID), anyString())).thenReturn(List.of(
@@ -411,7 +411,7 @@ class OrderBoundaryTest {
 
     private Store openStore(double minOrder, double deliveryFee) {
         return new Store(STORE_ID, "测试店", "", 4.5, 0, deliveryFee, minOrder, "30分钟", "1km", "[]", "",
-                1, "[1]", OWNER_ID, 1, 0, "");
+                "测试地址", 30.5, 114.3, 1, "[1]", OWNER_ID, 1, 0, "", 0);
     }
 
     private Goods goods(long id, long storeId, double price) {
@@ -444,7 +444,7 @@ class OrderBoundaryTest {
     private void stubMinimalOrderContext() {
         when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore(0, 3)));
         when(addressDao.listByUser(USER_ID)).thenReturn(List.of(
-                new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "")));
+                new Address(ADDRESS_ID, USER_ID, "张三", "13800138000", "测试地址", 1, "", 30.5, 114.3)));
         when(goodsDao.findById(GOODS_ID)).thenReturn(Optional.of(goods(GOODS_ID, STORE_ID, 10)));
         when(userDao.findById(USER_ID)).thenReturn(Optional.of(
                 new User(USER_ID, "测试用户", "", "13800138000", "", 0, 50, "2026-08-16 10:00:00")));

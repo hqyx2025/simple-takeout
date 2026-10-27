@@ -1,0 +1,20 @@
+[data-erp] .form-grid { align-items: start; }
+[data-erp] .field { align-content: start; }
+[data-erp] .erp-lines { grid-column: 1 / -1; display: grid; gap: 16px; }
+[data-erp] fieldset { min-width: 0; border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+[data-erp] legend { padding: 0 6px; font-weight: 600; }
+[data-erp] fieldset button { align-self: end; justify-self: start; }
+[data-erp] table { font-variant-numeric: tabular-nums; }
+[data-erp] table.erp-compact { min-width: 0; table-layout: fixed; }
+[data-erp] table.erp-compact th:last-child { width: 35%; text-align: right; }
+[data-erp] th { background: var(--surface); color: var(--muted); font-size: 13px; }
+[data-erp] .help-text, [data-erp] .field { font-size: 13px; }
+[data-erp] .btn { background: var(--surface); color: var(--ink); }
+[data-erp] .btn.primary { background: var(--accent-dark); color: white; }
+[data-erp] .erp-number { text-align: right; }
+[data-erp] td .btn { margin: 2px; }
+[data-erp] [aria-current=page] { background: var(--accent-dark); color: white; }
+@media (max-width: 768px) {
+  [data-erp] fieldset { grid-template-columns: 1fr; }
+  [data-erp] .toolbar { flex-wrap: wrap; }
+}

@@ -19,7 +19,19 @@
 
 **2026-10-25 安全复测基线**：截至当日 23:01，十轮攻防结束，基线版本为 `defense-20261025-225329`，包含第三至第十轮累计修复。该轮后端完整 reactor 实测 594 项全部通过；线上 28 项检查通过，30 路正确登录均返回 200，540 家店目录缓存为 451986 字节，第二次请求未回源。当时 demo 为单 app 副本，登录验密 2 许可 / 等待 10000 ms；源码默认等待为 5000 ms。该轮未执行线上下单、支付或退款，也未安装新的手机 HAP。这些结果属于当时的安全基线；完整证据与保留的 RT-16/22/31/32 风险见 [最终结论](md/audit/最终结论.md) 和 [第十轮回复](md/audit/round10/第十轮防御-回复.md)。
 
-## 六批业务与交互改造现状（2026-10-26）
+## 当前技术与验证状态（2026-10-27）
+
+当前架构为交易主服务 `takeout-app`、独立采购耗材服务 `takeout-erp` 与统一 Gateway。ERP 独立拥有数据库，通过内部接口校验门店权限和读取经营对账；商品目录、订单、库存扣减和资金事实保留在主服务的本地事务中。common 不再持有 DAO 或各服务业务实现，仍共享部分模型。
+
+- Web 商户端 / 管理端新增「采购与库存」：供应商、采购确认、分批收货、防超收、库存流水、盘点 / 报损审核、冲销、采购应付与线下付款凭证。管理对象为非食材耗材，未实现食材配方或按菜品销量自动扣料。
+- 跨服务复用 Outbox，支持持久重试、消费幂等、积压查询及人工补偿；API 在途数、请求体、线程和连接均有上限。普通缓存故障回源，Redis 故障时限流仍保留有界本地保护。
+- Docker / Temurin 25.0.5 下完整后端 **676 项通过，0 失败 / 错误 / 跳过**；Web 四套 Node 回归 **82 项通过**；API 26 Pura X View 模拟器的登录、搜索、购物车、结算、支付渠道、管理端六个用例类通过。正式域名配置已恢复，debug HAP 构建成功；设备运行使用隔离包名和本机后端。
+- 本机双 App 各 1 CPU / 768 MiB、48 个负载账号，20 秒混合流量共 2200 次请求：**109.56 RPS，P95 61.32 ms，P99 88.85 ms，错误与拒绝均为 0**；库存、余额和成功支付台账核对通过。该结果属于本机 Docker 短测，不代表体验站或生产容量。
+- 该负载下自动选择 Serial GC，采样期无 Full GC，JFR 最大 GC 停顿 2.13 ms，数据库连接池采样无等待；没有据此切换 GC 或调整 JVM 参数。
+
+源码、服务器、本机镜像更新及会话归档见 [本次会话记录](md/archive/会话记录-2026-10-27-微服务ERP并发JVM与部署.md)。服务启动和诊断说明见[独立采购库存服务与本地诊断](#独立采购库存服务与本地诊断)。真实外部支付、邮件联调、物理真机、长期稳定性和 Release 签名仍需分别验收。
+
+## 历史：六批业务与交互改造（2026-10-26）
 
 六批业务 / 交互改造当前随 `ux-20261026-1950-sync-r2` 于 **2026-10-26 20:30:14 +0800** 发布到体验站，运行源码提交为 `fc37a1471bf55f52c21b915c73afd65e73e9529a`。问题依据、逐批实施与验证证据见 [人性化改造诊断与实施方案](md/人性化改造诊断与实施方案.md)。GitHub Backend CI（`40322568519`）已通过；Frontend CI（`40327383209`，`4777346`）已由本机 `windows-deveco` 自托管 runner 完成依赖安装、HAP 构建、全部 15 个脚本检查及产物上传。
 
@@ -102,8 +114,8 @@
 | 前端 | HarmonyOS NEXT · ArkTS（严格模式）+ ArkUI | `targetSdkVersion` / `compatibleSdkVersion` **26.0.0**，单 HAP；仅依赖 `@ohos/axios`，无第三方 UI 库 |
 | 前端存储 | AppStorage + Preferences | 登录态、购物车展示等本地持久化 |
 | 后端 | Spring Boot 3.5.16 · Java 25 | 分层 Controller / Service / DAO；JWT 认证（jjwt 0.12.6）+ 自定义拦截器（**未引入 Spring Security**） |
-| 后端数据访问 | JdbcTemplate + 既有 MyBatis-Plus 映射 | 主要 DAO 位于 `server/takeout-common`；购物车等路径使用 `server/takeout-app` 的实体 / Mapper，与业务事务配合 |
-| 数据库 | MySQL 8.4 | 库名 `takeout`；启动自动执行 `schema.sql`，`SchemaMigration` 兼容旧库，`DataSeeder` 填充种子数据 |
+| 后端数据访问 | JdbcTemplate + 既有 MyBatis-Plus 映射 | 主服务 DAO 位于 `server/takeout-app`；ERP 数据访问位于 `server/takeout-erp`；购物车使用既有实体 / Mapper |
+| 数据库 | MySQL 8.4 | 主库 `takeout` 和独立 ERP 库 `takeout_erp`；自动建表、兼容旧库增量迁移；默认禁用数据播种 |
 | 缓存 | Redis 7（Lettuce 连接池） | 热点浏览数据缓存；故障快速降级（500ms 超时 + 短连接超时） |
 | 消息 | Redis Stream + 事务性 Outbox | 领域事件异步投递，**未引入 RabbitMQ/RocketMQ 等外部 MQ** |
 | 容器化 | Docker · Docker Compose | 后端镜像基于 JDK 25 多阶段构建；MySQL 8.4 + Redis 7 |
@@ -116,12 +128,17 @@
 flowchart LR
   App["HarmonyOS App<br/>ArkTS + ArkUI"] -->|"HTTP · JWT Bearer"| Gateway["Gateway :8087"]
   Gateway --> Balancer["Nginx 动态解析 / 轮询"]
+  Web["Web 商户端 / 管理端"] --> Gateway
+  Gateway -->|"/api/erp/**"| ERP["独立采购耗材服务"]
+  ERP --> ERPDB[("MySQL / takeout_erp")]
+  ERP -->|"内部权限校验 / 经营对账"| API
   Balancer --> API["Spring Boot app × 2<br/>Controller / Service / DAO"]
   API --> MySQL[("MySQL 8.4<br/>takeout")]
   API -->|"热点读缓存 / 失败降级回源"| Redis[("Redis 7")]
   API -->|"同一事务写入事件"| Outbox[("outbox_events")]
   Outbox --> Relay["OutboxRelayJob<br/>定时搬运"]
   Relay --> Stream[("Redis Stream<br/>takeout:stream:domain-events")]
+  Relay -->|"持久重试 / 收件箱幂等"| ERP
   Stream --> Consumer["DomainEventConsumer<br/>消费组 + 幂等去重"]
 ```
 
@@ -145,8 +162,9 @@ simple-takeout/
 │       ├── test/             # Hypium 本地单元测试
 │       └── ohosTest/         # UiTest 设备端自动化测试
 ├── server/                   # Spring Boot 多模块后端（应用端口 8087）
-│   ├── takeout-common/        # 共享 model、DAO、安全与通用组件
-│   ├── takeout-app/           # Controller、Service、Job、配置、schema.sql 与应用测试
+│   ├── takeout-common/        # 共享 model、协议与通用技术组件；不持有 DAO
+│   ├── takeout-app/           # 交易业务、DAO、安全、Job、schema.sql 与应用测试
+│   ├── takeout-erp/           # 独立采购耗材服务、ERP 库结构与测试
 │   │   └── docker/healthcheck.java # 容器探活（运行镜像无 curl/wget）
 │   ├── takeout-gateway/       # API 网关
 │   └── pom.xml                # Maven 聚合根
@@ -220,7 +238,7 @@ docker compose down  # 停止并保留数据卷
 ```bash
 # 确保 JAVA_HOME 指向 JDK 25；本机演示运行需设置 SPRING_PROFILES_ACTIVE=develop
 # PowerShell: $env:SPRING_PROFILES_ACTIVE="develop"
-# 多模块工程：聚合根为 server/pom.xml（含 takeout-common / takeout-app / takeout-gateway）
+# 聚合根为 server/pom.xml（common / app / gateway / erp）；独立服务启动方式见文末
 # 启动应用前先安装同仓库共享模块，避免使用旧的 takeout-common jar
 mvn -f server/pom.xml -pl takeout-common -am install -DskipTests
 mvn -f server/pom.xml -pl takeout-app spring-boot:run
@@ -418,11 +436,13 @@ HSTS 仓库策略为 `max-age=7776000; includeSubDomains`，按访问时间滚�
 - **配送方式**：新建订单仅开放立即配送；自取和预约须补齐独立履约、营业容量与改期规则后再开放。
 - **商户列表不展示 `status=0` 订单**（尚未支付，不进入商户待处理队列）。
 
-## 数据表（MySQL `takeout`）
+## 数据表（MySQL `takeout` / `takeout_erp`）
 
 `users` 用户 / `stores` 店铺 / `goods` 商品 / `goods_specs` 商品规格 / `orders` 订单（商品与地址 JSON 快照保留）/ `order_items` 新订单结构化商品行 / `order_create_requests` 下单请求与原订单映射 / `coupons` 优惠券 / `reviews` 评价 / `favorites` 收藏 / `addresses` 收货地址 / `categories` 分类（平台/商户）/ `refund_records` 退款申请 / `refund_apply_requests` 退款申请请求幂等映射 / `cart_items` 购物车 / `riders` 骑手档案 / `banners` 轮播 / `announcements` 公告 / `seckills` 限时秒杀 / `outbox_events` 事务性 Outbox 事件表
 
-2026-10-26 当前源码的结构兼容重点：
+ERP 独立数据库的供应商、耗材、采购单 / 明细、收货、调整审核、台账、付款凭证、审计和事件收件箱由 `server/takeout-erp/src/main/resources/erp-schema.sql` 管理；不访问主服务库，不导入本地验证数据。两个库分别备份；ERP 每日备份使用 `takeout-erp-YYYYMMDD.sql.gz` 前缀，与主库备份分开保留。
+
+2026-10-26 起保留的主库结构兼容重点：
 
 | 对象 | 新增 / 当前字段 | 业务约束 |
 | --- | --- | --- |
@@ -449,6 +469,8 @@ HSTS 仓库策略为 `max-age=7776000; includeSubDomains`，按访问时间滚�
 | --- | --- |
 | [简单外卖功能介绍.docx](简单外卖功能介绍.docx) | 四端功能介绍；本次同步目标为当前源码，具体完成情况以更新后的文件为准 |
 | [人性化改造诊断与实施方案](md/人性化改造诊断与实施方案.md) | 四端业务 / 交互诊断、六批真实实施、验证证据与未完成边界 |
+| [近期会话归档（2026-10-25 至 26）](md/archive/会话记录-2026-10-25至26-安全复测业务改造发布与CI.md) | 最近三个项目会话：安全复测、介绍稿、六批改造、发布同步及 Windows runner；保留历史边界与证据入口 |
+| [本次会话归档（2026-10-27）](md/archive/会话记录-2026-10-27-微服务ERP并发JVM与部署.md) | 独立 ERP、并发与 JVM 治理、Docker / HAP 验证、GitHub 与服务器同步及本机镜像更新 |
 | [md/开发参考.md](md/开发参考.md) | 技术栈、业务口径、构建细节与历史排错经验，按需查阅 |
 | [md/设备实测指南.md](md/设备实测指南.md) | 模拟器 / 真机构建、安装与 UiTest 操作指南 |
 | [md/archive/Redis缓存与异步事件架构.md](md/archive/Redis缓存与异步事件架构.md) | 缓存三类故障防护、事务性 Outbox 设计、降级行为与实测数据 |
@@ -470,6 +492,22 @@ HSTS 仓库策略为 `max-age=7776000; includeSubDomains`，按访问时间滚�
 网页 HTTPS、域名入口与相对路径访问已接通。六批实施后仍未完成的业务、政策与交互边界见 [诊断文档后续状态及第六批遗留边界](md/人性化改造诊断与实施方案.md)；来自 [md/archive/未完成.txt](md/archive/未完成.txt) 的真机 UI 自动化、AppAnalyzer 和 Release 签名仍待完成，手机端 HTTPS 尚未进行物理真机验证。源码 / 服务器同步不等于 AppGallery 发布或正式支付验收。
 
 ## 说明
+
+### 独立采购库存服务与本地诊断
+
+`takeout-erp` 独立拥有采购与耗材库存数据库；`takeout-app` 拥有账号、菜品、订单和资金事实。ERP 不读取应用数据库，通过受密钥保护的内部接口校验当前账号与门店归属、查询经营对账。商品目录仍与下单扣库存保留本地事务；本次没有将目录读写强行拆成跨服务库存事务。没有新增注册中心、消息中间件或分布式事务框架。
+
+- 独立构建：JDK 25 下执行 `mvn -f server/pom.xml -pl takeout-erp -am package`。新库执行 `erp-schema.sql` 的增量建表，不清理既有数据。为 ERP 单独创建数据库和账号，仅授予其自身库权限。
+- 在已导入环境变量并设置 `JAVA_HOME` 后，分别运行 `scripts/start-service.ps1 -Service app`、`-Service erp`、`-Service gateway`；默认端口为 9100 / 9200 / 8087。ERP 和应用共用单独生成的 `TAKEOUT_INTEGRATION_SECRET`，应用设置 `TAKEOUT_ERP_ENABLED=true`；其他变量见 `.env.example`。应用原有邮件、支付配置校验继续生效；只验证余额业务时须显式关闭真实支付和沙箱支付，邮件凭据缺失时不能验收真实发信。
+- Compose 使用独立 `erp-mysql` 数据卷和数据库账号，ERP 无宿主端口；Gateway 将 `/api/erp/**` 转至 ERP。仅在确认本机配置后自行启动本地 Compose。各服务 `/health` 为 HTTP 探活。网关不公开 `/internal/**`、`/api/internal/**` 或管理诊断端点。
+- 操作入口：通过网关登录 Web 商户端或管理端，进入「采购与库存」，先选择门店。维护供应商与经营耗材 → 保存采购草稿 → 提交审核 → 确认采购 → 在采购明细分批收货 → 查询台账 → 提交盘点/报损，由另一账号审核 → 在采购明细登记已完成的线下付款 → 查询付款与经营对账。采购单关闭后不再收货，已生效收货和应付不被删除。
+- 管理对象是餐盒、包装等**非食材经营耗材**，基础单位创建后固定；采购单保存采购单位与换算率。没有引入食材、配方或自动扣料，菜品可售库存仍由原订单事务扣减。收货按累计数量防超收；应付按累计收货金额四舍五入到分；已生效流水只能冲销。已付款覆盖的收货不能直接冲销。付款为线下凭证登记，不从应用钱包转账。
+- 经营对账直接汇总已有成功支付/退款台账及托管、结算状态，显示查询时间；采购侧独立汇总收货应付、凭证付款和未付，二者不构造新的钱包余额。管理端另有「事件投递与补偿」，只允许重投待处理且未被有效认领的事件。
+- 跨服务事件复用事务 Outbox，HTTP 连接/读取超时为 0.5 / 2 秒；不在 HTTP 客户端重试写操作。ERP 收件箱按事件号持久幂等；投递失败留存并指数退避到最多 60 秒，超过阈值告警，可人工补偿。ERP 不可用时，通知投递也会延迟，但订单本地事务可继续提交；修复后继续投递。应监控积压，不能把通知或对账当作强一致资金权威。
+- 应用每实例默认最多 48 个在途 API 请求，JSON 请求体限 256 KiB，饱和返回 503；原有账号限流返回 429。Tomcat、Gateway 连接及数据库连接池均有上限。普通缓存失败回源数据库；限流故障保留有界本地限流；调度锁只消除重复工作，正确性仍靠数据库事务与条件更新。
+- 本地 GC 日志与诊断文件写入 `TemporaryCacheStorage/jvm/`，GC 设置 filesize=5M、filecount=5，每进程含当前文件预留约 30 MiB；目录启动检查上限 1 GiB。`scripts/jvm-diagnostics.ps1 -ProcessId <PID> -Action snapshot|threads|jfr` 可按需诊断，JFR 默认 60 秒、最多 64 MiB。容器内带匹配 JDK 的 `jcmd` / `jfr`，例如 `docker compose exec app jcmd 1 VM.flags`；多副本时指定 `--index`。容器 GC 目录 `/app/diagnostics` 使用 64 MiB tmpfs，短时 JFR 应限 16 MiB，及时复制至受控位置后删除，重建容器会丢失该目录。
+- 默认不生成 OOM 堆转储。确需排查时，本地启动显式传 `-HeapDumpOnOom`，或诊断脚本显式选择 `-Action heap`；容器需先挂载有容量限制的私有诊断卷并预留堆大小空间，再启用转储。堆/JFR/线程文件可能包含账号、令牌、业务数据与密钥，不放入上传目录，不通过 HTTP 提供下载，不提交仓库。保留 JVM 自动选择的 GC，以 `VM.flags` 核对实际结果（本机为 G1，1 CPU 容器为 Serial）；不默认使用虚拟线程。
+- 可重复负载工具：`scripts/governance-load.py`，只接受本机 HTTP 地址，写入另需 `--write-local` 及 `TAKEOUT_LOAD_ISOLATED=1`。工作负载文件只存隔离测试账号令牌、地址及 SKU；结果写入 `TemporaryCacheStorage/`，不输出令牌，分别统计 429、过载 503 和其他错误。脚本仅输出性能证据，验收仍需独立核对数据库库存、订单及支付台账，不能仅凭脚本存在宣称性能通过。
 
 - 本项目为毕业设计/学习用途，当前支持余额支付与支付宝沙箱支付；沙箱支付按项目约定推进正常订单及结算流程，不代表支付宝真实人民币收款。
 - 许可协议：[PolyForm Noncommercial License 1.0.0](LICENSE)——允许个人学习/研究/非商业使用，**禁止商用**。

@@ -7,6 +7,7 @@ import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
 
 import java.util.Optional;
 
@@ -24,6 +25,23 @@ class AuthInterceptorSecurityTest {
     private final UserDao userDao = mock(UserDao.class);
     private final TokenRevocationService revocationService = mock(TokenRevocationService.class);
     private final AuthInterceptor interceptor = new AuthInterceptor(jwtUtil, userDao, revocationService);
+
+    @Test
+    void anonymousBrowseIsPublicButPrivateReadsAndWritesStillRequireLogin() {
+        for (String path : new String[]{"/api/stores", "/api/stores/10", "/api/stores/10/goods",
+                "/api/stores/10/categories", "/api/stores/10/reviews", "/api/categories", "/api/search",
+                "/api/rankings/stores", "/api/goods/special", "/api/seckills", "/api/banners", "/api/announcements",
+                "/api/location/search", "/api/location/reverse", "/api/location/geocode", "/api/location/nearby"}) {
+            assertTrue(interceptor.preHandle(new MockHttpServletRequest("GET", path),
+                    mock(HttpServletResponse.class), new Object()), path);
+            assertEquals(401, assertThrows(BizException.class, () -> interceptor.preHandle(
+                    new MockHttpServletRequest("POST", path), mock(HttpServletResponse.class), new Object())).getCode(), path);
+        }
+        for (String path : new String[]{"/api/orders", "/api/cart", "/api/addresses", "/api/merchant/stores", "/api/admin/stores"}) {
+            assertEquals(401, assertThrows(BizException.class, () -> interceptor.preHandle(
+                    new MockHttpServletRequest("GET", path), mock(HttpServletResponse.class), new Object())).getCode(), path);
+        }
+    }
 
     private HttpServletRequest bearerRequest(String token) {
         HttpServletRequest request = mock(HttpServletRequest.class);

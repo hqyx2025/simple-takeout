@@ -64,6 +64,9 @@ public class DomainEventPublisher {
     @Value("${takeout.mq.stream-maxlen:10000}")
     private long streamMaxLen = 10000;
 
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private com.example.takeout.service.ErpEventDelivery erpDelivery;
+
     public DomainEventPublisher(OutboxEventDao outboxDao, ObjectProvider<StringRedisTemplate> redisProvider,
                                 ObjectMapper objectMapper) {
         this.outboxDao = outboxDao;
@@ -85,8 +88,7 @@ public class DomainEventPublisher {
         try {
             json = objectMapper.writeValueAsString(payload == null ? Map.of() : payload);
         } catch (Exception e) {
-            log.warn("[事件] 序列化失败 type={} orderId={}", eventType, orderId, e);
-            return;
+            throw new IllegalStateException("Outbox event serialization failed", e);
         }
         try {
             outboxDao.insert(eventType, orderId, json, LocalDateTime.now().format(FMT));
@@ -94,8 +96,7 @@ public class DomainEventPublisher {
             // MySQL 死锁可能已回滚整个事务，不能吞异常后继续返回业务成功。
             throw e;
         } catch (Exception e) {
-            // Outbox 落库失败不能影响主业务（宁可丢一条通知，也不能让下单失败）
-            log.warn("[事件] Outbox 写入失败 type={} orderId={}", eventType, orderId, e);
+            throw new IllegalStateException("Outbox event persistence failed", e);
         }
     }
 
@@ -110,6 +111,7 @@ public class DomainEventPublisher {
             return false;
         }
         try {
+            if (erpDelivery != null && !erpDelivery.deliver(eventId,eventType,orderId,payloadJson)) return false;
             Map<String, String> fields = Map.of(
                     "eventId", String.valueOf(eventId),
                     "eventType", eventType,
@@ -128,7 +130,7 @@ public class DomainEventPublisher {
             }
             return true;
         } catch (Exception e) {
-            log.warn("[事件] Stream 投递失败 eventId={} type={}（等待中继重试）", eventId, eventType, e);
+            log.warn("[事件] ERP/Stream 下游投递失败 eventId={} type={}（等待 Outbox 退避重试）", eventId, eventType, e);
             return false;
         }
     }

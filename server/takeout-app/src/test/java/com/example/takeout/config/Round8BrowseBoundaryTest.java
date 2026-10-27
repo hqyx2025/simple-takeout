@@ -23,12 +23,8 @@ class Round8BrowseBoundaryTest {
         @Bean GlobalExceptionHandler errors() { return new GlobalExceptionHandler(); }
         @Bean LoginRateLimiter limiter() { return new LoginRateLimiter(mock(ObjectProvider.class)); }
         @Bean AuthInterceptor auth() {
-            var auth = mock(AuthInterceptor.class);
-            when(auth.preHandle(any(), any(), any())).thenAnswer(call -> {
-                jakarta.servlet.http.HttpServletRequest request = call.getArgument(0);
-                if (!(request.getAttribute("userId") instanceof Long)) throw new BizException(401, "test requires auth");
-                return true;
-            }); return auth;
+            return new AuthInterceptor(mock(JwtUtil.class), mock(com.example.takeout.dao.UserDao.class),
+                    mock(TokenRevocationService.class));
         }
         @Bean WebConfig web(AuthInterceptor auth, ObjectProvider<FileStorageService> storage, LoginRateLimiter limiter) {
             return new WebConfig(auth, new ApiRequestLoggingInterceptor(), storage, limiter);
@@ -38,6 +34,9 @@ class Round8BrowseBoundaryTest {
             when(service.listStores(any(), any(), any())).thenReturn(List.of()); return service;
         }
         @Bean StoreController controller(StoreService stores) { return new StoreController(stores); }
+        @Bean com.example.takeout.controller.LocationController locations() {
+            return mock(com.example.takeout.controller.LocationController.class);
+        }
     }
     private AnnotationConfigWebApplicationContext context; private MockMvc mvc;
     @BeforeEach void start() {
@@ -46,14 +45,35 @@ class Round8BrowseBoundaryTest {
     }
     @AfterEach void stop() { context.close(); }
 
-    @Test void allBrowseRoutesShare120RequestsPerAccountAndAuthenticationRunsFirst() throws Exception {
-        mvc.perform(get("/api/stores")).andExpect(status().isUnauthorized());
+    @Test void allBrowseRoutesShare120RequestsPerAccountAndAllowAnonymousBrowsing() throws Exception {
+        mvc.perform(get("/api/stores")).andExpect(status().isOk());
         String[] routes = {"/api/stores", "/api/stores/recommended", "/api/rankings/stores", "/api/rankings/goods",
                 "/api/goods/special", "/api/seckills", "/api/categories"};
         for (int i = 0; i < 120; i++) mvc.perform(get(routes[i % routes.length]).requestAttr("userId", 7L)).andExpect(status().isOk());
         mvc.perform(get("/api/stores").requestAttr("userId", 7L)).andExpect(status().isTooManyRequests());
         mvc.perform(get("/api/stores").requestAttr("userId", 8L)).andExpect(status().isOk());
-        System.out.println("[RT-34/browse] shared-account=120 next=429 other-account=200 anonymous=401");
+        System.out.println("[RT-34/browse] shared-account=120 next=429 other-account=200 anonymous=200");
+    }
+
+    @Test void anonymousBrowseSharesItsSourceBudgetWithoutTrustingForwardedHeaders() throws Exception {
+        for (int i = 0; i < 120; i++) {
+            mvc.perform(get(i % 2 == 0 ? "/api/stores" : "/api/categories")
+                    .header("X-Forwarded-For", "192.0.2." + i)).andExpect(status().isOk());
+        }
+        mvc.perform(get("/api/stores")).andExpect(status().isTooManyRequests());
+        mvc.perform(get("/api/stores").with(request -> { request.setRemoteAddr("192.0.2.200"); return request; }))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/merchant/stores")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/stores").header("Authorization", "Bearer invalid")).andExpect(status().isUnauthorized());
+    }
+
+    @Test void anonymousLocationReadsShareTheirSourceBudget() throws Exception {
+        for (int i = 0; i < 30; i++) {
+            mvc.perform(get("/api/location/search").param("keyword", "测试地点"))
+                    .andExpect(status().isOk());
+        }
+        mvc.perform(get("/api/location/search").param("keyword", "测试地点"))
+                .andExpect(status().isTooManyRequests());
     }
 
     @Test void storeListDoesNotProducePerStoreInfoLogs() throws Exception {

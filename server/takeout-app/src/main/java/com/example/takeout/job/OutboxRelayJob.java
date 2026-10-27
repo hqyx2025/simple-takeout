@@ -80,7 +80,9 @@ public class OutboxRelayJob {
             String owner = InstanceId.current();
             // 行级认领：事务内 SELECT ... FOR UPDATE SKIP LOCKED 并盖认领戳。
             // 多实例下同一事件只会出现在一个实例的返回结果里，从根上消除重复搬运。
-            List<OutboxEventDao.OutboxEvent> pending = outboxDao.claimPending(batchSize, owner, now, now + claimLeaseMs);
+            // Bound each scan; reserve HTTP/Redis/SQL time for the whole batch, not just one event.
+            List<OutboxEventDao.OutboxEvent> pending = outboxDao.claimPending(Math.max(1,Math.min(batchSize,10)), owner, now,
+                    now + Math.max(claimLeaseMs,105000));
             if (pending.isEmpty()) {
                 return;
             }
@@ -91,11 +93,11 @@ public class OutboxRelayJob {
                 // 因此这里【永不放弃】投递，只统计重试次数用于告警。
                 // 若因重试上限而跳过，Redis 的短暂故障就会变成事件的永久丢失（实测踩过）。
                 if (publisher.deliver(event.id(), event.eventType(), event.orderId(), event.payload())) {
-                    outboxDao.markSent(event.id());
+                    outboxDao.markSent(event.id(),owner);
                     sent++;
                 } else {
                     // markRetry 同时释放租约，让其他健康实例立刻能接手重试
-                    outboxDao.markRetry(event.id());
+                    outboxDao.markRetry(event.id(),owner,event.retryCount());
                     retried++;
                 }
             }
@@ -105,7 +107,7 @@ public class OutboxRelayJob {
             }
             // 重试次数偏高说明 Redis 长期不可用，需要运维介入
             if (retried > 0 && outboxDao.countExhausted(maxRetry) > 0) {
-                log.warn("[Outbox] 存在重试超过 {} 次仍未投递成功的事件 count={}，请检查 Redis 可用性",
+                log.warn("[Outbox] 存在重试超过 {} 次仍未投递成功的事件 count={}，请检查 ERP/Redis 下游及管理端补偿入口",
                         maxRetry, outboxDao.countExhausted(maxRetry));
             }
         } catch (Exception e) {

@@ -32,7 +32,8 @@ class Round3AccountRecoveryMySqlTest {
 
     @Test void actualAppRestartAfterExactRedisClearRestoresAdminButKeepsOffenderBlocked() throws Exception {
         String database = "takeout_recovery_" + UUID.randomUUID().toString().replace("-", "");
-        String base = "jdbc:mysql://127.0.0.1:" + System.getenv("TAKEOUT_DB_PORT") + "/";
+        String base = "jdbc:mysql://" + System.getenv().getOrDefault("TAKEOUT_DB_HOST", "127.0.0.1")
+                + ":" + System.getenv("TAKEOUT_DB_PORT") + "/";
         String options = "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai";
         var admin = new JdbcTemplate(new DriverManagerDataSource(base + options, "root", System.getenv("TAKEOUT_DB_PASSWORD")));
         var connection = new LettuceConnectionFactory("127.0.0.1", Integer.parseInt(System.getenv("TAKEOUT_TEST_REDIS_PORT")));
@@ -54,6 +55,7 @@ class Round3AccountRecoveryMySqlTest {
             try (var socket = new java.net.ServerSocket(0, 0, InetAddress.getLoopbackAddress())) { port = socket.getLocalPort(); }
             output = Path.of("../../TemporaryCacheStorage/round3-defense").toAbsolutePath().normalize(); Files.createDirectories(output);
             env = new HashMap<>(System.getenv());
+            env.put("TAKEOUT_ERP_ENABLED","false"); // This isolated auth child deliberately disables Outbox and downstream services.
             // Use only the test DB/Redis; never read .env or contact SMTP/payment providers.
             env.put("SPRING_PROFILES_ACTIVE", "develop"); env.put("SPRING_DATASOURCE_URL", base + database + options);
             env.put("SPRING_DATASOURCE_USERNAME", "root"); env.put("SPRING_DATASOURCE_PASSWORD", System.getenv("TAKEOUT_DB_PASSWORD"));

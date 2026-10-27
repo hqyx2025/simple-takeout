@@ -17,6 +17,11 @@ public class SecurityHeadersFilter implements WebFilter {
         headers.set("Content-Security-Policy", "default-src 'self'; script-src 'self'; "
                 + "style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; "
                 + "connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'");
+        String path=exchange.getRequest().getPath().value();
+        if(path.startsWith("/api/internal/") || path.startsWith("/internal/") || path.startsWith("/actuator")){
+            exchange.getResponse().setStatusCode(org.springframework.http.HttpStatus.NOT_FOUND);
+            return exchange.getResponse().setComplete();
+        }
         return chain.filter(exchange);
     }
 }

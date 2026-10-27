@@ -105,6 +105,32 @@ function browser(sidebarCollapsed='0',options={}){
 }
 const cardCount=html=>(html.match(/class="store-card"/g)||[]).length;
 
+test('guests browse all stores and details without login or location but cart stays protected',async()=>{
+  const b=browser('0',{stores:[{id:1,name:'远方店铺',distance:'2000km',deliverable:false,tags:[]}]});
+  b.resetAccountState();
+  await b.renderPage();
+  assert.equal(b.state.stores.length,1);
+  assert.match(b.element('storeGrid').innerHTML,/远方店铺/);
+  assert.equal(b.element('authModal').hidden,true);
+  assert.ok(b.requests.every(path=>!/[?&](latitude|longitude)=/.test(path)));
+  await b.handleAction('open-store',1);
+  assert.equal(b.state.page,'store');
+  assert.match(b.element('app').innerHTML,/远方店铺/);
+  assert.equal(b.element('authModal').hidden,true);
+  await b.handleAction('add-cart',11);
+  assert.equal(b.element('authModal').hidden,false);
+  assert.equal(b.calls.some(call=>call.path==='/api/cart/items'),false);
+});
+
+test('guests may select a browsing location and still see distant stores',async()=>{
+  const b=browser('0',{stores:[{id:1,name:'远方店铺',deliverable:false,tags:[]}]});
+  b.resetAccountState();
+  await b.handleAction('location-select','',{dataset:{longitude:'116.4',latitude:'39.9',address:'测试地点'}});
+  assert.equal(b.state.locationLabel,'测试地点');
+  assert.equal(b.state.stores.length,1);
+  assert.equal(b.element('authModal').hidden,true);
+});
+
 test('empty search displays all stores even after choosing a location',async()=>{
   const b=browser();await b.renderBrowse('discover');
   assert.equal(b.state.stores.length,55,'empty search must display stores instead of an empty result');
@@ -190,6 +216,71 @@ test('store ranking retains its results instead of overwriting them with an empt
   assert.equal(cardCount(b.element('storeGrid').innerHTML),24);
 });
 
+test('browse shortcuts replace the store list with visible results and allow returning to all stores',async()=>{
+  const b=browser();b.resetAccountState();await b.renderPage();
+  assert.ok(b.element('app').innerHTML.indexOf('id="browseResult"')<b.element('app').innerHTML.indexOf('id="storeGrid"'));
+  for(const [action,title] of [['rank-goods','热销菜品'],['specials','特价专区'],['seckills','限时秒杀']]){
+    await b.handleAction(action);
+    assert.equal(b.element('storeGrid').hidden,true);
+    assert.equal(b.element('storeLoadMore').hidden,true);
+    assert.equal(b.observers.at(-1).disconnected,true);
+    assert.match(b.element('browseResult').innerHTML,new RegExp(title));
+    assert.match(b.element('browseResult').innerHTML,/暂无/);
+    assert.equal(b.element('authModal').hidden,true);
+  }
+  await b.handleAction('rank-stores');
+  assert.equal(b.element('storeGrid').hidden,false);
+  assert.match(b.element('browseResult').innerHTML,/热销榜/);
+  await b.handleAction('browse-all');
+  assert.equal(b.state.stores.length,55);
+  assert.equal(b.state.stores[0].id,1);
+  assert.match(b.element('app').innerHTML,/data-action="browse-all"[^>]*aria-pressed="true"/);
+});
+
+test('rapid shortcut switches keep the latest selection even when an earlier request finishes last',async()=>{
+  let release;
+  const b=browser('0',{onRequest(path){
+    if(path.startsWith('/api/rankings/goods'))return new Promise(resolve=>{release=resolve;});
+  }});
+  await b.renderBrowse('discover');
+  const first=b.handleAction('rank-goods');
+  await Promise.resolve();
+  await b.handleAction('specials');
+  release({ok:true,status:200,json:async()=>({code:200,data:[{goods:{id:1,name:'过期榜单',price:2}}]})});
+  await first;
+  assert.match(b.element('browseResult').innerHTML,/特价专区/);
+  assert.doesNotMatch(b.element('browseResult').innerHTML,/过期榜单/);
+});
+
+test('promotional and hot goods use the server product photos for both response shapes',async()=>{
+  const goods={id:11,storeId:1,name:'招牌饭 <大份>',price:12,image:'/uploads/food-original.jpg'};
+  const b=browser('0',{onRequest(path){
+    if(['/api/rankings/goods?limit=20','/api/goods/special?limit=20','/api/seckills?limit=20'].includes(path)){
+      const data=path.startsWith('/api/seckills')
+        ? [{goodsId:goods.id,storeId:1,goodsName:goods.name,image:goods.image,price:9,quota:20,sold:3},{goodsName:'无图餐品',price:6}]
+        : [{goods,storeName:'测试店铺'},{goods:{name:'无图餐品',price:6}}];
+      return {ok:true,status:200,json:async()=>({code:200,data})};
+    }
+  }});
+  await b.renderBrowse('home');
+  for(const action of ['rank-goods','specials','seckills']){
+    await b.handleAction(action);
+    const html=b.element('browseResult').innerHTML;
+    assert.match(html,/<img[^>]*loading="lazy"[^>]*src="\/uploads\/food-original.jpg"[^>]*alt="招牌饭 &lt;大份&gt;"/);
+    assert.match(html,/暂无图片/);
+    assert.match(html,/data-action="open-store" data-id="1"/);
+    assert.doesNotMatch(html,/src="(?:undefined|null|)"/);
+  }
+});
+
+test('failed shortcuts display a retryable error in the result area',async()=>{
+  const b=browser('0',{onRequest(path){if(path.startsWith('/api/goods/special'))throw new Error('活动服务暂不可用');}});
+  await b.renderBrowse('discover');await b.handleAction('specials');
+  assert.equal(b.element('storeGrid').hidden,true);
+  assert.match(b.element('browseResult').innerHTML,/活动服务暂不可用/);
+  assert.match(b.element('browseResult').innerHTML,/data-action="specials"/);
+});
+
 test('a delayed ranking response cannot write into a different route',async()=>{
   let releaseRank;
   const pendingRank=new Promise(resolve=>{releaseRank=resolve;});
@@ -197,10 +288,11 @@ test('a delayed ranking response cannot write into a different route',async()=>{
   await b.renderBrowse('discover');
   const ranking=b.handleAction('rank-goods','',{isConnected:true});
   await Promise.resolve();
+  const beforeNavigation=b.element('browseResult').innerHTML;
   b.state.page='orders';await b.renderPage();
   releaseRank();await ranking;
   assert.match(b.element('app').innerHTML,/我的订单/);
-  assert.equal(b.element('browseResult').innerHTML,'');
+  assert.equal(b.element('browseResult').innerHTML,beforeNavigation);
 });
 
 test('sidebar collapse preserves the loaded list and exposes accessible icon navigation',async()=>{
