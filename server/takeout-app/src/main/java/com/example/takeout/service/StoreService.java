@@ -152,6 +152,9 @@ public class StoreService {
             if (gift.storeId() != storeId) {
                 throw new BizException(403, "赠品商品不属于该店铺");
             }
+            if (gift.multiSpec()) {
+                throw new BizException("赠品暂不支持多规格商品");
+            }
         } else {
             giftGoodsId = 0;
         }
@@ -298,6 +301,19 @@ public class StoreService {
         }
         if (input.items() == null || input.items().isEmpty()) {
             throw new BizException("套餐必须包含商品");
+        }
+        for (SetmealItem item : input.items()) {
+            if (item == null || item.quantity() <= 0) {
+                throw new BizException("套餐商品数量必须大于 0");
+            }
+            Goods component = goodsDao.findById(item.goodsId())
+                    .orElseThrow(() -> new BizException("套餐商品不存在"));
+            if (component.storeId() != storeId) {
+                throw new BizException(403, "套餐商品不属于该店铺");
+            }
+            if (component.status() != 1 || component.multiSpec()) {
+                throw new BizException("套餐须使用在售的单规格商品");
+            }
         }
         long id = storeDao.insertSetmeal(new Setmeal(0, storeId, name, desc, input.price(), input.originalPrice(),
                 input.image() == null ? "" : input.image(), 1, LocalDateTime.now().format(FMT), input.items()));
@@ -538,6 +554,7 @@ public class StoreService {
         return storeDetail(id);
     }
 
+    @Transactional
     public Store.StoreView updateStore(long ownerId, long storeId, StorePatch patch) {
         Store store = requireOwned(ownerId, storeId);
         // 与创建店铺同口径的有限性校验：NaN 会让所有比较恒为 false，使起送价校验被完全绕过；
@@ -570,6 +587,10 @@ public class StoreService {
                 store.categoryId(), store.categoryIds(), store.ownerId(),
                 patch.status() < 0 ? store.status() : patch.status(), store.recommended(), store.createTime(), nextRadius);
         storeDao.update(updated);
+        if (patch.status() >= 0) {
+            if (patch.status() != 0 && patch.status() != 1) throw new BizException("营业状态无效");
+            storeDao.updateStatus(storeId, patch.status());
+        }
         invalidateStoreAndGoodsCache();
         return storeDetail(storeId);
     }

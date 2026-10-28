@@ -23,13 +23,17 @@ export async function fetchCategories(): Promise<Category[]> {
 }
 
 export async function fetchStores(categoryId?: number, latitude?: number, longitude?: number): Promise<StoreItem[]> {
+  return (await fetchStoresResultApi(categoryId, latitude, longitude)) ?? []
+}
+
+export async function fetchStoresResultApi(categoryId?: number, latitude?: number, longitude?: number): Promise<StoreItem[] | null> {
   const baseUrl: string = categoryId !== undefined && categoryId > 0
     ? `${API_CONFIG.ENDPOINTS['stores']}?categoryId=${categoryId}`
     : API_CONFIG.ENDPOINTS['stores']
   const url: string = appendCoordinates(baseUrl, latitude, longitude)
   const resp: ApiResponse<ServerStore[]> = await get<ServerStore[]>(url)
-  if (resp.code !== 200 || resp.data === null) {
-    return []
+  if (resp.code !== 200 || !Array.isArray(resp.data)) {
+    return null
   }
   return resp.data.map((s: ServerStore) => toStoreItem(s))
 }
@@ -46,9 +50,13 @@ export async function fetchRecommendedStoresApi(maxDistanceKm: number = 2, limit
 }
 
 export async function fetchStoreGoods(storeId: number): Promise<GoodsItem[]> {
+  return (await fetchStoreGoodsResultApi(storeId)) ?? []
+}
+
+export async function fetchStoreGoodsResultApi(storeId: number): Promise<GoodsItem[] | null> {
   const resp: ApiResponse<ServerGoods[]> = await get<ServerGoods[]>(`/api/stores/${storeId}/goods`)
-  if (resp.code !== 200 || resp.data === null) {
-    return []
+  if (resp.code !== 200 || !Array.isArray(resp.data)) {
+    return null
   }
   return resp.data.map((g: ServerGoods) => toGoodsItem(g))
 }

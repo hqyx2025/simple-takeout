@@ -1,21 +1,22 @@
 package com.example.takeout.model;
 
-/**
- * 退款记录（status：PENDING待审批/APPROVED已同意/REJECTED已拒绝/REFUNDED已退款）
- * 数字状态机映射：申请后订单 status=6（退款中）；审批通过后 escrow_status=2 表达退款完成。
- * reasonType 为退款原因枚举 code（见 RefundReason），reason 为用户备注文字。
- */
+import java.math.BigDecimal;
+import java.util.List;
+
+/** 售后事实：金额为元，REFUNDED 才计入退款及商户负担累计。 */
 public record RefundRecord(
-        long id,
-        long orderId,
-        long userId,
-        long merchantId,
-        String reasonType,
-        String reason,
-        double amount,
-        String status,
-        String applyTime,
-        String processTime,
-        String rejectReason
+        long id, long orderId, long userId, long merchantId,
+        String reasonType, String reason, BigDecimal amount, String status,
+        String applyTime, String processTime, String rejectReason,
+        List<String> evidenceImages, List<String> merchantEvidenceImages, String merchantResponse,
+        int appealCount, String appealReason, List<String> appealImages, int originalEscrow, int settledBefore,
+        BigDecimal merchantAmount, BigDecimal platformAmount, String refundTime
 ) {
+    public RefundRecord(long id, long orderId, long userId, long merchantId,
+                        String reasonType, String reason, double amount, String status,
+                        String applyTime, String processTime, String rejectReason) {
+        this(id, orderId, userId, merchantId, reasonType, reason, BigDecimal.valueOf(amount).setScale(2, java.math.RoundingMode.HALF_UP),
+                status, applyTime, processTime, rejectReason, List.of(), List.of(), "", 0, "", List.of(), 0, 0,
+                BigDecimal.ZERO.setScale(2), BigDecimal.ZERO.setScale(2), "");
+    }
 }

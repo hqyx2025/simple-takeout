@@ -36,6 +36,21 @@ public class ExternalPaymentService {
     private final PaymentRecordDao paymentRecordDao;
     private final DomainEventPublisher eventPublisher;
     private TransactionTemplate transactions;
+    private com.example.takeout.service.ExternalRefundAttemptService refundAttempts;
+
+    @Autowired
+    public void configureRefundAttempts(com.example.takeout.service.ExternalRefundAttemptService refundAttempts) {
+        this.refundAttempts = refundAttempts;
+    }
+    private com.example.takeout.service.PromotionService promotions;
+    private com.example.takeout.service.HotDataCacheService cache;
+
+    @Autowired
+    void configureBusinessRules(com.example.takeout.service.PromotionService promotions,
+                                com.example.takeout.service.HotDataCacheService cache) {
+        this.promotions = promotions;
+        this.cache = cache;
+    }
 
     @Autowired
     void configureTransactions(TransactionTemplate transactions) {
@@ -188,8 +203,10 @@ public class ExternalPaymentService {
         }
         if ("CLOSED".equals(payment.status()) || order.status() != 0 || isExpired(order.createTime())) {
             // A late success can race a timeout/other payment. Refund the verified charge with a stable idempotency key.
-            requireGateway(channel).refund(payment.outTradeNo(), refundNo(payment), payment.amount());
+            submitRefund("LATE", payment, 0, refundNo(payment), payment.amount(), notice.providerTransactionId(), null);
             transactionDao.markLateRefunded(payment.id(), notice.providerTransactionId(), now());
+            // The verified charge and its compensating refund are both financial facts.
+            paymentRecordDao.insert(order.id(), order.userId(), order.payAmount(), "PAY", channel, "SUCCESS", now());
             paymentRecordDao.insert(order.id(), order.userId(), order.payAmount(), "REFUND", channel, "SUCCESS", now());
             return NotificationResult.REFUNDED;
         }
@@ -202,6 +219,10 @@ public class ExternalPaymentService {
             throw new SecurityException("Payment attempt was already handled");
         }
         paymentRecordDao.insert(order.id(), order.userId(), order.payAmount(), "PAY", channel, "SUCCESS", now);
+        if (promotions != null) promotions.paid(order.id());
+        if (cache != null) DomainEventPublisher.afterCommit(() -> {
+            for (String pattern : com.example.takeout.service.HotDataCacheService.Keys.STOCK_DEPENDENT_PATTERNS) cache.evictByPattern(pattern);
+        });
         eventPublisher.publish(DomainEventPublisher.ORDER_PAID, order.id(),
                 Map.of("userId", order.userId(), "payAmount", order.payAmount()));
         return NotificationResult.PAID;
@@ -231,14 +252,51 @@ public class ExternalPaymentService {
         transactionDao.markClosed(payment.id());
     }
 
-    /** Refund the original provider charge, using one stable provider refund ID even after a local rollback. */
+    /** Direct compatibility callers still enter the durable cancellation refund protocol. */
     public String refundOriginalPayment(Order order) {
+        return refundOriginalPayment(order, new com.example.takeout.service.ExternalRefundAttemptService.Cancellation(
+                "ADMIN", "PLATFORM_CANCELLED", "平台取消订单", 0, "", 0, 0));
+    }
+
+    public String refundOriginalPayment(Order order, com.example.takeout.service.ExternalRefundAttemptService.Cancellation cancellation) {
         PaymentTransaction payment = transactionDao.findSuccessfulByOrder(order.id()).orElse(null);
         if (payment == null) return PaymentChannels.BALANCE;
         if ("REFUNDED".equals(payment.status())) return payment.channel();
-        requireGateway(payment.channel()).refund(payment.outTradeNo(), refundNo(payment), payment.amount());
+        submitRefund("CANCEL", payment, 0, refundNo(payment), payment.amount(), payment.providerTransactionId(), cancellation);
         transactionDao.markRefunded(payment.id());
         return payment.channel();
+    }
+
+    public String refundOriginalPayment(Order order, BigDecimal amount, long refundId, boolean full) {
+        PaymentTransaction payment = transactionDao.findSuccessfulByOrder(order.id()).orElse(null);
+        if (payment == null) return PaymentChannels.BALANCE;
+        if ("REFUNDED".equals(payment.status())) throw new BizException("原支付已全额退款");
+        if (amount.signum() <= 0 || amount.compareTo(payment.amount()) > 0) throw new BizException("退款金额无效");
+        submitRefund("AFTER_SALES", payment, refundId, "AS" + payment.id() + "R" + refundId,
+                amount, payment.providerTransactionId(), null);
+        if (full) transactionDao.markRefunded(payment.id());
+        return payment.channel();
+    }
+
+    private void submitRefund(String kind, PaymentTransaction payment, long refundId, String number, BigDecimal amount,
+                              String providerId, com.example.takeout.service.ExternalRefundAttemptService.Cancellation cancellation) {
+        PaymentGateway gateway = requireGateway(payment.channel());
+        var attempt = refundAttempts.prepare(kind, payment, refundId, number, amount, providerId, cancellation);
+        if ("REQUESTED".equals(attempt.status())) {
+            gateway.refund(payment.outTradeNo(), number, amount, payment.amount());
+            refundAttempts.confirmed(number);
+        }
+        refundAttempts.doneAfterCommit(number);
+    }
+
+    /** Stored provider identity and amount were verified before the independent LATE intent was written. */
+    public void recoverLateRefund(com.example.takeout.service.ExternalRefundAttemptService.Attempt attempt) {
+        if (!"LATE".equals(attempt.kind())) throw new IllegalArgumentException("Not a late payment refund");
+        transactions.executeWithoutResult(status -> {
+            applyVerifiedNotice(attempt.channel(), new PaymentGateway.VerifiedNotice(attempt.outTradeNo(),
+                    attempt.providerTransactionId(), amountFen(attempt.originalAmount()), "CNY", true));
+            refundAttempts.doneAfterCommit(attempt.refundNo());
+        });
     }
 
     public boolean hasPendingPayment(long orderId) {

@@ -95,6 +95,26 @@ public class OrderService {
     private final DomainEventPublisher eventPublisher;
     private final ObjectProvider<StringRedisTemplate> redisProvider;
     private TransactionTemplate transactions;
+    private PromotionService promotions;
+    private OrderOperationsService operations;
+    @Autowired
+    private ExternalRefundAttemptService refundAttempts;
+
+    void configureRefundAttempts(ExternalRefundAttemptService attempts) { this.refundAttempts = attempts; }
+
+    private void requireNoExternalCancellation(long orderId) {
+        if (refundAttempts != null) refundAttempts.requireNoCancellation(orderId);
+    }
+
+    private Optional<ExternalRefundAttemptService.Attempt> pendingExternalCancellation(long orderId) {
+        return refundAttempts == null ? Optional.empty() : refundAttempts.pendingCancellation(orderId);
+    }
+
+    @Autowired
+    void configureBusinessRules(PromotionService promotions, OrderOperationsService operations) {
+        this.promotions = promotions;
+        this.operations = operations;
+    }
 
     @Autowired
     void configureTransactions(TransactionTemplate transactions) {
@@ -310,6 +330,9 @@ public class OrderService {
             Setmeal setmeal = storeDao.findSetmeal(so.setmealId()).orElseThrow(() -> new BizException("套餐不存在"));
             resolvedSetmeals.put(so.setmealId(), setmeal);
             for (SetmealItem component : setmeal.items()) {
+                if (component == null || component.quantity() <= 0) {
+                    throw new BizException("套餐配置错误，请联系商家");
+                }
                 goodsIds.add(component.goodsId());
             }
         }
@@ -385,6 +408,18 @@ public class OrderService {
             long unitCents = cents / totalQty;
             long remainder = cents % totalQty;
             for (SetmealItem si : setmeal.items()) {
+                // 套餐同样必须校验当前商品事实，不能通过旧配置跨店扣库或绕过 SKU。
+                Goods component = goodsDao.findById(si.goodsId())
+                        .orElseThrow(() -> new BizException("套餐商品已不存在，请联系商家"));
+                if (component.storeId() != storeId) {
+                    throw new BizException("套餐包含其他店铺商品");
+                }
+                if (component.status() != 1) {
+                    throw new BizException("套餐商品已下架：" + component.name());
+                }
+                if (component.multiSpec()) {
+                    throw new BizException("套餐暂不支持多规格商品，请联系商家调整套餐");
+                }
                 int extra = (int) Math.min(remainder, si.quantity());
                 remainder -= extra;
                 // 每个组件最多两行，同价数量合并，避免按购买件数展开。
@@ -428,37 +463,25 @@ public class OrderService {
             discount = coupon.amount();
             appliedCoupon = coupon;
         }
-        // ===== 营销活动：折扣 / 新客立减 / 满赠（无活动时为恒等，不改变既有金额口径）=====
-        double discountedGoodsAmount = goodsAmount;
-        for (MarketingActivity activity : activities) {
-            switch (activity.type()) {
-                case "DISCOUNT" -> {
-                    if (activity.discountRate() > 0 && activity.discountRate() < 1) {
-                        discountedGoodsAmount = BigDecimal.valueOf(discountedGoodsAmount)
-                                .multiply(BigDecimal.valueOf(activity.discountRate()))
-                                .setScale(2, RoundingMode.HALF_UP).doubleValue();
-                    }
+        // Fixed order: best rate -> first successful payment at this store -> coupon.
+        PromotionService.Quote pricing = promotions == null
+                ? PromotionService.calculate(goodsTotal, activities, false)
+                : promotions.quote(userId, storeId, goodsTotal, activities);
+        double discountedGoodsAmount = pricing.goodsAfterRate().doubleValue();
+        for (MarketingActivity activity : activities.stream().sorted(java.util.Comparator.comparingLong(MarketingActivity::id)).toList()) {
+            if ("GIFT".equals(activity.type()) && activity.giftGoodsId() > 0
+                    && discountedGoodsAmount >= activity.threshold()) {
+                Goods gift = goodsDao.findById(activity.giftGoodsId()).orElse(null);
+                boolean already = normalizedItems.stream().anyMatch(i -> i.goodsId() == activity.giftGoodsId());
+                if (gift != null && gift.storeId() == storeId && gift.status() == 1 && !gift.multiSpec()
+                        && gift.stock() > 0 && !already) {
+                    normalizedItems.add(new Order.OrderItem(gift.id(), gift.name(), 0, 1, gift.image(), 0, "", 0));
+                    holds.add(new StockHold(gift.id(), 0, 1, 0));
                 }
-                case "NEW_USER" -> {
-                    if (activity.reduceAmount() > 0 && !orderDao.hasAnyOrder(userId)) {
-                        discount += activity.reduceAmount();
-                    }
-                }
-                case "GIFT" -> {
-                    if (activity.giftGoodsId() > 0 && discountedGoodsAmount >= activity.threshold()) {
-                        Goods gift = goodsDao.findById(activity.giftGoodsId()).orElse(null);
-                        boolean already = normalizedItems.stream().anyMatch(i -> i.goodsId() == activity.giftGoodsId());
-                        if (gift != null && gift.storeId() == storeId && gift.status() == 1 && gift.stock() > 0 && !already) {
-                            normalizedItems.add(new Order.OrderItem(gift.id(), gift.name(), 0, 1, gift.image(), 0, "", 0));
-                            holds.add(new StockHold(gift.id(), 0, 1, 0));
-                        }
-                    }
-                }
-                default -> { }
             }
         }
-        discount = BigDecimal.valueOf(discount).add(BigDecimal.valueOf(goodsAmount))
-                .subtract(BigDecimal.valueOf(discountedGoodsAmount)).setScale(2, RoundingMode.HALF_UP).doubleValue();
+        BigDecimal couponDiscount = BigDecimal.valueOf(discount);
+        discount = pricing.discount(goodsTotal, couponDiscount).doubleValue();
         double payAmount = BigDecimal.valueOf(goodsAmount).add(BigDecimal.valueOf(deliveryFee))
                 .subtract(BigDecimal.valueOf(discount)).setScale(2, RoundingMode.HALF_UP).doubleValue();
         if (payAmount < 0) {
@@ -497,14 +520,15 @@ public class OrderService {
                 appliedCoupon == null ? 0 : appliedCoupon.id(), normalizedDeliveryType);
         long id = insertOrderWithUniqueRetry(order);
         orderDao.insertItems(id, normalizedItems);
+        if (promotions != null) promotions.bind(userId, storeId, id, goodsTotal, couponDiscount, pricing);
+        if (operations != null) operations.snapshot(id, storeId);
         // 一人一单：下单登记秒杀参与记录，唯一键(user_id, seckill_id)拦截跨单重复；重复则回滚整单
         for (StockHold hold : holds) {
             if (hold.seckillId() > 0 && !seckillDao.joinOnce(userId, hold.seckillId(), id, now)) {
                 throw new BizException("该秒杀商品每人限购一次，请勿重复下单");
             }
         }
-        storeDao.updateMonthlySales(storeId, 1);
-        // 下单扣减了库存与秒杀名额，且店铺月销量变化会影响榜单，需失效相关展示缓存
+        // 浏览销量按真实支付订单派生；待付款不制造月销量。
         invalidateStockDependentCache();
         // 领域事件：与订单同事务写入 Outbox，提交后由中继投递到 Redis Stream
         eventPublisher.publish(DomainEventPublisher.ORDER_CREATED, id,
@@ -604,6 +628,8 @@ public class OrderService {
             throw new BizException("余额不足，请先充值");
         }
         paymentRecordDao.insert(orderId, userId, order.payAmount(), "PAY", PaymentChannels.BALANCE, "SUCCESS", now);
+        if (promotions != null) promotions.paid(orderId);
+        invalidateStockDependentCache();
         // 支付成功后才发出事件：条件更新失败会抛异常回滚，不会产生「假支付」事件
         eventPublisher.publish(DomainEventPublisher.ORDER_PAID, orderId,
                 Map.of("userId", userId, "payAmount", order.payAmount()));
@@ -655,6 +681,7 @@ public class OrderService {
             return false;
         }
         rollbackStock(order);
+        if (promotions != null) promotions.releaseUnpaid(order.id());
         if (order.couponId() > 0) {
             couponDao.release(order.couponId(), LocalDateTime.now().format(FMT));
         }
@@ -735,7 +762,7 @@ public class OrderService {
                 .filter(order -> order.status() != 0)
                 .sorted((a, b) -> Long.compare(b.id(), a.id()))
                 // 商户需要看到是谁接的单：骑手抢单后商户不再负责配送，界面上要能显示骑手并禁用商户侧流转按钮
-                .map(this::toViewWithRider)
+                .map(order -> toViewWithRider(order, 1))
                 .toList();
     }
 
@@ -760,8 +787,8 @@ public class OrderService {
     public Order.OrderView adminOrderView(OrderDao.AdminOrderRow row) {
         Order order = row.order();
         PayDeadline deadline = payDeadline(order);
-        return order.toView(parseItems(order.items()), parseAddress(order.address()), deadline.text(),
-                deadline.epochMs(), row.riderName(), row.riderPhone(), row.readyTime() == null ? "" : row.readyTime());
+        return withCapabilities(order, order.toView(parseItems(order.items()), parseAddress(order.address()), deadline.text(),
+                deadline.epochMs(), row.riderName(), row.riderPhone(), row.readyTime() == null ? "" : row.readyTime()), 2);
     }
 
     public Order.OrderView orderDetail(long requesterId, int role, long id) {
@@ -769,7 +796,7 @@ public class OrderService {
         if (order.userId() != requesterId && (role != 1 || !storeDao.hasMerchantAccess(requesterId, order.storeId()))) {
             throw new BizException(403, "无权查看该订单");
         }
-        return withPaymentDetails(order, toViewWithRider(order));
+        return role == 0 ? withPaymentDetails(order, toViewWithRider(order)) : toViewWithRider(order, role);
     }
 
     /** 用户主动查单只接受支付平台的签名响应，仍不能由客户端声明支付成功。 */
@@ -800,6 +827,8 @@ public class OrderService {
         if (order.userId() != userId) {
             throw new BizException(403, "无权操作该订单");
         }
+        var pending = pendingExternalCancellation(orderId);
+        if (pending.isPresent()) return recoverCancellation(pending.get());
         return cancelOrder(order, "USER", "USER_CANCELLED", "用户取消订单", 1, userId);
     }
 
@@ -807,6 +836,8 @@ public class OrderService {
     @Transactional
     public Order.OrderView cancelOrderByAdmin(long orderId) {
         Order order = orderDao.findByIdForUpdate(orderId).orElseThrow(() -> new BizException("订单不存在"));
+        var pending = pendingExternalCancellation(orderId);
+        if (pending.isPresent()) return recoverCancellation(pending.get());
         return cancelOrder(order, "ADMIN", "PLATFORM_CANCELLED", "平台取消订单", 3, 0);
     }
 
@@ -836,9 +867,13 @@ public class OrderService {
                 reasonCode, reason, operatorId)) {
             throw new BizException("订单状态已变化，请刷新后重试");
         }
-        // escrow 条件更新成功才回滚库存（同一事务内，防重复回滚）
-        rollbackStock(order);
-        refundOrderPayment(order);
+        // 接单前恢复可售库存；制作/配送的餐品已耗用，不得重新出售。
+        if (order.status() <= 1) rollbackStock(order);
+        else invalidateStockDependentCache();
+        if (!"USER".equals(source) && order.couponId() > 0) {
+            couponDao.release(order.couponId(), LocalDateTime.now().format(FMT));
+        }
+        refundOrderPayment(order, new ExternalRefundAttemptService.Cancellation(source, reasonCode, reason, operatorId, "", 0, 0));
         eventPublisher.publish(DomainEventPublisher.ORDER_CANCELLED, orderId,
                 Map.of("userId", order.userId(), "reason", reason + "，已按原支付渠道退款"));
         return orderDetail(orderId);
@@ -852,6 +887,14 @@ public class OrderService {
         if (!storeDao.hasMerchantAccess(merchantId, order.storeId())) {
             throw new BizException(403, "无权操作该订单");
         }
+        var pending = pendingExternalCancellation(orderId);
+        if (pending.isPresent()) return recoverCancellation(pending.get());
+        return merchantRejectInternal(order, merchantId, reasonCode, note, goodsId, specId);
+    }
+
+    private Order.OrderView merchantRejectInternal(Order order, long merchantId, String reasonCode, String note,
+                                                  Long goodsId, Long specId) {
+        long orderId = order.id();
         if (order.status() == 5 && "MERCHANT".equals(order.cancelSource())) {
             return orderDetail(orderId);
         }
@@ -889,7 +932,8 @@ public class OrderService {
         if (order.couponId() > 0) {
             couponDao.release(order.couponId(), now);
         }
-        refundOrderPayment(order);
+        refundOrderPayment(order, new ExternalRefundAttemptService.Cancellation("MERCHANT", rejectReason.name(), reason,
+                merchantId, safeNote, rejectedGoodsId, rejectedSpecId));
         if (unavailableItem != null) {
             disableUnavailableSku(order.storeId(), unavailableItem);
         }
@@ -951,85 +995,71 @@ public class OrderService {
         }
     }
 
+    /** Recovery uses persisted authority and reason, without re-authorizing a possibly removed employee. */
+    @Transactional
+    public Order.OrderView recoverCancellation(ExternalRefundAttemptService.Attempt attempt) {
+        if (!"CANCEL".equals(attempt.kind())) throw new IllegalArgumentException("Not a cancellation intent");
+        Order order = orderDao.findByIdForUpdate(attempt.orderId()).orElseThrow(() -> new BizException("订单不存在"));
+        if (order.status() == 5 && order.escrowStatus() == 2) {
+            refundAttempts.doneAfterCommit(attempt.refundNo());
+            return orderDetail(order.id());
+        }
+        var original = refundAttempts.cancellation(attempt);
+        if ("MERCHANT".equals(original.source())) return merchantRejectInternal(order, original.operatorId(),
+                original.reasonCode(), original.note(), original.goodsId(), original.specId());
+        return cancelOrder(order, original.source(), original.reasonCode(), original.reason(),
+                "USER".equals(original.source()) ? 1 : 3, original.operatorId());
+    }
+
     /** All refund callers share the original payment channel; external charges are never credited as wallet balance. */
     public void refundOrderPayment(Order order) {
+        refundOrderPayment(order, new ExternalRefundAttemptService.Cancellation("ADMIN", "PLATFORM_CANCELLED", "平台取消订单", 0, "", 0, 0));
+    }
+
+    private void refundOrderPayment(Order order, ExternalRefundAttemptService.Cancellation cancellation) {
         String channel = externalPaymentService == null ? PaymentChannels.BALANCE
-                : externalPaymentService.refundOriginalPayment(order);
+                : externalPaymentService.refundOriginalPayment(order, cancellation);
         if (PaymentChannels.BALANCE.equals(channel)) userDao.addBalance(order.userId(), order.payAmount());
         paymentRecordDao.insert(order.id(), order.userId(), order.payAmount(), "REFUND", channel, "SUCCESS",
                 LocalDateTime.now().format(FMT));
     }
 
-    /**
-     * 用户申请退款（退款审批流程，见大纲 7.11/9.7/10.7）
-     * 条件：订单已送达（status=4）、托管未结算（escrow=0）、未评价；申请后订单进入退款中（status=6）。
-     */
-    /** 兼容旧客户端：只传文本原因，归入 OTHER。 */
+    /** 售后规则统一由 AfterSalesService 执行，所有客户端共享同一政策。 */
+    @Autowired
+    private AfterSalesService afterSalesService;
+
+    void configureAfterSales(AfterSalesService service) { this.afterSalesService = service; }
+
     @Transactional
     public RefundRecord applyRefund(long userId, long orderId, String reason) {
         return applyRefund(userId, orderId, null, reason);
     }
 
-    /** 结构化退款：reasonType 为枚举 code（显式非法值直接拒绝），reason 为可选备注。 */
     @Transactional
     public RefundRecord applyRefund(long userId, long orderId, String reasonType, String reason) {
         return applyRefund(userId, orderId, reasonType, reason, null);
     }
 
     public List<RefundRecord> refundHistory(long userId, long orderId) {
-        Order order = requireOrder(orderId);
-        if (order.userId() != userId) throw new BizException(403, "无权查看该订单");
-        return refundDao.listByOrder(orderId);
+        return afterSalesService.history(userId, orderId);
+    }
+
+    @Transactional
+    public RefundRecord applyRefund(long userId, long orderId, String reasonType, String reason, String idempotencyKey) {
+        return applyRefund(userId, orderId, reasonType, reason, idempotencyKey, null, List.of());
     }
 
     @Transactional
     public RefundRecord applyRefund(long userId, long orderId, String reasonType, String reason,
-                                    String idempotencyKey) {
-        Order order = orderDao.findByIdForUpdate(orderId).orElseThrow(() -> new BizException("订单不存在"));
-        if (order.userId() != userId) {
-            throw new BizException(403, "无权操作该订单");
-        }
-        String requestKey = idempotencyKey == null || idempotencyKey.isBlank() ? null
-                : requireMaxLength(idempotencyKey.trim(), 128, "退款请求标识");
-        if (requestKey != null) {
-            Optional<RefundRecord> replay = refundDao.findByRequestKey(orderId, requestKey);
-            if (replay.isPresent()) return replay.get();
-        }
-        Optional<RefundRecord> pending = refundDao.findPending(orderId);
-        if (pending.isPresent()) {
-            if (requestKey != null) refundDao.bindApplyRequest(orderId, requestKey, pending.get().id());
-            return pending.get();
-        }
-        RefundReason type = RefundReason.fromCode(reasonType);
-        if (type == null) {
-            throw new BizException("退款原因类型无效");
-        }
-        String safeReason = requireMaxLength(reason == null ? "" : reason.trim(), 255, "退款原因");
-        if (type == RefundReason.OTHER && safeReason.isBlank()) {
-            throw new BizException("选择其他原因时，请说明具体问题");
-        }
-        if (order.status() != 4) {
-            throw new BizException("仅已送达订单可申请退款");
-        }
-        if (order.escrowStatus() != 0) {
-            throw new BizException("订单已结算或已退款，不能申请退款");
-        }
-        if (order.reviewed() == 1) {
-            throw new BizException("订单已评价，不能申请退款");
-        }
-        // 条件流转 4→6（同时要求 escrow=0）：与「确认收货」并发时只有一方能成功，
-        // 成功后才插入申请记录，重复点击/网络重放不会产生第二条 PENDING。
-        if (!orderDao.markRefunding(orderId)) {
-            throw new BizException("订单资金已处理或状态已变化，请刷新后重试");
-        }
-        Store store = storeDao.findById(order.storeId()).orElseThrow(() -> new BizException("店铺不存在"));
-        String now = LocalDateTime.now().format(FMT);
-        long id = requestKey == null
-                ? refundDao.insert(orderId, userId, store.ownerId(), type.code(), safeReason, order.payAmount(), now)
-                : refundDao.insert(orderId, userId, store.ownerId(), type.code(), safeReason, order.payAmount(), now, requestKey);
-        if (requestKey != null) refundDao.bindApplyRequest(orderId, requestKey, id);
-        return refundDao.findById(id).orElseThrow(() -> new BizException("退款申请失败"));
+                                    String idempotencyKey, BigDecimal amount, List<String> evidenceImages) {
+        return afterSalesService.apply(userId, orderId, reasonType, reason, idempotencyKey, amount, evidenceImages);
     }
+
+    @Transactional
+    public RefundRecord appealRefund(long userId, long orderId, long refundId, String reason, List<String> evidenceImages) {
+        return afterSalesService.appeal(userId, orderId, refundId, reason, evidenceImages);
+    }
+
 
     /** 回滚订单商品库存与秒杀名额（取消/退款时调用，必须在条件更新成功后的同一事务内）。 */
     void rollbackStock(Order order) {
@@ -1068,8 +1098,10 @@ public class OrderService {
         return null;
     }
 
+    @Transactional
     public Order.OrderView merchantFlow(long ownerId, long orderId, String action) {
-        Order order = requireOrder(orderId);
+        Order order = orderDao.findByIdForUpdate(orderId).orElseThrow(() -> new BizException("订单不存在"));
+        requireNoExternalCancellation(orderId);
         if (!storeDao.hasMerchantAccess(ownerId, order.storeId())) {
             throw new BizException(403, "无权操作该订单");
         }
@@ -1088,16 +1120,22 @@ public class OrderService {
             case "deliver" -> {         // 出餐配送：2 → 3（仅未分配骑手的订单，避免与骑手流程冲突）
                 requireStatus(order, 2);
                 requireNoRider(orderId);
+                if (operations != null) {
+                    operations.requireMode(orderId, "MERCHANT");
+                    if (orderDao.findReadyTime(orderId).isBlank()) throw new BizException("请先确认出餐");
+                }
                 requireStatusUpdated(orderDao.merchantDeliver(orderId, now));
             }
             case "complete" -> {        // 确认送达：3 → 4（仅未分配骑手的订单）
                 requireStatus(order, 3);
                 requireNoRider(orderId);
+                if (operations != null) operations.requireMode(orderId, "MERCHANT");
                 requireStatusUpdated(orderDao.merchantComplete(orderId, now));
             }
             default -> throw new BizException("不支持的操作：" + action);
         }
-        return orderDetail(orderId);
+        Order latest = requireOrder(orderId);
+        return toViewWithRider(latest, 1);
     }
 
     // ============ 四端改造：骑手配送 ============
@@ -1113,8 +1151,12 @@ public class OrderService {
             return List.of();
         }
         return orderDao.listRiderPool().stream()
+                .filter(order -> operations == null || "RIDER".equals(operations.mode(order.id())))
                 .filter(order -> riderCanServe(rider, order.storeId()))
-                .map(order -> toView(order).forRiderPool())
+                .map(order -> {
+                    Order.OrderView view = toView(order, 3);
+                    return view.forRiderPool().withCapabilities(view.capabilities());
+                })
                 .toList();
     }
 
@@ -1148,7 +1190,9 @@ public class OrderService {
     @Transactional
     public Order.OrderView riderGrab(long riderId, long orderId) {
         Rider rider = requireActiveRider(riderId);
-        Order order = orderDao.findById(orderId).orElseThrow(() -> new BizException("订单不存在"));
+        Order order = orderDao.findByIdForUpdate(orderId).orElseThrow(() -> new BizException("订单不存在"));
+        requireNoExternalCancellation(orderId);
+        if (operations != null) operations.requireMode(orderId, "RIDER");
         // 抢单也要过半径判定：否则用订单 id 直接调用接口就能绕开派单范围
         if (!riderCanServe(rider, order.storeId())) {
             throw new BizException("该订单不在您的配送范围内，请调整接单范围或接单位置");
@@ -1163,6 +1207,9 @@ public class OrderService {
     @Transactional
     public Order.OrderView riderPickup(long riderId, long orderId) {
         requireActiveRider(riderId);
+        orderDao.findByIdForUpdate(orderId).orElseThrow(() -> new BizException("订单不存在"));
+        requireNoExternalCancellation(orderId);
+        if (operations != null) operations.requireMode(orderId, "RIDER");
         String now = LocalDateTime.now().format(FMT);
         if (!orderDao.riderPickup(orderId, riderId, now)) {
             throw new BizException("无法取餐：请确认已接单且商家已出餐");
@@ -1174,6 +1221,9 @@ public class OrderService {
     @Transactional
     public Order.OrderView riderDeliver(long riderId, long orderId) {
         requireActiveRider(riderId);
+        orderDao.findByIdForUpdate(orderId).orElseThrow(() -> new BizException("订单不存在"));
+        requireNoExternalCancellation(orderId);
+        if (operations != null) operations.requireMode(orderId, "RIDER");
         String now = LocalDateTime.now().format(FMT);
         if (!orderDao.riderDeliver(orderId, riderId, now)) {
             throw new BizException("无法送达：请确认已取餐且由你配送");
@@ -1201,8 +1251,8 @@ public class OrderService {
     }
 
     private Order.OrderView toRiderView(Order order) {
-        Order.OrderView view = toView(order);
-        return order.status() == 2 || order.status() == 3 ? view : view.forRiderHistory();
+        Order.OrderView view = toView(order, 3);
+        return order.status() == 2 || order.status() == 3 ? view : view.forRiderHistory().withCapabilities(view.capabilities());
     }
 
     private void validatePageStatus(Integer status) {
@@ -1213,8 +1263,8 @@ public class OrderService {
 
     private Order.OrderView orderViewWithRider(Order order, String riderName, String riderPhone, String readyTime) {
         PayDeadline deadline = payDeadline(order);
-        return order.toView(parseItems(order.items()), parseAddress(order.address()), deadline.text(),
-                deadline.epochMs(), riderName, riderPhone, readyTime == null ? "" : readyTime);
+        return withCapabilities(order, order.toView(parseItems(order.items()), parseAddress(order.address()), deadline.text(),
+                deadline.epochMs(), riderName, riderPhone, readyTime == null ? "" : readyTime), 1);
     }
 
     public record OrderPage(List<Order.OrderView> list, int total, int page, int pageSize, boolean hasMore) {
@@ -1237,8 +1287,9 @@ public class OrderService {
     }
 
     private double merchantSettlementAmount(Order order) {
-        return BigDecimal.valueOf(order.payAmount()).subtract(BigDecimal.valueOf(order.deliveryFee()))
-                .max(BigDecimal.ZERO).setScale(2,RoundingMode.HALF_UP).doubleValue();
+        BigDecimal original = BigDecimal.valueOf(order.payAmount()).subtract(BigDecimal.valueOf(order.deliveryFee())).max(BigDecimal.ZERO);
+        BigDecimal refunded = afterSalesService == null ? BigDecimal.ZERO : afterSalesService.merchantRefunded(order);
+        return original.subtract(refunded).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP).doubleValue();
     }
 
     @Transactional
@@ -1255,7 +1306,8 @@ public class OrderService {
         Store store = storeDao.findById(order.storeId()).orElseThrow(() -> new BizException("店铺不存在"));
         User merchant = userDao.findById(store.ownerId()).orElseThrow(() -> new BizException("商户不存在"));
         double settled = merchantSettlementAmount(order);
-        userDao.addBalance(merchant.id(), settled);
+        if (afterSalesService != null) afterSalesService.payMerchantSettlement(order, BigDecimal.valueOf(settled));
+        else userDao.addBalance(merchant.id(), settled);
         eventPublisher.publish(DomainEventPublisher.ORDER_SETTLED, order.id(),
                 Map.of("merchantId", merchant.id(), "amount", settled, "automatic", automatic));
     }
@@ -1440,11 +1492,17 @@ public class OrderService {
         throw new BizException("当前仅支持立即配送，暂不支持预约送达");
     }
 
-    private Order.OrderView toView(Order order) {
+    private Order.OrderView withCapabilities(Order order, Order.OrderView view, int role) {
+        return operations == null ? view : view.withCapabilities(operations.capabilities(order, view.readyTime(), role));
+    }
+
+    private Order.OrderView toView(Order order) { return toView(order, 0); }
+
+    private Order.OrderView toView(Order order, int role) {
         List<Order.OrderItem> items = parseItems(order.items());
         Order.AddressInfo address = parseAddress(order.address());
         var deadline = payDeadline(order);
-        return order.toView(items, address, deadline.text, deadline.epochMs, "", "", "");
+        return withCapabilities(order, order.toView(items, address, deadline.text, deadline.epochMs, "", "", orderDao.findReadyTime(order.id())), role);
     }
 
     /** 待付款订单的支付截止时间（前端倒计时用）；非待付款返回空串和0。 */
@@ -1465,7 +1523,9 @@ public class OrderService {
     }
 
     /** 订单详情视图：附带骑手姓名/电话（未分配骑手时为空）与出餐时间（未出餐为空）。 */
-    private Order.OrderView toViewWithRider(Order order) {
+    private Order.OrderView toViewWithRider(Order order) { return toViewWithRider(order, 0); }
+
+    private Order.OrderView toViewWithRider(Order order, int role) {
         List<Order.OrderItem> items = parseItems(order.items());
         Order.AddressInfo address = parseAddress(order.address());
         String riderName = "";
@@ -1481,8 +1541,8 @@ public class OrderService {
             }
         }
         var deadline = payDeadline(order);
-        return order.toView(items, address, deadline.text, deadline.epochMs, riderName, riderPhone,
-                orderDao.findReadyTime(order.id()));
+        return withCapabilities(order, order.toView(items, address, deadline.text, deadline.epochMs, riderName, riderPhone,
+                orderDao.findReadyTime(order.id())), role);
     }
 
     private List<Order.OrderItem> parseItems(String json) {

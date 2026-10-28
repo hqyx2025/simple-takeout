@@ -36,13 +36,14 @@ class GoodsDaoAdminPagingSqlTest {
         ArgumentCaptor<Object[]> args = ArgumentCaptor.forClass(Object[].class);
         verify(jdbc).query(sql.capture(), any(RowMapper.class), args.capture());
         assertTrue(sql.getValue().endsWith("ORDER BY g.id DESC LIMIT ? OFFSET ?"), "翻页 SQL 缺 LIMIT/OFFSET：" + sql.getValue());
-        // 参数顺序：keyword 两次（商品名/店铺名）→ status → limit → offset
+        // 同一个统计时刻双传 → keyword 两次 → status → limit → offset。
         Object[] a = args.getValue();
-        assertEquals("%面%", a[0]);
-        assertEquals("%面%", a[1]);
-        assertEquals(1, a[2]);
-        assertEquals(50, a[3]);
-        assertEquals(100, a[4]);
+        assertEquals(a[0], a[1]);
+        assertEquals("%面%", a[2]);
+        assertEquals("%面%", a[3]);
+        assertEquals(1, a[4]);
+        assertEquals(50, a[5]);
+        assertEquals(100, a[6]);
     }
 
     @Test

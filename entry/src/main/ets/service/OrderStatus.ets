@@ -1,20 +1,8 @@
-/** 订单状态：0待付款、1待接单、2制作中、3配送中、4已完成、5已取消、6退款中。 */
-export function canTransitionOrderStatus(from: number, to: number): boolean {
-  if (from === 0) {
-    return to === 1 || to === 5 || to === 6
-  }
-  if (from === 1) {
-    return to === 2 || to === 5
-  }
-  if (from === 2) {
-    return to === 3 || to === 5
-  }
-  if (from === 3) {
-    return to === 4
-  }
-  return false
-}
+import { OrderActionSource } from '../model/Models'
 
-export function getOrderStatusSequence(): number[] {
-  return [0, 1, 2, 3, 4]
+export function canOrderAction(order: OrderActionSource, action: string, legacy: boolean): boolean {
+  if (order.capabilities === undefined) { return legacy }
+  if (order.capabilities === null || typeof order.capabilities !== 'object' || Array.isArray(order.capabilities)) { return false }
+  const actions: string[] = order.capabilities.allowedActions
+  return Array.isArray(actions) && actions.every((item: string) => typeof item === 'string') && actions.includes(action)
 }

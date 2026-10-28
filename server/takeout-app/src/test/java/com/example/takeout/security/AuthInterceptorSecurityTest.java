@@ -43,6 +43,25 @@ class AuthInterceptorSecurityTest {
         }
     }
 
+    @Test
+    void operationalRolesCannotUseCustomerOrderMutationsButMerchantDetailRemainsAvailable() {
+        Claims claims = mock(Claims.class);
+        when(jwtUtil.parseToken("token")).thenReturn(claims);
+        when(jwtUtil.getUserId(claims)).thenReturn(1L);
+        for (int role : new int[]{1, 2, 3}) {
+            when(jwtUtil.getRole(claims)).thenReturn(role);
+            when(userDao.findById(1L)).thenReturn(Optional.of(new User(1, "账号", "", "13800138000", "", role, 0, "now")));
+            MockHttpServletRequest write = new MockHttpServletRequest("POST", "/api/orders");
+            write.addHeader("Authorization", "Bearer token");
+            assertEquals(403, assertThrows(BizException.class, () -> interceptor.preHandle(write, mock(HttpServletResponse.class), new Object())).getCode());
+            if (role == 1) {
+                MockHttpServletRequest detail = new MockHttpServletRequest("GET", "/api/orders/12");
+                detail.addHeader("Authorization", "Bearer token");
+                assertTrue(interceptor.preHandle(detail, mock(HttpServletResponse.class), new Object()));
+            }
+        }
+    }
+
     private HttpServletRequest bearerRequest(String token) {
         HttpServletRequest request = mock(HttpServletRequest.class);
         when(request.getMethod()).thenReturn("GET");

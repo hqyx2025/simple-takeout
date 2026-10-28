@@ -1,6 +1,6 @@
 
 
-import { RefundRecord, AdminOperationLog, SetmealOrder } from '../Models'
+import { OrderCapabilities, RefundRecord, AdminOperationLog, SetmealOrder } from '../Models'
 
 import { AssistantReply } from '../../service/api/AssistantApi'
 
@@ -129,6 +129,7 @@ export interface ServerAddressInfo {
 }
 
 export interface ServerOrder {
+  capabilities?: OrderCapabilities
   id: number
   orderNo: string
   userId: number
@@ -607,6 +608,8 @@ export interface GoodsSpecsRequest {
 }
 
 export interface RefundRequest {
+  amount?: number
+  evidenceImages?: string[]
   reasonType: string
   reason: string
   idempotencyKey?: string

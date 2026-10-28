@@ -42,8 +42,15 @@ function readRouterPageName(): string {
 // 注册给日志服务：每条日志写之前实时解析页面标识（点击/操作日志因此自动带上页面）。
 setPageResolver((): string => readRouterPageName())
 
+export interface RouterParamsCompat {
+  orderId?: number
+  storeId?: number
+  canReport?: boolean
+}
+
 export interface RouterOptionsCompat {
   url: string
+  params?: RouterParamsCompat
 }
 
 export interface ToastOptionsCompat {
@@ -51,7 +58,7 @@ export interface ToastOptionsCompat {
   duration?: number
 }
 
-export function navigate(url: string): void {
+export function navigate(url: string, params?: RouterParamsCompat): void {
   const context: UIContext | undefined = resolveUiContext()
   if (context === undefined) {
     return
@@ -61,7 +68,7 @@ export function navigate(url: string): void {
     return
   }
   try {
-    context.getRouter().pushUrl({ url })
+    context.getRouter().pushUrl({ url, params })
     setCurrentPage(url)
   } catch (_) {
     // 页面销毁或路由栈异常时忽略导航请求，避免影响当前页面生命周期。
@@ -107,18 +114,23 @@ export function showToast(message: string, duration?: number): void {
 }
 
 class RouterCompat {
+  getParams(): RouterParamsCompat | undefined {
+    const context: UIContext | undefined = resolveUiContext()
+    return context?.getRouter().getParams() as RouterParamsCompat | undefined
+  }
+
   pushUrl(options: RouterOptionsCompat): void {
-    navigate(options.url)
+    navigate(options.url, options.params)
   }
 
   replaceUrl(options: RouterOptionsCompat): void {
     const context: UIContext | undefined = resolveUiContext()
     if (context !== undefined) {
       try {
-        context.getRouter().replaceUrl({ url: options.url })
+        context.getRouter().replaceUrl({ url: options.url, params: options.params })
         setCurrentPage(options.url)
       } catch (_) {
-        navigate(options.url)
+        navigate(options.url, options.params)
       }
     }
   }

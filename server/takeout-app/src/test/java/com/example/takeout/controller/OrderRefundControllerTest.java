@@ -49,11 +49,25 @@ class OrderRefundControllerTest {
     }
 
     @Test
+    void partialRefundAndAppealPassExactAmountAndEvidence() throws Exception {
+        mvc.perform(post("/api/orders/7/refund").requestAttr("userId", 2L).requestAttr("role", 0)
+                        .contentType("application/json")
+                        .content("{\"reasonType\":\"QUALITY_ISSUE\",\"reason\":\"餐损\",\"amount\":2.25,\"evidenceImages\":[\"/uploads/food.jpg\"]}"))
+                .andExpect(status().isOk());
+        verify(orders).applyRefund(2, 7, "QUALITY_ISSUE", "餐损", null,
+                new java.math.BigDecimal("2.25"), List.of("/uploads/food.jpg"));
+        mvc.perform(post("/api/orders/7/refunds/9/appeal").requestAttr("userId", 2L).requestAttr("role", 0)
+                        .contentType("application/json").content("{\"reason\":\"补充证据\",\"evidenceImages\":[]}"))
+                .andExpect(status().isOk());
+        verify(orders).appealRefund(2, 7, 9, "补充证据", List.of());
+    }
+
+    @Test
     void refundSubmissionPassesOptionalKeyAndIgnoresForgedOwner() throws Exception {
         mvc.perform(post("/api/orders/7/refund").requestAttr("userId", 2L).requestAttr("role", 0)
                         .contentType("application/json")
                         .content("{\"userId\":99,\"reasonType\":\"OTHER\",\"reason\":\"餐损\",\"idempotencyKey\":\"refund-7\"}"))
                 .andExpect(status().isOk());
-        verify(orders).applyRefund(2, 7, "OTHER", "餐损", "refund-7");
+        verify(orders).applyRefund(2, 7, "OTHER", "餐损", "refund-7", null, null);
     }
 }

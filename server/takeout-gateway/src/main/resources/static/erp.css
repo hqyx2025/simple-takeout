@@ -1,5 +1,8 @@
 [data-erp] .form-grid { align-items: start; }
 [data-erp] .field { align-content: start; }
+[data-erp-picker] { min-width: 0; display: grid; gap: 8px; }
+[data-erp-pending] pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow: auto; }
+[data-erp-pending] p { overflow-wrap: anywhere; }
 [data-erp] .erp-lines { grid-column: 1 / -1; display: grid; gap: 16px; }
 [data-erp] fieldset { min-width: 0; border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 [data-erp] legend { padding: 0 6px; font-weight: 600; }

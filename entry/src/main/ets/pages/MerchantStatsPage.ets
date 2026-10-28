@@ -2,7 +2,7 @@ import { PageHeader } from '../components/PageHeader'
 import { AppCardStyle } from '../common/theme/AppTheme'
 /**
  * 商户收入统计页
- * 展示今日 / 本周 / 累计收入与订单数据，以及账户余额
+ * 展示今日 / 本周 / 累计净收入与订单数据，以及账户余额
  */
 import { AppMotion } from '../common/theme/AppMotion'
 import { ColorMetrics } from '@kit.ArkUI';
@@ -162,7 +162,7 @@ export struct MerchantStatsPage {
   @Builder
   TodayCard() {
     Column({ space: SPACING.MD }) {
-      Text('今日收入')
+      Text('今日净收入')
         .fontSize(FONT_SIZE.MD)
         .fontColor(COLORS.ON_PRIMARY)
         .width('100%')
@@ -219,7 +219,7 @@ export struct MerchantStatsPage {
           .height(28)
           .backgroundColor(accentBg(0))
           .borderRadius(BORDER_RADIUS.SM)
-        Text('近7天收入趋势')
+        Text('近7天净收入趋势')
           .fontSize(FONT_SIZE.LG)
           .fontWeight(FontWeight.Bold)
           .fontColor(accentFg(0))
@@ -268,7 +268,7 @@ export struct MerchantStatsPage {
     .padding(SPACING.LG)
   }
 
-  // 绘制近7天收入趋势折线图
+  // 绘制近7天净收入趋势折线图
   private drawWeekRevenueChart(): void {
     const ctx: CanvasRenderingContext2D = this.weekChartContext
     const width: number = ctx.width
@@ -281,16 +281,14 @@ export struct MerchantStatsPage {
 
     ctx.clearRect(0, 0, width, height)
 
-    // 计算最大值（至少为1，避免除零）
+    // 收入可因售后扣回为负，Y轴同时覆盖零与正负净额。
+    let minRevenue: number = 0
     let maxRevenue: number = 0
-    for (let i = 0; i < this.weekRevenue.length; i++) {
-      if (this.weekRevenue[i] > maxRevenue) {
-        maxRevenue = this.weekRevenue[i]
-      }
+    for (const value of this.weekRevenue) {
+      minRevenue = Math.min(minRevenue, value)
+      maxRevenue = Math.max(maxRevenue, value)
     }
-    if (maxRevenue <= 0) {
-      maxRevenue = 1
-    }
+    const revenueRange: number = Math.max(1, maxRevenue - minRevenue)
 
     // 绘制横向网格线与Y轴刻度
     ctx.strokeStyle = ColorMetrics.resourceColor(COLORS.DIVIDER).color
@@ -302,7 +300,7 @@ export struct MerchantStatsPage {
       ctx.moveTo(paddingLeft, y)
       ctx.lineTo(width - 10, y)
       ctx.stroke()
-      const label: number = Math.round(maxRevenue * (4 - i) / 4)
+      const label: number = Math.round(minRevenue + revenueRange * (4 - i) / 4)
       ctx.fillStyle = ColorMetrics.resourceColor(COLORS.TEXT_HINT).color
       ctx.fillText(`${label}`, 2, y + 3)
     }
@@ -313,7 +311,7 @@ export struct MerchantStatsPage {
     ctx.beginPath()
     for (let i = 0; i < this.weekRevenue.length; i++) {
       const x: number = paddingLeft + chartW * i / (this.weekRevenue.length - 1)
-      const y: number = paddingTop + chartH - chartH * this.weekRevenue[i] / maxRevenue
+      const y: number = paddingTop + chartH - chartH * (this.weekRevenue[i] - minRevenue) / revenueRange
       if (i === 0) {
         ctx.moveTo(x, y)
       } else {
@@ -325,7 +323,7 @@ export struct MerchantStatsPage {
     // 绘制数据点与日期标签
     for (let i = 0; i < this.weekRevenue.length; i++) {
       const x: number = paddingLeft + chartW * i / (this.weekRevenue.length - 1)
-      const y: number = paddingTop + chartH - chartH * this.weekRevenue[i] / maxRevenue
+      const y: number = paddingTop + chartH - chartH * (this.weekRevenue[i] - minRevenue) / revenueRange
       ctx.fillStyle = ColorMetrics.resourceColor(MODULE_COLOR.MERCHANT).color
       ctx.beginPath()
       ctx.arc(x, y, 3, 0, 2 * Math.PI)
@@ -419,7 +417,7 @@ export struct MerchantStatsPage {
             .fontSize(FONT_SIZE.XXL)
             .fontWeight(FontWeight.Bold)
             .fontColor(COLORS.PRICE_RED)
-          Text('本周收入')
+          Text('本周净收入')
             .fontSize(FONT_SIZE.SM)
             .fontColor(COLORS.TEXT_SECONDARY)
         }
@@ -480,7 +478,7 @@ export struct MerchantStatsPage {
             .fontSize(FONT_SIZE.XXL)
             .fontWeight(FontWeight.Bold)
             .fontColor(COLORS.PRICE_RED)
-          Text('累计收入')
+          Text('累计净收入')
             .fontSize(FONT_SIZE.SM)
             .fontColor(COLORS.TEXT_SECONDARY)
         }
@@ -533,7 +531,7 @@ export struct MerchantStatsPage {
 
       Row() {
         Image($r('app.media.ui_bulb')).width(FONT_SIZE.SM).height(FONT_SIZE.SM).objectFit(ImageFit.Contain)
-        Text(' 收入统计仅包含已结算订单（用户确认收货后到账）')
+        Text(' 净货款按实际结算日入账，已结算订单售后退款按退款日扣回，因此当日净收入可能为负；配送费不计入商户收入。')
           .fontSize(FONT_SIZE.SM)
           .fontColor(COLORS.TEXT_HINT)
       }

@@ -75,6 +75,11 @@ class OrderBoundaryTest {
             riderDao, specDao, seckillDao, cache, eventPublisher,
             mock(org.springframework.beans.factory.ObjectProvider.class), mock(PaymentRecordDao.class));
 
+    private final com.example.takeout.dao.AfterSalesDao afterSalesDao = mock(com.example.takeout.dao.AfterSalesDao.class);
+    private final AfterSalesService afterSales = new AfterSalesService(orderDao, storeDao, refundDao, afterSalesDao,
+            mock(com.example.takeout.service.thirdparty.ExternalPaymentService.class), mock(PaymentRecordDao.class),
+            eventPublisher, new ObjectMapper());
+
     private final AdminService adminService = new AdminService(storeDao, orderDao, userDao, goodsDao,
             refundDao, service, mock(AdminStatsDao.class), cache, eventPublisher, mock(PaymentRecordDao.class));
 
@@ -91,6 +96,10 @@ class OrderBoundaryTest {
 
     @BeforeEach
     void lockedOrderReadsCurrentStoredOrder() {
+        service.configureAfterSales(afterSales);
+        adminService.configureAfterSales(afterSales);
+        when(refundDao.refundedAmount(anyLong())).thenReturn(new java.math.BigDecimal("0.00"));
+        when(refundDao.merchantRefunded(anyLong())).thenReturn(new java.math.BigDecimal("0.00"));
         when(orderDao.findByIdForUpdate(anyLong())).thenAnswer(invocation -> orderDao.findById(invocation.getArgument(0)));
     }
 
@@ -149,12 +158,12 @@ class OrderBoundaryTest {
     void applyRefundDoesNotInsertWhenStatusChangedConcurrently() {
         when(orderDao.findById(8)).thenReturn(Optional.of(storedOrder(8, 4, 0)));
         when(refundDao.existsPending(8)).thenReturn(false);
-        // 与「确认收货」并发：escrow 已被结算，状态流转失败 → 不得落下退款申请
-        when(orderDao.markRefunding(8)).thenReturn(false);
+        when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore(0, 3)));
+        when(afterSalesDao.markPending(8, 0)).thenReturn(false);
 
         BizException error = assertThrows(BizException.class, () -> service.applyRefund(USER_ID, 8, "不想要了"));
 
-        assertTrue(error.getMessage().contains("订单资金已处理或状态已变化"));
+        assertTrue(error.getMessage().contains("订单状态已变化"));
         verify(refundDao, never()).insert(anyLong(), anyLong(), anyLong(), anyString(), anyString(), anyDouble(), anyString());
     }
 
@@ -272,7 +281,7 @@ class OrderBoundaryTest {
     void applyRefundRejectsOverlongReason() {
         when(orderDao.findById(8)).thenReturn(Optional.of(storedOrder(8, 4, 0)));
         when(refundDao.existsPending(8)).thenReturn(false);
-        when(orderDao.markRefunding(8)).thenReturn(true);
+        when(afterSalesDao.markPending(8, 0)).thenReturn(true);
         when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore(0, 3)));
 
         BizException error = assertThrows(BizException.class,
@@ -286,17 +295,18 @@ class OrderBoundaryTest {
     void applyRefundStoresStructuredReasonTypeAndRemark() {
         when(orderDao.findById(8)).thenReturn(Optional.of(storedOrder(8, 4, 0)));
         when(refundDao.existsPending(8)).thenReturn(false);
-        when(orderDao.markRefunding(8)).thenReturn(true);
+        when(afterSalesDao.markPending(8, 0)).thenReturn(true);
         when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore(0, 3)));
-        when(refundDao.insert(anyLong(), anyLong(), anyLong(), anyString(), anyString(), anyDouble(), anyString()))
-                .thenReturn(99L);
+        when(refundDao.insertAfterSales(anyLong(), anyLong(), anyLong(), anyString(), anyString(),
+                any(java.math.BigDecimal.class), anyString(), org.mockito.ArgumentMatchers.isNull(), anyString(), eq(0))).thenReturn(99L);
         when(refundDao.findById(99)).thenReturn(Optional.of(
                 new RefundRecord(99, 8, USER_ID, OWNER_ID, "QUALITY_ISSUE", "汤洒了", 13.0, "PENDING", "", "", "")));
 
         RefundRecord rec = service.applyRefund(USER_ID, 8, "QUALITY_ISSUE", "汤洒了");
 
         assertEquals("QUALITY_ISSUE", rec.reasonType());
-        verify(refundDao).insert(eq(8L), eq(USER_ID), eq(OWNER_ID), eq("QUALITY_ISSUE"), eq("汤洒了"), anyDouble(), anyString());
+        verify(refundDao).insertAfterSales(eq(8L), eq(USER_ID), eq(OWNER_ID), eq("QUALITY_ISSUE"), eq("汤洒了"),
+                any(java.math.BigDecimal.class), anyString(), org.mockito.ArgumentMatchers.isNull(), eq("[]"), eq(0));
     }
 
     @Test
@@ -429,7 +439,8 @@ class OrderBoundaryTest {
     private Order storedOrder(long id, int status, int escrowStatus, String items) {
         return new Order(id, "NO" + id, USER_ID, STORE_ID, "测试店", status, items, ADDRESS_JSON,
                 10, 3, 0, 13, "", 0, escrowStatus, "2026-08-16 10:00:00",
-                status == 0 ? "" : "2026-08-16 10:00:00", "", "", "", "", 0);
+                status == 0 ? "" : "2026-08-16 10:00:00", "", "",
+                status == 4 ? java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) : "", "", 0);
     }
 
     private CartItemEntity cartRow(long goodsId, long specId, int quantity) {

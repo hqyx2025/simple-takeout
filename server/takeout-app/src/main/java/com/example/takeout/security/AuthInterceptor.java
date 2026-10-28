@@ -78,6 +78,15 @@ public class AuthInterceptor implements HandlerInterceptor {
             if (!changedAt.isBlank() && changedAt.compareTo(jwtUtil.getPasswordChangedAt(claims)) > 0) {
                 throw new BizException(401, "密码已修改，请重新登录");
             }
+            String contextPath = request.getContextPath();
+            String applicationPath = path == null ? "" : path.substring(contextPath == null ? 0 : contextPath.length());
+            if (applicationPath.equals("/api/orders") || applicationPath.startsWith("/api/orders/")) {
+                boolean merchantDetail = user.role() == 1 && "GET".equalsIgnoreCase(request.getMethod())
+                        && applicationPath.matches("/api/orders/[0-9]+");
+                if (user.role() != 0 && !merchantDetail) {
+                    throw new BizException(403, "请使用用户账号操作个人订单");
+                }
+            }
             request.setAttribute(ATTR_USER_ID, userId);
             request.setAttribute(ATTR_ROLE, user.role());
             return true;

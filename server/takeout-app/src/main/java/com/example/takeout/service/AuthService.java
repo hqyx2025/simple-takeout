@@ -333,7 +333,8 @@ public class AuthService implements org.springframework.beans.factory.Initializi
         if (userDao.existsByUsernameExceptUser(username.trim(), userId)) {
             throw new BizException("该账号已被其他用户使用");
         }
-        User current = userDao.findById(userId).orElseThrow(() -> new BizException("用户不存在"));
+        // 与改密、找回密码共用账号行锁，禁止资料更新回写并发改密前的旧哈希。
+        User current = userDao.findByIdForUpdate(userId).orElseThrow(() -> new BizException("用户不存在"));
         String normalizedEmail = updateEmail ? requireEmail(email) : normalizeEmail(current.email());
         boolean contactChanged = !phone.equals(current.phone())
                 || (updateEmail && !normalizedEmail.equals(normalizeEmail(current.email())));

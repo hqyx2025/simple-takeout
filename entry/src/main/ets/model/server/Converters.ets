@@ -1,6 +1,6 @@
 import { ApiResponse } from '../../service/HttpClient'
 
-import { User, UserRole, StoreItem, GoodsItem, Order, OrderPageData, CartItem, Address, Coupon, Review, Rider, Banner, Announcement, BankCard, GoodsSpec } from '../Models'
+import { OrderCapabilities, User, UserRole, StoreItem, GoodsItem, Order, OrderPageData, CartItem, Address, Coupon, Review, Rider, Banner, Announcement, BankCard, GoodsSpec } from '../Models'
 
 import { ServerStore, ServerGoodsSpec, ServerGoods, ServerOrderItem, ServerCartItem, ServerOrder, ServerOrderPage, ServerUser, ServerCoupon, ServerAddress, ServerBankCard, ServerReview, ServerRider, ServerBanner, ServerAnnouncement, MerchantGoodsRequest, SpecInputRequest } from './Contracts'
 
@@ -217,12 +217,26 @@ export function toOrder(o: ServerOrder): Order {
     cancelSource: o.cancelSource ?? '',
     cancelReasonCode: o.cancelReasonCode ?? '',
     cancelReason: o.cancelReason ?? '',
+    capabilities: normalizeOrderCapabilities(o.capabilities),
     rejectGoodsId: o.rejectGoodsId ?? 0,
     rejectSpecId: o.rejectSpecId ?? 0,
     address: addr,
     remark: o.remark
   }
   return order
+}
+
+export function normalizeOrderCapabilities(value: OrderCapabilities | undefined): OrderCapabilities | undefined {
+  if (value === undefined) { return undefined }
+  const normalized: OrderCapabilities = { allowedActions: [], refundRemaining: 0, afterSalesDeadline: '', fulfillmentMode: '' }
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) { return normalized }
+  if (Array.isArray(value.allowedActions) && value.allowedActions.every((action: string) => typeof action === 'string')) {
+    normalized.allowedActions = value.allowedActions.slice()
+  }
+  normalized.refundRemaining = typeof value.refundRemaining === 'number' && Number.isFinite(value.refundRemaining) && value.refundRemaining >= 0 ? value.refundRemaining : 0
+  normalized.afterSalesDeadline = typeof value.afterSalesDeadline === 'string' ? value.afterSalesDeadline : ''
+  normalized.fulfillmentMode = value.fulfillmentMode === 'RIDER' || value.fulfillmentMode === 'MERCHANT' ? value.fulfillmentMode : ''
+  return normalized
 }
 
 export function toOrderPageData(resp: ApiResponse<ServerOrderPage>, requestedPage: number,

@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Uses only a generated schema on the explicitly opted-in test MySQL. */
 @EnabledIfEnvironmentVariable(named="TAKEOUT_MYSQL_CONCURRENCY_TEST",matches="1")
 class ErpMySqlTest {
+    com.zaxxer.hikari.HikariDataSource pool;
     JdbcTemplate admin,db;String schema;ErpService first,second;ObjectMapper json=new ObjectMapper();long material,supplier,purchase;
     @BeforeEach void setup()throws Exception {
         String base="jdbc:mysql://"+System.getenv().getOrDefault("TAKEOUT_DB_HOST","127.0.0.1")+":"+System.getenv().getOrDefault("TAKEOUT_DB_PORT","3310")+"/";
@@ -25,7 +26,9 @@ class ErpMySqlTest {
         String user=System.getenv().getOrDefault("TAKEOUT_DB_USERNAME","root"),password=System.getenv("TAKEOUT_DB_PASSWORD");
         admin=new JdbcTemplate(new DriverManagerDataSource(base+opts,user,password));schema="takeout_erp_test_"+UUID.randomUUID().toString().replace("-","");
         admin.execute("CREATE DATABASE `"+schema+"`");
-        var source=new DriverManagerDataSource(base+schema+opts,user,password);
+        var source=new com.zaxxer.hikari.HikariDataSource();pool=source;
+        source.setJdbcUrl(base+schema+opts);source.setUsername(user);source.setPassword(password);
+        source.setMaximumPoolSize(2);source.setMinimumIdle(0);source.setConnectionTimeout(10000);
         new ResourceDatabasePopulator(new ClassPathResource("erp-schema.sql")).execute(source);
         // Apply twice without destroying existing data, including after the first transaction.
         db=new JdbcTemplate(source);
@@ -37,7 +40,7 @@ class ErpMySqlTest {
         purchase=run("purchases","{\"supplierId\":"+supplier+",\"lines\":[{\"materialId\":"+material+",\"quantity\":2,\"unitPrice\":30.005,\"purchaseUnit\":\"箱\",\"factor\":100}]}");
         run("submit","{\"id\":"+purchase+"}");run("confirm","{\"id\":"+purchase+"}");
     }
-    @AfterEach void cleanup(){if(schema!=null)admin.execute("DROP DATABASE `"+schema+"`");}
+    @AfterEach void cleanup(){if(pool!=null)pool.close();if(schema!=null)admin.execute("DROP DATABASE `"+schema+"`");}
     ErpService.Command cmd(String value)throws Exception{return json.readValue(value,ErpService.Command.class);}
     long run(String action,String value)throws Exception{return ((Number)first.execute(10,99,action,UUID.randomUUID().toString(),cmd(value)).get("id")).longValue();}
     String receipt(String quantity){return "{\"id\":"+purchase+",\"lines\":[{\"materialId\":"+material+",\"quantity\":"+quantity+"}]}";}
@@ -90,6 +93,75 @@ class ErpMySqlTest {
         run("receive",receipt("1"));
         assertThrows(BizException.class,()->second.execute(10,2,"review",UUID.randomUUID().toString(),cmd("{\"id\":"+count+",\"approve\":true}")));
         run("close","{\"id\":"+purchase+"}");assertThrows(BizException.class,()->run("receive",receipt("0.1")));assertEquals(new BigDecimal("200.000"),balance());
+    }
+    @Test void paymentCorrectionsRefundsAndReceiptReversalKeepAppendOnlyHistory()throws Exception {
+        long receipt=run("receive",receipt("2"));
+        long payment=run("pay","{\"id\":"+purchase+",\"amount\":60.01,\"reference\":\"BANK-ORIGINAL\"}");
+        run("payment-correct","{\"id\":"+payment+",\"reference\":\"BANK-CORRECTED\",\"reason\":\"凭证录入错误\"}");
+        assertThrows(BizException.class,()->run("reverse-receipt","{\"id\":"+receipt+",\"reason\":\"未退款\"}"));
+        var refund=cmd("{\"id\":"+payment+",\"amount\":30,\"reference\":\"REFUND-1\",\"reason\":\"供应商退回货款\"}");
+        String key=UUID.randomUUID().toString();
+        assertEquals(first.execute(10,99,"supplier-refund",key,refund),second.execute(10,99,"supplier-refund",key,refund));
+        assertEquals(new BigDecimal("30.01"),first.finance(10).get("paid"));
+        assertThrows(BizException.class,()->run("supplier-refund","{\"id\":"+payment+",\"amount\":30.02,\"reference\":\"REFUND-TOO-MUCH\",\"reason\":\"超额\"}"));
+        run("reverse-payment","{\"id\":"+payment+",\"reason\":\"剩余付款登记错误\"}");
+        assertThrows(BizException.class,()->run("reverse-payment","{\"id\":"+payment+",\"reason\":\"重复\"}"));
+        run("reverse-receipt","{\"id\":"+receipt+",\"reason\":\"退货闭环\"}");
+        assertEquals(new BigDecimal("0.00"),first.finance(10).get("paid"));
+        assertEquals(new BigDecimal("0.00"),first.finance(10).get("payable"));
+        assertEquals("BANK-ORIGINAL",first.list(10,"payments",0,50,purchase,null).getFirst().get("reference"));
+        assertEquals(3,first.list(10,"payment-events",0,50,purchase,null).size());
+        assertThrows(BizException.class,()->first.execute(11,99,"supplier-refund",UUID.randomUUID().toString(),refund));
+        for(String amount:List.of("0","-1","0.001","9999999999"))
+            assertThrows(BizException.class,()->run("supplier-refund","{\"id\":"+payment+",\"amount\":"+amount+",\"reference\":\"INVALID\",\"reason\":\"金额校验\"}"));
+        assertTrue(first.list(11,"payment-events",0,50,purchase,null).isEmpty());
+    }
+    @Test void competingRefundAndReversalCannotReduceOnePaymentTwice()throws Exception {
+        run("receive",receipt("2"));long payment=run("pay","{\"id\":"+purchase+",\"amount\":60.01,\"reference\":\"BANK-RACE\"}");
+        var accepted=new AtomicInteger();
+        try(var pool=Executors.newFixedThreadPool(8)) {
+            var tasks=new ArrayList<Callable<Void>>();
+            for(int i=0;i<16;i++) {
+                final int n=i;var service=i%2==0?first:second;
+                tasks.add(()->{try {
+                    service.execute(10,99,n%2==0?"supplier-refund":"reverse-payment",UUID.randomUUID().toString(),
+                            cmd("{\"id\":"+payment+",\"amount\":60.01,\"reference\":\"REFUND-"+n+"\",\"reason\":\"并发核对\"}"));
+                    accepted.incrementAndGet();
+                }catch(BizException expected){}return null;});
+            }
+            for(var result:pool.invokeAll(tasks))result.get();
+        }
+        assertEquals(1,accepted.get());assertEquals(new BigDecimal("0.00"),first.finance(10).get("paid"));
+        assertEquals(1,first.list(10,"payment-events",0,50,purchase,null).size());
+    }
+    @Test void oldPaymentSchemaMigrationReservesReferencesAndPreservesHistory()throws Exception {
+        run("receive",receipt("2"));long payment=run("pay","{\"id\":"+purchase+",\"amount\":10,\"reference\":\"OLD-BANK\"}");
+        // Simulate the previous ERP schema, with an existing immutable payment.
+        db.execute("DROP TABLE erp_payment_events");db.execute("DROP TABLE erp_payment_references");
+        var migration=new ResourceDatabasePopulator(new ClassPathResource("erp-schema.sql"));
+        migration.execute(Objects.requireNonNull(db.getDataSource()));migration.execute(db.getDataSource());
+        assertEquals("OLD-BANK",first.list(10,"payments",0,50,purchase,null).getFirst().get("reference"));
+        assertEquals(new BigDecimal("10.00"),first.finance(10).get("paid"));
+        assertThrows(org.springframework.dao.DuplicateKeyException.class,()->run("payment-correct","{\"id\":"+payment+",\"reference\":\"OLD-BANK\",\"reason\":\"不得复用历史凭证\"}"));
+        run("payment-correct","{\"id\":"+payment+",\"reference\":\"NEW-BANK\",\"reason\":\"旧付款凭证纠正\"}");
+        assertEquals(1,first.list(10,"payment-events",0,50,purchase,null).size());
+    }
+    @Test void catalogSearchTraversesBeyondOneHundredAndEscapesWildcards()throws Exception {
+        for(int i=0;i<105;i++)run("materials","{\"name\":\"分页物料"+i+"\",\"unit\":\"只\"}");
+        run("materials","{\"name\":\"百分%物料\",\"unit\":\"只\"}");
+        var firstPage=first.list(10,"materials",0,50,null,null,"分页物料",null);
+        var secondPage=first.list(10,"materials",((Number)firstPage.getLast().get("id")).longValue(),50,null,null,"分页物料",null);
+        var thirdPage=first.list(10,"materials",((Number)secondPage.getLast().get("id")).longValue(),50,null,null,"分页物料",null);
+        assertEquals(50,firstPage.size());assertEquals(50,secondPage.size());assertEquals(5,thirdPage.size());
+        assertEquals(1,first.list(10,"materials",0,50,null,null,"%",null).size());
+        assertTrue(first.list(11,"materials",0,50,null,null,"分页物料",null).isEmpty());
+        for(int i=0;i<105;i++)run("suppliers","{\"name\":\"分页供应商"+i+"\",\"contact\":\"联系"+i+"\"}");
+        long disabled=run("suppliers","{\"name\":\"分页供应商停用\",\"contact\":\"联系停用\"}");
+        run("supplier-status","{\"id\":"+disabled+",\"enabled\":false}");
+        var page=first.list(10,"suppliers",0,1000,null,null,"分页供应商",true);
+        assertEquals(100,page.size());assertTrue(page.stream().noneMatch(row->((Number)row.get("id")).longValue()==disabled));
+        assertEquals(5,first.list(10,"suppliers",((Number)page.getLast().get("id")).longValue(),50,null,null,"分页供应商",true).size());
+        assertEquals(1,first.list(10,"suppliers",0,50,null,null,"联系104",true).size());
     }
     @Test void inboxDeduplicatesDurablyAndRejectsContentCollision(){
         first.event(1,"ORDER_PAID",100,"{\"amount\":10}");second.event(1,"ORDER_PAID",100,"{\"amount\":10}");

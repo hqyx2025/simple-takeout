@@ -43,6 +43,9 @@ public class AdminService {
     private final DomainEventPublisher eventPublisher;
     private final PaymentRecordDao paymentRecordDao;
     private final SeckillDao seckillDao;
+    private OrderOperationsService operations;
+    @Autowired
+    void configureOperations(OrderOperationsService operations) { this.operations = operations; }
 
     /** 保留无秒杀 DAO 的构造器，便于已有单元测试与嵌入式调用。 */
     public AdminService(StoreDao storeDao, OrderDao orderDao, UserDao userDao, GoodsDao goodsDao,
@@ -378,7 +381,8 @@ public class AdminService {
     /** 管理端订单推进：用于平台异常运营处理，状态规则与商户端一致。 */
     @Transactional
     public Order.OrderView orderFlow(long orderId, String action) {
-        Order order = orderDao.findById(orderId).orElseThrow(() -> new BizException("订单不存在"));
+        Order order = orderDao.findByIdForUpdate(orderId).orElseThrow(() -> new BizException("订单不存在"));
+        if (!"cancel".equals(action) && refundAttempts != null) refundAttempts.requireNoCancellation(orderId);
         String now = now();
         switch (action) {
             case "accept" -> {
@@ -396,11 +400,16 @@ public class AdminService {
             case "deliver" -> {
                 requireStatus(order, 2);
                 requireNoRider(order);
+                if (operations != null) {
+                    operations.requireMode(orderId, "MERCHANT");
+                    if (orderDao.findReadyTime(orderId).isBlank()) throw new BizException("请先确认出餐");
+                }
                 requireStatusUpdated(orderDao.merchantDeliver(orderId, now));
             }
             case "complete" -> {
                 requireStatus(order, 3);
                 requireNoRider(order);
+                if (operations != null) operations.requireMode(orderId, "MERCHANT");
                 requireStatusUpdated(orderDao.merchantComplete(orderId, now));
             }
             case "cancel" -> {
@@ -408,7 +417,9 @@ public class AdminService {
             }
             default -> throw new BizException("不支持的订单操作：" + action);
         }
-        return orderService.orderDetail(orderId);
+        Order.OrderView view = orderService.orderDetail(orderId);
+        return operations == null ? view : view.withCapabilities(operations.capabilities(
+                orderDao.findById(orderId).orElseThrow(() -> new BizException("订单不存在")), view.readyTime(), 2));
     }
 
     /** 已由骑手接单的订单由骑手负责配送，平台侧不再代为流转。 */
@@ -455,48 +466,23 @@ public class AdminService {
         return refundDao.findById(refundId).orElseThrow(() -> new BizException("退款申请不存在"));
     }
 
-    /** 同意已送达订单退款：escrow 0→2（条件更新）→ 按原支付渠道退款 → 退款记录 REFUNDED。 */
-    @Transactional
-    public RefundRecord approveRefund(long refundId) {
-        RefundRecord record = requirePending(refundId);
-        if (!refundDao.updateStatus(refundId, "REFUNDED", now(), "")) {
-            throw new BizException("该退款申请已处理");
-        }
-        Order order = orderDao.findById(record.orderId()).orElseThrow(() -> new BizException("订单不存在"));
-        if (!orderDao.refundEscrow(order.id())) {
-            throw new BizException("订单资金已处理，不能重复退款");
-        }
-        // 售后申请只来自已送达订单，餐品已被制作和消费，不能恢复为可售库存。
-        orderService.refundOrderPayment(order);
-        // 领域事件：与退款状态更新同事务写入 Outbox，提交后异步投递
-        eventPublisher.publish(DomainEventPublisher.ORDER_REFUNDED, order.id(),
-                java.util.Map.of("userId", order.userId(), "refundId", refundId));
-        return refundDao.findById(refundId).orElseThrow(() -> new BizException("退款处理失败"));
-    }
+    @org.springframework.beans.factory.annotation.Autowired
+    private AfterSalesService afterSalesService;
+    @org.springframework.beans.factory.annotation.Autowired
+    private ExternalRefundAttemptService refundAttempts;
 
-    /** 拒绝退款：退款记录 REJECTED，订单状态回退到已送达（status=4），escrow 保持不变。 */
+    void configureRefundAttempts(ExternalRefundAttemptService attempts) { this.refundAttempts = attempts; }
+
+    void configureAfterSales(AfterSalesService service) { this.afterSalesService = service; }
+
+    @Transactional
+    public RefundRecord approveRefund(long refundId) { return afterSalesService.approve(refundId); }
+
     @Transactional
     public RefundRecord rejectRefund(long refundId, String rejectReason) {
-        String safeReason = rejectReason == null ? "" : rejectReason.trim();
-        if (safeReason.isBlank()) throw new BizException("请填写拒绝原因");
-        if (safeReason.length() > 255) throw new BizException("拒绝原因最多 255 个字符");
-        RefundRecord record = requirePending(refundId);
-        if (!refundDao.updateStatus(refundId, "REJECTED", now(), safeReason)) {
-            throw new BizException("该退款申请已处理");
-        }
-        // 订单回退到已送达：仅当仍处于退款中(6) 时回退，已是 4 则按幂等处理（退款记录才是审批事实）
-        orderDao.updateStatusOnlyFrom(record.orderId(), 6, 4);
-        return refundDao.findById(refundId).orElseThrow(() -> new BizException("退款处理失败"));
+        return afterSalesService.reject(refundId, rejectReason);
     }
 
-    private RefundRecord requirePending(long refundId) {
-        // 同意与拒绝必须争用同一行锁，锁后读取当前状态，避免两种终态都执行成功。
-        RefundRecord record = refundDao.findByIdForUpdate(refundId).orElseThrow(() -> new BizException("退款申请不存在"));
-        if (!"PENDING".equals(record.status())) {
-            throw new BizException("该退款申请已处理");
-        }
-        return record;
-    }
 
     private Store.StoreView toStoreView(Store store) {
         return store.toView(List.of(), List.of());

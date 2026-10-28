@@ -35,6 +35,13 @@ public class PaymentRecordDao {
         return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 
+    public long insert(long orderId, long userId, java.math.BigDecimal amount, String type, String channel,
+                       String status, String createTime) {
+        jdbc.update("INSERT INTO payment_records(order_id,user_id,amount,type,channel,status,create_time) VALUES(?,?,?,?,?,?,?)",
+                orderId, userId, amount, type, channel, status, createTime);
+        return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+    }
+
     public List<PaymentRecord> listByUser(long userId, int limit) {
         return jdbc.query("SELECT * FROM payment_records WHERE user_id = ? ORDER BY id DESC LIMIT ?",
                 MAPPER, userId, Math.max(1, Math.min(limit, 100)));

@@ -24,6 +24,9 @@ public class AssistantService {
     private final StoreService storeService;
     private final AssistantConfigService configService;
     private final AssistantAiClient aiClient;
+    private AfterSalesService afterSales;
+    @org.springframework.beans.factory.annotation.Autowired
+    void configureAfterSales(AfterSalesService afterSales) { this.afterSales = afterSales; }
 
     public AssistantService(OrderDao orderDao, UserDao userDao, StoreService storeService,
                             AssistantConfigService configService, AssistantAiClient aiClient) {
@@ -189,8 +192,8 @@ public class AssistantService {
                 .mapToDouble(Order::payAmount)
                 .sum();
         return local(String.format(Locale.ROOT,
-                "你的余额是 ¥%.2f，当前未退款订单已支付 ¥%.2f。余额可以直接用于支付订单；退款审批同意后，款项按原支付渠道退回。充值入口在钱包页面。",
-                user.balance(), spent),
+                "你的余额是 ¥%.2f，扣除成功退款后累计已支付 ¥%.2f。余额支付需要独立支付密码；退款按原支付渠道退回。演示充值已停用，可在订单支付页选择已启用的支付渠道。",
+                user.balance(), afterSales == null ? spent : afterSales.netPaid(userId).doubleValue()),
                 List.of("我的订单到哪了", "推荐几家店"), "打开钱包", "WALLET");
     }
 
@@ -219,13 +222,13 @@ public class AssistantService {
         return local("退款分两种：待付款订单可以直接取消（平台尚未扣款，只释放库存和优惠券）；已支付且待商家接单的订单可以取消，款项按原支付渠道全额退回。"
                 + "订单进入制作或配送后不能直接取消，如需处理请进入「我的 → 订单」，打开对应订单，通过退款/售后入口联系平台。"
                 + "餐品漏送、少送、错送、洒漏或餐损时，也请在订单详情使用退款/售后入口。"
-                + "已送达但未确认收货、未评价的订单可以申请退款；请在确认收货前申请。审批同意后款项按原支付渠道退回，处理进度也在订单详情查看。",
+                + "送达后48小时内可以申请剩余金额范围内的部分或全额退款，确认收货或评价后仍可申请，并可上传图片证据。被驳回后48小时内可申诉一次。审批结果和原渠道退款进度在订单详情查看。",
                 List.of("我的订单到哪了", "余额还有多少"), "打开订单详情处理售后", "ORDERS");
     }
 
     private AssistantReply payReply() {
         return local("下单后是「待付款」状态，要在 " + Math.max(payTimeoutMinutes, 1)
-                + " 分钟内完成支付：进「我的 → 订单 → 待付款」点「立即支付」，余额不足会提示，可以先充值。"
+                + " 分钟内完成支付：进「我的 → 订单 → 待付款」点「立即支付」，余额不足时请改用页面已启用的第三方支付渠道。"
                 + "超时未付的订单会被平台自动取消并释放库存和优惠券。",
                 List.of("余额还有多少", "怎么充值"), "查看待付款订单", "ORDERS");
     }

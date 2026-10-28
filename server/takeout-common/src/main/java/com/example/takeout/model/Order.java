@@ -162,8 +162,17 @@ public record Order(
             String cancelReasonCode,
             String cancelReason,
             long rejectGoodsId,
-            long rejectSpecId
+            long rejectSpecId,
+            OrderCapabilities capabilities
     ) {
+        public OrderView(long id, String orderNo, long userId, long storeId, String storeName, int status, List<OrderItem> items, AddressInfo address, double goodsAmount, double deliveryFee, double discount, double payAmount, String remark, int reviewed, int escrowStatus, String createTime, String payTime, String acceptTime, String deliverTime, String completeTime, String expectTime, long couponId, String payDeadline, long payDeadlineEpochMs, long serverNowEpochMs, String riderName, String riderPhone, String readyTime, String deliveryType, String paymentChannel, String outTradeNo, String paymentUrl, String appOrderInfo, String paymentMode, boolean paymentSandbox, String cancelSource, String cancelReasonCode, String cancelReason, long rejectGoodsId, long rejectSpecId) {
+            this(id, orderNo, userId, storeId, storeName, status, items, address, goodsAmount, deliveryFee, discount, payAmount, remark, reviewed, escrowStatus, createTime, payTime, acceptTime, deliverTime, completeTime, expectTime, couponId, payDeadline, payDeadlineEpochMs, serverNowEpochMs, riderName, riderPhone, readyTime, deliveryType, paymentChannel, outTradeNo, paymentUrl, appOrderInfo, paymentMode, paymentSandbox, cancelSource, cancelReasonCode, cancelReason, rejectGoodsId, rejectSpecId, null);
+        }
+
+        public OrderView withCapabilities(OrderCapabilities next) {
+            return new OrderView(id, orderNo, userId, storeId, storeName, status, items, address, goodsAmount, deliveryFee, discount, payAmount, remark, reviewed, escrowStatus, createTime, payTime, acceptTime, deliverTime, completeTime, expectTime, couponId, payDeadline, payDeadlineEpochMs, serverNowEpochMs, riderName, riderPhone, readyTime, deliveryType, paymentChannel, outTradeNo, paymentUrl, appOrderInfo, paymentMode, paymentSandbox, cancelSource, cancelReasonCode, cancelReason, rejectGoodsId, rejectSpecId, next);
+        }
+
         /** 兼容现有完整视图构造：取消元数据默认为空。 */
         public OrderView(long id, String orderNo, long userId, long storeId, String storeName, int status,
                          List<OrderItem> items, AddressInfo address, double goodsAmount, double deliveryFee,
@@ -235,7 +244,7 @@ public record Order(
                     createTime, payTime, acceptTime, deliverTime, completeTime, expectTime, couponId,
                     payDeadline, payDeadlineEpochMs, serverNowEpochMs, riderName, riderPhone, readyTime, deliveryType,
                     channel, tradeNo, url, orderInfo, mode, sandbox, cancelSource, cancelReasonCode,
-                    cancelReason, rejectGoodsId, rejectSpecId);
+                    cancelReason, rejectGoodsId, rejectSpecId, capabilities);
         }
     }
 

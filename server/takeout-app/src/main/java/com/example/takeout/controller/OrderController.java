@@ -131,7 +131,8 @@ public class OrderController {
         String reasonType = req == null ? null : req.reasonType();
         String reason = req == null ? "" : req.reason();
         return ApiResponse.ok(orderService.applyRefund(userId, id, reasonType, reason,
-                req == null ? null : req.idempotencyKey()));
+                req == null ? null : req.idempotencyKey(), req == null ? null : req.amount(),
+                req == null ? List.of() : req.evidenceImages()));
     }
 
     @GetMapping("/orders/{id}/refunds")
@@ -140,6 +141,16 @@ public class OrderController {
         requireCustomer(role);
         return ApiResponse.ok(orderService.refundHistory(userId, id));
     }
+
+    @PostMapping("/orders/{id}/refunds/{refundId}/appeal")
+    public ApiResponse<RefundRecord> appeal(@RequestAttribute("userId") long userId,
+                                            @RequestAttribute("role") int role, @PathVariable long id,
+                                            @PathVariable long refundId, @RequestBody AppealRequest req) {
+        requireCustomer(role);
+        return ApiResponse.ok(orderService.appealRefund(userId, id, refundId, req.reason(), req.evidenceImages()));
+    }
+
+    public record AppealRequest(String reason, List<String> evidenceImages) {}
 
     // ============ 商户端 ============
 
@@ -199,7 +210,8 @@ public class OrderController {
                                 List<String> images, int anonymous) {
     }
 
-    public record RefundRequest(String reasonType, String reason, String idempotencyKey) {
+    public record RefundRequest(String reasonType, String reason, String idempotencyKey,
+                                java.math.BigDecimal amount, List<String> evidenceImages) {
     }
 
     public record MerchantRejectRequest(String reasonCode, String note, Long goodsId, Long specId) {

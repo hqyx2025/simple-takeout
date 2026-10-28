@@ -128,6 +128,7 @@ class OrderConcurrencyMySqlTest {
         var source = new DriverManagerDataSource(base + database + options, username, password);
         new ResourceDatabasePopulator(new ClassPathResource("schema.sql")).execute(source);
         jdbc = new JdbcTemplate(source);
+        new com.example.takeout.config.AfterSalesSchemaMigration(jdbc).run(null);
         var cartFactory = new MybatisSqlSessionFactoryBean();
         cartFactory.setDataSource(source);
         cartFactory.setConfiguration(new MybatisConfiguration());
@@ -146,6 +147,12 @@ class OrderConcurrencyMySqlTest {
                 new DomainEventPublisher(outbox, mock(ObjectProvider.class), new ObjectMapper()),
                 mock(ObjectProvider.class), paymentRecords);
         target.configureTransactions(transactions);
+        var externalPayments = mock(com.example.takeout.service.thirdparty.ExternalPaymentService.class);
+        when(externalPayments.refundOriginalPayment(any(), any(), anyLong(), anyBoolean())).thenReturn("BALANCE");
+        var afterSales = new AfterSalesService(new OrderDao(jdbc), new StoreDao(jdbc), new RefundDao(jdbc),
+                new com.example.takeout.dao.AfterSalesDao(jdbc), externalPayments, paymentRecords,
+                new DomainEventPublisher(outbox, mock(ObjectProvider.class), new ObjectMapper()), new ObjectMapper());
+        target.configureAfterSales(afterSales);
         var proxy = new ProxyFactory(target);
         proxy.addAdvice(new TransactionInterceptor(new DataSourceTransactionManager(source),
                 new AnnotationTransactionAttributeSource()));
@@ -153,6 +160,7 @@ class OrderConcurrencyMySqlTest {
         var adminTarget = new AdminService(new StoreDao(jdbc), new OrderDao(jdbc), new UserDao(jdbc),
                 new GoodsDao(jdbc, specs), new RefundDao(jdbc), service, mock(AdminStatsDao.class), cache,
                 new DomainEventPublisher(outbox, mock(ObjectProvider.class), new ObjectMapper()), paymentRecords);
+        adminTarget.configureAfterSales(afterSales);
         var adminProxy = new ProxyFactory(adminTarget);
         adminProxy.addAdvice(new TransactionInterceptor(new DataSourceTransactionManager(source),
                 new AnnotationTransactionAttributeSource()));
@@ -697,39 +705,23 @@ class OrderConcurrencyMySqlTest {
     }
 
     @Test
-    void confirmationAndRefundApplicationCannotBothWinTheEscrowRace() throws Exception {
+    void confirmationAndRefundApplicationSerializeWithoutLosingSettledRefundEligibility() throws Exception {
         insertDeliveredOrder(900, 1, 0, 26);
         AtomicInteger confirmations = new AtomicInteger();
         AtomicInteger refunds = new AtomicInteger();
-
         runTogether(2, index -> {
             try {
-                if (index == 0) {
-                    service.confirmOrder(1, 900);
-                    confirmations.incrementAndGet();
-                } else {
-                    service.applyRefund(1, 900, "OTHER", "concurrency test");
-                    refunds.incrementAndGet();
-                }
-            } catch (BizException expectedRaceLoser) {
-                // The losing transaction must not update escrow or create a refund.
+                if (index == 0) { service.confirmOrder(1, 900); confirmations.incrementAndGet(); }
+                else { service.applyRefund(1, 900, "OTHER", "concurrency test"); refunds.incrementAndGet(); }
+            } catch (BizException refundWonBeforeConfirmation) {
+                // Refund pending blocks confirmation; confirmation first still permits settled after-sales.
             }
         });
-
-        assertEquals(1, confirmations.get() + refunds.get());
-        int status = count("SELECT status FROM orders WHERE id=900");
-        int escrow = count("SELECT escrow_status FROM orders WHERE id=900");
-        if (confirmations.get() == 1) {
-            assertEquals(4, status);
-            assertEquals(1, escrow);
-            assertEquals(1020, count("SELECT balance FROM users WHERE id=99"));
-            assertEquals(0, count("SELECT COUNT(*) FROM refund_records WHERE order_id=900"));
-        } else {
-            assertEquals(6, status);
-            assertEquals(0, escrow);
-            assertEquals(1000, count("SELECT balance FROM users WHERE id=99"));
-            assertEquals(1, count("SELECT COUNT(*) FROM refund_records WHERE order_id=900"));
-        }
+        assertEquals(1, refunds.get());
+        assertEquals(6, count("SELECT status FROM orders WHERE id=900"));
+        assertEquals(confirmations.get(), count("SELECT escrow_status FROM orders WHERE id=900"));
+        assertEquals(1000 + confirmations.get() * 20, count("SELECT balance FROM users WHERE id=99"));
+        assertEquals(1, count("SELECT COUNT(*) FROM refund_records WHERE order_id=900"));
     }
 
     @Test
@@ -749,11 +741,11 @@ class OrderConcurrencyMySqlTest {
         assertEquals(4, count("SELECT status FROM orders WHERE id=903"));
         assertEquals(1, count("SELECT COUNT(*) FROM refund_records WHERE order_id=903"));
 
-        long nextId = service.applyRefund(1, 903, "OTHER", "补充：汤盒破损", "new-key").id();
-        assertNotEquals(firstId, nextId);
-        assertEquals(List.of(nextId, firstId), service.refundHistory(1, 903).stream()
+        assertThrows(BizException.class, () -> service.applyRefund(1, 903, "OTHER", "补充：汤盒破损", "new-key"));
+        assertEquals(firstId, service.appealRefund(1, 903, firstId, "补充：汤盒破损", List.of()).id());
+        assertEquals(List.of(firstId), service.refundHistory(1, 903).stream()
                 .map(com.example.takeout.model.RefundRecord::id).toList());
-        assertEquals("请补充具体情况", service.refundHistory(1, 903).get(1).rejectReason());
+        assertEquals(1, service.refundHistory(1, 903).getFirst().appealCount());
         assertEquals(403, assertThrows(BizException.class, () -> service.refundHistory(2, 903)).getCode());
         assertEquals(403, assertThrows(BizException.class,
                 () -> service.applyRefund(2, 903, "OTHER", "餐损", "new-key")).getCode());
@@ -796,10 +788,12 @@ class OrderConcurrencyMySqlTest {
         }
         assertEquals(1, count("SELECT COUNT(*) FROM refund_records WHERE order_id=907"));
         assertEquals(4, count("SELECT status FROM orders WHERE id=907"));
-        long newId = service.applyRefund(1, 907, "OTHER", "新申请补充餐损情况", "intent-new").id();
-        assertNotEquals(originalId, newId);
+        assertThrows(BizException.class, () -> service.applyRefund(1, 907, "OTHER", "新申请补充餐损情况", "intent-new"));
+        service.appealRefund(1, 907, originalId, "补充餐损情况", List.of());
+        adminService.rejectRefund(originalId, "仍无法核实");
+        assertThrows(BizException.class, () -> service.appealRefund(1, 907, originalId, "第二次申诉", List.of()));
         assertEquals(originalId, service.applyRefund(1, 907, null, null, "intent-0").id());
-        assertEquals(2, count("SELECT COUNT(*) FROM refund_records WHERE order_id=907"));
+        assertEquals(1, count("SELECT COUNT(*) FROM refund_records WHERE order_id=907"));
     }
 
     @Test

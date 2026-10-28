@@ -68,3 +68,16 @@ CREATE TABLE IF NOT EXISTS erp_receipt_reversals (
  reason VARCHAR(255) NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
  KEY idx_receipt_reversal_store(store_id,receipt_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- Additive migration: old payment rows remain unchanged; reserve their references on every startup.
+CREATE TABLE IF NOT EXISTS erp_payment_references (
+ store_id BIGINT NOT NULL, reference VARCHAR(100) NOT NULL, PRIMARY KEY(store_id,reference)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+INSERT IGNORE INTO erp_payment_references(store_id,reference) SELECT store_id,reference FROM erp_payments;
+CREATE TABLE IF NOT EXISTS erp_payment_events (
+ id BIGINT AUTO_INCREMENT PRIMARY KEY, store_id BIGINT NOT NULL, purchase_id BIGINT NOT NULL,
+ payment_id BIGINT NOT NULL, kind VARCHAR(32) NOT NULL, amount DECIMAL(18,2) NOT NULL,
+ reference VARCHAR(100) DEFAULT NULL, reason VARCHAR(255) NOT NULL, operator_id BIGINT NOT NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ KEY idx_payment_event_store(store_id,id), KEY idx_payment_event_purchase(purchase_id,id),
+ KEY idx_payment_event_payment(store_id,payment_id,id), CHECK(amount >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

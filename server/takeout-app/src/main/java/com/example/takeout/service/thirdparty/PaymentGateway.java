@@ -23,6 +23,10 @@ public interface PaymentGateway {
 
     void refund(String outTradeNo, String outRefundNo, BigDecimal amount);
 
+    default void refund(String outTradeNo, String outRefundNo, BigDecimal amount, BigDecimal originalAmount) {
+        refund(outTradeNo, outRefundNo, amount);
+    }
+
     record QueryResult(boolean paid, boolean closed, VerifiedNotice notice) {
     }
 

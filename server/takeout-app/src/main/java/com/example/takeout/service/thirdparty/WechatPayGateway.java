@@ -105,12 +105,17 @@ public class WechatPayGateway implements PaymentGateway {
 
     @Override
     public void refund(String outTradeNo, String outRefundNo, BigDecimal amount) {
+        refund(outTradeNo, outRefundNo, amount, amount);
+    }
+
+    @Override
+    public void refund(String outTradeNo, String outRefundNo, BigDecimal amount, BigDecimal originalAmount) {
         CreateRequest request = new CreateRequest();
         request.setOutTradeNo(outTradeNo);
         request.setOutRefundNo(outRefundNo);
         request.setReason("订单退款");
         AmountReq refundAmount = new AmountReq();
-        refundAmount.setTotal(amount.movePointRight(2).longValueExact());
+        refundAmount.setTotal(originalAmount.movePointRight(2).longValueExact());
         refundAmount.setRefund(amount.movePointRight(2).longValueExact());
         refundAmount.setCurrency("CNY");
         request.setAmount(refundAmount);

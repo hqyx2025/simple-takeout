@@ -1,9 +1,10 @@
 /**
  * 全局状态管理 - 使用AppStorage管理应用级状态
  */
-import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, Rider, Banner, Announcement, MerchantStatsData, MerchantStatsAggregateData, Category, RefundRecord, GoodsSpec, SeckillItem, SpecialGoodsItem, BundleInfo, UploadResult, SetmealOrder, createEmptyUser, createDefaultCategories } from '../model/Models'
+import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, Rider, Banner, Announcement, MerchantStatsAggregateData, Category, RefundRecord, GoodsSpec, SeckillItem, SpecialGoodsItem, BundleInfo, UploadResult, SetmealOrder, createEmptyUser, createDefaultCategories } from '../model/Models'
 import { saveAllData, clearAllData } from './DataPersistence'
 import { apiLogin, apiRegister, updateUserProfileApi, fetchCurrentUserApi, rechargeBalanceApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, fetchMerchantStatsApi, createOrderApi, cancelOrderApi, payOrderApi, queryPaymentApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi, fetchMerchantReviewsApi, replyReviewApi, fetchRiderProfileApi, setRiderStatusApi, fetchRiderPoolApi, fetchRiderOrdersApi, grabOrderApi, pickupOrderApi, deliverOrderApi, fetchBannersApi, fetchAnnouncementsApi, fetchAdminRidersApi, updateRiderStatusApi, fetchAdminBannersApi, createBannerApi, updateBannerStatusApi, deleteBannerApi, fetchAdminAnnouncementsApi, createAnnouncementApi, updateAnnouncementStatusApi, deleteAnnouncementApi, applyRefundApi, fetchCartApi, addCartItemApi, updateCartItemQuantityApi, deleteCartItemApi, deleteCartItemsApi, clearCartApi, uploadImageApi, fetchSeckillsApi, fetchRankStoresApi, fetchRankGoodsApi, fetchBundleApi, updateMerchantGoodsSpecsApi, apiLogout, changePasswordApi, updateRiderLocationApi } from './ApiService'
+import { fetchStoresResultApi, fetchStoreGoodsResultApi, fetchMerchantStoresResultApi } from './ApiService'
 import { getApiBaseUrl, getAuthToken, setAuthTokens, getLastApiErrorMessage, registerSessionExpiredHandler,
   getAuthSessionEpoch } from './HttpClient'
 import { logInfo, logWarn, logError } from './AppLogger'
@@ -15,7 +16,9 @@ import { API_CONFIG } from '../common/Constants'
 import { clearPushIdentity, registerPushForCurrentSession } from './PushKitService'
 
 let categoriesSyncInFlight: Promise<void> | null = null
-let storesSyncInFlight: Promise<void> | null = null
+let storesSyncVersion: number = 0
+let merchantStoresSyncVersion: number = 0
+let goodsSyncVersions: Record<string, number> = {}
 // 购物车接口返回的是整张购物车；不同页面并发写入时，旧响应可能晚到并覆盖新状态。
 // 统一串行化写请求，保证本地状态按服务端提交顺序推进。
 let cartMutationQueue: Promise<void> = Promise.resolve()
@@ -24,11 +27,29 @@ let cartRevision: number = 0
 let currentUserSyncVersion: number = 0
 let addressSyncVersion: number = 0
 let orderSyncVersion: number = 0
+let orderDetailSyncVersions: Record<string, number> = {}
+let favoriteSyncVersion: number = 0
 
 // 用户对象用于资料展示，余额单独维护为可观察字段，避免页面只保留登录时的余额副本。
 function setStoredUser(user: User): void {
   const previous: User | undefined = AppStorage.get<User>('user')
-  if (previous?.id !== user.id || previous?.role !== user.role) { clearDeliveryForms() }
+  if (previous?.id !== user.id || previous?.role !== user.role) {
+    clearDeliveryForms()
+    storesSyncVersion += 1
+    merchantStoresSyncVersion += 1
+    orderSyncVersion += 1
+    favoriteSyncVersion += 1
+    AppStorage.setOrCreate<StoreItem[]>('allStores', [])
+    AppStorage.setOrCreate<Record<string, GoodsItem[]>>('allGoodsMap', {})
+    AppStorage.setOrCreate<Order[]>('orderList', [])
+    AppStorage.setOrCreate<Order | null>('currentOrder', null)
+    AppStorage.setOrCreate<number>('currentOrderId', 0)
+    AppStorage.setOrCreate<CartItem[]>('cartItems', [])
+    AppStorage.setOrCreate<Favorite[]>('favoriteList', [])
+    AppStorage.setOrCreate<Coupon[]>('couponList', [])
+    AppStorage.setOrCreate<Address[]>('addressList', [])
+    AppStorage.setOrCreate<Address | null>('currentAddress', null)
+  }
   const normalizedBalance: number = Number.isFinite(user.balance) ? user.balance : 0
   AppStorage.setOrCreate<User>('user', user)
   AppStorage.setOrCreate<number>('userBalance', normalizedBalance)
@@ -396,96 +417,7 @@ export function getMerchantOrders(merchantId: number): Order[] {
   return orders.filter(o => storeIds.includes(o.storeId))
 }
 
-// ============ 商户收入统计 ============
-export function getMerchantTodayStats(merchantId: number): MerchantStatsData {
-  const orders: Order[] = getMerchantOrders(merchantId)
-  const today = new Date()
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-
-  const todayOrders = orders.filter(o => (o.createTime ?? '').startsWith(todayStr))
-  // 收入口径与大纲 21.4 一致：仅统计已结算订单（status=4 且 escrow=1，用户确认收货后）
-  const completedOrders = todayOrders.filter(o => o.status === 4 && (o.escrowStatus ?? 0) === 1)
-  const revenue = completedOrders.reduce((sum, o) => sum + o.payAmount, 0)
-
-  const stats: MerchantStatsData = {
-    todayOrders: todayOrders.length,
-    todayRevenue: revenue,
-    completedOrders: completedOrders.length,
-    totalOrders: orders.length,
-    totalRevenue: orders.filter(o => o.status === 4 && (o.escrowStatus ?? 0) === 1).reduce((sum, o) => sum + o.payAmount, 0)
-  }
-  return stats
-}
-
-export function getMerchantWeekStats(merchantId: number): MerchantStatsData {
-  const orders: Order[] = getMerchantOrders(merchantId)
-  // 本周口径与后端 /api/merchant/stats 对齐：周一为一周起点，而非滚动 7 天。
-  const now = new Date()
-  const day = now.getDay() // 0=周日
-  const diffToMonday = day === 0 ? 6 : day - 1
-  const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMonday)
-  const weekStartTime: number = weekStart.getTime()
-
-  const weekOrders = orders.filter(o => {
-    const orderTime: number = Date.parse(o.createTime.replace(/-/g, '/'))
-    return !Number.isNaN(orderTime) && orderTime >= weekStartTime
-  })
-  const completedOrders = weekOrders.filter(o => o.status === 4 && (o.escrowStatus ?? 0) === 1)
-  const revenue = completedOrders.reduce((sum, o) => sum + o.payAmount, 0)
-
-  const stats: MerchantStatsData = {
-    todayOrders: weekOrders.length,
-    todayRevenue: revenue,
-    completedOrders: completedOrders.length,
-    totalOrders: orders.length,
-    totalRevenue: orders.filter(o => o.status === 4 && (o.escrowStatus ?? 0) === 1).reduce((sum, o) => sum + o.payAmount, 0)
-  }
-  return stats
-}
-
-// 近7天（含今日）每日已完成订单收入，索引0为7天前，索引6为今日
-// 供商户收入统计页折线图使用
-export function getMerchantWeekRevenue(merchantId: number): number[] {
-  const orders: Order[] = getMerchantOrders(merchantId)
-  const result: number[] = []
-  const now = new Date()
-  const dayMillis: number = 24 * 60 * 60 * 1000
-  const cursor: Date = new Date(now.getTime() - 6 * dayMillis)
-  for (let i = 6; i >= 0; i--) {
-    const dayStr = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`
-    const revenue = orders
-      .filter(o => o.status === 4 && (o.escrowStatus ?? 0) === 1 && (o.completeTime ?? '').startsWith(dayStr))
-      .reduce((sum, o) => sum + o.payAmount, 0)
-    result.push(revenue)
-    cursor.setTime(cursor.getTime() + dayMillis)
-  }
-  return result
-}
-
-// 今日订单状态分布：[待接单, 制作中, 配送中, 已完成, 已取消]
-// 供商户收入统计页柱状图使用
-export function getMerchantTodayStatusOrders(merchantId: number): number[] {
-  const orders: Order[] = getMerchantOrders(merchantId)
-  const today = new Date()
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-  const todayOrders = orders.filter(o => (o.createTime ?? '').startsWith(todayStr))
-  const dist: number[] = [0, 0, 0, 0, 0]
-  todayOrders.forEach(o => {
-    if (o.status === 1) {
-      dist[0]++
-    } else if (o.status === 2) {
-      dist[1]++
-    } else if (o.status === 3) {
-      dist[2]++
-    } else if (o.status === 4) {
-      dist[3]++
-    } else if (o.status === 5) {
-      dist[4]++
-    }
-  })
-  return dist
-}
-
+// 商户金额与图表仅使用服务端结算/退款事件聚合，避免本地订单缓存产生第二套口径。
 /** 获取商户统计聚合，统计页无需同步全量订单。 */
 export async function fetchMerchantStatsRemote(storeId: number = 0): Promise<MerchantStatsAggregateData | null> {
   return fetchMerchantStatsApi(storeId)
@@ -493,7 +425,14 @@ export async function fetchMerchantStatsRemote(storeId: number = 0): Promise<Mer
 
 export async function updateUserProfileRemote(username: string, phone: string, email: string,
   currentPassword: string = ''): Promise<User | undefined> {
+  const sessionEpoch: number = getAuthSessionEpoch()
+  const ownerId: number = AppStorage.get<User>('user')?.id ?? 0
+  if (ownerId <= 0 || !isLoggedIn()) { return undefined }
+  currentUserSyncVersion += 1
   const user: User | undefined = await updateUserProfileApi(username, phone, email, currentPassword)
+  if (sessionEpoch !== getAuthSessionEpoch() || ownerId !== (AppStorage.get<User>('user')?.id ?? 0)
+    || !isLoggedIn() || (user !== undefined && user.id !== ownerId)) { return undefined }
+  currentUserSyncVersion += 1
   if (user === undefined) {
     logWarn('Api', '远程更新个人资料失败')
     return undefined
@@ -524,11 +463,16 @@ export async function rechargeBalanceRemote(amount: number): Promise<User | unde
 }
 
 export async function syncCurrentUserFromServer(): Promise<User | undefined> {
+  const sessionEpoch: number = getAuthSessionEpoch()
+  const ownerId: number = AppStorage.get<User>('user')?.id ?? 0
+  if (ownerId <= 0 || !isLoggedIn()) { return undefined }
   const requestVersion: number = currentUserSyncVersion + 1
   currentUserSyncVersion = requestVersion
   const user: User | undefined = await fetchCurrentUserApi()
   // 丢弃较早请求的返回值，避免旧余额覆盖手动刷新拿到的新余额。
-  if (requestVersion !== currentUserSyncVersion) {
+  if (requestVersion !== currentUserSyncVersion || sessionEpoch !== getAuthSessionEpoch()
+    || ownerId !== (AppStorage.get<User>('user')?.id ?? 0) || !isLoggedIn()
+    || (user !== undefined && user.id !== ownerId)) {
     logWarn('Api', '忽略过期的当前用户同步结果')
     return undefined
   }
@@ -638,34 +582,37 @@ export async function syncCategoriesFromServer(): Promise<void> {
  * 从后端拉取店铺列表并写入 allStores（首页 onShow 调用）
  */
 export async function syncStoresFromServer(): Promise<void> {
-  if (storesSyncInFlight !== null) {
-    await storesSyncInFlight
-    return
-  }
-  storesSyncInFlight = (async (): Promise<void> => {
-    const currentAddress: Address | null = AppStorage.get<Address>('currentAddress') ?? null
-    const latitude: number | undefined = currentAddress !== null ? currentAddress.latitude : undefined
-    const longitude: number | undefined = currentAddress !== null ? currentAddress.longitude : undefined
-    const stores: StoreItem[] = await fetchStores(undefined, latitude, longitude)
-    AppStorage.setOrCreate<StoreItem[]>('allStores', stores)
-    logInfo('Api', `同步店铺数据 ${stores.length} 家`)
-  })()
-  try {
-    await storesSyncInFlight
-  } finally {
-    storesSyncInFlight = null
-  }
+  const user: User | undefined = AppStorage.get<User>('user')
+  if (user?.role === UserRole.MERCHANT) { await syncMerchantStoresRemote(); return }
+  const epoch: number = getAuthSessionEpoch()
+  const owner: number = user?.id ?? 0
+  const loggedIn: boolean = isLoggedIn()
+  const version: number = ++storesSyncVersion
+  const latitude: number | undefined = getCurrentLatitude()
+  const longitude: number | undefined = getCurrentLongitude()
+  const stores: StoreItem[] | null = await fetchStoresResultApi(undefined, latitude, longitude)
+  if (epoch !== getAuthSessionEpoch() || owner !== (AppStorage.get<User>('user')?.id ?? 0)
+    || loggedIn !== isLoggedIn() || version !== storesSyncVersion || latitude !== getCurrentLatitude() || longitude !== getCurrentLongitude()) { return }
+  if (stores === null) { return }
+  AppStorage.setOrCreate<StoreItem[]>('allStores', stores)
 }
 
 /**
  * 从后端拉取指定店铺商品并写入 allGoodsMap
  */
 export async function syncGoodsFromServer(storeId: number): Promise<void> {
-  const goods: GoodsItem[] = await fetchStoreGoods(storeId)
-  const goodsMap: Record<string, GoodsItem[]> = AppStorage.get<Record<string, GoodsItem[]>>('allGoodsMap') || {}
-  goodsMap[storeId.toString()] = goods
+  const epoch: number = getAuthSessionEpoch()
+  const owner: number = AppStorage.get<User>('user')?.id ?? 0
+  const loggedIn: boolean = isLoggedIn()
+  const key: string = storeId.toString()
+  const version: number = (goodsSyncVersions[key] ?? 0) + 1
+  goodsSyncVersions[key] = version
+  const goods: GoodsItem[] | null = await fetchStoreGoodsResultApi(storeId)
+  if (goods === null || epoch !== getAuthSessionEpoch() || owner !== (AppStorage.get<User>('user')?.id ?? 0)
+    || loggedIn !== isLoggedIn() || version !== goodsSyncVersions[key]) { return }
+  const goodsMap: Record<string, GoodsItem[]> = AppStorage.get<Record<string, GoodsItem[]>>('allGoodsMap') ?? {}
+  goodsMap[key] = goods
   AppStorage.setOrCreate('allGoodsMap', goodsMap)
-  logInfo('Api', `同步店铺商品 storeId=${storeId} ${goods.length} 个`)
 }
 
 /**
@@ -703,8 +650,14 @@ export async function syncUserOrdersFromServer(): Promise<void> {
 
 export async function fetchOrderDetailRemote(orderId: number, showErrorToast: boolean = true): Promise<Order | null> {
   const sessionEpoch: number = getAuthSessionEpoch()
+  const ownerId: number = AppStorage.get<User>('user')?.id ?? 0
+  if (ownerId <= 0 || !isLoggedIn()) { return null }
+  const key: string = orderId.toString()
+  const version: number = (orderDetailSyncVersions[key] ?? 0) + 1
+  orderDetailSyncVersions[key] = version
   const order: Order | null = await fetchOrderDetailApi(orderId, showErrorToast)
-  if (order === null || sessionEpoch !== getAuthSessionEpoch()) {
+  if (order === null || sessionEpoch !== getAuthSessionEpoch() || !isLoggedIn()
+    || ownerId !== (AppStorage.get<User>('user')?.id ?? 0) || version !== orderDetailSyncVersions[key]) {
     return null
   }
   const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
@@ -723,15 +676,16 @@ export async function fetchOrderDetailRemote(orderId: number, showErrorToast: bo
  * 从后端拉取商户订单并写入 orderList（商户端 onShow 调用）
  */
 export async function syncMerchantOrdersFromServer(): Promise<void> {
-  // 该状态仅属于商户端（MERCHANT）；用户/管理员不调用，避免与用户订单列表互相覆盖。
-  const syncUser: User | undefined = AppStorage.get<User>('user')
-  if (syncUser === undefined || syncUser === null || syncUser.role !== UserRole.MERCHANT) {
-    logInfo('Api', '非商户角色，跳过商户订单同步')
-    return
-  }
-  const orders: Order[] = await fetchMerchantOrdersApi()
+  const user: User | undefined = AppStorage.get<User>('user')
+  if (!isLoggedIn() || user === undefined || user.id <= 0 || user.role !== UserRole.MERCHANT) { return }
+  const owner: number = user.id
+  const epoch: number = getAuthSessionEpoch()
+  const version: number = ++orderSyncVersion
+  const orders: Order[] | null = await fetchMerchantOrdersApi()
+  const current: User | undefined = AppStorage.get<User>('user')
+  if (orders === null || !isLoggedIn() || epoch !== getAuthSessionEpoch() || owner !== current?.id
+    || current?.role !== UserRole.MERCHANT || version !== orderSyncVersion) { return }
   AppStorage.setOrCreate<Order[]>('orderList', orders)
-  logInfo('Api', `同步商户订单 ${orders.length} 条`)
 }
 
 // ==================== 订单操作 ====================
@@ -770,11 +724,11 @@ export async function createOrderRemote(storeId: number, cartItems: CartItem[], 
 async function updateStoredOrder(orderId: number, knownOrder?: Order): Promise<Order | null> {
   const owner: number = deliveryCustomerId()
   const epoch: number = deliveryRevision()
-  const token: string = getAuthToken()
+  const sessionEpoch: number = getAuthSessionEpoch()
   const userId: number = AppStorage.get<User>('user')?.id ?? 0
   const order: Order | null = knownOrder ?? await fetchOrderDetailApi(orderId)
-  if (order === null || owner !== deliveryCustomerId() || epoch !== deliveryRevision()
-    || token !== getAuthToken() || userId !== (AppStorage.get<User>('user')?.id ?? 0)) {
+  if (order === null || !isLoggedIn() || userId <= 0 || owner !== deliveryCustomerId() || epoch !== deliveryRevision()
+    || sessionEpoch !== getAuthSessionEpoch() || userId !== (AppStorage.get<User>('user')?.id ?? 0)) {
     return null
   }
   const orders: Order[] = AppStorage.get<Order[]>('orderList') ?? []
@@ -799,7 +753,10 @@ async function updateStoredOrder(orderId: number, knownOrder?: Order): Promise<O
  * 远程取消订单：仅同步被操作的订单，避免为一条状态变化拉取全部历史。
  */
 export async function cancelOrderRemote(orderId: number): Promise<boolean> {
+  const epoch: number = getAuthSessionEpoch()
+  const owner: number = AppStorage.get<User>('user')?.id ?? 0
   const ok: boolean = await cancelOrderApi(orderId)
+  if (epoch !== getAuthSessionEpoch() || owner !== (AppStorage.get<User>('user')?.id ?? 0) || !isLoggedIn()) { return false }
   if (ok) {
     await updateStoredOrder(orderId)
     logInfo('Api', `远程取消订单 orderId=${orderId}`)
@@ -893,7 +850,10 @@ function getCurrentLongitude(): number | undefined {
  * 远程确认收货：同步本地订单状态
  */
 export async function confirmOrderRemote(orderId: number): Promise<boolean> {
+  const epoch: number = getAuthSessionEpoch()
+  const owner: number = AppStorage.get<User>('user')?.id ?? 0
   const ok: boolean = await confirmOrderApi(orderId)
+  if (epoch !== getAuthSessionEpoch() || owner !== (AppStorage.get<User>('user')?.id ?? 0) || !isLoggedIn()) { return false }
   if (ok) {
     await updateStoredOrder(orderId)
     logInfo('Api', `远程确认收货 orderId=${orderId}`)
@@ -905,9 +865,9 @@ export async function confirmOrderRemote(orderId: number): Promise<boolean> {
  * 远程申请退款：返回实际申请记录，幂等重放可能返回已处理终态，由页面重读订单与进度。
  */
 export async function applyRefundRemote(orderId: number, reasonType: string, reason: string,
-  idempotencyKey: string = ''): Promise<RefundRecord | null> {
+  idempotencyKey: string = '', amount?: number, evidenceImages: string[] = []): Promise<RefundRecord | null> {
   const sessionEpoch: number = getAuthSessionEpoch()
-  const record: RefundRecord | null = await applyRefundApi(orderId, reasonType, reason, idempotencyKey)
+  const record: RefundRecord | null = await applyRefundApi(orderId, reasonType, reason, idempotencyKey, amount, evidenceImages)
   if (sessionEpoch !== getAuthSessionEpoch()) { return null }
   if (record !== null) {
     logInfo('Api', `远程申请退款 orderId=${orderId} refundId=${record.id}`)
@@ -922,7 +882,10 @@ export async function applyRefundRemote(orderId: number, reasonType: string, rea
  * 出餐必须用 ready：deliver 会直接把订单推到配送中，订单就再也不会出现在骑手抢单池里。
  */
 export async function merchantActionRemote(orderId: number, action: string): Promise<boolean> {
+  const epoch: number = getAuthSessionEpoch()
+  const owner: number = AppStorage.get<User>('user')?.id ?? 0
   const ok: boolean = await merchantActionApi(orderId, action)
+  if (epoch !== getAuthSessionEpoch() || owner !== (AppStorage.get<User>('user')?.id ?? 0) || !isLoggedIn()) { return false }
   if (ok) {
     await syncMerchantOrdersFromServer()
     logInfo('Api', `商户操作成功 orderId=${orderId} action=${action}`)
@@ -951,16 +914,18 @@ export async function toggleFavoriteRemote(storeId: number): Promise<boolean> {
  * 从后端拉取收藏列表并写入 favoriteList
  */
 export async function syncFavoritesRemote(): Promise<void> {
+  const sessionEpoch: number = getAuthSessionEpoch()
+  const ownerId: number = AppStorage.get<User>('user')?.id ?? 0
+  if (ownerId <= 0 || !isLoggedIn()) { return }
+  const requestVersion: number = ++favoriteSyncVersion
   const remoteFavorites: Favorite[] = await fetchFavoritesApi()
-  // 远端收藏接口返回店铺视图，不携带本地用户 ID；补齐当前登录用户后，
-  // getFavorites() 才能通过用户隔离校验并正常渲染收藏列表。
-  const user: User | undefined = AppStorage.get<User>('user')
-  const favorites: Favorite[] = user === undefined || user === null
-    ? []
-    : remoteFavorites.map((favorite: Favorite) => {
-      favorite.userId = user.id
-      return favorite
-    })
+  if (sessionEpoch !== getAuthSessionEpoch() || ownerId !== (AppStorage.get<User>('user')?.id ?? 0)
+    || requestVersion !== favoriteSyncVersion || !isLoggedIn()) { return }
+  // 用发起请求的账号归属补齐店铺视图，旧会话响应不得污染当前账号。
+  const favorites: Favorite[] = remoteFavorites.map((favorite: Favorite) => {
+    favorite.userId = ownerId
+    return favorite
+  })
   AppStorage.setOrCreate<Favorite[]>('favoriteList', favorites)
   logInfo('Api', `同步收藏 ${favorites.length} 条`)
 }
@@ -1000,20 +965,16 @@ export async function claimCouponRemote(storeId: number, name: string, threshold
  * 从后端拉取商户自己的店铺并合并进 allStores
  */
 export async function syncMerchantStoresRemote(): Promise<void> {
-  const stores: StoreItem[] = await fetchMerchantStoresApi()
-  if (stores.length > 0) {
-    const all: StoreItem[] = AppStorage.get<StoreItem[]>('allStores') || []
-    for (let i = 0; i < stores.length; i++) {
-      const idx: number = all.findIndex(s => s.id === stores[i].id)
-      if (idx >= 0) {
-        all[idx] = stores[i]
-      } else {
-        all.push(stores[i])
-      }
-    }
-    AppStorage.setOrCreate<StoreItem[]>('allStores', all)
-    logInfo('Api', `同步商户店铺 ${stores.length} 家`)
-  }
+  const user: User | undefined = AppStorage.get<User>('user')
+  if (!isLoggedIn() || user === undefined || user.id <= 0 || user.role !== UserRole.MERCHANT) { return }
+  const owner: number = user.id
+  const epoch: number = getAuthSessionEpoch()
+  const version: number = ++merchantStoresSyncVersion
+  const stores: StoreItem[] | null = await fetchMerchantStoresResultApi()
+  const current: User | undefined = AppStorage.get<User>('user')
+  if (stores === null || !isLoggedIn() || epoch !== getAuthSessionEpoch() || owner !== current?.id
+    || current?.role !== UserRole.MERCHANT || version !== merchantStoresSyncVersion) { return }
+  AppStorage.setOrCreate<StoreItem[]>('allStores', stores)
 }
 
 /**
@@ -1216,11 +1177,11 @@ export async function syncAddressesRemote(showErrorToast: boolean = true): Promi
     return false
   }
   const requestVersion: number = ++addressSyncVersion
-  const token: string = getAuthToken()
+  const sessionEpoch: number = getAuthSessionEpoch()
   const userId: number = AppStorage.get<User>('user')?.id ?? 0
   AppStorage.setOrCreate<string>('addressSyncState', 'loading')
   const remoteAddresses: Address[] | null = await fetchAddressesApi(showErrorToast)
-  if (requestVersion !== addressSyncVersion || !isLoggedIn() || token !== getAuthToken()
+  if (requestVersion !== addressSyncVersion || !isLoggedIn() || sessionEpoch !== getAuthSessionEpoch()
     || userId !== (AppStorage.get<User>('user')?.id ?? 0)) {
     return false
   }

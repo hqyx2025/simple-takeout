@@ -119,6 +119,30 @@ class InputBoundaryTest {
         assertEquals("分类名称最多 32 个字符", error.getMessage());
     }
 
+    @Test
+    void setmealCreationRejectsInvalidComponentOwnershipAvailabilityAndQuantity() {
+        when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore()));
+        var input = new StoreService.SetmealInput("套餐", "", 10, 12, "",
+                List.of(new com.example.takeout.model.SetmealItem(0, 0, 100, "商品", 1)));
+        var valid = new com.example.takeout.model.Goods(100, STORE_ID, "商品", "", 10, 10, "",
+                1, 0, 99, 0, 0, 4.5, "", false, 1, "");
+        var foreign = new com.example.takeout.model.Goods(100, STORE_ID + 1, "他店商品", "", 10, 10, "",
+                1, 0, 99, 0, 0, 4.5, "", false, 1, "");
+        var offShelf = new com.example.takeout.model.Goods(100, STORE_ID, "下架商品", "", 10, 10, "",
+                1, 0, 99, 0, 0, 4.5, "", false, 0, "");
+        var multi = valid.withSpecs(List.of(new com.example.takeout.model.GoodsSpec(301, 100, "大份", 12, 10, 0, 0, 1, "")));
+        for (var component : List.of(foreign, offShelf, multi)) {
+            when(goodsDao.findById(100)).thenReturn(Optional.of(component));
+            assertThrows(BizException.class, () -> storeService.createSetmeal(OWNER_ID, STORE_ID, input));
+        }
+        when(goodsDao.findById(100)).thenReturn(Optional.empty());
+        assertThrows(BizException.class, () -> storeService.createSetmeal(OWNER_ID, STORE_ID, input));
+        assertThrows(BizException.class, () -> storeService.createSetmeal(OWNER_ID, STORE_ID,
+                new StoreService.SetmealInput("套餐", "", 10, 12, "",
+                        List.of(new com.example.takeout.model.SetmealItem(0, 0, 100, "商品", 0)))));
+        verify(storeDao, never()).insertSetmeal(any());
+    }
+
     // ============ 内容管理 ============
 
     @Test

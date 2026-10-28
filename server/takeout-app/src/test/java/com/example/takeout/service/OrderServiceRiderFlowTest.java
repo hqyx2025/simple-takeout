@@ -66,6 +66,11 @@ class OrderServiceRiderFlowTest {
             mock(com.example.takeout.service.mq.DomainEventPublisher.class),
             mock(org.springframework.beans.factory.ObjectProvider.class), mock(PaymentRecordDao.class));
 
+    @org.junit.jupiter.api.BeforeEach
+    void lockingReadUsesCurrentOrder() {
+        when(orderDao.findByIdForUpdate(org.mockito.ArgumentMatchers.anyLong())).thenAnswer(invocation -> orderDao.findById(invocation.getArgument(0)));
+    }
+
     /** 服务层独立校验骑手未被停用：走 riderGrab/riderPickup/riderDeliver 的用例必须先桩一个启用中的骑手档案。 */
     private void stubActiveRider() {
         // 骑手必须带接单位置与半径，否则配单判定（门店是否在自己半径内）会直接不派单
@@ -337,10 +342,12 @@ class OrderServiceRiderFlowTest {
     @Test
     void riderActionsFailWhenOrderIsNotYours() {
         stubActiveRider();
+        when(orderDao.findById(ORDER_ID)).thenReturn(Optional.of(storedOrder(2)));
         when(orderDao.riderPickup(eq(ORDER_ID), eq(RIDER_ID), anyString())).thenReturn(false);
         BizException pickup = assertThrows(BizException.class, () -> service.riderPickup(RIDER_ID, ORDER_ID));
         assertTrue(pickup.getMessage().contains("无法取餐"), pickup.getMessage());
 
+        when(orderDao.findById(ORDER_ID)).thenReturn(Optional.of(storedOrder(3)));
         when(orderDao.riderDeliver(eq(ORDER_ID), eq(RIDER_ID), anyString())).thenReturn(false);
         BizException deliver = assertThrows(BizException.class, () -> service.riderDeliver(RIDER_ID, ORDER_ID));
         assertTrue(deliver.getMessage().contains("无法送达"), deliver.getMessage());

@@ -7,13 +7,13 @@
   const STATUS = ['待付款', '待接单', '制作中', '配送中', '已送达', '已取消', '退款中'];
   const NAV = {
     0: [['首页', 'home', '⌂'], ['搜索与榜单', 'discover', '⌕'], ['购物车', 'cart', '▣'], ['我的订单', 'orders', '▤'], ['收藏与优惠券', 'perks', '♡'], ['地址与钱包', 'account', '◎'], ['个人设置', 'settings', '⚙'], ['智能客服', 'assistant', '?']],
-    1: [['经营概况', 'overview', '▦'], ['订单处理', 'merchant-orders', '▤'], ['门店与商品', 'catalog', '▣'], ['采购与库存', 'erp', '▤'], ['评价回复', 'reviews', '☆'], ['营销活动', 'marketing', '◇']],
-    2: [['平台总览', 'overview', '▦'], ['分类管理', 'categories', '▦'], ['店铺审核', 'stores', '⌂'], ['全平台订单', 'admin-orders', '▤'], ['退款审批', 'refunds', '↩'], ['用户与商品', 'users', '♙'], ['骑手管理', 'riders', '➤'], ['内容管理', 'content', '▧'], ['员工管理', 'employees', '♧'], ['采购与库存', 'erp', '▤'], ['操作日志', 'audit', '≡'], ['营销监管', 'admin-marketing', '◇']],
+    1: [['经营概况', 'overview', '▦'], ['订单处理', 'merchant-orders', '▤'], ['门店与商品', 'catalog', '▣'], ['采购与库存', 'erp', '▤'], ['评价回复', 'reviews', '☆'], ['营销活动', 'marketing', '◇'], ['售后待偿账目', 'after-sales-ledger', '↩']],
+    2: [['平台总览', 'overview', '▦'], ['分类管理', 'categories', '▦'], ['店铺审核', 'stores', '⌂'], ['全平台订单', 'admin-orders', '▤'], ['退款审批', 'refunds', '↩'], ['配送异常', 'delivery-issues', '⚑'], ['用户与商品', 'users', '♙'], ['骑手管理', 'riders', '➤'], ['内容管理', 'content', '▧'], ['员工管理', 'employees', '♧'], ['采购与库存', 'erp', '▤'], ['操作日志', 'audit', '≡'], ['营销监管', 'admin-marketing', '◇']],
     3: [['待抢订单', 'rider-pool', '⌖'], ['配送订单', 'rider-orders', '➤'], ['骑手资料', 'rider-profile', '♙']]
   };
   const TITLES = {
     home: '首页', discover: '搜索与榜单', cart: '购物车', checkout: '确认订单', orders: '我的订单', perks: '收藏与优惠券', account: '地址与钱包', settings: '个人设置', assistant: '智能客服',
-    erp: '采购与库存', overview: '经营概况', 'merchant-orders': '订单处理', catalog: '门店与商品', reviews: '评价回复', marketing: '营销活动',
+    'after-sales-ledger': '售后待偿账目', 'delivery-issues': '配送异常', erp: '采购与库存', overview: '经营概况', 'merchant-orders': '订单处理', catalog: '门店与商品', reviews: '评价回复', marketing: '营销活动',
     categories: '分类管理', stores: '店铺审核', 'admin-orders': '全平台订单', refunds: '退款审批', users: '用户与商品', riders: '骑手管理', content: '内容管理', employees: '员工管理', audit: '操作日志', 'admin-marketing': '营销监管',
     'rider-pool': '待抢订单', 'rider-orders': '配送订单', 'rider-profile': '骑手资料'
   };
@@ -22,7 +22,7 @@
     sidebarCollapsed: localStorage.getItem('takeout.demo.sidebarCollapsed') === '1',
     user: null, role: 0, page: 'home', search: '', categoryId: 0, stores: [], categories: [], storeId: 0, checkoutStoreId: 0,
     location: null, locationLabel: '', locating: false, locationVersion: 0,
-    goods: [], cart: [], addresses: [], coupons: [], orders: [], favorites: [], rider: null, riderOrders: [],
+    goods: [], cart: [], addresses: [], coupons: [], orders: [], favorites: [], rider: null, riderOrders: [], riderPool: [],
     merchantStores: [], activeStoreId: 0, merchantGoods: [], merchantOrders: [], editGoods: null, editAddress: null, reviewOrder: null,
     adminUsers: [], adminProducts: [], adminStores: [], adminCategories: [], adminOrders: [], adminRefunds: [],
     adminOrdersPage: 1, adminOrdersTotal: 0, adminOrdersHasMore: false, adminOrderQuery: '',
@@ -30,7 +30,7 @@
     adminRiders: [], adminBanners: [], adminAnnouncements: [], adminEmployees: [], adminActivities: [], adminSeckills: [],
     merchantActivities: [], merchantSeckills: [], merchantReviews: [], assistantHistory: [],
     checkoutIntentKey: '', checkoutIntentStoreId: 0, checkoutSubmitting: false,
-    checkoutDrafts: {}, checkoutReturnStoreId: 0, checkoutView: null, riderActions: {}
+    checkoutDrafts: {}, checkoutReturnStoreId: 0, checkoutView: null, riderActions: {}, ledgerPage: 1, deliveryIssuesPage: 1, deliveryIssueFilter: 'OPEN', deliveryIssues: []
   };
   let renderVersion = 0;
   let authRequestVersion = 0;
@@ -53,14 +53,14 @@
       search: '', categoryId: 0, stores: [], categories: [], storeId: 0, goods: [],
       location: null, locationLabel: '', locating: false,
       cart: [], addresses: [], coupons: [], orders: [], favorites: [],
-      rider: null, riderOrders: [], merchantStores: [], activeStoreId: 0,
+      rider: null, riderOrders: [], riderPool: [], merchantStores: [], activeStoreId: 0,
       merchantGoods: [], merchantOrders: [], merchantStoreEdit: null, editGoods: null, editAddress: null, reviewOrder: null,
       adminUsers: [], adminProducts: [], adminStores: [], adminCategories: [], adminOrders: [], adminRefunds: [],
       adminOrdersPage: 1, adminOrdersTotal: 0, adminOrdersHasMore: false, adminOrderQuery: '',
       adminRefundsPage: 1, adminRefundsTotal: 0, adminRefundsHasMore: false, adminRefundFilter: 'PENDING',
       adminRiders: [], adminBanners: [], adminAnnouncements: [], adminEmployees: [], adminActivities: [], adminSeckills: [],
       merchantActivities: [], merchantSeckills: [], merchantReviews: [], assistantHistory: [],
-      checkoutDrafts: {}, checkoutReturnStoreId: 0, riderActions: {}
+      checkoutDrafts: {}, checkoutReturnStoreId: 0, riderActions: {}, ledgerPage: 1, deliveryIssuesPage: 1, deliveryIssueFilter: 'OPEN', deliveryIssues: []
     });
     resetCheckoutIntent();
     localStorage.removeItem('takeout.demo.token');
@@ -74,7 +74,7 @@
   const toast = (message, error = false) => { const el = $('notice'); el.textContent = message; el.classList.toggle('error', error); el.hidden = false; clearTimeout(toast.timer); toast.timer = setTimeout(() => { el.hidden = true; }, 3600); };
   const api = async (path, options = {}) => {
     const requestToken = state.token;
-    const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+    const headers = { ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...(options.headers || {}) };
     if (requestToken) headers.Authorization = `Bearer ${requestToken}`;
     const response = await fetch(TakeoutUrls.localPath(path, document.baseURI), { cache: 'no-store', ...options, headers });
     let body;
@@ -237,9 +237,58 @@
     return {storeId,items,addresses,coupons,store,subtotal,deliveryFee,available,address,selectedCoupon,
       signature:checkoutSnapshot(items,store,address,selectedCoupon)};
   };
+  const canOrder = (order, action, legacy = false) => order && Object.prototype.hasOwnProperty.call(order,'capabilities')
+    ? Array.isArray(order.capabilities?.allowedActions) && order.capabilities.allowedActions.every(item=>typeof item==='string')
+      && order.capabilities.allowedActions.includes(action) : legacy;
+  const canRefund = order => canOrder(order, 'REFUND', Number(order?.status) === 4 && Number(order?.escrowStatus || 0) === 0);
+  const evidenceField = '<label class="field">证据图片（选填，最多9张）<input class="input" name="evidenceFiles" type="file" accept="image/*" multiple><span class="help-text">上传实际餐品、包装或配送凭证。</span></label>';
+  const evidenceLinks = (label, images) => (images || []).filter(url => typeof url === 'string' && /^\/uploads\/[^?#]+$/.test(url)).map((url,index) => `<a class="btn small" href="${esc(assetURL(url))}" target="_blank" rel="noopener">${esc(label)} ${index+1}</a>`).join('');
+  const uploadEvidence = async (form, active) => {
+    const input = form.querySelector('[name="evidenceFiles"]');
+    const files = Array.from(input?.files || []);
+    if (files.length > 9) throw new Error('证据图片最多9张');
+    const images = [];
+    for (const file of files) {
+      if (!file.type?.startsWith('image/')) throw new Error('请选择图片文件');
+      if (!active()) throw staleRender;
+      const data = new FormData(); data.append('file', file);
+      const result = await api('/api/upload', { method: 'POST', body: data });
+      if (!active()) throw staleRender;
+      const url = typeof result === 'string' ? result : result?.url;
+      if (!/^\/uploads\/[^?#]+$/.test(url || '')) throw new Error('图片上传未返回有效本地地址，请重试');
+      images.push(url);
+    }
+    return images;
+  };
+  const requestBusinessForm = (title, fields, path, method, payload) => {
+    const view = createRefundDialog(title, `<form class="field-stack">${fields}<p role="alert" data-business-error></p><div class="form-actions"><button class="btn" type="button" data-business-cancel>取消</button><button class="btn primary" type="submit" data-business-submit>确认提交</button></div></form>`);
+    const {dialog, active} = view, form = dialog.querySelector('form');
+    const error = form.querySelector('[data-business-error]'), submit = form.querySelector('[data-business-submit]');
+    let busy = false, pending = null;
+    form.querySelector('[data-business-cancel]').addEventListener('click', () => { if (!busy) dialog.close('cancel'); });
+    dialog.addEventListener('cancel', event => { if (busy) event.preventDefault(); });
+    form.addEventListener('submit', async event => {
+      event.preventDefault(); if (busy || !active()) return;
+      busy = true; submit.disabled = true; error.textContent = '';
+      try {
+        if (!pending) pending = await payload(Object.fromEntries(new FormData(form).entries()), form, active);
+        if (!active()) return;
+        const result = await send(path, method, pending);
+        if (!active()) return;
+        dialog.result = result || {ok:true}; dialog.close('success');
+      } catch (failure) {
+        if (!active()) return;
+        if (failure.responseReceived) pending = null;
+        error.textContent = pending ? `提交结果待核对：${failure.message}。再次提交将核对原请求，请勿重复新建。` : failure.message;
+      } finally { if (active()) { busy = false; submit.disabled = false; } }
+    });
+    view.show(); return view.closed;
+  };
+  const noteField = (name, label, max = 500) => `<label class="field">${label}<textarea class="textarea" name="${name}" required maxlength="${max}" placeholder="例如：联系收货人多次未接通，请平台协助核实"></textarea></label>`;
+  const requireNote = (value, max = 500) => { const text = String(value || '').trim(); if (!text || text.length > max) throw new Error(`请填写${max}字以内的说明`); return text; };
   const REFUND_REASONS = { NOT_RECEIVED: '未收到餐', QUALITY_ISSUE: '餐品质量问题', WRONG_ITEM: '商品不符或缺漏', DONOT_WANT: '不想要了', OTHER: '其他原因' };
   const refundStatus = record => ({ PENDING: '待审批', APPROVED: '已同意，退款处理中', REFUNDED: '已退款', REJECTED: '已拒绝' }[record.status] || '状态待确认');
-  const refundDetails = record => `<dl class="refund-details"><div><dt>退款申请编号</dt><dd>${esc(record.id)}</dd></div><div><dt>订单编号</dt><dd>${esc(record.orderId)}</dd></div><div><dt>申请类型</dt><dd>${esc(REFUND_REASONS[record.reasonType] || record.reasonType || '其他原因')}</dd></div><div><dt>补充说明</dt><dd>${esc(record.reason || '未填写')}</dd></div><div><dt>退款金额</dt><dd>¥${cash(record.amount)}</dd></div><div><dt>处理状态</dt><dd>${esc(refundStatus(record))}</dd></div><div><dt>申请时间</dt><dd>${esc(record.applyTime || '暂无记录')}</dd></div><div><dt>处理时间</dt><dd>${esc(record.processTime || '尚未处理')}</dd></div>${record.rejectReason ? `<div><dt>拒绝原因</dt><dd>${esc(record.rejectReason)}</dd></div>` : ''}</dl>`;
+  const refundDetails = record => `<dl class="refund-details"><div><dt>退款申请编号</dt><dd>${esc(record.id)}</dd></div><div><dt>订单编号</dt><dd>${esc(record.orderId)}</dd></div><div><dt>申请类型</dt><dd>${esc(REFUND_REASONS[record.reasonType] || record.reasonType || '其他原因')}</dd></div><div><dt>补充说明</dt><dd>${esc(record.reason || '未填写')}</dd></div><div><dt>退款金额</dt><dd>¥${cash(record.amount)}</dd></div><div><dt>处理状态</dt><dd>${esc(refundStatus(record))}</dd></div><div><dt>申请时间</dt><dd>${esc(record.applyTime || '暂无记录')}</dd></div><div><dt>处理时间</dt><dd>${esc(record.processTime || '尚未处理')}</dd></div>${record.rejectReason ? `<div><dt>拒绝原因</dt><dd>${esc(record.rejectReason)}</dd></div>` : ''}</dl><div class="toolbar">${evidenceLinks('申请证据',record.evidenceImages)}</div>${record.merchantResponse?`<p>商家举证：${esc(record.merchantResponse)}</p>`:''}<div class="toolbar">${evidenceLinks('商家证据',record.merchantEvidenceImages)}</div>${record.appealReason?`<p>申诉（${Number(record.appealCount||0)}次）：${esc(record.appealReason)}</p>`:''}<div class="toolbar">${evidenceLinks('申诉证据',record.appealImages)}</div>`;
   const refundFeedback = record => {
     if (record?.status === 'REFUNDED') return '款项已按原支付渠道退回，可在退款记录查看详情';
     if (record?.status === 'REJECTED') return `该申请已被拒绝：${record.rejectReason || '请查看退款记录中的处理说明'}`;
@@ -263,7 +312,32 @@
     activeRefundDialog = dialog;
     return { dialog, closed, active, show() { document.body.append(dialog); dialog.showModal(); } };
   };
+  const ISSUE_TYPES = {NO_RIDER:'长时间无人接单',CUSTOMER_UNREACHABLE:'无法联系收货人',ADDRESS_PROBLEM:'地址异常',FOOD_DAMAGED:'餐品损坏',OTHER:'其他异常'};
+  const issuePath = id => '/api/' + ({0:'orders',1:'merchant/orders',3:'rider/orders'}[state.role] || 'orders') + '/' + id + '/issues';
+  const issueDetails = issue => '<section class="surface"><strong>异常 #' + esc(issue.id) + ' · 订单 ' + esc(issue.orderId) + '</strong><p>' + esc(ISSUE_TYPES[issue.type] || issue.type) + '：' + esc(issue.note) + '</p><p class="subtle">' + esc(issue.status==='OPEN'?'待平台处理':'已处理') + ' · ' + esc(issue.createTime) + '</p>' + (issue.resolveNote?'<p>处理说明：' + esc(issue.resolveNote) + '</p>':'') + '</section>';
+  const showOrderIssues = async orderId => {
+    const path = issuePath(orderId);
+    const view = createRefundDialog('配送异常记录','<div data-issue-history role="status">正在读取…</div><button class="btn" type="button" data-refund-close>关闭</button>');
+    const {dialog,active} = view, content = dialog.querySelector('[data-issue-history]');
+    let busy = false;
+    const load = async () => {
+      if (busy || !active()) return; busy = true;
+      try { const records = await get(path); if(active())content.innerHTML = records?.length ? records.map(issueDetails).join('') : '<p>暂无异常记录。</p>'; }
+      catch(error) { if(active())content.innerHTML = '<p role="alert">读取失败：' + esc(error.message) + '</p><button class="btn" type="button" data-issue-retry>重试</button>'; }
+      finally {busy = false;}
+    };
+    content.addEventListener('click', event => {if(event.target.closest('[data-issue-retry]'))void load();});
+    dialog.querySelector('[data-refund-close]').addEventListener('click',()=>dialog.close('cancel'));
+    view.show(); await load();
+  };
+  const canAppeal = record => {
+    const processed = Date.parse(String(record.processTime || '').replace(' ','T'));
+    return record.status === 'REJECTED' && Number(record.appealCount || 0) === 0 && Number.isFinite(processed) && Date.now() <= processed + 48*60*60*1000;
+  };
   const showRefundHistory = async orderId => {
+    const merchant = state.role === 1;
+    const context = asyncContext();
+    let records = [];
     const view = createRefundDialog('退款记录', '<div data-refund-history role="status">正在读取退款记录…</div><div class="form-actions"><button class="btn" type="button" data-refund-close>关闭</button></div>');
     const { dialog, active } = view;
     const content = dialog.querySelector('[data-refund-history]');
@@ -272,26 +346,37 @@
       if (loading || !active()) return;
       loading = true; content.textContent = '正在读取退款记录…';
       try {
-        const records = await get(`/api/orders/${orderId}/refunds`);
+        records = await get(`/api/${merchant ? 'merchant/orders' : 'orders'}/${orderId}/refunds`);
         if (!active()) return;
-        content.innerHTML = records?.length ? records.map(record => `<section class="refund-record" aria-label="退款申请 ${esc(record.id)}">${refundDetails(record)}</section>`).join('') : '<p>此订单暂无退款申请。</p>';
+        content.innerHTML = records?.length ? records.map(record => `<section class="refund-record" aria-label="退款申请 ${esc(record.id)}">${refundDetails(record)}${merchant && record.status === 'PENDING' ? btn('提交商家举证','merchant-evidence',record.id) : !merchant && canAppeal(record) ? btn('提交一次申诉','refund-appeal',record.id) : ''}</section>`).join('') : '<p>此订单暂无退款申请。</p>';
       } catch (error) {
         if (active()) content.innerHTML = `<p role="alert">退款记录读取失败：${esc(error.message || '网络暂不可用')}。请重试。</p><button class="btn" type="button" data-refund-retry>重新读取</button>`;
       } finally { loading = false; }
     };
     dialog.querySelector('[data-refund-close]').addEventListener('click', () => dialog.close('cancel'));
-    content.addEventListener('click', event => { if (event.target.closest('[data-refund-retry]')) void loadHistory(); });
+    content.addEventListener('click', async event => {
+      if (event.target.closest('[data-refund-retry]')) { await loadHistory(); return; }
+      const button = event.target.closest('[data-action]'); if (!button || !active()) return;
+      const record = records.find(item => Number(item.id) === Number(button.dataset.id)); if (!record) return;
+      let result;
+      if (button.dataset.action === 'merchant-evidence' && merchant && record.status === 'PENDING') {
+        result = await requestBusinessForm('商家举证', refundDetails(record) + noteField('response','商家说明',1000) + evidenceField, '/api/after-sales/' + record.id + '/merchant-evidence', 'POST', async (data,form,valid) => ({response:requireNote(data.response,1000),evidenceImages:await uploadEvidence(form,valid)}));
+      } else if (button.dataset.action === 'refund-appeal' && !merchant && canAppeal(record)) {
+        result = await requestBusinessForm('提交一次申诉', '<p class="help-text">驳回后48小时内可申诉一次，由平台重新裁决。</p>' + refundDetails(record) + noteField('reason','申诉说明',255) + evidenceField, '/api/orders/' + orderId + '/refunds/' + record.id + '/appeal', 'POST', async (data,form,valid) => ({reason:requireNote(data.reason,255),evidenceImages:await uploadEvidence(form,valid)}));
+      } else return;
+      if (isCurrentContext(context)) { if(result) toast('处理已提交，请核对最新售后记录'); await showRefundHistory(orderId); }
+    });
     view.show(); await loadHistory();
   };
   const requestRefund = order => {
     const key = `web-refund-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const view = createRefundDialog('申请退款', `<p class="help-text">订单 ${esc(order.orderNo || order.id)}，实付 ¥${cash(order.payAmount)}。提交后需平台审批，处理结果可在“退款记录”查看。</p><form class="field-stack" data-refund-apply-form><label class="field">退款原因<select class="select" name="reasonType" required><option value="">请选择实际遇到的问题</option>${Object.entries(REFUND_REASONS).map(([code,label]) => `<option value="${code}">${esc(label)}</option>`).join('')}</select></label><label class="field"><span data-refund-note-label>补充说明（选填）</span><textarea class="textarea" name="reason" maxlength="200" placeholder="例如：缺少一份米饭，或餐盒破损漏汤"></textarea></label><p class="help-text" data-refund-error role="alert"></p><div class="form-actions"><button class="btn" type="button" data-refund-cancel>暂不申请</button><button class="btn primary" type="submit" data-refund-submit>提交退款申请</button></div></form>`);
+    const view = createRefundDialog('申请退款', `<p class="help-text">订单 ${esc(order.orderNo || order.id)}，实付 ¥${cash(order.payAmount)}。送达后48小时内可申请部分或全额售后，确认收到、评价后仍可申请；由平台审批。${order.capabilities?.afterSalesDeadline ? `售后截止 ${esc(order.capabilities.afterSalesDeadline)}，剩余可退 ¥${cash(order.capabilities.refundRemaining)}。` : ''}处理结果可在“退款记录”查看。</p><form class="field-stack" data-refund-apply-form><label class="field">退款金额（元，留空退剩余全额）<input class="input" name="amount" type="number" min="0.01" step="0.01" ${order.capabilities ? `max="${esc(order.capabilities.refundRemaining)}"` : ''} placeholder="例如：5.50"></label>${evidenceField}<label class="field">退款原因<select class="select" name="reasonType" required><option value="">请选择实际遇到的问题</option>${Object.entries(REFUND_REASONS).map(([code,label]) => `<option value="${code}">${esc(label)}</option>`).join('')}</select></label><label class="field"><span data-refund-note-label>补充说明（选填）</span><textarea class="textarea" name="reason" maxlength="200" placeholder="例如：缺少一份米饭，或餐盒破损漏汤"></textarea></label><p class="help-text" data-refund-error role="alert"></p><div class="form-actions"><button class="btn" type="button" data-refund-cancel>暂不申请</button><button class="btn primary" type="submit" data-refund-submit>提交退款申请</button></div></form>`);
     const { dialog, active } = view;
     const form = dialog.querySelector('form');
     const error = form.querySelector('[data-refund-error]');
     const submit = form.querySelector('[data-refund-submit]');
     const cancel = form.querySelector('[data-refund-cancel]');
-    let submitting = false;
+    let submitting = false, pendingPayload = null;
     form.elements.reasonType.addEventListener('change', () => {
       const required = form.elements.reasonType.value === 'OTHER';
       form.elements.reason.required = required;
@@ -309,10 +394,19 @@
       if (reasonType === 'OTHER' && !reason) { error.textContent = '请填写具体问题，方便平台核实'; form.elements.reason.focus(); return; }
       submitting = true; submit.disabled = true; cancel.disabled = true; submit.textContent = '提交中…'; error.textContent = '';
       try {
-        const record = await send(`/api/orders/${order.id}/refund`, 'POST', { reasonType, reason, idempotencyKey: key });
+        if (!pendingPayload) {
+          const text = String(form.querySelector('[name="amount"]').value || '').trim();
+          const amount = text ? Number(text) : undefined;
+          if (text && (!/^\d+(\.\d{1,2})?$/.test(text) || !Number.isFinite(amount) || amount <= 0 || (order.capabilities && moneyCents(amount) > moneyCents(order.capabilities.refundRemaining)))) throw new Error('退款金额须大于0且不超过剩余可退金额，最多两位小数');
+          const evidenceImages = await uploadEvidence(form,active);
+          pendingPayload = { reasonType, reason, idempotencyKey:key, ...(amount === undefined ? {} : {amount}), evidenceImages };
+        }
+        if (!active()) return;
+        const record = await send('/api/orders/' + order.id + '/refund', 'POST', pendingPayload);
         if (!active()) return;
         dialog.result = record; dialog.close('success');
       } catch (requestError) {
+        if (requestError.responseReceived) pendingPayload = null;
         if (active()) error.textContent = `提交结果暂未确认：${requestError.message || '网络暂不可用'}。可保留当前内容重试；同一次申请不会重复创建。`;
       } finally {
         if (active()) { submitting = false; submit.disabled = false; cancel.disabled = false; submit.textContent = '重新提交退款申请'; }
@@ -321,7 +415,7 @@
     view.show(); form.elements.reasonType.focus(); return view.closed;
   };
   const requestRefundDecision = (refundId, approve) => {
-    const view = createRefundDialog(approve ? '核对并同意退款' : '核对并拒绝退款', '<div data-refund-decision-details role="status">正在读取申请详情…</div><form class="field-stack" data-refund-decision-form hidden><p class="notice-line">按原支付渠道退款，餐品不恢复为库存。</p>' + (approve ? '<label class="refund-ack"><input type="checkbox" name="acknowledged" required> 我已核对申请原因与退款金额</label>' : '<label class="field">拒绝原因<textarea class="textarea" name="rejectReason" maxlength="200" required placeholder="请说明核实情况和拒绝依据，用户将看到此内容"></textarea></label>') + '<p class="help-text" data-refund-error role="alert"></p><div class="form-actions"><button class="btn" type="button" data-refund-cancel>暂不处理</button><button class="btn primary" type="submit" data-refund-submit>确认' + (approve ? '同意退款' : '拒绝退款') + '</button></div></form><div class="form-actions" data-refund-load-actions><button class="btn" type="button" data-refund-close>关闭</button><button class="btn" type="button" data-refund-retry hidden>重新读取</button></div>');
+    const view = createRefundDialog(approve ? '核对并同意退款' : '核对并拒绝退款', '<div data-refund-decision-details role="status">正在读取申请详情…</div><form class="field-stack" data-refund-decision-form hidden><p class="notice-line">按原支付渠道退款，餐品不恢复为库存。待付款取消释放优惠券；商家/平台取消退回仍有效券，已付用户主动取消不返券；制作或配送取消不恢复可售库存。</p>' + (approve ? '<label class="refund-ack"><input type="checkbox" name="acknowledged" required> 我已核对申请原因与退款金额</label>' : '<label class="field">拒绝原因<textarea class="textarea" name="rejectReason" maxlength="200" required placeholder="请说明核实情况和拒绝依据，用户将看到此内容"></textarea></label>') + '<p class="help-text" data-refund-error role="alert"></p><div class="form-actions"><button class="btn" type="button" data-refund-cancel>暂不处理</button><button class="btn primary" type="submit" data-refund-submit>确认' + (approve ? '同意退款' : '拒绝退款') + '</button></div></form><div class="form-actions" data-refund-load-actions><button class="btn" type="button" data-refund-close>关闭</button><button class="btn" type="button" data-refund-retry hidden>重新读取</button></div>');
     const { dialog, active } = view;
     const details = dialog.querySelector('[data-refund-decision-details]');
     const form = dialog.querySelector('form');
@@ -561,7 +655,7 @@
       if (page === 'erp' && state.user && [1,2].includes(role)) {
         const token=state.token;
         const stores=await load(role===1?'/api/merchant/stores':'/api/admin/stores');
-        await TakeoutErp.mount({root:app,api,toast,role,stores:stores||[],live:()=>isCurrentRender(version,page,role) && state.token===token});
+        await TakeoutErp.mount({root:app,api,toast,role,ownerId:Number(state.user.id),stores:stores||[],live:()=>isCurrentRender(version,page,role) && state.token===token});
       }
       else if (role === 0 || !state.user) await renderCustomer(page, load);
       else if (role === 1) await renderMerchant(page, load);
@@ -668,7 +762,7 @@
       <section class="page-panel"><h2 class="section-title">商品清单</h2>${items.map(x=>`<div class="row-between" style="padding:8px 0"><span>${esc(x.goods?.name)} ${x.specName?`· ${esc(x.specName)}`:''} × ${x.quantity}</span><strong>¥${cash(moneyCents(x.price)*Number(x.quantity)/100)}</strong></div>`).join('')}
       <div class="muted-sep"></div><label class="field">优惠券<select class="select" id="checkoutCoupon" ${disabled}><option value="0" ${!draft.couponId?'selected':''}>不使用</option>${available.map(c=>`<option value="${c.id}" ${Number(c.id)===draft.couponId?'selected':''}>${esc(c.name)} · 满${cash(c.threshold)}减${cash(c.amount)}</option>`).join('')}</select></label>
       <p class="help-text">${draft.couponManual&&!draft.couponId?'已保留“不使用优惠券”的选择，可随时改选。':available.length?'默认推荐本单可用券中预计实付最低的一张，可改选或不使用。':'本单暂无可用优惠券。'}</p>${unavailable.length?`<details><summary>${unavailable.length} 张券本单不可用</summary>${unavailable.map(c=>`<p class="help-text">${esc(c.name)}：${esc(couponUnavailableReason(c,storeId,subtotal,deliveryFee))}</p>`).join('')}</details>`:''}
-      <div class="muted-sep"></div><div id="checkoutSummary" aria-live="polite"><div class="row-between"><span>商品小计</span><span>¥${cash(subtotal)}</span></div><div class="row-between"><span>配送费</span><span>¥${cash(deliveryFee)}</span></div><div class="row-between"><span>优惠券抵扣</span><span>-¥<b id="checkoutDiscount">${cash(amounts.discount)}</b></span></div><div class="row-between" style="margin-top:8px"><strong>预计应付</strong><strong>¥<span id="checkoutPayable">${cash(amounts.payable)}</span></strong></div><p class="help-text">预估金额，活动与最终金额以创建订单后的服务端计算为准，付款前可核对。</p></div>
+      <div class="muted-sep"></div><div id="checkoutSummary" aria-live="polite"><div class="row-between"><span>商品小计</span><span>¥${cash(subtotal)}</span></div><div class="row-between"><span>配送费</span><span>¥${cash(deliveryFee)}</span></div><div class="row-between"><span>优惠券抵扣</span><span>-¥<b id="checkoutDiscount">${cash(amounts.discount)}</b></span></div><div class="row-between" style="margin-top:8px"><strong>预计应付</strong><strong>¥<span id="checkoutPayable">${cash(amounts.payable)}</span></strong></div><p class="help-text">预估金额，活动与最终金额以创建订单后的服务端计算为准，付款前可核对。优惠顺序：最优折扣→新客立减→优惠券；赠品门槛按折扣后商品金额。新客指本店首次成功支付，下单时占用名额，取消未支付订单释放。</p></div>
       <label class="field" style="margin-top:12px">给商家的备注<textarea class="textarea" id="checkoutRemark" maxlength="255" placeholder="例如：少辣、不放香菜" aria-describedby="checkoutRemarkHint" ${disabled}>${esc(draft.remark)}</textarea><span class="help-text" id="checkoutRemarkHint">仅供商家备餐参考，最多 255 字。收货地点请填写在地址中。</span></label><div class="form-actions"><button class="btn primary" id="checkoutSubmit" type="submit" data-store="${storeId}" ${state.checkoutSubmitting?'disabled':''}>${state.checkoutSubmitting?'提交中…':pending?'核对上次提交结果':draft.reviewMessage?'确认变更并提交待付款订单':'提交待付款订单'}</button></div></section></form>`;
     $('checkoutCoupon').value = String(draft.couponId); $('checkoutRemark').value = draft.remark;
     const updateSelection = event => {
@@ -691,19 +785,28 @@
     const actions = [];
     if (role === 'user') {
       actions.push(btn('退款记录','refund-history',o.id));
-      if (o.status === 0) { actions.push(btn('余额支付','pay',o.id,'primary'),btn('支付宝沙箱','alipay-pay',o.id),o.paymentChannel==='ALIPAY'&&o.outTradeNo?btn('查询支付','alipay-query',o.id):'',btn('取消订单','cancel-order',o.id)); }
-      if (o.status === 1) actions.push(btn('取消订单','cancel-order',o.id));
-      if (o.status === 4 && o.escrowStatus === 0) actions.push(btn('确认收到','confirm-order',o.id,'primary'),btn('申请退款','refund',o.id));
-      if (o.status === 4 && o.escrowStatus === 1 && !o.reviewed) actions.push(btn('评价','review',o.id));
+      if (canOrder(o,'PAY',o.status===0)) actions.push(btn('余额支付','pay',o.id,'primary'),btn('支付宝沙箱','alipay-pay',o.id),o.paymentChannel==='ALIPAY'&&o.outTradeNo?btn('查询支付','alipay-query',o.id):'');
+      if (canOrder(o,'CANCEL',[0,1].includes(o.status))) actions.push(btn('取消订单','cancel-order',o.id));
+      if (canOrder(o,'CONFIRM',o.status===4&&o.escrowStatus===0)) actions.push(btn('确认收到','confirm-order',o.id,'primary'));
+      if (canRefund(o)) actions.push(btn('申请退款','refund',o.id));
+      if (canOrder(o,'REVIEW',o.status===4&&o.escrowStatus===1&&!o.reviewed)) actions.push(btn('评价','review',o.id));
     }
     if (role === 'merchant') {
-      if (o.status === 1) actions.push(btn('无法接单','merchant-reject',o.id,'danger'),btn('接单','merchant-flow',`${o.id}:accept`,'primary'));
-      if (o.status === 2 && !o.readyTime) actions.push(btn('出餐完成','merchant-flow',`${o.id}:ready`,'primary'));
+      actions.push(btn('售后记录与举证','refund-history',o.id));
+      if (canOrder(o,'MERCHANT_REJECT',o.status===1)) actions.push(btn('无法接单','merchant-reject',o.id,'danger'));
+      if (canOrder(o,'MERCHANT_ACCEPT',o.status===1)) actions.push(btn('接单','merchant-flow',o.id+':accept','primary'));
+      if (canOrder(o,'MERCHANT_READY',o.status===2&&!o.readyTime)) actions.push(btn('出餐完成','merchant-flow',o.id+':ready','primary'));
+      if (canOrder(o,'MERCHANT_DELIVER')) actions.push(btn('开始自配送','merchant-flow',o.id+':deliver','primary'));
+      if (canOrder(o,'MERCHANT_COMPLETE')) actions.push(btn('自配送已送达','merchant-flow',o.id+':complete','primary'));
     }
-    if (role === 'admin' && [1,2,3].includes(Number(o.status))) actions.push(btn('平台退款','admin-refund-order',o.id,'danger'));
+    if (role === 'admin' && canOrder(o,'CANCEL',[1,2,3].includes(Number(o.status)))) actions.push(o.status===0?btn('平台取消','admin-cancel-order',o.id,'danger'):btn('平台退款','admin-refund-order',o.id,'danger'));
     if (role === 'rider') {
-      if (o.status === 2) actions.push(btn('确认取餐','rider-pickup',o.id,'primary'));
-      if (o.status === 3) actions.push(btn('送达','rider-deliver',o.id,'primary'));
+      if (canOrder(o,'RIDER_PICKUP',o.status===2)) actions.push(btn('确认取餐','rider-pickup',o.id,'primary'));
+      if (canOrder(o,'RIDER_DELIVER',o.status===3)) actions.push(btn('送达','rider-deliver',o.id,'primary'));
+    }
+    if (['user','merchant','rider'].includes(role)) {
+      actions.push(btn('配送异常记录','order-issues',o.id));
+      if (canOrder(o,'REPORT_ISSUE',[1,2,3].includes(Number(o.status)))) actions.push(btn('上报配送异常','report-issue',o.id));
     }
     const riderCanSeeRecipient = role === 'rider' && [2,3].includes(Number(o.status));
     const recipientPhone = riderCanSeeRecipient ? String(o.address?.phone || '').trim() : '';
@@ -722,7 +825,7 @@
     const rejectHint = role === 'user' && o.cancelSource === 'MERCHANT'
       ? `<div class="notice-line"><strong>商家未能接单</strong><div>${esc(o.cancelReason || '商家无法承接本次订单')}</div></div>` : '';
     const displayStatus = role==='rider' && o.status===2 ? '待取餐' : role==='rider' && o.status===3 ? '已取餐 · 配送中' : orderStatus(o);
-    return `<article class="order-card"><div class="row-between"><div><strong>${esc(o.storeName || `订单 ${o.id}`)}</strong><div class="subtle">${esc(o.orderNo || o.id)} · ${esc(o.createTime || '')}</div></div>${statusTag(displayStatus,o.status===0?'warn':o.status===5?'bad':o.status===4?'good':'')}</div><div class="order-items">${(o.items||[]).map(i=>`${esc(i.goodsName || i.name)}${i.specName?` · ${esc(i.specName)}`:''} ×${i.quantity}`).join('、')}<div class="row-between" style="margin-top:8px">${destination}<strong>实付 ¥${cash(o.payAmount)}</strong></div>${o.riderName?`<div>骑手：${esc(o.riderName)} ${esc(o.riderPhone||'')}</div>`:''}</div>${rejectHint}${supportHint}${merchantHint}${riderHint}${actions.length?`<div class="td-actions">${actions.join('')}</div>`:''}</article>`;
+    return `<article class="order-card"><div class="row-between"><div><strong>${esc(o.storeName || `订单 ${o.id}`)}</strong><div class="subtle">${esc(o.orderNo || o.id)} · ${esc(o.createTime || '')}</div></div>${statusTag(displayStatus,o.status===0?'warn':o.status===5?'bad':o.status===4?'good':'')}</div><div class="order-items">${(o.items||[]).map(i=>`${esc(i.goodsName || i.name)}${i.specName?` · ${esc(i.specName)}`:''} ×${i.quantity}`).join('、')}<div class="row-between" style="margin-top:8px">${destination}<strong>实付 ¥${cash(o.payAmount)}</strong></div>${o.capabilities?.fulfillmentMode?`<div>配送方式：${o.capabilities.fulfillmentMode==='MERCHANT'?'商家自配送':'骑手配送'}</div>`:''}${o.riderName?`<div>骑手：${esc(o.riderName)} ${esc(o.riderPhone||'')}</div>`:''}</div>${rejectHint}${supportHint}${merchantHint}${riderHint}${actions.length?`<div class="td-actions">${actions.join('')}</div>`:''}</article>`;
   };
   const adminOrdersHtml = () => {
     const query = state.adminOrderQuery.trim().toLowerCase();
@@ -748,6 +851,13 @@
   };
   const merchantStoreSelect = () => `<select class="select" id="merchantStoreSelect">${state.merchantStores.map(s=>`<option value="${s.id}" ${Number(s.id)===Number(state.activeStoreId)?'selected':''}>${esc(s.name)}</option>`).join('')}</select>`;
   const renderMerchant = async (page, load = get) => {
+    if (page === 'after-sales-ledger') {
+      const data = await load('/api/merchant/after-sales/ledger?page=' + state.ledgerPage + '&pageSize=20');
+      const last = Math.max(1,Math.ceil(Number(data.total||0)/Number(data.pageSize||20)));
+      if(state.ledgerPage>last){state.ledgerPage=last;return renderMerchant(page,load);}
+      state.ledgerPage=Number(data.page||state.ledgerPage);
+      $('app').innerHTML = pageHead('售后待偿账目','已结算售后按实际责任记账，骑手收入不扣回；余额不足部分记待偿债务',btn('刷新','refresh')) + '<div class="notice-line">当前待偿 ¥' + cash(data.debtAmount) + '</div>' + table(['退款/订单','商家承担','钱包已扣','本次记债','平台承担','时间'],(data.list||[]).map(row=>[esc(row.refundId)+' / '+esc(row.orderId),'¥'+cash(row.merchantAmount),'¥'+cash(row.walletDeducted),'¥'+cash(row.debtAmount),'¥'+cash(row.platformAmount),esc(row.createTime)])) + pagination('ledger-page',state.ledgerPage,Number(data.total||0),Boolean(data.hasMore)); return;
+    }
     await loadMerchantStores(load);
     if (page === 'overview') {
       const stats = await load(`/api/merchant/stats?storeId=${state.activeStoreId || 0}`);
@@ -757,13 +867,13 @@
     if (page === 'merchant-orders') {
       const orders = await load('/api/merchant/orders') || [];
       state.merchantOrders = orders;
-      $('app').innerHTML=`${pageHead('订单处理','接单并标记出餐后，订单进入骑手待取餐池')}${orders.map(o=>orderCard(o,'merchant')).join('')||empty('暂无待处理订单')}`; return;
+      $('app').innerHTML=`${pageHead('订单处理','骑手配送单出餐后进入待取餐池；商家自配送单出餐后由商家开始配送、确认送达')}${orders.map(o=>orderCard(o,'merchant')).join('')||empty('暂无待处理订单')}`; return;
     }
     if (page === 'catalog') {
       if (!state.merchantStores.length) { $('app').innerHTML=`${pageHead('门店与商品')}<div class="page-panel"><h2 class="section-title">创建门店</h2>${merchantStoreForm()}</div>`; return; }
       const [goods,cats] = await Promise.all([load(`/api/merchant/stores/${state.activeStoreId}/goods`),load('/api/merchant/categories')]); state.merchantGoods=goods||[];
       const editingStore = state.merchantStoreEdit || null;
-      $('app').innerHTML=`${pageHead('门店与商品','管理商品上下架、库存、规格和店内分类',`${merchantStoreSelect()} ${btn('新增门店','merchant-store-new')}`)}${state.editGoods==='store'||editingStore?`<div class="page-panel section"><h2 class="section-title">${editingStore?'编辑门店':'创建门店'}</h2>${merchantStoreForm(editingStore)}</div>`:''}<div class="toolbar">${btn('新增商品','merchant-goods-new','', 'primary')} ${btn('店内分类','merchant-categories')} ${btn('套餐管理','merchant-setmeals')} ${btn('门店员工','merchant-employees')} ${btn('编辑门店','merchant-store-edit',state.activeStoreId)}</div>${state.editGoods&&state.editGoods!=='store'?merchantGoodsForm(state.editGoods,cats||[]):''}<div class="table-wrap"><table><thead><tr><th>商品</th><th>分类</th><th>售价</th><th>库存</th><th>销量</th><th>状态</th><th>操作</th></tr></thead><tbody>${state.merchantGoods.map(g=>`<tr><td><strong>${esc(g.name)}</strong><div class="subtle">${esc(g.description||'')}</div></td><td>${esc((cats||[]).find(c=>c.id===g.merchantCategoryId)?.name||'未分组')}</td><td>¥${cash(g.price)}</td><td>${g.stock}</td><td>${g.sales}</td><td>${statusTag(g.status===1?'上架':'下架',g.status===1?'good':'warn')}</td><td><div class="td-actions">${btn('编辑','merchant-goods-edit',g.id,'small')}${btn('规格','merchant-goods-specs',g.id,'small')}${btn(g.status===1?'下架':'上架','merchant-goods-toggle',g.id,'small')}${btn('删除','merchant-goods-delete',g.id,'small danger')}</div></td></tr>`).join('')||'<tr><td colspan="7">暂无商品</td></tr>'}</tbody></table></div>`;
+      $('app').innerHTML=`${pageHead('门店与商品','管理商品上下架、库存、规格和店内分类',`${merchantStoreSelect()} ${btn('新增门店','merchant-store-new')}`)}${state.editGoods==='store'||editingStore?`<div class="page-panel section"><h2 class="section-title">${editingStore?'编辑门店':'创建门店'}</h2>${merchantStoreForm(editingStore)}</div>`:''}<div class="toolbar">${btn('新增商品','merchant-goods-new','', 'primary')} ${btn('店内分类','merchant-categories')} ${btn('套餐管理','merchant-setmeals')} ${btn('门店员工','merchant-employees')} ${btn('编辑门店','merchant-store-edit',state.activeStoreId)} ${btn('配送方式','merchant-fulfillment',state.activeStoreId)}</div>${state.editGoods&&state.editGoods!=='store'?merchantGoodsForm(state.editGoods,cats||[]):''}<div class="table-wrap"><table><thead><tr><th>商品</th><th>分类</th><th>售价</th><th>库存</th><th>销量</th><th>状态</th><th>操作</th></tr></thead><tbody>${state.merchantGoods.map(g=>`<tr><td><strong>${esc(g.name)}</strong><div class="subtle">${esc(g.description||'')}</div></td><td>${esc((cats||[]).find(c=>c.id===g.merchantCategoryId)?.name||'未分组')}</td><td>¥${cash(g.price)}</td><td>${g.stock}</td><td>${g.sales}</td><td>${statusTag(g.status===1?'上架':'下架',g.status===1?'good':'warn')}</td><td><div class="td-actions">${btn('编辑','merchant-goods-edit',g.id,'small')}${btn('规格','merchant-goods-specs',g.id,'small')}${btn(g.status===1?'下架':'上架','merchant-goods-toggle',g.id,'small')}${btn('删除','merchant-goods-delete',g.id,'small danger')}</div></td></tr>`).join('')||'<tr><td colspan="7">暂无商品</td></tr>'}</tbody></table></div>`;
       $('merchantStoreSelect')?.addEventListener('change',e=>{state.activeStoreId=Number(e.target.value);state.editGoods=null;renderPage();}); return;
     }
     if (page === 'reviews') {
@@ -774,7 +884,7 @@
       if (!state.merchantStores.length) { $('app').innerHTML=`${pageHead('营销活动')}${empty('先创建门店')}`; return; }
       const [activities,seckills]=await Promise.all([load(`/api/merchant/activities?storeId=${state.activeStoreId}`),load(`/api/merchant/seckills?storeId=${state.activeStoreId}`)]);
       state.merchantActivities=activities||[];state.merchantSeckills=seckills||[];
-      $('app').innerHTML=`${pageHead('营销活动','创建折扣/满减活动与限时秒杀',merchantStoreSelect())}<div class="grid two"><section><div class="row-between"><h2 class="section-title">优惠活动</h2>${btn('新增活动','merchant-activity-new','','small primary')}</div>${state.editGoods==='activity'?activityForm():''}${state.merchantActivities.map(a=>`<article class="item-card"><div class="row-between"><strong>${esc(a.title)}</strong>${statusTag(a.status?'进行中':'已暂停',a.status?'good':'warn')}</div><div class="subtle">${esc(a.type)} · ${esc(a.startTime)} 至 ${esc(a.endTime)}</div><div class="td-actions" style="margin-top:8px">${btn(a.status?'暂停':'启用','merchant-activity-status',a.id,'small')}${btn('删除','merchant-activity-delete',a.id,'small danger')}</div></article>`).join('')||empty('暂无活动')}</section><section><div class="row-between"><h2 class="section-title">限时秒杀</h2>${btn('新增秒杀','merchant-seckill-new','','small primary')}</div>${state.editGoods==='seckill'?seckillForm():''}${state.merchantSeckills.map(s=>`<article class="item-card"><strong>商品 #${s.goodsId} · ¥${cash(s.price)}</strong><div class="subtle">名额 ${s.sold}/${s.quota} · ${esc(s.startTime)} 至 ${esc(s.endTime)}</div><div class="td-actions" style="margin-top:8px">${btn(s.status?'暂停':'启用','merchant-seckill-status',s.id,'small')}${btn('删除','merchant-seckill-delete',s.id,'small danger')}</div></article>`).join('')||empty('暂无秒杀')}</section></div>`;
+      $('app').innerHTML=`${pageHead('营销活动','最优折扣→新客立减→优惠券；满赠按折扣后商品金额。新客为本店首次成功支付，下单占用，取消未支付释放',merchantStoreSelect())}<div class="grid two"><section><div class="row-between"><h2 class="section-title">优惠活动</h2>${btn('新增活动','merchant-activity-new','','small primary')}</div>${state.editGoods==='activity'?activityForm():''}${state.merchantActivities.map(a=>`<article class="item-card"><div class="row-between"><strong>${esc(a.title)}</strong>${statusTag(a.status?'进行中':'已暂停',a.status?'good':'warn')}</div><div class="subtle">${esc(a.type)} · ${esc(a.startTime)} 至 ${esc(a.endTime)}</div><div class="td-actions" style="margin-top:8px">${btn(a.status?'暂停':'启用','merchant-activity-status',a.id,'small')}${btn('删除','merchant-activity-delete',a.id,'small danger')}</div></article>`).join('')||empty('暂无活动')}</section><section><div class="row-between"><h2 class="section-title">限时秒杀</h2>${btn('新增秒杀','merchant-seckill-new','','small primary')}</div>${state.editGoods==='seckill'?seckillForm():''}${state.merchantSeckills.map(s=>`<article class="item-card"><strong>商品 #${s.goodsId} · ¥${cash(s.price)}</strong><div class="subtle">名额 ${s.sold}/${s.quota} · ${esc(s.startTime)} 至 ${esc(s.endTime)}</div><div class="td-actions" style="margin-top:8px">${btn(s.status?'暂停':'启用','merchant-seckill-status',s.id,'small')}${btn('删除','merchant-seckill-delete',s.id,'small danger')}</div></article>`).join('')||empty('暂无秒杀')}</section></div>`;
       $('merchantStoreSelect')?.addEventListener('change',e=>{state.activeStoreId=Number(e.target.value);state.editGoods=null;renderPage();}); return;
     }
   };
@@ -788,8 +898,8 @@
       $('app').innerHTML=`${pageHead('骑手资料','在线状态将影响是否可以抢单')}${!r?empty('暂时无法读取骑手资料'):`<div class="grid four"><div class="metric"><div class="metric-label">配送状态</div><div class="metric-value">${r.online?'在线':'离线'}</div><button class="btn ${r.online?'danger':'primary'}" style="margin-top:10px" data-action="rider-online" data-id="${r.online?0:1}">${r.online?'下线':'上线'}</button></div><div class="metric"><div class="metric-label">已完成配送</div><div class="metric-value">${r.totalOrders||0}</div></div><div class="metric"><div class="metric-label">累计配送收入</div><div class="metric-value">¥${cash(r.totalIncome)}</div></div><div class="metric"><div class="metric-label">账号状态</div><div class="metric-value">${r.status===1?'正常':'停用'}</div></div></div><div class="page-panel section"><h2 class="section-title">接单范围</h2><form data-form="rider-settings" class="form-grid"><label class="field">配送半径（米）<input class="input" name="radiusMeters" type="number" min="1000" max="100000" value="${r.deliveryRadius||25000}"></label><label class="field">接单位置<input class="input" name="address" value="${esc(r.locationAddress||'')}"></label><label class="field">纬度<input class="input" name="latitude" type="number" step="any" value="${r.latitude||0}"></label><label class="field">经度<input class="input" name="longitude" type="number" step="any" value="${r.longitude||0}"></label><div class="form-actions full"><button class="btn primary">保存接单范围</button></div></form></div>`}`; return;
     }
     if (page === 'rider-pool') {
-      const [profile,pool]=await Promise.all([load('/api/rider/profile'),load('/api/rider/orders/pool')]); state.rider=profile;
-      $('app').innerHTML=`${pageHead('待抢订单',profile?.online?'只显示配送范围内可抢订单':'请先上线后查看可抢订单',btn('刷新','refresh'))}${!profile?.online?`<div class="notice-line">当前处于离线状态。${btn('立即上线','rider-online','1','primary')}</div>`:(pool||[]).map(o=>`<article class="order-card"><div class="row-between"><div><strong>${esc(o.storeName)}</strong><div class="subtle">抢单后可查看收货地址 · ${esc(o.createTime||'')}</div></div><strong>配送费 ¥${cash(o.deliveryFee)}</strong></div><div class="order-items">收货人、电话和完整门牌将在抢单成功后显示。</div>${btn('抢单','rider-grab',o.id,'primary')}</article>`).join('')||empty('当前没有可抢订单')}`; return;
+      const [profile,pool]=await Promise.all([load('/api/rider/profile'),load('/api/rider/orders/pool')]); state.rider=profile;state.riderPool=pool||[];
+      $('app').innerHTML=`${pageHead('待抢订单',profile?.online?'只显示配送范围内可抢订单':'请先上线后查看可抢订单',btn('刷新','refresh'))}${!profile?.online?`<div class="notice-line">当前处于离线状态。${btn('立即上线','rider-online','1','primary')}</div>`:(pool||[]).map(o=>`<article class="order-card"><div class="row-between"><div><strong>${esc(o.storeName)}</strong><div class="subtle">抢单后可查看收货地址 · ${esc(o.createTime||'')}</div></div><strong>配送费 ¥${cash(o.deliveryFee)}</strong></div><div class="order-items">收货人、电话和完整门牌将在抢单成功后显示。</div>${canOrder(o,'RIDER_GRAB',true)?btn('抢单','rider-grab',o.id,'primary'):''}</article>`).join('')||empty('当前没有可抢订单')}`; return;
     }
     if (page === 'rider-orders') {
       state.riderOrders=await load('/api/rider/orders')||[];
@@ -797,6 +907,13 @@
     }
   };
   const renderAdmin = async (page, load = get) => {
+    if (page === 'delivery-issues') {
+      const data = await load('/api/admin/delivery-issues?status=' + state.deliveryIssueFilter + '&page=' + state.deliveryIssuesPage + '&pageSize=30');
+      const last = Math.max(1,Math.ceil(Number(data.total||0)/Number(data.pageSize||30)));
+      if(state.deliveryIssuesPage>last){state.deliveryIssuesPage=last;return renderAdmin(page,load);}
+      state.deliveryIssues=data.list||[];state.deliveryIssuesPage=Number(data.page||state.deliveryIssuesPage);
+      $('app').innerHTML = pageHead('配送异常','改派仅限骑手取餐前；继续履约或取消均保留处理记录',btn('刷新','refresh')) + '<div class="toolbar">' + [['OPEN','待处理'],['RESOLVED','已处理'],['ALL','全部']].map(([code,label])=>btn(label,'delivery-issue-filter',code,state.deliveryIssueFilter===code?'primary':'')).join('') + '</div>' + state.deliveryIssues.map(issue=>issueDetails(issue)+(issue.status==='OPEN'?'<div class="toolbar">'+btn('改派','resolve-issue',issue.id+':REASSIGN')+btn('继续履约','resolve-issue',issue.id+':RESUME')+btn('取消订单','resolve-issue',issue.id+':CANCEL','danger')+'</div>':'')).join('') + (state.deliveryIssues.length?'':empty('暂无配送异常')) + pagination('delivery-issues-page',state.deliveryIssuesPage,Number(data.total||0),Boolean(data.hasMore)); return;
+    }
     if (page === 'overview') {
       const d=await load('/api/admin/dashboard'); const m=d?.statistics||d?.overview||d||{};
       $('app').innerHTML=`${pageHead('平台总览','平台运营数据来自服务端',btn('刷新','refresh'))}<div class="grid four">${[['用户',m.totalUsers],['商户',m.totalMerchants],['店铺',m.totalStores],['商品',m.totalGoods],['累计订单',m.totalOrders],['累计 GMV',`¥${cash(m.totalGmv)}`],['今日订单',m.todayOrders],['待结算托管',`¥${cash(m.pendingEscrowAmount)}`]].map(([l,v])=>`<div class="metric"><div class="metric-label">${l}</div><div class="metric-value">${v??'--'}</div></div>`).join('')}</div><div class="grid two section"><div class="page-panel"><h2 class="section-title">快捷管理</h2><div class="toolbar">${btn('店铺审核','go','stores')} ${btn('退款审批','go','refunds')} ${btn('全平台订单','go','admin-orders')}</div></div><div class="page-panel"><h2 class="section-title">热门商品</h2>${(m.hotGoods||[]).slice(0,6).map(g=>`<div class="row-between" style="padding:7px 0"><span>${esc(g.goodsName)} · ${esc(g.storeName)}</span><strong>销量 ${g.sales}</strong></div>`).join('')||empty('暂无统计')}</div></div>`; return;
@@ -894,7 +1011,6 @@
       if (submitter) submitter.disabled = true;
       try {
         if (name === 'browse-location') { await searchPlaces(form); }
-        else if (name === 'recharge') { state.user = await formSend('/api/auth/recharge','POST',{ amount:Number(data.amount) }); toast('充值成功'); await renderPage(); }
         else if (name === 'profile') { state.user=await formSend('/api/auth/me','PUT',{username:data.username,phone:data.phone,email:data.email||'',currentPassword:data.currentPassword||''}); toast('资料已保存'); renderShell(); await renderPage(); }
         else if (name === 'password') { await formSend('/api/auth/password','PUT',{oldPassword:data.oldPassword,newPassword:data.newPassword}); toast('密码已修改，请重新登录'); await logout(); }
         else if (name === 'payment-password') { await formSend('/api/auth/payment-password','POST',{loginPassword:data.loginPassword,paymentPassword:data.paymentPassword}); await logout();toast('支付密码已设置，请重新登录'); }
@@ -936,6 +1052,11 @@
     const actionSend = (...args) => guarded(send(...args), context, connected);
     const actionLoad = path => guarded(get(path), context, connected);
     try {
+      const oid = Number(String(id).split(':')[0]);
+      const currentOrder = (state.role===1 ? state.merchantOrders : state.role===2 ? state.adminOrders : state.role===3 ? (action==='rider-grab'?state.riderPool:state.riderOrders) : state.orders).find(item=>Number(item.id)===oid);
+      const actionRule = {'pay':'PAY','alipay-pay':'PAY','alipay-query':'PAY','cancel-order':'CANCEL','confirm-order':'CONFIRM','refund':'REFUND','review':'REVIEW','merchant-reject':'MERCHANT_REJECT','rider-grab':'RIDER_GRAB','rider-pickup':'RIDER_PICKUP','rider-deliver':'RIDER_DELIVER','admin-refund-order':'CANCEL','admin-cancel-order':'CANCEL','report-issue':'REPORT_ISSUE'}[action]
+        || (action==='merchant-flow' ? {accept:'MERCHANT_ACCEPT',ready:'MERCHANT_READY',deliver:'MERCHANT_DELIVER',complete:'MERCHANT_COMPLETE'}[String(id).split(':')[1]] : '');
+      if (actionRule && currentOrder && !canOrder(currentOrder,actionRule,true)) { toast('服务端未允许此操作，请刷新订单后重试',true); return; }
       if (action === 'login') return openAuth();
       if (action === 'sidebar-toggle') {
         state.sidebarCollapsed = !state.sidebarCollapsed;
@@ -946,6 +1067,30 @@
       if (action === 'send-code') { const f=el.closest('form');const data=Object.fromEntries(new FormData(f).entries());const r=await actionSend('/api/auth/email-code','POST',{phone:data.phone,email:data.email,purpose:'register',username:data.username});toast(r?.code||'验证码已发送');return; }
       if (action === 'go') return navigate(id);
       if (action === 'refresh') return renderPage();
+      if (action === 'ledger-page' && state.role===1) {state.ledgerPage=Math.max(1,Number(id)||1);return renderPage();}
+      if (action === 'delivery-issues-page' && state.role===2) {state.deliveryIssuesPage=Math.max(1,Number(id)||1);return renderPage();}
+      if (action === 'delivery-issue-filter' && state.role===2 && ['OPEN','RESOLVED','ALL'].includes(id)) {state.deliveryIssueFilter=id;state.deliveryIssuesPage=1;return renderPage();}
+      if (action === 'merchant-fulfillment' && state.role===1) {
+        const result = await actionLoad('/api/merchant/stores/' + id + '/fulfillment');
+        const fields = '<p class="help-text">仅影响新订单，已创建订单沿用下单时配送方式。骑手配送单必须由骑手履约；商家自配送单出餐后由商家配送和确认送达。</p><label class="field">配送方式<select class="select" name="mode"><option value="RIDER" ' + (result.mode==='RIDER'?'selected':'') + '>骑手配送</option><option value="MERCHANT" ' + (result.mode==='MERCHANT'?'selected':'') + '>商家自配送</option></select></label>';
+        const changed = await guarded(requestBusinessForm('门店配送方式',fields,'/api/merchant/stores/' + id + '/fulfillment','PUT',data=>{if(!['RIDER','MERCHANT'].includes(data.mode))throw new Error('请选择配送方式');return {mode:data.mode};}),context,connected);
+        if(changed){toast('配送方式已保存，将用于新订单');return renderPage();}return;
+      }
+      if (action === 'order-issues' && [0,1,3].includes(state.role)) return showOrderIssues(Number(id));
+      if (action === 'report-issue' && [0,1,3].includes(state.role)) {
+        if(!currentOrder || !canOrder(currentOrder,'REPORT_ISSUE',[1,2,3].includes(Number(currentOrder.status)))){toast('当前订单不能上报配送异常，请刷新',true);return;}
+        const key='web-issue-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+        const fields='<label class="field">异常类型<select class="select" name="type" required><option value="">请选择</option>' + Object.entries(ISSUE_TYPES).map(([code,label])=>'<option value="'+code+'">'+label+'</option>').join('') + '</select></label>' + noteField('note','异常说明');
+        const result=await guarded(requestBusinessForm('上报配送异常',fields,issuePath(id),'POST',data=>{if(!ISSUE_TYPES[data.type])throw new Error('请选择异常类型');return {type:data.type,note:requireNote(data.note),idempotencyKey:key};}),context,connected);
+        if(result){toast('异常已上报，等待平台处理');await showOrderIssues(Number(id));}return;
+      }
+      if (action === 'resolve-issue' && state.role===2) {
+        const [issueId,resolution]=String(id).split(':');const issue=state.deliveryIssues.find(item=>Number(item.id)===Number(issueId));
+        if(!issue || issue.status!=='OPEN' || !['REASSIGN','RESUME','CANCEL'].includes(resolution))return;
+        const fields=issueDetails(issue)+'<p class="notice-line">'+(resolution==='CANCEL'?'取消后原渠道退款，退回仍有效优惠券；制作或配送取消不恢复可售库存。':resolution==='REASSIGN'?'仅骑手配送且取餐前可改派，将回到待抢单池。':'确认核实后继续履约。')+'</p>'+noteField('note','处理说明');
+        const result=await guarded(requestBusinessForm('处理配送异常',fields,'/api/admin/delivery-issues/'+issueId+'/resolve','POST',data=>({action:resolution,note:requireNote(data.note)})),context,connected);
+        if(result){toast('配送异常已处理');return renderPage();}return;
+      }
       if (action === 'locate-device') return locate(el);
       if (action === 'location-change') {
         const form = $('browseLocationPicker');
@@ -1039,15 +1184,15 @@
         const unpaid=Number(order.status)===0;
         const message=unpaid
           ? '该订单为待付款，平台尚未扣款；取消后将释放库存和优惠券，确定取消吗？'
-          : '该订单尚未由商家接单，取消后支付金额将按原支付渠道全额退回，确定取消吗？';
+          : '该订单尚未由商家接单，取消后支付金额将按原支付渠道全额退回；已支付订单由用户主动取消不返优惠券，确定取消吗？';
         if(!window.confirm(message))return;
         await actionSend(`/api/orders/${id}/cancel`,'PUT');
-        toast(unpaid?'订单已取消，平台未扣款；库存和优惠券已释放':`订单已取消，¥${cash(order.payAmount)} 已按原支付渠道全额退回`);
+        toast(unpaid?'订单已取消，平台未扣款；库存和优惠券已释放':`订单已取消，¥${cash(order.payAmount)} 已按原支付渠道全额退回；用户主动取消不返优惠券`);
         return renderPage();
       }
-      if (action === 'confirm-order') { if(!window.confirm('确认已经收到餐品？确认后订单款项将结算；如有缺漏或餐损，请先申请退款。'))return;await actionSend(`/api/orders/${id}/confirm`,'PUT');toast('已确认收到，订单已完成');return renderPage(); }
+      if (action === 'confirm-order') { if(!window.confirm('确认已经收到餐品？确认后订单款项将结算；送达后48小时内仍可申请部分或全额售后，评价不影响售后期。'))return;await actionSend(`/api/orders/${id}/confirm`,'PUT');toast('已确认收到，订单已完成');return renderPage(); }
       if (action === 'refund-history') return showRefundHistory(Number(id));
-      if (action === 'refund') { const order=state.orders.find(item=>Number(item.id)===Number(id));if(!order||Number(order.status)!==4||Number(order.escrowStatus||0)!==0){toast('当前订单不可申请退款，请刷新订单或查看退款记录',true);return;}const record=await guarded(requestRefund(order),context,connected);if(!record)return;toast(refundFeedback(record),record.status==='REJECTED');return renderPage(); }
+      if (action === 'refund') { const order=state.orders.find(item=>Number(item.id)===Number(id));if(!order||!canRefund(order)){toast('当前订单不可申请退款，请刷新订单或查看退款记录',true);return;}const record=await guarded(requestRefund(order),context,connected);if(!record)return;toast(refundFeedback(record),record.status==='REJECTED');return renderPage(); }
       if (action === 'review') { const order=state.orders.find(o=>Number(o.id)===Number(id));const review=await guarded(requestReview(order),context,connected);if(!review)return;await actionSend(`/api/orders/${id}/review`,'POST',review);toast('评价已提交');return renderPage(); }
       if (action === 'address-new') { state.editAddress={};return renderPage(); }
       if (action === 'address-search') {
@@ -1130,7 +1275,7 @@
       if (action === 'merchant-goods-specs') { const goods=state.merchantGoods.find(g=>Number(g.id)===Number(id));const current=(goods?.specs||[]).map(s=>`${s.name}:${s.price}:${s.stock}`).join(',');const text=window.prompt('规格格式：名称:价格:库存，多个用英文逗号分隔',current);if(text!==null){const specs=text.split(',').map((part,index)=>{const [name,price,stock]=part.split(':');return {id:goods?.specs?.[index]?.id||0,name:(name||'').trim(),price:Number(price||0),stock:Number(stock||0)};}).filter(s=>s.name);await actionSend(`/api/merchant/goods/${id}/specs`,'PUT',{specs});toast('规格已保存');}return renderPage(); }
       if (action === 'merchant-setmeals') { const setmeals=await actionLoad(`/api/merchant/setmeals?storeId=${state.activeStoreId}`)||[];const name=window.prompt(`当前套餐：${setmeals.map(s=>s.name).join('、')||'暂无'}\n输入新套餐名称，取消则不创建`,'');if(name&&name.trim()){const goodsIds=window.prompt('输入套餐商品 ID，英文逗号分隔','');const items=(goodsIds||'').split(',').map(gid=>({id:0,setmealId:0,goodsId:Number(gid.trim()),goodsName:'',quantity:1})).filter(x=>x.goodsId>0);if(items.length)await actionSend(`/api/merchant/setmeals?storeId=${state.activeStoreId}`,'POST',{name:name.trim(),description:'网页创建套餐',price:Number(window.prompt('套餐价格','20')||20),originalPrice:Number(window.prompt('套餐原价','25')||25),image:'',items});toast('套餐已创建');}return renderPage(); }
       if (action === 'merchant-employees') { const employees=await actionLoad(`/api/merchant/employees?storeId=${state.activeStoreId}`)||[];const userId=window.prompt(`当前员工：${employees.map(e=>e.username).join('、')||'暂无'}\n输入要添加的用户 ID，取消则不添加`,'');if(userId) {const roleName=window.prompt('员工角色','STAFF')||'STAFF';await actionSend(`/api/merchant/employees?storeId=${state.activeStoreId}`,'POST',{userId:Number(userId),roleName});toast('员工已添加');}return renderPage(); }
-      if (action === 'merchant-flow') {const [oid,flow]=String(id).split(':');await actionSend(`/api/merchant/orders/${oid}/${flow}`,'PUT');toast('订单状态已更新');return renderPage();}
+      if (action === 'merchant-flow') {const [oid,flow]=String(id).split(':');if(['deliver','complete'].includes(flow)&&(!currentOrder||!canOrder(currentOrder,flow==='deliver'?'MERCHANT_DELIVER':'MERCHANT_COMPLETE'))){toast('此订单当前不可由商家配送，请刷新后重试',true);return;}if(flow==='complete'&&!window.confirm('确认自配送餐品已交给用户或放到约定地点？'))return;await actionSend(`/api/merchant/orders/${oid}/${flow}`,'PUT');toast('订单状态已更新');return renderPage();}
       if (action === 'merchant-reject') {const order=state.merchantOrders.find(item=>Number(item.id)===Number(id));if(!order){toast('订单状态已变化，请刷新后重试',true);return;}if(Number(order.status)!==1){toast('仅待接单订单可以拒绝',true);return;}if(await requestMerchantReject(order)){toast('已通知用户，款项已按原支付渠道退回');return renderPage();}return;}
       if (action === 'rider-online') {state.rider=await actionSend('/api/rider/status','PUT',{online:Number(id)});toast(Number(id)?'已上线':'已下线');return renderPage();}
       if (action === 'rider-copy-address' || action === 'rider-store-address') {
@@ -1177,6 +1322,7 @@
       if (action === 'admin-orders-page') {state.adminOrdersPage=Math.max(1,Number(id)||1);return renderPage();}
       if (action === 'admin-refunds-page') {state.adminRefundsPage=Math.max(1,Number(id)||1);return renderPage();}
       if (action === 'admin-refund-filter') {state.adminRefundFilter=id==='ALL'?'':'PENDING';state.adminRefundsPage=1;return renderPage();}
+      if (action === 'admin-cancel-order' && state.role===2) {if(!currentOrder||Number(currentOrder.status)!==0||!canOrder(currentOrder,'CANCEL'))return;if(!window.confirm('该订单尚未付款；平台取消将释放库存、优惠券和新客名额，确定继续？'))return;await actionSend('/api/admin/orders/'+id+'/cancel','PUT');toast('未支付订单已由平台取消');return renderPage();}
       if (action === 'admin-refund-order') {const order=state.adminOrders.find(o=>Number(o.id)===Number(id));if(!order||![1,2,3].includes(Number(order.status))){toast('当前订单不可直接退款，请使用退款审批流程',true);return;}await actionSend(`/api/admin/orders/${id}/refund`,'PUT');return renderPage();}
       if (action === 'refund-approve'||action === 'refund-reject') {if(!state.adminRefunds.some(record=>Number(record.id)===Number(id)&&record.status==='PENDING')){toast('该申请已变化，请刷新后查看',true);return;}const record=await guarded(requestRefundDecision(Number(id),action==='refund-approve'),context,connected);if(!record)return;toast(record.status==='REJECTED'?`已拒绝退款，处理原因已同步给用户${record.rejectReason?`：${record.rejectReason}`:''}`:refundFeedback(record));return renderPage();}
       if (action === 'admin-subtab') {el.parentElement.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));el.classList.add('active');$('adminSubtab').innerHTML=id==='products'?adminProductsTable():adminUsersTable();return;}

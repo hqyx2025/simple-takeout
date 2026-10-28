@@ -335,53 +335,61 @@ public class OrderDao {
                 MAPPER, storeId);
     }
 
-    /**
-     * 商户统计聚合。统计页只需要计数和金额，避免把商户历史订单全部读入应用内存。
-     * Shadows are used only when they still match the legacy values during a rolling upgrade.
-     */
+    /** 成功退款先按订单聚合，避免多个退款/商品行把结算额重复计算。 */
+    static String successfulRefundsJoin(String orderAlias) {
+        return " LEFT JOIN (SELECT order_id, SUM(amount) AS refunded_amount, SUM(merchant_amount) AS merchant_refunded, " +
+                "SUM(CASE WHEN settled_before = 0 THEN merchant_amount ELSE 0 END) AS pre_settlement_refunded, " +
+                "MAX(settled_before) AS settled_before FROM refund_records WHERE status = 'REFUNDED' GROUP BY order_id) refunds " +
+                "ON refunds.order_id = " + orderAlias + ".id ";
+    }
+
+    static String wasSettled(String orderAlias) {
+        return "(" + orderAlias + ".escrow_status = 1 OR settlement.order_id IS NOT NULL OR (" + orderAlias +
+                ".escrow_status = 2 AND COALESCE(refunds.settled_before, 0) = 1))";
+    }
+
+    /** 支付量按支付日；收入按结算日入账，结算后退款按退款日扣回。 */
     public MerchantStatsAggregate aggregateMerchantStats(long storeId, String todayStart, String tomorrowStart,
                                                           String weekStart, String monthStart,
                                                           List<String> dayStarts) {
         if (dayStarts == null || dayStarts.size() != 7) {
             throw new IllegalArgumentException("dayStarts must contain 7 dates");
         }
+        String paid = "orders.status IN (1,2,3,4,6) AND orders.escrow_status <> 2 AND " +
+                dateTimeExpression("pay_time") + " IS NOT NULL";
+        String completed = "orders.escrow_status = 1";
+        String paidAt = dateTimeExpression("pay_time");
+        String settledAt = "COALESCE(settlement.settled_at, " + dateTimeExpression("complete_time") + ")";
         StringBuilder sql = new StringBuilder("SELECT ");
         List<Object> args = new ArrayList<>();
-        appendCount(sql, args, "today_orders", "status <> 0 AND " + dateTimeExpression("create_time") + " >= " + DATE_PARAMETER +
-                " AND " + dateTimeExpression("create_time") + " < " + DATE_PARAMETER, todayStart, tomorrowStart);
-        appendAmount(sql, args, "today_income", "status = 4 AND escrow_status = 1 AND " + dateTimeExpression("complete_time") +
-                " >= " + DATE_PARAMETER + " AND " + dateTimeExpression("complete_time") + " < " + DATE_PARAMETER,
-                todayStart, tomorrowStart);
-        appendCount(sql, args, "today_completed", "status = 4 AND escrow_status = 1 AND " + dateTimeExpression("complete_time") +
-                " >= " + DATE_PARAMETER + " AND " + dateTimeExpression("complete_time") + " < " + DATE_PARAMETER,
-                todayStart, tomorrowStart);
-        appendCount(sql, args, "week_orders", "status <> 0 AND " + dateTimeExpression("create_time") + " >= " + DATE_PARAMETER,
-                weekStart);
-        appendAmount(sql, args, "week_income", "status = 4 AND escrow_status = 1 AND " + dateTimeExpression("complete_time") +
-                " >= " + DATE_PARAMETER, weekStart);
-        appendCount(sql, args, "week_completed", "status = 4 AND escrow_status = 1 AND " + dateTimeExpression("complete_time") +
-                " >= " + DATE_PARAMETER, weekStart);
-        appendCount(sql, args, "month_orders", "status <> 0 AND " + dateTimeExpression("create_time") + " >= " + DATE_PARAMETER,
-                monthStart);
-        appendAmount(sql, args, "month_income", "status = 4 AND escrow_status = 1 AND " + dateTimeExpression("complete_time") +
-                " >= " + DATE_PARAMETER, monthStart);
-        appendCount(sql, args, "month_completed", "status = 4 AND escrow_status = 1 AND " + dateTimeExpression("complete_time") +
-                " >= " + DATE_PARAMETER, monthStart);
-        appendCount(sql, args, "total_orders", "status <> 0");
-        appendAmount(sql, args, "total_income", "status = 4 AND escrow_status = 1");
+        appendCount(sql, args, "today_orders", paid + " AND " + paidAt + " >= " + DATE_PARAMETER +
+                " AND " + paidAt + " < " + DATE_PARAMETER, todayStart, tomorrowStart);
+        appendAmount(sql, args, "today_income", todayStart, tomorrowStart);
+        appendCount(sql, args, "today_completed", completed + " AND " + settledAt + " >= " + DATE_PARAMETER +
+                " AND " + settledAt + " < " + DATE_PARAMETER, todayStart, tomorrowStart);
+        appendCount(sql, args, "week_orders", paid + " AND " + paidAt + " >= " + DATE_PARAMETER +
+                " AND " + paidAt + " < " + DATE_PARAMETER, weekStart, tomorrowStart);
+        appendAmount(sql, args, "week_income", weekStart, tomorrowStart);
+        appendCount(sql, args, "week_completed", completed + " AND " + settledAt + " >= " + DATE_PARAMETER +
+                " AND " + settledAt + " < " + DATE_PARAMETER, weekStart, tomorrowStart);
+        appendCount(sql, args, "month_orders", paid + " AND " + paidAt + " >= " + DATE_PARAMETER +
+                " AND " + paidAt + " < " + DATE_PARAMETER, monthStart, tomorrowStart);
+        appendAmount(sql, args, "month_income", monthStart, tomorrowStart);
+        appendCount(sql, args, "month_completed", completed + " AND " + settledAt + " >= " + DATE_PARAMETER +
+                " AND " + settledAt + " < " + DATE_PARAMETER, monthStart, tomorrowStart);
+        appendCount(sql, args, "total_orders", paid);
+        appendAmount(sql, args, "total_income");
         for (int i = 0; i < 7; i++) {
             String end = i == 6 ? tomorrowStart : dayStarts.get(i + 1);
-            appendAmount(sql, args, "day_income_" + i,
-                    "status = 4 AND escrow_status = 1 AND " + dateTimeExpression("complete_time") + " >= " + DATE_PARAMETER +
-                            " AND " + dateTimeExpression("complete_time") + " < " + DATE_PARAMETER,
-                    dayStarts.get(i), end);
+            appendAmount(sql, args, "day_income_" + i, dayStarts.get(i), end);
         }
         for (int status = 1; status <= 5; status++) {
             appendCount(sql, args, "status_" + status,
-                    "status = " + status + " AND " + dateTimeExpression("create_time") + " >= " + DATE_PARAMETER + " AND " +
-                            dateTimeExpression("create_time") + " < " + DATE_PARAMETER, todayStart, tomorrowStart);
+                    "orders.status = " + status + " AND " + paidAt + " >= " + DATE_PARAMETER + " AND " +
+                            paidAt + " < " + DATE_PARAMETER, todayStart, tomorrowStart);
         }
-        sql.append(" FROM orders WHERE store_id = ?");
+        sql.append(" FROM orders LEFT JOIN order_settlements settlement ON settlement.order_id = orders.id")
+                .append(successfulRefundsJoin("orders")).append(" WHERE orders.store_id = ?");
         args.add(storeId);
         Map<String, Object> row = jdbc.queryForMap(sql.toString(), args.toArray());
         return MerchantStatsAggregate.from(row);
@@ -394,12 +402,26 @@ public class OrderDao {
         for (Object value : values) args.add(value);
     }
 
-    private static void appendAmount(StringBuilder sql, List<Object> args, String alias, String condition,
-                                     Object... values) {
+    private static void appendAmount(StringBuilder sql, List<Object> args, String alias, String... bounds) {
         appendComma(sql);
-        sql.append("COALESCE(SUM(CASE WHEN ").append(condition)
-                .append(" THEN GREATEST(pay_amount - delivery_fee, 0) ELSE 0 END), 0) AS ").append(alias);
-        for (Object value : values) args.add(value);
+        String settledAt = "COALESCE(settlement.settled_at, " + dateTimeExpression("complete_time") + ")";
+        String settlementWindow = "";
+        String refundWindow = "";
+        if (bounds.length == 2) {
+            settlementWindow = " AND " + settledAt + " >= " + DATE_PARAMETER + " AND " + settledAt + " < " + DATE_PARAMETER;
+            String refundedAt = "COALESCE(r.refund_time, STR_TO_DATE(NULLIF(r.process_time, ''), '%Y-%m-%d %H:%i:%s'))";
+            refundWindow = " AND " + refundedAt + " >= " + DATE_PARAMETER + " AND " + refundedAt + " < " + DATE_PARAMETER;
+            args.add(bounds[0]);
+            args.add(bounds[1]);
+            args.add(bounds[0]);
+            args.add(bounds[1]);
+        }
+        // net_amount 已扣结算前退款；fallback 只扣结算前退款，结算后退款在发生日独立扣回。
+        sql.append("COALESCE(SUM(CASE WHEN ").append(wasSettled("orders")).append(settlementWindow)
+                .append(" THEN COALESCE(settlement.net_amount, GREATEST(GREATEST(pay_amount - delivery_fee, 0) - ")
+                .append("COALESCE(refunds.pre_settlement_refunded, 0), 0)) ELSE 0 END - COALESCE((SELECT SUM(r.merchant_amount) ")
+                .append("FROM refund_records r WHERE r.order_id = orders.id AND r.status = 'REFUNDED' AND r.settled_before = 1")
+                .append(refundWindow).append("), 0)), 0) AS ").append(alias);
     }
 
     private static void appendComma(StringBuilder sql) {

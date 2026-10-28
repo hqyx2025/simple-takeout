@@ -114,8 +114,8 @@ export struct AdminStatisticsPage {
               Divider().color(COLORS.DIVIDER)
               Row({ space: SPACING.SM }) {
                 this.Metric('订单', this.stats.totalOrders.toString(), false)
-                this.Metric('累计成交', `¥${this.valueOrZero(this.stats.totalGmv)}`, true)
-                this.Metric('已结算', `¥${this.valueOrZero(this.stats.settledAmount)}`, false)
+                this.Metric('累计净成交额', `¥${this.valueOrZero(this.stats.totalGmv)}`, true)
+                this.Metric('已结算净额', `¥${this.valueOrZero(this.stats.settledAmount)}`, false)
                 this.Metric('待结算', `¥${this.valueOrZero(this.stats.pendingEscrowAmount)}`, false)
               }.width('100%')
             }
@@ -135,7 +135,7 @@ export struct AdminStatisticsPage {
                 Column({ space: SPACING.XS }) {
                   Text(`¥${this.valueOrZero(this.stats.todayGmv)}`).fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold)
                     .fontColor(MODULE_COLOR.ADMIN)
-                  Text('今日成交').fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
+                  Text('今日净成交额').fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
                 }.layoutWeight(1).alignItems(HorizontalAlign.Start)
               }.width('100%')
             }
@@ -176,14 +176,14 @@ export struct AdminStatisticsPage {
             .width('100%').padding(SPACING.MD)
           }
           ListItem() {
-            this.SectionTitle('店铺成交额排行', 2)
+            this.SectionTitle('店铺净成交额排行', 2)
           }
           ListItem() {
             Column({ space: SPACING.LG }) {
               if (this.topStores.length === 0) {
-                this.ChartEmpty('暂无店铺成交数据', 230)
+                this.ChartEmpty('暂无店铺净成交数据', 230)
               } else if (this.maxStoreGmv <= 0) {
-                this.ChartEmpty('暂无成交额数据', 230)
+                this.ChartEmpty('暂无净成交额数据', 230)
               } else {
                 ForEach(this.topStores.slice(0, 5), (store: AdminTopStore, index: number) => {
                   this.StoreBar(store, index + 1)
@@ -217,7 +217,7 @@ export struct AdminStatisticsPage {
             .width('100%')
           }
           ListItem() {
-            this.SectionTitle('店铺成交额明细', 5)
+            this.SectionTitle('店铺净成交额明细', 5)
           }
           ForEach(this.topStores, (store: AdminTopStore, index: number) => {
             ListItem() {
@@ -306,7 +306,7 @@ export struct AdminStatisticsPage {
         .backgroundColor(accentBg(accentIndexFromText(store.storeName)))
         .borderRadius(BORDER_RADIUS.ROUND)
       Text(store.storeName).fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold).layoutWeight(1)
-      Text(`成交 ¥${store.gmv.toFixed(2)}`).fontSize(FONT_SIZE.SM).fontColor(MODULE_COLOR.ADMIN)
+      Text(`净成交 ¥${store.gmv.toFixed(2)}`).fontSize(FONT_SIZE.SM).fontColor(MODULE_COLOR.ADMIN)
     }
       .attributeModifier(new AppCardStyle())
     .width('100%').padding(SPACING.MD)
@@ -425,7 +425,7 @@ export struct AdminStatisticsPage {
     Row({ space: SPACING.MD }) {
       Text(point.date).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).width(90)
       Text(`订单 ${point.orderCount}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
-      Text(`成交 ¥${point.gmv.toFixed(2)}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
+      Text(`净成交 ¥${point.gmv.toFixed(2)}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
     }
       .attributeModifier(new AppCardStyle()).width('100%').padding(SPACING.MD)
   }

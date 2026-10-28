@@ -6,6 +6,7 @@ import { AppMotion } from '../common/theme/AppMotion'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { Order, OrderPageData, Rider, User, UserRole } from '../model/Models'
+import { canOrderAction } from '../service/OrderStatus'
 import { grabOrderRemote, getLastRemoteErrorMessage, fetchRiderProfileRemote, reportRiderLocationRemote, startRiderLocationTimer } from '../service/AppStorageManager'
 import { fetchRiderOrdersPageResultApi, fetchRiderPoolResultApi } from '../service/api/RiderApi'
 import { logInfo } from '../service/AppLogger'
@@ -101,6 +102,8 @@ export struct RiderOrderPoolPage {
   }
 
   private async grab(order: Order): Promise<void> {
+    const current: Order | undefined = this.orders.find((item: Order) => item.id === order.id)
+    if (current === undefined || !canOrderAction(current, 'RIDER_GRAB', true)) { return }
     if (this.grabbingOrderId !== 0) {
       promptAction.showToast({ message: '正在抢单，请稍候', duration: 1200 })
       return
@@ -222,7 +225,7 @@ export struct RiderOrderPoolPage {
         Button(this.grabbingOrderId === order.id ? '抢单中…' : '抢单')
           .attributeModifier(new AppButtonStyle()).height(44).fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.RIDER)
           .borderRadius(BORDER_RADIUS.ROUND)
-          .enabled(this.grabbingOrderId === 0)
+          .enabled(this.grabbingOrderId === 0 && canOrderAction(order, 'RIDER_GRAB', true))
           .id(`rider-grab-${order.id}`)
           .onClick(() => { this.grab(order) })
       }.width('100%')

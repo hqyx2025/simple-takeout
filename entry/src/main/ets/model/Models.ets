@@ -148,8 +148,30 @@ export interface Coupon {
   condition: string
 }
 
+export interface OrderCapabilities {
+  allowedActions: string[]
+  refundRemaining: number
+  afterSalesDeadline: string
+  fulfillmentMode: string
+}
+
+export interface DeliveryIssue {
+  id: number
+  orderId: number
+  type: string
+  note: string
+  status: string
+  reporterRole: string
+  createTime: string
+  resolveNote?: string
+}
+
+export interface OrderActionSource {
+  capabilities?: OrderCapabilities
+}
+
 // 订单模型
-export interface Order {
+export interface Order extends OrderActionSource {
   id: number
   storeId: number
   storeName: string
@@ -373,6 +395,17 @@ export interface RefundRecord {
   applyTime: string
   processTime?: string
   rejectReason?: string
+  evidenceImages?: string[]
+  merchantEvidenceImages?: string[]
+  merchantResponse?: string
+  appealCount?: number
+  merchantAmount?: number
+  platformAmount?: number
+  settledBefore?: number
+  appealReason?: string
+  appealImages?: string[]
+  originalEscrow?: number
+  refundTime?: string
 }
 
 export interface RefundPageData {

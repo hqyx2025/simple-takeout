@@ -19,12 +19,16 @@ import java.util.Optional;
 @Repository
 public class StoreDao {
 
+    private static final String SELECT_STORES = "SELECT s.*, COALESCE(sold.monthly_sales, 0) AS real_monthly_sales " +
+            "FROM stores s LEFT JOIN (SELECT o.store_id, COUNT(*) AS monthly_sales FROM orders o WHERE " +
+            GoodsDao.recentPaidOrders("o") + " GROUP BY o.store_id) sold ON sold.store_id = s.id ";
+
     private static final RowMapper<Store> MAPPER = (rs, i) -> new Store(
             rs.getLong("id"),
             rs.getString("name"),
             rs.getString("image"),
             rs.getDouble("rating"),
-            rs.getInt("monthly_sales"),
+            rs.getInt("real_monthly_sales"),
             rs.getDouble("delivery_fee"),
             rs.getDouble("min_order"),
             rs.getString("delivery_time"),
@@ -132,24 +136,24 @@ public class StoreDao {
     }
 
     public List<Store> listAll() {
-        return jdbc.query("SELECT * FROM stores WHERE status = 1 ORDER BY monthly_sales DESC", MAPPER);
+        return jdbc.query(SELECT_STORES + "WHERE s.status = 1 ORDER BY real_monthly_sales DESC, s.id DESC", MAPPER, GoodsDao.monthlySalesArgs());
     }
 
     public List<Store> listAllForAdmin() {
-        return jdbc.query("SELECT * FROM stores ORDER BY id DESC", MAPPER);
+        return jdbc.query(SELECT_STORES + "ORDER BY s.id DESC", MAPPER, GoodsDao.monthlySalesArgs());
     }
 
     public List<Store> listByCategory(int categoryId) {
-        return jdbc.query("SELECT * FROM stores WHERE status = 1 AND " +
+        return jdbc.query(SELECT_STORES + "WHERE s.status = 1 AND " +
                         "(category_id = ? OR JSON_CONTAINS(COALESCE(category_ids, '[]'), JSON_ARRAY(?))) " +
-                        "ORDER BY monthly_sales DESC",
-                MAPPER, categoryId, categoryId);
+                        "ORDER BY real_monthly_sales DESC, s.id DESC",
+                MAPPER, GoodsDao.monthlySalesArgs(categoryId, categoryId));
     }
 
     /** 平台推荐营业店铺，距离由服务层按用户当前坐标计算。 */
     public List<Store> listRecommended() {
-        return jdbc.query("SELECT * FROM stores WHERE status = 1 AND recommended = 1 " +
-                        "ORDER BY rating DESC, monthly_sales DESC", MAPPER);
+        return jdbc.query(SELECT_STORES + "WHERE s.status = 1 AND s.recommended = 1 " +
+                        "ORDER BY s.rating DESC, real_monthly_sales DESC, s.id DESC", MAPPER, GoodsDao.monthlySalesArgs());
     }
 
     public boolean categoryExists(long categoryId) {
@@ -202,19 +206,19 @@ public class StoreDao {
     }
 
     public List<Store> listByOwner(long ownerId) {
-        return jdbc.query("SELECT * FROM stores WHERE owner_id = ? ORDER BY id", MAPPER, ownerId);
+        return jdbc.query(SELECT_STORES + "WHERE s.owner_id = ? ORDER BY s.id", MAPPER, GoodsDao.monthlySalesArgs(ownerId));
     }
 
     /** 商家工作台可见门店：店主本人或该店启用员工。 */
     public List<Store> listAccessibleByMerchant(long userId) {
-        return jdbc.query("SELECT * FROM stores s WHERE s.owner_id = ? OR EXISTS (" +
+        return jdbc.query(SELECT_STORES + "WHERE s.owner_id = ? OR EXISTS (" +
                         "SELECT 1 FROM employees e WHERE e.store_id = s.id AND e.user_id = ? AND e.status = 1) " +
                         "ORDER BY s.id",
-                MAPPER, userId, userId);
+                MAPPER, GoodsDao.monthlySalesArgs(userId, userId));
     }
 
     public Optional<Store> findById(long id) {
-        return jdbc.query("SELECT * FROM stores WHERE id = ?", MAPPER, id).stream().findFirst();
+        return jdbc.query(SELECT_STORES + "WHERE s.id = ?", MAPPER, GoodsDao.monthlySalesArgs(id)).stream().findFirst();
     }
 
     /** 店主或该店启用员工均可执行商家侧订单操作。 */
@@ -235,10 +239,10 @@ public class StoreDao {
     }
 
     public void update(Store s) {
-        jdbc.update("UPDATE stores SET name=?, image=?, rating=?, monthly_sales=?, delivery_fee=?, min_order=?, delivery_time=?, distance=?, tags=?, notice=?, address=?, latitude=?, longitude=?, delivery_radius=?, category_id=?, category_ids=?, status=?, recommended=? WHERE id=?",
-                s.name(), s.image(), s.rating(), s.monthlySales(), s.deliveryFee(), s.minOrder(),
+        jdbc.update("UPDATE stores SET name=?, image=?, delivery_fee=?, min_order=?, delivery_time=?, distance=?, tags=?, notice=?, address=?, latitude=?, longitude=?, delivery_radius=?, category_id=?, category_ids=? WHERE id=?",
+                s.name(), s.image(), s.deliveryFee(), s.minOrder(),
                 s.deliveryTime(), s.distance(), s.tags(), s.notice(), s.address(), s.latitude(), s.longitude(),
-                s.deliveryRadius(), s.categoryId(), s.categoryIds(), s.status(), s.recommended(), s.id());
+                s.deliveryRadius(), s.categoryId(), s.categoryIds(), s.id());
     }
 
     public void updateMonthlySales(long storeId, int sales) {

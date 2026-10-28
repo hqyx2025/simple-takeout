@@ -23,12 +23,28 @@ public class RefundDao {
             rs.getLong("merchant_id"),
             rs.getString("reason_type"),
             rs.getString("reason"),
-            rs.getDouble("amount"),
+            rs.getBigDecimal("amount"),
             rs.getString("status"),
             rs.getString("apply_time"),
             rs.getString("process_time"),
-            rs.getString("reject_reason")
+            rs.getString("reject_reason"),
+            images(rs.getString("evidence_images")), images(rs.getString("merchant_evidence_images")),
+            rs.getString("merchant_response"), rs.getInt("appeal_count"), rs.getString("appeal_reason"),
+            images(rs.getString("appeal_images")), rs.getInt("original_escrow"),
+            rs.getInt("settled_before"), rs.getBigDecimal("merchant_amount"),
+            rs.getBigDecimal("platform_amount"), rs.getString("refund_time")
     );
+
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
+
+    private static List<String> images(String value) throws java.sql.SQLException {
+        if (value == null || value.isBlank()) return List.of();
+        try {
+            return JSON.readValue(value, new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {});
+        } catch (java.io.IOException error) {
+            throw new java.sql.SQLException("售后证据数据损坏", error);
+        }
+    }
 
     private final JdbcTemplate jdbc;
 
@@ -60,6 +76,63 @@ public class RefundDao {
         Number key = keys.getKey();
         if (key == null) throw new IllegalStateException("退款申请主键未返回");
         return key.longValue();
+    }
+
+    public long insertAfterSales(long orderId, long userId, long merchantId, String reasonType,
+                                 String reason, java.math.BigDecimal amount, String applyTime,
+                                 String requestKey, String evidenceImages, int originalEscrow) {
+        GeneratedKeyHolder keys = new GeneratedKeyHolder();
+        jdbc.update(connection -> {
+            var statement = connection.prepareStatement("INSERT INTO refund_records(order_id,user_id,merchant_id," +
+                    "reason_type,reason,amount,status,apply_time,request_key,evidence_images,original_escrow,settled_before) " +
+                    "VALUES(?,?,?,?,?,?,'PENDING',?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS);
+            statement.setLong(1, orderId);
+            statement.setLong(2, userId);
+            statement.setLong(3, merchantId);
+            statement.setString(4, reasonType);
+            statement.setString(5, reason);
+            statement.setBigDecimal(6, amount);
+            statement.setString(7, applyTime);
+            statement.setString(8, requestKey);
+            statement.setString(9, evidenceImages);
+            statement.setInt(10, originalEscrow);
+            statement.setInt(11, originalEscrow == 1 ? 1 : 0);
+            return statement;
+        }, keys);
+        if (keys.getKey() == null) throw new IllegalStateException("退款申请主键未返回");
+        return keys.getKey().longValue();
+    }
+
+    public java.math.BigDecimal refundedAmount(long orderId) {
+        return jdbc.queryForObject("SELECT COALESCE(SUM(amount),0) FROM refund_records " +
+                "WHERE order_id=? AND status='REFUNDED'", java.math.BigDecimal.class, orderId);
+    }
+
+    public java.math.BigDecimal merchantRefunded(long orderId) {
+        return jdbc.queryForObject("SELECT COALESCE(SUM(merchant_amount),0) FROM refund_records " +
+                "WHERE order_id=? AND status='REFUNDED'", java.math.BigDecimal.class, orderId);
+    }
+
+    public boolean complete(long id, java.math.BigDecimal merchant, java.math.BigDecimal platform, String now) {
+        return jdbc.update("UPDATE refund_records SET status='REFUNDED',process_time=?,refund_time=?," +
+                "merchant_amount=?,platform_amount=?,reject_reason='' WHERE id=? AND status='PENDING'",
+                now, now, merchant, platform, id) == 1;
+    }
+
+    public boolean appeal(long id, String reason, String images, int escrow, String now) {
+        return jdbc.update("UPDATE refund_records SET status='PENDING',appeal_count=1,appeal_reason=?," +
+                "appeal_images=?,original_escrow=?,settled_before=?,apply_time=? " +
+                "WHERE id=? AND status='REJECTED' AND appeal_count=0",
+                reason, images, escrow, escrow == 1 ? 1 : 0, now, id) == 1;
+    }
+
+    public boolean merchantEvidence(long id, String response, String images) {
+        return jdbc.update("UPDATE refund_records SET merchant_response=?,merchant_evidence_images=? " +
+                "WHERE id=? AND status='PENDING'", response, images, id) == 1;
+    }
+
+    public Optional<RefundRecord> latestByOrder(long orderId) {
+        return jdbc.query("SELECT * FROM refund_records WHERE order_id = ? ORDER BY id DESC LIMIT 1", MAPPER, orderId).stream().findFirst();
     }
 
     public List<RefundRecord> listByOrder(long orderId) {

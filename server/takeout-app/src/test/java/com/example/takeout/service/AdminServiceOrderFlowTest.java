@@ -47,6 +47,11 @@ class AdminServiceOrderFlowTest {
             mock(HotDataCacheService.class), eventPublisher,
             mock(PaymentRecordDao.class));
 
+    @org.junit.jupiter.api.BeforeEach
+    void lockingReadsUseCurrentOrder() {
+        when(orderDao.findByIdForUpdate(anyLong())).thenAnswer(invocation -> orderDao.findById(invocation.getArgument(0)));
+    }
+
     private Order storedOrder(int status) {
         return new Order(ORDER_ID, "NO500", 1L, 10L, "测试店", status, "[]",
                 "{\"addressId\":1,\"name\":\"张三\",\"phone\":\"138\",\"detail\":\"地址\"}",
@@ -75,25 +80,17 @@ class AdminServiceOrderFlowTest {
     }
 
     @Test
-    void approvingDeliveredOrderRefundDoesNotRestoreConsumedStock() {
+    void approvingDeliveredOrderRefundDelegatesToSharedAfterSalesPolicy() {
         long refundId = 900L;
-        RefundRecord pending = new RefundRecord(refundId, ORDER_ID, 1L, 2L, "DAMAGED", "餐损",
-                15, "PENDING", "2026-09-15 11:00:00", "", "");
-        RefundRecord refunded = new RefundRecord(refundId, ORDER_ID, 1L, 2L, "DAMAGED", "餐损",
+        AfterSalesService afterSales = mock(AfterSalesService.class);
+        service.configureAfterSales(afterSales);
+        RefundRecord refunded = new RefundRecord(refundId, ORDER_ID, 1L, 2L, "QUALITY_ISSUE", "餐损",
                 15, "REFUNDED", "2026-09-15 11:00:00", "2026-09-15 11:05:00", "");
-        Order delivered = storedOrder(6);
-        when(refundDao.findByIdForUpdate(refundId)).thenReturn(Optional.of(pending));
-        when(refundDao.updateStatus(eq(refundId), eq("REFUNDED"), anyString(), eq(""))).thenReturn(true);
-        when(orderDao.findById(ORDER_ID)).thenReturn(Optional.of(delivered));
-        when(orderDao.refundEscrow(ORDER_ID)).thenReturn(true);
-        when(refundDao.findById(refundId)).thenReturn(Optional.of(refunded));
-
+        when(afterSales.approve(refundId)).thenReturn(refunded);
         assertEquals("REFUNDED", service.approveRefund(refundId).status());
-
-        verify(orderService).refundOrderPayment(delivered);
+        verify(afterSales).approve(refundId);
         verify(orderService, never()).rollbackStock(any(Order.class));
     }
-
     @Test
     void adminReadyWritesReadyTimeInsteadOfPushingOrderToDelivering() {
         when(orderDao.findById(ORDER_ID)).thenReturn(Optional.of(storedOrder(2)));

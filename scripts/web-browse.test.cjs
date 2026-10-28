@@ -29,6 +29,7 @@ function browser(sidebarCollapsed='0',options={}){
   ];
   class TestFormData{
     constructor(form){this.data=form?.formData||{};}
+    append(name,value){this.data[name]=value;}
     get(name){const value=this.data[name];return Array.isArray(value)?value[0]:(value??null);}
     getAll(name){const value=this.data[name];return value===undefined?[]:(Array.isArray(value)?value:[value]);}
     entries(){return Object.entries(this.data).flatMap(([key,value])=>(Array.isArray(value)?value:[value]).map(item=>[key,item]))[Symbol.iterator]();}
@@ -743,6 +744,7 @@ test('refund replay feedback follows terminal server state and a late response c
   Object.assign(late.state,{page:'orders',orders:[{id:7,status:4,escrowStatus:0}]});
   const old=late.handleAction('refund',7);const stale=late.dialogs.at(-1);
   stale.form.elements.reasonType.value='NOT_RECEIVED';const sending=stale.form.fire('submit');
+  await new Promise(setImmediate);
   late.resetAccountState();Object.assign(late.state,{user:{id:88,role:0},token:'new-account',page:'home'});await late.renderPage();
   release();await sending;await old;
   assert.equal(stale.removed,true);assert.equal(late.element('notice').textContent,'');

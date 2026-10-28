@@ -6,7 +6,8 @@ import { AppButtonStyle, AppCardStyle, AppFilterStyle, AppRefreshStyle } from '.
  * 订单改为从「我的」页的订单入口进入本页。
  */
 import { AppMotion } from '../common/theme/AppMotion'
-import { CartItem, Order } from '../model/Models'
+import { CartItem, Order, OrderPageData, createEmptyUser, User, UserRole } from '../model/Models'
+import { getAuthSessionEpoch } from '../service/HttpClient'
 import { fetchUserOrdersPageApi } from '../service/ApiService'
 import { confirmOrderRemote, cancelOrderRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, MODULE_COLOR, MODULE_BG } from '../common/Constants'
@@ -14,6 +15,7 @@ import { EmptyState } from '../components/EmptyState'
 import { PageHeader } from '../components/PageHeader'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
+import { canOrderAction } from '../service/OrderStatus'
 import { logInfo } from '../service/AppLogger'
 
 /** 订单筛选 Tab 数据（避免 arkts-no-untyped-obj-literals）。 */
@@ -82,6 +84,12 @@ struct OrderListPage {
   @StorageLink('orderFilterStatus') @Watch('onOrderFilterRequest') requestedStatus: number = -1
   @State @Watch('onFilterChange') currentStatus: number = -1
   @State pageOrders: Order[] = []
+  @StorageLink('user') @Watch('onOrdersOwnerChange') ordersOwner: User = createEmptyUser()
+  @State ordersError: boolean = false
+  private ordersRequestVersion: number = 0
+  private pageActive: boolean = true
+  private retryPage: number = 1
+  private retryAppend: boolean = false
   @State currentPage: number = 1
   @State totalOrders: number = 0
   @State hasMoreOrders: boolean = false
@@ -109,6 +117,9 @@ struct OrderListPage {
   }
 
   onLoginStateChange(): void {
+    this.ordersRequestVersion += 1
+    this.ordersLoading = false
+    this.isRefreshing = false
     if (!this.loggedIn) {
       this.orderList = []
       this.pageOrders = []
@@ -127,43 +138,70 @@ struct OrderListPage {
   }
 
   private selectStatus(status: number): void {
-    if (this.ordersLoading) {
-      return
-    }
     this.currentStatus = status
   }
 
   // 拉取后端用户订单并刷新列表
+  private canApplyOrders(epoch: number, owner: number, version: number): boolean {
+    const user: User | undefined = AppStorage.get<User>('user')
+    return this.pageActive && this.loggedIn && epoch === getAuthSessionEpoch()
+      && user?.id === owner && user?.role === UserRole.CUSTOMER && version === this.ordersRequestVersion
+  }
+
+  onPageShow(): void {
+    this.pageActive = true
+    this.refreshOrders()
+  }
+
+  onPageHide(): void {
+    this.pageActive = false
+    this.ordersRequestVersion += 1
+    this.ordersLoading = false
+    this.isRefreshing = false
+  }
+
+  aboutToDisappear(): void { this.onPageHide() }
+
+  onOrdersOwnerChange(): void {
+    this.ordersRequestVersion += 1
+    this.ordersLoading = false
+    this.pageOrders = []
+    this.totalOrders = 0
+    this.hasMoreOrders = false
+    this.ordersError = false
+    this.refreshDataSource()
+    if (this.pageActive) { this.refreshOrders() }
+  }
+
   private async refreshOrders(page: number = 1, append: boolean = false): Promise<void> {
-    if (this.ordersLoading) {
-      return
-    }
-    if (!this.loggedIn) {
-      this.orderList = []
-      this.pageOrders = []
-      this.totalOrders = 0
-      this.hasMoreOrders = false
-      this.refreshDataSource()
-      this.isRefreshing = false
-      return
-    }
+    if (!this.pageActive || (this.ordersLoading && append)) { return }
+    const user: User | undefined = AppStorage.get<User>('user')
+    if (!this.loggedIn || user === undefined || user.id <= 0 || user.role !== UserRole.CUSTOMER) { return }
+    const epoch: number = getAuthSessionEpoch()
+    const owner: number = user.id
+    const version: number = ++this.ordersRequestVersion
     this.ordersLoading = true
     this.isRefreshing = true
+    this.ordersError = false
+    this.retryPage = page
+    this.retryAppend = append
     try {
       const status: number | undefined = this.currentStatus < 0 ? undefined : this.currentStatus
-      const result = await fetchUserOrdersPageApi(status, page)
-      if (append) {
-        this.pageOrders = this.pageOrders.concat(result.list)
-      } else {
-        this.pageOrders = result.list
-      }
+      const result: OrderPageData | null = await fetchUserOrdersPageApi(status, page, 30, false)
+      if (!this.canApplyOrders(epoch, owner, version)) { return }
+      if (result === null) { this.ordersError = true; return }
+      this.pageOrders = append ? this.pageOrders.concat(result.list) : result.list
       this.currentPage = result.page
       this.totalOrders = result.total
       this.hasMoreOrders = result.hasMore
       this.refreshDataSource()
+    } catch (_) {
+      if (this.canApplyOrders(epoch, owner, version)) { this.ordersError = true }
     } finally {
-      this.ordersLoading = false
-      this.isRefreshing = false
+      if (this.canApplyOrders(epoch, owner, version)) {
+        this.ordersLoading = false
+        this.isRefreshing = false
+      }
     }
   }
 
@@ -195,16 +233,33 @@ struct OrderListPage {
     this.filteredCount = list.length
   }
 
+  private activeCustomerOrder(orderId: number, action: string): Order | undefined {
+    if (!this.pageActive || !this.loggedIn || this.ordersOwner.role !== UserRole.CUSTOMER) { return undefined }
+    const user: User | undefined = AppStorage.get<User>('user')
+    if (user?.id !== this.ordersOwner.id || user?.role !== UserRole.CUSTOMER) { return undefined }
+    const current: Order | undefined = this.pageOrders.find((order: Order) => order.id === orderId)
+    if (current === undefined) { return undefined }
+    const legacy: boolean = action === 'CONFIRM' ? current.status === 4 && (current.escrowStatus ?? 0) === 0 : current.status === 0
+    return canOrderAction(current, action, legacy) ? current : undefined
+  }
+
   /** 待付款订单先进入详情选择渠道，避免列表按钮隐式使用余额支付。 */
   private payPendingOrder(order: Order): void {
-    AppStorage.setOrCreate<Order>('currentOrder', order)
+    const current: Order | undefined = this.activeCustomerOrder(order.id, 'PAY')
+    if (current === undefined) { return }
+    AppStorage.setOrCreate<Order>('currentOrder', current)
     AppStorage.setOrCreate<number>('currentOrderId', order.id)
     router.pushUrl({ url: 'pages/OrderDetailPage' })
   }
 
   /** 取消待付款订单：平台尚未扣款，仅释放库存与优惠券。 */
   private async cancelPendingOrder(order: Order): Promise<void> {
+    if (this.activeCustomerOrder(order.id, 'CANCEL') === undefined) { return }
+    const epoch: number = getAuthSessionEpoch()
+    const owner: number = this.ordersOwner.id
+    const version: number = this.ordersRequestVersion
     const ok: boolean = await cancelOrderRemote(order.id)
+    if (!this.canApplyOrders(epoch, owner, version)) { return }
     await this.refreshOrders()
     if (ok) {
       promptAction.showToast({ message: '订单已取消，平台未扣款；库存与优惠券已释放', duration: 2400 })
@@ -218,10 +273,12 @@ struct OrderListPage {
     const orderId: number = this.confirmingOrderId
     this.showConfirmDialog = false
     this.confirmingOrderId = 0
-    if (orderId <= 0) {
-      return
-    }
+    if (orderId <= 0 || this.activeCustomerOrder(orderId, 'CONFIRM') === undefined) { return }
+    const epoch: number = getAuthSessionEpoch()
+    const owner: number = this.ordersOwner.id
+    const version: number = this.ordersRequestVersion
     const ok: boolean = await confirmOrderRemote(orderId)
+    if (!this.canApplyOrders(epoch, owner, version)) { return }
     await this.refreshOrders()
     if (ok) {
       promptAction.showToast({ message: '已确认收到，订单已完成', duration: 1800 })
@@ -259,7 +316,15 @@ struct OrderListPage {
         } else {
           Refresh({ refreshing: $$this.isRefreshing }) {
             List({ space: SPACING.SM }) {
-              if (this.filteredCount === 0 && !this.isRefreshing) {
+              if (this.ordersError) {
+                ListItem() {
+                  Button('订单加载失败，点击重试（保留上次数据）')
+                    .attributeModifier(new AppButtonStyle()).enabled(!this.ordersLoading)
+                    .id('customer-order-retry')
+                    .onClick(() => { this.refreshOrders(this.retryPage, this.retryAppend) })
+                }
+              }
+              if (this.filteredCount === 0 && !this.isRefreshing && !this.ordersError) {
                 ListItem() {
                   EmptyState({ icon: $r('app.media.ui_gift'), title: '暂无订单',
                     description: this.currentStatus === -1 ? '快去点一份美味吧' : '当前分类暂无订单，可下拉刷新' })
@@ -302,7 +367,7 @@ struct OrderListPage {
       if (this.showConfirmDialog) {
         ConfirmDialog({
           title: '确认收到餐品？',
-          content: '确认后订单款项将结算；如有缺漏或餐损，请先申请退款',
+          content: '确认后订单款项将结算；送达48小时内仍可申请售后退款',
           confirmText: '确认收到',
           cancelText: '暂不确认',
           onConfirm: () => { this.confirmSelectedOrder() },
@@ -378,13 +443,14 @@ struct OrderListPage {
           Button('取消订单')
             .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
             .backgroundColor(COLORS.BG_PRIMARY).borderRadius(BORDER_RADIUS.ROUND)
-            .margin({ right: SPACING.SM })
+            .margin({ right: SPACING.SM }).enabled(canOrderAction(order, 'CANCEL', true))
             .onClick(() => { this.cancelPendingOrder(order) })
           Button('立即支付')
             .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)
             .backgroundColor(MODULE_COLOR.ORDER).borderRadius(BORDER_RADIUS.ROUND)
+            .enabled(canOrderAction(order, 'PAY', true))
             .onClick(() => { this.payPendingOrder(order) })
-        } else if (order.status === 4 && (order.escrowStatus ?? 0) === 0) {
+        } else if (canOrderAction(order, 'CONFIRM', order.status === 4 && (order.escrowStatus ?? 0) === 0)) {
           Button('确认收到')
             .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)
             .backgroundColor(MODULE_COLOR.CART).borderRadius(BORDER_RADIUS.ROUND)

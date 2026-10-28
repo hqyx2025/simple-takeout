@@ -129,12 +129,41 @@ public class ErpService {
             case "pay" -> {
                 var p=owned("erp_purchases",s,c.id()); BigDecimal amount=positive(c.amount(),2);
                 check(decimal(p,"paid").add(amount).compareTo(decimal(p,"payable"))<=0,"付款不能超过已收货应付余额");
+                claimReference(s,text(c.reference(),100));
                 db.update("INSERT INTO erp_payments(store_id,purchase_id,amount,reference,operator_id) VALUES(?,?,?,?,?)",
                         s,c.id(),amount,text(c.reference(),100),actor);
                 long id=lastId();db.update("UPDATE erp_purchases SET paid=paid+? WHERE id=?",amount,c.id());return id;
             }
+            case "payment-correct", "reverse-payment", "supplier-refund" -> { return paymentEvent(s,actor,action,c); }
             default -> throw new BizException(404,"操作不存在");
         }
+    }
+
+    private void claimReference(long store,String reference) {
+        db.update("INSERT INTO erp_payment_references(store_id,reference) VALUES(?,?)",store,reference);
+    }
+
+    private long paymentEvent(long s,long actor,String action,Command c) {
+        var found=db.queryForList("SELECT * FROM erp_payments WHERE store_id=? AND id=?",s,c.id());
+        check(!found.isEmpty(),"付款记录不存在或不属于本门店");
+        long purchase=num(found.getFirst(),"purchase_id");
+        var p=owned("erp_purchases",s,purchase);var payment=owned("erp_payments",s,c.id());
+        BigDecimal consumed=db.queryForList("SELECT amount FROM erp_payment_events WHERE store_id=? AND payment_id=? FOR UPDATE",s,c.id())
+                .stream().map(row->decimal(row,"amount")).reduce(BigDecimal.ZERO,BigDecimal::add);
+        BigDecimal remaining=decimal(payment,"amount").subtract(consumed),amount=BigDecimal.ZERO;
+        String reason=text(c.reason(),255),reference=null;
+        if(action.equals("payment-correct")) {
+            reference=text(c.reference(),100);claimReference(s,reference);
+        } else {
+            amount=action.equals("supplier-refund")?positive(c.amount(),2):remaining;
+            check(amount.signum()>0 && amount.compareTo(remaining)<=0,"冲销或退款不能超过该付款未冲退金额");
+            check(amount.compareTo(decimal(p,"paid"))<=0,"冲销或退款不能超过采购净已付");
+            if(action.equals("supplier-refund")){reference=text(c.reference(),100);claimReference(s,reference);}
+            db.update("UPDATE erp_purchases SET paid=paid-? WHERE id=? AND store_id=?",amount,purchase,s);
+        }
+        db.update("INSERT INTO erp_payment_events(store_id,purchase_id,payment_id,kind,amount,reference,reason,operator_id) VALUES(?,?,?,?,?,?,?,?)",
+                s,purchase,c.id(),action,amount,reference,reason,actor);
+        return lastId();
     }
 
     private long receive(long s,long actor,Command c) {
@@ -186,13 +215,23 @@ public class ErpService {
     }
 
     public List<Map<String,Object>> list(long s,String resource,long before,int limit,Long purchase,Long supplier) {
+        return list(s,resource,before,limit,purchase,supplier,null,null);
+    }
+    public List<Map<String,Object>> list(long s,String resource,long before,int limit,Long purchase,Long supplier,String query,Boolean enabled) {
         String table=switch(resource) {
             case "suppliers"->"erp_suppliers";case "materials"->"erp_materials";case "purchases"->"erp_purchases";
             case "receipts"->"erp_receipts";case "ledger"->"erp_ledger";case "adjustments"->"erp_adjustments";
-            case "payments"->"erp_payments";case "audit"->"erp_audit"; default->throw new BizException(404,"资源不存在");};
+            case "payments"->"erp_payments";case "payment-events"->"erp_payment_events";case "audit"->"erp_audit"; default->throw new BizException(404,"资源不存在");};
         String filter=""; var args=new ArrayList<Object>();args.add(s);args.add(before<=0?Long.MAX_VALUE:before);
-        if(purchase!=null && Set.of("receipts","payments").contains(resource)){filter+=" AND purchase_id=?";args.add(purchase);}
+        if(purchase!=null && Set.of("receipts","payments","payment-events").contains(resource)){filter+=" AND purchase_id=?";args.add(purchase);}
         if(supplier!=null && resource.equals("purchases")){filter+=" AND supplier_id=?";args.add(supplier);}
+        if(query!=null && !query.isBlank() && Set.of("materials","suppliers").contains(resource)) {
+            check(query.length()<=100,"搜索词最多100字");
+            String like="%"+query.trim().replace("!","!!").replace("%","!%").replace("_","!_")+"%";
+            filter+=resource.equals("suppliers")?" AND (name LIKE ? ESCAPE '!' OR contact LIKE ? ESCAPE '!')":" AND name LIKE ? ESCAPE '!'";
+            args.add(like);if(resource.equals("suppliers"))args.add(like);
+        }
+        if(enabled!=null && resource.equals("suppliers")){filter+=" AND enabled=?";args.add(enabled);}
         args.add(Math.max(1,Math.min(limit,100)));
         return db.queryForList("SELECT * FROM "+table+" WHERE store_id=? AND id<?"+filter+" ORDER BY id DESC LIMIT ?",args.toArray());
     }
@@ -227,6 +266,6 @@ public class ErpService {
     private static BigDecimal money(BigDecimal n){return n.setScale(2,RoundingMode.HALF_UP);}
     private static void bounded(BigDecimal n){check(n.abs().compareTo(new BigDecimal("999999999"))<=0,"数值超出允许范围");}
     private String encode(Object value){try{return json.writeValueAsString(value);}catch(Exception e){throw new IllegalStateException(e);}}
-    private Map<String,Object> decode(String value){try{return json.readValue(value,new TypeReference<>(){});}catch(Exception e){throw new BizException(400,"JSON格式错误");}}
+    private Map<String,Object> decode(String value){try{return json.readerFor(new TypeReference<Map<String,Object>>(){}).with(com.fasterxml.jackson.databind.DeserializationFeature.USE_LONG_FOR_INTS).readValue(value);}catch(Exception e){throw new BizException(400,"JSON格式错误");}}
     private static String hash(String value){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));}catch(Exception e){throw new IllegalStateException(e);}}
 }

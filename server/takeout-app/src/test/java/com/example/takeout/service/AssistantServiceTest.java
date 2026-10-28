@@ -188,7 +188,8 @@ class AssistantServiceTest {
             assertFalse(reply.answer().contains("还没有订单"), reply.answer());
         }
         String refundAnswer = assistant.reply(1, "退款").answer();
-        assertTrue(refundAnswer.contains("确认收货前申请"));
+        assertTrue(refundAnswer.contains("送达后48小时"));
+        assertTrue(refundAnswer.contains("确认收货或评价后仍可申请"));
         assertFalse(refundAnswer.contains("先确认收货"));
         assertTrue(refundAnswer.contains("按原支付渠道全额退回"));
         assertTrue(refundAnswer.contains("进入制作或配送后不能直接取消"));

@@ -33,19 +33,20 @@ export async function fetchMerchantReviewsApi(): Promise<Review[]> {
 
 // ==================== 商户端（需商户登录） ====================
 
-export async function fetchMerchantOrdersApi(): Promise<Order[]> {
+export async function fetchMerchantOrdersApi(): Promise<Order[] | null> {
   const resp: ApiResponse<ServerOrder[]> = await get<ServerOrder[]>(API_CONFIG.ENDPOINTS['merchantOrders'])
-  if (resp.code !== 200 || resp.data === null) {
-    return []
+  if (resp.code !== 200 || !Array.isArray(resp.data)) {
+    return null
   }
   return resp.data.map((o: ServerOrder) => toOrder(o))
 }
 
 export async function fetchMerchantOrdersPageApi(status?: number, page: number = 1,
-  pageSize: number = 30): Promise<OrderPageData> {
+  pageSize: number = 30, showErrorToast: boolean = true): Promise<OrderPageData | null> {
   const statusQuery: string = status === undefined ? '' : `&status=${status}`
   const resp: ApiResponse<ServerOrderPage> = await get<ServerOrderPage>(
-    `/api/merchant/orders/page?page=${page}&pageSize=${pageSize}${statusQuery}`)
+    `/api/merchant/orders/page?page=${page}&pageSize=${pageSize}${statusQuery}`, showErrorToast)
+  if (resp.code !== 200 || resp.data === null || resp.data === undefined || !Array.isArray(resp.data.list)) { return null }
   return toOrderPageData(resp, page, pageSize)
 }
 
@@ -176,9 +177,13 @@ export async function removeMerchantEmployeeApi(storeId: number, employeeId: num
 }
 
 export async function fetchMerchantStoresApi(): Promise<StoreItem[]> {
+  return (await fetchMerchantStoresResultApi()) ?? []
+}
+
+export async function fetchMerchantStoresResultApi(): Promise<StoreItem[] | null> {
   const resp: ApiResponse<ServerStore[]> = await get<ServerStore[]>(API_CONFIG.ENDPOINTS['merchantStores'])
-  if (resp.code !== 200 || resp.data === null) {
-    return []
+  if (resp.code !== 200 || !Array.isArray(resp.data)) {
+    return null
   }
   return resp.data.map((s: ServerStore) => toStoreItem(s))
 }

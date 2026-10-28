@@ -126,17 +126,18 @@ export async function createOrderApi(storeId: number, cartItems: CartItem[], add
 
 export async function fetchUserOrdersApi(): Promise<Order[] | null> {
   const resp: ApiResponse<ServerOrder[]> = await get<ServerOrder[]>(API_CONFIG.ENDPOINTS['orders'])
-  if (resp.code !== 200 || resp.data === null) {
+  if (resp.code !== 200 || !Array.isArray(resp.data)) {
     return null
   }
   return resp.data.map((o: ServerOrder) => toOrder(o))
 }
 
 export async function fetchUserOrdersPageApi(status?: number, page: number = 1,
-  pageSize: number = 30): Promise<OrderPageData> {
+  pageSize: number = 30, showErrorToast: boolean = true): Promise<OrderPageData | null> {
   const statusQuery: string = status === undefined ? '' : `&status=${status}`
   const resp: ApiResponse<ServerOrderPage> = await get<ServerOrderPage>(
-    `/api/orders/page?page=${page}&pageSize=${pageSize}${statusQuery}`)
+    `/api/orders/page?page=${page}&pageSize=${pageSize}${statusQuery}`, showErrorToast)
+  if (resp.code !== 200 || resp.data === null || resp.data === undefined || !Array.isArray(resp.data.list)) { return null }
   return toOrderPageData(resp, page, pageSize)
 }
 
@@ -149,7 +150,7 @@ export async function fetchOrderDetailApi(orderId: number, showErrorToast: boole
 }
 
 export async function cancelOrderApi(orderId: number): Promise<boolean> {
-  const resp: ApiResponse<ServerOrder> = await put<ServerOrder>(`/api/orders/${orderId}/cancel`, undefined)
+  const resp: ApiResponse<ServerOrder> = await put<ServerOrder>(`/api/orders/${orderId}/cancel`, undefined, false)
   return resp.code === 200
 }
 
@@ -169,7 +170,7 @@ export async function payOrderApi(orderId: number, channel: string, mode: string
 }
 
 export async function confirmOrderApi(orderId: number): Promise<boolean> {
-  const resp: ApiResponse<ServerOrder> = await put<ServerOrder>(`/api/orders/${orderId}/confirm`, undefined)
+  const resp: ApiResponse<ServerOrder> = await put<ServerOrder>(`/api/orders/${orderId}/confirm`, undefined, false)
   return resp.code === 200
 }
 
@@ -181,10 +182,10 @@ export async function submitReviewApi(orderId: number, goodsId: number, rating: 
 
 // ==================== 退款（演进项，见大纲 7.11/9.7） ====================
 
-/** 用户申请退款：订单 status=4 且 escrow=0 且未评价时可用。 */
+/** 用户申请退款：按服务端售后窗口与可退余额申请，确认或评价后仍可用。 */
 export async function applyRefundApi(orderId: number, reasonType: string, reason: string,
-  idempotencyKey: string = ''): Promise<RefundRecord | null> {
-  const req: RefundRequest = { reasonType: reasonType, reason: reason, idempotencyKey: idempotencyKey }
+  idempotencyKey: string = '', amount?: number, evidenceImages: string[] = []): Promise<RefundRecord | null> {
+  const req: RefundRequest = { reasonType: reasonType, reason: reason, idempotencyKey: idempotencyKey, amount: amount, evidenceImages: evidenceImages }
   // 页面保留失败原因与输入，统一反馈一次；相同 key 可核对响应丢失前已创建的申请。
   const resp: ApiResponse<RefundRecord> = await post<RefundRecord>(`/api/orders/${orderId}/refund`, req, false)
   return resp.code === 200 && resp.data !== null && resp.data !== undefined ? resp.data : null

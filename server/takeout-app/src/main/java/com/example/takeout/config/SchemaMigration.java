@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
  * 这里在启动时检查并补齐缺列，保证老库升级后可直接运行。
  */
 @Component
+@org.springframework.core.annotation.Order(100)
 public class SchemaMigration implements ApplicationRunner {
 
     private final JdbcTemplate jdbc;

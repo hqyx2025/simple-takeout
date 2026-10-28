@@ -359,18 +359,28 @@ CREATE TABLE IF NOT EXISTS refund_records (
     order_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
     merchant_id BIGINT NOT NULL,
-    reason VARCHAR(255) DEFAULT '',
     reason_type VARCHAR(32) NOT NULL DEFAULT 'OTHER',
+    reason VARCHAR(255) DEFAULT '',
     request_key VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
     amount DECIMAL(10,2) NOT NULL DEFAULT 0,
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     apply_time VARCHAR(32) NOT NULL,
     process_time VARCHAR(32) DEFAULT '',
     reject_reason VARCHAR(255) DEFAULT '',
-    KEY idx_refund_order (order_id),
-    UNIQUE KEY uk_refund_order_request (order_id, request_key),
-    KEY idx_refund_status_page (status, id),
-    KEY idx_refund_status (status)
+    evidence_images TEXT,
+    merchant_evidence_images TEXT,
+    merchant_response VARCHAR(1000) NOT NULL DEFAULT '',
+    appeal_count INT NOT NULL DEFAULT 0,
+    appeal_reason VARCHAR(255) NOT NULL DEFAULT '',
+    appeal_images TEXT,
+    original_escrow INT NOT NULL DEFAULT 0,
+    settled_before TINYINT NOT NULL DEFAULT 0,
+    merchant_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+    platform_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+    refund_time DATETIME NULL,
+    KEY idx_refund_order(order_id),
+    UNIQUE KEY uk_refund_order_request(order_id,request_key),
+    KEY idx_refund_status_page(status,id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 每个已接受的退款请求都固定指向原申请，包括复用同一 PENDING 的并发请求。
@@ -551,4 +561,87 @@ VALUES (1, 0, '', '', '');
 CREATE TABLE IF NOT EXISTS upload_usage (
     user_id BIGINT PRIMARY KEY,
     used_bytes BIGINT NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+
+CREATE TABLE IF NOT EXISTS refund_apply_requests (
+    order_id BIGINT NOT NULL,
+    request_key VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+    refund_id BIGINT NOT NULL,
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(order_id,request_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS after_sales_ledger (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    refund_id BIGINT NOT NULL,
+    order_id BIGINT NOT NULL,
+    merchant_id BIGINT NOT NULL,
+    merchant_amount DECIMAL(10,2) NOT NULL,
+    wallet_deducted DECIMAL(10,2) NOT NULL,
+    debt_amount DECIMAL(10,2) NOT NULL,
+    debt_repaid DECIMAL(10,2) NOT NULL DEFAULT 0,
+    platform_amount DECIMAL(10,2) NOT NULL,
+    create_time DATETIME NOT NULL,
+    UNIQUE KEY uk_after_sales_refund(refund_id),
+    KEY idx_after_sales_merchant(merchant_id,id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS after_sales_debt_payments (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    settlement_order_id BIGINT NOT NULL,
+    refund_id BIGINT NOT NULL,
+    merchant_id BIGINT NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    create_time DATETIME NOT NULL,
+    UNIQUE KEY uk_after_sales_debt_payment(settlement_order_id,refund_id),
+    KEY idx_after_sales_debt_merchant(merchant_id,id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 新结算按真实发生时间归属；历史订单没有此事实时由统计回退 complete_time。
+CREATE TABLE IF NOT EXISTS order_settlements (
+    order_id BIGINT PRIMARY KEY,
+    merchant_id BIGINT NOT NULL,
+    net_amount DECIMAL(10,2) NOT NULL,
+    debt_repaid DECIMAL(10,2) NOT NULL,
+    wallet_credited DECIMAL(10,2) NOT NULL,
+    settled_at DATETIME NOT NULL,
+    KEY idx_order_settlements_merchant_time(merchant_id,settled_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS promotion_claims (
+ user_id BIGINT NOT NULL, store_id BIGINT NOT NULL, state VARCHAR(16) NOT NULL DEFAULT 'AVAILABLE',
+ order_id BIGINT NOT NULL DEFAULT 0, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(user_id,store_id), KEY idx_promotion_order(order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS order_pricing_snapshots (
+ order_id BIGINT PRIMARY KEY, snapshot_json JSON NOT NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS store_fulfillment (
+ store_id BIGINT PRIMARY KEY, mode VARCHAR(16) NOT NULL DEFAULT 'RIDER'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS order_fulfillment (
+ order_id BIGINT PRIMARY KEY, mode VARCHAR(16) NOT NULL DEFAULT 'RIDER'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS delivery_issues (
+ id BIGINT AUTO_INCREMENT PRIMARY KEY, order_id BIGINT NOT NULL, reporter_id BIGINT NOT NULL,
+ reporter_role INT NOT NULL, request_key VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+ type VARCHAR(32) NOT NULL, note VARCHAR(500) NOT NULL, status VARCHAR(16) NOT NULL DEFAULT 'OPEN',
+ create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, resolve_time DATETIME NULL,
+ resolve_note VARCHAR(500) NOT NULL DEFAULT '', resolver_id BIGINT NOT NULL DEFAULT 0, resolution VARCHAR(16) NOT NULL DEFAULT '',
+ UNIQUE KEY uk_issue_request(order_id,reporter_id,request_key), KEY idx_issue_status(status,id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- No FK: independent transactions must never wait on a business row locked by their caller.
+CREATE TABLE IF NOT EXISTS external_refund_attempts (
+ refund_no VARCHAR(64) PRIMARY KEY, kind VARCHAR(16) NOT NULL,
+ order_id BIGINT NOT NULL, payment_id BIGINT NOT NULL, refund_id BIGINT NOT NULL DEFAULT 0,
+ channel VARCHAR(16) NOT NULL, out_trade_no VARCHAR(64) NOT NULL,
+ provider_transaction_id VARCHAR(128) NOT NULL DEFAULT '',
+ amount DECIMAL(10,2) NOT NULL, original_amount DECIMAL(10,2) NOT NULL,
+ metadata_json TEXT NOT NULL, status VARCHAR(16) NOT NULL DEFAULT 'REQUESTED',
+ created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ KEY idx_external_refund_recovery(status,updated_at), KEY idx_external_refund_order(order_id,kind,status),
+ KEY idx_external_refund_record(refund_id,status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -10,11 +10,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** 数据大屏 SQL 契约：店铺成交额排行必须排除已取消(5)/退款中(6)，与平台统计口径一致。 */
+/** 近30天榜排除未支付/取消/全退，申请中和部分退款仍计订单。 */
 class AdminDashboardSqlTest {
 
     @Test
-    void topStoresExcludesCancelledAndRefunding() {
+    void topStoresUsesRealPaidOrdersInLastThirtyDays() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.query(anyString(), any(org.springframework.jdbc.core.RowMapper.class), any(Object[].class)))
                 .thenReturn(java.util.List.of());
@@ -24,6 +24,9 @@ class AdminDashboardSqlTest {
 
         org.mockito.ArgumentCaptor<String> sql = org.mockito.ArgumentCaptor.forClass(String.class);
         verify(jdbc).query(sql.capture(), any(org.springframework.jdbc.core.RowMapper.class), any(Object[].class));
-        assertTrue(sql.getValue().contains("o.status NOT IN (5,6)"), sql.getValue());
+        assertTrue(sql.getValue().contains("o.status IN (1,2,3,4,6) AND o.escrow_status <> 2"), sql.getValue());
+        assertTrue(sql.getValue().contains("INTERVAL 30 DAY"), sql.getValue());
+        assertTrue(sql.getValue().contains("o.pay_time_dt"), sql.getValue());
+        assertTrue(sql.getValue().contains("o.pay_amount - COALESCE(refunds.refunded_amount, 0)"), sql.getValue());
     }
 }

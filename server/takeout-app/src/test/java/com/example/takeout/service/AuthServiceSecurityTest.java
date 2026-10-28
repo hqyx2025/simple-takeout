@@ -139,7 +139,7 @@ class AuthServiceSecurityTest {
         UserDao userDao = mock(UserDao.class);
         User current = new User(1, "用户", "", "13800138000", PasswordUtil.hash("oldpass"),
                 0, 1, 20, "now", "", "", "user@example.com");
-        when(userDao.findById(1)).thenReturn(java.util.Optional.of(current));
+        when(userDao.findByIdForUpdate(1)).thenReturn(java.util.Optional.of(current));
         when(userDao.existsByPhoneExceptUser("13900139000", 1)).thenReturn(false);
         when(userDao.existsByUsernameExceptUser("新昵称", 1)).thenReturn(false);
         when(userDao.findById(1)).thenReturn(java.util.Optional.of(current));
@@ -153,6 +153,28 @@ class AuthServiceSecurityTest {
         service.updateProfile(1, "新昵称", "13900139000", "new@example.com", "oldpass");
         verify(userDao).updatePassword(eq(1L), eq(current.password()), anyString());
     }
+    @Test
+    void profileContactChangeUsesCurrentLockedPasswordInsteadOfAnOlderSnapshot() {
+        UserDao userDao = mock(UserDao.class);
+        User stale = new User(1, "用户", "", "13800138000", PasswordUtil.hash("oldpass"),
+                0, 1, 20, "now", "", "", "user@example.com");
+        User latest = new User(1, "用户", "", "13800138000", PasswordUtil.hash("newpass"),
+                0, 1, 20, "now", "2026-10-28 12:00:00", "", "user@example.com");
+        when(userDao.findById(1)).thenReturn(java.util.Optional.of(stale));
+        when(userDao.findByIdForUpdate(1)).thenReturn(java.util.Optional.of(latest));
+        AuthService service = new AuthService(userDao, mock(JwtUtil.class));
+
+        assertThrows(BizException.class, () -> service.updateProfile(
+                1, "用户", "13900139000", "new@example.com", "oldpass"));
+        org.mockito.Mockito.verify(userDao, org.mockito.Mockito.never()).updatePassword(
+                org.mockito.ArgumentMatchers.anyLong(), anyString(), anyString());
+        org.mockito.Mockito.verify(userDao, org.mockito.Mockito.never()).updateProfile(
+                org.mockito.ArgumentMatchers.anyLong(), anyString(), anyString(), anyString());
+
+        service.updateProfile(1, "用户", "13900139000", "new@example.com", "newpass");
+        verify(userDao).updatePassword(eq(1L), eq(latest.password()), anyString());
+    }
+
     @Test
     void rechargeNeverAddsBalance() {
         UserDao userDao = mock(UserDao.class);

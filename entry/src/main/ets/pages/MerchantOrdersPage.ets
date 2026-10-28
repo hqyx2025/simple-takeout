@@ -6,11 +6,13 @@ import { AppButtonStyle, AppCardStyle, AppFilterStyle, AppTextAreaStyle } from '
  */
 import { AppMotion } from '../common/theme/AppMotion'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
-import { Order, OrderPageData, CartItem, User, UserRole } from '../model/Models'
+import { Order, OrderPageData, createEmptyUser, CartItem, User, UserRole } from '../model/Models'
 import { fetchMerchantOrdersPageApi, MerchantRejectOrderRequest, rejectMerchantOrderApi } from '../service/ApiService'
 import { getCurrentUser, merchantActionRemote } from '../service/AppStorageManager'
+import { getAuthSessionEpoch } from '../service/HttpClient'
 import { logInfo } from '../service/AppLogger'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
+import { canOrderAction } from '../service/OrderStatus'
 import { PageHeader } from '../components/PageHeader'
 
 // 状态Tab项（使用 class + static create 避免 arkts-no-untyped-obj-literals）
@@ -57,9 +59,15 @@ export struct MerchantOrdersPage {
       .opacity(0)
   }
 
-  @StorageLink('isLoggedIn') loggedIn: boolean = false
+  @StorageLink('isLoggedIn') @Watch('onOrdersOwnerChange') loggedIn: boolean = false
   @State currentStatus: number = -1
   @State allOrders: Order[] = []
+  @StorageLink('user') @Watch('onOrdersOwnerChange') ordersOwner: User = createEmptyUser()
+  @State ordersError: boolean = false
+  private ordersRequestVersion: number = 0
+  private pageActive: boolean = true
+  private retryPage: number = 1
+  private retryAppend: boolean = false
   @State currentPage: number = 1
   @State totalOrders: number = 0
   @State hasMoreOrders: boolean = false
@@ -89,18 +97,68 @@ export struct MerchantOrdersPage {
     }
   }
 
-  private async loadOrders(page: number = 1, append: boolean = false): Promise<void> {
-    if (this.loading || this.merchantId <= 0) {
-      return
-    }
-    this.loading = true
-    const status: number | undefined = this.currentStatus < 0 ? undefined : this.currentStatus
-    const result: OrderPageData = await fetchMerchantOrdersPageApi(status, page)
-    this.allOrders = append ? this.allOrders.concat(result.list) : result.list
-    this.currentPage = result.page
-    this.totalOrders = result.total
-    this.hasMoreOrders = result.hasMore
+  private canApplyOrders(epoch: number, owner: number, version: number): boolean {
+    const user: User | undefined = AppStorage.get<User>('user')
+    return this.pageActive && this.loggedIn && epoch === getAuthSessionEpoch()
+      && user?.id === owner && user?.role === UserRole.MERCHANT && version === this.ordersRequestVersion
+  }
+
+  onPageShow(): void {
+    this.pageActive = true
+    this.loadOrders()
+  }
+
+  onPageHide(): void {
+    this.pageActive = false
+    this.ordersRequestVersion += 1
     this.loading = false
+    if (this.rejectDialog !== undefined) { try { this.rejectDialog.close() } catch (_) {} }
+    this.rejectDialog = undefined
+  }
+
+  aboutToDisappear(): void { this.onPageHide() }
+
+  onOrdersOwnerChange(): void {
+    this.ordersRequestVersion += 1
+    this.loading = false
+    this.allOrders = []
+    this.totalOrders = 0
+    this.hasMoreOrders = false
+    this.ordersError = false
+
+    if (this.pageActive) { this.loadOrders() }
+  }
+
+  private async loadOrders(page: number = 1, append: boolean = false): Promise<void> {
+    if (!this.pageActive || (this.loading && append)) { return }
+    const user: User | undefined = AppStorage.get<User>('user')
+    if (!this.loggedIn || user === undefined || user.id <= 0 || user.role !== UserRole.MERCHANT) { return }
+    const epoch: number = getAuthSessionEpoch()
+    const owner: number = user.id
+    const version: number = ++this.ordersRequestVersion
+    this.loading = true
+
+    this.ordersError = false
+    this.retryPage = page
+    this.retryAppend = append
+    try {
+      const status: number | undefined = this.currentStatus < 0 ? undefined : this.currentStatus
+      const result: OrderPageData | null = await fetchMerchantOrdersPageApi(status, page, 30, false)
+      if (!this.canApplyOrders(epoch, owner, version)) { return }
+      if (result === null) { this.ordersError = true; return }
+      this.allOrders = append ? this.allOrders.concat(result.list) : result.list
+      this.currentPage = result.page
+      this.totalOrders = result.total
+      this.hasMoreOrders = result.hasMore
+
+    } catch (_) {
+      if (this.canApplyOrders(epoch, owner, version)) { this.ordersError = true }
+    } finally {
+      if (this.canApplyOrders(epoch, owner, version)) {
+        this.loading = false
+
+      }
+    }
   }
 
   private getFilteredOrders(): Order[] {
@@ -114,17 +172,37 @@ export struct MerchantOrdersPage {
   }
 
   private selectStatus(status: number): void {
-    if (this.loading) {
-      return
-    }
     this.currentStatus = status
     this.loadOrders()
   }
 
+  private canMerchantAction(order: Order, action: string): boolean {
+    switch (action) {
+      case 'MERCHANT_ACCEPT':
+      case 'MERCHANT_REJECT': return canOrderAction(order, action, order.status === 1)
+      case 'MERCHANT_READY': return canOrderAction(order, action, order.status === 2 && (order.readyTime ?? '') === '')
+      case 'MERCHANT_DELIVER': return canOrderAction(order, action, false)
+      case 'MERCHANT_COMPLETE': return canOrderAction(order, action, order.status === 3 && (order.riderName ?? '') === '')
+      default: return false
+    }
+  }
+
+  private activeMerchantOrder(orderId: number, action: string): Order | undefined {
+    const user: User | undefined = getCurrentUser()
+    if (!this.pageActive || !this.loggedIn || user === undefined || user.role !== UserRole.MERCHANT || user.id !== this.ordersOwner.id) { return undefined }
+    const current: Order | undefined = this.allOrders.find((order: Order) => order.id === orderId)
+    if (current === undefined) { return undefined }
+    return this.canMerchantAction(current, action) ? current : undefined
+  }
+
   private async handleAccept(order: Order): Promise<void> {
+    if (this.activeMerchantOrder(order.id, 'MERCHANT_ACCEPT') === undefined) { return }
+    const epoch: number = getAuthSessionEpoch()
+    const owner: number = this.ordersOwner.id
+    const version: number = this.ordersRequestVersion
     const ok: boolean = await merchantActionRemote(order.id, 'accept')
+    if (!this.canApplyOrders(epoch, owner, version)) { return }
     if (!ok) {
-      promptAction.showToast({ message: '接单失败，请检查登录状态或订单状态', duration: 2200 })
       return
     }
     logInfo('Merchant', `点击接单 orderId=${order.id} 店铺=${order.storeName}`)
@@ -133,7 +211,7 @@ export struct MerchantOrdersPage {
   }
 
   private openRejectDialog(order: Order): void {
-    if (order.status !== 1) {
+    if (this.activeMerchantOrder(order.id, 'MERCHANT_REJECT') === undefined) {
       promptAction.showToast({ message: '订单状态已变化，请刷新后再处理', duration: 2200 })
       return
     }
@@ -149,37 +227,57 @@ export struct MerchantOrdersPage {
         orderNo: order.orderNo ?? order.id.toString(),
         storeName: order.storeName,
         items: order.items,
-        onSubmit: async (request: MerchantRejectOrderRequest): Promise<boolean> => {
-          const ok: boolean = await rejectMerchantOrderApi(order.id, request)
-          if (ok) {
-            logInfo('Merchant', `无法接单 orderId=${order.id} reason=${request.reasonCode}`)
-            promptAction.showToast({ message: '已通知用户，款项已按原支付渠道退回', duration: 2600 })
-            await this.loadOrders()
-          }
-          return ok
-        },
+        onSubmit: (request: MerchantRejectOrderRequest): Promise<boolean> => this.submitMerchantRejection(order.id, request),
         onClose: (): void => { this.rejectDialog = undefined }
       })
     })
     this.rejectDialog.open()
   }
 
+  private async submitMerchantRejection(orderId: number, request: MerchantRejectOrderRequest): Promise<boolean> {
+    if (this.activeMerchantOrder(orderId, 'MERCHANT_REJECT') === undefined) { return false }
+    const epoch: number = getAuthSessionEpoch()
+    const owner: number = this.ordersOwner.id
+    const version: number = this.ordersRequestVersion
+    const ok: boolean = await rejectMerchantOrderApi(orderId, request)
+    if (!this.canApplyOrders(epoch, owner, version)) { return false }
+    if (ok) {
+      promptAction.showToast({ message: '已通知用户，款项已按原支付渠道退回', duration: 2600 })
+      await this.loadOrders()
+    }
+    return ok
+  }
+
   /** 出餐完成：写 ready_time 并进入骑手待取餐池（数字状态仍为 2），订单由骑手接单后配送。 */
   private async handleReady(order: Order): Promise<void> {
+    if (this.activeMerchantOrder(order.id, 'MERCHANT_READY') === undefined) { return }
+    const epoch: number = getAuthSessionEpoch()
+    const owner: number = this.ordersOwner.id
+    const version: number = this.ordersRequestVersion
     const ok: boolean = await merchantActionRemote(order.id, 'ready')
+    if (!this.canApplyOrders(epoch, owner, version)) { return }
     if (!ok) {
-      promptAction.showToast({ message: '出餐操作失败，请检查登录状态或订单状态', duration: 2200 })
       return
     }
     logInfo('Merchant', `点击出餐 orderId=${order.id} 店铺=${order.storeName}`)
-    promptAction.showToast({ message: '已出餐，等待骑手接单', duration: 2200 })
+    promptAction.showToast({ message: order.capabilities?.fulfillmentMode === 'MERCHANT' ? '已出餐，可开始商家配送' : '已出餐，等待骑手接单', duration: 2200 })
     this.loadOrders()
   }
 
+  private async handleDeliver(order: Order): Promise<void> {
+    if (this.activeMerchantOrder(order.id, 'MERCHANT_DELIVER') === undefined) { return }
+    const ok: boolean = await merchantActionRemote(order.id, 'deliver')
+    if (ok && this.pageActive) { this.loadOrders() }
+  }
+
   private async handleComplete(order: Order): Promise<void> {
+    if (this.activeMerchantOrder(order.id, 'MERCHANT_COMPLETE') === undefined) { return }
+    const epoch: number = getAuthSessionEpoch()
+    const owner: number = this.ordersOwner.id
+    const version: number = this.ordersRequestVersion
     const ok: boolean = await merchantActionRemote(order.id, 'complete')
+    if (!this.canApplyOrders(epoch, owner, version)) { return }
     if (!ok) {
-      promptAction.showToast({ message: '确认送达失败，请检查登录状态或订单状态', duration: 2200 })
       return
     }
     logInfo('Merchant', `点击确认送达 orderId=${order.id} 店铺=${order.storeName}`)
@@ -213,6 +311,12 @@ export struct MerchantOrdersPage {
       .height(60)
       .backgroundColor(COLORS.BG_WHITE)
 
+      if (this.ordersError) {
+        Button('订单加载失败，点击重试（保留上次数据）')
+          .attributeModifier(new AppButtonStyle()).enabled(!this.loading)
+          .id('merchant-order-retry')
+          .onClick(() => { this.loadOrders(this.retryPage, this.retryAppend) })
+      }
       // 订单列表 / 空状态
       if (this.loading && this.getFilteredOrders().length === 0) {
         Column() {
@@ -360,6 +464,10 @@ export struct MerchantOrdersPage {
 
       Divider().color(COLORS.DIVIDER)
 
+      Button('配送异常与售后记录').attributeModifier(new AppButtonStyle()).height(44).width('100%')
+        .id(`merchant-order-support-${order.id}`)
+        .onClick(() => { router.pushUrl({ url: 'pages/OrderSupportPage', params: { orderId: order.id, canReport: canOrderAction(order, 'REPORT_ISSUE', order.status === 2 || order.status === 3) } }) })
+
       // 实付金额 + 操作按钮
       Row() {
         Text('实付')
@@ -374,7 +482,7 @@ export struct MerchantOrdersPage {
         this.OrderAction(order)
       }
       .width('100%')
-      if (order.status === 1) {
+      if (this.canMerchantAction(order, 'MERCHANT_REJECT')) {
         Button('无法接单')
           .attributeModifier(new AppButtonStyle()).width('100%').height(44)
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.ERROR)
@@ -393,7 +501,7 @@ export struct MerchantOrdersPage {
 
   @Builder
   OrderAction(order: Order) {
-    if (order.status === 1) {
+    if (this.canMerchantAction(order, 'MERCHANT_ACCEPT')) {
       Button('接单')
         .attributeModifier(new AppButtonStyle()).height(44)
         .fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)
@@ -407,12 +515,15 @@ export struct MerchantOrdersPage {
           Text(`骑手 ${order.riderName} 已接单，等待取餐`)
             .fontSize(FONT_SIZE.SM)
             .fontColor(MODULE_COLOR.MERCHANT)
+        } else if (this.canMerchantAction(order, 'MERCHANT_DELIVER')) {
+          Button('开始商家配送').attributeModifier(new AppButtonStyle()).height(44)
+            .id(`merchant-deliver-${order.id}`).onClick(() => { this.handleDeliver(order) })
         } else if ((order.readyTime ?? '') !== '') {
           Text('已出餐，等待骑手接单')
             .fontSize(FONT_SIZE.SM)
             .fontColor(COLORS.SUCCESS)
             .id(`merchant-ready-${order.id}`)
-        } else {
+        } else if (this.canMerchantAction(order, 'MERCHANT_READY')) {
           Button('出餐完成')
             .attributeModifier(new AppButtonStyle()).height(44)
             .fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)
@@ -432,8 +543,8 @@ export struct MerchantOrdersPage {
         Text(`骑手 ${order.riderName} 配送中`)
           .fontSize(FONT_SIZE.SM)
           .fontColor(MODULE_COLOR.MERCHANT)
-      } else {
-        // 未分配骑手的订单仍保留商户自行确认送达（兼容无骑手时的自配送）
+      } else if (this.canMerchantAction(order, 'MERCHANT_COMPLETE')) {
+        // 服务端能力优先，旧服务端兼容无骑手自配送。
         Button('确认送达')
           .attributeModifier(new AppButtonStyle()).height(40)
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)

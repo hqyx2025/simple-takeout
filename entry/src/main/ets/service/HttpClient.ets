@@ -385,86 +385,67 @@ export async function uploadFile(url: string, fileUri: string, showErrorToast: b
   const requestEpoch: number = authSessionEpoch
   lastApiErrorMessage = ''
   let file: fileIo.File | null = null
-  // 请求对象在 finally 中统一 destroy，避免上传失败/异常时连接资源泄漏
   let httpRequest: http.HttpRequest | null = null
   try {
-    httpRequest = http.createHttp()
     file = fileIo.openSync(fileUri, fileIo.OpenMode.READ_ONLY)
     const stat: fileIo.Stat = fileIo.statSync(file.fd)
     const buffer: ArrayBuffer = new ArrayBuffer(stat.size)
     fileIo.readSync(file.fd, buffer)
-
     const fileName: string = buildFileName(fileUri)
     const formData: http.MultiFormData = {
-      name: 'file',
-      contentType: buildContentType(fileName),
-      remoteFileName: fileName,
-      data: buffer
+      name: 'file', contentType: buildContentType(fileName), remoteFileName: fileName, data: buffer
     }
-    const header: Record<string, string> = {
-      'Content-Type': 'multipart/form-data',
-      'Authorization': `Bearer ${authToken}`
-    }
-    const options: http.HttpRequestOptions = {
-      method: http.RequestMethod.POST,
-      header: header,
-      multiFormDataList: [formData],
-      expectDataType: http.HttpDataType.STRING,
-      connectTimeout: API_CONFIG.CONNECT_TIMEOUT,
-      readTimeout: API_CONFIG.TIMEOUT
-    }
-    logInfo('Http', `前端请求后端：上传评价图片（POST ${url}）`)
-    const response: http.HttpResponse = await httpRequest.request(url, options)
-    const body: string = typeof response.result === 'string' ? response.result as string : ''
-    if (response.responseCode === 0 || body === '') {
-      throw new Error('上传服务不可达')
-    }
-    if (response.responseCode !== 200) {
-      if (response.responseCode === 401) {
-        const refreshResult: number = await refreshAfterUnauthorized(requestToken, requestRefreshToken, requestEpoch)
-        if (refreshResult === -1 && authSessionEpoch === requestEpoch) { await expireLocalSession() }
+    for (let attempt: number = 0; attempt < 2; attempt++) {
+      if (requestEpoch !== authSessionEpoch) { return null }
+      httpRequest = http.createHttp()
+      const header: Record<string, string> = {
+        'Content-Type': 'multipart/form-data', 'Authorization': `Bearer ${attempt === 0 ? requestToken : authToken}`
       }
-      lastApiErrorMessage = '图片上传失败，请稍后重试'
-      if (showErrorToast) {
-        notifyApiError(lastApiErrorMessage)
+      const options: http.HttpRequestOptions = {
+        method: http.RequestMethod.POST, header: header, multiFormDataList: [formData],
+        expectDataType: http.HttpDataType.STRING,
+        connectTimeout: API_CONFIG.CONNECT_TIMEOUT, readTimeout: API_CONFIG.TIMEOUT
       }
+      const response: http.HttpResponse = await httpRequest.request(url, options)
+      httpRequest.destroy()
+      httpRequest = null
+      if (requestEpoch !== authSessionEpoch) { return null }
+      const body: string = typeof response.result === 'string' ? response.result as string : ''
+      let parsed: ApiResponse<UploadResult> | null = null
+      try { parsed = JSON.parse(body) as ApiResponse<UploadResult> } catch (_) {}
+      const unauthorized: boolean = response.responseCode === 401 || parsed?.code === 401
+      if (unauthorized) {
+        if (attempt === 0) {
+          const refreshResult: number = await refreshAfterUnauthorized(requestToken, requestRefreshToken, requestEpoch)
+          if (requestEpoch !== authSessionEpoch) { return null }
+          if (refreshResult === 1) { continue }
+          if (refreshResult === -1) { await expireLocalSession() }
+        } else {
+          await expireLocalSession()
+        }
+        lastApiErrorMessage = '登录验证失败，请重试或重新登录'
+      } else if (response.responseCode === 200 && parsed?.code === 200 && parsed.data !== undefined && parsed.data !== null) {
+        lastApiErrorMessage = ''
+        return parsed.data
+      } else {
+        lastApiErrorMessage = parsed?.message ?? '图片上传失败，请稍后重试'
+      }
+      if (showErrorToast) { notifyApiError(lastApiErrorMessage) }
       return null
     }
-    const parsed: ApiResponse<UploadResult> = JSON.parse(body) as ApiResponse<UploadResult>
-    if (parsed.code === 401) {
-      const refreshResult: number = await refreshAfterUnauthorized(requestToken, requestRefreshToken, requestEpoch)
-      if (refreshResult === -1 && authSessionEpoch === requestEpoch) { await expireLocalSession() }
-    }
-    if (parsed.code !== 200 || parsed.data === undefined || parsed.data === null) {
-      lastApiErrorMessage = parsed.message !== undefined && parsed.message !== '' ? parsed.message : '图片上传失败'
-      if (showErrorToast) {
-        notifyApiError(lastApiErrorMessage)
-      }
-      return null
-    }
-    logInfo('Http', `后端响应成功：上传评价图片，地址=${parsed.data.url}`)
-    return parsed.data
+    return null
   } catch (err) {
+    if (requestEpoch !== authSessionEpoch) { return null }
     logError('Http', '后端请求异常：上传评价图片，请检查网络和服务端状态', err)
     lastApiErrorMessage = '图片上传失败，请确认后端服务已启动'
-    if (showErrorToast) {
-      notifyApiError(lastApiErrorMessage)
-    }
+    if (showErrorToast) { notifyApiError(lastApiErrorMessage) }
     return null
   } finally {
     if (file !== null) {
-      try {
-        fileIo.closeSync(file)
-      } catch (closeErr) {
-        logWarn('Http', '关闭上传文件失败')
-      }
+      try { fileIo.closeSync(file) } catch (_) {}
     }
     if (httpRequest !== null) {
-      try {
-        httpRequest.destroy()
-      } catch (destroyErr) {
-        logWarn('Http', '释放上传请求对象失败')
-      }
+      try { httpRequest.destroy() } catch (_) {}
     }
   }
 }

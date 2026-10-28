@@ -60,6 +60,14 @@ class ExternalPaymentServiceTest {
                 transactionDao.findByOutTradeNo(invocation.getArgument(0)));
         service = new ExternalPaymentService(properties, List.of(gateway), transactionDao, orderDao,
                 paymentRecordDao, eventPublisher);
+        var attempts = mock(com.example.takeout.service.ExternalRefundAttemptService.class);
+        when(attempts.prepare(anyString(), any(), anyLong(), anyString(), any(), any(), any())).thenAnswer(invocation -> {
+            PaymentTransaction payment = invocation.getArgument(1);
+            return new com.example.takeout.service.ExternalRefundAttemptService.Attempt(invocation.getArgument(3),
+                    invocation.getArgument(0), payment.orderId(), payment.id(), invocation.getArgument(2), payment.channel(),
+                    payment.outTradeNo(), "", invocation.getArgument(4), payment.amount(), "null", "REQUESTED");
+        });
+        service.configureRefundAttempts(attempts);
         PlatformTransactionManager manager = mock(PlatformTransactionManager.class);
         when(manager.getTransaction(any())).thenAnswer(invocation -> new SimpleTransactionStatus());
         service.configureTransactions(new TransactionTemplate(manager));
@@ -178,7 +186,7 @@ class ExternalPaymentServiceTest {
         when(orderDao.findByIdForUpdate(7)).thenReturn(Optional.of(pendingOrder()));
         assertEquals(ExternalPaymentService.NotificationResult.REFUNDED,
                 service.acceptNotification("ALIPAY", "raw", Map.of()));
-        verify(gateway).refund("ALI123", "RALI123", new BigDecimal("13.00"));
+        verify(gateway).refund("ALI123", "RALI123", new BigDecimal("13.00"), new BigDecimal("13.00"));
         verify(orderDao, never()).markPaid(anyLong(), anyString());
     }
 
@@ -253,7 +261,7 @@ class ExternalPaymentServiceTest {
 
         verify(orderDao, never()).markPaid(anyLong(), anyString());
         verify(transactionDao, never()).markSuccess(anyLong(), anyString(), anyString());
-        verify(gateway).refund("ALI123", "RALI123", new BigDecimal("13.00"));
+        verify(gateway).refund("ALI123", "RALI123", new BigDecimal("13.00"), new BigDecimal("13.00"));
         verify(transactionDao).markLateRefunded(eq(9L), eq("provider-1"), anyString());
     }
 
@@ -380,7 +388,18 @@ class ExternalPaymentServiceTest {
 
         assertEquals("ALIPAY", service.refundOriginalPayment(order(1)));
 
-        verify(gateway).refund("ALI123", "RALI123", new BigDecimal("13.00"));
+        verify(gateway).refund("ALI123", "RALI123", new BigDecimal("13.00"), new BigDecimal("13.00"));
+        verify(transactionDao).markRefunded(9);
+    }
+
+    @Test
+    void partialAfterSalesUsesStablePerRecordRefundNumberAndOriginalTotal() {
+        when(transactionDao.findSuccessfulByOrder(7)).thenReturn(Optional.of(payment("SUCCESS", "provider-1")));
+        service.refundOriginalPayment(order(6), new BigDecimal("2.25"), 81, false);
+        service.refundOriginalPayment(order(6), new BigDecimal("2.25"), 81, false);
+        service.refundOriginalPayment(order(6), new BigDecimal("10.75"), 82, true);
+        verify(gateway, org.mockito.Mockito.times(2)).refund("ALI123", "AS9R81", new BigDecimal("2.25"), new BigDecimal("13.00"));
+        verify(gateway).refund("ALI123", "AS9R82", new BigDecimal("10.75"), new BigDecimal("13.00"));
         verify(transactionDao).markRefunded(9);
     }
 
@@ -388,7 +407,7 @@ class ExternalPaymentServiceTest {
     void providerRefundFailureLeavesThePaymentUnrefunded() {
         when(transactionDao.findSuccessfulByOrder(7)).thenReturn(Optional.of(payment("SUCCESS", "provider-1")));
         doThrow(new IllegalStateException("pending provider refund")).when(gateway)
-                .refund("ALI123", "RALI123", new BigDecimal("13.00"));
+                .refund("ALI123", "RALI123", new BigDecimal("13.00"), new BigDecimal("13.00"));
 
         assertThrows(IllegalStateException.class, () -> service.refundOriginalPayment(order(1)));
 

@@ -7,15 +7,18 @@ import { AppButtonStyle, AppCardStyle, AppTextAreaStyle } from '../common/theme/
 import { AppMotion } from '../common/theme/AppMotion'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor } from '../common/Constants'
-import { Order, CartItem, DeliveryStep, RefundRecord } from '../model/Models'
+import { Order, CartItem, DeliveryStep, RefundRecord, User, createEmptyUser } from '../model/Models'
 import { cancelOrderRemote, confirmOrderRemote, applyRefundRemote, addCartItemRemote, fetchOrderDetailRemote, getLastRemoteErrorMessage, syncCartRemote, payOrderRemote, queryPaymentRemote } from '../service/AppStorageManager'
 import { fetchOrderRefundsApi } from '../service/ApiService'
+import { EvidenceImages } from '../components/EvidenceImages'
+import { appealRefundApi, RefundEvidenceRequest } from '../service/api/AfterSalesApi'
+import { canOrderAction } from '../service/OrderStatus'
 import { OrderStatusTimeline } from '../components/OrderStatusTimeline'
 import { PageHeader } from '../components/PageHeader'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { logInfo } from '../service/AppLogger'
 import { bundleManager } from '@kit.AbilityKit'
-import { getAuthSessionEpoch, getServerClockOffsetMs } from '../service/HttpClient'
+import { getAuthSessionEpoch, getServerClockOffsetMs, getApiBaseUrl } from '../service/HttpClient'
 
 class RefundReasonOption {
   code: string
@@ -53,6 +56,9 @@ export struct OrderDetailPage {
       .opacity(0)
   }
 
+  @StorageLink('user') @Watch('onOwnerChanged') sessionUser: User = createEmptyUser()
+  private detailOwner: number = 0
+  private detailRole: number = -1
   @State order: Order | null = null
   @StorageLink('isLoggedIn') @Watch('onLoginChanged') loggedIn: boolean = false
   @StorageLink('appForeground') @Watch('onAppForegroundChanged') appForeground: boolean = true
@@ -60,6 +66,11 @@ export struct OrderDetailPage {
   @State showConfirmDialog: boolean = false
   @State showRefundDialog: boolean = false
   @State refundReason: string = ''
+  @State refundAmount: string = ''
+  @State refundImages: string[] = []
+  @State refundUploading: boolean = false
+  @State refundAppealId: number = 0
+  @State refundPayloadLocked: boolean = false
   @State refundReasonType: string = ''
   @State refundRecords: RefundRecord[] = []
   @State refundHistoryLoading: boolean = false
@@ -222,6 +233,8 @@ export struct OrderDetailPage {
 
   async aboutToAppear(): Promise<void> {
     this.pageActive = true
+    this.detailOwner = this.sessionUser.id
+    this.detailRole = this.sessionUser.role
     const routerOrderId: number = AppStorage.get<number>('currentOrderId') || 0
     if (routerOrderId !== this.orderId) {
       this.resetReorderState()
@@ -240,9 +253,10 @@ export struct OrderDetailPage {
     }
     const sessionEpoch: number = getAuthSessionEpoch()
     const requestedOrderId: number = this.orderId
+    const requestVersion: number = ++this.refundOrderVersion
     const remoteOrder: Order | null = await fetchOrderDetailRemote(requestedOrderId)
     if (!this.pageActive || !this.loggedIn || sessionEpoch !== getAuthSessionEpoch() ||
-      requestedOrderId !== this.orderId) { return }
+      requestedOrderId !== this.orderId || requestVersion !== this.refundOrderVersion) { return }
     this.order = remoteOrder
     this.refundOrderError = ''
     if (remoteOrder !== null) { this.loadRefundHistory() }
@@ -309,6 +323,16 @@ export struct OrderDetailPage {
     }
   }
 
+  private onOwnerChanged(): void {
+    if (this.detailOwner <= 0 || (this.detailOwner === this.sessionUser.id && this.detailRole === this.sessionUser.role)) { return }
+    this.pageActive = false
+    this.resetReorderState()
+    this.clearPaymentSession()
+    this.clearRefundSession()
+    this.order = null
+    this.orderId = 0
+  }
+
   private onLoginChanged(): void {
     if (this.loggedIn) { return }
     this.resetReorderState()
@@ -323,6 +347,7 @@ export struct OrderDetailPage {
     this.refundDialogVersion += 1
     this.refundHistoryLoading = false
     this.refundSubmitting = false
+    this.refundUploading = false
     this.showRefundDialog = false
   }
 
@@ -337,6 +362,10 @@ export struct OrderDetailPage {
     this.refundSubmitKey = ''
     this.refundReason = ''
     this.refundReasonType = ''
+    this.refundImages = []
+    this.refundUploading = false
+    this.refundAppealId = 0
+    this.refundPayloadLocked = false
   }
 
   private async loadRefundHistory(): Promise<void> {
@@ -357,7 +386,7 @@ export struct OrderDetailPage {
     }
     this.refundRecords = records.slice().sort((a: RefundRecord, b: RefundRecord) => b.id - a.id)
     this.refundPreventsSettlement = records.some((record: RefundRecord) =>
-      record.status === 'PENDING' || record.status === 'APPROVED' || record.status === 'REFUNDED')
+      record.status === 'PENDING' || record.status === 'APPROVED')
     this.refundHistoryLoaded = true
     this.refundHistoryError = ''
   }
@@ -465,8 +494,15 @@ export struct OrderDetailPage {
     }
   }
 
+  private canDispatchOrder(action: string, legacy: boolean): boolean {
+    return this.pageActive && this.loggedIn && this.order !== null
+      && this.detailOwner === this.sessionUser.id && this.detailRole === this.sessionUser.role
+      && canOrderAction(this.order, action, legacy)
+  }
+
   /** 待付款订单支付：成功后刷新订单并提示。 */
   private async payNow(): Promise<void> {
+    if (!this.canDispatchOrder('PAY', this.order?.status === 0)) { return }
     if (!this.loggedIn || this.order === null || this.order.status !== 0 || this.paying || this.paymentChecking) {
       return
     }
@@ -497,6 +533,7 @@ export struct OrderDetailPage {
   }
 
   private async preparePayment(mode: string): Promise<Order | null> {
+    if (!this.canDispatchOrder('PAY', this.order?.status === 0)) { return null }
     if (this.order === null) { return null }
     if (this.payChannel === 'BALANCE' && !/^[0-9]{6}$/.test(this.balancePaymentPassword)) {
       promptAction.showToast({ message: '请输入 6 位支付密码；未设置请前往账号安全', duration: 3000 })
@@ -646,7 +683,7 @@ export struct OrderDetailPage {
     if (this.order !== null && this.order.status === 0) {
       return '该订单为待付款，平台尚未扣款；取消后将释放占用的库存与优惠券，确定取消吗？'
     }
-    return '该订单尚未由商家接单，取消后支付金额将按原支付渠道全额退回，确定取消吗？'
+    return '取消后支付金额将原路退回；已付款用户主动取消不返优惠券。进入制作后取消不恢复库存，确定取消吗？'
   }
 
   private reloadOrder(): void {
@@ -728,6 +765,10 @@ export struct OrderDetailPage {
               // 店铺与商品卡片
               this.StoreAndItemsCard()
 
+              Button('配送异常与处理记录').attributeModifier(new AppButtonStyle()).height(44).width('100%')
+                .id('customer-order-support')
+                .onClick(() => { router.pushUrl({ url: 'pages/OrderSupportPage', params: { orderId: this.orderId, canReport: canOrderAction(this.order!, 'REPORT_ISSUE', this.order!.status === 2 || this.order!.status === 3) } }) })
+
               // 配送信息卡片
               this.DeliveryInfoCard()
 
@@ -772,6 +813,7 @@ export struct OrderDetailPage {
               // 待付款订单未扣款；待接单订单取消后按原支付渠道全额退款。
               const unpaid: boolean = this.order.status === 0
               const refundAmount: number = this.order.payAmount
+              if (!this.canDispatchOrder('CANCEL', this.order.status === 0 || this.order.status === 1)) { this.showCancelDialog = false; return }
               const ok: boolean = await cancelOrderRemote(this.order.id)
               if (ok) {
                 this.clearPaymentSession()
@@ -799,11 +841,12 @@ export struct OrderDetailPage {
       if (this.showConfirmDialog) {
         ConfirmDialog({
           title: '确认收到餐品？',
-          content: '确认后订单款项将结算；如有缺漏或餐损，请先申请退款',
+          content: '确认后订单款项将结算；送达48小时内仍可申请售后退款',
           confirmText: '确认收到',
           cancelText: '暂不确认',
           onConfirm: async () => {
             if (this.order !== null) {
+              if (!this.canDispatchOrder('CONFIRM', this.order.status === 4 && (this.order.escrowStatus ?? 0) === 0)) { this.showConfirmDialog = false; return }
               const ok: boolean = await confirmOrderRemote(this.order.id)
               if (ok) {
                 this.reloadOrder()
@@ -833,17 +876,37 @@ export struct OrderDetailPage {
   }
 
   private openRefundDialog(): void {
+    if (!this.canDispatchOrder('REFUND', this.order?.status === 4 && (this.order?.escrowStatus ?? 0) === 0 && this.order?.reviewed === 0)) { return }
     if (this.order === null || this.refundSubmitting || this.refundPreventsSettlement || this.refundOrderError !== '') { return }
     this.refundDialogVersion += 1
     this.refundReason = ''
     this.refundReasonType = ''
     this.refundSubmitError = ''
+    this.refundAmount = (this.order.capabilities?.refundRemaining ?? this.order.payAmount).toFixed(2)
+    this.refundImages = []
+    this.refundUploading = false
+    this.refundAppealId = 0
+    this.refundPayloadLocked = false
     this.refundSubmitKey = `refund-${this.order.id}-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 10)}`
     this.showRefundDialog = true
   }
 
+  private openRefundAppeal(record: RefundRecord): void {
+    if (this.order === null || record.status !== 'REJECTED' || (record.appealCount ?? 0) > 0) { return }
+    if (this.refundSubmitting || this.refundUploading) { return }
+    this.refundDialogVersion += 1
+    this.refundReason = ''
+    this.refundSubmitError = ''
+    this.refundImages = []
+    this.refundPayloadLocked = false
+    this.refundAppealId = record.id
+    this.refundReasonType = 'OTHER'
+    this.refundAmount = record.amount.toFixed(2)
+    this.showRefundDialog = true
+  }
+
   private closeRefundDialog(): void {
-    if (this.refundSubmitting) { return }
+    if (this.refundSubmitting || this.refundUploading) { return }
     this.showRefundDialog = false
     this.refundDialogVersion += 1
   }
@@ -869,7 +932,14 @@ export struct OrderDetailPage {
 
   // 同一弹层始终复用 key；响应丢失后重试取回原申请，失败保留原因与补充说明。
   private async submitRefund(): Promise<void> {
-    if (this.order === null || this.refundSubmitting) { return }
+    if (this.order === null || this.refundSubmitting || this.refundUploading) { return }
+    if (this.refundAppealId === 0 && !this.canDispatchOrder('REFUND', this.order.status === 4 && (this.order.escrowStatus ?? 0) === 0 && this.order.reviewed === 0)) { return }
+    const amount: number = Number(this.refundAmount)
+    const remaining: number = this.order.capabilities?.refundRemaining ?? this.order.payAmount
+    if (this.refundAppealId === 0 && !this.refundPayloadLocked && (!Number.isFinite(amount) || amount <= 0 || amount > remaining || !/^[0-9]+(\.[0-9]{1,2})?$/.test(this.refundAmount))) {
+      this.refundSubmitError = '请输入不超过可退余额的金额（最多两位小数）'
+      return
+    }
     if (this.refundReasonType === '') {
       this.refundSubmitError = '请选择退款原因'
       return
@@ -883,8 +953,12 @@ export struct OrderDetailPage {
     const dialogVersion: number = this.refundDialogVersion
     this.refundSubmitting = true
     this.refundSubmitError = ''
-    const record: RefundRecord | null = await applyRefundRemote(requestedOrderId, this.refundReasonType,
-      this.refundReason.trim(), this.refundSubmitKey)
+    this.refundPayloadLocked = true
+    const evidence: RefundEvidenceRequest = { reason: this.refundReason.trim(), evidenceImages: this.refundImages }
+    const record: RefundRecord | null = this.refundAppealId > 0
+      ? await appealRefundApi(requestedOrderId, this.refundAppealId, evidence)
+      : await applyRefundRemote(requestedOrderId, this.refundReasonType, this.refundReason.trim(),
+        this.refundSubmitKey, amount, this.refundImages)
     if (!this.pageActive || !this.loggedIn || sessionEpoch !== getAuthSessionEpoch() ||
       dialogVersion !== this.refundDialogVersion || requestedOrderId !== this.orderId) { return }
     this.refundSubmitting = false
@@ -899,7 +973,7 @@ export struct OrderDetailPage {
     this.refundRecords = [record].concat(this.refundRecords.filter((item: RefundRecord) => item.id !== record.id))
       .sort((a: RefundRecord, b: RefundRecord) => b.id - a.id)
     this.refundPreventsSettlement = this.refundRecords.some((item: RefundRecord) =>
-      item.status === 'PENDING' || item.status === 'APPROVED' || item.status === 'REFUNDED')
+      item.status === 'PENDING' || item.status === 'APPROVED')
     this.refundHistoryLoaded = true
     this.refundHistoryError = ''
     const message: string = record.status === 'REFUNDED'
@@ -923,6 +997,9 @@ export struct OrderDetailPage {
           .enabled(!this.refundHistoryLoading).id('order-refund-refresh')
           .onClick(() => { this.refreshRefundProgress() })
       }.width('100%')
+      if ((this.order?.capabilities?.afterSalesDeadline ?? '') !== '') {
+        Text(`售后申请截止：${this.order?.capabilities?.afterSalesDeadline ?? ''}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+      }
       if (this.refundOrderError !== '') {
         Text(this.refundOrderError).width('100%').fontSize(FONT_SIZE.SM).fontColor(COLORS.ERROR)
           .id('order-refund-order-error')
@@ -962,11 +1039,24 @@ export struct OrderDetailPage {
       Text(`补充说明：${(record.reason ?? '').trim() === '' ? '未填写' : record.reason}`)
         .width('100%').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
       Text(`申请时间：${record.applyTime}`).width('100%').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+      if ((record.merchantResponse ?? '') !== '') {
+        Text(`商家举证：${record.merchantResponse ?? ''}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+      }
+      ForEach(record.evidenceImages ?? [], (url: string) => {
+        Image(url.startsWith('/') ? getApiBaseUrl() + url : url).width(80).height(80).objectFit(ImageFit.Cover)
+      }, (url: string) => url)
+      ForEach(record.merchantEvidenceImages ?? [], (url: string) => {
+        Image(url.startsWith('/') ? getApiBaseUrl() + url : url).width(80).height(80).objectFit(ImageFit.Cover)
+      }, (url: string) => url)
       Text(`处理时间：${(record.processTime ?? '').trim() === '' ? '尚未处理' : record.processTime ?? ''}`)
         .width('100%').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
       if (record.status === 'REJECTED') {
         Text(`拒绝原因：${(record.rejectReason ?? '').trim() === '' ? '未提供说明' : record.rejectReason ?? ''}`)
           .width('100%').fontSize(FONT_SIZE.MD).fontColor(COLORS.ERROR).id(`order-refund-reject-reason-${record.id}`)
+        if ((record.appealCount ?? 0) === 0) {
+          Button('申诉一次').attributeModifier(new AppButtonStyle()).height(44)
+            .id(`order-refund-appeal-${record.id}`).onClick(() => { this.openRefundAppeal(record) })
+        }
       } else if (record.status === 'PENDING') {
         Text('审核结果会显示在这里，可刷新进度查看更新。').width('100%')
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
@@ -989,7 +1079,7 @@ export struct OrderDetailPage {
 
       Column() {
         Row() {
-          Text('申请退款')
+          Text(this.refundAppealId > 0 ? '退款申诉' : '申请退款')
             .fontSize(FONT_SIZE.LG)
             .fontWeight(FontWeight.Bold)
             .fontColor(COLORS.TEXT_PRIMARY)
@@ -1005,8 +1095,13 @@ export struct OrderDetailPage {
 
         Scroll() {
           Column({ space: SPACING.SM }) {
-            Text(`退款金额：¥${this.order !== null ? this.order.payAmount.toFixed(2) : '0.00'}（审核通过后按原支付渠道退回）`)
+            Text(`可退余额：¥${(this.order?.capabilities?.refundRemaining ?? this.order?.payAmount ?? 0).toFixed(2)}（审核通过后原路退回）`)
               .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+            Text('申请金额（元）').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_PRIMARY)
+            TextInput({ text: this.refundAmount, placeholder: '例如：10.50' }).type(InputType.NUMBER_DECIMAL)
+              .enabled(this.refundAppealId === 0 && !this.refundSubmitting && !this.refundPayloadLocked)
+              .id('order-refund-amount').onChange((value: string) => { this.refundAmount = value })
+            EvidenceImages({ images: $refundImages, uploading: $refundUploading, disabled: this.refundSubmitting || this.refundPayloadLocked, contextVersion: (): number => this.refundDialogVersion })
             Text('退款原因（请选择一项）').fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Medium)
               .fontColor(COLORS.TEXT_PRIMARY).width('100%').margin({ top: SPACING.SM })
             ForEach(this.refundReasonOptions, (opt: RefundReasonOption) => {
@@ -1016,7 +1111,7 @@ export struct OrderDetailPage {
               .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY).width('100%').margin({ top: SPACING.SM })
             TextArea({ text: this.refundReason, placeholder: '例如：少送了一份米饭，最多50字' })
               .attributeModifier(new AppTextAreaStyle()).width('100%').height(100).maxLength(50)
-              .enabled(!this.refundSubmitting).id('order-refund-note')
+              .enabled(!this.refundSubmitting && !this.refundPayloadLocked).id('order-refund-note')
               .onChange((value: string) => { this.refundReason = value })
           }.width('100%').padding({ bottom: SPACING.SM })
         }.layoutWeight(1).scrollBar(BarState.Auto).width('100%')
@@ -1044,7 +1139,7 @@ export struct OrderDetailPage {
             .fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
             .backgroundColor(COLORS.PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
-            .enabled(!this.refundSubmitting).id('order-refund-submit')
+            .enabled(!this.refundSubmitting && !this.refundUploading).id('order-refund-submit')
             .onClick(() => { this.submitRefund() })
         }
         .width('100%')
@@ -1066,7 +1161,7 @@ export struct OrderDetailPage {
       .attributeModifier(new AppButtonStyle()).width('100%').constraintSize({ minHeight: 44 })
       .fontSize(FONT_SIZE.MD).fontColor(this.refundReasonType === option.code ? COLORS.ON_PRIMARY : COLORS.TEXT_PRIMARY)
       .backgroundColor(this.refundReasonType === option.code ? COLORS.PRIMARY : COLORS.TAG_BG)
-      .borderRadius(BORDER_RADIUS.MD).enabled(!this.refundSubmitting)
+      .borderRadius(BORDER_RADIUS.MD).enabled(!this.refundSubmitting && !this.refundPayloadLocked)
       .accessibilitySelected(this.refundReasonType === option.code)
       .accessibilityText(`${option.label}${this.refundReasonType === option.code ? '，已选择' : '，未选择'}`)
       .id(`order-refund-reason-${option.code}`)
@@ -1433,10 +1528,9 @@ export struct OrderDetailPage {
 
   @Builder
   ActionButtons() {
-    // 可操作状态：0 待付款可支付/取消；1/2/3 可取消（现状口径：用户取消无商家确认、即时退款）；
-    // 4 且托管未结算可确认收货；4 已结算后提供再来一单/去评价
+    // 服务端能力优先；旧服务端沿用原状态规则。确认与评价不关闭送达48小时内售后。
     if (this.order!.status >= 0 && this.order!.status <= 4) {
-      if (this.order!.status === 0) {
+      if (canOrderAction(this.order!, 'PAY', this.order!.status === 0)) {
         Row({ space: SPACING.SM }) {
           ForEach(this.payChannelOptions, (opt: PayChannelOption) => {
             this.PayChannelChip(opt)
@@ -1474,7 +1568,7 @@ export struct OrderDetailPage {
             .fontColor(COLORS.TEXT_SECONDARY)
             .backgroundColor(COLORS.BG_PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
-            .enabled(!this.paying && !this.manualPaymentChecking)
+            .enabled(!this.paying && !this.manualPaymentChecking && canOrderAction(this.order!, 'CANCEL', true))
             .id('order-cancel')
             .onClick(() => { this.showCancelDialog = true })
 
@@ -1485,13 +1579,13 @@ export struct OrderDetailPage {
             .fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY)
             .backgroundColor(COLORS.PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
-            .enabled(!this.paying && !this.manualPaymentChecking)
+            .enabled(!this.paying && !this.manualPaymentChecking && canOrderAction(this.order!, 'PAY', true))
             .id('order-pay')
             .onClick(() => { this.payNow() })
         }
 
         // 商家接单前仍可自助取消，并按原支付渠道全额退款。
-        if (this.order!.status === 1 && (this.order!.escrowStatus ?? 0) === 0) {
+        if (this.order!.status !== 0 && canOrderAction(this.order!, 'CANCEL', this.order!.status === 1 && (this.order!.escrowStatus ?? 0) === 0)) {
           Button('取消订单')
             .attributeModifier(new AppButtonStyle())
             .layoutWeight(1)
@@ -1514,7 +1608,7 @@ export struct OrderDetailPage {
         }
 
         // status===4 且托管款未结算：确认收货并结算
-        if (this.order!.status === 4 && (this.order!.escrowStatus ?? 0) === 0) {
+        if (canOrderAction(this.order!, 'CONFIRM', this.order!.status === 4 && (this.order!.escrowStatus ?? 0) === 0)) {
           Button('确认收到')
             .attributeModifier(new AppButtonStyle())
             .layoutWeight(1)
@@ -1526,8 +1620,8 @@ export struct OrderDetailPage {
             .onClick(() => { this.showConfirmDialog = true })
         }
 
-        // status===4 且托管未结算、未评价：申请退款（演进项：退款审批，见大纲 7.11）
-        if (this.order!.status === 4 && (this.order!.escrowStatus ?? 0) === 0 && this.order!.reviewed === 0) {
+        // 服务端计算售后时限与可退余额，支持已确认/已评价订单部分退款。
+        if (canOrderAction(this.order!, 'REFUND', this.order!.status === 4 && (this.order!.escrowStatus ?? 0) === 0 && this.order!.reviewed === 0)) {
           Button('申请退款')
             .attributeModifier(new AppButtonStyle())
             .layoutWeight(1)
@@ -1566,7 +1660,7 @@ export struct OrderDetailPage {
                 this.addAgain()
               }
             })
-          if ((this.order!.escrowStatus ?? 0) === 1 && this.order!.reviewed === 0) {
+          if (canOrderAction(this.order!, 'REVIEW', (this.order!.escrowStatus ?? 0) === 1 && this.order!.reviewed === 0)) {
             Button('评价商品')
               .attributeModifier(new AppButtonStyle())
               .layoutWeight(1)
@@ -1576,6 +1670,7 @@ export struct OrderDetailPage {
               .borderRadius(BORDER_RADIUS.ROUND)
               .id('order-review-entry')
               .onClick(() => {
+                if (!this.canDispatchOrder('REVIEW', this.order?.status === 4 && (this.order?.escrowStatus ?? 0) === 1 && this.order?.reviewed === 0)) { return }
                 if (this.order !== null && this.order.items.length > 0) {
                   AppStorage.setOrCreate<number>('currentOrderId', this.order.id)
                   AppStorage.setOrCreate<number>('currentReviewGoodsId', this.order.items[0].goods.id)

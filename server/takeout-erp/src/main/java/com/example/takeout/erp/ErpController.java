@@ -41,11 +41,12 @@ public class ErpController {
     public ApiResponse<?> list(@PathVariable long store,@PathVariable String resource,
             @RequestHeader(value="Authorization",required=false) String auth,
             @RequestParam(defaultValue="0") long before,@RequestParam(defaultValue="50") int limit,
-            @RequestParam(required=false) Long purchaseId,@RequestParam(required=false) Long supplierId) {
+            @RequestParam(required=false) Long purchaseId,@RequestParam(required=false) Long supplierId,
+            @RequestParam(required=false) String q,@RequestParam(required=false) Boolean enabled) {
         authority(auth,store,"context");
         if(resource.equals("finance"))return ApiResponse.ok(Map.of("procurement",service.finance(store),
-                "operations",authority(auth,store,"finance"),"procurementBasis","按实际收货累计应付；已付为线下付款凭证登记，不扣应用钱包"));
-        return ApiResponse.ok(service.list(store,resource,before,limit,purchaseId,supplierId));
+                "operations",authority(auth,store,"finance"),"procurementBasis","按实际收货及收货冲销计应付；净已付为线下付款减付款冲销和供应商退款，不扣应用钱包"));
+        return ApiResponse.ok(service.list(store,resource,before,limit,purchaseId,supplierId,q,enabled));
     }
     @GetMapping("/api/erp/stores/{store}/purchases/{purchase}/lines")
     public ApiResponse<?> lines(@PathVariable long store,@PathVariable long purchase,@RequestHeader(value="Authorization",required=false) String auth){

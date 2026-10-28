@@ -11,6 +11,7 @@ import { CartItem, Order, Review, User } from '../model/Models'
 import { getCurrentUser, submitReviewRemote, syncStoreReviewsRemote, syncUserOrdersFromServer, uploadReviewImageRemote } from '../service/AppStorageManager'
 import { getApiBaseUrl } from '../service/HttpClient'
 import { logInfo, logWarn } from '../service/AppLogger'
+import { canOrderAction } from '../service/OrderStatus'
 import { PageHeader } from '../components/PageHeader'
 import { photoAccessHelper } from '@kit.MediaLibraryKit'
 
@@ -152,6 +153,9 @@ export struct ReviewPage {
       promptAction.showToast({ message: '订单不存在' })
       return
     }
+    const latestOrders: Order[] = AppStorage.get<Order[]>('orderList') ?? []
+    const current: Order = latestOrders.find((item: Order) => item.id === this.orderId) ?? this.order
+    if (!canOrderAction(current, 'REVIEW', current.status === 4 && (current.escrowStatus ?? 0) === 1 && current.reviewed === 0)) { return }
     if (this.selectedGoodsId <= 0 || this.order.items.length === 0) {
       promptAction.showToast({ message: '订单中没有可评价的商品' })
       return

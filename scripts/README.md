@@ -1,6 +1,6 @@
 # 脚本说明
 
-2026-10-27 当前验证：后端 Docker/JDK 25 全量 676 项、Web 四套 82 项、API 26 模拟器六个用例类通过；范围与限制见 [本次会话归档](../md/archive/会话记录-2026-10-27-微服务ERP并发JVM与部署.md)。下文 2026-10-25 / 26 的发布数字保留为历史基线。
+2026-10-28 当前验证：Windows/JDK 25 后端 711 项，实际执行 703 项全部通过，8 项因未配置 Redis 专项环境跳过；全部 Node 行为回归 170 项通过；API 26 debug HAP 构建成功且未签名，本轮无可用设备。真实 MySQL 包含 Spring HTTP 余额交易贯通和 7 个外部退款故障恢复用例，支付渠道在故障注入中使用测试替身。范围与证据见 [本次会话归档](../md/archive/会话记录-2026-10-28-业务闭环与发布.md)。2026-10-27 的 Docker 676 项、模拟器六类及双实例压测属于 [历史验证](../md/archive/会话记录-2026-10-27-微服务ERP并发JVM与部署.md)，下文更早数字也仅为历史基线。
 
 | 脚本 | 用途 | 前置条件 / 产物 |
 | --- | --- | --- |
@@ -16,6 +16,8 @@
 | `web-browse.test.cjs` | 网页四端浏览、结算恢复、退款闭环、骑手履约与账号 / 异步隔离回归 | Node.js 原生测试；2026-10-25 的 6 项为历史基线，后续已随六批 UX 扩展 |
 | `web-location.test.cjs`、`web-urls.test.cjs` | 定位失败反馈、手选地点坐标和根路径 / `/takeout/` API、上传资源路径回归 | Node.js 原生测试；不请求真实定位授权，不代表物理真机 GPS 验收 |
 | `checkout-coupon-session.test.cjs` | 执行真实 ArkTS 规则 / 非渲染方法，验证券资格、结算草稿、冻结请求与终态重放 | Node.js + DevEco TypeScript；不等同 ArkUI 渲染或 Hypium 已运行 |
+| `account-session.test.cjs`、`mobile-business.test.cjs`、`mobile-cache.test.cjs`、`mobile-contracts.test.cjs`、`mobile-actions.test.cjs` | 账号/页面异步隔离、分页失败保留、401 上传重试、售后配送契约与四端能力按钮/提交行为 | Node.js + DevEco TypeScript；不等同设备渲染测试 |
+| `erp-page.test.cjs`、`web-business-rules.test.cjs` | 采购明细乱序、按账号门店持久重试、分页选择、凭证纠错退款、部分售后证据申诉与配送异常 | Node.js 原生测试，执行生产逻辑；不触发真实渠道退款 |
 | `cart-flight.test.cjs`、`store-cart-rapid-click.test.cjs` | 购物车异步隔离与快速连续操作回归 | Node.js + DevEco TypeScript；设备行为需另外实测 |
 | `recover-login-account.py` | 既有 root SSH 通道下核验或恢复一个启用管理员的登录预算 | 默认只读；`--apply` 清目标账号预算并重启全部 app，会丢失全部本地窗口并中断在途请求，不能当作无中断解锁 |
 | `seed-demo-catalog.py` | 生成并校验 500 店、6000 菜品目录；支持预检、备份后增量导入 | Python 3；`self-test` 不写业务库，`apply` 会写库；2026-10-25 安全复测基线为线上 540 店，当时终轮发布没有重新播种 |

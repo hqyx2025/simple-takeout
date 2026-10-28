@@ -489,6 +489,8 @@ export struct MerchantCenterPage {
                 .layoutWeight(1)
                 .alignItems(HorizontalAlign.Start)
                 Blank()
+                Text('配送方式').fontSize(FONT_SIZE.SM).fontColor(MODULE_COLOR.MERCHANT)
+                  .onClick(() => { router.pushUrl({ url: 'pages/OrderSupportPage', params: { storeId: store.id } }) })
                 Text('编辑').fontSize(FONT_SIZE.SM).fontColor(MODULE_COLOR.MERCHANT)
                   .padding({ left: SPACING.SM, right: SPACING.SM })
                   .onClick(() => { this.startEditStore(store) })

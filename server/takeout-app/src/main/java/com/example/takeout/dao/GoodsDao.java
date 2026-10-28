@@ -24,6 +24,28 @@ import java.sql.SQLException;
 @Repository
 public class GoodsDao {
 
+    // 浏览销量只来自支付订单；保留旧 sales 列供滚动升级，绝不与真实销量相加。
+    static final String MONTHLY_SALES_JOIN = " LEFT JOIN (SELECT oi.goods_id, SUM(oi.quantity) AS sales " +
+            "FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE " + recentPaidOrders("o") +
+            " GROUP BY oi.goods_id) sold ON sold.goods_id = g.id ";
+
+    static String recentPaidOrders(String alias) {
+        String paidAt = JdbcDateTimes.value(alias + ".pay_time");
+        return alias + ".status IN (1,2,3,4,6) AND " + alias + ".escrow_status <> 2 AND " + paidAt +
+                " >= DATE_SUB(" + JdbcDateTimes.PARAMETER + ", INTERVAL 30 DAY) AND " + paidAt +
+                " <= " + JdbcDateTimes.PARAMETER;
+    }
+
+    static Object[] monthlySalesArgs(Object... values) {
+        // 使用订单写入所用的应用本地时间，不依赖数据库连接的会话时区。
+        String now = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        List<Object> args = new ArrayList<>(List.of(now, now));
+        java.util.Collections.addAll(args, values);
+        return args.toArray();
+    }
+
+    private static final String SELECT_GOODS = "SELECT g.*, COALESCE(sold.sales, 0) AS real_sales FROM goods g" + MONTHLY_SALES_JOIN;
+
     private static final RowMapper<Goods> MAPPER = (rs, i) -> mapGoods(rs);
 
     private static final RowMapper<SpecialGoods> SPECIAL_MAPPER = (rs, i) -> new SpecialGoods(
@@ -42,7 +64,7 @@ public class GoodsDao {
             rs.getLong("merchant_category_id"),
             rs.getInt("stock"),
             rs.getInt("version"),
-            rs.getInt("sales"),
+            rs.getInt("real_sales"),
             rs.getDouble("rating"),
             rs.getString("tag"),
             rs.getBoolean("is_special"),
@@ -91,12 +113,12 @@ public class GoodsDao {
     }
 
     public List<Goods> listByStore(long storeId) {
-        return attachSpecs(jdbc.query("SELECT * FROM goods WHERE store_id = ? AND status = 1 AND deleted = 0 ORDER BY sales DESC",
-                MAPPER, storeId));
+        return attachSpecs(jdbc.query(SELECT_GOODS + "WHERE g.store_id = ? AND g.status = 1 AND g.deleted = 0 ORDER BY real_sales DESC, g.id DESC",
+                MAPPER, monthlySalesArgs(storeId)));
     }
 
     public List<Goods> listByStoreAll(long storeId) {
-        return attachSpecs(jdbc.query("SELECT * FROM goods WHERE store_id = ? AND deleted = 0 ORDER BY id", MAPPER, storeId));
+        return attachSpecs(jdbc.query(SELECT_GOODS + "WHERE g.store_id = ? AND g.deleted = 0 ORDER BY g.id", MAPPER, monthlySalesArgs(storeId)));
     }
 
     /**
@@ -110,26 +132,26 @@ public class GoodsDao {
     }
 
     public List<SpecialGoods> listSpecialGoods(int limit) {
-        return attachSpecsToSpecial(jdbc.query("SELECT g.*, s.name AS store_name, s.distance AS store_distance " +
-                        "FROM goods g JOIN stores s ON s.id = g.store_id " +
+        return attachSpecsToSpecial(jdbc.query("SELECT g.*, COALESCE(sold.sales, 0) AS real_sales, s.name AS store_name, s.distance AS store_distance " +
+                        "FROM goods g JOIN stores s ON s.id = g.store_id " + MONTHLY_SALES_JOIN +
                         "WHERE g.status = 1 AND g.is_special = 1 AND g.stock > 0 AND g.deleted = 0 AND s.status = 1 " +
-                        "ORDER BY g.create_time DESC, g.sales DESC, g.id DESC LIMIT ?",
-                SPECIAL_MAPPER, limit));
+                        "ORDER BY g.create_time DESC, real_sales DESC, g.id DESC LIMIT ?",
+                SPECIAL_MAPPER, monthlySalesArgs(limit)));
     }
 
-    /** 热销菜品榜：跨店铺按累计销量排序（仅上架菜品与营业店铺）。 */
+    /** 热销菜品榜：跨店铺按近30天已支付且未取消/全额退款订单的商品数量排序（仅上架菜品与营业店铺）。 */
     public List<SpecialGoods> listTopGoods(int limit) {
-        return attachSpecsToSpecial(jdbc.query("SELECT g.*, s.name AS store_name, s.distance AS store_distance " +
-                        "FROM goods g JOIN stores s ON s.id = g.store_id " +
+        return attachSpecsToSpecial(jdbc.query("SELECT g.*, COALESCE(sold.sales, 0) AS real_sales, s.name AS store_name, s.distance AS store_distance " +
+                        "FROM goods g JOIN stores s ON s.id = g.store_id " + MONTHLY_SALES_JOIN +
                         "WHERE g.status = 1 AND g.deleted = 0 AND s.status = 1 " +
-                        "ORDER BY g.sales DESC, g.rating DESC, g.id DESC LIMIT ?",
-                SPECIAL_MAPPER, limit));
+                        "ORDER BY real_sales DESC, g.rating DESC, g.id DESC LIMIT ?",
+                SPECIAL_MAPPER, monthlySalesArgs(limit)));
     }
 
     /** 凑单推荐：店铺内可下单的最低价格菜品（价格升序）。 */
     public List<Goods> listCheapest(long storeId, int limit) {
-        return attachSpecs(jdbc.query("SELECT * FROM goods WHERE store_id = ? AND status = 1 AND stock > 0 AND deleted = 0 " +
-                "ORDER BY price, id LIMIT ?", MAPPER, storeId, limit));
+        return attachSpecs(jdbc.query(SELECT_GOODS + "WHERE g.store_id = ? AND g.status = 1 AND g.stock > 0 AND g.deleted = 0 " +
+                "ORDER BY g.price, g.id LIMIT ?", MAPPER, monthlySalesArgs(storeId, limit)));
     }
 
     public List<AdminProduct> listForAdmin(String keyword, Integer status) {
@@ -146,7 +168,7 @@ public class GoodsDao {
             args.add(limit);
             args.add(offset);
         }
-        return jdbc.query(sql.toString(), ADMIN_PRODUCT_MAPPER, args.toArray());
+        return jdbc.query(sql.toString(), ADMIN_PRODUCT_MAPPER, monthlySalesArgs(args.toArray()));
     }
 
     /** 管理端商品总数（与 listForAdmin 同一套筛选，用于分页 hasMore 判断）。 */
@@ -158,8 +180,8 @@ public class GoodsDao {
     }
 
     private StringBuilder adminProductSql(String keyword, Integer status) {
-        return new StringBuilder("SELECT g.*, s.name AS store_name FROM goods g " +
-                "JOIN stores s ON s.id = g.store_id WHERE 1 = 1" + whereClause(keyword, status));
+        return new StringBuilder("SELECT g.*, COALESCE(sold.sales, 0) AS real_sales, s.name AS store_name FROM goods g " +
+                "JOIN stores s ON s.id = g.store_id " + MONTHLY_SALES_JOIN + " WHERE 1 = 1" + whereClause(keyword, status));
     }
 
     private List<Object> adminProductArgs(String keyword, Integer status) {
@@ -190,13 +212,13 @@ public class GoodsDao {
             rs.getLong("id"), rs.getLong("store_id"), rs.getString("store_name"),
             rs.getString("name"), rs.getString("description"), rs.getDouble("price"),
             rs.getDouble("original_price"), rs.getString("image"), rs.getInt("category_id"),
-            rs.getLong("merchant_category_id"), rs.getInt("stock"), rs.getInt("sales"),
+            rs.getLong("merchant_category_id"), rs.getInt("stock"), rs.getInt("real_sales"),
             rs.getDouble("rating"), rs.getString("tag"), rs.getInt("status"),
             rs.getString("create_time")
     );
 
     public Optional<Goods> findById(long id) {
-        return attachSpecs(jdbc.query("SELECT * FROM goods WHERE id = ? AND deleted = 0", MAPPER, id)).stream().findFirst();
+        return attachSpecs(jdbc.query(SELECT_GOODS + "WHERE g.id = ? AND g.deleted = 0", MAPPER, monthlySalesArgs(id))).stream().findFirst();
     }
 
     /**

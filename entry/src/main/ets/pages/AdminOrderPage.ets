@@ -5,15 +5,16 @@ import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
  * 已送达订单（status=4）需走退款审批流程，不在此直接退款
  */
 import { AppMotion } from '../common/theme/AppMotion'
-import { User, UserRole } from '../model/Models'
-import { ApiResponse, get } from '../service/HttpClient'
+import { User, UserRole, OrderActionSource } from '../model/Models'
+import { ApiResponse, get, getAuthSessionEpoch } from '../service/HttpClient'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, getOrderStatusColor, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { PageHeader } from '../components/PageHeader'
 import { logInfo } from '../service/AppLogger'
 import { adminOrderActionApi } from '../service/ApiService'
+import { canOrderAction } from '../service/OrderStatus'
 
-interface AdminOrder {
+interface AdminOrder extends OrderActionSource {
   id: number
   orderNo: string
   storeName: string
@@ -62,8 +63,8 @@ export struct AdminOrderPage {
       .opacity(0)
   }
 
-  @StorageLink('isLoggedIn') loggedIn: boolean = false
-  @StorageLink('user') user: User = {
+  @StorageLink('isLoggedIn') @Watch('onOrdersOwnerChange') loggedIn: boolean = false
+  @StorageLink('user') @Watch('onOrdersOwnerChange') user: User = {
     id: 0, username: '未登录', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER,
     balance: 0, coupons: [], orders: [], storeIds: []
   }
@@ -75,6 +76,11 @@ export struct AdminOrderPage {
   @State total: number = 0
   @State hasMore: boolean = false
   @State loading: boolean = false
+  @State ordersError: boolean = false
+  private ordersRequestVersion: number = 0
+  private pageActive: boolean = true
+  private retryPage: number = 1
+  private retryAppend: boolean = false
   @State actioningOrderId: number = 0
   // 拼进 ForEach 键，强制重建同 id 的订单行（否则刷新后状态/按钮文案停留在旧值）
 
@@ -88,39 +94,71 @@ export struct AdminOrderPage {
     this.refresh()
   }
 
-  async refresh(): Promise<void> {
-    if (this.loading) {
-      return
-    }
-    this.loading = true
-    this.page = 1
-    const statusQuery: string = this.currentStatus < 0 ? '' : `&status=${this.currentStatus}`
-    const resp: ApiResponse<AdminOrderPageData> = await get<AdminOrderPageData>(
-      `/api/admin/orders/page?page=1&pageSize=50${statusQuery}`)
-    this.orders = resp.code === 200 && resp.data !== null ? resp.data.list : []
-    this.total = resp.code === 200 && resp.data !== null ? resp.data.total : 0
-    this.hasMore = resp.code === 200 && resp.data !== null ? resp.data.hasMore : false
-    this.applyFilter()
-    this.loading = false
+  private canApplyOrders(epoch: number, owner: number, version: number): boolean {
+    const user: User | undefined = AppStorage.get<User>('user')
+    return this.pageActive && this.loggedIn && epoch === getAuthSessionEpoch()
+      && user?.id === owner && user?.role === UserRole.ADMIN && version === this.ordersRequestVersion
   }
 
+  onPageShow(): void { this.pageActive = true; this.refresh() }
+
+  onPageHide(): void {
+    this.pageActive = false
+    this.ordersRequestVersion += 1
+    this.loading = false
+    this.actioningOrderId = 0
+  }
+
+  aboutToDisappear(): void { this.onPageHide() }
+
+  onOrdersOwnerChange(): void {
+    this.ordersRequestVersion += 1
+    this.loading = false
+    this.orders = []
+    this.displayOrders = []
+    this.total = 0
+    this.hasMore = false
+    this.ordersError = false
+    this.actioningOrderId = 0
+    if (this.pageActive) { this.refresh() }
+  }
+
+  async refresh(): Promise<void> { await this.loadOrders() }
+
   private async loadMore(): Promise<void> {
-    if (this.loading || !this.hasMore) {
-      return
-    }
+    if (!this.loading && this.hasMore) { await this.loadOrders(this.page + 1, true) }
+  }
+
+  private async loadOrders(page: number = 1, append: boolean = false): Promise<void> {
+    const user: User | undefined = AppStorage.get<User>('user')
+    if (!this.pageActive || (this.loading && append) || !this.loggedIn
+      || user === undefined || user.id <= 0 || user.role !== UserRole.ADMIN) { return }
+    const epoch: number = getAuthSessionEpoch()
+    const owner: number = user.id
+    const version: number = ++this.ordersRequestVersion
     this.loading = true
-    const nextPage: number = this.page + 1
-    const statusQuery: string = this.currentStatus < 0 ? '' : `&status=${this.currentStatus}`
-    const resp: ApiResponse<AdminOrderPageData> = await get<AdminOrderPageData>(
-      `/api/admin/orders/page?page=${nextPage}&pageSize=50${statusQuery}`)
-    if (resp.code === 200 && resp.data !== null) {
-      this.orders = this.orders.concat(resp.data.list)
+    this.ordersError = false
+    this.retryPage = page
+    this.retryAppend = append
+    try {
+      const statusQuery: string = this.currentStatus < 0 ? '' : `&status=${this.currentStatus}`
+      const resp: ApiResponse<AdminOrderPageData> = await get<AdminOrderPageData>(
+        `/api/admin/orders/page?page=${page}&pageSize=50${statusQuery}`, false)
+      if (!this.canApplyOrders(epoch, owner, version)) { return }
+      if (resp.code !== 200 || resp.data === null || resp.data === undefined || !Array.isArray(resp.data.list)) {
+        this.ordersError = true
+        return
+      }
+      this.orders = append ? this.orders.concat(resp.data.list) : resp.data.list
       this.page = resp.data.page
       this.total = resp.data.total
       this.hasMore = resp.data.hasMore
+      this.applyFilter()
+    } catch (_) {
+      if (this.canApplyOrders(epoch, owner, version)) { this.ordersError = true }
+    } finally {
+      if (this.canApplyOrders(epoch, owner, version)) { this.loading = false }
     }
-    this.applyFilter()
-    this.loading = false
   }
 
   /** 按当前状态筛选并写入 displayOrders（显式计算，避免渲染期 getter 求值）。 */
@@ -131,9 +169,6 @@ export struct AdminOrderPage {
 
   /** 切换筛选 Tab。 */
   private onStatusChange(status: number): void {
-    if (this.loading) {
-      return
-    }
     this.currentStatus = status
     this.refresh()
   }
@@ -162,17 +197,67 @@ export struct AdminOrderPage {
     return COLORS.WARNING
   }
 
+  private canRunOrderAction(order: AdminOrder, action: string): boolean {
+    switch (action) {
+      case 'accept': return canOrderAction(order, 'MERCHANT_ACCEPT', order.status === 1)
+      case 'ready': return canOrderAction(order, 'MERCHANT_READY', order.status === 2 && (order.readyTime ?? '') === '')
+      case 'deliver': return canOrderAction(order, 'MERCHANT_DELIVER', false)
+      case 'complete': return canOrderAction(order, 'MERCHANT_COMPLETE', order.status === 3)
+      case 'cancel': return canOrderAction(order, 'CANCEL', order.status >= 0 && order.status <= 3)
+      default: return false
+    }
+  }
+
   async runOrderAction(orderId: number, action: string, successText: string): Promise<void> {
-    if (this.actioningOrderId === orderId) {
+    const current: AdminOrder | undefined = this.orders.find((order: AdminOrder) => order.id === orderId)
+    if (!this.pageActive || !this.loggedIn || this.loading || this.user.role !== UserRole.ADMIN
+      || current === undefined || !this.canRunOrderAction(current, action)) { return }
+    if (this.actioningOrderId !== 0) {
       promptAction.showToast({ message: '该订单操作正在处理，请稍候', duration: 1200 })
       return
     }
+    const epoch: number = getAuthSessionEpoch()
+    const owner: number = this.user.id
+    const version: number = this.ordersRequestVersion
     this.actioningOrderId = orderId
     const ok: boolean = await adminOrderActionApi(orderId, action)
+    if (!this.canApplyOrders(epoch, owner, version)) { return }
     this.actioningOrderId = 0
     if (ok) {
       promptAction.showToast({ message: successText, duration: 1400 })
       await this.refresh()
+    }
+  }
+
+  @Builder
+  AdminOrderActions(order: AdminOrder) {
+    if (this.canRunOrderAction(order, 'accept')) {
+      Button('接单').attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
+        .enabled(this.actioningOrderId === 0 && !this.loading).id(`admin-order-accept-${order.id}`)
+        .onClick(() => { this.runOrderAction(order.id, 'accept', '订单已接单') })
+    }
+    if (this.canRunOrderAction(order, 'ready')) {
+      Button('出餐').attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
+        .enabled(this.actioningOrderId === 0 && !this.loading).id(`admin-order-ready-${order.id}`)
+        .onClick(() => { this.runOrderAction(order.id, 'ready', '已出餐，配送方式以订单为准') })
+    }
+    if (this.canRunOrderAction(order, 'deliver')) {
+      Button('开始商家配送').attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
+        .enabled(this.actioningOrderId === 0 && !this.loading).id(`admin-order-deliver-${order.id}`)
+        .onClick(() => { this.runOrderAction(order.id, 'deliver', '订单已进入商家配送') })
+    }
+    if (this.canRunOrderAction(order, 'complete')) {
+      Button('确认送达').attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
+        .enabled(this.actioningOrderId === 0 && !this.loading).id(`admin-order-complete-${order.id}`)
+        .onClick(() => { this.runOrderAction(order.id, 'complete', '订单已标记送达') })
+    }
+    if (this.canRunOrderAction(order, 'cancel')) {
+      Button(order.status === 0 ? '取消' : '取消并退款').attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
+        .fontColor(COLORS.ERROR).enabled(this.actioningOrderId === 0 && !this.loading).id(`admin-order-cancel-${order.id}`)
+        .onClick(() => { this.runOrderAction(order.id, 'cancel', order.status === 0 ? '订单已取消' : '订单已取消并退款') })
+    }
+    if (order.status === 2 && (order.readyTime ?? '') !== '' && !this.canRunOrderAction(order, 'deliver')) {
+      Text('已出餐，等待骑手接单').fontSize(FONT_SIZE.XS).fontColor(COLORS.SUCCESS)
     }
   }
 
@@ -188,6 +273,9 @@ export struct AdminOrderPage {
         onBack: () => { router.back() },
         onAction: () => { this.refresh() }
       })
+
+      Button('配送异常处理').attributeModifier(new AppButtonStyle()).height(44).width('100%')
+        .id('admin-delivery-issues').onClick(() => { router.pushUrl({ url: 'pages/OrderSupportPage' }) })
 
       // 状态筛选 Tab
       Scroll() {
@@ -218,10 +306,17 @@ export struct AdminOrderPage {
       .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
       .width('100%').backgroundColor(MODULE_BG.ADMIN)
 
+      if (this.ordersError) {
+        Button('订单加载失败，点击重试（保留上次数据）')
+          .attributeModifier(new AppButtonStyle()).enabled(!this.loading)
+          .id('admin-order-retry')
+          .onClick(() => { this.loadOrders(this.retryPage, this.retryAppend) })
+      }
+
       // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
       List({ space: SPACING.MD }) {
         ListItem() {
-          Text('支付后托管，用户确认收货后结算给商户；待付款取消释放库存与可用优惠券，已付款取消按原渠道退款，已送达订单走退款审批')
+          Text('支付后托管，确认收货后结算；送达48小时内含已确认、已评价仍可售后。制作后取消不恢复库存；已付用户主动取消不返券，平台/商家取消退有效券。')
             .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%')
         }
 
@@ -249,49 +344,7 @@ export struct AdminOrderPage {
                 }
                 Text(`订单金额 ¥${(order.payAmount ?? 0).toFixed(2)}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
               }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-              if (order.status === 0) {
-                Button('取消')
-                  .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
-                  .fontColor(COLORS.ERROR).backgroundColor(COLORS.ERROR_LIGHT)
-                  .borderRadius(BORDER_RADIUS.ROUND)
-                  .id(`admin-order-cancel-${order.id}`)
-                  .onClick(() => { this.runOrderAction(order.id, 'cancel', '订单已取消') })
-              } else if (order.status === 1) {
-                Button('接单')
-                  .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.ADMIN)
-                  .borderRadius(BORDER_RADIUS.ROUND)
-                  .onClick(() => { this.runOrderAction(order.id, 'accept', '订单已接单') })
-                Button('取消')
-                  .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
-                  .fontColor(COLORS.ERROR).backgroundColor(COLORS.ERROR_LIGHT)
-                  .borderRadius(BORDER_RADIUS.ROUND)
-                  .onClick(() => { this.runOrderAction(order.id, 'cancel', '订单已取消并退款') })
-              } else if (order.status === 2) {
-                if ((order.readyTime ?? '') !== '') {
-                  // 已出餐并进入骑手待取餐池（状态仍为制作中），给可见凭据
-                  Text('已出餐，等待骑手接单').fontSize(FONT_SIZE.XS).fontColor(COLORS.SUCCESS)
-                } else {
-                  Button('出餐')
-                    .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.ADMIN)
-                    .borderRadius(BORDER_RADIUS.ROUND)
-                    .onClick(() => { this.runOrderAction(order.id, 'ready', '已出餐，等待骑手接单') })
-                }
-                Button('取消')
-                  .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
-                  .fontColor(COLORS.ERROR).backgroundColor(COLORS.ERROR_LIGHT)
-                  .borderRadius(BORDER_RADIUS.ROUND)
-                  .onClick(() => { this.runOrderAction(order.id, 'cancel', '订单已取消并退款') })
-              } else if (order.status === 3) {
-                Button('确认送达')
-                  .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.ADMIN)
-                  .borderRadius(BORDER_RADIUS.ROUND)
-                  .onClick(() => { this.runOrderAction(order.id, 'complete', '订单已标记送达') })
-                Button('取消')
-                  .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
-                  .fontColor(COLORS.ERROR).backgroundColor(COLORS.ERROR_LIGHT)
-                  .borderRadius(BORDER_RADIUS.ROUND)
-                  .onClick(() => { this.runOrderAction(order.id, 'cancel', '订单已取消并退款') })
-              }
+              this.AdminOrderActions(order)
             }
               .attributeModifier(new AppCardStyle())
             .width('100%').padding(SPACING.MD)

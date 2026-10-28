@@ -113,6 +113,10 @@ class OrderServiceFlowTest {
 
     @Test void zeroAmountFromNewUserPromotionWithoutCouponCannotCreateAnOrder() {
         stubCommon(10, 0, 3);
+        PromotionService promotions = mock(PromotionService.class);
+        service.configureBusinessRules(promotions, null);
+        when(promotions.quote(eq(USER_ID), eq(STORE_ID), any(), any())).thenReturn(
+                new PromotionService.Quote(new java.math.BigDecimal("10.00"), new java.math.BigDecimal("13.00"), 0, 1));
         when(storeDao.listActiveMarketingActivities(eq(STORE_ID), anyString())).thenReturn(List.of(
                 new com.example.takeout.model.MarketingActivity(1, STORE_ID, "NEW_USER", "新客", 1, 13, 0, 0,
                         "", "", 1, "")));
@@ -216,7 +220,7 @@ class OrderServiceFlowTest {
         assertTrue(view.payDeadlineEpochMs() > view.serverNowEpochMs(), "支付截止时间晚于服务端当前时间");
         verify(userDao, never()).deductBalance(anyLong(), anyDouble());
         verify(goodsDao).deductStock(GOODS_ID, 1);
-        verify(storeDao).updateMonthlySales(STORE_ID, 1);
+        verify(storeDao, never()).updateMonthlySales(anyLong(), anyInt());
         verify(orderDao).insert(org.mockito.ArgumentMatchers.argThat(o ->
                 o.status() == 0 && o.payTime().isEmpty() && o.payAmount() == 13.0));
     }
@@ -268,6 +272,41 @@ class OrderServiceFlowTest {
         assertEquals(20.0, total.doubleValue(), 0.000001);
         assertEquals(order.goodsAmount(), total.doubleValue(), 0.000001);
         assertEquals(23.0, order.payAmount(), 0.000001);
+    }
+
+    @Test
+    void setmealRejectsCrossStoreUnavailableAndMultiSpecComponentsBeforeDeductingStock() {
+        stubCommon(10, 0, 3);
+        when(storeDao.findSetmeal(500)).thenReturn(Optional.of(new Setmeal(500, STORE_ID, "套餐", "", 8, 13, "", 1, "",
+                List.of(new SetmealItem(1, 500, GOODS_ID, "旧商品名", 1)))));
+        Goods available = shelfGoods(10, STORE_ID);
+        Goods offShelf = new Goods(GOODS_ID, STORE_ID, "已下架", "", 10, 10, "", 1, 0, 99, 0, 0, 4.5, "", false, 0, "");
+        Goods multiSpec = available.withSpecs(List.of(new GoodsSpec(301, GOODS_ID, "大份", 12, 10, 0, 0, 1, "")));
+        for (Goods component : List.of(shelfGoods(10, STORE_ID + 1), offShelf, multiSpec)) {
+            when(goodsDao.findById(GOODS_ID)).thenReturn(Optional.of(component));
+            assertThrows(BizException.class, () -> service.createOrder(USER_ID, STORE_ID, List.of(),
+                    ADDRESS_ID, 0, "", List.of(), "", "", List.of(new SetmealOrder(500, 1)), ""));
+        }
+        when(goodsDao.findById(GOODS_ID)).thenReturn(Optional.empty());
+        assertThrows(BizException.class, () -> service.createOrder(USER_ID, STORE_ID, List.of(),
+                ADDRESS_ID, 0, "", List.of(), "", "", List.of(new SetmealOrder(500, 1)), ""));
+        verify(goodsDao, never()).deductStock(anyLong(), anyInt());
+        verify(orderDao, never()).insert(any(Order.class));
+    }
+
+    @Test
+    void multiSpecGiftNeverDeductsOnlyTheAggregateStock() {
+        stubCommon(10, 0, 3);
+        Goods gift = new Goods(200, STORE_ID, "赠品", "", 2, 2, "", 1, 0, 10, 0, 0, 4.5, "", false, 1, "")
+                .withSpecs(List.of(new GoodsSpec(302, 200, "大份", 2, 10, 0, 0, 1, "")));
+        when(goodsDao.findById(200)).thenReturn(Optional.of(gift));
+        when(storeDao.listActiveMarketingActivities(eq(STORE_ID), anyString())).thenReturn(List.of(
+                new com.example.takeout.model.MarketingActivity(1, STORE_ID, "GIFT", "满赠", 0, 0, 1, 200, "", "", 1, "")));
+        when(orderDao.insert(any(Order.class))).thenReturn(13L);
+        when(orderDao.findById(13)).thenReturn(Optional.of(storedOrder(13, 0, ITEMS, "")));
+        service.createOrder(USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "");
+        verify(goodsDao, never()).deductStock(eq(200L), anyInt());
+        verify(specDao, never()).deductStock(eq(302L), anyInt());
     }
 
     @Test
@@ -450,7 +489,7 @@ class OrderServiceFlowTest {
         when(orderDao.cancelPaidFrom(eq(13L), eq(1), anyString(), eq("USER"), eq("USER_CANCELLED"),
                 eq("用户取消订单"), eq(USER_ID))).thenReturn(true);
         ExternalPaymentService external = mock(ExternalPaymentService.class);
-        when(external.refundOriginalPayment(paid)).thenReturn("ALIPAY");
+        when(external.refundOriginalPayment(eq(paid), any(ExternalRefundAttemptService.Cancellation.class))).thenReturn("ALIPAY");
         service.configureExternalPaymentService(external);
 
         service.cancelOrder(USER_ID, 13);
@@ -459,7 +498,7 @@ class OrderServiceFlowTest {
         sequence.verify(orderDao).findByIdForUpdate(13);
         sequence.verify(external).closePendingPayment(13);
         sequence.verify(orderDao).findByIdForUpdate(13);
-        verify(external).refundOriginalPayment(paid);
+        verify(external).refundOriginalPayment(eq(paid), any(ExternalRefundAttemptService.Cancellation.class));
         verify(orderDao, never()).cancelPending(anyLong(), anyString(), anyString(), anyString(), anyString());
         verify(userDao, never()).addBalance(anyLong(), anyDouble());
     }
@@ -526,7 +565,7 @@ class OrderServiceFlowTest {
     }
 
     @Test
-    void adminCancellationRefundsOriginalChannelAndDoesNotReturnUsedCoupon() {
+    void platformCancellationRefundsOriginalChannelAndReturnsValidCoupon() {
         Order paid = new Order(14, "NO14", USER_ID, STORE_ID, "测试店", 1, ITEMS, ADDRESS_JSON,
                 10, 3, 3, 10, "", 0, 0, LocalDateTime.now().format(FMT), "", "", "", "", "", 66);
         when(orderDao.findById(14)).thenReturn(Optional.of(paid));
@@ -534,14 +573,14 @@ class OrderServiceFlowTest {
         when(orderDao.cancelPaidFrom(eq(14L), eq(1), anyString(), eq("ADMIN"), eq("PLATFORM_CANCELLED"),
                 eq("平台取消订单"), eq(0L))).thenReturn(true);
         ExternalPaymentService external = mock(ExternalPaymentService.class);
-        when(external.refundOriginalPayment(paid)).thenReturn("ALIPAY");
+        when(external.refundOriginalPayment(eq(paid), any(ExternalRefundAttemptService.Cancellation.class))).thenReturn("ALIPAY");
         service.configureExternalPaymentService(external);
 
         service.cancelOrderByAdmin(14);
 
-        verify(external).refundOriginalPayment(paid);
+        verify(external).refundOriginalPayment(eq(paid), any(ExternalRefundAttemptService.Cancellation.class));
         verify(goodsDao).restoreStock(GOODS_ID, 1);
-        verify(couponDao, never()).release(anyLong(), anyString());
+        verify(couponDao).release(eq(66L), anyString());
         verify(userDao, never()).addBalance(anyLong(), anyDouble());
     }
 
@@ -561,6 +600,8 @@ class OrderServiceFlowTest {
             verify(orderDao).cancelPaidFrom(eq(orderId), eq(status), anyString(), eq("ADMIN"),
                     eq("PLATFORM_CANCELLED"), eq("平台取消订单"), eq(0L));
         }
+        verify(goodsDao, never()).restoreStock(anyLong(), anyInt());
+        verify(specDao, never()).restoreStock(anyLong(), anyInt());
     }
 
     @Test

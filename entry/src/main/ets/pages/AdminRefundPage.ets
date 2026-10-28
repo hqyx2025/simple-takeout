@@ -11,7 +11,7 @@ import { StatusBadge } from '../components/StatusBadge'
 import { PageHeader } from '../components/PageHeader'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
-import { getAuthSessionEpoch } from '../service/HttpClient'
+import { getAuthSessionEpoch, getApiBaseUrl } from '../service/HttpClient'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { fetchAdminRefundDetailApi } from '../service/api/AdminApi'
 
@@ -237,6 +237,25 @@ export struct AdminRefundPage {
     return '状态待确认'
   }
 
+  @Builder
+  RefundEvidence(record: RefundRecord) {
+    Column({ space: SPACING.SM }) {
+      Text(`商家说明：${record.merchantResponse ?? '未提供'}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+      if ((record.appealCount ?? 0) > 0) {
+        Text(`用户申诉：${record.appealReason ?? ''}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_PRIMARY)
+      }
+      ForEach(record.evidenceImages ?? [], (url: string) => {
+        Image(url.startsWith('/') ? getApiBaseUrl() + url : url).width(100).height(100).objectFit(ImageFit.Cover)
+      }, (url: string) => url)
+      ForEach(record.merchantEvidenceImages ?? [], (url: string) => {
+        Image(url.startsWith('/') ? getApiBaseUrl() + url : url).width(100).height(100).objectFit(ImageFit.Cover)
+      }, (url: string) => url)
+      ForEach(record.appealImages ?? [], (url: string) => {
+        Image(url.startsWith('/') ? getApiBaseUrl() + url : url).width(100).height(100).objectFit(ImageFit.Cover)
+      }, (url: string) => url)
+    }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+
   build() {
     Stack() {
       Column() {
@@ -323,6 +342,7 @@ export struct AdminRefundPage {
                   }.alignItems(HorizontalAlign.Start).layoutWeight(1)
                   StatusBadge({ text: this.getRefundStatusText(record.status), mode: record.status === 'REFUNDED' ? 'success' : record.status === 'REJECTED' ? 'error' : 'warning' })
                 }.width('100%')
+                this.RefundEvidence(record)
                 if (record.status === 'PENDING') {
                   Row({ space: SPACING.SM }) {
                     Button('同意退款')

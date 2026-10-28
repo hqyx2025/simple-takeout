@@ -12,6 +12,7 @@ import { Order, OrderPageData, StoreItem, User, UserRole } from '../model/Models
 import { fetchRiderOrdersPageResultApi } from '../service/api/RiderApi'
 import { fetchStoreDetailApi } from '../service/api/CatalogApi'
 import { getAuthSessionEpoch, getAuthToken } from '../service/HttpClient'
+import { canOrderAction } from '../service/OrderStatus'
 import { pickupOrderRemote, deliverOrderRemote, getLastRemoteErrorMessage, startRiderLocationTimer, stopRiderLocationTimer } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
 import { PageHeader } from '../components/PageHeader'
@@ -143,7 +144,7 @@ export struct RiderOrdersPage {
 
   private askToDeliver(order: Order): void {
     const current: Order | undefined = this.activeOrder(order.id)
-    if (this.acting || this.loading || current === undefined || current.status !== 3) { return }
+    if (this.acting || this.loading || current === undefined || !canOrderAction(current, 'RIDER_DELIVER', current.status === 3)) { return }
     this.pendingDeliverId = current.id
     this.deliverySummary = `请确认餐品已交给 ${current.address.name || '收货人'}，或已放在双方约定的位置。\n无法联系或尚未完成交付时，请先不要确认送达。`
   }
@@ -338,7 +339,8 @@ export struct RiderOrdersPage {
   }
 
   private async pickup(order: Order): Promise<void> {
-    if (this.acting || this.activeOrder(order.id)?.status !== 2) {
+    const current: Order | undefined = this.activeOrder(order.id)
+    if (this.acting || current === undefined || !canOrderAction(current, 'RIDER_PICKUP', current.status === 2)) {
       return
     }
     this.acting = true
@@ -382,7 +384,8 @@ export struct RiderOrdersPage {
   }
 
   private async deliver(order: Order): Promise<void> {
-    if (this.acting || this.activeOrder(order.id)?.status !== 3) {
+    const current: Order | undefined = this.activeOrder(order.id)
+    if (this.acting || current === undefined || !canOrderAction(current, 'RIDER_DELIVER', current.status === 3)) {
       return
     }
     this.acting = true
@@ -610,17 +613,20 @@ export struct RiderOrdersPage {
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%')
       }
 
+      Button('配送异常与处理记录').attributeModifier(new AppButtonStyle()).height(44).width('100%')
+        .enabled(!this.acting).id(`rider-order-support-${order.id}`)
+        .onClick(() => { router.pushUrl({ url: 'pages/OrderSupportPage', params: { orderId: order.id, canReport: canOrderAction(order, 'REPORT_ISSUE', order.status === 2 || order.status === 3) } }) })
       Row() {
         Text(`¥${order.payAmount.toFixed(2)} · ${order.createTime}`)
           .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).layoutWeight(1)
-        if (order.status === 2) {
+        if (canOrderAction(order, 'RIDER_PICKUP', order.status === 2)) {
           Button(this.acting && this.actingOrderId === order.id && this.actingAction === 'pickup' ? '取餐中…' : '取餐')
             .attributeModifier(new AppButtonStyle()).height(44).fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.RIDER)
             .borderRadius(BORDER_RADIUS.ROUND)
             .enabled(!this.acting)
             .id(`rider-pickup-${order.id}`)
             .onClick(() => { this.pickup(order) })
-        } else if (order.status === 3 && !this.deliveredOrderIds.includes(order.id)) {
+        } else if (canOrderAction(order, 'RIDER_DELIVER', order.status === 3) && !this.deliveredOrderIds.includes(order.id)) {
           Button(this.acting && this.actingOrderId === order.id && this.actingAction === 'deliver' ? '送达中…' : '送达')
             .attributeModifier(new AppButtonStyle()).height(44).fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.ON_PRIMARY).backgroundColor(COLORS.SUCCESS)
