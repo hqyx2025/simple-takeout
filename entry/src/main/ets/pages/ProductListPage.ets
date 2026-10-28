@@ -302,7 +302,7 @@ export struct ProductListPage {
       })
 
       if (!this.loggedIn) {
-EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', description: '请登录后查看商品' })
+EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', actionLabel: '去登录', actionUrl: 'pages/Index' })
        } else if (this.mode === ProductListMode.CATEGORY) {
          if (this.categoryStores.length === 0) {
            EmptyState({ icon: $r('app.media.login_store'), title: '暂无该分类店铺', description: '当前分类暂时没有可展示的店铺' })

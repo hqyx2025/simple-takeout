@@ -118,7 +118,6 @@ export struct AdminRiderPage {
           Image($r('app.media.login_rider')).width(60).height(60).objectFit(ImageFit.Contain).margin({ top: 40 })
           Text(this.statusFilter === -1 ? '暂无骑手' : '当前筛选条件下暂无骑手')
             .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
-          Text('骑手通过「注册→选择骑手」开通').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.SM })
         }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
       } else {
         // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在筛选行下方

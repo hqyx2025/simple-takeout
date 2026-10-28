@@ -5,6 +5,9 @@ import { UserRole } from '../model/Models'
 import { loginRemote, registerRemote, logout, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { logInfo, logWarn } from '../service/AppLogger'
 import { APP_CONFIG } from '../common/Constants'
+import BuildProfile from 'BuildProfile'
+import { getQuickLoginAccount, QuickLoginAccount } from '../common/QuickLoginConfig'
+import { getApiBaseUrl } from '../service/HttpClient'
 import { AppTheme, AppInputStyle, AppButtonStyle } from '../common/theme/AppTheme'
 import { AppMotion } from '../common/theme/AppMotion'
 import { requestEmailCodeApi, EmailCodeResult } from '../service/ApiService'
@@ -32,8 +35,8 @@ export struct LoginPage {
   onLoginSuccess: () => void = () => {}
   private quickLoginDialog: CustomDialogController = new CustomDialogController({
     builder: QuickLoginDialog({
-      onSelectLogin: (phone: string, role: UserRole): void => {
-        this.quickLogin(phone, role)
+      onSelectLogin: (role: UserRole): void => {
+        this.quickLogin(role)
       }
     }),
     autoCancel: true,
@@ -47,20 +50,15 @@ export struct LoginPage {
         Column() {
           Column() {
             this.brandHeader()
-            Text(this.isLoginMode ? '欢迎回来' : '从一顿美味开始')
+            Text(this.isLoginMode ? '登录' : '注册账号')
               .fontSize(24)
               .fontWeight(FontWeight.Bold)
               .fontColor(AppTheme.TEXT)
               .width('100%')
               .margin({ top: 10, bottom: 4 })
-            Text(this.isLoginMode ? '选好身份，开启今天的美味。' : '创建账号，加入简单外卖。')
-              .fontSize(14)
-              .fontColor(AppTheme.MUTED)
-              .width('100%')
-              .margin({ bottom: 10 })
 
             this.modeSelector()
-            this.roleSelector()
+            if (this.isLoginMode) { this.roleSelector() }
 
             if (!this.isLoginMode) {
               this.formField('账号名', '请输入账号名，例如 takeout_user', this.username, $r('app.media.login_user'),
@@ -68,7 +66,7 @@ export struct LoginPage {
               this.formField('邮箱', '请输入用于找回密码的邮箱', this.email, $r('app.media.login_user'),
                 InputType.Email, 'login-email', (value: string) => { this.email = value; this.emailCode = '' })
             }
-            this.formField('手机号', '请输入唯一的 11 位手机号', this.phone, $r('app.media.login_phone'),
+            this.formField('手机号', '例如：13800138000', this.phone, $r('app.media.login_phone'),
               InputType.PhoneNumber, 'login-phone', (value: string) => { this.phone = value; this.emailCode = '' })
             if (!this.isLoginMode) {
               this.registrationCodeField()
@@ -94,12 +92,6 @@ export struct LoginPage {
                 })
             }
 
-            Text(this.isLoginMode ? '使用所选身份对应的账号登录' : '注册成功后，请使用新账号登录')
-              .fontSize(12)
-              .fontColor(AppTheme.MUTED)
-              .textAlign(TextAlign.Center)
-              .width('100%')
-              .margin({ top: 8 })
           }
           .width('100%')
           .constraintSize({ maxWidth: AppTheme.FORM_MAX_WIDTH })
@@ -131,6 +123,7 @@ export struct LoginPage {
           .id('version-text')
           .margin({ bottom: 4 })
           .onClick(() => {
+            if (!BuildProfile.DEBUG) { return }
             this.versionClickCount = this.versionClickCount + 1
             if (this.versionClickCount >= 3) {
               this.versionClickCount = 0
@@ -210,9 +203,6 @@ export struct LoginPage {
           .fontSize(22)
           .fontWeight(FontWeight.Bold)
           .fontColor(AppTheme.TEXT)
-        Text('美味送到家')
-          .fontSize(12)
-          .fontColor(AppTheme.MUTED)
       }
       .alignItems(HorizontalAlign.Start)
     }
@@ -419,7 +409,7 @@ export struct LoginPage {
     }
     this.isLoginMode = loginMode
     this.emailCode = ''
-    if (!this.isLoginMode && this.selectedRole === UserRole.ADMIN) {
+    if (!this.isLoginMode) {
       this.selectedRole = UserRole.CUSTOMER
     }
     this.errorMsg = ''
@@ -505,30 +495,42 @@ export struct LoginPage {
     }
   }
 
-  private async quickLogin(phone: string, role: UserRole): Promise<void> {
+  private async quickLogin(role: UserRole): Promise<void> {
     if (this.submitting) {
       promptAction.showToast({ message: '正在处理，请稍候', duration: 1200 })
       return
     }
+    const account: QuickLoginAccount | undefined = getQuickLoginAccount(role, getApiBaseUrl())
+    if (account === undefined) {
+      this.errorMsg = '当前环境未配置该身份的快捷登录账号'
+      promptAction.showToast({ message: this.errorMsg, duration: 2200 })
+      return
+    }
     this.submitting = true
     this.errorMsg = ''
+    this.tipMsg = ''
     this.selectedRole = role
-    const user = await loginRemote(phone, '123456', this.loginTypeName())
-    if (user !== undefined && user.role === role) {
-      this.phone = phone
-      this.password = '123456'
-      this.onLoginSuccess()
-    } else {
-      if (user !== undefined) {
-        logout()
+    try {
+      const user = await loginRemote(account.phone, account.password, this.loginTypeName())
+      if (user !== undefined && user.role === role) {
+        this.phone = account.phone
+        this.password = ''
+        this.onLoginSuccess()
+      } else {
+        if (user !== undefined) {
+          logout()
+        }
+        const remoteMessage: string = getLastRemoteErrorMessage()
+        this.errorMsg = remoteMessage !== '' ? remoteMessage : role === UserRole.ADMIN
+          ? '管理端快捷登录失败，请确认账号可用'
+          : role === UserRole.MERCHANT ? '商户快捷登录失败，请确认账号可用'
+          : role === UserRole.RIDER ? '骑手快捷登录失败，请确认账号可用' : '用户快捷登录失败，请确认账号可用'
       }
-      const remoteMessage: string = getLastRemoteErrorMessage()
-      this.errorMsg = remoteMessage !== '' ? remoteMessage : role === UserRole.ADMIN
-        ? '管理端快捷登录失败，请确认账号可用'
-        : role === UserRole.MERCHANT ? '商户快捷登录失败，请确认账号可用'
-        : role === UserRole.RIDER ? '骑手快捷登录失败，请确认账号可用' : '用户快捷登录失败，请确认账号可用'
+    } catch (_) {
+      this.errorMsg = '快捷登录失败，请稍后重试'
+    } finally {
+      this.submitting = false
     }
-    this.submitting = false
   }
 
   private loginTypeName(): string {
@@ -539,11 +541,11 @@ export struct LoginPage {
   }
 }
 
-/** 快捷登录选择弹窗，沿用版本号三击入口与四个测试账号。 */
+/** 调试包的快捷登录选择弹窗，账号由本机私有构建配置提供。 */
 @CustomDialog
 export struct QuickLoginDialog {
   controller?: CustomDialogController
-  onSelectLogin: (phone: string, role: UserRole) => void = () => {}
+  onSelectLogin: (role: UserRole) => void = () => {}
 
   build() {
     Column() {
@@ -572,13 +574,13 @@ export struct QuickLoginDialog {
       Divider().color(AppTheme.BORDER)
       Column({ space: 10 }) {
         this.quickLoginButton('用户点餐', $r('app.media.login_user'),
-          '13800138000', UserRole.CUSTOMER, 'quick-login-user')
+          UserRole.CUSTOMER, 'quick-login-user')
         this.quickLoginButton('商户管理', $r('app.media.login_store'),
-          '13600136000', UserRole.MERCHANT, 'quick-login-merchant')
+          UserRole.MERCHANT, 'quick-login-merchant')
         this.quickLoginButton('管理端', $r('app.media.login_shield'),
-          '13100131000', UserRole.ADMIN, 'quick-login-admin')
+          UserRole.ADMIN, 'quick-login-admin')
         this.quickLoginButton('骑手配送', $r('app.media.login_rider'),
-          '13300133000', UserRole.RIDER, 'quick-login-rider')
+          UserRole.RIDER, 'quick-login-rider')
       }
       .width('100%')
       .padding({ left: 24, right: 24, top: 18, bottom: 28 })
@@ -590,7 +592,7 @@ export struct QuickLoginDialog {
   }
 
   @Builder
-  quickLoginButton(label: string, icon: Resource, phone: string, role: UserRole, id: string) {
+  quickLoginButton(label: string, icon: Resource, role: UserRole, id: string) {
     Button({ type: ButtonType.Normal }) {
       Row({ space: 12 }) {
         Image(icon)
@@ -613,7 +615,7 @@ export struct QuickLoginDialog {
     .id(id)
     .accessibilityText(label)
     .onClick(() => {
-      this.onSelectLogin(phone, role)
+      this.onSelectLogin(role)
       if (this.controller !== undefined) {
         this.controller.close()
       }

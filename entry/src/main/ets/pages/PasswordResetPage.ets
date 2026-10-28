@@ -142,9 +142,7 @@ export struct PasswordResetPage {
       Scroll() {
         Column({ space: SPACING.LG }) {
           Column({ space: SPACING.MD }) {
-            Text(this.mode === 'login' ? '找回登录密码' : '找回支付密码')
-              .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(AppTheme.TEXT).width('100%')
-            Text('填写要找回的手机号和绑定邮箱。验证码仅用于该手机号对应账户的本次密码重置。')
+            Text('使用绑定邮箱验证身份。')
               .fontSize(FONT_SIZE.SM).fontColor(AppTheme.MUTED).width('100%')
             Text('绑定手机号').fontSize(FONT_SIZE.SM).fontColor(AppTheme.TEXT).width('100%')
             TextInput({ text: this.phone, placeholder: '请输入该账号绑定的 11 位手机号' }).attributeModifier(new AppInputStyle())
@@ -154,6 +152,7 @@ export struct PasswordResetPage {
             TextInput({ text: this.email, placeholder: '例如 name@qq.com' }).attributeModifier(new AppInputStyle())
               .type(InputType.Email).width('100%').id('password-reset-email')
               .onChange((value: string) => { this.email = value; this.code = '' })
+            Text('邮箱验证码').fontSize(FONT_SIZE.SM).fontColor(AppTheme.TEXT).width('100%')
             Row({ space: SPACING.SM }) {
               TextInput({ text: this.code, placeholder: '邮箱验证码' }).attributeModifier(new AppInputStyle())
                 .type(InputType.Number).maxLength(6).layoutWeight(1).id('password-reset-code')
@@ -163,10 +162,12 @@ export struct PasswordResetPage {
                 .id('password-reset-send-code').onClick(() => { this.sendCode() })
             }.width('100%')
             Text('验证码 15 分钟内有效，请勿向他人泄露。').fontSize(FONT_SIZE.SM).fontColor(AppTheme.MUTED).width('100%')
+            Text(this.mode === 'login' ? '新登录密码' : '新支付密码').fontSize(FONT_SIZE.SM).fontColor(AppTheme.TEXT).width('100%')
             TextInput({ text: this.newPassword, placeholder: this.mode === 'login' ? '请输入新登录密码，至少 6 位' : '请输入 6 位支付密码' })
               .attributeModifier(new AppInputStyle()).type(InputType.Password).width('100%')
               .maxLength(this.mode === 'payment' ? 6 : 64).id('password-reset-new')
               .onChange((value: string) => { this.newPassword = this.mode === 'payment' ? value.replace(/[^0-9]/g, '') : value })
+            Text('确认新密码').fontSize(FONT_SIZE.SM).fontColor(AppTheme.TEXT).width('100%')
             TextInput({ text: this.confirmPassword, placeholder: '请再次输入密码' }).attributeModifier(new AppInputStyle())
               .type(InputType.Password).width('100%').maxLength(this.mode === 'payment' ? 6 : 64)
               .id('password-reset-confirm').onChange((value: string) => { this.confirmPassword = this.mode === 'payment' ? value.replace(/[^0-9]/g, '') : value })

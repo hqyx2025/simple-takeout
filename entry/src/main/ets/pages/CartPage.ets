@@ -50,6 +50,7 @@ class BundleHint {
  */
 @Component
 export struct CartPage {
+  onBrowse: () => void = () => {}
   @Prop bottomInset: number = 0
   @State actionBarHeight: number = 72
   @State cartItems: CartItem[] = []
@@ -682,9 +683,9 @@ export struct CartPage {
         }
 
         if (!this.loggedIn) {
-          EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', description: '请登录后查看购物车' })
+          EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', actionLabel: '去登录', actionUrl: 'pages/Index' })
         } else if (this.getCurrentCartItems().length === 0) {
-          EmptyState({ icon: $r('app.media.home_nav_cart'), title: '购物车是空的', description: '去首页挑选喜欢的商品吧' })
+          EmptyState({ icon: $r('app.media.home_nav_cart'), title: '购物车是空的', actionLabel: '去逛店铺', onAction: () => { this.onBrowse() } })
         } else {
           Stack({ alignContent: Alignment.Bottom }) {
         // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部

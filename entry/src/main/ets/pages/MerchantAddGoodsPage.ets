@@ -455,7 +455,7 @@ export struct MerchantAddGoodsPage {
       }
       .width('100%').alignItems(VerticalAlign.Center)
 
-      Text('配置规格后，菜品价格与库存分别按规格单独计算（菜品价取规格最低价、库存为规格合计）；多规格菜品下单时必须选择规格。')
+      Text('每种规格分别设置售价和库存。')
         .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%')
 
       if (this.multiSpecEnabled) {
@@ -485,14 +485,7 @@ export struct MerchantAddGoodsPage {
 
       Scroll() {
         Column({ space: SPACING.MD }) {
-          Column({ space: SPACING.SM }) {
-            Text('确认后将保存到数据库，并立即刷新商品列表')
-              .fontSize(FONT_SIZE.SM).fontColor(accentFg(0))
-            Text('请填写商品信息；库存和分类使用固定范围与数据库分类，避免录入无效数据。')
-              .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
-          }
-          .width('100%').padding(SPACING.MD)
-          .backgroundColor(accentBg(0)).borderRadius(BORDER_RADIUS.MD)
+
 
           Column({ space: SPACING.MD }) {
             Row() {
@@ -508,25 +501,25 @@ export struct MerchantAddGoodsPage {
             Column({ space: SPACING.XS }) {
               this.FieldLabel('商品名称', true)
               TextInput({ placeholder: '如：宫保鸡丁', text: this.goodsName })
-                .attributeModifier(new AppInputStyle())
+                .attributeModifier(new AppInputStyle()).id('merchant-goods-name')
                 .width('100%')
                 .onChange((value: string) => { this.goodsName = value })
             }
             Column({ space: SPACING.XS }) {
               this.FieldLabel('商品描述', false)
               TextInput({ placeholder: '如：招牌菜，微辣', text: this.goodsDescription })
-                .attributeModifier(new AppInputStyle())
+                .attributeModifier(new AppInputStyle()).id('merchant-goods-description')
                 .width('100%')
                 .onChange((value: string) => { this.goodsDescription = value })
             }
             Row({ space: SPACING.MD }) {
-              this.NumberField('特价价', '如：25.00', this.price, '', (value: string) => { this.price = value })
+              this.NumberField('售价', '如：25.00', this.price, '', (value: string) => { this.price = value })
               this.NumberField('库存', '0-9999', this.stock, this.specStockHint(), (value: string) => { this.stock = value })
             }
             Column({ space: SPACING.XS }) {
               this.FieldLabel('原价', false)
               TextInput({ placeholder: '特价时填写，如：30.00', text: this.originalPrice })
-                .attributeModifier(new AppInputStyle())
+                .attributeModifier(new AppInputStyle()).id('merchant-goods-original-price')
                 .width('100%').type(InputType.Number)
                 .onChange((value: string) => { this.originalPrice = value })
             }
@@ -571,13 +564,13 @@ export struct MerchantAddGoodsPage {
       .layoutWeight(1).scrollBar(BarState.Off)
 
       Row({ space: SPACING.MD }) {
-        Button('取消')
+        Button('取消').id('merchant-goods-cancel')
           .attributeModifier(new AppButtonStyle())
           .layoutWeight(1).height(46).fontSize(FONT_SIZE.MD)
           .fontColor(COLORS.TEXT_SECONDARY).backgroundColor(COLORS.BG_PRIMARY)
           .borderRadius(BORDER_RADIUS.ROUND)
           .onClick(() => { router.back() })
-        Button(this.submitting ? '提交中...' : '确认添加')
+        Button(this.submitting ? '提交中...' : '确认添加').id('merchant-goods-submit')
           .attributeModifier(new AppButtonStyle())
           .layoutWeight(1).height(46).fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.MERCHANT)
           .borderRadius(BORDER_RADIUS.ROUND)

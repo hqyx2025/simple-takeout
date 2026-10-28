@@ -7,6 +7,7 @@ import { setPaymentPasswordApi, PaymentPasswordResult } from '../service/ApiServ
 import { getAuthToken } from '../service/HttpClient'
 import { User } from '../model/Models'
 import { logout } from '../service/AppStorageManager'
+import { FormInput } from '../components/FormInput'
 import { KeyboardAvoidMode } from '@kit.ArkUI'
 
 @Entry
@@ -144,15 +145,15 @@ export struct AccountSecurityPage {
               .fontColor(AppTheme.TEXT).width('100%')
             Text('修改成功后当前登录会失效，需要重新登录。').fontSize(FONT_SIZE.SM)
               .fontColor(AppTheme.MUTED).width('100%')
-            TextInput({ text: this.oldPassword, placeholder: '请输入当前登录密码' })
-              .attributeModifier(new AppInputStyle()).type(InputType.Password).width('100%')
-              .id('account-old-password').onChange((value: string) => { this.oldPassword = value })
-            TextInput({ text: this.newPassword, placeholder: '请输入新密码，至少 6 位' })
-              .attributeModifier(new AppInputStyle()).type(InputType.Password).width('100%')
-              .id('account-new-password').onChange((value: string) => { this.newPassword = value })
-            TextInput({ text: this.confirmPassword, placeholder: '请再次输入新密码' })
-              .attributeModifier(new AppInputStyle()).type(InputType.Password).width('100%')
-              .id('account-confirm-password').onChange((value: string) => { this.confirmPassword = value })
+            FormInput({ label: '当前登录密码', value: this.oldPassword, placeholder: '请输入当前密码',
+              fieldId: 'account-old-password', inputType: InputType.Password, maxLength: 64,
+              isEnabled: !this.savingPassword && !this.savingPayment, onChange: (value: string) => { this.oldPassword = value } })
+            FormInput({ label: '新登录密码', value: this.newPassword, placeholder: '至少 6 位',
+              fieldId: 'account-new-password', inputType: InputType.Password, maxLength: 64,
+              isEnabled: !this.savingPassword && !this.savingPayment, onChange: (value: string) => { this.newPassword = value } })
+            FormInput({ label: '确认新登录密码', value: this.confirmPassword, placeholder: '再次输入新密码',
+              fieldId: 'account-confirm-password', inputType: InputType.Password, maxLength: 64,
+              isEnabled: !this.savingPassword && !this.savingPayment, onChange: (value: string) => { this.confirmPassword = value } })
             Button(this.savingPassword ? '保存中…' : '保存登录密码')
               .attributeModifier(new AppButtonStyle()).height(AppTheme.CONTROL_HEIGHT).width('100%')
               .enabled(!this.savingPassword && !this.savingPayment).id('account-save-password')
@@ -169,17 +170,17 @@ export struct AccountSecurityPage {
           Column({ space: SPACING.MD }) {
             Text('支付密码').fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold)
               .fontColor(AppTheme.TEXT).width('100%')
-            Text('用于查看完整银行卡号，与登录密码独立。').fontSize(FONT_SIZE.SM)
+            Text('用于余额支付和查看完整卡号，与登录密码独立。').fontSize(FONT_SIZE.SM)
               .fontColor(AppTheme.MUTED).width('100%')
-            TextInput({ text: this.loginPassword, placeholder: '请输入当前登录密码' })
-              .attributeModifier(new AppInputStyle()).type(InputType.Password).width('100%')
-              .id('account-payment-login-password').onChange((value: string) => { this.loginPassword = value })
-            TextInput({ text: this.paymentPassword, placeholder: '请输入 6 位数字支付密码' })
-              .attributeModifier(new AppInputStyle()).type(InputType.Password).maxLength(6).width('100%')
-              .id('account-payment-password').onChange((value: string) => { this.paymentPassword = value.replace(/[^0-9]/g, '') })
-            TextInput({ text: this.paymentConfirm, placeholder: '请再次输入 6 位数字支付密码' })
-              .attributeModifier(new AppInputStyle()).type(InputType.Password).maxLength(6).width('100%')
-              .id('account-payment-confirm').onChange((value: string) => { this.paymentConfirm = value.replace(/[^0-9]/g, '') })
+            FormInput({ label: '当前登录密码', value: this.loginPassword, placeholder: '请输入当前密码',
+              fieldId: 'account-payment-login-password', inputType: InputType.Password, maxLength: 64,
+              isEnabled: !this.savingPassword && !this.savingPayment, onChange: (value: string) => { this.loginPassword = value } })
+            FormInput({ label: '支付密码', value: this.paymentPassword, placeholder: '6 位数字',
+              fieldId: 'account-payment-password', inputType: InputType.Password, maxLength: 6,
+              isEnabled: !this.savingPassword && !this.savingPayment, onChange: (value: string) => { this.paymentPassword = value.replace(/[^0-9]/g, '') } })
+            FormInput({ label: '确认支付密码', value: this.paymentConfirm, placeholder: '再次输入 6 位数字',
+              fieldId: 'account-payment-confirm', inputType: InputType.Password, maxLength: 6,
+              isEnabled: !this.savingPassword && !this.savingPayment, onChange: (value: string) => { this.paymentConfirm = value.replace(/[^0-9]/g, '') } })
             Button(this.savingPayment ? '保存中…' : '保存支付密码')
               .attributeModifier(new AppButtonStyle()).height(AppTheme.CONTROL_HEIGHT).width('100%')
               .enabled(!this.savingPayment && !this.savingPassword).id('account-save-payment')

@@ -1,6 +1,7 @@
 /**
  * 全局常量定义
  */
+import BuildProfile from 'BuildProfile'
 
 // 品牌主色（业务数据用途的稳定 hex，不随深浅色变化）。
 // 如分类展示色传给后端存储、Canvas 需要字符串色的场景使用。
@@ -141,11 +142,17 @@ export class APP_CONFIG {
 
 // API 地址按优先级排列：先访问云服务器，云端不可达时回退到本机 IDEA/Docker。
 // 本机地址使用 10.0.2.2，是鸿蒙模拟器访问宿主机的 NAT 别名。
+export function getMarketingTypeText(type: string): string {
+  return type === 'DISCOUNT' ? '折扣' : type === 'NEW_USER' ? '新客立减' : type === 'GIFT' ? '满赠' : '其他活动'
+}
+
 export class API_CONFIG {
   static readonly REMOTE_BASE_URL: string = 'https://hqyx.website/takeout'
   static readonly LOCAL_BASE_URL: string = 'http://10.0.2.2:8087'
-  static readonly BASE_URL: string = API_CONFIG.REMOTE_BASE_URL
-  static readonly BASE_URLS: string[] = [API_CONFIG.REMOTE_BASE_URL, API_CONFIG.LOCAL_BASE_URL]
+  static readonly BASE_URL: string = BuildProfile.DEBUG && BuildProfile.UI_TEST_BASE_URL.length > 0
+    ? BuildProfile.UI_TEST_BASE_URL : API_CONFIG.REMOTE_BASE_URL
+  static readonly BASE_URLS: string[] = BuildProfile.DEBUG && BuildProfile.UI_TEST_BASE_URL.length > 0
+    ? [API_CONFIG.BASE_URL, API_CONFIG.BASE_URL] : [API_CONFIG.REMOTE_BASE_URL, API_CONFIG.LOCAL_BASE_URL]
   static readonly CONNECT_TIMEOUT: number = 2000
   static readonly TIMEOUT: number = 10000
   static readonly ENDPOINTS: Record<string, string> = {

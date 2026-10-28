@@ -44,15 +44,13 @@ interface AdminOrderPageResponse {
 class AdminEntryItem {
   icon: Resource = $r('app.media.ui_info')
   title: string = ''
-  description: string = ''
   count: number = 0
   page: string = ''
 
-  static create(icon: Resource, title: string, description: string, count: number, page: string): AdminEntryItem {
+  static create(icon: Resource, title: string, count: number, page: string): AdminEntryItem {
     const item: AdminEntryItem = new AdminEntryItem()
     item.icon = icon
     item.title = title
-    item.description = description
     item.count = count
     item.page = page
     return item
@@ -136,19 +134,19 @@ export struct AdminCenterPage {
   /** 四个后台模块入口卡片（数据源提取为方法，避免 ForEach 字面量闭包捕获问题）。 */
   private getAdminEntries(): AdminEntryItem[] {
     const entries: AdminEntryItem[] = [
-      AdminEntryItem.create($r('app.media.ui_folder'), '分类管理', '平台分类的增删改', this.categories.length, 'pages/AdminCategoryPage'),
-      AdminEntryItem.create($r('app.media.login_store'), '店铺管理', '营业状态与发现页推荐', this.stores.length, 'pages/AdminStorePage'),
-      AdminEntryItem.create($r('app.media.ui_people'), '员工管理', '商户账号创建、编辑与停用', this.employees, 'pages/AdminEmployeePage'),
-      AdminEntryItem.create($r('app.media.home_bowl'), '商品监管', '搜索商品并强制上下架', 0, 'pages/AdminProductPage'),
-      AdminEntryItem.create($r('app.media.login_user'), '用户管理', '查看用户和商户账号状态', 0, 'pages/AdminUserPage'),
-      AdminEntryItem.create($r('app.media.profile_order'), '订单管理', '托管订单状态与退款', this.orderCount, 'pages/AdminOrderPage'),
-      AdminEntryItem.create($r('app.media.profile_wallet'), '退款审批', '处理用户退款申请', this.getPendingRefundCount(), 'pages/AdminRefundPage'),
-      AdminEntryItem.create($r('app.media.ui_grid'), '营销监管', '查看并管理全平台活动与秒杀', 0, 'pages/AdminMarketingPage'),
-      AdminEntryItem.create($r('app.media.ui_document'), '操作审计', '按操作记录追踪管理变更', 0, 'pages/AdminAuditPage'),
-      AdminEntryItem.create($r('app.media.ui_grid'), '平台统计', '查看平台订单、成交和热销商品', 0, 'pages/AdminStatisticsPage'),
-      AdminEntryItem.create($r('app.media.login_rider'), '骑手管理', '骑手列表与启用停用', 0, 'pages/AdminRiderPage'),
-      AdminEntryItem.create($r('app.media.ui_content'), '内容管理', '首页轮播与平台公告', 0, 'pages/AdminContentPage'),
-      AdminEntryItem.create($r('app.media.ui_info'), 'AI 助手设置', '管理问答接口、模型与密钥', 0, 'pages/AdminAssistantPage')
+      AdminEntryItem.create($r('app.media.ui_folder'), '分类管理', this.categories.length, 'pages/AdminCategoryPage'),
+      AdminEntryItem.create($r('app.media.login_store'), '店铺管理', this.stores.length, 'pages/AdminStorePage'),
+      AdminEntryItem.create($r('app.media.ui_people'), '员工管理', this.employees, 'pages/AdminEmployeePage'),
+      AdminEntryItem.create($r('app.media.home_bowl'), '商品监管', 0, 'pages/AdminProductPage'),
+      AdminEntryItem.create($r('app.media.login_user'), '用户管理', 0, 'pages/AdminUserPage'),
+      AdminEntryItem.create($r('app.media.profile_order'), '订单管理', this.orderCount, 'pages/AdminOrderPage'),
+      AdminEntryItem.create($r('app.media.profile_wallet'), '退款审批', this.getPendingRefundCount(), 'pages/AdminRefundPage'),
+      AdminEntryItem.create($r('app.media.ui_grid'), '营销监管', 0, 'pages/AdminMarketingPage'),
+      AdminEntryItem.create($r('app.media.ui_document'), '操作审计', 0, 'pages/AdminAuditPage'),
+      AdminEntryItem.create($r('app.media.ui_grid'), '平台统计', 0, 'pages/AdminStatisticsPage'),
+      AdminEntryItem.create($r('app.media.login_rider'), '骑手管理', 0, 'pages/AdminRiderPage'),
+      AdminEntryItem.create($r('app.media.ui_content'), '内容管理', 0, 'pages/AdminContentPage'),
+      AdminEntryItem.create($r('app.media.ui_info'), 'AI 助手设置', 0, 'pages/AdminAssistantPage')
     ]
     return entries
   }
@@ -268,7 +266,6 @@ export struct AdminCenterPage {
               .padding({ left: SPACING.SM, right: SPACING.SM, top: SPACING.XS, bottom: SPACING.XS })
           }
         }
-        Text(item.description).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       Text('›').fontSize(FONT_SIZE.XL).fontColor(this.entryThemeColor(item.title))
     }

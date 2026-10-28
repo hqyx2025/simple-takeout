@@ -9,7 +9,6 @@ import { AppTheme, AppButtonStyle, AppCardStyle, AppInputStyle } from '../common
  *     本页不再自己算余额，避免出现第二个口径；
  *   - 银行卡走 GET /api/wallet/bank-cards，默认只下发掩码卡号；完整卡号必须经支付密码
  *     校验后按需短暂返回，页面和复制完成后立即清除本地明文；
- *   - 充值使用 rechargeBalanceRemote（写库后回读最新余额）。
  */
 import { AppMotion } from '../common/theme/AppMotion'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
@@ -17,7 +16,6 @@ import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS } from '../common/Constants'
 import { BankCard, User } from '../model/Models'
 import { fetchBankCardsApi, fetchCurrentUserApi, deleteBankCardApi, revealBankCardApi,
   RevealBankCardResult } from '../service/ApiService'
-import { rechargeBalanceRemote } from '../service/AppStorageManager'
 import { getAuthToken } from '../service/HttpClient'
 import { EmptyState } from '../components/EmptyState'
 import { PageHeader } from '../components/PageHeader'
@@ -49,9 +47,6 @@ export struct BalancePage {
   @State cards: BankCard[] = []
   @State loading: boolean = true
   @State cardsLoadFailed: boolean = false
-  @State showRechargeDialog: boolean = false
-  @State rechargeAmount: string = ''
-  @State recharging: boolean = false
   @State deletingCardId: number = 0
   @State pendingDeleteId: number = 0
   @State pendingDeleteDescription: string = ''
@@ -103,8 +98,6 @@ export struct BalancePage {
     this.active = false
     this.revealSequence += 1
     this.requestSequence += 1
-    this.rechargeAmount = ''
-    this.showRechargeDialog = false
     this.pendingDeleteId = 0
     this.clearRevealedCard()
     try { this.revealDialog.close() } catch (_) {}
@@ -119,12 +112,9 @@ export struct BalancePage {
     this.cards = []
     this.loading = false
     this.cardsLoadFailed = false
-    this.rechargeAmount = ''
-    this.showRechargeDialog = false
     this.pendingDeleteId = 0
     this.pendingDeleteDescription = ''
     this.deletingCardId = 0
-    this.recharging = false
     this.clearRevealedCard()
     try { this.revealDialog.close() } catch (_) {}
     if (this.active && hadSession) { router.replaceUrl({ url: 'pages/Index' }) }
@@ -258,42 +248,6 @@ export struct BalancePage {
     }
   }
 
-  private openRecharge(): void {
-    if (!this.hasWalletSession(this.sessionToken)) {
-      promptAction.showToast({ message: '请先登录后再充值', duration: 1800 })
-      return
-    }
-    this.rechargeAmount = ''
-    this.showRechargeDialog = true
-  }
-
-  private async submitRecharge(): Promise<void> {
-    if (!this.hasWalletSession(this.sessionToken)) { return }
-    if (this.recharging) {
-      promptAction.showToast({ message: '充值正在处理，请稍候', duration: 1500 })
-      return
-    }
-    const amount: number = Number.parseFloat(this.rechargeAmount.trim())
-    if (!Number.isFinite(amount) || amount < 0.01 || amount > 10000) {
-      promptAction.showToast({ message: '请输入 0.01～10000 元的充值金额', duration: 1800 })
-      return
-    }
-    this.recharging = true
-    const token: string = this.sessionToken
-    const updated: User | undefined = await rechargeBalanceRemote(amount)
-    if (!this.hasWalletSession(token)) { return }
-    this.recharging = false
-    if (updated === undefined || updated === null) {
-      return
-    }
-    this.showRechargeDialog = false
-    this.rechargeAmount = ''
-    // 以服务端返回的最新余额为准，避免前端自己加减算错
-    const nextBalance: number = Number.isFinite(updated.balance) ? updated.balance : 0
-    this.balance = nextBalance
-    promptAction.showToast({ message: `充值成功，当前余额 ¥${nextBalance.toFixed(2)}`, duration: 2000 })
-  }
-
   build() {
     Stack() {
       Column() {
@@ -302,7 +256,7 @@ export struct BalancePage {
 
         if (!this.loggedIn) {
           Column() {
-            EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', description: '请登录后查看钱包' })
+            EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', actionLabel: '去登录', actionUrl: 'pages/Index' })
           }.layoutWeight(1).width('100%')
         } else {
           Scroll() {
@@ -321,7 +275,7 @@ export struct BalancePage {
         Column() {
           Button('添加银行卡')
             .attributeModifier(new AppButtonStyle()).height(AppTheme.CONTROL_HEIGHT).width('100%')
-            .enabled(this.loggedIn && !this.loading && this.deletingCardId === 0 && !this.recharging)
+            .enabled(this.loggedIn && !this.loading && this.deletingCardId === 0)
             .id('wallet-add-card').onClick(() => { this.openAddCard() })
         }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.XL })
         .backgroundColor(AppTheme.PAGE).border({ width: { top: 1 }, color: AppTheme.BORDER })
@@ -330,10 +284,6 @@ export struct BalancePage {
       .height('100%')
       .backgroundColor(COLORS.BG_PRIMARY)
 
-      // 充值浮层（与「我的」页同一套做法：条件渲染 + Stack 承载，保证在最上层）
-      if (this.showRechargeDialog) {
-        this.RechargeOverlay()
-      }
       if (this.pendingDeleteId > 0) {
         ConfirmDialog({
           title: '删除银行卡', content: `确定删除${this.pendingDeleteDescription}吗？`,
@@ -360,21 +310,7 @@ export struct BalancePage {
         .fontWeight(FontWeight.Bold)
         .fontColor(COLORS.ON_PRIMARY)
         .width('100%')
-      Row() {
-        Text('余额为账户可用金额，下单支付时直接抵扣')
-          .fontSize(FONT_SIZE.SM)
-          .fontColor(COLORS.ON_PRIMARY)
-          .layoutWeight(1)
-        Button('立即充值')
-          .attributeModifier(new AppButtonStyle()).height(40)
-          .fontSize(FONT_SIZE.SM)
-          .fontColor(COLORS.PRIMARY)
-          .backgroundColor(COLORS.BG_WHITE)
-          .borderRadius(BORDER_RADIUS.ROUND)
-          .onClick(() => { this.openRecharge() })
-      }
-      .width('100%')
-      .alignItems(VerticalAlign.Center)
+
     }
     .width('100%')
     .padding(SPACING.XL)
@@ -419,9 +355,6 @@ export struct BalancePage {
           Text('暂无已绑定的银行卡')
             .fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.TEXT_SECONDARY)
-          Text('点击下方“添加银行卡”，记录卡片信息')
-            .fontSize(FONT_SIZE.SM)
-            .fontColor(COLORS.TEXT_HINT)
         }
         .width('100%')
         .padding({ top: SPACING.XL, bottom: SPACING.XL })
@@ -432,10 +365,6 @@ export struct BalancePage {
         }, (card: BankCard, index: number) => `${card.id}-${card.isDefault}-${index}`)
       }
 
-      Text('出于安全考虑，仅展示卡号后四位')
-        .fontSize(FONT_SIZE.SM)
-        .fontColor(COLORS.TEXT_HINT)
-        .width('100%')
     }
       .attributeModifier(new AppCardStyle())
     .width('100%')
@@ -495,12 +424,12 @@ export struct BalancePage {
           Button('显示完整卡号')
             .attributeModifier(new AppButtonStyle()).height(40)
             .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY).backgroundColor(COLORS.TAG_BG)
-            .enabled(!this.loading && this.deletingCardId === 0 && this.revealingCardId === 0 && !this.recharging)
+            .enabled(!this.loading && this.deletingCardId === 0 && this.revealingCardId === 0)
             .id(`wallet-reveal-card-${card.id}`).onClick(() => { this.openReveal(card) })
           Button(this.deletingCardId === card.id ? '删除中…' : '删除银行卡')
             .attributeModifier(new AppButtonStyle()).height(40)
             .fontSize(FONT_SIZE.SM).fontColor(COLORS.ERROR).backgroundColor(COLORS.ERROR_LIGHT)
-            .enabled(!this.loading && this.deletingCardId === 0 && this.revealingCardId === 0 && !this.recharging)
+            .enabled(!this.loading && this.deletingCardId === 0 && this.revealingCardId === 0)
             .id(`wallet-delete-card-${card.id}`).onClick(() => { this.confirmDelete(card) })
         }
       }
@@ -513,44 +442,7 @@ export struct BalancePage {
     .id(`bank-card-${index}`)
   }
 
-  @Builder
-  RechargeOverlay() {
-    Column() {
-      Column({ space: SPACING.MD }) {
-        Text('充值余额')
-          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.TEXT_PRIMARY)
-        Text('充值金额会直接写入数据库，仅用于开发测试')
-          .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
-          .width('100%')
-        Text('充值金额（必填）')
-          .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
-          .width('100%')
-        TextInput({ placeholder: '请输入金额，如：100', text: this.rechargeAmount })
-          .attributeModifier(new AppInputStyle())
-          .width('100%').type(InputType.Number)
-          .onChange((value: string) => { this.rechargeAmount = value })
-        Row({ space: SPACING.SM }) {
-          Button('取消')
-            .attributeModifier(new AppButtonStyle())
-            .layoutWeight(1).height(42)
-            .backgroundColor(COLORS.BG_PRIMARY).fontColor(COLORS.TEXT_SECONDARY)
-            .onClick(() => { this.showRechargeDialog = false })
-          Button(this.recharging ? '充值中…' : '确认充值')
-            .attributeModifier(new AppButtonStyle())
-            .layoutWeight(1).height(42)
-            .backgroundColor(COLORS.PRIMARY).fontColor(COLORS.ON_PRIMARY)
-            .enabled(!this.recharging)
-            .onClick(() => { this.submitRecharge() })
-        }.width('100%')
-      }
-        .attributeModifier(new AppCardStyle())
-      .width('86%').constraintSize({ maxWidth: 460 }).padding(SPACING.XL)
-    }
-    .width('100%').height('100%')
-    .backgroundColor(COLORS.OVERLAY)
-    .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
-  }
+
 }
 
 /** 显示完整银行卡号前的支付密码校验弹窗。密码仅存在于弹窗状态，提交后立即清空。 */

@@ -88,9 +88,9 @@ export struct FavoriteListPage {
 
       // 内容区
       if (!this.loggedIn) {
-        EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', description: '请登录后查看收藏' })
+        EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', actionLabel: '去登录', actionUrl: 'pages/Index' })
       } else if (this.favoriteList.length === 0) {
-        EmptyState({ icon: $r('app.media.home_heart'), title: '暂无收藏店铺', description: '去首页收藏喜欢的店铺吧' })
+        EmptyState({ icon: $r('app.media.home_heart'), title: '暂无收藏店铺', actionLabel: '去逛店铺', actionUrl: 'pages/Index' })
       } else {
         List({ space: SPACING.MD }) {
           LazyForEach(this.dataSource, (item: Favorite) => {

@@ -38,11 +38,11 @@
 <body>
   <header class="topbar"><div class="topinner">
     <a class="brand" href="#"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 10.5h14l-1 8H6l-1-8Z"/><path d="M8 10.5 9.5 6h5L16 10.5M9 14h.01M12 14h.01M15 14h.01" stroke-linecap="round"/><path d="M4 10.5h16"/></svg></span>简单外卖</a>
-    <div class="top-actions"><span class="user-meta" id="userMeta">共享服务端</span><button class="btn" id="topCart" hidden>购物车 <b id="cartCount">0</b></button><button class="btn" id="topLogin">登录</button><button class="btn" id="topLogout" hidden>退出</button></div>
+    <div class="top-actions"><span class="user-meta" id="userMeta"></span><button class="btn" id="topCart" hidden>购物车 <b id="cartCount">0</b></button><button class="btn" id="topLogin">登录</button><button class="btn" id="topLogout" hidden>退出</button></div>
   </div></header>
   <div class="layout" id="appLayout"><aside class="sidebar" id="sidebar" aria-label="主导航"><div class="sidebar-head"><div class="nav-caption" id="navCaption">浏览</div><button class="btn icon sidebar-toggle" id="sidebarToggle" type="button" data-action="sidebar-toggle" aria-expanded="true" aria-controls="nav" aria-label="收起侧边栏" title="收起侧边栏"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg></button></div><nav class="nav-list" id="nav"></nav></aside><main class="main" id="app"><div class="empty">正在载入…</div></main></div>
   <div class="notice" id="notice" hidden></div>
-  <div class="modal" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authTitle" hidden><div class="dialog"><div class="dialog-head"><div><h2 id="authTitle">登录</h2><p class="help-text">网页与手机端共用同一账号和服务端数据。</p></div><button class="btn icon" data-close="authModal" aria-label="关闭">×</button></div><form id="authForm" class="field-stack"></form></div></div>
+  <div class="modal" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authTitle" hidden><div class="dialog"><div class="dialog-head"><div><h2 id="authTitle">登录</h2></div><button class="btn icon" data-close="authModal" aria-label="关闭">×</button></div><form id="authForm" class="field-stack"></form></div></div>
   <script src="urls.js?v=20261020-relative" defer></script>
   <script src="location.js?v=20261020-manual" defer></script>
   <link rel="stylesheet" href="erp.css?v=20261027">

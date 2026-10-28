@@ -71,7 +71,7 @@ export struct AssistantPage {
     this.messages = [ChatMessage.create(
       this.nextMessageId++,
       'assistant',
-      '你好，我是简单外卖的智能助手。可以帮你查订单、余额，推荐店铺，也能带你去订单、钱包、地址和优惠券页面。管理员启用 AI 后，还可以回答更多问题。\n例如：“打开我的订单”或“午餐怎么搭配？”'
+      '想查订单、余额，或找家店吃饭？直接告诉我。'
     )]
   }
 

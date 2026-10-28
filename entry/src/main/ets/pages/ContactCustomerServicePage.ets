@@ -75,6 +75,7 @@ export struct ContactCustomerServicePage {
 
           Column({ space: SPACING.SM }) {
             Button('从订单发起售后')
+              .id('support-start-refund')
               .attributeModifier(new AppButtonStyle())
               .width('100%')
               .height(44)
@@ -82,8 +83,9 @@ export struct ContactCustomerServicePage {
               .fontColor(COLORS.ON_PRIMARY)
               .backgroundColor(COLORS.PRIMARY)
               .borderRadius(BORDER_RADIUS.ROUND)
-              .onClick(() => { this.openOrders(4) })
+              .onClick(() => { this.openOrders(-1) })
             Button('查看退款 / 售后进度')
+              .id('support-refund-progress')
               .attributeModifier(new AppButtonStyle())
               .width('100%')
               .height(44)
@@ -92,7 +94,7 @@ export struct ContactCustomerServicePage {
               .backgroundColor(COLORS.BG_WHITE)
               .border({ width: 1, color: COLORS.PRIMARY })
               .borderRadius(BORDER_RADIUS.ROUND)
-              .onClick(() => { this.openOrders(6) })
+              .onClick(() => { this.openOrders(-1) })
           }
           .width('100%')
 
@@ -101,7 +103,7 @@ export struct ContactCustomerServicePage {
               .fontSize(FONT_SIZE.LG)
               .fontWeight(FontWeight.Bold)
               .fontColor(COLORS.TEXT_PRIMARY)
-            Text('选择对应订单后再提交问题，避免重复填写订单号，也能准确展示退款状态。')
+            Text('在订单详情查看退款记录、举证和申诉进度。')
               .fontSize(FONT_SIZE.MD)
               .fontColor(COLORS.TEXT_SECONDARY)
               .lineHeight(22)

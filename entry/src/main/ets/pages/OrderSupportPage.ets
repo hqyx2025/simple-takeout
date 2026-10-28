@@ -165,6 +165,18 @@ struct OrderSupportPage {
     this.feedback = '举证已提交，由平台审核'; this.evidenceRefundId = 0; this.evidenceImages = []; this.evidenceResponse = ''; await this.load()
   }
 
+  private issueTypeLabel(code: string): string {
+    return this.types.find((item: IssueType) => item.code === code)?.label ?? '其他'
+  }
+
+  private refundStatusLabel(status: string): string {
+    if (status === 'PENDING') { return '待审核' }
+    if (status === 'APPROVED') { return '退款处理中' }
+    if (status === 'REFUNDED') { return '已退款' }
+    if (status === 'REJECTED') { return '已拒绝' }
+    return '状态更新中'
+  }
+
   build() {
     Column() {
       PageHeader({ title: this.storeId > 0 ? '门店配送方式' : this.role === UserRole.ADMIN ? '配送异常处理' : '订单配送与售后',
@@ -225,7 +237,7 @@ struct OrderSupportPage {
   @Builder
   IssueCard(issue: DeliveryIssue) {
     Column({ space: SPACING.SM }) {
-      Text('#' + issue.orderId.toString() + ' ' + issue.type + ' · ' + (issue.status === 'OPEN' ? '处理中' : '已处理')).fontColor(COLORS.TEXT_PRIMARY)
+      Text('#' + issue.orderId.toString() + ' ' + this.issueTypeLabel(issue.type) + ' · ' + (issue.status === 'OPEN' ? '处理中' : '已处理')).fontColor(COLORS.TEXT_PRIMARY)
       Text(issue.note).fontColor(COLORS.TEXT_SECONDARY)
       Text(issue.createTime).fontColor(COLORS.TEXT_HINT)
       if ((issue.resolveNote ?? '') !== '') { Text(issue.resolveNote ?? '').fontColor(COLORS.TEXT_SECONDARY) }
@@ -240,7 +252,7 @@ struct OrderSupportPage {
   @Builder
   RefundCard(record: RefundRecord) {
     Column({ space: SPACING.SM }) {
-      Text('售后 #' + record.id.toString() + ' ¥' + record.amount.toFixed(2) + ' · ' + record.status).fontColor(COLORS.TEXT_PRIMARY)
+      Text('售后 #' + record.id.toString() + ' ¥' + record.amount.toFixed(2) + ' · ' + this.refundStatusLabel(record.status)).fontColor(COLORS.TEXT_PRIMARY)
       Text(record.reason).fontColor(COLORS.TEXT_SECONDARY)
       Text('商家说明：' + (record.merchantResponse ?? '未提交')).fontColor(COLORS.TEXT_SECONDARY)
       ForEach(record.evidenceImages ?? [], (url: string) => {

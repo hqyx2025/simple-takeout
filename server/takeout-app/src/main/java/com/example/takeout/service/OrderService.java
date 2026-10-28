@@ -617,7 +617,7 @@ public class OrderService {
             throw new BizException(403, "支付密码不正确");
         }
         if (user.balance() < order.payAmount()) {
-            throw new BizException("余额不足，请先充值");
+            throw new BizException("余额不足，请选择其他支付方式");
         }
         String now = LocalDateTime.now().format(FMT);
         if (!orderDao.markPaid(orderId, now)) {
@@ -625,7 +625,7 @@ public class OrderService {
         }
         // 原子条件扣款：余额不足（并发支付两单时抢不到余额）即抛异常回滚订单状态，绝不写负余额
         if (!userDao.deductBalance(userId, order.payAmount())) {
-            throw new BizException("余额不足，请先充值");
+            throw new BizException("余额不足，请选择其他支付方式");
         }
         paymentRecordDao.insert(orderId, userId, order.payAmount(), "PAY", PaymentChannels.BALANCE, "SUCCESS", now);
         if (promotions != null) promotions.paid(orderId);

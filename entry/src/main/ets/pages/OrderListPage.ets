@@ -312,7 +312,7 @@ struct OrderListPage {
         .width('100%').backgroundColor(COLORS.BG_WHITE)
 
         if (!this.loggedIn) {
-          EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', description: '请登录后查看订单' })
+          EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', actionLabel: '去登录', actionUrl: 'pages/Index' })
         } else {
           Refresh({ refreshing: $$this.isRefreshing }) {
             List({ space: SPACING.SM }) {

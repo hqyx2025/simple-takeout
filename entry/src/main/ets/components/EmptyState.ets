@@ -3,13 +3,18 @@
  * 用于列表无数据时展示
  */
 import { COLORS, SPACING, FONT_SIZE } from '../common/Constants'
-import { AppTheme } from '../common/theme/AppTheme'
+import { AppButtonStyle, AppTheme } from '../common/theme/AppTheme'
+import { routerCompat as router } from '../common/UiNavigation'
 
 @Component
 export struct EmptyState {
   icon: Resource = $r('app.media.ui_inbox')
   title: string = '暂无数据'
   description: string = ''
+  actionLabel: string = ''
+  actionId: string = 'empty-state-action'
+  actionUrl: string = ''
+  onAction: () => void = () => {}
 
   build() {
     Column({ space: SPACING.MD }) {
@@ -30,6 +35,15 @@ export struct EmptyState {
           .textAlign(TextAlign.Center)
           .constraintSize({ maxWidth: 280 })
           .margin({ top: SPACING.XS })
+      }
+      if (this.actionLabel !== '') {
+        Button(this.actionLabel).attributeModifier(new AppButtonStyle())
+          .constraintSize({ minHeight: 44 }).padding({ left: 24, right: 24, top: 12, bottom: 12 })
+          .id(this.actionId).margin({ top: 8 })
+          .onClick(() => {
+            if (this.actionUrl !== '') { router.replaceUrl({ url: this.actionUrl }) }
+            else { this.onAction() }
+          })
       }
     }
     .width('100%')

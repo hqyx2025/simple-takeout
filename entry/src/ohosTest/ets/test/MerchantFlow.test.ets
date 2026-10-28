@@ -22,7 +22,9 @@ import { Driver, ON, Component } from '@kit.TestKit'
 import { describe, it, expect } from '@ohos/hypium'
 import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, scrollUntilVisible, scrollAndClick, waitAny, openQuickLoginDialog } from './UiTestHelper'
 import { loginRemote, syncMerchantOrdersFromServer, getMerchantOrders } from '../../../main/ets/service/AppStorageManager'
-import { Order, User } from '../../../main/ets/model/Models'
+import { Order, User, UserRole } from '../../../main/ets/model/Models'
+import { getQuickLoginAccount, QuickLoginAccount } from '../../../main/ets/common/QuickLoginConfig'
+import { getApiBaseUrl } from '../../../main/ets/service/HttpClient'
 
 /** 读取组件文本（找不到时返回空串，便于断言给出明确差异）。 */
 async function textOf(component: Component | null | undefined): Promise<string> {
@@ -77,7 +79,9 @@ export default function merchantFlowTest() {
       await driver.delayMs(8000)
 
       // ---------- 2. 用应用自身数据定位 fixture 订单 ----------
-      const merchant: User | undefined = await loginRemote('13600136000', '123456')
+      const account: QuickLoginAccount | undefined = getQuickLoginAccount(UserRole.MERCHANT, getApiBaseUrl())
+      if (account === undefined) { throw new Error('当前环境未配置商户快捷登录账号') }
+      const merchant: User | undefined = await loginRemote(account.phone, account.password, 'MERCHANT')
       const merchantId: number = merchant === undefined || merchant === null ? 0 : merchant.id
       console.info('[MerchantFlow] merchantId=' + merchantId)
       expect(merchantId > 0).assertTrue()

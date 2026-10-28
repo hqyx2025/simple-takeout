@@ -194,6 +194,7 @@ export struct AddressListPage {
                     }
                     Blank()
                     Button('编辑', { type: ButtonType.Normal })
+                      .id(`address-edit-${addr.id}`)
                       .attributeModifier(new AppButtonStyle())
                       .height(44)
                       .constraintSize({ minWidth: 52 })
@@ -254,7 +255,7 @@ export struct AddressListPage {
             .textAlign(TextAlign.Center)
             .padding({ top: SPACING.MD, bottom: SPACING.MD })
         } else {
-          Button('+ 新增收货地址')
+          Button('+ 新增收货地址').id('address-add')
             .attributeModifier(new AppButtonStyle())
             .width('90%').constraintSize({ maxWidth: 460 })
             .height(48)
@@ -283,13 +284,15 @@ export struct AddressListPage {
                 .width('100%')
                 .textAlign(TextAlign.Center)
 
+            Text('收货人').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY).width('100%')
             TextInput({ placeholder: '收货人姓名（如：张女士）', text: this.formData.name })
-              .attributeModifier(new AppInputStyle())
+              .attributeModifier(new AppInputStyle()).id('address-name').accessibilityText('收货人')
               .width('100%')
               .onChange((v: string) => { this.formData.name = v })
 
+            Text('联系电话').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY).width('100%')
             TextInput({ placeholder: '11 位手机号（如：13800138000）', text: this.formData.phone })
-              .attributeModifier(new AppInputStyle())
+              .attributeModifier(new AppInputStyle()).id('address-phone').accessibilityText('联系电话')
               .width('100%')
               .type(InputType.PhoneNumber)
               .onChange((v: string) => { this.formData.phone = v })
@@ -310,17 +313,18 @@ export struct AddressListPage {
 
             TextInput({ placeholder: '地图位置（如：南宁学院东门）', text: this.formData.address })
               .attributeModifier(new AppInputStyle())
-              .width('100%')
+              .width('100%').id('address-map-address').accessibilityText('地图位置')
               .onChange((v: string) => { this.changeMapAddress(v) })
 
-            Text(this.hasFormCoordinates() ? '已记录地图坐标，可用于配送范围判断'
-              : '手动修改地图位置后，请重新定位以更新坐标')
+            Text(this.hasFormCoordinates() ? '已定位'
+              : '地址已修改，请重新定位')
               .fontSize(FONT_SIZE.XS)
               .fontColor(this.hasFormCoordinates() ? COLORS.TEXT_SECONDARY : COLORS.TEXT_HINT)
               .width('100%')
 
+            Text('详细地址（选填）').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY).width('100%')
             TextInput({ placeholder: '楼栋、楼层或门牌（如：3 栋 1206，东门进入）', text: this.formData.detail })
-              .attributeModifier(new AppInputStyle())
+              .attributeModifier(new AppInputStyle()).id('address-detail').accessibilityText('详细地址（选填）')
               .width('100%')
               .onChange((v: string) => { this.formData.detail = v })
 
@@ -367,7 +371,7 @@ export struct AddressListPage {
             .scrollBar(BarState.Auto)
 
             Row({ space: SPACING.MD }) {
-              Button('取消')
+            Button('取消').id('address-form-cancel')
                 .attributeModifier(new AppButtonStyle())
                 .layoutWeight(1)
                 .height(44)
@@ -377,7 +381,7 @@ export struct AddressListPage {
                 .borderRadius(BORDER_RADIUS.ROUND)
                 .enabled(!this.saving)
                 .onClick(() => { this.showAddForm = false })
-              Button(this.saving ? '保存中…' : '保存')
+            Button(this.saving ? '保存中…' : '保存').id('address-form-save')
                 .attributeModifier(new AppButtonStyle())
                 .layoutWeight(1)
                 .height(44)

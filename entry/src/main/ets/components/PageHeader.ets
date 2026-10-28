@@ -22,6 +22,7 @@ export struct PageHeader {
   @Prop subtitle: string = ''
   /** 右侧动作文案，为空不显示 */
   @Prop actionLabel: string = ''
+  @Prop actionEnabled: boolean = true
   /** Tab 与角色中心可隐藏返回键 */
   @Prop showBack: boolean = true
   /** 返回键文本：默认 '‹ 返回'；部分页 UiTest 依赖 '‹' 文本兜底锚点（OrderDetailPage/SearchPage） */
@@ -69,6 +70,7 @@ export struct PageHeader {
 
       Column({ space: 0 }) {
         Text(this.title)
+          .id('page-title')
           .fontSize(FONT_SIZE.XXL)
           .fontWeight(FontWeight.Bold)
           .fontColor(this.titleColor)
@@ -91,6 +93,8 @@ export struct PageHeader {
 
       if (this.actionLabel !== '') {
         Button(this.actionLabel, { type: ButtonType.Normal })
+          .id('page-header-action')
+          .enabled(this.actionEnabled)
           .buttonStyle(ButtonStyleMode.NORMAL)
           .attributeModifier(this.softPress)
           .animation(AppMotion.pressAnimation())

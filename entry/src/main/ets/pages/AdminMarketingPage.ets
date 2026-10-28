@@ -6,7 +6,7 @@ import {
   fetchAdminMarketingSeckillsApi, fetchAdminMarketingStoresApi, updateAdminMarketingActivityStatusApi,
   updateAdminMarketingSeckillStatusApi
 } from '../service/ApiService'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, getMarketingTypeText } from '../common/Constants'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { PageHeader } from '../components/PageHeader'
 import { StatusBadge } from '../components/StatusBadge'
@@ -200,7 +200,7 @@ export struct AdminMarketingPage {
                   Column({ space: SPACING.XS }) {
                     Text(item.title).fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Bold)
                       .fontColor(COLORS.TEXT_PRIMARY).maxLines(2)
-                    Text(`${item.type} · 店铺 #${item.storeId}`).fontSize(FONT_SIZE.XS)
+                    Text(`${getMarketingTypeText(item.type)} · 店铺 #${item.storeId}`).fontSize(FONT_SIZE.XS)
                       .fontColor(COLORS.TEXT_SECONDARY)
                   }.layoutWeight(1)
                   StatusBadge({ text: item.status === 1 ? '已上架' : '已下架', mode: item.status === 1 ? 'success' : 'warning' })

@@ -29,12 +29,11 @@ struct AppSettingsPage {
   }
 
   @Builder
-  ThemeOption(mode: string, title: string, description: string) {
+  ThemeOption(mode: string, title: string) {
     Button({ type: ButtonType.Normal }) {
       Row({ space: SPACING.MD }) {
         Column({ space: SPACING.XS }) {
           Text(title).fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_PRIMARY)
-          Text(description).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
         Text(this.colorMode === mode ? '已选' : '选择')
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
@@ -57,7 +56,9 @@ struct AppSettingsPage {
       Row({ space: SPACING.MD }) {
         Column({ space: SPACING.XS }) {
           Text(title).fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_PRIMARY)
-          Text(description).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+          if (description !== '') {
+            Text(description).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+          }
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
         Text(this.navigationMode === mode ? '已选' : '选择')
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
@@ -96,23 +97,21 @@ struct AppSettingsPage {
       PageHeader({ title: '应用设置', backId: 'app-settings-back', onBack: () => { router.back() } })
       Scroll() {
         Column({ space: SPACING.LG }) {
-          Text('修改后立即生效，下次启动仍会保留。')
-            .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).width('100%')
           Column({ space: SPACING.MD }) {
             Text('导航位置').fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold)
               .fontColor(COLORS.TEXT_PRIMARY).width('100%')
-            this.NavigationOption('auto', '跟随交互手 · 自动', '根据操作的左右手调整，不支持时保持居中')
-            this.NavigationOption('left', '靠左，方便左手', '将底部导航固定在左侧')
-            this.NavigationOption('right', '靠右，方便右手', '将底部导航固定在右侧')
-            this.NavigationOption('center', '居中', '将底部导航固定在中间')
+            this.NavigationOption('auto', '自动', '跟随操作手，不支持时居中')
+            this.NavigationOption('left', '靠左', '')
+            this.NavigationOption('right', '靠右', '')
+            this.NavigationOption('center', '居中', '')
           }
           .attributeModifier(new AppCardStyle()).width('100%').padding(SPACING.LG)
           Column({ space: SPACING.MD }) {
             Text('深色模式').fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold)
               .fontColor(COLORS.TEXT_PRIMARY).width('100%')
-            this.ThemeOption('system', '跟随系统', '随设备的浅色或深色模式自动切换')
-            this.ThemeOption('light', '浅色模式', '使用暖白背景，适合明亮环境')
-            this.ThemeOption('dark', '深色模式', '使用深色背景，适合夜间阅读')
+            this.ThemeOption('system', '跟随系统')
+            this.ThemeOption('light', '浅色')
+            this.ThemeOption('dark', '深色')
           }
           .attributeModifier(new AppCardStyle()).width('100%').padding(SPACING.LG)
           .backgroundColor(COLORS.BG_CARD)
@@ -120,8 +119,6 @@ struct AppSettingsPage {
           Column({ space: SPACING.MD }) {
             Text('字体大小').fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold)
               .fontColor(COLORS.TEXT_PRIMARY).width('100%')
-            Text('调整整个应用的文字大小，不改变图片和图标大小。')
-              .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).width('100%')
             Row({ space: SPACING.SM }) {
               this.FontOption(0.9, '小', 'small')
               this.FontOption(1, '标准', 'normal')
@@ -133,8 +130,8 @@ struct AppSettingsPage {
             Column({ space: SPACING.SM }) {
               Text('阅读预览').fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold)
                 .fontColor(COLORS.TEXT_PRIMARY)
-              Text('简单外卖，让每一餐更方便。').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_PRIMARY)
-              Text('找到适合你的字号，更舒适地阅读每一条消息。')
+              Text('订单已送达').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_PRIMARY)
+              Text('请核对餐品，确认收到后可评价。')
                 .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_SECONDARY)
             }.alignItems(HorizontalAlign.Start).width('100%').padding(SPACING.LG)
             .backgroundColor(COLORS.INPUT).borderRadius(AppTheme.CONTROL_RADIUS).id('app-settings-preview')
@@ -147,7 +144,7 @@ struct AppSettingsPage {
       Row() {
         Button(this.saving ? '保存中…' : '恢复默认设置')
           .attributeModifier(new AppButtonStyle()).width('100%')
-          .fontColor(COLORS.ON_PRIMARY).backgroundColor(COLORS.PRIMARY)
+          .fontColor(COLORS.TEXT_PRIMARY).backgroundColor(COLORS.INPUT)
           .constraintSize({ minHeight: 48 }).padding(SPACING.MD)
           .id('app-settings-reset').enabled(!this.saving)
           .onClick(() => { this.updateSettings('system', 1, 'auto') })

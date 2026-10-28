@@ -448,7 +448,7 @@ class OrderServiceFlowTest {
 
         BizException error = assertThrows(BizException.class, () -> service.payOrder(USER_ID, 13, "BALANCE", "QR", "135790"));
 
-        assertEquals("余额不足，请先充值", error.getMessage());
+        assertEquals("余额不足，请选择其他支付方式", error.getMessage());
         verify(userDao).deductBalance(USER_ID, 13.0);
     }
 
@@ -459,7 +459,7 @@ class OrderServiceFlowTest {
 
         BizException error = assertThrows(BizException.class, () -> service.payOrder(USER_ID, 13, "BALANCE", "QR", "135790"));
 
-        assertEquals("余额不足，请先充值", error.getMessage());
+        assertEquals("余额不足，请选择其他支付方式", error.getMessage());
         verify(orderDao, never()).markPaid(anyLong(), anyString());
     }
 

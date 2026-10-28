@@ -324,7 +324,7 @@ struct Index {
 
       TabContent() {
         if (this.selectedTab === 2) {
-        CartPage({ bottomInset: this.systemBottomInset })
+        CartPage({ bottomInset: this.systemBottomInset, onBrowse: () => { this.tabsController.changeIndex(0) } })
       }
       }
 

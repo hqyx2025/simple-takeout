@@ -4,11 +4,10 @@ import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/App
  * 商户可查看自己的店铺列表、管理店铺、上架食物
  */
 import { AppMotion } from '../common/theme/AppMotion'
-import { StoreItem, GoodsItem, UserRole, User, Category, Address, Employee } from '../model/Models'
+import { StoreItem, GoodsItem, UserRole, User, Category, Address } from '../model/Models'
 import { fetchMerchantStoresApi, fetchMerchantGoodsApi, createMerchantStoreApi, updateMerchantStoreApi,
   updateMerchantGoodsApi, deleteMerchantGoodsApi, uploadImageApi,
-  fetchMerchantCategoriesApi, createMerchantCategoryApi, updateMerchantCategoryApi, deleteMerchantCategoryApi,
-  fetchMerchantEmployeesApi, removeMerchantEmployeeApi } from '../service/ApiService'
+  fetchMerchantCategoriesApi, createMerchantCategoryApi, updateMerchantCategoryApi, deleteMerchantCategoryApi } from '../service/ApiService'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, formatSales, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText, merchantImageSource, DEFAULT_MERCHANT_IMAGE } from '../common/Constants'
 import { photoAccessHelper } from '@kit.MediaLibraryKit'
 import { promptCompat as promptAction } from '../common/UiNavigation'
@@ -63,9 +62,6 @@ export struct MerchantCenterPage {
   @State showAddStore: boolean = false
   @State selectedStoreId: number = 0
   @State selectedStoreGoods: GoodsItem[] = []
-  @State storeEmployees: Employee[] = []
-  @State showEmployeeDialog: boolean = false
-  @State employeeStoreId: number = 0
   @State storeGoodsCounts: Record<string, number> = {}
   @StorageLink('addressList') merchantAddresses: Address[] = []
   @State storeAddressOptions: MerchantAddressOption[] = []
@@ -392,7 +388,7 @@ export struct MerchantCenterPage {
     Stack() {
       Column() {
         // 顶部
-        PageHeader({ title: '商户中心', backText: '‹', backId: 'merchant-center-back', titleColor: COLORS.TEXT_PRIMARY, headerBgColor: COLORS.BG_PRIMARY, actionLabel: this.user.username, onAction: () => {}, onBack: () => { router.back() } })
+        PageHeader({ title: '商户中心', backText: '‹', backId: 'merchant-center-back', titleColor: COLORS.TEXT_PRIMARY, headerBgColor: COLORS.BG_PRIMARY, onBack: () => { router.back() } })
 
         // 统计概览
         Row() {
@@ -439,12 +435,12 @@ export struct MerchantCenterPage {
             .fontColor(MODULE_COLOR.MERCHANT)
             .id('merchant-reviews-entry')
             .onClick(() => { router.pushUrl({ url: 'pages/MerchantReviewsPage' }) })
-          Text('营销管理')
+          Text('营销管理').id('merchant-marketing-entry')
             .fontSize(FONT_SIZE.SM)
             .fontColor(MODULE_COLOR.MERCHANT)
             .margin({ left: SPACING.LG })
             .onClick(() => { router.pushUrl({ url: 'pages/MerchantMarketingPage' }) })
-          Text('分类管理')
+          Text('分类管理').id('merchant-category-entry')
             .fontSize(FONT_SIZE.SM)
             .fontColor(MODULE_COLOR.MERCHANT)
             .margin({ left: SPACING.LG })
@@ -494,12 +490,7 @@ export struct MerchantCenterPage {
                 Text('编辑').fontSize(FONT_SIZE.SM).fontColor(MODULE_COLOR.MERCHANT)
                   .padding({ left: SPACING.SM, right: SPACING.SM })
                   .onClick(() => { this.startEditStore(store) })
-                Text('员工')
-                  .fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.MERCHANT)
-                  .onClick(() => {
-                    promptAction.showToast({ message: '员工管理：可通过后端接口分配员工账号到本店', duration: 1800 })
-                  })
-                Text('管理 ›')
+                Text('管理 ›').id(`merchant-store-goods-${store.id}`)
                   .fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.MERCHANT)
               }
                 .attributeModifier(new AppCardStyle())
@@ -537,8 +528,6 @@ export struct MerchantCenterPage {
             .width('100%')
             Scroll() {
               Column({ space: SPACING.MD }) {
-                Text('创建后将自动归入您的名下，店铺名称为必填项')
-                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
                 Column({ space: SPACING.XS }) {
                   Text('店铺名称（必填）')
                     .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
@@ -564,8 +553,6 @@ export struct MerchantCenterPage {
                       .borderRadius(BORDER_RADIUS.ROUND)
                       .onClick(() => { this.openStoreAddressManager('new') })
                   }
-                  Text('地址来自商户已保存地址，也可以直接用地图定位门店位置')
-                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%')
                   Button('定位选择店铺位置（地图选点）')
                     .attributeModifier(new AppButtonStyle())
                     .width('100%').height(40).fontSize(FONT_SIZE.SM)
@@ -585,7 +572,7 @@ export struct MerchantCenterPage {
                     .width('100%').onChange((v: string) => { this.newStoreNotice = v })
                 }
                 Column({ space: SPACING.XS }) {
-                  Text('店铺照片（选填，展示在用户端店铺详情页，方便顾客找到门店）')
+                  Text('店铺照片（选填）')
                     .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
                   Row({ space: SPACING.MD }) {
                     Image(merchantImageSource(this.newStoreImage))
@@ -688,8 +675,6 @@ export struct MerchantCenterPage {
             .width('100%')
             Scroll() {
               Column({ space: SPACING.MD }) {
-                Text('修改后用户端店铺信息将同步更新，店铺名称为必填项')
-                  .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
                 Column({ space: SPACING.XS }) {
                   Text('店铺名称（必填）')
                     .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
@@ -715,8 +700,6 @@ export struct MerchantCenterPage {
                       .borderRadius(BORDER_RADIUS.ROUND)
                       .onClick(() => { this.openStoreAddressManager('edit') })
                   }
-                  Text('地址来自商户已保存地址，也可以直接用地图重新定位门店位置')
-                    .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%')
                   Button('定位选择店铺位置（地图选点）')
                     .attributeModifier(new AppButtonStyle())
                     .width('100%').height(40).fontSize(FONT_SIZE.SM)
@@ -732,7 +715,7 @@ export struct MerchantCenterPage {
                     .width('100%').onChange((v: string) => { this.editStoreNotice = v })
                 }
                 Column({ space: SPACING.XS }) {
-                  Text('店铺照片（选填，展示在用户端店铺详情页，方便顾客找到门店）')
+                  Text('店铺照片（选填）')
                     .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
                   Row({ space: SPACING.MD }) {
                     Image(merchantImageSource(this.editStoreImage))
@@ -807,14 +790,12 @@ export struct MerchantCenterPage {
         Column() {
           Column({ space: SPACING.MD }) {
             Row() {
-              Text('分类管理')
+              Text('分类管理').id('merchant-category-entry')
                 .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.MERCHANT).layoutWeight(1)
               Image($r('app.media.ui_close')).width(FONT_SIZE.LG).height(FONT_SIZE.LG).objectFit(ImageFit.Contain)
                 .onClick(() => { this.showManageCategories = false })
             }
             .width('100%')
-            Text('店内分类用于用户端商品分组展示，创建后可在商品编辑中选择')
-              .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%')
 
             Row({ space: SPACING.SM }) {
               TextInput({ placeholder: '新分类名称', text: this.newCategoryName })
@@ -898,22 +879,9 @@ export struct MerchantCenterPage {
       // 商品管理面板（选中店铺后显示）
       if (this.selectedStoreId > 0 && !this.showAddStore) {
         Column() {
-          Row() {
-            Text('‹ 返回')
-              .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
-              .onClick(() => { this.selectedStoreId = 0 })
-            Text('商品管理')
-              .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
-              .fontColor(MODULE_COLOR.MERCHANT)
-              .layoutWeight(1).textAlign(TextAlign.Center)
-            Button('+ 添加商品')
-              .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)
-              .backgroundColor(MODULE_COLOR.MERCHANT).borderRadius(BORDER_RADIUS.ROUND)
-              .onClick(() => { this.openAddGoodsPage() })
-          }
-          .width('100%').height(50)
-          .padding({ left: SPACING.LG, right: SPACING.LG })
-          .backgroundColor(COLORS.BG_WHITE)
+          PageHeader({ title: '商品管理', backId: 'merchant-goods-back',
+            onBack: () => { this.selectedStoreId = 0 }, actionLabel: '添加商品',
+            onAction: () => { this.openAddGoodsPage() } })
 
           // 商品列表
           List({ space: SPACING.SM }) {
@@ -954,7 +922,7 @@ export struct MerchantCenterPage {
                               promptAction.showToast({ message: '删除失败，请稍后重试' })
                             }
                         })
-                      Button('编辑')
+                      Button('编辑').id(`merchant-goods-edit-${goods.id}`)
                         .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS).fontColor(MODULE_COLOR.MERCHANT)
                         .backgroundColor(MODULE_BG.MERCHANT).borderRadius(BORDER_RADIUS.ROUND)
                         .onClick(() => { this.openEditGoodsPage(goods) })

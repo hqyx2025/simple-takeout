@@ -28,7 +28,7 @@ export struct ProfileMainPage {
   // 余额显示只由当前页面的接口结果驱动，避免 StorageLink 旧快照回调覆盖新余额。
   @State balance: number = 0
   @State isRefreshing: boolean = false
-  @State refreshStatus: string = '余额数据来自数据库'
+  @State refreshStatus: string = ''
   onNavigateLogin: () => void = () => {}
   private lastRefreshAt: number = 0
   private refreshInFlight: boolean = false
@@ -94,7 +94,7 @@ export struct ProfileMainPage {
     }
     this.isRefreshing = true
     this.lastRefreshAt = 0
-    this.refreshStatus = '正在从数据库同步余额…'
+    this.refreshStatus = '正在刷新余额…'
     try {
       const synced: boolean = await this.refreshFromDatabase()
       if (synced) {
@@ -102,11 +102,11 @@ export struct ProfileMainPage {
         const hour: string = now.getHours().toString().padStart(2, '0')
         const minute: string = now.getMinutes().toString().padStart(2, '0')
         const second: string = now.getSeconds().toString().padStart(2, '0')
-        this.refreshStatus = `已同步数据库 ${hour}:${minute}:${second}`
-        promptAction.showToast({ message: '余额已按数据库最新数据同步', duration: 1800 })
+        this.refreshStatus = `更新于 ${hour}:${minute}:${second}`
+        promptAction.showToast({ message: '余额已更新', duration: 1800 })
       } else {
         const remoteError: string = getLastRemoteErrorMessage()
-        this.refreshStatus = remoteError === '' ? '数据库同步失败，请重试' : `同步失败：${remoteError}`
+        this.refreshStatus = remoteError === '' ? '刷新失败，请重试' : `同步失败：${remoteError}`
         promptAction.showToast({ message: this.refreshStatus, duration: 2400 })
       }
     } finally {
