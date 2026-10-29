@@ -29,6 +29,7 @@ public class LoginRateLimiter implements org.springframework.beans.factory.Initi
             // 验证码找回按来源 IP 限制，避免第三方邮件接口被刷。
             Map.entry("sms-code", new Policy(5, 60, 600)),
             Map.entry("email-code", new Policy(5, 60, 600)),
+            Map.entry("captcha", new Policy(30, 60, 60)),
             Map.entry("email-code-phone", new Policy(5, 86400, 86400)),
             Map.entry("password-forgot", new Policy(5, 60, 600)),
             Map.entry("payment-password-forgot", new Policy(5, 60, 600)),

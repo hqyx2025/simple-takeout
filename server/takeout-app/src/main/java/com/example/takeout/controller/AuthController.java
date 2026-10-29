@@ -62,6 +62,14 @@ public class AuthController {
     }
 
     /** The server generates, stores, and sends the one-time email code. Only local mock mode returns it. */
+    @GetMapping("/captcha")
+    public ApiResponse<SmsVerificationService.CaptchaResult> captcha(HttpServletRequest http,
+                                                                   jakarta.servlet.http.HttpServletResponse response) {
+        limitSessionEndpoint("captcha", http);
+        response.setHeader("Cache-Control", "no-store");
+        return ApiResponse.ok(smsVerificationService.issueCaptcha(LoginRateLimiter.clientIp(http)));
+    }
+
     @PostMapping({"/email-code", "/sms-code"})
     public ApiResponse<EmailCodeResult> emailCode(@RequestBody EmailCodeRequest req, HttpServletRequest http) {
         String ip = LoginRateLimiter.clientIp(http);
@@ -70,6 +78,7 @@ public class AuthController {
         }
         loginRateLimiter.recordAttempt("email-code", ip);
         if (req == null) throw new BizException("请填写手机号和邮箱");
+        smsVerificationService.consumeCaptcha(ip, req.captchaId(), req.captchaCode());
         AuthService.requirePhone(req.phone());
         String identity;
         String destination;
@@ -77,7 +86,7 @@ public class AuthController {
             destination = authService.registrationEmail(req.username(), req.phone(), req.email());
             identity = authService.registrationIdentity(req.phone(), destination);
         } else {
-            if (!"login".equals(req.purpose()) && !"payment".equals(req.purpose())) {
+            if (!"login".equals(req.purpose()) && !"payment".equals(req.purpose()) && !"signin".equals(req.purpose())) {
                 throw new BizException("验证码用途不正确");
             }
             User user;
@@ -160,6 +169,34 @@ public class AuthController {
     public ApiResponse<RefreshTokenService.RefreshResult> refresh(@RequestBody RefreshRequest req, HttpServletRequest http) {
         limitSessionEndpoint("refresh", http);
         return ApiResponse.ok(refreshTokenService.refresh(req == null ? null : req.refreshToken()));
+    }
+
+    @PostMapping("/login/email")
+    public ApiResponse<AuthSessionResult> emailLogin(@RequestBody EmailLoginRequest req, HttpServletRequest http) {
+        String ip = LoginRateLimiter.clientIp(http);
+        if (loginRateLimiter.isBlocked("login", ip) || loginRateLimiter.isBlocked("login-total", ip)) {
+            throw new BizException(429, "登录尝试过于频繁，请稍后再试");
+        }
+        String[] account = {null};
+        try {
+            if (req == null) throw new BizException("请填写手机号、邮箱和验证码");
+            AuthService.LoginResult result = authService.loginByEmailCode(req.phone(), req.email(), req.code(), req.loginType(), key -> {
+                account[0] = key;
+                if (loginRateLimiter.isBlocked("login", ip) || loginRateLimiter.isBlocked("login-account-fail", key)) {
+                    throw new BizException(429, "登录尝试过于频繁，请稍后再试");
+                }
+                loginRateLimiter.recordAttempt("login-total", ip);
+                loginRateLimiter.recordAttempt("login-account-total", key);
+            });
+            return ApiResponse.ok(new AuthSessionResult(result.token(),
+                    refreshTokenService.issue(result.user().id(), result.token()), result.user()));
+        } catch (BizException e) {
+            if (e.getCode() == 400 || e.getCode() == 401) {
+                try { loginRateLimiter.recordAttempt("login", ip); }
+                finally { if (account[0] != null) loginRateLimiter.recordAttempt("login-account-fail", account[0]); }
+            }
+            throw e;
+        }
     }
 
     @PostMapping("/push-token")
@@ -268,7 +305,15 @@ public class AuthController {
     public record RechargeRequest(double amount) {
     }
 
-    public record EmailCodeRequest(String phone, String email, String purpose, String username) {
+    public record EmailCodeRequest(String phone, String email, String purpose, String username,
+                                   String captchaId, String captchaCode) {
+        public EmailCodeRequest(String phone, String email, String purpose, String username) {
+            this(phone, email, purpose, username, null, null);
+        }
+    }
+
+    public record EmailLoginRequest(String phone, String email, String code, String loginType) {
+        @Override public String toString() { return "EmailLoginRequest[credentials=[redacted]]"; }
     }
 
     public record EmailCodeResult(String code, boolean mock) {

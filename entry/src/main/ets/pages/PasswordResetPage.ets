@@ -1,6 +1,7 @@
 import { AppButtonStyle, AppCardStyle, AppInputStyle, AppTheme } from '../common/theme/AppTheme'
 import { COLORS, FONT_SIZE, SPACING } from '../common/Constants'
 import { PageHeader } from '../components/PageHeader'
+import { EmailCaptchaField } from '../components/EmailCaptchaField'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { requestEmailCodeApi, resetLoginPasswordApi, resetPaymentPasswordApi, PaymentPasswordResult, EmailCodeResult } from '../service/ApiService'
 import { getAuthToken } from '../service/HttpClient'
@@ -26,6 +27,9 @@ export struct PasswordResetPage {
   @State confirmPassword: string = ''
   @State busy: boolean = false
   @State sendingCode: boolean = false
+  @State captchaId: string = ''
+  @State captchaCode: string = ''
+  @State captchaRefreshVersion: number = 0
   private sessionToken: string = ''
   private previousKeyboardAvoidMode: KeyboardAvoidMode = KeyboardAvoidMode.OFFSET
   private keyboardModeChanged: boolean = false
@@ -80,7 +84,13 @@ export struct PasswordResetPage {
       return
     }
     this.sendingCode = true
-    const result: EmailCodeResult = await requestEmailCodeApi(this.phone.trim(), email, this.mode)
+    if (!this.captchaId || !/^[A-Za-z0-9]{5}$/.test(this.captchaCode)) {
+      this.sendingCode = false
+      promptAction.showToast({ message: '请先输入图片中的 5 位校对码', duration: 1800 })
+      return
+    }
+    const result: EmailCodeResult = await requestEmailCodeApi(this.phone.trim(), email, this.mode, '', this.captchaId, this.captchaCode)
+    this.captchaRefreshVersion++
     this.sendingCode = false
     if (!result.success) {
       promptAction.showToast({ message: result.message || '验证码发送失败，请稍后重试', duration: 1800 })
@@ -152,6 +162,7 @@ export struct PasswordResetPage {
             TextInput({ text: this.email, placeholder: '例如 name@qq.com' }).attributeModifier(new AppInputStyle())
               .type(InputType.Email).width('100%').id('password-reset-email')
               .onChange((value: string) => { this.email = value; this.code = '' })
+            EmailCaptchaField({ captchaId: $captchaId, captchaCode: $captchaCode, refreshVersion: this.captchaRefreshVersion })
             Text('邮箱验证码').fontSize(FONT_SIZE.SM).fontColor(AppTheme.TEXT).width('100%')
             Row({ space: SPACING.SM }) {
               TextInput({ text: this.code, placeholder: '邮箱验证码' }).attributeModifier(new AppInputStyle())

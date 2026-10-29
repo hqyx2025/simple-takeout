@@ -53,7 +53,7 @@ class AuthEmailRecoveryTest {
         BizException error = assertThrows(BizException.class, () -> controller.emailCode(request,
                 mock(jakarta.servlet.http.HttpServletRequest.class)));
         assertEquals("手机号或邮箱不匹配", error.getMessage());
-        verifyNoInteractions(sender);
+        verify(sender, never()).issue(anyString(), anyString());
     }
 
     @Test
@@ -88,6 +88,34 @@ class AuthEmailRecoveryTest {
                 .consume("registration:13900139000:user@example.com", "123456");
         assertThrows(BizException.class, () -> auth.register("new", "13900139000", "user@example.com", "123456", "newpass123", 0));
         verify(users, never()).insert(anyString(), anyString(), anyString(), anyString(), anyInt(), anyDouble(), anyString());
+    }
+
+    @Test
+    void emailLoginUsesItsOwnCodeAndEnforcesRoleAndMailbox() {
+        User account = user(1, "first", "13800138000");
+        when(users.findByPhoneForUpdate(account.phone())).thenReturn(Optional.of(account));
+        assertEquals(account.id(), auth.loginByEmailCode(account.phone(), "751848863@qq.com", "123456", "CUSTOMER", key -> {}).user().id());
+        verify(codes).consume("recovery:1:signin:13800138000:751848863@qq.com", "123456");
+        assertEquals(403, assertThrows(BizException.class, () -> auth.loginByEmailCode(
+                account.phone(), account.email(), "123456", "ADMIN", key -> {})).getCode());
+        clearInvocations(codes);
+        assertThrows(BizException.class, () -> auth.loginByEmailCode(account.phone(), "wrong@example.com", "123456", "CUSTOMER", key -> {}));
+        verifyNoInteractions(codes);
+    }
+
+    @Test
+    void captchaFailurePreventsSendingAnyEmailCode() {
+        SmsVerificationService sender = mock(SmsVerificationService.class);
+        doThrow(new BizException("校对码不正确或已过期")).when(sender).consumeCaptcha(any(), any(), any());
+        var controller = new com.example.takeout.controller.AuthController(auth,
+                mock(com.example.takeout.security.LoginRateLimiter.class),
+                mock(com.example.takeout.security.TokenRevocationService.class), mock(RefreshTokenService.class),
+                sender, mock(PushTokenService.class));
+        var req = new com.example.takeout.controller.AuthController.EmailCodeRequest(
+                "13800138000", "test@example.com", "signin", "", "invalid-id", "WRONG");
+        assertThrows(BizException.class, () -> controller.emailCode(req, mock(jakarta.servlet.http.HttpServletRequest.class)));
+        verify(sender, never()).issue(anyString(), anyString());
+        verifyNoInteractions(users);
     }
 
     @Test

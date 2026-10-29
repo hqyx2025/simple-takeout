@@ -74,6 +74,54 @@ public class SmsVerificationService implements SmsCodeVerifier {
         return issue(identity, identity);
     }
 
+    /** 图形校对码只保存摘要，绑定来源；不论答对与否均原子消费，三分钟过期。 */
+    public CaptchaResult issueCaptcha(String source) {
+        String id = java.util.UUID.randomUUID().toString();
+        String alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+        StringBuilder answer = new StringBuilder();
+        for (int i = 0; i < 5; i++) answer.append(alphabet.charAt(RANDOM.nextInt(alphabet.length())));
+        try {
+            var image = new java.awt.image.BufferedImage(180, 64, java.awt.image.BufferedImage.TYPE_INT_RGB);
+            var graphics = image.createGraphics();
+            try {
+                graphics.setColor(new java.awt.Color(255, 244, 231));
+                graphics.fillRect(0, 0, 180, 64);
+                graphics.setFont(new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD, 32));
+                for (int i = 0; i < 8; i++) {
+                    graphics.setColor(new java.awt.Color(220, 190, 160));
+                    graphics.drawLine(RANDOM.nextInt(180), RANDOM.nextInt(64), RANDOM.nextInt(180), RANDOM.nextInt(64));
+                }
+                graphics.setColor(new java.awt.Color(83, 49, 30));
+                for (int i = 0; i < 5; i++) {
+                    graphics.drawString(String.valueOf(answer.charAt(i)), 12 + i * 32, 40 + RANDOM.nextInt(8));
+                }
+            } finally { graphics.dispose(); }
+            var output = new java.io.ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(image, "png", output);
+            redis.opsForValue().set("takeout:captcha:" + id, digest(source + ":" + answer), Duration.ofMinutes(3));
+            return new CaptchaResult(id, "data:image/png;base64," + java.util.Base64.getEncoder().encodeToString(output.toByteArray()));
+        } catch (java.io.IOException | RuntimeException e) {
+            throw new BizException(503, "校对码暂不可用，请稍后重试");
+        }
+    }
+
+    public void consumeCaptcha(String source, String id, String answer) {
+        if (id == null || !id.matches("[a-f0-9-]{36}") || answer == null || !answer.matches("[A-Za-z0-9]{5}")) {
+            throw new BizException("请输入图片中的 5 位校对码");
+        }
+        try {
+            String expected = redis.opsForValue().getAndDelete("takeout:captcha:" + id);
+            String actual = digest(source + ":" + answer.toUpperCase(java.util.Locale.ROOT));
+            if (expected == null || !java.security.MessageDigest.isEqual(
+                    expected.getBytes(StandardCharsets.UTF_8), actual.getBytes(StandardCharsets.UTF_8))) {
+                throw new BizException("校对码不正确或已过期，请换一张重试");
+            }
+        } catch (BizException e) { throw e; }
+        catch (RuntimeException e) { throw new BizException(503, "校对码暂不可用，请稍后重试"); }
+    }
+
+    public record CaptchaResult(String id, String image) { }
+
     public IssueResult issue(String identity, String destination) {
         String identityHash = digest(identity);
         String codeKey = "takeout:verification:code:" + identityHash;
@@ -193,7 +241,7 @@ public class SmsVerificationService implements SmsCodeVerifier {
     }
 
     private boolean validIdentity(String value) {
-        return value != null && (value.matches("registration:1[0-9]{10}:[^\\s:]+@[^\\s:]+") || value.matches("recovery:[1-9][0-9]*:(login|payment):1[0-9]{10}:[^\\s:]+@[^\\s:]+") || value.matches("1\\d{10}") || value.matches(
+        return value != null && (value.matches("registration:1[0-9]{10}:[^\\s:]+@[^\\s:]+") || value.matches("recovery:[1-9][0-9]*:(login|payment|signin):1[0-9]{10}:[^\\s:]+@[^\\s:]+") || value.matches("1\\d{10}") || value.matches(
                 "1\\d{10}:[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+") || value.matches(
                 "^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"));
     }

@@ -668,7 +668,9 @@ export interface ForgotPasswordRequest { phone: string; email: string; code: str
 
 export interface ForgotPaymentPasswordRequest { phone: string; email: string; code: string; paymentPassword: string }
 
-export interface EmailCodeRequest { phone: string; email: string; purpose: string; username: string }
+export interface EmailCodeRequest { phone: string; email: string; purpose: string; username: string; captchaId: string; captchaCode: string }
+
+export interface CaptchaResult { id: string; image: string }
 
 export interface MerchantMarketingInput {
   type: string

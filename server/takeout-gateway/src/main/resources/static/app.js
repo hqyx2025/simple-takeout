@@ -1,7 +1,9 @@
 (() => {
   'use strict';
-  // 旧版持久化凭证不再恢复；会话仅驻留当前页面内存。
+  // 清除旧版长期凭证；当前标签页会话通过 sessionStorage 跨刷新恢复。
   localStorage.removeItem('takeout.demo.token'); localStorage.removeItem('takeout.demo.refresh');
+  const SESSION_KEY = 'takeout.session';
+  const saveSession = () => sessionStorage.setItem(SESSION_KEY, JSON.stringify({token:state.token,refreshToken:state.refreshToken}));
 
   const ROLE = { 0: 'CUSTOMER', 1: 'MERCHANT', 2: 'ADMIN', 3: 'RIDER' };
   const STATUS = ['待付款', '待接单', '制作中', '配送中', '已送达', '已取消', '退款中'];
@@ -64,22 +66,40 @@
       checkoutDrafts: {}, checkoutReturnStoreId: 0, riderActions: {}, ledgerPage: 1, deliveryIssuesPage: 1, deliveryIssueFilter: 'OPEN', deliveryIssues: []
     });
     resetCheckoutIntent();
+    sessionStorage.removeItem(SESSION_KEY);
     localStorage.removeItem('takeout.demo.token');
     localStorage.removeItem('takeout.demo.refresh');
     const notice = document.getElementById('notice');
     if (notice) { clearTimeout(toast.timer); notice.textContent = ''; notice.hidden = true; }
   };
   const $ = (id) => document.getElementById(id);
+  const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
+  const themeKey = () => `takeout.theme.${state.role}.${state.user.id}`;
+  const applyTheme = () => {
+    const logged = Boolean(state.user && state.token);
+    const saved = logged ? localStorage.getItem(themeKey()) : 'light';
+    const preference = ['light', 'dark', 'system'].includes(saved) ? saved : 'light';
+    document.documentElement.dataset.theme = preference === 'system' ? (systemTheme.matches ? 'dark' : 'light') : preference;
+    $('themeControl').hidden = !logged;
+    $('themeSelect').value = preference;
+  };
+  systemTheme.addEventListener('change', applyTheme);
+  $('themeSelect').addEventListener('change', e => {
+    if (!state.user || !state.token) return;
+    localStorage.setItem(themeKey(), e.target.value);
+    applyTheme();
+  });
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const cash = (v) => Number(v || 0).toFixed(2);
   const toast = (message, error = false) => { const el = $('notice'); el.textContent = message; el.classList.toggle('error', error); el.hidden = false; clearTimeout(toast.timer); toast.timer = setTimeout(() => { el.hidden = true; }, 3600); };
   const api = async (path, options = {}) => {
     const requestToken = state.token;
+    const { keepSessionOnUnauthorized = false, ...requestOptions } = options;
     const headers = { ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...(options.headers || {}) };
     if (requestToken) headers.Authorization = `Bearer ${requestToken}`;
     let response;
     try {
-      response = await fetch(TakeoutUrls.localPath(path, document.baseURI), { cache: 'no-store', ...options, headers });
+      response = await fetch(TakeoutUrls.localPath(path, document.baseURI), { cache: 'no-store', ...requestOptions, headers });
     } catch (cause) {
       if (cause && typeof cause === 'object' && !['TypeError', 'AbortError'].includes(cause.name)) {
         cause.responseReceived = false;
@@ -101,8 +121,10 @@
       body = {};
     }
     if (response.status === 401) {
-      if (requestToken && requestToken === state.token) { resetAccountState(); renderShell(); void renderPage(); }
-      throw new Error('登录已过期，请重新登录');
+      if (!keepSessionOnUnauthorized && requestToken && requestToken === state.token) { resetAccountState(); renderShell(); void renderPage(); }
+      const error = new Error('登录已过期，请重新登录');
+      error.status = 401;
+      throw error;
     }
     if (!body || !Number.isInteger(body.code) || body.code < 100 || body.code > 599) {
       throw new Error('响应内容不完整，处理结果待确认，请重试核对');
@@ -564,29 +586,115 @@
     document.body.append(dialog);dialog.showModal();form.elements.reasonCode.focus();
   });
   let authReturnFocus = null;
+  let authViewVersion = 0;
+  let captchaVersion = 0;
+  const emailCooldowns = new Map();
   const closeAuth = () => {
+    authViewVersion++; authRequestVersion++;
+    clearTimeout(updateCodeButton.timer);
     $('authModal').hidden = true;
     authReturnFocus?.focus?.();
     authReturnFocus = null;
   };
   const openAuth = (mode = 'login') => {
     if ($('authModal').hidden) authReturnFocus = document.activeElement;
+    const form = $('authForm'), previous = Object.fromEntries(new FormData(form).entries());
+    authViewVersion++; authRequestVersion++; clearTimeout(updateCodeButton.timer);
     $('authTitle').textContent = mode === 'register' ? '注册用户账号' : '登录';
+    $('authSuccess').textContent = ''; $('authSuccess').hidden = true;
     $('authForm').dataset.mode = mode;
     $('authForm').innerHTML = mode === 'register'
-      ? `<label class="field">用户名<input class="input" name="username" required placeholder="例如：小王"></label><label class="field">手机号<input class="input" name="phone" required inputmode="tel" placeholder="13800138000"></label><label class="field">邮箱<input class="input" name="email" required type="email" placeholder="name@example.com"></label><div class="row-between"><label class="field" style="flex:1">邮箱验证码<input class="input" name="code" required placeholder="验证码"></label><button class="btn" type="button" data-action="send-code" style="margin-top:20px">获取验证码</button></div><label class="field">登录密码<input class="input" name="password" required type="password" minlength="6"></label><div class="form-actions"><button class="btn" type="button" data-action="auth-switch" data-id="login">返回登录</button><button class="btn primary">注册</button></div>`
+      ? `<label class="field">用户名<input class="input" name="username" required placeholder="例如：小王"></label><label class="field">手机号<input class="input" name="phone" required inputmode="tel" placeholder="13800138000"></label><label class="field">邮箱<input class="input" name="email" required type="email" placeholder="name@example.com"></label><div class="row-between"><label class="field" style="flex:1">邮箱验证码<input class="input" name="code" required placeholder="验证码"></label><button class="btn" type="button" data-action="send-code" style="margin-top:20px">获取验证码</button></div><label class="field">登录密码<input class="input" id="authPassword" name="password" required type="password" minlength="6" maxlength="64" autocomplete="new-password" aria-describedby="authPasswordHint" placeholder="请输入 6 至 64 位密码"></label><p class="auth-guidance" id="authPasswordHint"><strong>密码需为 6 至 64 位</strong><span>请在下方再次输入相同密码。</span></p><label class="field">确认密码<input class="input" id="authConfirmPassword" name="confirmPassword" required type="password" minlength="6" maxlength="64" autocomplete="new-password" aria-describedby="authPasswordHint authError" placeholder="请再次输入登录密码"></label><div class="form-actions"><button class="btn" type="button" data-action="auth-switch" data-id="login">返回登录</button><button class="btn primary">注册</button></div>`
       : `<label class="field">登录端<select class="select" name="loginType"><option value="CUSTOMER">用户端</option><option value="MERCHANT">商户端</option><option value="RIDER">骑手端</option><option value="ADMIN">管理端</option></select></label><label class="field">手机号<input class="input" name="phone" required inputmode="tel" placeholder="请输入手机号" autocomplete="username"></label><label class="field">密码<input class="input" name="password" required type="password" placeholder="请输入密码" autocomplete="current-password"></label><div class="form-actions"><button class="btn" type="button" data-action="auth-switch" data-id="register">注册用户</button><button class="btn primary">登录</button></div>`;
+    if (mode !== 'register') {
+      form.insertAdjacentHTML('afterbegin', '<div class="tabs auth-tabs" aria-label="登录方式"><button class="tab ' + (mode === 'email' ? '' : 'active') + '" type="button" data-action="auth-switch" data-id="login" aria-pressed="' + (mode !== 'email') + '">密码登录</button><button class="tab ' + (mode === 'email' ? 'active' : '') + '" type="button" data-action="auth-switch" data-id="email" aria-pressed="' + (mode === 'email') + '">验证码登录</button></div>');
+    }
+    if (mode === 'email') {
+      const password = form.querySelector('[name="password"]').closest('label');
+      password.outerHTML = '<label class="field">绑定邮箱<input class="input" name="email" required type="email" maxlength="254" autocomplete="email" placeholder="例如：name@example.com"></label><div class="row-between auth-code-row"><label class="field">邮箱验证码<input class="input" name="code" required inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="请输入 6 位邮箱验证码"></label><button class="btn" type="button" data-action="send-code">获取验证码</button></div>';
+    }
+    if (mode === 'email' || mode === 'register') {
+      const codeRow = form.querySelector('[data-action="send-code"]').parentElement;
+      codeRow.classList.add('auth-code-row');
+      codeRow.insertAdjacentHTML('beforebegin', '<div class="auth-captcha"><label class="field">图片校对码<input class="input" name="captchaCode" maxlength="5" autocomplete="off" placeholder="输入右图 5 位字符"></label><button class="btn captcha-image" type="button" data-action="captcha-refresh" aria-label="更换图片校对码"><img id="authCaptchaImage" alt="图片校对码" hidden><span id="authCaptchaLabel">点击加载</span></button><input type="hidden" name="captchaId"></div>');
+      codeRow.insertAdjacentHTML('afterend', '<p id="authCodeStatus" class="help-text" role="status"></p>');
+      form.querySelector('[name="code"]').setAttribute('pattern', '[0-9]{6}');
+    }
+    form.querySelectorAll('.field .input,.field .select').forEach(input => {
+      input.insertAdjacentHTML('afterend', '<span class="auth-field-error" id="authField-' + input.name + '" hidden></span>');
+      input.setAttribute('aria-describedby', ((input.getAttribute('aria-describedby') || '') + ' authField-' + input.name).trim());
+    });
+    for (const name of ['phone', 'email', 'loginType']) {
+      const input = form.querySelector('[name="' + name + '"]');
+      if (input && previous[name]) input.value = previous[name];
+    }
+    showAuthError('');
     $('authModal').hidden = false;
     $('authForm').querySelector('select, input, button')?.focus();
+    if (mode === 'email' || mode === 'register') { updateCodeButton(); void refreshAuthCaptcha(); }
   };
-  const loginWith = async (payload) => {
+  const updateCodeButton = () => {
+    clearTimeout(updateCodeButton.timer);
+    const button = $('authForm').querySelector('[data-action="send-code"]');
+    if (!button || $('authModal').hidden) return;
+    const email = $('authForm').querySelector('[name="email"]').value.trim().toLowerCase();
+    const seconds = Math.max(0, Math.ceil(((emailCooldowns.get(email) || 0) - Date.now()) / 1000));
+    button.disabled = button.dataset.sending === 'true' || seconds > 0;
+    button.textContent = button.dataset.sending === 'true' ? '发送中…' : seconds > 0 ? seconds + ' 秒后重发' : '获取验证码';
+    if (seconds > 0) updateCodeButton.timer = setTimeout(updateCodeButton, 1000);
+  };
+  const refreshAuthCaptcha = async () => {
+    const view = authViewVersion, request = ++captchaVersion, form = $('authForm');
+    const id = form.querySelector('[name="captchaId"]');
+    if (!id) return;
+    id.value = ''; form.querySelector('[name="captchaCode"]').value = '';
+    $('authCaptchaImage').hidden = true; $('authCaptchaLabel').hidden = false; $('authCaptchaLabel').textContent = '加载中…';
+    try {
+      const result = await get('/api/auth/captcha');
+      if (view !== authViewVersion || request !== captchaVersion || $('authModal').hidden) return;
+      if (!result?.id || !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(result.image || '')) throw new Error('校对码加载失败，请点击图片重试');
+      id.value = result.id; $('authCaptchaImage').src = result.image;
+      $('authCaptchaImage').hidden = false; $('authCaptchaLabel').hidden = true;
+    } catch (error) {
+      if (view !== authViewVersion || request !== captchaVersion || $('authModal').hidden) return;
+      $('authCaptchaLabel').textContent = '点击重试'; showAuthError(error.message, 'captchaCode');
+    }
+  };
+  const sendAuthCode = async () => {
+    const form = $('authForm'), version = authViewVersion, button = form.querySelector('[data-action="send-code"]');
+    if (!button || button.disabled) return;
+    showAuthError('');
+    const data = Object.fromEntries(new FormData(form).entries());
+    for (const name of [...(form.dataset.mode === 'register' ? ['username'] : []), 'phone', 'email']) {
+      if (!form.querySelector('[name="' + name + '"]').reportValidity()) return;
+    }
+    if (!data.captchaId || !/^[A-Za-z0-9]{5}$/.test(data.captchaCode || '')) {
+      showAuthError('请先输入图片中的 5 位校对码，再获取邮箱验证码。', 'captchaCode');
+      form.querySelector('[name="captchaCode"]').focus(); return;
+    }
+    button.dataset.sending = 'true'; updateCodeButton();
+    try {
+      const result = await send('/api/auth/email-code', 'POST', {phone:data.phone,email:data.email,purpose:form.dataset.mode === 'register' ? 'register' : 'signin',username:data.username || '',captchaId:data.captchaId,captchaCode:data.captchaCode});
+      emailCooldowns.set(data.email.trim().toLowerCase(), Date.now() + 60000);
+      if (version !== authViewVersion || $('authModal').hidden) return;
+      $('authCodeStatus').textContent = result?.mock && result.code ? '开发模式验证码：' + result.code : '验证码已发送至邮箱，15 分钟内有效。';
+      form.querySelector('[name="code"]').focus();
+    } catch (error) {
+      if (version === authViewVersion && !$('authModal').hidden) showAuthError(error.message);
+    } finally {
+      button.dataset.sending = 'false';
+      if (version === authViewVersion && !$('authModal').hidden) { updateCodeButton(); void refreshAuthCaptcha(); }
+    }
+  };
+  const loginWith = async (payload, endpoint = '/api/auth/login') => {
     const requestVersion = ++authRequestVersion;
-    const data = await send('/api/auth/login', 'POST', payload);
+    const data = await send(endpoint, 'POST', payload);
     if (requestVersion !== authRequestVersion) return;
     resetAccountState(false);
     state.token = data.token; state.refreshToken = data.refreshToken || '';
     state.user = data.user; state.role = Number(data.user.role); state.page = state.role === 0 ? 'home' : state.role === 3 ? 'rider-pool' : 'overview';
-    closeAuth(); renderShell(); await renderPage();
+    saveSession();
+    closeAuth(); renderShell(); await Promise.all([loadCartCount(), renderPage()]);
   };
   const logout = async () => {
     const request = send('/api/auth/logout', 'POST', { refreshToken: state.refreshToken, pushToken: '' }).catch(() => {});
@@ -596,6 +704,8 @@
   };
   const requireUser = (message = '请先登录') => { if (!state.token) { openAuth(); toast(message); return false; } return true; };
   function renderShell() {
+    applyTheme();
+    updateCartCount();
     $('appLayout').classList.toggle('sidebar-collapsed', state.sidebarCollapsed);
     const toggle = $('sidebarToggle');
     const toggleLabel = state.sidebarCollapsed ? '展开侧边栏' : '收起侧边栏';
@@ -611,6 +721,30 @@
     $('topCart').onclick = () => { if (requireUser()) navigate('cart'); };
     $('topLogin').onclick = () => openAuth(); $('topLogout').onclick = logout;
   }
+  const updateCartCount = () => {
+    const count = state.cart.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    $('cartCount').textContent = String(count);
+    $('topCart').setAttribute('aria-label', `购物车，共 ${count} 件商品`);
+    $('topCart').title = '';
+  };
+  const setCart = items => { state.cart = items || []; updateCartCount(); };
+  const refreshCart = async (load = get) => {
+    const token = state.token;
+    const items = await load('/api/cart');
+    if (token !== state.token) throw staleRender;
+    setCart(items);
+  };
+  const loadCartCount = async () => {
+    if (!state.user || state.role !== 0) return;
+    const token = state.token;
+    try { await refreshCart(); }
+    catch (error) {
+      if (error === staleRender || token !== state.token) return;
+      $('cartCount').textContent = '—';
+      $('topCart').title = '购物车数量加载失败，点击购物车重试';
+      $('topCart').setAttribute('aria-label', $('topCart').title);
+    }
+  };
   const navigate = async (page) => {
     if (!['home', 'discover', 'store'].includes(page) && !requireUser()) return;
     const allowed = (NAV[state.role] || NAV[0]).some(item => item[1] === page);
@@ -741,14 +875,14 @@
     $('app').innerHTML = `${pageHead(store.name, store.notice || store.address || '', `${btn('返回首页','go','home')} ${state.user ? btn('收藏店铺','favorite',store.id) : ''}`)}<div class="grid four"><div class="metric"><div class="metric-label">评分</div><div class="metric-value">★ ${Number(store.rating || 0).toFixed(1)}</div></div><div class="metric"><div class="metric-label">月售</div><div class="metric-value">${Number(store.monthlySales || 0)}</div></div><div class="metric"><div class="metric-label">配送费</div><div class="metric-value">¥${cash(store.deliveryFee)}</div></div><div class="metric"><div class="metric-label">起送价</div><div class="metric-value">¥${cash(store.minOrder)}</div></div></div><div class="section">${categories?.length ? `<div class="toolbar">${categories.map(c=>`<span class="tag">${esc(c.name)}</span>`).join('')}</div>`:''}<div class="page-panel">${state.goods.map(g=>`<div class="food-row"><div class="food-image">${g.image?`<img loading="lazy" decoding="async" src="${esc(assetURL(g.image))}" alt="">`:'食'}</div><div class="food-info"><h3>${esc(g.name)} ${g.special?'<span class="tag">特价</span>':''}</h3><p>${esc(g.description || g.tag || '今日推荐')} · 月售 ${g.sales || 0} · 库存 ${g.stock ?? '-'}</p><div class="price">¥${cash(g.price)} ${g.originalPrice>g.price?`<del class="subtle">¥${cash(g.originalPrice)}</del>`:''}</div></div><div class="food-actions">${(g.specs||[]).length?`<select class="select" data-spec-for="${g.id}" style="max-width:150px">${g.specs.map(s=>`<option value="${s.id}">${esc(s.name)} ¥${cash(s.price)}</option>`).join('')}</select>`:''}<button class="btn primary small" data-action="add-cart" data-id="${g.id}">加入购物车</button></div></div>`).join('') || empty('暂时没有上架商品')}</div></div><section class="section"><h2 class="section-title">顾客评价 (${reviews.length})</h2><div class="grid two">${reviews.slice(0,20).map(r=>`<div class="surface"><div class="row-between"><strong>${esc(r.userName || '顾客')}</strong><span class="rating">★ ${r.rating}</span></div><p>${esc(r.content || '')}</p><div class="subtle">${esc(r.createTime || '')}</div>${r.reply?`<div class="notice-line" style="margin-top:8px">商家回复：${esc(r.reply)}</div>`:''}</div>`).join('') || empty('暂无评价')}</div></section>`;
   };
   const renderCart = async (load = get) => {
-    state.cart = await load('/api/cart') || [];
+    await refreshCart(load);
     const groups = Object.groupBy ? Object.groupBy(state.cart, x=>x.storeId) : state.cart.reduce((a,x)=>((a[x.storeId] ||= []).push(x),a),{});
     const total = state.cart.reduce((s,x)=>s+Number(x.price||0)*x.quantity,0);
     $('app').innerHTML = `${pageHead('购物车','')}${state.cart.length ? Object.values(groups).map(items=>`<section class="page-panel section"><div class="row-between"><h2 class="section-title">${esc(items[0].storeName)}</h2><span class="subtle">同一店铺商品一次结算</span></div>${items.map(x=>`<div class="cart-row"><div class="row-main"><strong>${esc(x.goods?.name || '商品')}</strong><small>${esc(x.specName||'')} · ¥${cash(x.price)}</small></div><div class="stepper"><button class="btn small" data-action="cart-dec" data-id="${x.goodsId}" data-spec="${x.specId||0}">−</button><b>${x.quantity}</b><button class="btn small" data-action="cart-inc" data-id="${x.goodsId}" data-spec="${x.specId||0}">+</button></div></div>`).join('')}<div class="form-actions">${btn('清空本店','cart-clear',items[0].storeId,'danger')} ${btn('去结算','checkout',items[0].storeId,'primary')}</div></section>`).join('') : empty('购物车为空，请先选择店铺和商品')}<div class="panel-foot"><strong>全部商品合计 ¥${cash(total)}</strong></div>`;
   };
   const renderCheckout = async (load = get) => {
     const existingDraft = state.checkoutStoreId ? checkoutDraft(state.checkoutStoreId) : null;
-    if (!existingDraft?.submittedPayload) state.cart = await load('/api/cart') || [];
+    if (!existingDraft?.submittedPayload) await refreshCart(load);
     const storeId = Number(state.checkoutStoreId || state.cart[0]?.storeId || 0);
     const draft = checkoutDraft(storeId);
     state.checkoutStoreId = storeId; state.checkoutIntentKey = draft.intentKey; state.checkoutIntentStoreId = storeId;
@@ -1076,7 +1210,8 @@
         renderShell(); return;
       }
       if (action === 'auth-switch') return openAuth(id);
-      if (action === 'send-code') { const f=el.closest('form');const data=Object.fromEntries(new FormData(f).entries());const r=await actionSend('/api/auth/email-code','POST',{phone:data.phone,email:data.email,purpose:'register',username:data.username});toast(r?.code||'验证码已发送');return; }
+      if (action === 'send-code') return sendAuthCode();
+      if (action === 'captcha-refresh') return refreshAuthCaptcha();
       if (action === 'go') return navigate(id);
       if (action === 'refresh') return renderPage();
       if (action === 'ledger-page' && state.role===1) {state.ledgerPage=Math.max(1,Number(id)||1);return renderPage();}
@@ -1127,7 +1262,7 @@
       if (action === 'location-clear') { state.locationVersion++; state.location = null; state.locationLabel = ''; return renderPage(); }
       if (action === 'stores-more') return appendStoreCards();
       if (action === 'open-store') { state.storeId=Number(id);return navigate('store'); }
-      if (action === 'add-cart') { if(!requireUser())return;const spec=document.querySelector(`[data-spec-for="${id}"]`);await actionSend('/api/cart/items','POST',{goodsId:Number(id),specId:Number(spec?.value||0),quantity:1});toast('已加入服务端购物车');return; }
+      if (action === 'add-cart') { if(!requireUser())return;const spec=document.querySelector(`[data-spec-for="${id}"]`);await actionSend('/api/cart/items','POST',{goodsId:Number(id),specId:Number(spec?.value||0),quantity:1});await refreshCart(actionLoad);toast('已加入服务端购物车');return; }
       if (action === 'favorite') { await actionSend(`/api/favorites/toggle?storeId=${id}`,'POST');toast('收藏状态已更新');return renderPage(); }
       if (action === 'cart-inc'||action === 'cart-dec') { const item=state.cart.find(x=>Number(x.goodsId)===Number(id)&&Number(x.specId||0)===Number(el.dataset.spec||0));if(!item)return;const q=item.quantity+(action==='cart-inc'?1:-1);if(q>0)await actionSend(`/api/cart/items/${id}?specId=${el.dataset.spec||0}`,'PUT',{quantity:q});else await actionSend(`/api/cart/items/${id}?specId=${el.dataset.spec||0}`,'DELETE');return renderPage(); }
       if (action === 'cart-clear') {
@@ -1157,7 +1292,7 @@
           if(!draft.submittedPayload){
             const [cart,addresses,coupons,store]=await Promise.all([actionLoad('/api/cart'),actionLoad('/api/addresses'),actionLoad('/api/coupons'),actionLoad(`/api/stores/${storeId}`)]);
             const fresh=checkoutData(storeId,cart||[],addresses||[],coupons||[],store,draft);
-            state.cart=cart||[];state.addresses=addresses||[];state.coupons=coupons||[];
+            setCart(cart);state.addresses=addresses||[];state.coupons=coupons||[];
             if(fresh.signature!==state.checkoutView.signature){
               draft.reviewMessage ||= '商品、配送费、地址或优惠已变化。请核对清单与金额后再次提交。';
               state.checkoutSubmitting=false;await renderPage();return;
@@ -1172,6 +1307,8 @@
           if(!order||!Number.isInteger(Number(order.id))||Number(order.id)<=0)throw new Error('订单结果尚未完整返回，请按原信息重试核对');
           delete state.checkoutDrafts[`${Number(state.user?.id||0)}:${storeId}`];state.checkoutReturnStoreId=0;
           resetCheckoutIntent();
+          await loadCartCount();
+          if (!isCurrentContext(context)) return;
           toast(Number(order.status)===0?`订单 ${order.orderNo||order.id} 已创建，请核对服务端金额后付款`:`已核对到原订单 ${order.orderNo||order.id}，当前状态：${orderStatus(order)}，请查看详情`);
           return navigate('orders');
         } catch(error) {
@@ -1372,7 +1509,96 @@
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   });
-  $('authForm').addEventListener('submit', async e => { e.preventDefault(); const f=new FormData(e.currentTarget);const data=Object.fromEntries(f.entries());try{if(e.currentTarget.dataset.mode==='register'){const r=await send('/api/auth/register','POST',{username:data.username,phone:data.phone,email:data.email,code:data.code,password:data.password,role:0});toast(`注册成功，请使用 ${r.phone} 登录`);openAuth('login');}else await loginWith({phone:data.phone,password:data.password,loginType:data.loginType});}catch(error){toast(error.message,true);}});
-  const boot = async () => { renderShell(); if (state.token) { try { state.user=await get('/api/auth/me');state.role=Number(state.user.role); } catch (_) { state.token=''; } } renderShell(); await renderPage(); };
+  const showAuthError = (message, field = '') => {
+    const form = $('authForm');
+    form.querySelectorAll('[aria-invalid="true"]').forEach(input => input.setAttribute('aria-invalid', 'false'));
+    form.querySelectorAll('.auth-field-error').forEach(error => { error.textContent = ''; error.hidden = true; });
+    field ||= /校对码/.test(message) ? 'captchaCode' : /验证码/.test(message) ? 'code'
+      : /登录端|角色/.test(message) ? 'loginType' : /两次|确认密码/.test(message) ? 'confirmPassword'
+      : /密码/.test(message) ? 'password' : /邮箱/.test(message) ? 'email'
+      : /手机号/.test(message) ? 'phone' : /账号名|用户名/.test(message) ? 'username' : '';
+    if (message && field) {
+      form.querySelector('[name="' + field + '"]')?.setAttribute('aria-invalid', 'true');
+      const error = $('authField-' + field);
+      if (error) { error.textContent = message; error.hidden = false; }
+    }
+    $('authError').textContent = message ? '操作未完成：' + message : '';
+    $('authError').hidden = !message;
+  };
+  $('authForm').addEventListener('input', () => {
+    showAuthError(''); updateCodeButton();
+    if ($('authForm').dataset.mode !== 'register') return;
+    const confirm = $('authConfirmPassword');
+    const mismatch = Boolean(confirm.value && confirm.value !== $('authPassword').value);
+    confirm.setAttribute('aria-invalid', String(mismatch));
+    if (mismatch) showAuthError('两次输入的密码不一致，请重新输入确认密码。');
+  });
+  $('authForm').addEventListener('invalid', e => showAuthError(e.target.validationMessage, e.target.name), true);
+  $('authForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const form = e.currentTarget, version = authViewVersion, mode = form.dataset.mode;
+    const data = Object.fromEntries(new FormData(form).entries());
+    showAuthError('');
+    if (form.dataset.mode === 'register') {
+      if (!data.password || data.password.length < 6 || data.password.length > 64) {
+        showAuthError('密码长度需为 6 至 64 位，请重新输入。'); $('authPassword').focus(); return;
+      }
+      if (data.password !== data.confirmPassword) {
+        showAuthError('两次输入的密码不一致，请重新输入确认密码。');
+        $('authConfirmPassword').setAttribute('aria-invalid', 'true'); $('authConfirmPassword').focus(); return;
+      }
+    }
+    const submit = form.querySelector('button.primary');
+    if (submit.disabled) return;
+    submit.disabled = true;
+    try {
+      if (form.dataset.mode === 'register') {
+        const r = await send('/api/auth/register', 'POST', {username:data.username,phone:data.phone,email:data.email,code:data.code,password:data.password,role:0});
+        if (version !== authViewVersion || $('authModal').hidden) return;
+        openAuth('login');
+        form.querySelector('[name="phone"]').value = r.phone || data.phone;
+        form.querySelector('[name="loginType"]').value = 'CUSTOMER';
+        $('authSuccess').textContent = '注册成功，已保留手机号，请重新输入密码登录。';
+        $('authSuccess').hidden = false;
+        form.querySelector('[name="password"]').focus();
+      } else if (mode === 'email') {
+        await loginWith({phone:data.phone,email:data.email,code:data.code,loginType:data.loginType}, '/api/auth/login/email');
+      } else await loginWith({phone:data.phone,password:data.password,loginType:data.loginType});
+    } catch (error) { if (version === authViewVersion && !$('authModal').hidden) showAuthError(error.message); }
+    finally { submit.disabled = false; }
+  });
+  const boot = async () => {
+    renderShell();
+    const version = authRequestVersion;
+    let saved;
+    try { saved = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null'); }
+    catch (_) { sessionStorage.removeItem(SESSION_KEY); }
+    if (saved && typeof saved.token === 'string' && saved.token) {
+      state.token = saved.token;
+      state.refreshToken = typeof saved.refreshToken === 'string' ? saved.refreshToken : '';
+      try {
+        let user;
+        try { user = await api('/api/auth/me', {keepSessionOnUnauthorized:true}); }
+        catch (error) {
+          if (version !== authRequestVersion) return;
+          if (error.status !== 401 || !state.refreshToken) throw error;
+          const renewed = await api('/api/auth/refresh', {method:'POST',body:JSON.stringify({refreshToken:state.refreshToken}),keepSessionOnUnauthorized:true});
+          if (version !== authRequestVersion) return;
+          state.token = renewed.token; state.refreshToken = renewed.refreshToken;
+          saveSession();
+          user = await api('/api/auth/me', {keepSessionOnUnauthorized:true});
+        }
+        if (version !== authRequestVersion) return;
+        state.user = user; state.role = Number(user.role);
+        state.page = state.role === 0 ? 'home' : state.role === 3 ? 'rider-pool' : 'overview';
+      } catch (error) {
+        if (version !== authRequestVersion) return;
+        if (error.status === 401) resetAccountState();
+        else { state.token = ''; state.refreshToken = ''; state.user = null; }
+        toast(error.status === 401 ? error.message : '暂时无法恢复登录，请检查网络后刷新重试。', true);
+      }
+    }
+    renderShell(); await Promise.all([loadCartCount(), renderPage()]);
+  };
   boot();
 })();

@@ -2,6 +2,7 @@
  * 登录/注册页面：四种身份登录，用户、商户、骑手可注册。
  */
 import { UserRole } from '../model/Models'
+import { EmailCaptchaField } from '../components/EmailCaptchaField'
 import { loginRemote, registerRemote, logout, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { logInfo, logWarn } from '../service/AppLogger'
 import { APP_CONFIG } from '../common/Constants'
@@ -21,6 +22,9 @@ export struct LoginPage {
   @State phone: string = ''
   @State email: string = ''
   @State emailCode: string = ''
+  @State captchaId: string = ''
+  @State captchaCode: string = ''
+  @State captchaRefreshVersion: number = 0
   @State sendingCode: boolean = false
   @State cooldownSeconds: number = 0
   private cooldownTimer: number = -1
@@ -148,6 +152,7 @@ export struct LoginPage {
   @Builder
   private registrationCodeField() {
     Column({ space: 4 }) {
+      EmailCaptchaField({ captchaId: $captchaId, captchaCode: $captchaCode, refreshVersion: this.captchaRefreshVersion })
       Text('邮箱验证码').fontSize(13).fontWeight(FontWeight.Medium).fontColor(AppTheme.TEXT).width('100%')
       Row({ space: 8 }) {
         TextInput({ text: this.emailCode, placeholder: '请输入 6 位验证码' })
@@ -172,7 +177,11 @@ export struct LoginPage {
     if (!/^1\d{10}$/.test(this.phone.trim())) { this.errorMsg = '请输入正确的 11 位手机号'; return }
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(this.email.trim())) { this.errorMsg = '请输入正确的邮箱地址'; return }
     this.sendingCode = true
-    const result: EmailCodeResult = await requestEmailCodeApi(this.phone.trim(), this.email.trim(), 'register', this.username.trim())
+    if (!this.captchaId || !/^[A-Za-z0-9]{5}$/.test(this.captchaCode)) {
+      this.sendingCode = false; this.errorMsg = '请先输入图片中的 5 位校对码'; return
+    }
+    const result: EmailCodeResult = await requestEmailCodeApi(this.phone.trim(), this.email.trim(), 'register', this.username.trim(), this.captchaId, this.captchaCode)
+    this.captchaRefreshVersion++
     this.sendingCode = false
     if (!this.pageActive) { return }
     if (!result.success) {

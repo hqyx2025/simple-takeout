@@ -6,6 +6,7 @@ import { User, UserRole, BankCard } from '../../model/Models'
 import { logInfo, logWarn } from '../AppLogger'
 import { ServerUser, ServerBankCard, ServerRevealedBankCard, LoginResult, LogoutRequest, LoginRequest, RegisterRequest, ChangePasswordRequest, ProfileUpdateRequest, RechargeRequest, EmailCodeApiResult, EmailCodeResult, ForgotPasswordRequest, ForgotPaymentPasswordRequest, EmailCodeRequest, BankCardRequest, RevealBankCardRequest, SetPaymentPasswordRequest, RevealBankCardResult, PaymentPasswordResult } from '../../model/server/Contracts'
 import { toBankCard, toServerRole, toUser } from '../../model/server/Converters'
+import { CaptchaResult } from '../../model/server/Contracts'
 
 // ==================== 认证 ====================
 
@@ -75,8 +76,13 @@ export async function changePasswordApi(oldPassword: string, newPassword: string
   return true
 }
 
-export async function requestEmailCodeApi(phone: string, email: string, purpose: string, username: string = ''): Promise<EmailCodeResult> {
-  const request: EmailCodeRequest = { phone: phone, email: email, purpose: purpose, username: username }
+export async function fetchCaptchaApi(): Promise<CaptchaResult | null> {
+  const response: ApiResponse<CaptchaResult> = await get<CaptchaResult>('/api/auth/captcha', false)
+  return response.code === 200 ? response.data ?? null : null
+}
+
+export async function requestEmailCodeApi(phone: string, email: string, purpose: string, username: string = '', captchaId: string = '', captchaCode: string = ''): Promise<EmailCodeResult> {
+  const request: EmailCodeRequest = { phone: phone, email: email, purpose: purpose, username: username, captchaId: captchaId, captchaCode: captchaCode }
   const response: ApiResponse<EmailCodeApiResult> = await post<EmailCodeApiResult>(
     '/api/auth/email-code', request, false)
   const result: EmailCodeResult = { success: response.code === 200, message: response.message ?? '' }

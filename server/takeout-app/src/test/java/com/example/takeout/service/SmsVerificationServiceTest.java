@@ -35,6 +35,30 @@ class SmsVerificationServiceTest {
     private static final String SIGNING_SECRET = "a-test-signing-secret-that-is-at-least-32-chars";
 
     @Test
+    void captchaIsAnExpiringImageAndCannotBeReusedOrMovedToAnotherSource() {
+        StringRedisTemplate redis = mock(StringRedisTemplate.class);
+        ValueOperations<String, String> values = mock(ValueOperations.class);
+        when(redis.opsForValue()).thenReturn(values);
+        var service = new SmsVerificationService(redis, mock(SmsSender.class), SIGNING_SECRET, 300, 60);
+        var image = service.issueCaptcha("source-a");
+        org.junit.jupiter.api.Assertions.assertTrue(image.image().startsWith("data:image/png;base64,"));
+        verify(values).set(eq("takeout:captcha:" + image.id()), anyString(), eq(Duration.ofMinutes(3)));
+        String answer = "ABCDE";
+        String digest;
+        try {
+            var mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            mac.init(new javax.crypto.spec.SecretKeySpec(SIGNING_SECRET.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256"));
+            digest = java.util.HexFormat.of().formatHex(mac.doFinal(("source-a:" + answer).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.GeneralSecurityException e) { throw new AssertionError(e); }
+        when(values.getAndDelete("takeout:captcha:" + image.id())).thenReturn(digest, (String) null);
+        service.consumeCaptcha("source-a", image.id(), "abcde");
+        assertThrows(BizException.class, () -> service.consumeCaptcha("source-a", image.id(), answer));
+        when(values.getAndDelete("takeout:captcha:" + image.id())).thenReturn(digest);
+        assertThrows(BizException.class, () -> service.consumeCaptcha("source-b", image.id(), answer));
+        assertThrows(BizException.class, () -> service.consumeCaptcha("source-a", null, answer));
+    }
+
+    @Test
     void hourlyBudgetsAreIsolatedByRecipient() {
         StringRedisTemplate redis = mock(StringRedisTemplate.class);
         ValueOperations<String, String> values = mock(ValueOperations.class);

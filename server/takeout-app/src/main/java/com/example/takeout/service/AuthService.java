@@ -180,6 +180,23 @@ public class AuthService implements org.springframework.beans.factory.Initializi
         return new LoginResult(token, user.safe());
     }
 
+    @Transactional
+    public LoginResult loginByEmailCode(String phone, String email, String code, String loginType,
+                                       java.util.function.Consumer<String> admitAccount) {
+        requirePhone(phone);
+        User user = userDao.findByPhoneForUpdate(phone).filter(found -> phone.equals(found.phone())).orElse(null);
+        admitAccount.accept(user == null ? "unknown:" + phone : "u" + user.id());
+        String normalizedEmail = requireEmail(email);
+        if (user == null || user.status() != 1 || !normalizedEmail.equals(normalizeEmail(user.email()))) {
+            throw new BizException("手机号、邮箱或验证码不正确");
+        }
+        smsCodeVerifier.consume(recoveryIdentity(user, "signin"), code);
+        if (loginType == null || loginType.isBlank() || user.role() != roleOf(loginType)) {
+            throw new BizException(403, "登录端与账号角色不匹配，请切换正确的登录端");
+        }
+        return new LoginResult(jwtUtil.generateToken(user.id(), user.role(), user.passwordChangedAt()), user.safe());
+    }
+
     /** 严格身份输入；不 trim、不移除隐形字符，避免与数据库等价比较产生不同口径。 */
     public static void requirePhone(String phone) {
         if (phone == null || !phone.matches("1[0-9]{10}")) throw new BizException("手机号格式不正确");
@@ -261,7 +278,7 @@ public class AuthService implements org.springframework.beans.factory.Initializi
     }
 
     public String recoveryIdentity(User user, String purpose) {
-        if (!"login".equals(purpose) && !"payment".equals(purpose)) {
+        if (!"login".equals(purpose) && !"payment".equals(purpose) && !"signin".equals(purpose)) {
             throw new BizException("验证码用途不正确");
         }
         return "recovery:" + user.id() + ":" + purpose + ":" + user.phone() + ":" + normalizeEmail(user.email());

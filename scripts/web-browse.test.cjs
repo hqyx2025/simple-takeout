@@ -4,13 +4,14 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 
 function browser(sidebarCollapsed='0',options={}){
-  const nodes=new Map(),requests=[],calls=[],dialogs=[],observers=[],confirmMessages=[],promptMessages=[],storage=new Map([['takeout.demo.sidebarCollapsed',sidebarCollapsed]]);
+  const nodes=new Map(),requests=[],calls=[],dialogs=[],observers=[],confirmMessages=[],promptMessages=[],storage=new Map([['takeout.demo.sidebarCollapsed',sidebarCollapsed],...Object.entries(options.storage||{})]);
+  const session=options.session||new Map();
   const element=id=>{
     if(!nodes.has(id)){
       const classes=new Set();
-      nodes.set(id,{innerHTML:'',textContent:'',hidden:id==='authModal',dataset:{},value:'',isConnected:true,disabled:false,attributes:{},classes,
-        setAttribute(name,value){this.attributes[name]=value;},
-        addEventListener(){},insertAdjacentHTML(position,html){this.innerHTML+=html;},querySelector(){return {focus(){}};},querySelectorAll(){return [];},focus(){},
+      nodes.set(id,{innerHTML:'',textContent:'',hidden:id==='authModal',dataset:{},value:'',isConnected:true,disabled:false,attributes:{},classes,listeners:{},
+        parentElement:{classList:{add(){}},insertAdjacentHTML(){}},closest(){return {outerHTML:''};},reportValidity(){return true;},getAttribute(name){return this.attributes[name];},setAttribute(name,value){this.attributes[name]=value;},
+        addEventListener(name,listener){this.listeners[name]=listener;},async fire(name,event={}){return this.listeners[name]?.({preventDefault(){},currentTarget:this,target:this,...event});},insertAdjacentHTML(position,html){this.innerHTML+=html;},querySelector(selector){return element(id+':'+selector);},querySelectorAll(){return [];},focus(){this.focused=true;},
         classList:{toggle(name,enabled){if(enabled)classes.add(name);else classes.delete(name);}}});
     }
     return nodes.get(id);
@@ -59,10 +60,12 @@ function browser(sidebarCollapsed='0',options={}){
     observe(target){this.target=target;}
     disconnect(){this.disconnected=true;}
   }
+  const media={matches:Boolean(options.darkSystem),addEventListener(name,listener){this.listener=listener;}};
   const context=vm.createContext({URL,console,setTimeout:(callback,delay)=>{const timer=setTimeout(callback,delay);timer.unref?.();return timer;},clearTimeout,IntersectionObserver:Observer,FormData:TestFormData,
     localStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},
-    window:{isSecureContext:true,navigator:options.navigator||{},IntersectionObserver:Observer,scrollTo(){},prompt(message,value){promptMessages.push({message,value});return options.promptResult??null;},confirm(message){confirmMessages.push(message);return options.confirmResult??false;}},
-    document:{baseURI:'https://hqyx.website/takeout/',body:{append(){}},createElement(tag){return tag==='dialog'?createDialog():element(`created-${tag}`);},getElementById:element,querySelector(selector){return selector==='input[name="addressId"]:checked'?{value:element('selectedAddress').value||'1'}:null;},querySelectorAll(){return [];},addEventListener(){}},
+    sessionStorage:{getItem:key=>session.get(key),setItem:(key,value)=>session.set(key,value),removeItem:key=>session.delete(key)},
+    window:{isSecureContext:true,navigator:options.navigator||{},IntersectionObserver:Observer,matchMedia:()=>media,scrollTo(){},prompt(message,value){promptMessages.push({message,value});return options.promptResult??null;},confirm(message){confirmMessages.push(message);return options.confirmResult??false;}},
+    document:{baseURI:'https://hqyx.website/takeout/',documentElement:element('documentElement'),body:{append(){}},createElement(tag){return tag==='dialog'?createDialog():element(`created-${tag}`);},getElementById:element,querySelector(selector){return selector==='input[name="addressId"]:checked'?{value:element('selectedAddress').value||'1'}:null;},querySelectorAll(){return [];},addEventListener(){}},
     TakeoutUrls:{localPath:path=>path},
     TakeoutLocation:{coordinates(longitude,latitude){const lng=Number(longitude),lat=Number(latitude);return Number.isFinite(lng)&&Number.isFinite(lat)&&longitude!==''&&latitude!==''?{longitude:lng,latitude:lat}:null;}},
     fetch:async (path,init={})=>{
@@ -70,7 +73,8 @@ function browser(sidebarCollapsed='0',options={}){
       calls.push({path,init});
       if(options.onRequest){const override=await options.onRequest(path,init);if(override?.json)return override;}
       let data=[];
-      if(path==='/api/stores')data=stores;
+      if(path==='/api/auth/captcha')data={id:'test-captcha',image:'data:image/png;base64,aGVsbG8='};
+      else if(path==='/api/stores')data=stores;
       else if(/^\/api\/stores\/\d+$/.test(path))data=stores.find(store=>store.id===Number(path.split('/').at(-1)));
       else if(path==='/api/cart')data=typeof cart==='function'?cart():cart;
       else if(path==='/api/addresses')data=options.addresses||[{id:1,name:'测试用户',phone:'13800138000',detail:'测试地址',isDefault:true}];
@@ -100,9 +104,9 @@ function browser(sidebarCollapsed='0',options={}){
     }
   });
   const source=fs.readFileSync('server/takeout-gateway/src/main/resources/static/app.js','utf8');
-  vm.runInContext(source.replace('  boot();','  globalThis.browseTest = {state,renderBrowse,renderCheckout,renderPage,renderShell,orderCard,handleAction,couponEligible,couponUnavailableReason,checkoutAmounts,checkoutDraft,merchantRejectPayload,addressForm,addressPayload,addressText,resetAccountState,loginWith,openAuth,closeAuth};'),context);
+  vm.runInContext(source.replace('  boot();','  globalThis.browseTest = {state,renderBrowse,renderCheckout,renderPage,renderShell,orderCard,handleAction,couponEligible,couponUnavailableReason,checkoutAmounts,checkoutDraft,merchantRejectPayload,addressForm,addressPayload,addressText,resetAccountState,loginWith,openAuth,closeAuth,boot,logout};'),context);
   Object.assign(context.browseTest.state,{user:{role:0},token:'test',location:{latitude:22.74967,longitude:108.452009},page:'discover'});
-  return {...context.browseTest,element,requests,calls,dialogs,observers,confirmMessages,promptMessages,stores,coupons,storage,context};
+  return {...context.browseTest,element,requests,calls,dialogs,observers,confirmMessages,promptMessages,stores,coupons,storage,session,media,context};
 }
 const cardCount=html=>(html.match(/class="store-card"/g)||[]).length;
 
@@ -324,7 +328,7 @@ test('a saved sidebar preference is restored for each role without mixing naviga
 });
 
 test('switching accounts clears every account-scoped cache and merchant selection',async()=>{
-  const b=browser('0',{loginResponse:{token:'token-b',refreshToken:'refresh-b',user:{id:202,role:0,username:'账号B'}}});
+  const b=browser('0',{cart:[],loginResponse:{token:'token-b',refreshToken:'refresh-b',user:{id:202,role:0,username:'账号B'}}});
   Object.assign(b.state,{
     user:{id:101,role:1,username:'账号A'},role:1,token:'token-a',refreshToken:'refresh-a',page:'catalog',
     cart:[{goodsId:1}],addresses:[{id:1}],orders:[{id:1}],favorites:[{id:1}],coupons:[{id:1}],

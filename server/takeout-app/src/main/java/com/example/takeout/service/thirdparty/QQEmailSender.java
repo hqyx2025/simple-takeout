@@ -25,7 +25,7 @@ public class QQEmailSender implements SmsSender {
 
     private static final Logger log = LoggerFactory.getLogger(QQEmailSender.class);
     private static final Pattern VERIFICATION_IDENTITY = Pattern.compile(
-            "^(?:recovery:[1-9][0-9]*:(login|payment)|(registration)):(1[0-9]{10}):(.+)$");
+            "^(?:recovery:[1-9][0-9]*:(login|payment|signin)|(registration)):(1[0-9]{10}):(.+)$");
 
     private final String username;
     private final String authCode;
@@ -89,14 +89,20 @@ public class QQEmailSender implements SmsSender {
             throw new BizException("验证码发送失败，请稍后重试");
         }
         boolean registration = verification.group(2) != null;
+        boolean signin = "signin".equals(verification.group(1));
         String purpose = registration ? "注册账号" : "login".equals(verification.group(1)) ? "登录密码" : "支付密码";
         String phone = verification.group(3);
         String maskedPhone = phone.substring(0, 3) + "****" + phone.substring(7);
-        String operation = registration ? "注册简单外卖账户并验证绑定邮箱" : "找回简单外卖账户的" + purpose;
+        String operation = registration ? "注册简单外卖账户并验证绑定邮箱"
+                : signin ? "使用邮箱验证码登录简单外卖账户" : "找回简单外卖账户的" + purpose;
         String instructions = registration ? """
                 1. 返回简单外卖的“注册”页面。
                 2. 核对账号名、手机号和邮箱，输入上方 6 位验证码。
                 3. 设置登录密码并点击“注册”，邮箱验证通过后才会创建账户。
+                """ : signin ? """
+                1. 返回简单外卖的“验证码登录”页面。
+                2. 核对手机号和绑定邮箱，输入上方 6 位验证码。
+                3. 选择正确的登录端并点击“登录”。
                 """ : """
                 1. 返回简单外卖的“找回%s”页面。
                 2. 核对手机号和绑定邮箱，输入上方 6 位验证码。
@@ -104,8 +110,10 @@ public class QQEmailSender implements SmsSender {
                 """.formatted(purpose, purpose);
         String restriction = registration
                 ? "本验证码仅用于上述手机号和邮箱的本次注册验证，不可用于找回密码。"
+                : signin ? "本验证码仅用于上述账户的登录，不可用于注册或重置密码。"
                 : "本验证码仅用于上述账户的本次" + purpose + "重置，不能用于其他账户或另一种密码。";
-        String passiveResult = registration ? "仅收到本邮件不会创建账户或绑定邮箱。" : "仅收到本邮件不会修改您的密码。";
+        String passiveResult = registration ? "仅收到本邮件不会创建账户或绑定邮箱。"
+                : signin ? "仅收到本邮件不会登录您的账户或修改密码。" : "仅收到本邮件不会修改您的密码。";
         String body = """
                 您好！
 
@@ -129,7 +137,8 @@ public class QQEmailSender implements SmsSender {
         MimeMessage message = new MimeMessage(session);
         message.setFrom(new InternetAddress(username, fromName, StandardCharsets.UTF_8.name()));
         message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(email.trim(), true));
-        message.setSubject(registration ? "【简单外卖】注册邮箱验证码" : "【简单外卖】找回" + purpose + "验证码", StandardCharsets.UTF_8.name());
+        message.setSubject(registration ? "【简单外卖】注册邮箱验证码"
+                : signin ? "【简单外卖】登录验证码" : "【简单外卖】找回" + purpose + "验证码", StandardCharsets.UTF_8.name());
         message.setText(body, StandardCharsets.UTF_8.name());
         message.saveChanges();
         return message;
