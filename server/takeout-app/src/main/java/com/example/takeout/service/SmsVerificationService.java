@@ -22,6 +22,9 @@ import java.util.List;
 public class SmsVerificationService implements SmsCodeVerifier {
 
     private static final SecureRandom RANDOM = new SecureRandom();
+    private static final DefaultRedisScript<String> CAPTCHA_CONSUME_SCRIPT = new DefaultRedisScript<>(
+            "local value = redis.call('GET', KEYS[1]); "
+                    + "if value then redis.call('DEL', KEYS[1]) end; return value", String.class);
     private static final DefaultRedisScript<Long> CONSUME_SCRIPT = new DefaultRedisScript<>(
             "local value = redis.call('GET', KEYS[1]); "
                     + "if not value then return 0 end; "
@@ -110,7 +113,7 @@ public class SmsVerificationService implements SmsCodeVerifier {
             throw new BizException("请输入图片中的 5 位校对码");
         }
         try {
-            String expected = redis.opsForValue().getAndDelete("takeout:captcha:" + id);
+            String expected = redis.execute(CAPTCHA_CONSUME_SCRIPT, List.of("takeout:captcha:" + id));
             String actual = digest(source + ":" + answer.toUpperCase(java.util.Locale.ROOT));
             if (expected == null || !java.security.MessageDigest.isEqual(
                     expected.getBytes(StandardCharsets.UTF_8), actual.getBytes(StandardCharsets.UTF_8))) {

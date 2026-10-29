@@ -50,10 +50,12 @@ class SmsVerificationServiceTest {
             mac.init(new javax.crypto.spec.SecretKeySpec(SIGNING_SECRET.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256"));
             digest = java.util.HexFormat.of().formatHex(mac.doFinal(("source-a:" + answer).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
         } catch (java.security.GeneralSecurityException e) { throw new AssertionError(e); }
-        when(values.getAndDelete("takeout:captcha:" + image.id())).thenReturn(digest, (String) null);
+        when(redis.execute(org.mockito.ArgumentMatchers.<org.springframework.data.redis.core.script.DefaultRedisScript<String>>any(),
+                eq(List.of("takeout:captcha:" + image.id())))).thenReturn(digest, (String) null);
         service.consumeCaptcha("source-a", image.id(), "abcde");
         assertThrows(BizException.class, () -> service.consumeCaptcha("source-a", image.id(), answer));
-        when(values.getAndDelete("takeout:captcha:" + image.id())).thenReturn(digest);
+        when(redis.execute(org.mockito.ArgumentMatchers.<org.springframework.data.redis.core.script.DefaultRedisScript<String>>any(),
+                eq(List.of("takeout:captcha:" + image.id())))).thenReturn(digest);
         assertThrows(BizException.class, () -> service.consumeCaptcha("source-b", image.id(), answer));
         assertThrows(BizException.class, () -> service.consumeCaptcha("source-a", null, answer));
     }
