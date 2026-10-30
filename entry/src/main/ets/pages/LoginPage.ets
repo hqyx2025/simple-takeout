@@ -1,11 +1,13 @@
 /**
- * 登录/注册页面：四种身份登录，用户、商户、骑手可注册。
+ * 四端密码 / 邮箱验证码登录；公开注册仅创建用户账号。
  */
-import { UserRole } from '../model/Models'
+import { User, UserRole } from '../model/Models'
 import { EmailCaptchaField } from '../components/EmailCaptchaField'
-import { loginRemote, registerRemote, logout, getLastRemoteErrorMessage } from '../service/AppStorageManager'
+import { FormInput } from '../components/FormInput'
+import { loginRemote, loginByEmailRemote, registerRemote, logout, getLastRemoteErrorMessage } from '../service/AppStorageManager'
 import { logInfo, logWarn } from '../service/AppLogger'
 import { APP_CONFIG } from '../common/Constants'
+import { newPasswordError } from '../common/PasswordPolicy'
 import BuildProfile from 'BuildProfile'
 import { getQuickLoginAccount, QuickLoginAccount } from '../common/QuickLoginConfig'
 import { getApiBaseUrl } from '../service/HttpClient'
@@ -13,29 +15,33 @@ import { AppTheme, AppInputStyle, AppButtonStyle } from '../common/theme/AppThem
 import { AppMotion } from '../common/theme/AppMotion'
 import { requestEmailCodeApi, EmailCodeResult } from '../service/ApiService'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
+import { KeyboardAvoidMode } from '@kit.ArkUI'
 
 @Component
 export struct LoginPage {
   @StorageLink('appReduceMotion') reduceMotion: boolean = false
   @State isLoginMode: boolean = true
+  @State useEmailLogin: boolean = false
   @State selectedRole: UserRole = UserRole.CUSTOMER
   @State phone: string = ''
   @State email: string = ''
   @State emailCode: string = ''
   @State captchaId: string = ''
   @State captchaCode: string = ''
-  @State captchaRefreshVersion: number = 0
   @State sendingCode: boolean = false
   @State cooldownSeconds: number = 0
   private cooldownTimer: number = -1
   private pageActive: boolean = true
+  private previousKeyboardAvoidMode: KeyboardAvoidMode = KeyboardAvoidMode.OFFSET
+  private keyboardModeChanged: boolean = false
   @State password: string = ''
+  @State confirmPassword: string = ''
   @State username: string = ''
   @State errorMsg: string = ''
+  @State errorField: string = ''
   @State tipMsg: string = ''
   @State submitting: boolean = false
   @State versionClickCount: number = 0
-  @State focusedField: string = ''
   onLoginSuccess: () => void = () => {}
   private quickLoginDialog: CustomDialogController = new CustomDialogController({
     builder: QuickLoginDialog({
@@ -50,48 +56,70 @@ export struct LoginPage {
 
   build() {
     Column() {
+      if ((this.errorMsg && !this.errorField) || this.tipMsg) {
+        Row() {
+          Column() {
+            Text(this.errorMsg || this.tipMsg).fontSize(14).fontWeight(FontWeight.Medium).textAlign(TextAlign.Center)
+              .fontColor(this.errorMsg ? AppTheme.ERROR : AppTheme.SUCCESS).width('100%').padding(10)
+              .border({ width: 1, color: this.errorMsg ? AppTheme.ERROR : AppTheme.SUCCESS })
+              .backgroundColor(this.errorMsg ? AppTheme.ERROR_BG : AppTheme.SUCCESS_BG).borderRadius(10)
+              .id(this.errorMsg ? 'login-error' : 'login-success').margin({ bottom: 8 })
+          }.width('100%').constraintSize({ maxWidth: AppTheme.FORM_MAX_WIDTH })
+        }.width('100%').justifyContent(FlexAlign.Center).padding({ left: 24, right: 24, top: 8 })
+      }
       Scroll() {
         Column() {
           Column() {
             this.brandHeader()
-            Text(this.isLoginMode ? '登录' : '注册账号')
-              .fontSize(24)
-              .fontWeight(FontWeight.Bold)
-              .fontColor(AppTheme.TEXT)
-              .width('100%')
-              .margin({ top: 10, bottom: 4 })
-
             this.modeSelector()
-            if (this.isLoginMode) { this.roleSelector() }
-
-            if (!this.isLoginMode) {
-              this.formField('账号名', '请输入账号名，例如 takeout_user', this.username, $r('app.media.login_user'),
-                InputType.Normal, 'login-username', (value: string) => { this.username = value })
-              this.formField('邮箱', '请输入用于找回密码的邮箱', this.email, $r('app.media.login_user'),
-                InputType.Email, 'login-email', (value: string) => { this.email = value; this.emailCode = '' })
-            }
-            this.formField('手机号', '例如：13800138000', this.phone, $r('app.media.login_phone'),
-              InputType.PhoneNumber, 'login-phone', (value: string) => { this.phone = value; this.emailCode = '' })
-            if (!this.isLoginMode) {
-              this.registrationCodeField()
-            }
-            this.formField('密码', '请输入密码', this.password, $r('app.media.login_lock'),
-              InputType.Password, 'login-password', (value: string) => { this.password = value })
-
-            if (this.tipMsg) {
-              this.formMessage(this.tipMsg, AppTheme.SUCCESS, AppTheme.SUCCESS_BG)
-            }
-            if (this.errorMsg) {
-              this.formMessage(this.errorMsg, AppTheme.ERROR, AppTheme.ERROR_BG)
-            }
-            if (this.isLoginMode) { this.submitButton() }
-
             if (this.isLoginMode) {
+              this.roleSelector()
+              this.loginMethodSelector()
+            }
+
+            if (!this.isLoginMode) {
+              FormInput({ compact: true, label: '账号名', placeholder: '请输入账户名', value: this.username,
+                icon: $r('app.media.login_user'), fieldId: 'login-username', isEnabled: !this.submitting && !this.sendingCode,
+                errorMessage: this.errorField === 'login-username' ? this.errorMsg : '',
+                onChange: (value: string) => { this.username = value; this.clearFeedback() } }).margin({ bottom: 4 })
+              FormInput({ compact: true, label: '邮箱', placeholder: '请输入邮箱', value: this.email,
+                icon: $r('app.media.login_user'), inputType: InputType.Email, fieldId: 'login-email', isEnabled: !this.submitting && !this.sendingCode,
+                errorMessage: this.errorField === 'login-email' ? this.errorMsg : '',
+                onChange: (value: string) => { this.email = value; this.emailCode = ''; this.clearFeedback() } }).margin({ bottom: 4 })
+            }
+            FormInput({ compact: true, label: '手机号', placeholder: '请输入11位手机号', value: this.phone,
+              icon: $r('app.media.login_phone'), inputType: InputType.PhoneNumber, fieldId: 'login-phone', maxLength: 11,
+              isEnabled: !this.submitting && !this.sendingCode, errorMessage: this.errorField === 'login-phone' ? this.errorMsg : '',
+              onChange: (value: string) => { this.phone = value; this.emailCode = ''; this.clearFeedback() } }).margin({ bottom: 4 })
+            if (this.isLoginMode && this.useEmailLogin) {
+              FormInput({ compact: true, label: '绑定邮箱', placeholder: '请输入邮箱', value: this.email,
+                icon: $r('app.media.login_user'), inputType: InputType.Email, fieldId: 'login-email', isEnabled: !this.submitting && !this.sendingCode,
+                errorMessage: this.errorField === 'login-email' ? this.errorMsg : '',
+                onChange: (value: string) => { this.email = value; this.emailCode = ''; this.clearFeedback() } }).margin({ bottom: 4 })
+            }
+            if (!this.isLoginMode || this.useEmailLogin) {
+              this.verificationCodeField()
+            }
+            if (!this.isLoginMode || !this.useEmailLogin) {
+              FormInput({ compact: true, label: '密码', placeholder: this.isLoginMode ? '请输入密码' : '请输入 6 至 64 位密码', value: this.password,
+                icon: $r('app.media.login_lock'), inputType: InputType.Password, fieldId: 'login-password', maxLength: 64, passwordRules: !this.isLoginMode,
+                isEnabled: !this.submitting && !this.sendingCode, errorMessage: this.errorField === 'login-password' ? this.errorMsg : '',
+                onChange: (value: string) => { this.password = value; this.clearFeedback() } }).margin({ bottom: 4 })
+            }
+            if (!this.isLoginMode) {
+              FormInput({ compact: true, label: '确认密码', placeholder: '请再次输入相同密码', value: this.confirmPassword,
+                icon: $r('app.media.login_lock'), inputType: InputType.Password, fieldId: 'login-confirm-password', maxLength: 64,
+                isEnabled: !this.submitting && !this.sendingCode, errorMessage: this.errorField === 'login-confirm-password' ? this.errorMsg : '',
+                onChange: (value: string) => { this.confirmPassword = value; this.clearFeedback() } }).margin({ bottom: 4 })
+            }
+            if (this.isLoginMode && !this.useEmailLogin) {
               Button('忘记登录密码？')
                 .fontSize(13).fontColor(AppTheme.ACCENT).backgroundColor(Color.Transparent)
                 .height(36).width('100%').id('login-forgot-password')
+                .enabled(!this.submitting && !this.sendingCode)
                 .onClick(() => {
                   AppStorage.setOrCreate<string>('passwordResetMode', 'login')
+                  AppStorage.setOrCreate<string>('passwordResetPhone', this.phone.trim())
                   router.pushUrl({ url: 'pages/PasswordResetPage' })
                 })
             }
@@ -107,13 +135,11 @@ export struct LoginPage {
       .width('100%')
       .layoutWeight(1)
 
-      if (!this.isLoginMode) {
-        Row() {
-          Column() { this.submitButton() }
-            .width('100%').constraintSize({ maxWidth: AppTheme.FORM_MAX_WIDTH })
-        }.width('100%').justifyContent(FlexAlign.Center)
-          .padding({ left: 24, right: 24, top: 8, bottom: 16 })
-      }
+      Row() {
+        Column() { this.submitButton() }
+          .width('100%').constraintSize({ maxWidth: AppTheme.FORM_MAX_WIDTH })
+      }.width('100%').justifyContent(FlexAlign.Center)
+        .padding({ left: 24, right: 24, top: 8, bottom: 16 })
 
       // 固定底部入口，窄屏与长表单下也可连续点击三次打开快捷登录。
       if (this.isLoginMode) {
@@ -141,75 +167,139 @@ export struct LoginPage {
     .backgroundColor(AppTheme.PAGE)
   }
 
-  aboutToAppear(): void { this.pageActive = true }
+  aboutToAppear(): void {
+    this.pageActive = true
+    try {
+      this.previousKeyboardAvoidMode = this.getUIContext().getKeyboardAvoidMode()
+      this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE)
+      this.keyboardModeChanged = true
+    } catch (_) {}
+  }
 
   aboutToDisappear(): void {
     this.pageActive = false
+    if (this.keyboardModeChanged) {
+      try { this.getUIContext().setKeyboardAvoidMode(this.previousKeyboardAvoidMode) } catch (_) {}
+      this.keyboardModeChanged = false
+    }
     if (this.cooldownTimer !== -1) { clearInterval(this.cooldownTimer); this.cooldownTimer = -1 }
     this.emailCode = ''
   }
 
   @Builder
-  private registrationCodeField() {
+  private verificationCodeField() {
     Column({ space: 4 }) {
-      EmailCaptchaField({ captchaId: $captchaId, captchaCode: $captchaCode, refreshVersion: this.captchaRefreshVersion })
+      EmailCaptchaField({ captchaId: $captchaId, captchaCode: $captchaCode,
+        disabled: this.submitting || this.sendingCode,
+        errorMessage: this.errorField === 'email-captcha-input' ? this.errorMsg : '' })
       Text('邮箱验证码').fontSize(13).fontWeight(FontWeight.Medium).fontColor(AppTheme.TEXT).width('100%')
       Row({ space: 8 }) {
         TextInput({ text: this.emailCode, placeholder: '请输入 6 位验证码' })
           .attributeModifier(new AppInputStyle()).type(InputType.Number).maxLength(6)
-          .height(44).layoutWeight(1).id('register-email-code')
-          .onChange((value: string) => { this.emailCode = value })
+          .height(44).layoutWeight(1).id(this.isLoginMode ? 'login-email-code' : 'register-email-code')
+          .enabled(!this.submitting && !this.sendingCode)
+          .border({ width: this.errorField.endsWith('email-code') ? 1.5 : 1,
+            color: this.errorField.endsWith('email-code') ? AppTheme.ERROR : AppTheme.BORDER })
+          .onChange((value: string) => { this.emailCode = value; this.clearFeedback() })
         Button(this.sendingCode ? '发送中…' : this.cooldownSeconds > 0 ? this.cooldownSeconds + '秒后重发' : '获取验证码')
-          .attributeModifier(new AppButtonStyle()).height(44).width(120).id('register-send-code')
+          .attributeModifier(new AppButtonStyle()).height(44).width(120).id(this.isLoginMode ? 'login-send-code' : 'register-send-code')
           .enabled(!this.sendingCode && this.cooldownSeconds === 0 && !this.submitting)
-          .onClick(() => { this.sendRegistrationCode() })
+          .onClick(() => { this.sendVerificationCode() })
       }.width('100%')
-      Text('验证码 15 分钟内有效；完成邮箱验证后才能注册。')
-        .fontSize(12).fontColor(AppTheme.MUTED).width('100%')
+      if (this.errorMsg && this.errorField.endsWith('email-code')) {
+        Text(this.errorMsg).fontSize(13).fontColor(AppTheme.ERROR).width('100%')
+          .id(this.isLoginMode ? 'login-email-code-error' : 'register-email-code-error')
+      }
     }.width('100%').margin({ bottom: 8 })
   }
 
-  private async sendRegistrationCode(): Promise<void> {
+  private async sendVerificationCode(): Promise<void> {
     if (this.sendingCode || this.cooldownSeconds > 0 || this.submitting) { return }
-    this.errorMsg = ''
-    this.tipMsg = ''
-    if (this.username.trim() === '') { this.errorMsg = '请输入账号名'; return }
-    if (!/^1\d{10}$/.test(this.phone.trim())) { this.errorMsg = '请输入正确的 11 位手机号'; return }
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(this.email.trim())) { this.errorMsg = '请输入正确的邮箱地址'; return }
-    this.sendingCode = true
+    this.clearFeedback()
+    if (!this.isLoginMode && this.username.trim() === '') { this.showError('请输入账号名', 'login-username'); return }
+    if (!/^1\d{10}$/.test(this.phone.trim())) { this.showError('请输入正确的 11 位手机号', 'login-phone'); return }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(this.email.trim())) { this.showError('请输入正确的邮箱地址', 'login-email'); return }
+    if (!this.captchaId && /^[A-Za-z0-9]{5}$/.test(this.captchaCode)) {
+      this.showError('校对码已使用，请点击图片更换后重试', 'email-captcha-input'); return
+    }
     if (!this.captchaId || !/^[A-Za-z0-9]{5}$/.test(this.captchaCode)) {
-      this.sendingCode = false; this.errorMsg = '请先输入图片中的 5 位校对码'; return
+      this.showError('请先输入图片中的 5 位校对码', 'email-captcha-input'); return
     }
-    const result: EmailCodeResult = await requestEmailCodeApi(this.phone.trim(), this.email.trim(), 'register', this.username.trim(), this.captchaId, this.captchaCode)
-    this.captchaRefreshVersion++
-    this.sendingCode = false
-    if (!this.pageActive) { return }
-    if (!result.success) {
-      this.errorMsg = result.message || '验证码发送失败，请稍后重试'
-      promptAction.showToast({ message: this.errorMsg, duration: 2200 })
-      return
+    this.sendingCode = true
+    const captchaId: string = this.captchaId
+    this.captchaId = ''
+    try {
+      const result: EmailCodeResult = await requestEmailCodeApi(this.phone.trim(), this.email.trim(),
+        this.isLoginMode ? 'signin' : 'register', this.username.trim(), captchaId, this.captchaCode)
+      if (!this.pageActive) { return }
+      if (!result.success) {
+        this.showError(result.message || '验证码发送失败，请稍后重试')
+        return
+      }
+      this.tipMsg = result.mock === true && result.code !== undefined
+        ? `开发模式验证码：${result.code}` : '验证码已发送至邮箱，15 分钟内有效。'
+      this.cooldownSeconds = 60
+      this.cooldownTimer = setInterval(() => {
+        this.cooldownSeconds = Math.max(0, this.cooldownSeconds - 1)
+        if (this.cooldownSeconds === 0) { clearInterval(this.cooldownTimer); this.cooldownTimer = -1 }
+      }, 1000)
+    } catch (_) {
+      if (this.pageActive) { this.showError('验证码发送失败，请检查网络后重试') }
+    } finally {
+      this.sendingCode = false
     }
-    this.tipMsg = result.mock === true && result.code !== undefined
-      ? `开发模式验证码：${result.code}` : '注册验证码已发送，请查看邮箱'
-    promptAction.showToast({ message: this.tipMsg, duration: 1800 })
-    this.cooldownSeconds = 60
-    this.cooldownTimer = setInterval(() => {
-      this.cooldownSeconds = Math.max(0, this.cooldownSeconds - 1)
-      if (this.cooldownSeconds === 0) { clearInterval(this.cooldownTimer); this.cooldownTimer = -1 }
-    }, 1000)
+  }
+
+  @Builder
+  private loginMethodSelector() {
+    Row({ space: 8 }) {
+      this.loginMethodButton('密码登录', false, 'login-method-password')
+      this.loginMethodButton('验证码登录', true, 'login-method-email')
+    }.width('100%').margin({ bottom: 12 })
+  }
+
+  @Builder
+  private loginMethodButton(label: string, emailLogin: boolean, id: string) {
+    Button(label, { type: ButtonType.Normal }).height(44).layoutWeight(1)
+      .fontSize(14).fontWeight(this.useEmailLogin === emailLogin ? FontWeight.Bold : FontWeight.Medium)
+      .fontColor(this.useEmailLogin === emailLogin ? AppTheme.ACCENT : AppTheme.MUTED)
+      .backgroundColor(this.useEmailLogin === emailLogin ? AppTheme.ACCENT_SOFT : AppTheme.CARD)
+      .border({ width: 1, color: this.useEmailLogin === emailLogin ? AppTheme.ACCENT : AppTheme.BORDER })
+      .borderRadius(AppTheme.CONTROL_RADIUS).id(id).accessibilitySelected(this.useEmailLogin === emailLogin)
+      .enabled(!this.submitting && !this.sendingCode).onClick(() => this.switchLoginMethod(emailLogin))
+  }
+
+  private switchLoginMethod(emailLogin: boolean): void {
+    if (this.submitting || this.sendingCode || this.useEmailLogin === emailLogin) { return }
+    this.useEmailLogin = emailLogin
+    this.password = ''; this.confirmPassword = ''; this.emailCode = ''; this.captchaId = ''; this.captchaCode = ''
+    this.clearFeedback()
+  }
+
+  private clearFeedback(): void {
+    this.errorMsg = ''; this.errorField = ''; this.tipMsg = ''
+  }
+
+  private showError(message: string, field: string = ''): void {
+    this.tipMsg = ''
+    this.errorMsg = message
+    this.errorField = field || (/校对码/.test(message) ? 'email-captcha-input'
+      : /验证码/.test(message) ? (this.isLoginMode ? 'login-email-code' : 'register-email-code')
+      : /密码/.test(message) ? 'login-password' : /邮箱/.test(message) ? 'login-email'
+      : /手机号/.test(message) ? 'login-phone' : '')
   }
 
   @Builder
   private brandHeader() {
     Row({ space: 12 }) {
       Image($r('app.media.login_brand'))
-        .width(44)
-        .height(44)
+        .width(36)
+        .height(36)
         .objectFit(ImageFit.Contain)
         .accessibilityLevel('no')
       Column({ space: 5 }) {
         Text('简单外卖')
-          .fontSize(22)
+          .fontSize(21)
           .fontWeight(FontWeight.Bold)
           .fontColor(AppTheme.TEXT)
       }
@@ -217,6 +307,7 @@ export struct LoginPage {
     }
     .width('100%')
     .alignItems(VerticalAlign.Center)
+    .margin({ bottom: 10 })
   }
 
   @Builder
@@ -246,6 +337,7 @@ export struct LoginPage {
       .id(id)
       .accessibilitySelected(this.isLoginMode === loginMode)
       .accessibilityText(label + (this.isLoginMode === loginMode ? '，已选中' : '，未选中'))
+      .enabled(!this.submitting && !this.sendingCode)
       .onClick(() => this.switchMode(loginMode))
   }
 
@@ -321,63 +413,8 @@ export struct LoginPage {
     .id(id)
     .accessibilitySelected(this.selectedRole === role)
     .accessibilityText(label + (this.selectedRole === role ? '，已选中' : '，未选中'))
-    .onClick(() => { this.selectedRole = role })
-  }
-
-  @Builder
-  private formField(label: string, placeholder: string, value: string, icon: Resource,
-    inputType: InputType, id: string, onValueChange: (value: string) => void) {
-    Column({ space: 4 }) {
-      Text(label)
-        .fontSize(13)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(AppTheme.TEXT)
-        .width('100%')
-      Row({ space: 10 }) {
-        Image(icon)
-          .width(20)
-          .height(20)
-          .objectFit(ImageFit.Contain)
-          .accessibilityLevel('no')
-        TextInput({ placeholder: placeholder, text: value })
-          .fontSize(16)
-          .fontColor(AppTheme.TEXT)
-          .placeholderColor(AppTheme.MUTED)
-          .caretColor(AppTheme.ACCENT)
-          .layoutWeight(1)
-          .height(44)
-          .padding(0)
-          .backgroundColor(Color.Transparent)
-          .borderRadius(0)
-          .type(inputType)
-          .id(id)
-          .accessibilityText(label)
-          .onChange(onValueChange)
-          .onFocus(() => { this.focusedField = id })
-          .onBlur(() => { this.focusedField = '' })
-      }
-      .width('100%')
-      .height(44)
-      .padding({ left: 14, right: 14 })
-      .backgroundColor(AppTheme.INPUT)
-      .border({ width: this.focusedField === id ? 1.5 : 1,
-        color: this.focusedField === id ? AppTheme.ACCENT : AppTheme.BORDER })
-      .borderRadius(AppTheme.CONTROL_RADIUS)
-    }
-    .width('100%')
-    .margin({ bottom: 8 })
-  }
-
-  @Builder
-  private formMessage(message: string, textColor: Resource, background: Resource) {
-    Text(message)
-      .fontSize(13)
-      .fontColor(textColor)
-      .width('100%')
-      .padding(8)
-      .backgroundColor(background)
-      .borderRadius(10)
-      .margin({ bottom: 10 })
+    .enabled(!this.submitting && !this.sendingCode)
+    .onClick(() => { this.selectedRole = role; this.clearFeedback() })
   }
 
   @Builder
@@ -408,98 +445,89 @@ export struct LoginPage {
     .backgroundColor(AppTheme.PRIMARY)
     .borderRadius(16)
     .id('login-submit')
-    .margin({ top: 6 })
+    .enabled(!this.submitting && !this.sendingCode)
+    .margin({ top: 0 })
     .onClick(() => this.submitForm())
   }
 
   private switchMode(loginMode: boolean): void {
-    if (this.isLoginMode === loginMode) {
+    if (this.submitting || this.sendingCode || this.isLoginMode === loginMode) {
       return
     }
     this.isLoginMode = loginMode
-    this.emailCode = ''
+    this.useEmailLogin = false
+    this.emailCode = ''; this.password = ''; this.confirmPassword = ''; this.captchaId = ''; this.captchaCode = ''
     if (!this.isLoginMode) {
       this.selectedRole = UserRole.CUSTOMER
     }
-    this.errorMsg = ''
-    this.tipMsg = ''
+    this.clearFeedback()
     logInfo('Auth', `切换${this.isLoginMode ? '登录' : '注册'}模式`)
   }
 
   private async submitForm(): Promise<void> {
-    if (this.submitting) {
-      promptAction.showToast({ message: '正在处理，请稍候', duration: 1200 })
-      return
+    if (this.submitting || this.sendingCode) { return }
+    this.clearFeedback()
+    if (!/^1\d{10}$/.test(this.phone.trim())) {
+      this.showError('请输入正确的 11 位手机号', 'login-phone'); return
+    }
+    const needsCode: boolean = !this.isLoginMode || this.useEmailLogin
+    if (!this.isLoginMode && this.username.trim() === '') {
+      this.showError('请输入账号名', 'login-username'); return
+    }
+    if (needsCode && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(this.email.trim())) {
+      this.showError('请输入正确的邮箱地址', 'login-email'); return
+    }
+    if (needsCode && !/^\d{6}$/.test(this.emailCode.trim())) {
+      this.showError('请输入 6 位邮箱验证码', this.isLoginMode ? 'login-email-code' : 'register-email-code'); return
+    }
+    if ((!this.isLoginMode || !this.useEmailLogin) && this.password === '') {
+      this.showError('请输入密码', 'login-password'); return
+    }
+    if (!this.isLoginMode && newPasswordError(this.password)) {
+      this.showError(newPasswordError(this.password), 'login-password'); return
+    }
+    if (!this.isLoginMode && this.password !== this.confirmPassword) {
+      this.showError('两次输入的密码不一致，请重新输入确认密码', 'login-confirm-password'); return
     }
     this.submitting = true
-    this.errorMsg = ''
-    this.tipMsg = ''
-    if (this.phone.trim() === '' || this.password === '') {
-      logWarn('Auth', '登录/注册提交失败：手机号或密码为空')
-      this.errorMsg = '请输入手机号和密码'
-      this.submitting = false
-      return
-    }
-    if (!this.isLoginMode && this.username === '') {
-      logWarn('Auth', '注册提交失败：用户名为空')
-      this.errorMsg = '请输入用户名'
-      this.submitting = false
-      return
-    }
-    if (!this.isLoginMode && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(this.email.trim())) {
-      logWarn('Auth', '注册提交失败：邮箱格式不正确')
-      this.errorMsg = '请输入正确的邮箱地址'
-      this.submitting = false
-      return
-    }
-    if (!this.isLoginMode && !/^\d{6}$/.test(this.emailCode.trim())) {
-      this.errorMsg = '请输入 6 位邮箱验证码'
-      this.submitting = false
-      return
-    }
-    const roleName: string = this.selectedRole === UserRole.ADMIN
-      ? '管理端'
-      : this.selectedRole === UserRole.MERCHANT ? '商户'
-      : this.selectedRole === UserRole.RIDER ? '骑手' : '用户'
-    logInfo('Auth', `用户点击${this.isLoginMode ? '登录' : '注册'} phone=${this.phone} role=${roleName}`)
-
-    if (this.isLoginMode) {
-      const user = await loginRemote(this.phone.trim(), this.password, this.loginTypeName())
-      if (user !== undefined) {
-        if (user.role !== this.selectedRole) {
-          this.errorMsg = this.selectedRole === UserRole.ADMIN
-            ? '该账号不是管理端账号'
-            : this.selectedRole === UserRole.MERCHANT ? '该账号不是商户账号'
-            : this.selectedRole === UserRole.RIDER ? '该账号不是骑手账号' : '该账号不是用户账号'
-          logout()
-          logWarn('Auth', `登录角色不匹配 phone=${this.phone} 期望角色=${this.selectedRole}`)
-          this.submitting = false
+    try {
+      if (this.isLoginMode) {
+        const user: User | undefined = this.useEmailLogin
+          ? await loginByEmailRemote(this.phone.trim(), this.email.trim(), this.emailCode.trim(), this.loginTypeName())
+          : await loginRemote(this.phone.trim(), this.password, this.loginTypeName())
+        if (!this.pageActive) { return }
+        if (user === undefined) {
+          this.showError(getLastRemoteErrorMessage() || (this.useEmailLogin ? '验证码不正确或已过期' : '账号或密码错误'))
           return
         }
+        if (user.role !== this.selectedRole) {
+          this.showError('登录身份与账号不匹配，请选择正确的身份')
+          await logout()
+          return
+        }
+        this.password = ''; this.emailCode = ''
         this.onLoginSuccess()
       } else {
-        const remoteMessage: string = getLastRemoteErrorMessage()
-        this.errorMsg = remoteMessage === '' ? '账号或密码错误' : remoteMessage
-        this.submitting = false
+        const newUser: User | undefined = await registerRemote(this.username.trim(), this.phone.trim(), this.email.trim(),
+          this.emailCode.trim(), this.password, UserRole.CUSTOMER)
+        if (!this.pageActive) { return }
+        if (newUser === undefined) {
+          this.showError(getLastRemoteErrorMessage() || '注册失败，请核对信息后重试')
+          return
+        }
+        this.isLoginMode = true; this.useEmailLogin = false; this.selectedRole = UserRole.CUSTOMER
+        this.phone = this.phone.trim()
+        this.password = ''; this.confirmPassword = ''; this.emailCode = ''; this.captchaId = ''; this.captchaCode = ''
+        this.tipMsg = '注册成功，已保留手机号，请重新输入密码登录。'
+        setTimeout(() => {
+          if (this.pageActive && this.isLoginMode && !this.useEmailLogin) {
+            this.getUIContext().getFocusController().requestFocus('login-password')
+          }
+        }, 100)
       }
-    } else {
-      const newUser = await registerRemote(this.username.trim(), this.phone.trim(), this.email.trim(), this.emailCode.trim(), this.password, this.selectedRole)
-      if (newUser !== undefined) {
-        // 注册成功不自动登录：切回登录态并清空密码，由用户自己再输入一遍完成登录。
-        // 保留手机号和所选角色，注册后使用手机号登录。
-        this.isLoginMode = true
-        this.password = ''
-        this.email = ''
-        this.emailCode = ''
-        this.tipMsg = '注册成功，请使用该密码登录'
-        promptAction.showToast({ message: '注册成功，请登录', duration: 2000 })
-        logInfo('Auth', `注册成功，转入登录态等待手动登录 userId=${newUser.id} role=${newUser.role}`)
-        this.submitting = false
-        return
-      }
-      const remoteMessage: string = getLastRemoteErrorMessage()
-      this.errorMsg = remoteMessage === '' ? '该账号已注册' : remoteMessage
-      logWarn('Auth', `注册失败：账号已存在 phone=${this.phone}`)
+    } catch (_) {
+      if (this.pageActive) { this.showError('操作未完成，请检查网络后重试') }
+    } finally {
       this.submitting = false
     }
   }

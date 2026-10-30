@@ -17,6 +17,7 @@ export class AppTheme {
   static readonly ERROR_BG: Resource = $r('app.color.error_light')
   static readonly SUCCESS: Resource = $r('app.color.success')
   static readonly SUCCESS_BG: Resource = $r('app.color.success_light')
+  static readonly PASSWORD_MEDIUM: Resource = $r('app.color.password_medium')
   static readonly FORM_MAX_WIDTH: number = 460
   static readonly CONTROL_HEIGHT: number = 52
   static readonly CONTROL_RADIUS: number = 14

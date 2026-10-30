@@ -86,9 +86,7 @@ public class AuthService implements org.springframework.beans.factory.Initializi
             throw new BizException(403, "商户、骑手与管理员账号须由平台开通");
         }
         String normalizedEmail = registrationEmail(username, phone, email);
-        if (password == null || password.length() < 6 || password.length() > 64) {
-            throw new BizException("密码长度应为 6 至 64 位");
-        }
+        requireNewPassword(password);
         if (code == null || !code.matches("[0-9]{6}")) {
             throw new BizException("请输入 6 位邮箱验证码");
         }
@@ -214,9 +212,7 @@ public class AuthService implements org.springframework.beans.factory.Initializi
         if (oldPassword == null || !PasswordUtil.matches(oldPassword, user.password())) {
             throw new BizException("原密码不正确");
         }
-        if (newPassword == null || newPassword.length() < 6) {
-            throw new BizException("新密码长度至少 6 位");
-        }
+        requireNewPassword(newPassword);
         if (PasswordUtil.matches(newPassword, user.password())) {
             throw new BizException("新密码不能与原密码相同");
         }
@@ -241,9 +237,7 @@ public class AuthService implements org.springframework.beans.factory.Initializi
     /** Codes are bound to immutable user ID, password purpose, and current contact details. */
     @Transactional
     public void resetPasswordByEmail(String phone, String email, String code, String newPassword) {
-        if (newPassword == null || newPassword.length() < 6 || newPassword.length() > 64) {
-            throw new BizException("新密码长度应为 6 至 64 位");
-        }
+        requireNewPassword(newPassword);
         User user = recoveryUser(phone, email, true);
         smsCodeVerifier.consume(recoveryIdentity(user, "login"), code);
         userDao.updatePassword(user.id(), PasswordUtil.hash(newPassword),
@@ -282,6 +276,16 @@ public class AuthService implements org.springframework.beans.factory.Initializi
             throw new BizException("验证码用途不正确");
         }
         return "recovery:" + user.id() + ":" + purpose + ":" + user.phone() + ":" + normalizeEmail(user.email());
+    }
+
+    /** 新设口令采用显式字符集；已有密码的验证保持原样，查询仍使用绑定参数。 */
+    static void requireNewPassword(String value) {
+        if (value == null || value.length() < 6 || value.length() > 64) {
+            throw new BizException("密码长度应为 6 至 64 位");
+        }
+        if (!value.matches("[A-Za-z0-9!@#$%^&*._+=?\\-]+")) {
+            throw new BizException("密码仅支持数字、英文字母和 !@#$%^&*._+-=?，不含空格或其他字符");
+        }
     }
 
     private int roleOf(String loginType) {

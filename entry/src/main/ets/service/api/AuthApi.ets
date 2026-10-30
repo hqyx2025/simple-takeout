@@ -6,7 +6,7 @@ import { User, UserRole, BankCard } from '../../model/Models'
 import { logInfo, logWarn } from '../AppLogger'
 import { ServerUser, ServerBankCard, ServerRevealedBankCard, LoginResult, LogoutRequest, LoginRequest, RegisterRequest, ChangePasswordRequest, ProfileUpdateRequest, RechargeRequest, EmailCodeApiResult, EmailCodeResult, ForgotPasswordRequest, ForgotPaymentPasswordRequest, EmailCodeRequest, BankCardRequest, RevealBankCardRequest, SetPaymentPasswordRequest, RevealBankCardResult, PaymentPasswordResult } from '../../model/server/Contracts'
 import { toBankCard, toServerRole, toUser } from '../../model/server/Converters'
-import { CaptchaResult } from '../../model/server/Contracts'
+import { CaptchaResult, EmailLoginRequest } from '../../model/server/Contracts'
 
 // ==================== 认证 ====================
 
@@ -17,7 +17,17 @@ export async function apiLogin(phone: string, password: string, loginType?: stri
   const req: LoginRequest = loginType === undefined
     ? { phone: phone, password: password }
     : { phone: phone, password: password, loginType: loginType }
-  const resp: ApiResponse<LoginResult> = await post<LoginResult>(API_CONFIG.ENDPOINTS['login'], req)
+  const resp: ApiResponse<LoginResult> = await post<LoginResult>(API_CONFIG.ENDPOINTS['login'], req, false)
+  return storeLoginSession(resp)
+}
+
+export async function apiLoginByEmail(phone: string, email: string, code: string, loginType: string): Promise<User | null> {
+  const req: EmailLoginRequest = { phone: phone, email: email, code: code, loginType: loginType }
+  const resp: ApiResponse<LoginResult> = await post<LoginResult>('/api/auth/login/email', req, false)
+  return storeLoginSession(resp)
+}
+
+async function storeLoginSession(resp: ApiResponse<LoginResult>): Promise<User | null> {
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     logWarn('Api', `登录失败：${resp.message}`)
     return null
@@ -38,7 +48,7 @@ export async function apiLogin(phone: string, password: string, loginType?: stri
  */
 export async function apiRegister(username: string, phone: string, email: string, code: string, password: string, role: UserRole): Promise<User | null> {
   const req: RegisterRequest = { username: username, phone: phone, email: email, code: code, password: password, role: toServerRole(role) }
-  const resp: ApiResponse<ServerUser> = await post<ServerUser>(API_CONFIG.ENDPOINTS['register'], req)
+  const resp: ApiResponse<ServerUser> = await post<ServerUser>(API_CONFIG.ENDPOINTS['register'], req, false)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     logWarn('Api', `注册失败：${resp.message}`)
     return null

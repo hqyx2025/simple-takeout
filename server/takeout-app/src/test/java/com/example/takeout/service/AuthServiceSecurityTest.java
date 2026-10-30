@@ -232,7 +232,7 @@ class AuthServiceSecurityTest {
                 com.example.takeout.common.BizException.class,
                 () -> new AuthService(userDao, mock(JwtUtil.class)).changePassword(1, "123456", "12345"));
 
-        assertEquals("新密码长度至少 6 位", error.getMessage());
+        assertEquals("密码长度应为 6 至 64 位", error.getMessage());
     }
 
     @Test

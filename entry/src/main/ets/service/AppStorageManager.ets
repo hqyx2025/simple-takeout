@@ -5,6 +5,7 @@ import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem,
 import { saveAllData, clearAllData } from './DataPersistence'
 import { apiLogin, apiRegister, updateUserProfileApi, fetchCurrentUserApi, rechargeBalanceApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, fetchMerchantStatsApi, createOrderApi, cancelOrderApi, payOrderApi, queryPaymentApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi, fetchMerchantReviewsApi, replyReviewApi, fetchRiderProfileApi, setRiderStatusApi, fetchRiderPoolApi, fetchRiderOrdersApi, grabOrderApi, pickupOrderApi, deliverOrderApi, fetchBannersApi, fetchAnnouncementsApi, fetchAdminRidersApi, updateRiderStatusApi, fetchAdminBannersApi, createBannerApi, updateBannerStatusApi, deleteBannerApi, fetchAdminAnnouncementsApi, createAnnouncementApi, updateAnnouncementStatusApi, deleteAnnouncementApi, applyRefundApi, fetchCartApi, addCartItemApi, updateCartItemQuantityApi, deleteCartItemApi, deleteCartItemsApi, clearCartApi, uploadImageApi, fetchSeckillsApi, fetchRankStoresApi, fetchRankGoodsApi, fetchBundleApi, updateMerchantGoodsSpecsApi, apiLogout, changePasswordApi, updateRiderLocationApi } from './ApiService'
 import { fetchStoresResultApi, fetchStoreGoodsResultApi, fetchMerchantStoresResultApi } from './ApiService'
+import { apiLoginByEmail } from './ApiService'
 import { getApiBaseUrl, getAuthToken, setAuthTokens, getLastApiErrorMessage, registerSessionExpiredHandler,
   getAuthSessionEpoch } from './HttpClient'
 import { logInfo, logWarn, logError } from './AppLogger'
@@ -493,6 +494,15 @@ export async function syncCurrentUserFromServer(): Promise<User | undefined> {
  */
 export async function loginRemote(phone: string, password: string, loginType?: string): Promise<User | undefined> {
   const user: User | null = await apiLogin(phone, password, loginType)
+  return completeRemoteLogin(user)
+}
+
+export async function loginByEmailRemote(phone: string, email: string, code: string, loginType: string): Promise<User | undefined> {
+  const user: User | null = await apiLoginByEmail(phone, email, code, loginType)
+  return completeRemoteLogin(user)
+}
+
+async function completeRemoteLogin(user: User | null): Promise<User | undefined> {
   if (user !== null) {
     const token: string = getAuthToken()
     AppStorage.setOrCreate<string>('authToken', token)

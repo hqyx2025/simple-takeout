@@ -34,6 +34,24 @@ export default function loginFlowTest() {
       requireComponent(await driver.findComponent(ON.id('login-password')), 'login-password')
       requireComponent(await driver.findComponent(ON.id('login-submit')), 'login-submit')
 
+      expect(await clickByIdOrText(driver, 'login-method-email', '验证码登录')).assertTrue()
+      await driver.delayMs(500)
+      requireComponent(await driver.findComponent(ON.id('login-email')), 'login-email')
+      expect(isFound(await driver.findComponent(ON.id('login-password')))).assertFalse()
+      expect(await clickByIdOrText(driver, 'login-submit', '登录')).assertTrue()
+      await driver.delayMs(500)
+      const error = requireComponent(await driver.findComponent(ON.id('login-phone-error')), 'login-phone-error')
+      expect(await error.getText()).assertContain('手机号')
+      expect(await clickByIdOrText(driver, 'login-method-password', '密码登录')).assertTrue()
+      requireComponent(await driver.findComponent(ON.id('login-password')), 'login-password')
+      expect(isFound(await driver.findComponent(ON.id('login-error')))).assertFalse()
+
+      expect(await clickByIdOrText(driver, 'login-mode-register', '注册')).assertTrue()
+      await driver.delayMs(500)
+      requireComponent(await driver.findComponent(ON.id('login-confirm-password')), 'login-confirm-password')
+      expect(await clickByIdOrText(driver, 'login-mode-login', '登录')).assertTrue()
+      await driver.delayMs(500)
+
       // 快捷登录入口已移入弹窗：点击版本号文本3次触发
       //   第一步：确认版本号文本存在
       //   第二步：先滚动至真实可见，再连续点击并确认弹窗已出现。

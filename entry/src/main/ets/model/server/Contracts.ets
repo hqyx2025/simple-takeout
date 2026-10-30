@@ -672,6 +672,8 @@ export interface EmailCodeRequest { phone: string; email: string; purpose: strin
 
 export interface CaptchaResult { id: string; image: string }
 
+export interface EmailLoginRequest { phone: string; email: string; code: string; loginType: string }
+
 export interface MerchantMarketingInput {
   type: string
   title: string

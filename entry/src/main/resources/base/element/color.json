@@ -18,6 +18,7 @@
     {"name": "divider", "value": "#E6DDD3"},
     {"name": "success", "value": "#286542"},
     {"name": "warning", "value": "#8B5D19"},
+    {"name": "password_medium", "value": "#D87916"},
     {"name": "error", "value": "#AD302B"},
     {"name": "tag_bg", "value": "#FFF0E6"},
     {"name": "tag_text", "value": "#B94419"},

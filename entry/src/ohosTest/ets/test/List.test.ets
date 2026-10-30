@@ -1,6 +1,7 @@
 import abilityTest from './Ability.test';
 import allPagesReviewTest from './AllPagesReview.test';
 import loginFlowTest from './LoginFlow.test';
+import authLayoutTest from './AuthLayout.test';
 import locationFlowTest from './LocationFlow.test';
 import checkoutGuardTest from './CheckoutGuard.test';
 import checkoutFlowTest from './CheckoutFlow.test';
@@ -23,6 +24,7 @@ export default function testsuite() {
   allPagesReviewTest();
   abilityTest();
   loginFlowTest();
+  authLayoutTest();
   locationFlowTest();
   checkoutGuardTest();
   checkoutFlowTest();

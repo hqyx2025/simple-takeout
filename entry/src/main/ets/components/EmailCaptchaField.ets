@@ -1,4 +1,4 @@
-import { AppTheme, AppInputStyle, AppButtonStyle } from '../common/theme/AppTheme'
+import { AppTheme, AppInputStyle } from '../common/theme/AppTheme'
 import { fetchCaptchaApi } from '../service/api/AuthApi'
 import { CaptchaResult } from '../model/server/Contracts'
 
@@ -6,7 +6,8 @@ import { CaptchaResult } from '../model/server/Contracts'
 export struct EmailCaptchaField {
   @Link captchaId: string
   @Link captchaCode: string
-  @Prop @Watch('reload') refreshVersion: number = 0
+  @Prop disabled: boolean = false
+  @Prop errorMessage: string = ''
   @State image: string = ''
   @State loading: boolean = false
   @State error: string = ''
@@ -40,13 +41,17 @@ export struct EmailCaptchaField {
       Row({ space: 8 }) {
         TextInput({ text: this.captchaCode, placeholder: '输入右图 5 位字符' })
           .attributeModifier(new AppInputStyle()).maxLength(5).layoutWeight(1).height(44)
+          .enabled(!this.disabled)
           .id('email-captcha-input').onChange((value: string) => { this.captchaCode = value })
-        Button().attributeModifier(new AppButtonStyle()).width(120).height(44)
-          .enabled(!this.loading).id('email-captcha-refresh').accessibilityText('更换图片校对码')
+        Button({ type: ButtonType.Normal }).width(120).height(44).padding(2)
+          .backgroundColor(AppTheme.INPUT).border({ width: 1, color: AppTheme.BORDER }).borderRadius(AppTheme.CONTROL_RADIUS)
+          .enabled(!this.loading && !this.disabled).id('email-captcha-refresh').accessibilityText('更换图片校对码')
           .onClick(() => { this.reload() })
           .overlay(this.captchaImage())
       }.width('100%')
-      if (this.error) { Text(this.error).fontSize(13).fontColor(AppTheme.ERROR).width('100%') }
+      if (this.errorMessage || this.error) {
+        Text(this.errorMessage || this.error).fontSize(13).fontColor(AppTheme.ERROR).width('100%').id('email-captcha-input-error')
+      }
     }.width('100%')
   }
 
@@ -56,7 +61,7 @@ export struct EmailCaptchaField {
       Text(this.loading ? '加载中…' : '点击重试').fontSize(13).fontColor(AppTheme.TEXT)
         .hitTestBehavior(HitTestMode.None)
     } else {
-      Image(this.image).width(116).height(40).objectFit(ImageFit.Contain)
+      Image(this.image).width(116).height(40).objectFit(ImageFit.Contain).id('email-captcha-image')
         .hitTestBehavior(HitTestMode.None).accessibilityText('图片校对码')
     }
   }

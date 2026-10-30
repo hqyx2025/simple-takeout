@@ -1,13 +1,14 @@
-import { AppButtonStyle, AppCardStyle, AppInputStyle, AppTheme } from '../common/theme/AppTheme'
-import { COLORS, FONT_SIZE, SPACING } from '../common/Constants'
+import { AppButtonStyle, AppInputStyle, AppTheme } from '../common/theme/AppTheme'
 import { PageHeader } from '../components/PageHeader'
 import { EmailCaptchaField } from '../components/EmailCaptchaField'
+import { FormInput } from '../components/FormInput'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { requestEmailCodeApi, resetLoginPasswordApi, resetPaymentPasswordApi, PaymentPasswordResult, EmailCodeResult } from '../service/ApiService'
 import { getAuthToken } from '../service/HttpClient'
 import { User } from '../model/Models'
 import { logout } from '../service/AppStorageManager'
 import { KeyboardAvoidMode } from '@kit.ArkUI'
+import { newPasswordError } from '../common/PasswordPolicy'
 
 @Entry
 @Component
@@ -29,13 +30,18 @@ export struct PasswordResetPage {
   @State sendingCode: boolean = false
   @State captchaId: string = ''
   @State captchaCode: string = ''
-  @State captchaRefreshVersion: number = 0
+  @State errorMsg: string = ''
+  @State errorField: string = ''
+  @State tipMsg: string = ''
+  private pageActive: boolean = true
   private sessionToken: string = ''
   private previousKeyboardAvoidMode: KeyboardAvoidMode = KeyboardAvoidMode.OFFSET
   private keyboardModeChanged: boolean = false
 
   aboutToAppear(): void {
-    this.phone = this.user.phone
+    this.pageActive = true
+    this.phone = this.loggedIn ? this.user.phone : AppStorage.get<string>('passwordResetPhone') ?? ''
+    AppStorage.setOrCreate<string>('passwordResetPhone', '')
     this.email = this.user.email ?? ''
     this.sessionToken = getAuthToken()
     this.mode = AppStorage.get<string>('passwordResetMode') === 'payment' ? 'payment' : 'login'
@@ -51,7 +57,7 @@ export struct PasswordResetPage {
     } catch (_) {}
   }
 
-  aboutToDisappear(): void { this.restoreKeyboardAvoidMode(); this.clearFields(); if (this.cooldownTimer !== -1) { clearInterval(this.cooldownTimer) } }
+  aboutToDisappear(): void { this.pageActive = false; this.restoreKeyboardAvoidMode(); this.clearFields(); if (this.cooldownTimer !== -1) { clearInterval(this.cooldownTimer) } }
 
   private restoreKeyboardAvoidMode(): void {
     if (!this.keyboardModeChanged) { return }
@@ -69,128 +75,169 @@ export struct PasswordResetPage {
 
   private validAccount(): boolean {
     if (!/^1\d{10}$/.test(this.phone.trim())) {
-      promptAction.showToast({ message: '请输入该账号绑定的 11 位手机号', duration: 1800 })
+      this.showError('请输入该账号绑定的 11 位手机号', 'password-reset-phone')
       return false
     }
     return true
   }
 
   private async sendCode(): Promise<void> {
-    if (this.sendingCode || this.cooldownSeconds > 0) { return }
+    if (this.busy || this.sendingCode || this.cooldownSeconds > 0) { return }
+    this.clearFeedback()
     if (!this.validAccount()) { return }
     const email: string = this.email.trim()
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-      promptAction.showToast({ message: '请输入正确的邮箱地址', duration: 1800 })
+      this.showError('请输入正确的邮箱地址', 'password-reset-email')
+      return
+    }
+    if (!this.captchaId && /^[A-Za-z0-9]{5}$/.test(this.captchaCode)) {
+      this.showError('校对码已使用，请点击图片更换后重试', 'email-captcha-input')
+      return
+    }
+    if (!this.captchaId || !/^[A-Za-z0-9]{5}$/.test(this.captchaCode)) {
+      this.showError('请先输入图片中的 5 位校对码', 'email-captcha-input')
       return
     }
     this.sendingCode = true
-    if (!this.captchaId || !/^[A-Za-z0-9]{5}$/.test(this.captchaCode)) {
+    const captchaId: string = this.captchaId
+    this.captchaId = ''
+    try {
+      const result: EmailCodeResult = await requestEmailCodeApi(this.phone.trim(), email, this.mode, '', captchaId, this.captchaCode)
+      if (!this.pageActive) { return }
+      if (!result.success) {
+        this.showError(result.message || '验证码发送失败，请稍后重试')
+        return
+      }
+      this.cooldownSeconds = 60
+      this.cooldownTimer = setInterval(() => {
+        this.cooldownSeconds = Math.max(0, this.cooldownSeconds - 1)
+        if (this.cooldownSeconds === 0) { clearInterval(this.cooldownTimer); this.cooldownTimer = -1 }
+      }, 1000)
+      this.tipMsg = result.mock === true && result.code !== undefined ? `开发模式验证码：${result.code}` : '验证码已发送，15 分钟内有效。'
+    } catch (_) {
+      if (this.pageActive) { this.showError('验证码发送失败，请检查网络后重试') }
+    } finally {
       this.sendingCode = false
-      promptAction.showToast({ message: '请先输入图片中的 5 位校对码', duration: 1800 })
-      return
     }
-    const result: EmailCodeResult = await requestEmailCodeApi(this.phone.trim(), email, this.mode, '', this.captchaId, this.captchaCode)
-    this.captchaRefreshVersion++
-    this.sendingCode = false
-    if (!result.success) {
-      promptAction.showToast({ message: result.message || '验证码发送失败，请稍后重试', duration: 1800 })
-      return
-    }
-    this.cooldownSeconds = 60
-    this.cooldownTimer = setInterval(() => {
-      this.cooldownSeconds = Math.max(0, this.cooldownSeconds - 1)
-      if (this.cooldownSeconds === 0) { clearInterval(this.cooldownTimer); this.cooldownTimer = -1 }
-    }, 1000)
-    promptAction.showToast({
-      message: result.mock === true && result.code !== undefined ? `开发模式验证码：${result.code}` : '验证码已发送',
-      duration: 1800
-    })
+  }
+
+  private clearFeedback(): void {
+    this.errorMsg = ''; this.errorField = ''; this.tipMsg = ''
+  }
+
+  private showError(message: string, field: string = ''): void {
+    this.tipMsg = ''; this.errorMsg = message
+    this.errorField = field || (/校对码/.test(message) ? 'email-captcha-input'
+      : /验证码/.test(message) ? 'password-reset-code' : /邮箱/.test(message) ? 'password-reset-email'
+      : /手机号/.test(message) ? 'password-reset-phone' : /密码/.test(message) ? 'password-reset-new' : '')
   }
 
   private async submit(): Promise<void> {
-    if (this.busy || !this.validAccount()) { return }
+    if (this.busy || this.sendingCode) { return }
+    this.clearFeedback()
+    if (!this.validAccount()) { return }
     const email: string = this.email.trim()
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || this.code.trim() === '') {
-      promptAction.showToast({ message: '请填写邮箱和验证码', duration: 1800 })
-      return
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      this.showError('请输入正确的邮箱地址', 'password-reset-email'); return
     }
-    if (this.mode === 'login' && this.newPassword.length < 6) {
-      promptAction.showToast({ message: '新登录密码至少 6 位', duration: 1800 })
-      return
+    if (!/^\d{6}$/.test(this.code.trim())) {
+      this.showError('请输入 6 位邮箱验证码', 'password-reset-code'); return
+    }
+    if (this.mode === 'login' && newPasswordError(this.newPassword)) {
+      this.showError(newPasswordError(this.newPassword), 'password-reset-new'); return
     }
     if (this.mode === 'payment' && !/^\d{6}$/.test(this.newPassword)) {
-      promptAction.showToast({ message: '新支付密码必须是 6 位数字', duration: 1800 })
-      return
+      this.showError('新支付密码必须是 6 位数字', 'password-reset-new'); return
     }
     if (this.newPassword !== this.confirmPassword) {
-      promptAction.showToast({ message: '两次输入的密码不一致', duration: 1800 })
-      return
+      this.showError('两次输入的密码不一致', 'password-reset-confirm'); return
     }
     this.busy = true
-    const result: PaymentPasswordResult = this.mode === 'login'
-      ? await resetLoginPasswordApi(this.phone.trim(), email, this.code.trim(), this.newPassword)
-      : await resetPaymentPasswordApi(this.phone.trim(), email, this.code.trim(), this.newPassword)
-    this.busy = false
-    this.clearFields()
-    if (!result.success) {
-      promptAction.showToast({ message: result.message || '密码重置失败，请重试', duration: 2200 })
-      return
-    }
-    promptAction.showToast({ message: this.mode === 'login' ? '登录密码已重置，请重新登录' : '支付密码已重置', duration: 2200 })
-    if (this.mode === 'login' && this.loggedIn && this.sessionToken === getAuthToken()) {
-      logout()
-      router.replaceUrl({ url: 'pages/Index' })
-    } else {
-      router.back()
+    try {
+      const result: PaymentPasswordResult = this.mode === 'login'
+        ? await resetLoginPasswordApi(this.phone.trim(), email, this.code.trim(), this.newPassword)
+        : await resetPaymentPasswordApi(this.phone.trim(), email, this.code.trim(), this.newPassword)
+      if (!this.pageActive) { return }
+      if (!result.success) {
+        this.showError(result.message || '密码重置失败，请重试'); return
+      }
+      this.clearFields()
+      promptAction.showToast({ message: this.mode === 'login' ? '登录密码已重置，请重新登录' : '支付密码已重置', duration: 2200 })
+      if (this.mode === 'login' && this.loggedIn && this.sessionToken === getAuthToken()) {
+        await logout()
+        router.replaceUrl({ url: 'pages/Index' })
+      } else {
+        router.back()
+      }
+    } catch (_) {
+      if (this.pageActive) { this.showError('操作未完成，请检查网络后重试') }
+    } finally {
+      this.busy = false
     }
   }
 
   build() {
     Column() {
-      PageHeader({ title: this.mode === 'login' ? '找回登录密码' : '找回支付密码',
+      PageHeader({ title: this.mode === 'login' ? '找回登录密码' : '找回支付密码', topPadding: 0,
         showBack: true, backId: 'password-reset-back', onBack: () => { router.back() } })
+      if ((this.errorMsg && !this.errorField) || this.tipMsg) {
+        Row() {
+          Text(this.errorMsg || this.tipMsg).fontSize(14).fontWeight(FontWeight.Medium).textAlign(TextAlign.Center)
+            .fontColor(this.errorMsg ? AppTheme.ERROR : AppTheme.SUCCESS).padding(12).width('100%')
+            .border({ width: 1, color: this.errorMsg ? AppTheme.ERROR : AppTheme.SUCCESS })
+            .backgroundColor(this.errorMsg ? AppTheme.ERROR_BG : AppTheme.SUCCESS_BG).borderRadius(10)
+            .constraintSize({ maxWidth: AppTheme.FORM_MAX_WIDTH }).id('password-reset-message')
+        }.width('100%').justifyContent(FlexAlign.Center).padding({ left: 24, right: 24, top: 8 })
+      }
       Scroll() {
-        Column({ space: SPACING.LG }) {
-          Column({ space: SPACING.MD }) {
-            Text('使用绑定邮箱验证身份。')
-              .fontSize(FONT_SIZE.SM).fontColor(AppTheme.MUTED).width('100%')
-            Text('绑定手机号').fontSize(FONT_SIZE.SM).fontColor(AppTheme.TEXT).width('100%')
-            TextInput({ text: this.phone, placeholder: '请输入该账号绑定的 11 位手机号' }).attributeModifier(new AppInputStyle())
-              .type(InputType.PhoneNumber).maxLength(11).width('100%').id('password-reset-phone')
-              .onChange((value: string) => { this.phone = value; this.code = '' })
-            Text('绑定邮箱').fontSize(FONT_SIZE.SM).fontColor(AppTheme.TEXT).width('100%')
-            TextInput({ text: this.email, placeholder: '例如 name@qq.com' }).attributeModifier(new AppInputStyle())
-              .type(InputType.Email).width('100%').id('password-reset-email')
-              .onChange((value: string) => { this.email = value; this.code = '' })
-            EmailCaptchaField({ captchaId: $captchaId, captchaCode: $captchaCode, refreshVersion: this.captchaRefreshVersion })
-            Text('邮箱验证码').fontSize(FONT_SIZE.SM).fontColor(AppTheme.TEXT).width('100%')
-            Row({ space: SPACING.SM }) {
-              TextInput({ text: this.code, placeholder: '邮箱验证码' }).attributeModifier(new AppInputStyle())
-                .type(InputType.Number).maxLength(6).layoutWeight(1).id('password-reset-code')
-                .onChange((value: string) => { this.code = value })
-              Button(this.sendingCode ? '发送中…' : this.cooldownSeconds > 0 ? this.cooldownSeconds + '秒后重发' : '获取验证码').attributeModifier(new AppButtonStyle())
-                .height(AppTheme.CONTROL_HEIGHT).width(120).enabled(!this.sendingCode && this.cooldownSeconds === 0)
-                .id('password-reset-send-code').onClick(() => { this.sendCode() })
+        Column() {
+          Column({ space: 8 }) {
+            FormInput({ compact: true, label: '绑定手机号', placeholder: '请输入11位手机号', value: this.phone,
+              inputType: InputType.PhoneNumber, maxLength: 11, fieldId: 'password-reset-phone', isEnabled: !this.busy && !this.sendingCode,
+              errorMessage: this.errorField === 'password-reset-phone' ? this.errorMsg : '',
+              onChange: (value: string) => { this.phone = value; this.code = ''; this.clearFeedback() } })
+            FormInput({ compact: true, label: '绑定邮箱', placeholder: '请输入邮箱', value: this.email,
+              inputType: InputType.Email, fieldId: 'password-reset-email', isEnabled: !this.busy && !this.sendingCode,
+              errorMessage: this.errorField === 'password-reset-email' ? this.errorMsg : '',
+              onChange: (value: string) => { this.email = value; this.code = ''; this.clearFeedback() } })
+            EmailCaptchaField({ captchaId: $captchaId, captchaCode: $captchaCode,
+              disabled: this.busy || this.sendingCode,
+              errorMessage: this.errorField === 'email-captcha-input' ? this.errorMsg : '' })
+            Column({ space: 4 }) {
+              Text('邮箱验证码').fontSize(13).fontColor(AppTheme.TEXT).width('100%')
+              Row({ space: 8 }) {
+                TextInput({ text: this.code, placeholder: '请输入 6 位验证码' }).attributeModifier(new AppInputStyle())
+                  .height(44).type(InputType.Number).maxLength(6).layoutWeight(1).id('password-reset-code')
+                  .enabled(!this.busy && !this.sendingCode)
+                  .onChange((value: string) => { this.code = value; this.clearFeedback() })
+                Button(this.sendingCode ? '发送中…' : this.cooldownSeconds > 0 ? this.cooldownSeconds + '秒后重发' : '获取验证码')
+                  .attributeModifier(new AppButtonStyle()).height(44).width(120)
+                  .enabled(!this.busy && !this.sendingCode && this.cooldownSeconds === 0)
+                  .id('password-reset-send-code').onClick(() => { this.sendCode() })
+              }.width('100%')
+              if (this.errorMsg && this.errorField === 'password-reset-code') {
+                Text(this.errorMsg).fontSize(13).fontColor(AppTheme.ERROR).width('100%').id('password-reset-code-error')
+              }
             }.width('100%')
-            Text('验证码 15 分钟内有效，请勿向他人泄露。').fontSize(FONT_SIZE.SM).fontColor(AppTheme.MUTED).width('100%')
-            Text(this.mode === 'login' ? '新登录密码' : '新支付密码').fontSize(FONT_SIZE.SM).fontColor(AppTheme.TEXT).width('100%')
-            TextInput({ text: this.newPassword, placeholder: this.mode === 'login' ? '请输入新登录密码，至少 6 位' : '请输入 6 位支付密码' })
-              .attributeModifier(new AppInputStyle()).type(InputType.Password).width('100%')
-              .maxLength(this.mode === 'payment' ? 6 : 64).id('password-reset-new')
-              .onChange((value: string) => { this.newPassword = this.mode === 'payment' ? value.replace(/[^0-9]/g, '') : value })
-            Text('确认新密码').fontSize(FONT_SIZE.SM).fontColor(AppTheme.TEXT).width('100%')
-            TextInput({ text: this.confirmPassword, placeholder: '请再次输入密码' }).attributeModifier(new AppInputStyle())
-              .type(InputType.Password).width('100%').maxLength(this.mode === 'payment' ? 6 : 64)
-              .id('password-reset-confirm').onChange((value: string) => { this.confirmPassword = this.mode === 'payment' ? value.replace(/[^0-9]/g, '') : value })
-
-          }.attributeModifier(new AppCardStyle()).padding(SPACING.LG).width('100%')
-        }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
+            FormInput({ compact: true, label: this.mode === 'login' ? '新登录密码' : '新支付密码',
+              placeholder: this.mode === 'login' ? '请输入 6 至 64 位密码' : '请输入 6 位数字', value: this.newPassword,
+              inputType: InputType.Password, maxLength: this.mode === 'payment' ? 6 : 64, passwordRules: this.mode === 'login',
+              fieldId: 'password-reset-new', isEnabled: !this.busy && !this.sendingCode,
+              errorMessage: this.errorField === 'password-reset-new' ? this.errorMsg : '',
+              onChange: (value: string) => { this.newPassword = this.mode === 'payment' ? value.replace(/[^0-9]/g, '') : value; this.clearFeedback() } })
+            FormInput({ compact: true, label: '确认新密码', placeholder: '请再次输入相同密码', value: this.confirmPassword,
+              inputType: InputType.Password, maxLength: this.mode === 'payment' ? 6 : 64,
+              fieldId: 'password-reset-confirm', isEnabled: !this.busy && !this.sendingCode,
+              errorMessage: this.errorField === 'password-reset-confirm' ? this.errorMsg : '',
+              onChange: (value: string) => { this.confirmPassword = this.mode === 'payment' ? value.replace(/[^0-9]/g, '') : value; this.clearFeedback() } })
+          }.width('100%').constraintSize({ maxWidth: AppTheme.FORM_MAX_WIDTH })
+        }.width('100%').padding({ left: 24, right: 24, top: 16, bottom: 12 })
       }.layoutWeight(1).width('100%').scrollBar(BarState.Off)
       Row() {
         Button(this.busy ? '提交中…' : '确认重置').attributeModifier(new AppButtonStyle())
-          .height(AppTheme.CONTROL_HEIGHT).width('100%').enabled(!this.busy)
+          .height(44).width('100%').constraintSize({ maxWidth: AppTheme.FORM_MAX_WIDTH }).enabled(!this.busy && !this.sendingCode)
           .id('password-reset-submit').onClick(() => { this.submit() })
-      }.width('100%').padding(SPACING.LG).backgroundColor(AppTheme.PAGE)
-    }.width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)
+      }.width('100%').justifyContent(FlexAlign.Center).padding({ left: 24, right: 24, top: 8, bottom: 16 })
+    }.width('100%').height('100%').backgroundColor(AppTheme.PAGE)
   }
 }

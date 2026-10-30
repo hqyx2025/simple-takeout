@@ -9,6 +9,7 @@ import { User } from '../model/Models'
 import { logout } from '../service/AppStorageManager'
 import { FormInput } from '../components/FormInput'
 import { KeyboardAvoidMode } from '@kit.ArkUI'
+import { newPasswordError } from '../common/PasswordPolicy'
 
 @Entry
 @Component
@@ -81,8 +82,8 @@ export struct AccountSecurityPage {
       promptAction.showToast({ message: '请填写登录密码的完整信息', duration: 1800 })
       return
     }
-    if (this.newPassword.length < 6) {
-      promptAction.showToast({ message: '新密码长度至少 6 位', duration: 1800 })
+    if (newPasswordError(this.newPassword)) {
+      promptAction.showToast({ message: newPasswordError(this.newPassword), duration: 1800 })
       return
     }
     if (this.newPassword !== this.confirmPassword) {
@@ -148,7 +149,7 @@ export struct AccountSecurityPage {
             FormInput({ label: '当前登录密码', value: this.oldPassword, placeholder: '请输入当前密码',
               fieldId: 'account-old-password', inputType: InputType.Password, maxLength: 64,
               isEnabled: !this.savingPassword && !this.savingPayment, onChange: (value: string) => { this.oldPassword = value } })
-            FormInput({ label: '新登录密码', value: this.newPassword, placeholder: '至少 6 位',
+            FormInput({ label: '新登录密码', value: this.newPassword, placeholder: '请输入 6 至 64 位密码', passwordRules: true,
               fieldId: 'account-new-password', inputType: InputType.Password, maxLength: 64,
               isEnabled: !this.savingPassword && !this.savingPayment, onChange: (value: string) => { this.newPassword = value } })
             FormInput({ label: '确认新登录密码', value: this.confirmPassword, placeholder: '再次输入新密码',
