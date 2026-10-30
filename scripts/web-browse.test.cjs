@@ -9,7 +9,7 @@ function browser(sidebarCollapsed='0',options={}){
   const element=id=>{
     if(!nodes.has(id)){
       const classes=new Set();
-      nodes.set(id,{innerHTML:'',textContent:'',hidden:id==='authModal',dataset:{},value:'',isConnected:true,disabled:false,attributes:{},classes,listeners:{},
+      nodes.set(id,{innerHTML:'',textContent:'',hidden:id==='authPage',dataset:{},value:'',isConnected:true,disabled:false,attributes:{},classes,listeners:{},
         parentElement:{classList:{add(){}},insertAdjacentHTML(){}},closest(){return {outerHTML:''};},reportValidity(){return true;},getAttribute(name){return this.attributes[name];},setAttribute(name,value){this.attributes[name]=value;},
         addEventListener(name,listener){this.listeners[name]=listener;},async fire(name,event={}){return this.listeners[name]?.({preventDefault(){},currentTarget:this,target:this,...event});},insertAdjacentHTML(position,html){this.innerHTML+=html;},querySelector(selector){return element(id+':'+selector);},querySelectorAll(){return [];},focus(){this.focused=true;},
         classList:{toggle(name,enabled){if(enabled)classes.add(name);else classes.delete(name);}}});
@@ -61,10 +61,19 @@ function browser(sidebarCollapsed='0',options={}){
     disconnect(){this.disconnected=true;}
   }
   const media={matches:Boolean(options.darkSystem),addEventListener(name,listener){this.listener=listener;}};
+  const listeners={};
+  const location={hash:options.hash||'',pathname:'/takeout/',search:''};
+  const entries=[location.hash];let historyIndex=0;
+  const updateLocation=url=>{const next=new URL(url,'https://hqyx.website/takeout/');Object.assign(location,{hash:next.hash,pathname:next.pathname,search:next.search});};
+  const history={
+    pushState(state,title,url){updateLocation(url);entries.splice(++historyIndex);entries.push(location.hash);},
+    replaceState(state,title,url){updateLocation(url);entries[historyIndex]=location.hash;},
+    back(){if(historyIndex>0){updateLocation(entries[--historyIndex]||'/takeout/');listeners.popstate?.();listeners.hashchange?.();}},
+  };
   const context=vm.createContext({URL,console,setTimeout:(callback,delay)=>{const timer=setTimeout(callback,delay);timer.unref?.();return timer;},clearTimeout,IntersectionObserver:Observer,FormData:TestFormData,
     localStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},
     sessionStorage:{getItem:key=>session.get(key),setItem:(key,value)=>session.set(key,value),removeItem:key=>session.delete(key)},
-    window:{isSecureContext:true,navigator:options.navigator||{},IntersectionObserver:Observer,matchMedia:()=>media,scrollTo(){},prompt(message,value){promptMessages.push({message,value});return options.promptResult??null;},confirm(message){confirmMessages.push(message);return options.confirmResult??false;}},
+    window:{location,history,addEventListener:(name,callback)=>{listeners[name]=callback;},isSecureContext:true,navigator:options.navigator||{},IntersectionObserver:Observer,matchMedia:()=>media,scrollTo(){},prompt(message,value){promptMessages.push({message,value});return options.promptResult??null;},confirm(message){confirmMessages.push(message);return options.confirmResult??false;}},
     document:{baseURI:'https://hqyx.website/takeout/',documentElement:element('documentElement'),body:{append(){}},createElement(tag){return tag==='dialog'?createDialog():element(`created-${tag}`);},getElementById:element,querySelector(selector){return selector==='input[name="addressId"]:checked'?{value:element('selectedAddress').value||'1'}:null;},querySelectorAll(){return [];},addEventListener(){}},
     TakeoutUrls:{localPath:path=>path},
     TakeoutLocation:{coordinates(longitude,latitude){const lng=Number(longitude),lat=Number(latitude);return Number.isFinite(lng)&&Number.isFinite(lat)&&longitude!==''&&latitude!==''?{longitude:lng,latitude:lat}:null;}},
@@ -104,9 +113,9 @@ function browser(sidebarCollapsed='0',options={}){
     }
   });
   const source=fs.readFileSync('server/takeout-gateway/src/main/resources/static/app.js','utf8');
-  vm.runInContext(source.replace('  boot();','  globalThis.browseTest = {state,renderBrowse,renderCheckout,renderPage,renderShell,orderCard,handleAction,couponEligible,couponUnavailableReason,checkoutAmounts,checkoutDraft,merchantRejectPayload,addressForm,addressPayload,addressText,resetAccountState,loginWith,openAuth,closeAuth,boot,logout};'),context);
+  vm.runInContext(source.replace('  boot();','  globalThis.browseTest = {state,renderBrowse,renderCheckout,renderPage,renderShell,orderCard,handleAction,couponEligible,couponUnavailableReason,checkoutAmounts,checkoutDraft,merchantRejectPayload,addressForm,addressPayload,addressText,resetAccountState,loginWith,openAuth,closeAuth,applyAuthRoute,boot,logout};'),context);
   Object.assign(context.browseTest.state,{user:{role:0},token:'test',location:{latitude:22.74967,longitude:108.452009},page:'discover'});
-  return {...context.browseTest,element,requests,calls,dialogs,observers,confirmMessages,promptMessages,stores,coupons,storage,session,media,context};
+  return {...context.browseTest,element,requests,calls,dialogs,observers,confirmMessages,promptMessages,stores,coupons,storage,session,media,location,history,context};
 }
 const cardCount=html=>(html.match(/class="store-card"/g)||[]).length;
 
@@ -116,14 +125,14 @@ test('guests browse all stores and details without login or location but cart st
   await b.renderPage();
   assert.equal(b.state.stores.length,1);
   assert.match(b.element('storeGrid').innerHTML,/远方店铺/);
-  assert.equal(b.element('authModal').hidden,true);
+  assert.equal(b.element('authPage').hidden,true);
   assert.ok(b.requests.every(path=>!/[?&](latitude|longitude)=/.test(path)));
   await b.handleAction('open-store',1);
   assert.equal(b.state.page,'store');
   assert.match(b.element('app').innerHTML,/远方店铺/);
-  assert.equal(b.element('authModal').hidden,true);
+  assert.equal(b.element('authPage').hidden,true);
   await b.handleAction('add-cart',11);
-  assert.equal(b.element('authModal').hidden,false);
+  assert.equal(b.element('authPage').hidden,false);
   assert.equal(b.calls.some(call=>call.path==='/api/cart/items'),false);
 });
 
@@ -133,7 +142,7 @@ test('guests may select a browsing location and still see distant stores',async(
   await b.handleAction('location-select','',{dataset:{longitude:'116.4',latitude:'39.9',address:'测试地点'}});
   assert.equal(b.state.locationLabel,'测试地点');
   assert.equal(b.state.stores.length,1);
-  assert.equal(b.element('authModal').hidden,true);
+  assert.equal(b.element('authPage').hidden,true);
 });
 
 test('empty search displays all stores even after choosing a location',async()=>{
@@ -231,7 +240,7 @@ test('browse shortcuts replace the store list with visible results and allow ret
     assert.equal(b.observers.at(-1).disconnected,true);
     assert.match(b.element('browseResult').innerHTML,new RegExp(title));
     assert.match(b.element('browseResult').innerHTML,/暂无/);
-    assert.equal(b.element('authModal').hidden,true);
+    assert.equal(b.element('authPage').hidden,true);
   }
   await b.handleAction('rank-stores');
   assert.equal(b.element('storeGrid').hidden,false);

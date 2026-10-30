@@ -11,10 +11,23 @@ async function verifyForm(driver: Driver, ids: string[], submitId: string, full:
   const size = await driver.getDisplaySize()
   const submit: Component = requireComponent(await driver.findComponent(ON.id(submitId)), submitId)
   const footer = await submit.getBounds()
+  const scroll = requireComponent(await driver.findComponent(ON.type('Scroll')), 'form scroll')
+  const viewport = await scroll.getBounds()
   expect(footer.top > 0 && footer.bottom <= size.y).assertTrue()
   for (const id of ids) {
-    const field: Component = requireComponent(full ? await driver.findComponent(ON.id(id))
-      : await scrollUntilVisible(driver, id), id)
+    let found = await driver.findComponent(ON.id(id))
+    for (let attempt = 0; attempt < 8; attempt++) {
+      if (found !== null && found !== undefined) {
+        const bounds = await found.getBounds()
+        if (bounds.bottom - bounds.top > 70) { break }
+      }
+      // Swipe inside this page's actual scroll area, above the fixed footer.
+      await driver.swipe(Math.floor(size.x / 2), viewport.bottom - 60,
+        Math.floor(size.x / 2), Math.max(viewport.top + 60, viewport.bottom - 500), 500)
+      await driver.delayMs(400)
+      found = await driver.findComponent(ON.id(id))
+    }
+    const field: Component = requireComponent(found, id)
     const rect = await field.getBounds()
     expect(rect.top >= 0 && rect.bottom <= footer.top && rect.right <= size.x).assertTrue()
     expect(rect.bottom - rect.top > 70).assertTrue()
@@ -46,8 +59,11 @@ export default function authLayoutTest() {
           await verifyForm(driver, ['login-phone', 'login-email', 'email-captcha-input', 'login-email-code'], 'login-submit', full)
           expect(await driver.screenCap(directory + '/' + variant + '-email.png')).assertTrue()
           expect(await clickByIdOrText(driver, 'login-mode-register', '注册')).assertTrue()
+          let routeName: string = ''
+          ui.runScopedTask((): void => { routeName = ui.getRouter().getState().name ?? '' })
+          expect(routeName.includes('RegisterPage')).assertTrue()
           await verifyForm(driver, ['login-username', 'login-email', 'login-phone', 'email-captcha-input', 'register-email-code',
-            'login-password', 'login-confirm-password'], 'login-submit', full)
+            'login-password', 'login-confirm-password'], 'register-submit', full)
           expect(isFound(await driver.findComponent(ON.text('注册账号')))).assertFalse()
           expect(await driver.screenCap(directory + '/' + variant + '-register.png')).assertTrue()
           const topMode = requireComponent(await scrollUntilVisible(driver, 'login-mode-login'), 'login mode')

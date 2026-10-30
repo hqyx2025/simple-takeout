@@ -18,6 +18,7 @@
     "pages/SettingsPage",
     "pages/AccountSecurityPage",
     "pages/PasswordResetPage",
+    "pages/RegisterPage",
     "pages/AppSettingsPage",
     "pages/PrivacyPolicyPage",
     "pages/ContactCustomerServicePage",

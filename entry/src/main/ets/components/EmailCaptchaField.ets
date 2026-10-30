@@ -48,11 +48,11 @@ export struct EmailCaptchaField {
           .enabled(!this.loading && !this.disabled).id('email-captcha-refresh').accessibilityText('更换图片校对码')
           .onClick(() => { this.reload() })
           .overlay(this.captchaImage())
-      }.width('100%')
+      }.width('100%').height(44).flexShrink(0)
       if (this.errorMessage || this.error) {
         Text(this.errorMessage || this.error).fontSize(13).fontColor(AppTheme.ERROR).width('100%').id('email-captcha-input-error')
       }
-    }.width('100%')
+    }.width('100%').flexShrink(0)
   }
 
   @Builder

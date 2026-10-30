@@ -8,27 +8,30 @@ const source=fs.readFileSync('entry/src/main/ets/pages/LoginPage.ets','utf8');
 const policy={};
 vm.runInNewContext(ts.transpileModule(fs.readFileSync('entry/src/main/ets/common/PasswordPolicy.ets','utf8'),
   {compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS}}).outputText,{exports:policy});
-function method(name){
-  const start=source.search(new RegExp('^  (?:private )?(?:async )?'+name+'\\(','m'));
+function method(name,sourceText=source){
+  const start=sourceText.search(new RegExp('^  (?:private )?(?:async )?'+name+'\\(','m'));
   assert.ok(start>=0,name+' must exist');
-  return source.slice(start,source.indexOf('\n  }',start)+4);
+  return sourceText.slice(start,sourceText.indexOf('\n  }',start)+4);
 }
 function page(options={}){
-  const methods=['submitForm','sendVerificationCode','switchLoginMethod','switchMode','clearFeedback','showError','loginTypeName'].map(method).join('\n');
-  const result={},calls=[],state={success:0,logout:0,focused:''};
+  const pageSource=options.registration?fs.readFileSync('entry/src/main/ets/pages/RegisterPage.ets','utf8'):source;
+  const names=options.registration?['submitForm','sendVerificationCode','clearFeedback','showError']:['submitForm','sendVerificationCode','switchLoginMethod','openRegistration','onRegistrationComplete','clearFeedback','showError','loginTypeName'];
+  const methods=names.map(name=>method(name,pageSource)).join('\n');
+  const result={},calls=[],state={success:0,logout:0,focused:'',back:0,storage:new Map(),routes:[]};
   const code=ts.transpileModule('export class Page {'+methods+'}',{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS}}).outputText;
   vm.runInNewContext(code,{
     exports:result,newPasswordError:policy.newPasswordError,UserRole:{CUSTOMER:0,MERCHANT:1,ADMIN:2,RIDER:3},
     loginRemote:async(...args)=>{calls.push({kind:'password',args});return options.login?options.login(...args):{id:1,role:0};},
     loginByEmailRemote:async(...args)=>{calls.push({kind:'email',args});return options.login?options.login(...args):{id:1,role:0};},
-    registerRemote:async(...args)=>{calls.push({kind:'register',args});return {id:1,role:0};},
+    registerRemote:async(...args)=>{calls.push({kind:'register',args});return options.register?options.register(...args):{id:1,role:0};},
+    AppStorage:{setOrCreate:(key,value)=>state.storage.set(key,value)},router:{back:()=>state.back++,pushUrl:route=>state.routes.push(route.url)},
     requestEmailCodeApi:async(...args)=>{calls.push({kind:'send-code',args});return options.sendResult||{success:true,message:''};},
     getLastRemoteErrorMessage:()=>options.error||'',logout:async()=>{state.logout++;},
     logInfo(){},logWarn(){},promptAction:{showToast(){}},
     setTimeout:callback=>{callback();return 1;},setInterval:()=>1,clearInterval(){},
   });
   const instance=new result.Page();
-  Object.assign(instance,{isLoginMode:true,useEmailLogin:false,selectedRole:0,phone:'13800138000',email:'test@example.com',emailCode:'123456',captchaId:'picture-id',captchaCode:'ABCDE',captchaRefreshVersion:0,password:'abcdef',confirmPassword:'abcdef',username:'测试用户',errorMsg:'',errorField:'',tipMsg:'',submitting:false,sendingCode:false,cooldownSeconds:0,cooldownTimer:-1,pageActive:true,onLoginSuccess(){state.success++;},getUIContext(){return {getFocusController(){return {requestFocus(id){state.focused=id;}};}};}});
+  Object.assign(instance,{useEmailLogin:false,selectedRole:0,phone:'13800138000',email:'test@example.com',emailCode:'123456',captchaId:'picture-id',captchaCode:'ABCDE',captchaRefreshVersion:0,password:'abcdef',confirmPassword:'abcdef',username:'测试用户',errorMsg:'',errorField:'',tipMsg:'',submitting:false,sendingCode:false,cooldownSeconds:0,cooldownTimer:-1,pageActive:true,onLoginSuccess(){state.success++;},getUIContext(){return {getFocusController(){return {requestFocus(id){state.focused=id;}};}};}});
   return {instance,calls,state};
 }
 
@@ -44,17 +47,33 @@ test('native code login needs no password and enforces the selected role',async(
 });
 
 test('registration rejects password mismatch and retains phone after success',async()=>{
-  const p=page();Object.assign(p.instance,{isLoginMode:false,confirmPassword:'different'});
+  const p=page({registration:true});p.instance.confirmPassword='different';
   await p.instance.submitForm();assert.equal(p.calls.length,0);assert.equal(p.instance.errorField,'login-confirm-password');
   p.instance.confirmPassword='abcdef';await p.instance.submitForm();
-  assert.equal(p.calls[0].kind,'register');assert.equal(p.instance.isLoginMode,true);
+  assert.equal(p.calls[0].kind,'register');assert.equal(p.state.back,1);
+  assert.equal(p.state.storage.get('registrationCompletedPhone'),'13800138000');
   assert.equal(p.instance.phone,'13800138000');assert.equal(p.instance.password,'');assert.equal(p.instance.confirmPassword,'');
-  assert.match(p.instance.tipMsg,/注册成功.*输入密码/);assert.equal(p.state.focused,'login-password');
+  const login=page();login.instance.registeredPhone=p.state.storage.get('registrationCompletedPhone');login.instance.onRegistrationComplete();
+  assert.equal(login.instance.phone,'13800138000');assert.equal(login.instance.registeredPhone,'');
+  assert.match(login.instance.tipMsg,/注册成功.*输入密码/);
+});
+
+test('registration opens a dedicated route and clears credentials before leaving login',()=>{
+  const p=page();p.instance.openRegistration();
+  assert.deepEqual(p.state.routes,['pages/RegisterPage']);
+  assert.equal(p.state.storage.get('registrationPhone'),'13800138000');
+  assert.equal(p.instance.password,'');assert.equal(p.instance.emailCode,'');assert.equal(p.instance.captchaId,'');
+});
+
+test('leaving registration ignores a delayed response and does not navigate back again',async()=>{
+  let finish;const p=page({registration:true,register:()=>new Promise(resolve=>{finish=resolve;})});
+  const submitting=p.instance.submitForm();p.instance.pageActive=false;finish({id:1,role:0});await submitting;
+  assert.equal(p.state.back,0);assert.equal(p.state.storage.size,0);assert.equal(p.instance.submitting,false);
 });
 
 test('both verification flows require the picture answer and use distinct email purposes',async()=>{
   for(const registration of [false,true]){
-    const p=page();Object.assign(p.instance,{isLoginMode:!registration,useEmailLogin:!registration,captchaCode:''});
+    const p=page({registration});Object.assign(p.instance,{useEmailLogin:!registration,captchaCode:''});
     await p.instance.sendVerificationCode();assert.equal(p.calls.length,0);assert.match(p.instance.errorMsg,/校对码/);
     p.instance.captchaCode='ABCDE';await p.instance.sendVerificationCode();
     assert.equal(p.calls[0].kind,'send-code');assert.equal(p.calls[0].args[2],registration?'register':'signin');

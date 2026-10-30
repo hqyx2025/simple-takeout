@@ -30,13 +30,14 @@ test('registration blocks mismatched passwords and submits only the validated pa
   const b=browser('0',{onRequest(path,init){if(path==='/api/auth/register')return {ok:true,status:200,json:async()=>({code:200,data:{phone:JSON.parse(init.body).phone}})};}});
   b.openAuth('register');
   assert.match(b.element('authForm').innerHTML,/name="confirmPassword"[^>]*required/);
-  assert.match(b.element('authForm').innerHTML,/密码需为 6 至 64 位/);
+  assert.match(b.element('authForm').innerHTML,/6 至 64 位，支持数字、英文字母/);
   const form=b.element('authForm');
   form.formData={username:'测试',phone:'13800138000',email:'test@example.com',code:'123456',password:'abcdef',confirmPassword:'abcdeg'};
   await form.fire('submit');
   assert.equal(b.calls.some(call=>call.path==='/api/auth/register'),false);
   assert.match(b.element('authError').textContent,/两次输入的密码不一致/);
-  assert.equal(b.element('authError').hidden,false);
+  assert.equal(b.element('authError').hidden,true);
+  assert.equal(b.element('authField-confirmPassword').hidden,false);
   assert.equal(b.element('authConfirmPassword').focused,true);
   b.element('authPassword').value='abcdef';b.element('authConfirmPassword').value='abcdef';
   await form.fire('input');
@@ -48,7 +49,7 @@ test('registration blocks mismatched passwords and submits only the validated pa
   assert.equal(form.dataset.mode,'login');
 });
 
-test('registration length checks and server failures remain visible inside the auth dialog',async()=>{
+test('registration length checks and server failures remain visible on the registration page',async()=>{
   const b=browser('0',{onRequest(path){if(path==='/api/auth/register')return {ok:false,status:400,json:async()=>({code:400,message:'邮箱验证码不正确，请重新输入'})};}});
   b.openAuth('register');const form=b.element('authForm');
   for(const password of ['abc','a'.repeat(65)]){
@@ -58,6 +59,38 @@ test('registration length checks and server failures remain visible inside the a
   assert.equal(b.calls.some(call=>call.path==='/api/auth/register'),false);
   form.formData={password:'abcdef',confirmPassword:'abcdef'};await form.fire('submit');
   assert.match(b.element('authError').textContent,/邮箱验证码不正确/);
-  assert.equal(b.element('authError').hidden,false);
+  assert.equal(b.element('authError').hidden,true);
+  assert.equal(b.element('authField-code').hidden,false);
   assert.equal(form.querySelector('button.primary').disabled,false);
+});
+
+test('login and registration have separate URLs, refresh correctly, and support browser back',async()=>{
+  const b=browser();b.resetAccountState();
+  b.openAuth();assert.equal(b.location.hash,'#/login');
+  assert.equal(b.element('siteHeader').hidden,true);assert.equal(b.element('appLayout').hidden,true);
+  assert.equal(b.element('authPage').hidden,false);
+  assert.match(b.element('authForm').innerHTML,/选择登录身份/);
+  b.openAuth('register');assert.equal(b.location.hash,'#/register');
+  assert.doesNotMatch(b.element('authForm').innerHTML,/选择登录身份/);
+  b.history.back();assert.equal(b.location.hash,'#/login');assert.equal(b.element('authForm').dataset.mode,'login');
+  b.closeAuth();assert.equal(b.location.hash,'');assert.equal(b.element('appLayout').hidden,false);
+  assert.equal(b.element('authForm').innerHTML,'','credentials must not remain in the hidden page');
+  const direct=browser('0',{hash:'#/register'});direct.resetAccountState();await direct.boot();
+  assert.equal(direct.element('authPage').hidden,false);assert.equal(direct.element('authForm').dataset.mode,'register');
+  direct.closeAuth();assert.equal(direct.location.hash,'');assert.match(direct.element('app').innerHTML,/storeSearchForm/);
+});
+
+test('registration rejects unsupported password characters before calling the server',async()=>{
+  const b=browser();b.openAuth('register');const form=b.element('authForm');
+  form.formData={password:'Abc123<script>',confirmPassword:'Abc123<script>'};await form.fire('submit');
+  assert.match(b.element('authError').textContent,/密码仅支持/);
+  assert.equal(b.calls.some(call=>call.path==='/api/auth/register'),false);
+});
+
+test('leaving registration prevents a delayed success from reopening login',async()=>{
+  let finish;const b=browser('0',{onRequest(path){if(path==='/api/auth/register')return new Promise(resolve=>{finish=()=>resolve({ok:true,status:200,json:async()=>({code:200,data:{phone:'13800138000'}})});});}});
+  b.openAuth('register');const form=b.element('authForm');
+  form.formData={password:'Abc123!',confirmPassword:'Abc123!'};
+  const submission=form.fire('submit');b.closeAuth();finish();await submission;
+  assert.equal(b.element('authPage').hidden,true);assert.equal(b.location.hash,'');assert.equal(b.element('authForm').innerHTML,'');
 });

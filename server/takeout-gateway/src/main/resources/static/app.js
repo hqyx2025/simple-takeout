@@ -586,57 +586,106 @@
     document.body.append(dialog);dialog.showModal();form.elements.reasonCode.focus();
   });
   let authReturnFocus = null;
+  let authReturnHash = '';
   let authViewVersion = 0;
   let captchaVersion = 0;
   const emailCooldowns = new Map();
-  const closeAuth = () => {
+  const authModeFromUrl = () => /^#\/register$/.test(window.location.hash) ? 'register'
+    : /^#\/login(?:\?method=email)?$/.test(window.location.hash) ? (window.location.hash.includes('method=email') ? 'email' : 'login') : '';
+  const authVisibility = visible => {
+    $('authPage').hidden = !visible;
+    $('siteHeader').hidden = visible;
+    $('appLayout').hidden = visible;
+  };
+  const closeAuth = (updateRoute = true) => {
     authViewVersion++; authRequestVersion++;
     clearTimeout(updateCodeButton.timer);
-    $('authModal').hidden = true;
+    authVisibility(false);
+    $('authForm').innerHTML = '';
+    document.title = '简单外卖';
+    if (updateRoute && authModeFromUrl()) window.history.replaceState(null, '', window.location.pathname + window.location.search + authReturnHash);
     authReturnFocus?.focus?.();
     authReturnFocus = null;
   };
-  const openAuth = (mode = 'login') => {
-    if ($('authModal').hidden) authReturnFocus = document.activeElement;
+  const authIcon = name => '<svg class="auth-icon" aria-hidden="true"><use href="auth-icons.svg#' + name + '"></use></svg>';
+  // 图片校对码只在获取邮箱验证码时校验，最终提交不需要再次填写。
+  const authInput = (label, name, placeholder, type = 'text', attributes = '', icon = 'user', required = name !== 'captchaCode') =>
+    `<label class="field"><span>${label}</span><span class="auth-input">${authIcon(icon)}<input class="input" name="${name}" type="${type}" ${required ? 'required' : ''} placeholder="${placeholder}" ${attributes}></span></label>`;
+  const PASSWORD_SYMBOLS = '!@#$%^&*._+-=?';
+  const newPasswordError = value => !value || value.length < 6 || value.length > 64 ? '密码长度需为 6 至 64 位，请重新输入。'
+    : /[^A-Za-z0-9!@#$%^&*._+=?\-]/.test(value) ? '密码仅支持数字、英文字母和 ' + PASSWORD_SYMBOLS + '，不含空格或其他字符。' : '';
+  const updatePasswordFeedback = () => {
+    if ($('authForm').dataset.mode !== 'register') return;
+    const value = $('authPassword').value;
+    const invalid = /[^A-Za-z0-9!@#$%^&*._+=?\-]/.test(value);
+    const strength = !value || invalid ? 0 : value.length < 6 || !/[0-9]/.test(value) || !/[A-Za-z]/.test(value) ? 1 : /[!@#$%^&*._+=?\-]/.test(value) ? 3 : 2;
+    $('authStrength').hidden = !value;
+    $('authStrength').dataset.level = String(strength);
+    $('authStrengthLabel').textContent = invalid ? '字符无效' : ['', '弱', '中', '强'][strength];
+    $('authPasswordRules').hidden = document.activeElement !== $('authPassword');
+  };
+  const openAuth = (mode = 'login', route = 'push') => {
+    if (!['login', 'email', 'register'].includes(mode)) mode = 'login';
+    if ($('authPage').hidden) {
+      authReturnFocus = document.activeElement;
+      authReturnHash = authModeFromUrl() ? '' : window.location.hash;
+    }
     const form = $('authForm'), previous = Object.fromEntries(new FormData(form).entries());
     authViewVersion++; authRequestVersion++; clearTimeout(updateCodeButton.timer);
-    $('authTitle').textContent = mode === 'register' ? '注册用户账号' : '登录';
+    const registration = mode === 'register';
+    const hash = registration ? '#/register' : '#/login' + (mode === 'email' ? '?method=email' : '');
+    if (route !== 'none' && window.location.hash !== hash) window.history[route === 'replace' ? 'replaceState' : 'pushState']({authMode:mode}, '', hash);
+    $('authTitle').textContent = registration ? '注册' : '登录';
+    document.title = (registration ? '注册' : '登录') + ' · 简单外卖';
+    $('authBack').textContent = registration ? '返回登录' : '返回浏览';
+    $('authBack').dataset.action = registration ? 'auth-switch' : 'auth-close';
+    $('authBack').dataset.id = 'login';
     $('authSuccess').textContent = ''; $('authSuccess').hidden = true;
-    $('authForm').dataset.mode = mode;
-    $('authForm').innerHTML = mode === 'register'
-      ? `<label class="field">用户名<input class="input" name="username" required placeholder="例如：小王"></label><label class="field">手机号<input class="input" name="phone" required inputmode="tel" placeholder="13800138000"></label><label class="field">邮箱<input class="input" name="email" required type="email" placeholder="name@example.com"></label><div class="row-between"><label class="field" style="flex:1">邮箱验证码<input class="input" name="code" required placeholder="验证码"></label><button class="btn" type="button" data-action="send-code" style="margin-top:20px">获取验证码</button></div><label class="field">登录密码<input class="input" id="authPassword" name="password" required type="password" minlength="6" maxlength="64" autocomplete="new-password" aria-describedby="authPasswordHint" placeholder="请输入 6 至 64 位密码"></label><p class="auth-guidance" id="authPasswordHint"><strong>密码需为 6 至 64 位</strong><span>请在下方再次输入相同密码。</span></p><label class="field">确认密码<input class="input" id="authConfirmPassword" name="confirmPassword" required type="password" minlength="6" maxlength="64" autocomplete="new-password" aria-describedby="authPasswordHint authError" placeholder="请再次输入登录密码"></label><div class="form-actions"><button class="btn" type="button" data-action="auth-switch" data-id="login">返回登录</button><button class="btn primary">注册</button></div>`
-      : `<label class="field">登录端<select class="select" name="loginType"><option value="CUSTOMER">用户端</option><option value="MERCHANT">商户端</option><option value="RIDER">骑手端</option><option value="ADMIN">管理端</option></select></label><label class="field">手机号<input class="input" name="phone" required inputmode="tel" placeholder="请输入手机号" autocomplete="username"></label><label class="field">密码<input class="input" name="password" required type="password" placeholder="请输入密码" autocomplete="current-password"></label><div class="form-actions"><button class="btn" type="button" data-action="auth-switch" data-id="register">注册用户</button><button class="btn primary">登录</button></div>`;
-    if (mode !== 'register') {
-      form.insertAdjacentHTML('afterbegin', '<div class="tabs auth-tabs" aria-label="登录方式"><button class="tab ' + (mode === 'email' ? '' : 'active') + '" type="button" data-action="auth-switch" data-id="login" aria-pressed="' + (mode !== 'email') + '">密码登录</button><button class="tab ' + (mode === 'email' ? 'active' : '') + '" type="button" data-action="auth-switch" data-id="email" aria-pressed="' + (mode === 'email') + '">验证码登录</button></div>');
-    }
-    if (mode === 'email') {
-      const password = form.querySelector('[name="password"]').closest('label');
-      password.outerHTML = '<label class="field">绑定邮箱<input class="input" name="email" required type="email" maxlength="254" autocomplete="email" placeholder="例如：name@example.com"></label><div class="row-between auth-code-row"><label class="field">邮箱验证码<input class="input" name="code" required inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="请输入 6 位邮箱验证码"></label><button class="btn" type="button" data-action="send-code">获取验证码</button></div>';
-    }
-    if (mode === 'email' || mode === 'register') {
-      const codeRow = form.querySelector('[data-action="send-code"]').parentElement;
-      codeRow.classList.add('auth-code-row');
-      codeRow.insertAdjacentHTML('beforebegin', '<div class="auth-captcha"><label class="field">图片校对码<input class="input" name="captchaCode" maxlength="5" autocomplete="off" placeholder="输入右图 5 位字符"></label><button class="btn captcha-image" type="button" data-action="captcha-refresh" aria-label="更换图片校对码"><img id="authCaptchaImage" alt="图片校对码" hidden><span id="authCaptchaLabel">点击加载</span></button><input type="hidden" name="captchaId"></div>');
-      codeRow.insertAdjacentHTML('afterend', '<p id="authCodeStatus" class="help-text" role="status"></p>');
-      form.querySelector('[name="code"]').setAttribute('pattern', '[0-9]{6}');
-    }
-    form.querySelectorAll('.field .input,.field .select').forEach(input => {
-      input.insertAdjacentHTML('afterend', '<span class="auth-field-error" id="authField-' + input.name + '" hidden></span>');
+    form.dataset.mode = mode;
+    const phone = authInput('手机号', 'phone', '请输入 11 位手机号', 'tel', 'maxlength="11" pattern="1[0-9]{10}" autocomplete="tel"', 'phone');
+    const email = authInput(registration ? '邮箱' : '绑定邮箱', 'email', '例如：name@example.com', 'email', 'maxlength="254" autocomplete="email"');
+    const password = authInput('密码', 'password', registration ? '请输入 6 至 64 位密码' : '请输入密码', 'password',
+      registration ? 'id="authPassword" minlength="6" maxlength="64" autocomplete="new-password" aria-describedby="authPasswordRules"' : 'autocomplete="current-password"', 'lock');
+    const verification = `<div class="auth-captcha">${authInput('图片校对码', 'captchaCode', '输入右图 5 位字符', 'text', 'maxlength="5" autocomplete="off"')}<button class="btn captcha-image" type="button" data-action="captcha-refresh" aria-label="更换图片校对码"><img id="authCaptchaImage" alt="图片校对码" hidden><span id="authCaptchaLabel">点击加载</span></button><input type="hidden" name="captchaId"></div><div class="auth-code-row">${authInput('邮箱验证码', 'code', '请输入 6 位验证码', 'text', 'inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code"')}<button class="btn" type="button" data-action="send-code">获取验证码</button></div><p id="authCodeStatus" class="help-text" role="status"></p>`;
+    const roles = [['CUSTOMER','用户点餐','user'],['MERCHANT','商户管理','store'],['RIDER','骑手配送','rider'],['ADMIN','管理端','shield']];
+    const selected = previous.loginType || 'CUSTOMER';
+    const roleSelector = '<fieldset class="auth-roles"><legend>选择登录身份</legend><input type="hidden" name="loginType" value="' + esc(selected) + '"><div>' + roles.map(([role,label,icon]) => `<button type="button" class="auth-role" data-action="auth-role" data-id="${role}" aria-pressed="${role === selected}">${authIcon(icon)}${label}</button>`).join('') + '</div></fieldset>';
+    const methods = '<div class="auth-tabs" aria-label="登录方式"><button class="btn ' + (mode === 'email' ? '' : 'active') + '" type="button" data-action="auth-switch" data-id="login" aria-pressed="' + (mode !== 'email') + '">密码登录</button><button class="btn ' + (mode === 'email' ? 'active' : '') + '" type="button" data-action="auth-switch" data-id="email" aria-pressed="' + (mode === 'email') + '">验证码登录</button></div>';
+    form.innerHTML = '<div class="auth-fields">' + (registration
+      ? authInput('账号名','username','例如：小王','text','maxlength="64" autocomplete="username"') + email + phone + verification + password
+        + '<div class="auth-strength" id="authStrength" hidden aria-live="polite"><i></i><i></i><i></i><span id="authStrengthLabel"></span></div><p class="auth-rules" id="authPasswordRules" hidden>6 至 64 位，支持数字、英文字母和 ' + PASSWORD_SYMBOLS + '</p>'
+        + authInput('确认密码','confirmPassword','请再次输入相同密码','password','id="authConfirmPassword" minlength="6" maxlength="64" autocomplete="new-password"','lock')
+      : roleSelector + methods + phone + (mode === 'email' ? email + verification : password))
+      + '</div><div class="form-actions"><button class="btn primary" type="submit">' + (registration ? '注册' : '登录') + authIcon('arrow') + '</button>'
+      + (registration ? '' : '<button class="auth-link" type="button" data-action="auth-switch" data-id="register">还没有账号？去注册</button>') + '</div>';
+    form.querySelectorAll('.field .input').forEach(input => {
+      const label = input.closest('.field');
+      label.insertAdjacentHTML('beforeend', '<span class="auth-field-error" id="authField-' + input.name + '" role="alert" hidden></span>');
       input.setAttribute('aria-describedby', ((input.getAttribute('aria-describedby') || '') + ' authField-' + input.name).trim());
     });
-    for (const name of ['phone', 'email', 'loginType']) {
+    for (const name of ['phone', 'email']) {
       const input = form.querySelector('[name="' + name + '"]');
       if (input && previous[name]) input.value = previous[name];
     }
-    showAuthError('');
-    $('authModal').hidden = false;
-    $('authForm').querySelector('select, input, button')?.focus();
-    if (mode === 'email' || mode === 'register') { updateCodeButton(); void refreshAuthCaptcha(); }
+    showAuthError(''); authVisibility(true);
+    form.querySelector('input:not([type="hidden"])')?.focus();
+    if (mode === 'email' || registration) { updateCodeButton(); void refreshAuthCaptcha(); }
   };
+  const applyAuthRoute = () => {
+    const mode = authModeFromUrl();
+    if (mode && !state.token) {
+      if ($('authPage').hidden || $('authForm').dataset.mode !== mode) openAuth(mode, 'none');
+      return true;
+    }
+    if (!$('authPage').hidden || mode) closeAuth(Boolean(mode));
+    return false;
+  };
+  window.addEventListener('popstate', applyAuthRoute);
+  window.addEventListener('hashchange', applyAuthRoute);
   const updateCodeButton = () => {
     clearTimeout(updateCodeButton.timer);
     const button = $('authForm').querySelector('[data-action="send-code"]');
-    if (!button || $('authModal').hidden) return;
+    if (!button || $('authPage').hidden) return;
     const email = $('authForm').querySelector('[name="email"]').value.trim().toLowerCase();
     const seconds = Math.max(0, Math.ceil(((emailCooldowns.get(email) || 0) - Date.now()) / 1000));
     button.disabled = button.dataset.sending === 'true' || seconds > 0;
@@ -651,12 +700,12 @@
     $('authCaptchaImage').hidden = true; $('authCaptchaLabel').hidden = false; $('authCaptchaLabel').textContent = '加载中…';
     try {
       const result = await get('/api/auth/captcha');
-      if (view !== authViewVersion || request !== captchaVersion || $('authModal').hidden) return;
+      if (view !== authViewVersion || request !== captchaVersion || $('authPage').hidden) return;
       if (!result?.id || !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(result.image || '')) throw new Error('校对码加载失败，请点击图片重试');
       id.value = result.id; $('authCaptchaImage').src = result.image;
       $('authCaptchaImage').hidden = false; $('authCaptchaLabel').hidden = true;
     } catch (error) {
-      if (view !== authViewVersion || request !== captchaVersion || $('authModal').hidden) return;
+      if (view !== authViewVersion || request !== captchaVersion || $('authPage').hidden) return;
       $('authCaptchaLabel').textContent = '点击重试'; showAuthError(error.message, 'captchaCode');
     }
   };
@@ -676,14 +725,14 @@
     try {
       const result = await send('/api/auth/email-code', 'POST', {phone:data.phone,email:data.email,purpose:form.dataset.mode === 'register' ? 'register' : 'signin',username:data.username || '',captchaId:data.captchaId,captchaCode:data.captchaCode});
       emailCooldowns.set(data.email.trim().toLowerCase(), Date.now() + 60000);
-      if (version !== authViewVersion || $('authModal').hidden) return;
+      if (version !== authViewVersion || $('authPage').hidden) return;
       $('authCodeStatus').textContent = result?.mock && result.code ? '开发模式验证码：' + result.code : '验证码已发送至邮箱，15 分钟内有效。';
       form.querySelector('[name="code"]').focus();
     } catch (error) {
-      if (version === authViewVersion && !$('authModal').hidden) showAuthError(error.message);
+      if (version === authViewVersion && !$('authPage').hidden) showAuthError(error.message);
     } finally {
       button.dataset.sending = 'false';
-      if (version === authViewVersion && !$('authModal').hidden) { updateCodeButton(); void refreshAuthCaptcha(); }
+      if (version === authViewVersion && !$('authPage').hidden) { updateCodeButton(); void refreshAuthCaptcha(); }
     }
   };
   const loginWith = async (payload, endpoint = '/api/auth/login') => {
@@ -1210,6 +1259,13 @@
         renderShell(); return;
       }
       if (action === 'auth-switch') return openAuth(id);
+      if (action === 'auth-close') return closeAuth();
+      if (action === 'auth-role') {
+        if (!['CUSTOMER','MERCHANT','RIDER','ADMIN'].includes(id)) return;
+        $('authForm').querySelector('[name="loginType"]').value = id;
+        $('authForm').querySelectorAll('[data-action="auth-role"]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.id === id)));
+        showAuthError(''); return;
+      }
       if (action === 'send-code') return sendAuthCode();
       if (action === 'captcha-refresh') return refreshAuthCaptcha();
       if (action === 'go') return navigate(id);
@@ -1496,19 +1552,7 @@
   document.addEventListener('error', e => {
     if (e.target?.matches?.('img[data-product-image]')) e.target.parentElement.textContent = '暂无图片';
   }, true);
-  document.addEventListener('click', e => { const target=e.target.closest('[data-action]'); if(target) handleAction(target.dataset.action,target.dataset.id,target); const nav=e.target.closest('[data-page]'); if(nav) navigate(nav.dataset.page); const close=e.target.closest('[data-close]'); if(close) close.dataset.close==='authModal'?closeAuth():$(close.dataset.close).hidden=true; });
-  document.addEventListener('keydown', e => {
-    const modal = $('authModal');
-    if (modal.hidden) return;
-    if (e.key === 'Escape') { e.preventDefault(); closeAuth(); return; }
-    if (e.key !== 'Tab') return;
-    const focusable = [...modal.querySelectorAll('button,input,select,textarea,[tabindex]:not([tabindex="-1"])')]
-      .filter(element => !element.disabled && !element.hidden);
-    if (!focusable.length) return;
-    const first = focusable[0], last = focusable[focusable.length - 1];
-    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-  });
+  document.addEventListener('click', e => { const target=e.target.closest('[data-action]'); if(target) handleAction(target.dataset.action,target.dataset.id,target); const nav=e.target.closest('[data-page]'); if(nav) navigate(nav.dataset.page); const close=e.target.closest('[data-close]'); if(close) close.dataset.close==='authPage'?closeAuth():$(close.dataset.close).hidden=true; });
   const showAuthError = (message, field = '') => {
     const form = $('authForm');
     form.querySelectorAll('[aria-invalid="true"]').forEach(input => input.setAttribute('aria-invalid', 'false'));
@@ -1517,22 +1561,26 @@
       : /登录端|角色/.test(message) ? 'loginType' : /两次|确认密码/.test(message) ? 'confirmPassword'
       : /密码/.test(message) ? 'password' : /邮箱/.test(message) ? 'email'
       : /手机号/.test(message) ? 'phone' : /账号名|用户名/.test(message) ? 'username' : '';
+    let inlineError = false;
     if (message && field) {
       form.querySelector('[name="' + field + '"]')?.setAttribute('aria-invalid', 'true');
       const error = $('authField-' + field);
-      if (error) { error.textContent = message; error.hidden = false; }
+      if (error) { error.textContent = message; error.hidden = false; inlineError = true; }
     }
     $('authError').textContent = message ? '操作未完成：' + message : '';
-    $('authError').hidden = !message;
+    $('authError').hidden = !message || inlineError;
   };
   $('authForm').addEventListener('input', () => {
     showAuthError(''); updateCodeButton();
     if ($('authForm').dataset.mode !== 'register') return;
+    updatePasswordFeedback();
     const confirm = $('authConfirmPassword');
     const mismatch = Boolean(confirm.value && confirm.value !== $('authPassword').value);
     confirm.setAttribute('aria-invalid', String(mismatch));
     if (mismatch) showAuthError('两次输入的密码不一致，请重新输入确认密码。');
   });
+  $('authForm').addEventListener('focusin', updatePasswordFeedback);
+  $('authForm').addEventListener('focusout', () => setTimeout(updatePasswordFeedback, 0));
   $('authForm').addEventListener('invalid', e => showAuthError(e.target.validationMessage, e.target.name), true);
   $('authForm').addEventListener('submit', async e => {
     e.preventDefault();
@@ -1540,9 +1588,8 @@
     const data = Object.fromEntries(new FormData(form).entries());
     showAuthError('');
     if (form.dataset.mode === 'register') {
-      if (!data.password || data.password.length < 6 || data.password.length > 64) {
-        showAuthError('密码长度需为 6 至 64 位，请重新输入。'); $('authPassword').focus(); return;
-      }
+      const passwordError = newPasswordError(data.password);
+      if (passwordError) { showAuthError(passwordError); $('authPassword').focus(); return; }
       if (data.password !== data.confirmPassword) {
         showAuthError('两次输入的密码不一致，请重新输入确认密码。');
         $('authConfirmPassword').setAttribute('aria-invalid', 'true'); $('authConfirmPassword').focus(); return;
@@ -1554,8 +1601,8 @@
     try {
       if (form.dataset.mode === 'register') {
         const r = await send('/api/auth/register', 'POST', {username:data.username,phone:data.phone,email:data.email,code:data.code,password:data.password,role:0});
-        if (version !== authViewVersion || $('authModal').hidden) return;
-        openAuth('login');
+        if (version !== authViewVersion || $('authPage').hidden) return;
+        openAuth('login', 'replace');
         form.querySelector('[name="phone"]').value = r.phone || data.phone;
         form.querySelector('[name="loginType"]').value = 'CUSTOMER';
         $('authSuccess').textContent = '注册成功，已保留手机号，请重新输入密码登录。';
@@ -1564,7 +1611,7 @@
       } else if (mode === 'email') {
         await loginWith({phone:data.phone,email:data.email,code:data.code,loginType:data.loginType}, '/api/auth/login/email');
       } else await loginWith({phone:data.phone,password:data.password,loginType:data.loginType});
-    } catch (error) { if (version === authViewVersion && !$('authModal').hidden) showAuthError(error.message); }
+    } catch (error) { if (version === authViewVersion && !$('authPage').hidden) showAuthError(error.message); }
     finally { submit.disabled = false; }
   });
   const boot = async () => {
@@ -1598,7 +1645,9 @@
         toast(error.status === 401 ? error.message : '暂时无法恢复登录，请检查网络后刷新重试。', true);
       }
     }
-    renderShell(); await Promise.all([loadCartCount(), renderPage()]);
+    renderShell();
+    applyAuthRoute();
+    await Promise.all([loadCartCount(), renderPage()]);
   };
   boot();
 })();
