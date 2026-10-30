@@ -25,10 +25,11 @@ public class SmsVerificationService implements SmsCodeVerifier {
     private static final DefaultRedisScript<String> CAPTCHA_CONSUME_SCRIPT = new DefaultRedisScript<>(
             "local value = redis.call('GET', KEYS[1]); "
                     + "if value then redis.call('DEL', KEYS[1]) end; return value", String.class);
-    private static final DefaultRedisScript<Long> CONSUME_SCRIPT = new DefaultRedisScript<>(
+    private static final DefaultRedisScript<Long> CODE_CHECK_SCRIPT = new DefaultRedisScript<>(
             "local value = redis.call('GET', KEYS[1]); "
                     + "if not value then return 0 end; "
-                    + "if value == ARGV[1] then redis.call('DEL', KEYS[1]); redis.call('DEL', KEYS[2]); return 1 end; "
+                    + "if value == ARGV[1] then "
+                    + "if ARGV[2] == 'consume' then redis.call('DEL', KEYS[1]); redis.call('DEL', KEYS[2]) end; return 1 end; "
                     + "local tries = redis.call('INCR', KEYS[2]); "
                     + "if tries == 1 then redis.call('PEXPIRE', KEYS[2], redis.call('PTTL', KEYS[1])) end; "
                     + "if tries >= 5 then redis.call('DEL', KEYS[1]); redis.call('DEL', KEYS[2]) end; return 0",
@@ -211,6 +212,15 @@ public class SmsVerificationService implements SmsCodeVerifier {
 
     @Override
     public void consume(String identity, String code) {
+        checkCode(identity, code, "consume");
+    }
+
+    @Override
+    public void verify(String identity, String code) {
+        checkCode(identity, code, "verify");
+    }
+
+    private void checkCode(String identity, String code, String action) {
         if (!validIdentity(identity) || code == null || !code.matches("\\d{6}")) {
             throw invalidCode();
         }
@@ -218,8 +228,8 @@ public class SmsVerificationService implements SmsCodeVerifier {
         String codeKey = "takeout:verification:code:" + identityHash;
         String attemptsKey = "takeout:verification:attempts:" + identityHash;
         try {
-            Long consumed = redis.execute(CONSUME_SCRIPT, List.of(codeKey, attemptsKey), digest(identity + ":" + code));
-            if (!Long.valueOf(1L).equals(consumed)) {
+            Long valid = redis.execute(CODE_CHECK_SCRIPT, List.of(codeKey, attemptsKey), digest(identity + ":" + code), action);
+            if (!Long.valueOf(1L).equals(valid)) {
                 throw invalidCode();
             }
         } catch (BizException e) {

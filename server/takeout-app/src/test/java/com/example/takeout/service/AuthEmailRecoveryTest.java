@@ -22,6 +22,25 @@ class AuthEmailRecoveryTest {
     }
 
     @Test
+    void rejectedRegistrationDoesNotSpendTheEmailCodeAndCanRetryWithAnotherName() {
+        when(users.existsByUsername("taken")).thenReturn(true);
+        assertThrows(BizException.class, () -> auth.register("taken", "13900139000", "user@example.com", "123456", "newpass123", 0));
+        verify(codes, never()).consume(anyString(), anyString());
+        when(users.insert(eq("available"), eq("13900139000"), eq("user@example.com"), anyString(), eq(0), eq(0.0), anyString()))
+                .thenReturn(user(2, "available", "13900139000"));
+        assertEquals(2, auth.register("available", "13900139000", "user@example.com", "123456", "newpass123", 0).id());
+        verify(codes).consume("registration:13900139000:user@example.com", "123456");
+    }
+
+    @Test
+    void failedAccountInsertDoesNotSpendTheEmailCode() {
+        when(users.insert(anyString(), anyString(), anyString(), anyString(), anyInt(), anyDouble(), anyString()))
+                .thenThrow(new org.springframework.dao.DuplicateKeyException("concurrent signup"));
+        assertThrows(BizException.class, () -> auth.register("new", "13900139000", "user@example.com", "123456", "newpass123", 0));
+        verify(codes, never()).consume(anyString(), anyString());
+    }
+
+    @Test
     void sharedMailboxResetsOnlyTheAccountMatchingItsPhone() {
         when(users.findByPhoneForUpdate("13900139000")).thenReturn(Optional.of(user(2, "second", "13900139000")));
         auth.resetPasswordByEmail("13900139000", "751848863@qq.com", "123456", "newpass123");
@@ -85,8 +104,9 @@ class AuthEmailRecoveryTest {
         assertThrows(BizException.class, () -> auth.register("new", "13900139000", "user@example.com", null, "newpass123", 0));
         verifyNoInteractions(codes);
         doThrow(new BizException("验证码不正确或已过期")).when(codes)
-                .consume("registration:13900139000:user@example.com", "123456");
+                .verify("registration:13900139000:user@example.com", "123456");
         assertThrows(BizException.class, () -> auth.register("new", "13900139000", "user@example.com", "123456", "newpass123", 0));
+        verifyNoInteractions(users);
         verify(users, never()).insert(anyString(), anyString(), anyString(), anyString(), anyInt(), anyDouble(), anyString());
     }
 
@@ -96,8 +116,10 @@ class AuthEmailRecoveryTest {
         when(users.findByPhoneForUpdate(account.phone())).thenReturn(Optional.of(account));
         assertEquals(account.id(), auth.loginByEmailCode(account.phone(), "751848863@qq.com", "123456", "CUSTOMER", key -> {}).user().id());
         verify(codes).consume("recovery:1:signin:13800138000:751848863@qq.com", "123456");
+        clearInvocations(codes);
         assertEquals(403, assertThrows(BizException.class, () -> auth.loginByEmailCode(
                 account.phone(), account.email(), "123456", "ADMIN", key -> {})).getCode());
+        verify(codes, never()).consume(anyString(), anyString());
         clearInvocations(codes);
         assertThrows(BizException.class, () -> auth.loginByEmailCode(account.phone(), "wrong@example.com", "123456", "CUSTOMER", key -> {}));
         verifyNoInteractions(codes);

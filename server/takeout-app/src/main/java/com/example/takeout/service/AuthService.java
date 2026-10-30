@@ -90,16 +90,28 @@ public class AuthService implements org.springframework.beans.factory.Initializi
         if (code == null || !code.matches("[0-9]{6}")) {
             throw new BizException("请输入 6 位邮箱验证码");
         }
-        smsCodeVerifier.consume(registrationIdentity(phone, normalizedEmail), code);
-        if (userDao.existsByUsername(username.trim()) || userDao.existsByPhone(phone)) {
-            throw new BizException("注册信息校验未通过");
-        }
+        String identity = registrationIdentity(phone, normalizedEmail);
+        // Verify mailbox ownership before revealing conflicts; failed validation must retain the original TTL.
+        smsCodeVerifier.verify(identity, code);
+        requireRegistrationAvailable(username.trim(), phone);
         String now = LocalDateTime.now().format(FMT);
-        return userDao.insert(username.trim(), phone, normalizedEmail, PasswordUtil.hash(password),
-                0, 0.0, now);
+        try {
+            User registered = userDao.insert(username.trim(), phone, normalizedEmail, PasswordUtil.hash(password),
+                    0, 0.0, now);
+            // Spend the code only after the write succeeds; expiry/replay rolls back this account transaction.
+            smsCodeVerifier.consume(identity, code);
+            return registered;
+        } catch (org.springframework.dao.DuplicateKeyException e) {
+            throw new BizException("账号名或手机号已被使用，请更换账号名或返回登录");
+        }
     }
 
-    /** Check duplicates before requesting mail and again before account creation. */
+    private void requireRegistrationAvailable(String username, String phone) {
+        if (userDao.existsByUsername(username)) throw new BizException("账号名已被使用，请更换账号名");
+        if (userDao.existsByPhone(phone)) throw new BizException("手机号已注册，请返回登录或找回密码");
+    }
+
+    /** Validate mail-request inputs; reveal uniqueness conflicts only after mailbox ownership is verified. */
     public String registrationEmail(String username, String phone, String email) {
         if (username == null || username.isBlank()) {
             throw new BizException("账号名不能为空");
@@ -188,11 +200,14 @@ public class AuthService implements org.springframework.beans.factory.Initializi
         if (user == null || user.status() != 1 || !normalizedEmail.equals(normalizeEmail(user.email()))) {
             throw new BizException("手机号、邮箱或验证码不正确");
         }
-        smsCodeVerifier.consume(recoveryIdentity(user, "signin"), code);
+        String identity = recoveryIdentity(user, "signin");
+        smsCodeVerifier.verify(identity, code);
         if (loginType == null || loginType.isBlank() || user.role() != roleOf(loginType)) {
             throw new BizException(403, "登录端与账号角色不匹配，请切换正确的登录端");
         }
-        return new LoginResult(jwtUtil.generateToken(user.id(), user.role(), user.passwordChangedAt()), user.safe());
+        String token = jwtUtil.generateToken(user.id(), user.role(), user.passwordChangedAt());
+        smsCodeVerifier.consume(identity, code);
+        return new LoginResult(token, user.safe());
     }
 
     /** 严格身份输入；不 trim、不移除隐形字符，避免与数据库等价比较产生不同口径。 */
@@ -239,9 +254,11 @@ public class AuthService implements org.springframework.beans.factory.Initializi
     public void resetPasswordByEmail(String phone, String email, String code, String newPassword) {
         requireNewPassword(newPassword);
         User user = recoveryUser(phone, email, true);
-        smsCodeVerifier.consume(recoveryIdentity(user, "login"), code);
+        String identity = recoveryIdentity(user, "login");
+        smsCodeVerifier.verify(identity, code);
         userDao.updatePassword(user.id(), PasswordUtil.hash(newPassword),
                 nextPasswordChangedAt(user.passwordChangedAt()));
+        smsCodeVerifier.consume(identity, code);
     }
 
     @Transactional
@@ -250,9 +267,11 @@ public class AuthService implements org.springframework.beans.factory.Initializi
             throw new BizException("支付密码必须为 6 位数字");
         }
         User user = recoveryUser(phone, email, true);
-        smsCodeVerifier.consume(recoveryIdentity(user, "payment"), code);
+        String identity = recoveryIdentity(user, "payment");
+        smsCodeVerifier.verify(identity, code);
         userDao.updatePaymentPassword(user.id(), PaymentPasswordUtil.hash(paymentPassword));
         userDao.updatePassword(user.id(), user.password(), nextPasswordChangedAt(user.passwordChangedAt()));
+        smsCodeVerifier.consume(identity, code);
     }
 
     public User recoveryUser(String phone, String email, boolean lock) {

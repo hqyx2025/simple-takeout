@@ -143,12 +143,12 @@ class SmsVerificationServiceTest {
     @SuppressWarnings({"unchecked", "rawtypes"})
     void consumeUsesRedisAtomicScriptAndRejectsReplay() {
         StringRedisTemplate redis = mock(StringRedisTemplate.class);
-        when(redis.execute(any(), any(List.class), anyString())).thenReturn(1L, 0L);
+        when(redis.execute(any(), any(List.class), anyString(), eq("consume"))).thenReturn(1L, 0L);
         SmsVerificationService service = new SmsVerificationService(redis, mock(SmsSender.class),
                 SIGNING_SECRET, 300, 60);
 
         service.consume("13800138000", "463829");
         assertThrows(BizException.class, () -> service.consume("13800138000", "463829"));
-        verify(redis, org.mockito.Mockito.times(2)).execute(any(), any(List.class), anyString());
+        verify(redis, org.mockito.Mockito.times(2)).execute(any(), any(List.class), anyString(), eq("consume"));
     }
 }
