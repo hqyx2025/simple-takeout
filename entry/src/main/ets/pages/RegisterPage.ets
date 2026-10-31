@@ -5,7 +5,7 @@ import { EmailCaptchaField } from '../components/EmailCaptchaField'
 import { AppTheme, AppInputStyle, AppButtonStyle } from '../common/theme/AppTheme'
 import { newPasswordError } from '../common/PasswordPolicy'
 import { registerRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
-import { requestEmailCodeApi, EmailCodeResult } from '../service/ApiService'
+import { requestEmailCodeApi, EmailCodeResult, checkUsernameAvailableApi } from '../service/ApiService'
 import { routerCompat as router } from '../common/UiNavigation'
 import { KeyboardAvoidMode } from '@kit.ArkUI'
 
@@ -13,6 +13,11 @@ import { KeyboardAvoidMode } from '@kit.ArkUI'
 @Component
 struct RegisterPage {
   @State username: string = ''
+  @State usernameError: string = ''
+  private usernameCheckVersion: number = 0
+  private usernameCheckTimer: number = -1
+  private checkedUsername: string = ''
+  private usernameAvailable: boolean | null = null
   @State phone: string = ''
   @State email: string = ''
   @State emailCode: string = ''
@@ -40,6 +45,8 @@ struct RegisterPage {
 
   aboutToDisappear(): void {
     this.pageActive = false
+    this.usernameCheckVersion++
+    if (this.usernameCheckTimer !== -1) { clearTimeout(this.usernameCheckTimer); this.usernameCheckTimer = -1 }
     if (this.cooldownTimer !== -1) { clearInterval(this.cooldownTimer); this.cooldownTimer = -1 }
     this.password = ''; this.confirmPassword = ''; this.emailCode = ''; this.captchaId = ''; this.captchaCode = ''
     this.getUIContext().setKeyboardAvoidMode(this.previousKeyboardAvoidMode)
@@ -56,10 +63,12 @@ struct RegisterPage {
               .backgroundColor(this.errorMsg ? AppTheme.ERROR_BG : AppTheme.SUCCESS_BG)
               .id(this.errorMsg ? 'register-error' : 'register-success')
           }
-          FormInput({ compact: true, label: '账号名', placeholder: '例如：小王', value: this.username,
+          FormInput({ compact: true, label: '用户名', placeholder: '例如：小王', value: this.username,
             icon: $r('app.media.login_user'), fieldId: 'login-username', maxLength: 64,
-            isEnabled: !this.submitting && !this.sendingCode, errorMessage: this.errorField === 'login-username' ? this.errorMsg : '',
-            onChange: (value: string) => { this.username = value; this.clearFeedback() } })
+            isEnabled: !this.submitting && !this.sendingCode,
+            errorMessage: this.usernameError || (this.errorField === 'login-username' ? this.errorMsg : ''),
+            onChange: (value: string) => { this.usernameChanged(value) },
+            onInputBlur: () => { this.checkUsername() } })
           FormInput({ compact: true, label: '邮箱', placeholder: '例如：name@example.com', value: this.email,
             icon: $r('app.media.login_user'), inputType: InputType.Email, fieldId: 'login-email', maxLength: 254,
             isEnabled: !this.submitting && !this.sendingCode, errorMessage: this.errorField === 'login-email' ? this.errorMsg : '',
@@ -86,6 +95,33 @@ struct RegisterPage {
           .enabled(!this.submitting && !this.sendingCode).onClick(() => { this.submitForm() })
       }.width('100%').justifyContent(FlexAlign.Center).padding({ left: 24, right: 24, top: 8, bottom: 20 })
     }.width('100%').height('100%').backgroundColor(AppTheme.PAGE)
+  }
+
+  private usernameChanged(value: string): void {
+    this.username = value
+    this.usernameCheckVersion++
+    this.usernameError = ''; this.checkedUsername = ''; this.usernameAvailable = null
+    this.clearFeedback()
+    if (this.usernameCheckTimer !== -1) { clearTimeout(this.usernameCheckTimer) }
+    this.usernameCheckTimer = -1
+    if (!value.trim()) { return }
+    this.usernameCheckTimer = setTimeout(() => { this.usernameCheckTimer = -1; this.checkUsername() }, 400)
+  }
+
+  private async checkUsername(): Promise<boolean> {
+    if (!this.pageActive) { return false }
+    if (this.usernameCheckTimer !== -1) { clearTimeout(this.usernameCheckTimer); this.usernameCheckTimer = -1 }
+    const name: string = this.username.trim()
+    if (!name) { return false }
+    if (name === this.checkedUsername && this.usernameAvailable !== null) { return this.usernameAvailable }
+    const version: number = ++this.usernameCheckVersion
+    let available: boolean | null = null
+    try { available = await checkUsernameAvailableApi(name) } catch (_) {}
+    if (!this.pageActive || version !== this.usernameCheckVersion || name !== this.username.trim()) { return false }
+    this.usernameAvailable = available
+    this.checkedUsername = available === null ? '' : name
+    this.usernameError = available === null ? '用户名暂时无法校验，请重试' : available ? '' : '用户名已重复'
+    return available === true
   }
 
   @Builder
@@ -128,9 +164,10 @@ struct RegisterPage {
       this.showError('请先输入图片中的 5 位校对码', 'email-captcha-input'); return
     }
     this.sendingCode = true
-    const captchaId: string = this.captchaId
-    this.captchaId = ''
     try {
+      if (!await this.checkUsername()) { this.showError(this.usernameError || '请检查用户名', 'login-username'); return }
+      const captchaId: string = this.captchaId
+      this.captchaId = ''
       const result: EmailCodeResult = await requestEmailCodeApi(this.phone.trim(), this.email.trim(),
         'register', this.username.trim(), captchaId, this.captchaCode)
       if (!this.pageActive) { return }
@@ -162,7 +199,7 @@ struct RegisterPage {
     this.errorField = field || (/校对码/.test(message) ? 'email-captcha-input'
       : /验证码/.test(message) ? ('register-email-code')
       : /密码/.test(message) ? 'login-password' : /邮箱/.test(message) ? 'login-email'
-      : /手机号/.test(message) ? 'login-phone' : '')
+      : /手机号/.test(message) ? 'login-phone' : /用户名|账号名/.test(message) ? 'login-username' : '')
   }
 
   private async submitForm(): Promise<void> {
@@ -178,6 +215,7 @@ struct RegisterPage {
     }
     this.submitting = true
     try {
+      if (!await this.checkUsername()) { this.showError(this.usernameError || '请检查用户名', 'login-username'); return }
       const user: User | undefined = await registerRemote(this.username.trim(), this.phone.trim(), this.email.trim(),
         this.emailCode.trim(), this.password, UserRole.CUSTOMER)
       if (!this.pageActive) { return }

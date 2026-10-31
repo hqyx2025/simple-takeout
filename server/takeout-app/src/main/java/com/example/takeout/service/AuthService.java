@@ -107,21 +107,29 @@ public class AuthService implements org.springframework.beans.factory.Initializi
     }
 
     private void requireRegistrationAvailable(String username, String phone) {
-        if (userDao.existsByUsername(username)) throw new BizException("账号名已被使用，请更换账号名");
+        if (userDao.existsByUsername(username)) throw new BizException("用户名已重复");
         if (userDao.existsByPhone(phone)) throw new BizException("手机号已注册，请返回登录或找回密码");
     }
 
     /** Validate mail-request inputs; reveal uniqueness conflicts only after mailbox ownership is verified. */
     public String registrationEmail(String username, String phone, String email) {
+        registrationUsername(username);
+        requirePhone(phone);
+        return requireEmail(email);
+    }
+
+    public boolean usernameAvailable(String username) {
+        return !userDao.existsByUsername(registrationUsername(username));
+    }
+
+    private String registrationUsername(String username) {
         if (username == null || username.isBlank()) {
-            throw new BizException("账号名不能为空");
+            throw new BizException("用户名不能为空");
         }
         if (username.trim().length() > 64) {
-            throw new BizException("账号名最多 64 个字符");
+            throw new BizException("用户名最多 64 个字符");
         }
-        requirePhone(phone);
-        String normalizedEmail = requireEmail(email);
-        return normalizedEmail;
+        return username.trim();
     }
 
     public String registrationIdentity(String phone, String email) {

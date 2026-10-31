@@ -589,6 +589,8 @@
   let authReturnHash = '';
   let authViewVersion = 0;
   let captchaVersion = 0;
+  let usernameCheckVersion = 0, usernameCheckTimer = null;
+  let checkedUsername = '', usernameAvailable = null, usernameError = '';
   const emailCooldowns = new Map();
   const authModeFromUrl = () => /^#\/register$/.test(window.location.hash) ? 'register'
     : /^#\/login(?:\?method=email)?$/.test(window.location.hash) ? (window.location.hash.includes('method=email') ? 'email' : 'login') : '';
@@ -600,14 +602,48 @@
   const closeAuth = (updateRoute = true) => {
     authViewVersion++; authRequestVersion++;
     clearTimeout(updateCodeButton.timer);
+    resetUsernameCheck();
     authVisibility(false);
     $('authForm').innerHTML = '';
+    $('authForm').dataset.mode = '';
     document.title = '简单外卖';
     if (updateRoute && authModeFromUrl()) window.history.replaceState(null, '', window.location.pathname + window.location.search + authReturnHash);
     authReturnFocus?.focus?.();
     authReturnFocus = null;
   };
   const authIcon = name => '<svg class="auth-icon" aria-hidden="true"><use href="auth-icons.svg#' + name + '"></use></svg>';
+  const resetUsernameCheck = () => {
+    usernameCheckVersion++; clearTimeout(usernameCheckTimer);
+    checkedUsername = ''; usernameAvailable = null; usernameError = '';
+  };
+  const renderUsernameError = () => {
+    const form = $('authForm'), input = form.querySelector('[name="username"]');
+    if (form.dataset.mode !== 'register' || !input) return;
+    input.setAttribute('aria-invalid', String(Boolean(usernameError)));
+    const error = $('authField-username');
+    error.textContent = usernameError; error.hidden = !usernameError;
+  };
+  const checkAuthUsername = async value => {
+    clearTimeout(usernameCheckTimer);
+    const form = $('authForm'), name = String(value ?? new FormData(form).get('username') ?? '').trim();
+    if (!name || form.dataset.mode !== 'register') return false;
+    if (name === checkedUsername && usernameAvailable !== null) { renderUsernameError(); return usernameAvailable; }
+    const view = authViewVersion, version = ++usernameCheckVersion;
+    try {
+      const available = await get('/api/auth/username-availability?username=' + encodeURIComponent(name));
+      if (view !== authViewVersion || version !== usernameCheckVersion || $('authPage').hidden
+        || name !== String(new FormData(form).get('username') ?? '').trim()) return false;
+      if (typeof available !== 'boolean') throw new Error('用户名暂时无法校验，请重试');
+      checkedUsername = name; usernameAvailable = available;
+      usernameError = available ? '' : '用户名已重复'; renderUsernameError();
+      return available;
+    } catch (error) {
+      if (view === authViewVersion && version === usernameCheckVersion && !$('authPage').hidden) {
+        usernameError = error.message || '用户名暂时无法校验，请重试'; renderUsernameError();
+      }
+      return false;
+    }
+  };
   // 图片校对码只在获取邮箱验证码时校验，最终提交不需要再次填写。
   const authInput = (label, name, placeholder, type = 'text', attributes = '', icon = 'user', required = name !== 'captchaCode') =>
     `<label class="field"><span>${label}</span><span class="auth-input">${authIcon(icon)}<input class="input" name="${name}" type="${type}" ${required ? 'required' : ''} placeholder="${placeholder}" ${attributes}></span></label>`;
@@ -632,6 +668,7 @@
     }
     const form = $('authForm'), previous = Object.fromEntries(new FormData(form).entries());
     authViewVersion++; authRequestVersion++; clearTimeout(updateCodeButton.timer);
+    resetUsernameCheck();
     const registration = mode === 'register';
     const hash = registration ? '#/register' : '#/login' + (mode === 'email' ? '?method=email' : '');
     if (route !== 'none' && window.location.hash !== hash) window.history[route === 'replace' ? 'replaceState' : 'pushState']({authMode:mode}, '', hash);
@@ -652,7 +689,7 @@
     const roleSelector = '<fieldset class="auth-roles"><legend>选择登录身份</legend><input type="hidden" name="loginType" value="' + esc(selected) + '"><div>' + roles.map(([role,label,icon]) => `<button type="button" class="auth-role" data-action="auth-role" data-id="${role}" aria-pressed="${role === selected}">${authIcon(icon)}${label}</button>`).join('') + '</div></fieldset>';
     const methods = '<div class="auth-tabs" aria-label="登录方式"><button class="btn ' + (mode === 'email' ? '' : 'active') + '" type="button" data-action="auth-switch" data-id="login" aria-pressed="' + (mode !== 'email') + '">密码登录</button><button class="btn ' + (mode === 'email' ? 'active' : '') + '" type="button" data-action="auth-switch" data-id="email" aria-pressed="' + (mode === 'email') + '">验证码登录</button></div>';
     form.innerHTML = '<div class="auth-fields">' + (registration
-      ? authInput('账号名','username','例如：小王','text','maxlength="64" autocomplete="username"') + email + phone + verification + password
+      ? authInput('用户名','username','例如：小王','text','maxlength="64" autocomplete="username"') + email + phone + verification + password
         + '<div class="auth-strength" id="authStrength" hidden aria-live="polite"><i></i><i></i><i></i><span id="authStrengthLabel"></span></div><p class="auth-rules" id="authPasswordRules" hidden>6 至 64 位，支持数字、英文字母和 ' + PASSWORD_SYMBOLS + '</p>'
         + authInput('确认密码','confirmPassword','请再次输入相同密码','password','id="authConfirmPassword" minlength="6" maxlength="64" autocomplete="new-password"','lock')
       : roleSelector + methods + phone + (mode === 'email' ? email + verification : password))
@@ -713,6 +750,7 @@
     const form = $('authForm'), version = authViewVersion, button = form.querySelector('[data-action="send-code"]');
     if (!button || button.disabled) return;
     showAuthError('');
+    renderUsernameError();
     const data = Object.fromEntries(new FormData(form).entries());
     for (const name of [...(form.dataset.mode === 'register' ? ['username'] : []), 'phone', 'email']) {
       if (!form.querySelector('[name="' + name + '"]').reportValidity()) return;
@@ -722,7 +760,10 @@
       form.querySelector('[name="captchaCode"]').focus(); return;
     }
     button.dataset.sending = 'true'; updateCodeButton();
+    let requested = false;
     try {
+      if (form.dataset.mode === 'register' && !await checkAuthUsername(data.username)) return;
+      requested = true;
       const result = await send('/api/auth/email-code', 'POST', {phone:data.phone,email:data.email,purpose:form.dataset.mode === 'register' ? 'register' : 'signin',username:data.username || '',captchaId:data.captchaId,captchaCode:data.captchaCode});
       emailCooldowns.set(data.email.trim().toLowerCase(), Date.now() + 60000);
       if (version !== authViewVersion || $('authPage').hidden) return;
@@ -732,7 +773,7 @@
       if (version === authViewVersion && !$('authPage').hidden) showAuthError(error.message);
     } finally {
       button.dataset.sending = 'false';
-      if (version === authViewVersion && !$('authPage').hidden) { updateCodeButton(); void refreshAuthCaptcha(); }
+      if (version === authViewVersion && !$('authPage').hidden) { updateCodeButton(); if (requested) void refreshAuthCaptcha(); }
     }
   };
   const loginWith = async (payload, endpoint = '/api/auth/login') => {
@@ -1569,10 +1610,19 @@
     }
     $('authError').textContent = message ? '操作未完成：' + message : '';
     $('authError').hidden = !message || inlineError;
+    if (usernameError && field !== 'username') renderUsernameError();
   };
-  $('authForm').addEventListener('input', () => {
+  $('authForm').addEventListener('input', e => {
+    if (e.target.name === 'username') resetUsernameCheck();
     showAuthError(''); updateCodeButton();
     if ($('authForm').dataset.mode !== 'register') return;
+    renderUsernameError();
+    if (e.target.name === 'username') {
+      if (e.isComposing) return;
+      const name = e.target.value.trim();
+      if (name) usernameCheckTimer = setTimeout(() => { void checkAuthUsername(name); }, 400);
+      return;
+    }
     updatePasswordFeedback();
     const confirm = $('authConfirmPassword');
     const mismatch = Boolean(confirm.value && confirm.value !== $('authPassword').value);
@@ -1580,13 +1630,17 @@
     if (mismatch) showAuthError('两次输入的密码不一致，请重新输入确认密码。');
   });
   $('authForm').addEventListener('focusin', updatePasswordFeedback);
-  $('authForm').addEventListener('focusout', () => setTimeout(updatePasswordFeedback, 0));
+  $('authForm').addEventListener('focusout', e => {
+    if (e.target.name === 'username') void checkAuthUsername(e.target.value);
+    setTimeout(updatePasswordFeedback, 0);
+  });
   $('authForm').addEventListener('invalid', e => showAuthError(e.target.validationMessage, e.target.name), true);
   $('authForm').addEventListener('submit', async e => {
     e.preventDefault();
     const form = e.currentTarget, version = authViewVersion, mode = form.dataset.mode;
     const data = Object.fromEntries(new FormData(form).entries());
     showAuthError('');
+    renderUsernameError();
     if (form.dataset.mode === 'register') {
       const passwordError = newPasswordError(data.password);
       if (passwordError) { showAuthError(passwordError); $('authPassword').focus(); return; }
@@ -1600,6 +1654,9 @@
     submit.disabled = true;
     try {
       if (form.dataset.mode === 'register') {
+        if (!await checkAuthUsername(data.username)) {
+          form.querySelector('[name="username"]')?.focus(); return;
+        }
         const r = await send('/api/auth/register', 'POST', {username:data.username,phone:data.phone,email:data.email,code:data.code,password:data.password,role:0});
         if (version !== authViewVersion || $('authPage').hidden) return;
         openAuth('login', 'replace');
@@ -1611,7 +1668,13 @@
       } else if (mode === 'email') {
         await loginWith({phone:data.phone,email:data.email,code:data.code,loginType:data.loginType}, '/api/auth/login/email');
       } else await loginWith({phone:data.phone,password:data.password,loginType:data.loginType});
-    } catch (error) { if (version === authViewVersion && !$('authPage').hidden) showAuthError(error.message); }
+    } catch (error) {
+      if (version === authViewVersion && !$('authPage').hidden) {
+        showAuthError(error.message);
+        const invalid = form.querySelector('[aria-invalid="true"]');
+        invalid?.focus(); invalid?.scrollIntoView?.({block:'center'});
+      }
+    }
     finally { submit.disabled = false; }
   });
   const boot = async () => {

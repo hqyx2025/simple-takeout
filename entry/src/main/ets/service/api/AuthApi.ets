@@ -91,6 +91,12 @@ export async function fetchCaptchaApi(): Promise<CaptchaResult | null> {
   return response.code === 200 ? response.data ?? null : null
 }
 
+export async function checkUsernameAvailableApi(username: string): Promise<boolean | null> {
+  const response: ApiResponse<boolean> = await get<boolean>(
+    '/api/auth/username-availability?username=' + encodeURIComponent(username.trim()), false)
+  return response.code === 200 && typeof response.data === 'boolean' ? response.data : null
+}
+
 export async function requestEmailCodeApi(phone: string, email: string, purpose: string, username: string = '', captchaId: string = '', captchaCode: string = ''): Promise<EmailCodeResult> {
   const request: EmailCodeRequest = { phone: phone, email: email, purpose: purpose, username: username, captchaId: captchaId, captchaCode: captchaCode }
   const response: ApiResponse<EmailCodeApiResult> = await post<EmailCodeApiResult>(

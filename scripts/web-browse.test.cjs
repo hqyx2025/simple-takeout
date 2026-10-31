@@ -11,7 +11,11 @@ function browser(sidebarCollapsed='0',options={}){
       const classes=new Set();
       nodes.set(id,{innerHTML:'',textContent:'',hidden:id==='authPage',dataset:{},value:'',isConnected:true,disabled:false,attributes:{},classes,listeners:{},
         parentElement:{classList:{add(){}},insertAdjacentHTML(){}},closest(){return {outerHTML:''};},reportValidity(){return true;},getAttribute(name){return this.attributes[name];},setAttribute(name,value){this.attributes[name]=value;},
-        addEventListener(name,listener){this.listeners[name]=listener;},async fire(name,event={}){return this.listeners[name]?.({preventDefault(){},currentTarget:this,target:this,...event});},insertAdjacentHTML(position,html){this.innerHTML+=html;},querySelector(selector){return element(id+':'+selector);},querySelectorAll(){return [];},focus(){this.focused=true;},
+        addEventListener(name,listener){this.listeners[name]=listener;},async fire(name,event={}){return this.listeners[name]?.({preventDefault(){},currentTarget:this,target:this,...event});},insertAdjacentHTML(position,html){this.innerHTML+=html;},querySelector(selector){return element(id+':'+selector);},querySelectorAll(selector){
+          if(id==='authForm'&&selector==='.auth-field-error')return [...nodes.entries()].filter(([key])=>key.startsWith('authField-')).map(([,node])=>node);
+          if(id==='authForm'&&selector==='[aria-invalid="true"]')return [...nodes.values()].filter(node=>node.attributes['aria-invalid']==='true');
+          return [];
+        },focus(){this.focused=true;},
         classList:{toggle(name,enabled){if(enabled)classes.add(name);else classes.delete(name);}}});
     }
     return nodes.get(id);
@@ -83,6 +87,7 @@ function browser(sidebarCollapsed='0',options={}){
       if(options.onRequest){const override=await options.onRequest(path,init);if(override?.json)return override;}
       let data=[];
       if(path==='/api/auth/captcha')data={id:'test-captcha',image:'data:image/png;base64,aGVsbG8='};
+      else if(path.startsWith('/api/auth/username-availability?'))data=true;
       else if(path==='/api/stores')data=stores;
       else if(/^\/api\/stores\/\d+$/.test(path))data=stores.find(store=>store.id===Number(path.split('/').at(-1)));
       else if(path==='/api/cart')data=typeof cart==='function'?cart():cart;

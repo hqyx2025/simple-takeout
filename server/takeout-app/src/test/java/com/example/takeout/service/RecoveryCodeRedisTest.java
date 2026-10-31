@@ -48,7 +48,7 @@ class RecoveryCodeRedisTest {
             when(users.existsByUsername("taken")).thenReturn(true);
             BizException conflict = assertThrows(BizException.class,
                     () -> auth.register("taken", phone, email, code, "newpass123", 0));
-            assertTrue(conflict.getMessage().contains("账号名"));
+            assertEquals("用户名已重复", conflict.getMessage());
             assertTrue(redis.getExpire(codeKey, java.util.concurrent.TimeUnit.MILLISECONDS) > 0);
             assertTrue(redis.getExpire(codeKey, java.util.concurrent.TimeUnit.MILLISECONDS) <= initialTtl,
                     "Retry must retain the deadline rather than restart fifteen minutes");

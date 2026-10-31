@@ -19,6 +19,7 @@ export struct FormInput {
   @State strength: number = 0
   @State passwordError: string = ''
   onChange: (value: string) => void = () => {}
+  onInputBlur: () => void = () => {}
 
   aboutToAppear(): void { this.updatePasswordFeedback() }
 
@@ -59,7 +60,7 @@ export struct FormInput {
             .type(this.inputType).maxLength(this.maxLength).enabled(this.isEnabled)
             .id(this.fieldId).accessibilityText(this.label)
             .onChange((value: string) => { this.value = value; this.updatePasswordFeedback(); this.onChange(value) })
-            .onFocus(() => { this.focused = true }).onBlur(() => { this.focused = false })
+            .onFocus(() => { this.focused = true }).onBlur(() => { this.focused = false; this.onInputBlur() })
         }.width('100%').height(44).padding({ left: 14, right: 14 }).backgroundColor(AppTheme.INPUT)
           .border({ width: this.errorMessage || this.passwordError || this.focused ? 1.5 : 1,
             color: this.errorMessage || this.passwordError ? AppTheme.ERROR : this.focused ? AppTheme.ACCENT : AppTheme.BORDER })
@@ -71,7 +72,7 @@ export struct FormInput {
           .borderColor(this.errorMessage || this.passwordError ? AppTheme.ERROR : this.focused ? AppTheme.ACCENT : AppTheme.BORDER)
           .width('100%').enabled(this.isEnabled).id(this.fieldId).accessibilityText(this.label)
           .onChange((value: string) => { this.value = value; this.updatePasswordFeedback(); this.onChange(value) })
-          .onFocus(() => { this.focused = true }).onBlur(() => { this.focused = false })
+          .onFocus(() => { this.focused = true }).onBlur(() => { this.focused = false; this.onInputBlur() })
       }
       if (this.passwordRules && this.focused) {
         Text(PASSWORD_HINT).fontSize(12).fontColor(AppTheme.MUTED).width('100%').id(this.fieldId + '-rules')

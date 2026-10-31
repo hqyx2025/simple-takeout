@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -59,6 +60,12 @@ public class AuthController {
         }
         loginRateLimiter.recordAttempt("register", ip);
         return ApiResponse.ok(authService.register(req.username(), req.phone(), req.email(), req.code(), req.password(), req.role()).safe());
+    }
+
+    @GetMapping("/username-availability")
+    public ApiResponse<Boolean> usernameAvailability(@RequestParam("username") String username, HttpServletRequest http) {
+        limitSessionEndpoint("username-check", http);
+        return ApiResponse.ok(authService.usernameAvailable(username));
     }
 
     /** The server generates, stores, and sends the one-time email code. Only local mock mode returns it. */

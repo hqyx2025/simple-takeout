@@ -50,6 +50,7 @@ public class WebConfig implements WebMvcConfigurer {
                         "/api/auth/login/email",
                         "/api/auth/captcha",
                         "/api/auth/register",
+                        "/api/auth/username-availability",
                         "/api/auth/refresh",
                         "/api/auth/logout",
                         "/api/auth/email-code",
