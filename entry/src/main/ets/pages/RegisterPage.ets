@@ -63,13 +63,13 @@ struct RegisterPage {
               .backgroundColor(this.errorMsg ? AppTheme.ERROR_BG : AppTheme.SUCCESS_BG)
               .id(this.errorMsg ? 'register-error' : 'register-success')
           }
-          FormInput({ compact: true, label: '用户名', placeholder: '例如：小王', value: this.username,
+          FormInput({ compact: true, label: '用户名', placeholder: '请输入用户名', value: this.username,
             icon: $r('app.media.login_user'), fieldId: 'login-username', maxLength: 64,
             isEnabled: !this.submitting && !this.sendingCode,
             errorMessage: this.usernameError || (this.errorField === 'login-username' ? this.errorMsg : ''),
             onChange: (value: string) => { this.usernameChanged(value) },
             onInputBlur: () => { this.checkUsername() } })
-          FormInput({ compact: true, label: '邮箱', placeholder: '例如：name@example.com', value: this.email,
+          FormInput({ compact: true, label: '邮箱', placeholder: '请输入邮箱', value: this.email,
             icon: $r('app.media.login_user'), inputType: InputType.Email, fieldId: 'login-email', maxLength: 254,
             isEnabled: !this.submitting && !this.sendingCode, errorMessage: this.errorField === 'login-email' ? this.errorMsg : '',
             onChange: (value: string) => { this.email = value; this.emailCode = ''; this.clearFeedback() } })
@@ -154,7 +154,7 @@ struct RegisterPage {
   private async sendVerificationCode(): Promise<void> {
     if (this.sendingCode || this.cooldownSeconds > 0 || this.submitting) { return }
     this.clearFeedback()
-    if (this.username.trim() === '') { this.showError('请输入账号名', 'login-username'); return }
+    if (this.username.trim() === '') { this.showError('请输入用户名', 'login-username'); return }
     if (!/^1\d{10}$/.test(this.phone.trim())) { this.showError('请输入正确的 11 位手机号', 'login-phone'); return }
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(this.email.trim())) { this.showError('请输入正确的邮箱地址', 'login-email'); return }
     if (!this.captchaId && /^[A-Za-z0-9]{5}$/.test(this.captchaCode)) {
@@ -205,7 +205,7 @@ struct RegisterPage {
   private async submitForm(): Promise<void> {
     if (this.submitting || this.sendingCode) { return }
     this.clearFeedback()
-    if (!this.username.trim()) { this.showError('请输入账号名', 'login-username'); return }
+    if (!this.username.trim()) { this.showError('请输入用户名', 'login-username'); return }
     if (!/^1\d{10}$/.test(this.phone.trim())) { this.showError('请输入正确的 11 位手机号', 'login-phone'); return }
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(this.email.trim())) { this.showError('请输入正确的邮箱地址', 'login-email'); return }
     if (!/^\d{6}$/.test(this.emailCode.trim())) { this.showError('请输入 6 位邮箱验证码', 'register-email-code'); return }

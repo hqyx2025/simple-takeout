@@ -680,7 +680,7 @@
     $('authSuccess').textContent = ''; $('authSuccess').hidden = true;
     form.dataset.mode = mode;
     const phone = authInput('手机号', 'phone', '请输入 11 位手机号', 'tel', 'maxlength="11" pattern="1[0-9]{10}" autocomplete="tel"', 'phone');
-    const email = authInput(registration ? '邮箱' : '绑定邮箱', 'email', '例如：name@example.com', 'email', 'maxlength="254" autocomplete="email"');
+    const email = authInput(registration ? '邮箱' : '绑定邮箱', 'email', '请输入邮箱', 'email', 'maxlength="254" autocomplete="email"');
     const password = authInput('密码', 'password', registration ? '请输入 6 至 64 位密码' : '请输入密码', 'password',
       registration ? 'id="authPassword" minlength="6" maxlength="64" autocomplete="new-password" aria-describedby="authPasswordRules"' : 'autocomplete="current-password"', 'lock');
     const verification = `<div class="auth-captcha">${authInput('图片校对码', 'captchaCode', '输入右图 5 位字符', 'text', 'maxlength="5" autocomplete="off"')}<button class="btn captcha-image" type="button" data-action="captcha-refresh" aria-label="更换图片校对码"><img id="authCaptchaImage" alt="图片校对码" hidden><span id="authCaptchaLabel">点击加载</span></button><input type="hidden" name="captchaId"></div><div class="auth-code-row">${authInput('邮箱验证码', 'code', '请输入 6 位验证码', 'text', 'inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code"')}<button class="btn" type="button" data-action="send-code">获取验证码</button></div><p id="authCodeStatus" class="help-text" role="status"></p>`;
@@ -689,10 +689,11 @@
     const roleSelector = '<fieldset class="auth-roles"><legend>选择登录身份</legend><input type="hidden" name="loginType" value="' + esc(selected) + '"><div>' + roles.map(([role,label,icon]) => `<button type="button" class="auth-role" data-action="auth-role" data-id="${role}" aria-pressed="${role === selected}">${authIcon(icon)}${label}</button>`).join('') + '</div></fieldset>';
     const methods = '<div class="auth-tabs" aria-label="登录方式"><button class="btn ' + (mode === 'email' ? '' : 'active') + '" type="button" data-action="auth-switch" data-id="login" aria-pressed="' + (mode !== 'email') + '">密码登录</button><button class="btn ' + (mode === 'email' ? 'active' : '') + '" type="button" data-action="auth-switch" data-id="email" aria-pressed="' + (mode === 'email') + '">验证码登录</button></div>';
     form.innerHTML = '<div class="auth-fields">' + (registration
-      ? authInput('用户名','username','例如：小王','text','maxlength="64" autocomplete="username"') + email + phone + verification + password
+      ? '<div class="auth-identity">' + authInput('用户名','username','请输入用户名','text','maxlength="64" autocomplete="username"') + email + phone + '</div>'
+        + '<div class="auth-verification">' + verification + '</div><div class="auth-passwords"><div class="auth-password-field">' + password
         + '<div class="auth-strength" id="authStrength" hidden aria-live="polite"><i></i><i></i><i></i><span id="authStrengthLabel"></span></div><p class="auth-rules" id="authPasswordRules" hidden>6 至 64 位，支持数字、英文字母和 ' + PASSWORD_SYMBOLS + '</p>'
-        + authInput('确认密码','confirmPassword','请再次输入相同密码','password','id="authConfirmPassword" minlength="6" maxlength="64" autocomplete="new-password"','lock')
-      : roleSelector + methods + phone + (mode === 'email' ? email + verification : password))
+        + '</div>' + authInput('确认密码','confirmPassword','请再次输入相同密码','password','id="authConfirmPassword" minlength="6" maxlength="64" autocomplete="new-password"','lock') + '</div>'
+      : roleSelector + methods + phone + (mode === 'email' ? email + '<div class="auth-verification">' + verification + '</div>' : password))
       + '</div><div class="form-actions"><button class="btn primary" type="submit">' + (registration ? '注册' : '登录') + authIcon('arrow') + '</button>'
       + (registration ? '' : '<button class="auth-link" type="button" data-action="auth-switch" data-id="register">还没有账号？去注册</button>') + '</div>';
     form.querySelectorAll('.field .input').forEach(input => {
