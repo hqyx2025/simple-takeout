@@ -1,6 +1,6 @@
 {
-  "createdAt": "2026-11-03T23:10:20+08:00",
-  "baseCommit": "3aea5e6c5a4ebea8fce8f3a3d00b573c401ee3ef",
+  "createdAt": "2026-11-03T23:35:57+08:00",
+  "baseCommit": "e0f6bd30870a8bf775ad6c260bd11421429f9942",
   "dirtyWorkspace": true,
   "sourceFiles": 581,
   "sourceHashList": "source-hashes.json",
@@ -33,7 +33,7 @@
       "sha256": "34c1523d6610d400ce755888343f8b1123bdc6fd7803370c67e0e8c3c778f45a"
     }
   ],
-  "deployment": "Local validation and packages only. Production remains store-review-20261103-r2; no web changes or production deployment in this follow-up.",
+  "deployment": "User-authorized boundary-20261103-r3 deployed; remote JAR/HAP/thesis hashes and app/gateway/ERP health verified. See deployment-summary.json.",
   "conditions": [
     "Backend MySQL/Redis gates enabled; all 736 executed",
     "Normal HAP rebuilt after isolated UI test builds; bundle source bytes restored; test API/account overrides absent in delivery build",
@@ -45,8 +45,16 @@
       "sha256": "b3d72b2810b4f3c1b4cbd66807f4cedd6c00398df63907d8dd259a495a723e26"
     },
     {
+      "path": "ci-summary.json",
+      "sha256": "b8fcbfdcaa1f7b2032dd08bcfdd4ba3f3f3e0cc8f97f8f02516fee1ff4da7b7c"
+    },
+    {
       "path": "codelinter-summary.json",
       "sha256": "0be609da86e9c2b997d1264ea2854bffbe4fffdfb1d58ef426e15b4085a3e620"
+    },
+    {
+      "path": "deployment-summary.json",
+      "sha256": "13188b5daffee5cf7294e6919c456f424732aa39c695597720b41ca4097bf8fd"
     },
     {
       "path": "device-fixture-summary.json",
@@ -87,6 +95,10 @@
     {
       "path": "performance-sustained.json",
       "sha256": "dbf914b0836795bb89d6d8e581caca630d6392f9686d2c18b9b213b537af70d0"
+    },
+    {
+      "path": "README.md",
+      "sha256": "2d3dfb7fcd6c7124297936eec3bf53b6bb3eaf2189a073e789a5276bf24a9400"
     },
     {
       "path": "screenshots/account-a-restored.png",

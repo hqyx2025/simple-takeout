@@ -1,6 +1,6 @@
 # 状态文案与边界补验
 
-本轮修正商户订单状态、退款拒绝说明和论文两幅图，并补测账号隔离、API 连接中断、响应丢失重试、深浅色及应用最大字号。持续负载发现的骑手订单池慢查询也已修复，代码与安装包、后端 JAR 已在本机验证；本轮没有部署线上服务。
+本轮修正商户订单状态、退款拒绝说明和论文两幅图，并补测账号隔离、API 连接中断、响应丢失重试、深浅色及应用最大字号。持续负载发现的骑手订单池慢查询也已修复。经用户明确要求，最新后端已于 2026-11-03 23:26 发布为 `boundary-20261103-r3`，HAP 与论文已上传服务器；[部署证据](deployment-summary.json)保留健康状态和远端文件哈希。
 
 | 范围 | 结果与证据 |
 | --- | --- |
@@ -31,4 +31,6 @@
 
 本机复现入口：`mvn -f server/pom.xml test`、`node --test scripts/*.test.cjs` 和[设备实测指南](../../../设备实测指南.md)。本轮隔离夹具、TCP 故障代理、测量和构建脚本位于 `TemporaryCacheStorage/boundary-20261103/`；私有配置注入测试 API 与账号，不进入公开证据。测试前必须布置新的已送达未结算／已结算退款申请，不能反复审批已拒绝的申请。测试代理只连接本机隔离端口，不连接生产域名。
 
-本轮服务端优化已打包但未部署；正式 HAP 可安装，仍不是 Release 上架包。校园实网、物理真机、学校查重／签字等边界保留。
+发布使用源码提交 `e0f6bd3` 对应的已验证业务代码。上线前主库与 ERP 库均已备份，沿用现有私有配置和数据卷；线上首页 HTTP 200、540 店目录、App／Gateway／ERP 健康及运行 JAR 哈希均已核对。HAP 与论文保存在服务器私有发布目录，哈希与本机一致，未把含开发入口的 debug HAP 放到公开静态下载地址。正式 HAP 仍不是 Release 上架包；校园实网、物理真机、学校查重／签字等边界保留。
+
+业务代码已推送 GitHub／Gitee 的 `master`；GitHub [Backend CI](https://github.com/hqyx2025/simple-takeout/actions/runs/41664307467) 与 [Frontend CI](https://github.com/hqyx2025/simple-takeout/actions/runs/41664307714) 均通过，[CI 身份与状态](ci-summary.json)记录对应完整提交号。源码包 `source-e0f6bd3.tar.gz`、主 HAP 和论文共三项已上传，[部署摘要](deployment-summary.json)含远端字节数与 SHA-256；验收记录随后以单独文档提交同步。

@@ -33,7 +33,8 @@
     "Device bundle temporarily replaced with .review and test-only local API/account overrides; original bundle sources restored byte-for-byte",
     "Normal delivery HAP built after test bundle, without test-only account overrides and with domain API configuration",
     "No source commit/push; no new server/web changes in final native/material continuation",
-    "Prior same-day deployment store-review-20261103-r2 remains live; native MerchantOrders stale callback fix is in delivered HAP"
+    "Prior same-day deployment store-review-20261103-r2 remains live; native MerchantOrders stale callback fix is in delivered HAP",
+    "These are earlier-run artifact hashes; mutable local artifact paths may now contain the subsequent release. Use the boundary manifest for current delivery."
   ],
   "evidence": [
     {
@@ -78,7 +79,7 @@
     },
     {
       "path": "README.md",
-      "sha256": "9938ead257c6ea0bd854c27e168bfd687b76739d1fa1bef52c60c55b4207fb16"
+      "sha256": "83f429d2ce44812c3b4e1b61e7fb5947efbb92f71f39ada0d4c1b9d4d73349f1"
     },
     {
       "path": "reference-verification.json",
@@ -104,5 +105,7 @@
       "path": "source-hashes.json",
       "sha256": "856facf54672c9c7915abe06e62dcfbfd1c2635cd532034da409d4490a1847f5"
     }
-  ]
+  ],
+  "status": "historical-superseded",
+  "supersededBy": "boundary/artifact-manifest.json"
 }

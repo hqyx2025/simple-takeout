@@ -1,0 +1,18 @@
+[
+  {
+    "id": 41664307714,
+    "name": "Frontend",
+    "head_sha": "e0f6bd30870a8bf775ad6c260bd11421429f9942",
+    "status": "completed",
+    "conclusion": "success",
+    "html_url": "https://github.com/hqyx2025/simple-takeout/actions/runs/41664307714"
+  },
+  {
+    "id": 41664307467,
+    "name": "Backend",
+    "head_sha": "e0f6bd30870a8bf775ad6c260bd11421429f9942",
+    "status": "completed",
+    "conclusion": "success",
+    "html_url": "https://github.com/hqyx2025/simple-takeout/actions/runs/41664307467"
+  }
+]
