@@ -10,6 +10,10 @@ CREATE TABLE IF NOT EXISTS users (
     password VARCHAR(128) NOT NULL,
     role INT NOT NULL DEFAULT 0,
     status INT NOT NULL DEFAULT 1,
+    can_create TINYINT NOT NULL DEFAULT 1 CHECK (can_create IN (0,1)),
+    can_read TINYINT NOT NULL DEFAULT 1 CHECK (can_read IN (0,1)),
+    can_update TINYINT NOT NULL DEFAULT 1 CHECK (can_update IN (0,1)),
+    can_delete TINYINT NOT NULL DEFAULT 1 CHECK (can_delete IN (0,1)),
     balance DECIMAL(10,2) NOT NULL DEFAULT 0,
     create_time VARCHAR(32) NOT NULL,
     -- 最后一次改密时间（yyyy-MM-dd HH:mm:ss，空=从未改密）：签发时间早于它的 token 一律失效
@@ -41,8 +45,21 @@ CREATE TABLE IF NOT EXISTS stores (
     category_ids VARCHAR(128) DEFAULT '[]',
     owner_id BIGINT NOT NULL,
     status INT NOT NULL DEFAULT 1,
+    review_status INT NOT NULL DEFAULT 0,
+    platform_status INT NOT NULL DEFAULT 1,
+    review_reason VARCHAR(512) NOT NULL DEFAULT '',
     recommended INT NOT NULL DEFAULT 0,
     create_time VARCHAR(32) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS store_review_records (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    store_id BIGINT NOT NULL,
+    status INT NOT NULL,
+    operator_id BIGINT NOT NULL,
+    reason VARCHAR(512) NOT NULL DEFAULT '',
+    create_time VARCHAR(32) NOT NULL,
+    KEY idx_store_review (store_id, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS goods (

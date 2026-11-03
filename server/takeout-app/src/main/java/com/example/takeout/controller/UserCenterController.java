@@ -1,5 +1,7 @@
 package com.example.takeout.controller;
 
+import com.example.takeout.common.CrudOperation;
+import com.example.takeout.common.RequireCrud;
 import com.example.takeout.common.ApiResponse;
 import com.example.takeout.common.BizException;
 import com.example.takeout.model.Address;
@@ -81,6 +83,7 @@ public class UserCenterController {
         return ApiResponse.ok(service.isFavorited(userId, storeId));
     }
 
+    @RequireCrud({})
     @PostMapping("/favorites/toggle")
     public ApiResponse<Boolean> toggleFavorite(@RequestAttribute("userId") long userId,
                                                @RequestParam long storeId) {
@@ -147,6 +150,7 @@ public class UserCenterController {
         return ApiResponse.ok();
     }
 
+    @RequireCrud({CrudOperation.READ})
     @PostMapping("/wallet/bank-cards/{id}/reveal")
     public ApiResponse<RevealedBankCard> revealBankCard(@RequestAttribute("userId") long userId,
                                                         @PathVariable long id,

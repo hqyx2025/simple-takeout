@@ -2,7 +2,7 @@ import { AppButtonStyle, AppCardStyle, AppFilterStyle, AppTextAreaStyle } from '
 /**
  * 商户订单管理页
  * 按状态Tab分类展示商户所有店铺订单
- * 支持接单(1→2)、出餐(2→3)、确认送达(3→4)状态流转
+ * 接单后保持 status=2，出餐记录 readyTime；取餐后才进入配送中。
  */
 import { AppMotion } from '../common/theme/AppMotion'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
@@ -341,7 +341,8 @@ export struct MerchantOrdersPage {
             ListItem() {
               this.OrderCard(order)
             }
-          }, (order: Order) => `${order.id}`)
+          // Builder 行捕获订单对象；业务状态改变时只重建该行，避免接单后仍执行旧的接单回调。
+          }, (order: Order) => `${order.id}:${order.status}:${order.readyTime ?? ''}:${order.riderName ?? ''}:${order.escrowStatus ?? 0}`)
           ListItem() {
             Row({ space: SPACING.SM }) {
               Text(`已显示 ${this.allOrders.length} / ${this.totalOrders}`)
@@ -375,6 +376,16 @@ export struct MerchantOrdersPage {
       .onClick(() => { this.selectStatus(tab.status) })
   }
 
+  private orderStatusText(order: Order): string {
+    if (order.status === 2 && (order.escrowStatus ?? 0) !== 2) {
+      if ((order.riderName ?? '') !== '') { return '待骑手取餐' }
+      if ((order.readyTime ?? '') !== '') {
+        return order.capabilities?.fulfillmentMode === 'MERCHANT' ? '待商家配送' : '待骑手接单'
+      }
+    }
+    return getOrderStatusText(order.status, order.escrowStatus ?? 0)
+  }
+
   @Builder
   OrderCard(order: Order) {
     Column({ space: SPACING.SM }) {
@@ -392,7 +403,7 @@ export struct MerchantOrdersPage {
           .fontColor(COLORS.TEXT_PRIMARY)
           .layoutWeight(1)
           .margin({ left: SPACING.SM })
-        Text(getOrderStatusText(order.status, order.escrowStatus ?? 0))
+        Text(this.orderStatusText(order))
           .fontSize(FONT_SIZE.MD)
           .fontColor(accentFg(order.status))
           .backgroundColor(accentBg(order.status))
@@ -532,7 +543,7 @@ export struct MerchantOrdersPage {
             .id(`merchant-action-${order.id}`)
             .onClick(() => { this.handleReady(order) })
         }
-        Text('制作中如有异常，请联系平台处理')
+        Text('如有履约异常，请联系平台处理')
           .fontSize(FONT_SIZE.XS)
           .fontColor(COLORS.TEXT_HINT)
       }

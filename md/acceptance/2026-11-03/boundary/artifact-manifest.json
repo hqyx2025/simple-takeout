@@ -1,0 +1,180 @@
+{
+  "createdAt": "2026-11-03T23:10:20+08:00",
+  "baseCommit": "3aea5e6c5a4ebea8fce8f3a3d00b573c401ee3ef",
+  "dirtyWorkspace": true,
+  "sourceFiles": 581,
+  "sourceHashList": "source-hashes.json",
+  "artifacts": [
+    {
+      "name": "normal domain debug HAP",
+      "path": "entry/build/default/outputs/default/entry-default-unsigned.hap",
+      "sha256": "511a40b6ebe98a7d4e78be7a148464535613655e5f95d000d9aab3fcefe86d7e",
+      "bytes": 10207695
+    },
+    {
+      "name": "backend application JAR",
+      "path": "server/takeout-app/target/takeout-app-1.0.0.jar",
+      "sha256": "7c87b2ac91bd523050f394da5336a941372b07c8c746a2f75bb1c13fda7be30f",
+      "bytes": 102146512
+    },
+    {
+      "name": "revised thesis",
+      "filename": "彭志强_基于鸿蒙的校园外卖服务平台的设计与实现_论文_2026-11-03整改版.docx",
+      "sha256": "492e5e99518ad6f4cd2e7adce3ce4f04d345a3d4d0834d68b992ff5aab535a86"
+    },
+    {
+      "name": "isolated device default.hap",
+      "privateLocalPath": "TemporaryCacheStorage/boundary-20261103/default.hap",
+      "sha256": "c98bfa866ae4bd0ec4e904a62f7b6e0a304997f9f83a638e8a3759bb917dd5e1"
+    },
+    {
+      "name": "isolated device ohosTest.hap",
+      "privateLocalPath": "TemporaryCacheStorage/boundary-20261103/ohosTest.hap",
+      "sha256": "34c1523d6610d400ce755888343f8b1123bdc6fd7803370c67e0e8c3c778f45a"
+    }
+  ],
+  "deployment": "Local validation and packages only. Production remains store-review-20261103-r2; no web changes or production deployment in this follow-up.",
+  "conditions": [
+    "Backend MySQL/Redis gates enabled; all 736 executed",
+    "Normal HAP rebuilt after isolated UI test builds; bundle source bytes restored; test API/account overrides absent in delivery build",
+    "Production authorization, radius and transaction rules unchanged; per-store cache lifetime is one pool request"
+  ],
+  "evidence": [
+    {
+      "path": "backend-summary.json",
+      "sha256": "b3d72b2810b4f3c1b4cbd66807f4cedd6c00398df63907d8dd259a495a723e26"
+    },
+    {
+      "path": "codelinter-summary.json",
+      "sha256": "0be609da86e9c2b997d1264ea2854bffbe4fffdfb1d58ef426e15b4085a3e620"
+    },
+    {
+      "path": "device-fixture-summary.json",
+      "sha256": "6ee1080ee842d67d697c63f389c5b99bea0339e453d9f505931d45eaa95049b3"
+    },
+    {
+      "path": "device-summary.json",
+      "sha256": "ff912866ccdcd45140d86d83df60fa15446048b1b6432558aa2857a7199c3da6"
+    },
+    {
+      "path": "figures/architecture-erp.svg",
+      "sha256": "3d9fc7f99f644248cca9a721095b1249da3f0afd3bac4d36079534c4b9be9237"
+    },
+    {
+      "path": "figures/order-partial-refund.svg",
+      "sha256": "89bf529c27fc0b6d549a59777eca27456c875dda193606f2dd66cd1c83da7a2f"
+    },
+    {
+      "path": "manuscript-audit.json",
+      "sha256": "36d49dc260b7e8db2ed84cd75e71a1df0acb152339c0c3a93daf2dc136248f0f"
+    },
+    {
+      "path": "network-faults.json",
+      "sha256": "385aa6f74ef0a9afb60529d48f47f0462a0e45dd1a559b3e17770548cc2cf730"
+    },
+    {
+      "path": "node-summary.json",
+      "sha256": "478e535c8da5fe6307ee2960dff093cb6219ca06b3916ba2e15736c8e73b1090"
+    },
+    {
+      "path": "performance-comparison.json",
+      "sha256": "641b4a062bc274d4556d03a282397aee3fa292ea58b4ba997cb70cd4080c8eaf"
+    },
+    {
+      "path": "performance-sustained-before.json",
+      "sha256": "a7b0cbd6487c5493caad9167ce711beff8af2af5d091486c7183972ef577173d"
+    },
+    {
+      "path": "performance-sustained.json",
+      "sha256": "dbf914b0836795bb89d6d8e581caca630d6392f9686d2c18b9b213b537af70d0"
+    },
+    {
+      "path": "screenshots/account-a-restored.png",
+      "sha256": "acf5a491ee63c4d1347c63a58bf7f77e4ae8fa927c045b3d7d06c428edbb1003"
+    },
+    {
+      "path": "screenshots/account-b.png",
+      "sha256": "1cfbea3090eb01b3f2da054e54e000e76a5aed6d0b7153aef00769abd1fa2c84"
+    },
+    {
+      "path": "screenshots/campus-01-paid.png",
+      "sha256": "bfd4d26ff89a07caaf2c4bd2d8c565e169f9dd3c0c1f369ec0c75fedd63dde58"
+    },
+    {
+      "path": "screenshots/campus-02-merchant-ready.png",
+      "sha256": "aab1c3ddd82f234dc22b62d6e4cf2bb696ac6eb13baefe2b145b6c2e887cabeb"
+    },
+    {
+      "path": "screenshots/campus-03-rider-delivered.png",
+      "sha256": "cbdd3e3f8cd438fa16c6e430b41f929f3afa9fa3636c1d74d6ac098b1c51a127"
+    },
+    {
+      "path": "screenshots/campus-04-admin-refund.png",
+      "sha256": "896de5cd4f42295ebb04cc27dc41a080364bdd0292ae49d64d1052fdfd32d320"
+    },
+    {
+      "path": "screenshots/dark-large-merchant.png",
+      "sha256": "daf4b11538c170a40a72c562d5a9c1f28a372629728e9a849a7dfc2dae909fd7"
+    },
+    {
+      "path": "screenshots/dark-large-refund.png",
+      "sha256": "c9de804717206fe35d267061d80a293e807e2d817d9f917c7c6f84dba8a53c2f"
+    },
+    {
+      "path": "screenshots/dark-merchant.png",
+      "sha256": "f5f46e5fdd54ae53eefa251370a07c196ca14aee48d5a9007cacefd98aabf462"
+    },
+    {
+      "path": "screenshots/dark-refund.png",
+      "sha256": "adb9cc8822462225173d1b0266f6c3a9dcbc312866420d4f756689f8b0593ae0"
+    },
+    {
+      "path": "screenshots/light-large-merchant.png",
+      "sha256": "0f061dc498c55bd2b6e316d62c74f1b10afac58910aaef3986d735b9e56a2209"
+    },
+    {
+      "path": "screenshots/light-large-refund.png",
+      "sha256": "adcd6961383b6492818cf098091cce8539e19054a5d447d1c3aabddc9eb06ef2"
+    },
+    {
+      "path": "screenshots/light-merchant.png",
+      "sha256": "9c51a85341e1e4aa4c6dee61fd16910c819807d1ada46596da77df7ae66158cc"
+    },
+    {
+      "path": "screenshots/light-refund.png",
+      "sha256": "314e02390c3523aa277a1adc1e1fce65f87b6b3a25e82e6b0680805358933ce9"
+    },
+    {
+      "path": "screenshots/offline-read.png",
+      "sha256": "df3bc25b9c2bdcf670feb97ee17a7f931b08e22b8ab452fcbff15d9b28eab206"
+    },
+    {
+      "path": "screenshots/reconciled-single-order.png",
+      "sha256": "5bdee2fd859bd73b93d82432d09434a1a2ce4f99c15d08aaf53413b6d2da32a4"
+    },
+    {
+      "path": "screenshots/reconnected-read.png",
+      "sha256": "5a4da5ca9342996748436e81c8394fc31b2a0543690a2ee30ee5bc523bc3669d"
+    },
+    {
+      "path": "screenshots/reject-4-dialog.png",
+      "sha256": "f37cac2eeabcd2c34e061aa8f0c037d0d4533076e2c320ae9d0a0945afeca190"
+    },
+    {
+      "path": "screenshots/reject-4-result.png",
+      "sha256": "b04964fb7860e21a1589393d5e3182830af0c4bcfecdd1db2189413e2b4373cd"
+    },
+    {
+      "path": "screenshots/reject-5-dialog.png",
+      "sha256": "bd2dfb72f751670a6676f05af088a8d3be711556e1013c60c226e3798c44e776"
+    },
+    {
+      "path": "screenshots/reject-5-result.png",
+      "sha256": "cfbf05f6db908efeaa34ae197cbb32c5376db81efd7d400db391f5129ee6ff99"
+    },
+    {
+      "path": "source-hashes.json",
+      "sha256": "5cc18e5ee07b4112d008c8a716efed8c7bc63c43fb7a6017535a4552f3eeec3d"
+    }
+  ]
+}

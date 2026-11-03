@@ -26,6 +26,9 @@ export interface ServerStore {
   ownerId: number
   status: number
   recommended: number
+  reviewStatus?: number
+  platformStatus?: number
+  reviewReason?: string
   /** 配送半径（米，0=不限） */
   deliveryRadius?: number
   /** 当前用户定位下是否在配送范围内（服务端按坐标判定） */

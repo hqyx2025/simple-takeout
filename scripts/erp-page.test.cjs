@@ -6,7 +6,7 @@ const { randomUUID } = require('node:crypto');
 const source = fs.readFileSync(require('node:path').join(__dirname, '../server/takeout-gateway/src/main/resources/static/erp.js'), 'utf8');
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
-async function runtime({ storage = new Map(), ownerId = 1, materialCount = 1, supplierCount = 0, purchaseCount = 2 } = {}) {
+async function runtime({ storage = new Map(), ownerId = 1, materialCount = 1, supplierCount = 0, purchaseCount = 2, documentNumber } = {}) {
   const listeners = {}, requests = [], writes = [], toasts = [], reads = [], confirmations = [], prompts = [];
   let connected = true, confirmed = true;
   const sessionStorage = { getItem: key => storage.get(key) ?? null, setItem: (key,value) => storage.set(key,value) };
@@ -28,7 +28,7 @@ async function runtime({ storage = new Map(), ownerId = 1, materialCount = 1, su
   const shell = { isConnected: true, querySelector(s) { return s === '[data-erp-body]' ? body : s === '[data-erp-pending]' ? pendingNode : selector; },
     querySelectorAll() { return []; }, addEventListener(type, listener) { listeners[type] = listener; } };
   const root = { innerHTML: '', querySelector() { return shell; } };
-  const purchases = Array.from({length:purchaseCount},(_,i) => ({ id:i+1, status: 'CONFIRMED', payable: 10, paid: 0 }));
+  const purchases = Array.from({length:purchaseCount},(_,i) => ({ id:i+1, document_no: documentNumber, status: 'CONFIRMED', payable: 10, paid: 0 }));
   const catalog=Array.from({length:materialCount},(_,i)=>({id:i+8,name:'餐盒'+i,unit:'只'})).reverse();
   const window = { sessionStorage, confirm(message) { confirmations.push(message);return confirmed; }, prompt() { return prompts.shift(); } };
   let postFailure = null, postDelay = null;
@@ -62,6 +62,18 @@ function resolvePurchase(r, id, name) {
   r.requests.find(q => q.url.includes(`/purchases/${id}/lines`)).resolve([{ material_id: 8, name, quantity: 2, received: 0, factor: 1, unit_price: 5, unit: '只' }]);
   r.requests.find(q => q.url.includes(`purchaseId=${id}`)).resolve([]);
 }
+
+test('full Snowflake document number stays a string while actions retain the original database ID', async () => {
+  const number = 'CG110891014553628673', r = await runtime({ documentNumber: number });
+  assert.match(r.body.innerHTML, new RegExp(number));
+  const load = r.click(1);
+  resolvePurchase(r, 1, '餐盒'); await load;
+  assert.match(r.target.innerHTML, new RegExp(`采购单 ${number}`));
+  const form = r.forms().find(f => f.dataset.erpForm === 'receive');
+  form.data = { materialId: '8', quantity: '1' };
+  await r.submit(form);
+  assert.equal(JSON.parse(r.writes[0].options.body).id, 1);
+});
 
 test('reversed purchase-detail responses keep the visible document and submission ID together', async () => {
   const r = await runtime();

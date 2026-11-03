@@ -2,9 +2,12 @@ package com.example.takeout.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.takeout.common.BizException;
+import com.example.takeout.common.CrudPermissions;
+import com.example.takeout.common.CrudOperation;
 import com.example.takeout.dao.GoodsDao;
 import com.example.takeout.dao.GoodsSpecDao;
 import com.example.takeout.dao.StoreDao;
+import com.example.takeout.dao.UserDao;
 import com.example.takeout.mapper.CartItemMapper;
 import com.example.takeout.model.CartItemEntity;
 import com.example.takeout.model.CartItemView;
@@ -35,12 +38,14 @@ public class CartService {
     private final GoodsDao goodsDao;
     private final StoreDao storeDao;
     private final GoodsSpecDao specDao;
+    private final UserDao users;
 
-    public CartService(CartItemMapper cartItemMapper, GoodsDao goodsDao, StoreDao storeDao, GoodsSpecDao specDao) {
+    public CartService(CartItemMapper cartItemMapper, GoodsDao goodsDao, StoreDao storeDao, GoodsSpecDao specDao, UserDao users) {
         this.cartItemMapper = cartItemMapper;
         this.goodsDao = goodsDao;
         this.storeDao = storeDao;
         this.specDao = specDao;
+        this.users = users;
     }
 
     public List<CartItemView> list(long userId) {
@@ -82,6 +87,7 @@ public class CartService {
         Goods goods = requireAvailableGoods(goodsId);
         GoodsSpec spec = requireSpec(goods, specId);
         CartItemEntity existing = findEntityForUpdate(userId, goodsId, specId);
+        requireOperation(userId, existing == null ? CrudOperation.CREATE : CrudOperation.UPDATE);
         // 用 long 累加再判上限：int 直接相加会在「已加购 1 份 + 请求 2147483647 份」时溢出成负数，
         // 而 validateStock 的 quantity > available 对负数不成立 → 负数落库、库存口径被绕过。
         long next = existing == null ? quantity : (long) existing.getQuantity() + quantity;
@@ -102,6 +108,7 @@ public class CartService {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public List<CartItemView> setQuantity(long userId, long goodsId, long specId, int quantity) {
         if (quantity <= 0) {
+            requireOperation(userId, CrudOperation.DELETE);
             return deleteOne(userId, goodsId, specId);
         }
         // 与 add 保持完全相同的锁顺序，避免并发下单/改数量互相死锁。
@@ -109,8 +116,14 @@ public class CartService {
         Goods goods = requireAvailableGoods(goodsId);
         GoodsSpec spec = requireSpec(goods, specId);
         validateStock(goods, spec, quantity);
-        saveQuantity(userId, goodsId, specId, quantity, findEntityForUpdate(userId, goodsId, specId));
+        CartItemEntity existing = findEntityForUpdate(userId, goodsId, specId);
+        requireOperation(userId, existing == null ? CrudOperation.CREATE : CrudOperation.UPDATE);
+        saveQuantity(userId, goodsId, specId, quantity, existing);
         return list(userId);
+    }
+
+    private void requireOperation(long userId, CrudOperation operation) {
+        CrudPermissions.from(users.findById(userId).orElseThrow(() -> new BizException(401, "用户不存在"))).require(operation);
     }
 
     public List<CartItemView> deleteOne(long userId, long goodsId) {

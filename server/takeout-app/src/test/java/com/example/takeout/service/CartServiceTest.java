@@ -4,6 +4,7 @@ import com.example.takeout.common.BizException;
 import com.example.takeout.dao.GoodsDao;
 import com.example.takeout.dao.GoodsSpecDao;
 import com.example.takeout.dao.StoreDao;
+import com.example.takeout.dao.UserDao;
 import com.example.takeout.mapper.CartItemMapper;
 import com.example.takeout.model.CartItemEntity;
 import com.example.takeout.model.Goods;
@@ -23,13 +24,19 @@ import static org.mockito.Mockito.inOrder;
 import org.mockito.InOrder;
 
 class CartServiceTest {
+    private UserDao allowedUsers() {
+        var users = mock(UserDao.class);
+        when(users.findById(org.mockito.ArgumentMatchers.anyLong())).thenReturn(Optional.of(
+                new com.example.takeout.model.User(1,"user","","13800000001","",0,0,"now")));
+        return users;
+    }
 
     @Test
     void rejectsEmptyBatchDelete() {
         CartItemMapper mapper = mock(CartItemMapper.class);
         GoodsDao goodsDao = mock(GoodsDao.class);
         StoreDao storeDao = mock(StoreDao.class);
-        CartService service = new CartService(mapper, goodsDao, storeDao, mock(GoodsSpecDao.class));
+        CartService service = new CartService(mapper, goodsDao, storeDao, mock(GoodsSpecDao.class), allowedUsers());
 
         BizException exception = assertThrows(BizException.class, () -> service.deleteBatch(1L, List.of()));
 
@@ -42,7 +49,7 @@ class CartServiceTest {
         CartItemMapper mapper = mock(CartItemMapper.class);
         GoodsDao goodsDao = mock(GoodsDao.class);
         StoreDao storeDao = mock(StoreDao.class);
-        CartService service = new CartService(mapper, goodsDao, storeDao, mock(GoodsSpecDao.class));
+        CartService service = new CartService(mapper, goodsDao, storeDao, mock(GoodsSpecDao.class), allowedUsers());
         Goods goods = new Goods(10L, 20L, "测试商品", "", 10.0, 10.0, "", 1,
                 0L, 10, 0, 0, 4.5, "", false, 0, "now");
         when(goodsDao.findById(10L)).thenReturn(Optional.of(goods));
@@ -58,7 +65,7 @@ class CartServiceTest {
         CartItemMapper mapper = mock(CartItemMapper.class);
         GoodsDao goodsDao = mock(GoodsDao.class);
         StoreDao storeDao = mock(StoreDao.class);
-        CartService service = new CartService(mapper, goodsDao, storeDao, mock(GoodsSpecDao.class));
+        CartService service = new CartService(mapper, goodsDao, storeDao, mock(GoodsSpecDao.class), allowedUsers());
         when(mapper.selectList(any())).thenReturn(List.of());
 
         List<?> result = service.deleteOne(7L, 10L);
@@ -73,7 +80,7 @@ class CartServiceTest {
         CartItemMapper mapper = mock(CartItemMapper.class);
         GoodsDao goodsDao = mock(GoodsDao.class);
         StoreDao storeDao = mock(StoreDao.class);
-        CartService service = new CartService(mapper, goodsDao, storeDao, mock(GoodsSpecDao.class));
+        CartService service = new CartService(mapper, goodsDao, storeDao, mock(GoodsSpecDao.class), allowedUsers());
         Goods goods = new Goods(10L, 20L, "测试商品", "", 10.0, 10.0, "", 1,
                 0L, 10, 0, 0, 4.5, "", false, 1, "now");
         when(goodsDao.findById(10L)).thenReturn(Optional.of(goods));

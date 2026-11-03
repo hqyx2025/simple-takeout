@@ -421,7 +421,7 @@ public class DataSeeder implements ApplicationRunner {
                 continue;
             }
             int categoryId = categories[i];
-            jdbc.update("INSERT INTO stores(name, image, rating, monthly_sales, delivery_fee, min_order, delivery_time, distance, tags, notice, category_id, category_ids, owner_id, status, recommended, create_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            jdbc.update("INSERT INTO stores(review_status,name, image, rating, monthly_sales, delivery_fee, min_order, delivery_time, distance, tags, notice, category_id, category_ids, owner_id, status, recommended, create_time) VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     names[i], "", 4.5 + (i % 5) * 0.1, 800 + i * 137,
                     2 + i % 3, 10 + i % 3 * 5, (18 + i * 2) + "分钟", distances[i] + "km",
                     "[\"附近推荐\",\"满减\"]", "平台推荐附近好店，欢迎光临" + names[i],
@@ -581,7 +581,7 @@ public class DataSeeder implements ApplicationRunner {
         long storeSequence = 1;
         for (int i = 0; i < baseStores.length; i++) {
             long owner = merchantIds[i / 4];
-            jdbc.update("INSERT INTO stores(name, image, rating, monthly_sales, delivery_fee, min_order, delivery_time, distance, tags, notice, category_id, category_ids, owner_id, status, create_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            jdbc.update("INSERT INTO stores(review_status,name, image, rating, monthly_sales, delivery_fee, min_order, delivery_time, distance, tags, notice, category_id, category_ids, owner_id, status, create_time) VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     baseStores[i], "", baseRating[i], baseSales[i],
                     2 + i % 4, 12 + (i % 4) * 5,
                     (20 + i * 2) + "分钟", (0.5 + i * 0.3) + "km",
@@ -595,7 +595,7 @@ public class DataSeeder implements ApplicationRunner {
             long owner = merchantIds[(int) (storeSequence % 3)];
             int cat = 1 + (int) (storeSequence % 8);
             int sales = 300 + ThreadLocalRandom.current().nextInt(5000);
-            jdbc.update("INSERT INTO stores(name, image, rating, monthly_sales, delivery_fee, min_order, delivery_time, distance, tags, notice, category_id, category_ids, owner_id, status, create_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            jdbc.update("INSERT INTO stores(review_status,name, image, rating, monthly_sales, delivery_fee, min_order, delivery_time, distance, tags, notice, category_id, category_ids, owner_id, status, create_time) VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     name, "", 4.0 + ThreadLocalRandom.current().nextDouble(0.9),
                     sales, 2 + (int) (storeSequence % 4), 10 + (int) (storeSequence % 3) * 5,
                     (18 + (int) (storeSequence % 10) * 3) + "分钟",

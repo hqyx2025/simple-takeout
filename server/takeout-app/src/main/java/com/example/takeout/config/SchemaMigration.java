@@ -22,6 +22,8 @@ public class SchemaMigration implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
+        migrateUserCrudPermissions();
+        migrateStoreReview();
         addColumnIfMissing("reviews", "order_id", "BIGINT NOT NULL DEFAULT 0");
         addColumnIfMissing("reviews", "images", "TEXT");
         addColumnIfMissing("reviews", "anonymous", "INT NOT NULL DEFAULT 0");
@@ -95,6 +97,18 @@ public class SchemaMigration implements ApplicationRunner {
         addIndexIfMissing("users", "idx_users_admin_status_page", "(status, id)");
         migrateAccountIndexes();
         rebuildCartUniqueKey();
+    }
+
+    void migrateStoreReview() {
+        // 仅旧库已有店铺沿用准入资格；后续 INSERT 缺省必须待审核。重复启动不覆盖审核结果。
+        addColumnIfMissing("stores", "review_status", "INT NOT NULL DEFAULT 1");
+        addColumnIfMissing("stores", "platform_status", "INT NOT NULL DEFAULT 1");
+        addColumnIfMissing("stores", "review_reason", "VARCHAR(512) NOT NULL DEFAULT ''");
+        jdbc.execute("ALTER TABLE stores ALTER COLUMN review_status SET DEFAULT 0");
+        jdbc.execute("CREATE TABLE IF NOT EXISTS store_review_records (id BIGINT AUTO_INCREMENT PRIMARY KEY, " +
+                "store_id BIGINT NOT NULL, status INT NOT NULL, operator_id BIGINT NOT NULL, " +
+                "reason VARCHAR(512) NOT NULL DEFAULT '', create_time VARCHAR(32) NOT NULL, " +
+                "KEY idx_store_review (store_id, id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     }
 
     void migrateOrderCreateRequests() {
@@ -216,6 +230,14 @@ public class SchemaMigration implements ApplicationRunner {
             jdbc.execute("ALTER TABLE cart_items DROP INDEX uk_cart_user_goods");
         }
         jdbc.execute("ALTER TABLE cart_items ADD UNIQUE KEY uk_cart_user_goods_spec (user_id, goods_id, spec_id)");
+    }
+
+    void migrateUserCrudPermissions() {
+        // 保留存量账号行为；四项标志只收紧其角色和数据归属范围，不授予跨端权限。
+        for (String action : java.util.List.of("create", "read", "update", "delete")) {
+            String column = "can_" + action;
+            addColumnIfMissing("users", column, "TINYINT NOT NULL DEFAULT 1 CHECK (" + column + " IN (0,1))");
+        }
     }
 
     private boolean indexExists(String table, String indexName) {

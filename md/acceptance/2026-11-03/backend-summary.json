@@ -1,0 +1,1428 @@
+{
+  "totals": {
+    "tests": 734,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "classes": [
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.common.GlobalExceptionHandlerTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.065
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.common.SchedulerLockTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.646
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.common.SnowflakeIdGeneratorTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.081
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.common.TraceContextTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.01
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.config.ApiRequestLoggingInterceptorAuditTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.05
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.config.ApiRequestLoggingInterceptorTraceTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.007
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.config.ClientIpValveDefenseTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.351
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.config.DataSeederDisabledTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.059
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.config.DataSeederStockTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.002
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.config.OpenApiConfigTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.003
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.config.ProductionHuaweiGuardTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.001
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.config.ProductionPaymentGuardTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.004
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.config.RecoveryPublicRouteTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.058
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.config.Round3ResourceBoundaryTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.701
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.config.Round4OperationalPolicyTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.009
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.config.Round8BrowseBoundaryTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.47
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.config.SchemaMigrationAddressMySqlTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 2.93
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.config.SchemaMigrationDomainTimeMySqlTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 2.981
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.config.SchemaMigrationOrderCreateRequestMySqlTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.09
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.config.SchemaMigrationOrderTimeMySqlTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.22
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.config.SchemaMigrationRefundRequestMySqlTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.207
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.config.SchemaMigrationStoreReviewMySqlTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.213
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.config.SchemaMigrationUserPermissionsMySqlTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.404
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.config.UsernameAvailabilityTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.127
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.config.WebBoundaryDefenseTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.087
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.controller.AdminAssistantControllerSecurityTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.096
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.controller.AdminControllerSecurityTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.04
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.controller.AdminOperationLogControllerTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.002
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.controller.AfterSalesControllerTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.041
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.controller.AssistantControllerSecurityTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.024
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.controller.AuthControllerRateLimitTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.063
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.controller.AuthPaymentPasswordControllerTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.018
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.controller.AuthPushTokenControllerTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.006
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.controller.LocationControllerTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.022
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.controller.OrderListPagingSecurityTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.071
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.controller.OrderPaymentControllerTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.031
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.controller.OrderRefundControllerTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.025
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.controller.PaymentNotificationControllerTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.039
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.controller.Round3EmailBudgetTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.008
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.controller.Round3SourceLoginBudgetTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.009
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.controller.Round4AccountLoginBudgetTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.074
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.controller.RoundTwoLoginDefenseTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.005
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.controller.UserCenterBankCardControllerTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.084
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.dao.AdminDashboardSqlTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.003
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.dao.AdminStatsDaoSqlTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.003
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.dao.BankCardDaoSqlTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.066
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.dao.BusinessStatisticsMySqlTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 7.466
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.dao.DomainTimeMySqlTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 9.296
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.dao.EmployeeDefenseTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.001
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.dao.GoodsDaoAdminPagingSqlTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.03
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.dao.OperationAuditLogDaoTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.001
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.dao.OrderDaoAdminPagingSqlTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.001
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.dao.OrderDaoOrderItemsTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.001
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.dao.OrderDaoRiderPoolMySqlTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 2.361
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.dao.OrderDaoRiderPoolSqlTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.003
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.dao.OrderDaoRolePagingMySqlTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 7.355
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.dao.OrderDaoRolePagingSqlTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.001
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.dao.OutboxEventDaoClaimSqlTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.057
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.dao.RefundDaoAdminPagingSqlTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.002
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.dao.SeckillOnePerUserSqlTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.0
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.dao.SetmealSqlTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.0
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.dao.SoftDeleteSqlTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.003
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.dao.UserDaoAdminPagingSqlTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.001
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.model.StoreDeliveryRadiusTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.001
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.model.StoreDistanceTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.0
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.security.AuthInterceptorSecurityTest",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.074
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.security.JwtDefenseTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.053
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.security.LoginRateLimiterRedisTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.699
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.security.LoginRateLimiterTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.044
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.security.PasswordUtilTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.546
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.security.PaymentPasswordUtilTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.169
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.security.Round3AccountRecoveryMySqlTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 9.583
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.security.Round3LoginConfigurationTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.028
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.security.Round4PasswordCostPolicyTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 2.402
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.security.Round4RecoveryBoundaryTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.128
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.security.Round6RedisHealthTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 12.748
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.security.Round7LegacyLoginActionTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.002
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.security.TokenRevocationServiceTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.035
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.security.UserCrudAuthorizationTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.061
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.AdminRefundConcurrencyMySqlTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 12.626
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.AdminServiceMarketingTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.209
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.AdminServiceOrderFlowTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.006
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.AdminServiceOrderPagingTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.001
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.AdminServiceProductPagingTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.002
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.AdminServiceRefundPagingTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.002
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.AdminServiceUserPagingTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.003
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.ApplicationBusinessMySqlTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 5.968
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.AssistantAiClientTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.176
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.AssistantConfigServiceTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.017
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.AssistantServiceTest",
+      "tests": 15,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.01
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.AuditDefenseRegressionTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.002
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.AuthEmailRecoveryTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.656
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.AuthPaymentPasswordTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 1.17
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.AuthServiceSecurityTest",
+      "tests": 19,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 4.067
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.BankCardCryptoTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.004
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.BusinessRulesMySqlTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 7.332
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.CartServiceTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.068
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.EmployeeServiceDefenseTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.045
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.ExternalRefundRecoveryMySqlTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 18.857
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.FileStorageServiceTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.03
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.HotDataCacheServiceTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.02
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.HuaweiObsStorageServiceTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.0
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.InputBoundaryTest",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.096
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.MerchantRejectServiceTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.041
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.mq.DomainEventConsumerPushRetryTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.076
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.mq.DomainEventPublisherTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.041
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.OrderBoundaryTest",
+      "tests": 19,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.062
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.OrderConcurrencyMySqlTest",
+      "tests": 32,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 91.918
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.OrderServiceFlowTest",
+      "tests": 54,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 1.057
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.OrderServiceIdempotencyFallbackTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.008
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.OrderServiceMerchantStatsTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.001
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.OrderServiceOrderNoTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.04
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.OrderServicePagingTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.006
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.OrderServiceRiderFlowTest",
+      "tests": 16,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.016
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.OrderServiceSecurityTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.007
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.PasswordPolicyTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.193
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.PromotionServiceTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.003
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.PushNotificationServiceTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.04
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.PushTokenServiceTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.028
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.RecoveryCodeRedisTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.378
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.RefreshTokenServiceTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.006
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.RefundClosureTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.006
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.RiderServiceSecurityTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.002
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.Round10CatalogCapacityTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.104
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.Round3LoginPrivacyTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 3.161
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.Round4LoginCpuBudgetTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 2.995
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.Round5LoginAdmissionTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 5.114
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.Round6LoginRedisCapacityTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 4.488
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.Round8CacheRedisTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 1.077
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.Round8CacheResourceTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.12
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.Round9CacheEfficiencyTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.594
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.SmsVerificationServiceTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.122
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.StoreRecommendedDistanceTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.002
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.StoreServiceTransactionMySqlTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 4.867
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.thirdparty.AlipayGatewayTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.124
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.thirdparty.ExternalPaymentServiceTest",
+      "tests": 28,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.114
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.thirdparty.HuaweiCloudSmsSenderTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.0
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.thirdparty.HuaweiPushKitSenderTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.132
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.thirdparty.PaymentChannelsTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.0
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.thirdparty.PaymentNotificationConcurrencyMySqlTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 4.788
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.thirdparty.QQEmailSenderTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 28.5
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.UploadDefenseTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.009
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.UserCenterAddressBoundaryTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.047
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.UserCenterAddressConcurrencyMySqlTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 9.889
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.UserCenterBankCardTest",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.043
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.UserCenterCouponClaimTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.029
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.UserCenterFullBankCardTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.755
+    },
+    {
+      "module": "takeout-app",
+      "name": "com.example.takeout.service.UserCenterSearchTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.003
+    },
+    {
+      "module": "takeout-common",
+      "name": "com.example.takeout.common.BusinessIdGeneratorStartupTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.214
+    },
+    {
+      "module": "takeout-common",
+      "name": "com.example.takeout.common.ResourceBoundaryFilterTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.06
+    },
+    {
+      "module": "takeout-erp",
+      "name": "com.example.takeout.erp.ErpBoundaryTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.827
+    },
+    {
+      "module": "takeout-erp",
+      "name": "com.example.takeout.erp.ErpMySqlTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 13.038
+    },
+    {
+      "module": "takeout-erp",
+      "name": "com.example.takeout.erp.ErpPermissionTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.142
+    },
+    {
+      "module": "takeout-gateway",
+      "name": "com.example.takeout.gateway.ClientIpHeadersFilterTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.219
+    },
+    {
+      "module": "takeout-gateway",
+      "name": "com.example.takeout.gateway.GatewayXForwardedConfigTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.031
+    },
+    {
+      "module": "takeout-gateway",
+      "name": "com.example.takeout.gateway.web.GatewayFailureHandlerTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.023
+    }
+  ],
+  "environment": {
+    "os": "Windows 11",
+    "java": "25.0.2",
+    "mysql": "8.4.0 isolated instance",
+    "redis": "5.0.14 Windows isolated instance",
+    "unixSocketWorkaround": "JDK unixdomain tmpdir points to a nonexistent task directory; JDBC uses TCP fallback"
+  },
+  "command": "mvn -f server/pom.xml test",
+  "gatesEnabled": [
+    "TAKEOUT_MYSQL_CONCURRENCY_TEST=1",
+    "TAKEOUT_TEST_REDIS_PORT (dedicated Redis)",
+    "TAKEOUT_SNOWFLAKE_WORKER_ID (dedicated worker)"
+  ],
+  "rawLogSha256": "c0596dbb95c521e215c6fe0065879e255d124ac884deaae9404f63027ae8e704"
+}

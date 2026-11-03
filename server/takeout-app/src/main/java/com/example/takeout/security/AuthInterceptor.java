@@ -1,6 +1,9 @@
 package com.example.takeout.security;
 
 import com.example.takeout.common.BizException;
+import com.example.takeout.common.CrudOperation;
+import com.example.takeout.common.CrudPermissions;
+import com.example.takeout.common.RequireCrud;
 import com.example.takeout.dao.UserDao;
 import com.example.takeout.model.User;
 import io.jsonwebtoken.Claims;
@@ -9,6 +12,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.util.AntPathMatcher;
+import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.web.method.HandlerMethod;
 
 import java.util.List;
 
@@ -24,6 +29,7 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     public static final String ATTR_USER_ID = "userId";
     public static final String ATTR_ROLE = "role";
+    public static final String ATTR_CRUD_PERMISSIONS = "crudPermissions";
     public static final List<String> PUBLIC_BROWSE_PATHS = List.of(
             "/api/stores", "/api/stores/**", "/api/categories", "/api/search", "/api/goods/special",
             "/api/rankings/**", "/api/seckills", "/api/banners", "/api/announcements");
@@ -89,11 +95,31 @@ public class AuthInterceptor implements HandlerInterceptor {
             }
             request.setAttribute(ATTR_USER_ID, userId);
             request.setAttribute(ATTR_ROLE, user.role());
+            CrudPermissions permissions = CrudPermissions.from(user);
+            request.setAttribute(ATTR_CRUD_PERMISSIONS, permissions);
+            for (CrudOperation operation : requiredOperations(request.getMethod(), handler)) {
+                permissions.require(operation);
+            }
             return true;
         } catch (BizException e) {
             throw e;
         } catch (Exception e) {
             throw new BizException(401, "登录凭证无效或已过期");
         }
+    }
+
+    private CrudOperation[] requiredOperations(String method, Object handler) {
+        if (handler instanceof HandlerMethod handlerMethod) {
+            RequireCrud declared = AnnotatedElementUtils.findMergedAnnotation(handlerMethod.getMethod(), RequireCrud.class);
+            if (declared == null) declared = AnnotatedElementUtils.findMergedAnnotation(handlerMethod.getBeanType(), RequireCrud.class);
+            if (declared != null) return declared.value();
+        }
+        return new CrudOperation[]{switch (method.toUpperCase(java.util.Locale.ROOT)) {
+            case "GET", "HEAD" -> CrudOperation.READ;
+            case "POST" -> CrudOperation.CREATE;
+            case "PUT", "PATCH" -> CrudOperation.UPDATE;
+            case "DELETE" -> CrudOperation.DELETE;
+            default -> throw new BizException(403, "不支持的业务操作");
+        }};
     }
 }

@@ -19,7 +19,9 @@ import com.example.takeout.model.Order;
 import com.example.takeout.model.RefundRecord;
 import com.example.takeout.model.Seckill;
 import com.example.takeout.model.Store;
+import com.example.takeout.model.StoreReview;
 import com.example.takeout.model.User;
+import com.example.takeout.common.CrudPermissions;
 import com.example.takeout.security.PasswordUtil;
 import com.example.takeout.service.mq.DomainEventPublisher;
 import org.springframework.stereotype.Service;
@@ -209,13 +211,32 @@ public class AdminService {
         invalidateStoreAndGoodsCache();
     }
 
+    @Transactional
     public void updateStoreStatus(long storeId, int status) {
         if (status != 0 && status != 1) {
             throw new BizException("店铺状态不合法");
         }
-        storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
-        storeDao.updateStatus(storeId, status);
+        storeDao.findByIdForUpdate(storeId).orElseThrow(() -> new BizException("店铺不存在"));
+        storeDao.updatePlatformStatus(storeId, status);
         invalidateStoreAndGoodsCache();
+    }
+
+    @Transactional
+    public void reviewStore(long adminId, long storeId, int status, String reason) {
+        if (status != 1 && status != 2) throw new BizException("审核结果不合法");
+        String safeReason = reason == null ? "" : reason.trim();
+        if (status == 2 && safeReason.isBlank()) throw new BizException("请填写驳回原因");
+        if (safeReason.length() > 512) throw new BizException("审核意见最多 512 个字符");
+        Store store = storeDao.findByIdForUpdate(storeId).orElseThrow(() -> new BizException("店铺不存在"));
+        if (store.reviewStatus() != 0) throw new BizException(409, "店铺已审核，请刷新后重试");
+        storeDao.updateReview(storeId, status, safeReason);
+        storeDao.insertReview(storeId, status, adminId, safeReason, now());
+        invalidateStoreAndGoodsCache();
+    }
+
+    public List<StoreReview> storeReviews(long storeId) {
+        storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
+        return storeDao.reviews(storeId);
     }
 
     public void updateStoreRecommended(long storeId, int recommended) {
@@ -276,6 +297,25 @@ public class AdminService {
     }
 
     public record UserPage(List<AdminUser> list, int total, int page, int pageSize, boolean hasMore) {
+    }
+
+    public CrudPermissions userPermissions(long id) {
+        return CrudPermissions.from(requirePermissionTarget(id, false));
+    }
+
+    @Transactional
+    public CrudPermissions updateUserPermissions(long id, CrudPermissions permissions) {
+        if (permissions == null) throw new BizException(400, "请提供四项操作权限");
+        requirePermissionTarget(id, true);
+        userDao.updateCrudPermissions(id, permissions);
+        return permissions;
+    }
+
+    private User requirePermissionTarget(long id, boolean lock) {
+        User user = (lock ? userDao.findByIdForUpdate(id) : userDao.findById(id))
+                .orElseThrow(() -> new BizException(404, "用户不存在"));
+        if (user.role() == 2) throw new BizException(403, "此入口不能修改管理端账号权限");
+        return user;
     }
 
     public void updateUserStatus(long id, int status) {

@@ -1,0 +1,9 @@
+{
+  "offline": false,
+  "loseOrderResponse": false,
+  "drops": 9,
+  "committedResponseDrops": 2,
+  "orderPosts": 6,
+  "uniqueOrderIntentKeys": 4,
+  "orderIntentReplayObserved": true
+}

@@ -1,5 +1,7 @@
 package com.example.takeout.controller;
 
+import com.example.takeout.common.CrudOperation;
+import com.example.takeout.common.RequireCrud;
 import com.example.takeout.common.ApiResponse;
 import com.example.takeout.common.BizException;
 import com.example.takeout.model.User;
@@ -206,6 +208,7 @@ public class AuthController {
         }
     }
 
+    @RequireCrud({CrudOperation.UPDATE})
     @PostMapping("/push-token")
     public ApiResponse<PushRegistrationResult> registerPushToken(@RequestAttribute("userId") long userId,
                                                @RequestBody PushTokenRequest req) {
@@ -249,6 +252,7 @@ public class AuthController {
     }
 
     /** 设置或重置独立支付密码；登录密码仅用于身份确认，不会作为支付密码保存。 */
+    @RequireCrud({CrudOperation.UPDATE})
     @PostMapping("/payment-password")
     public ApiResponse<Void> setPaymentPassword(@RequestAttribute("userId") long userId,
                                                 @RequestBody PaymentPasswordRequest req,
@@ -276,6 +280,7 @@ public class AuthController {
                 req.currentPassword()));
     }
 
+    @RequireCrud({CrudOperation.UPDATE})
     @PostMapping("/recharge")
     public ApiResponse<User> recharge(@RequestAttribute("userId") long userId,
                                       @RequestBody RechargeRequest req) {

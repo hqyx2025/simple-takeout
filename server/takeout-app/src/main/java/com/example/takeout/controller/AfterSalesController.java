@@ -1,5 +1,7 @@
 package com.example.takeout.controller;
 
+import com.example.takeout.common.CrudOperation;
+import com.example.takeout.common.RequireCrud;
 import com.example.takeout.common.ApiResponse;
 import com.example.takeout.common.BizException;
 import com.example.takeout.model.RefundRecord;
@@ -20,6 +22,7 @@ public class AfterSalesController {
         return ApiResponse.ok(service.merchantHistory(userId, id));
     }
 
+    @RequireCrud({CrudOperation.UPDATE})
     @PostMapping("/after-sales/{refundId}/merchant-evidence")
     public ApiResponse<RefundRecord> evidence(@RequestAttribute("userId") long userId,
                                                @RequestAttribute("role") int role, @PathVariable long refundId,

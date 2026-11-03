@@ -21,6 +21,10 @@
 
 ## 当前技术与验证状态（2026-10-28）
 
+**2026-11-03 边界补验**：商户出餐后改显“待骑手接单”，退款拒绝按服务端托管状态区分待确认与已完成；论文 ERP 架构图和部分退款状态图同步更新。后端 **736 项零跳过**、Node **217 项**、三项边界 UiTest 及完整同单回归通过。200 笔可抢订单的骑手池在五分钟负载下暴露重复销量聚合，轻量查询与请求内同店复用后 P95 从 **7,043.17 ms 降至 85.67 ms**，2,400 次请求零失败。正式域名配置 HAP 和后端 JAR 已构建，本轮未部署线上。结果、截图、论文与产物身份见[边界补验证据](md/acceptance/2026-11-03/boundary/README.md)。
+
+**2026-11-03 整改更新**：店铺审核、驳回重提、审核历史与独立平台停用已落地。独立 MySQL／Redis 下后端 **734 项全部执行通过、零跳过**；Node **214 项通过**。API 26 模拟器完成同一订单的下单、错误密码拒付、余额支付、商户出餐、骑手配送、确认评价与结算后部分退款，并通过登录、管理端和店铺审核回归；实测发现的商户订单按钮旧回调已修复。500 店／14,971 商品／10,000 笔合成订单下，39 组 1,170 次本机接口测量零失败，最大 P95 **174.31 ms**。正式域名配置 debug HAP 构建成功；Code Linter 为 0 error、48 warning、2 suggestion。论文整改副本已完成 36 页核验，正文保守计数 11,706 个汉字。网页及后端已部署，线上域名与 540 店目录复核正常。详见[最终补验与边界](md/任务书与开题报告实现核对分析-2026-11-03.md#14-2026-11-03-最终补验与材料整改)及[脱敏验收证据](md/acceptance/2026-11-03/README.md)。下文注明日期的结果属于各自历史基线；本机性能不代表校园无线网或全校高峰。
+
 当前架构为交易主服务 `takeout-app`、独立采购耗材服务 `takeout-erp` 与统一 Gateway。ERP 独立拥有数据库，通过内部接口校验门店权限和读取经营对账；商品目录、订单、库存扣减和资金事实保留在主服务的本地事务中。common 不再持有 DAO 或各服务业务实现，仍共享部分模型。
 
 **本轮已于 2026-10-28 17:25:28 +0800 发布**为 `business-20261028-closure-r1`。业务代码提交 `c835463`，发布源码归档提交 `5bd31cb`；[Backend CI](https://github.com/hqyx2025/simple-takeout/actions/runs/40662793866) 与 [Frontend CI](https://github.com/hqyx2025/simple-takeout/actions/runs/40662793837) 均通过。App / Gateway / ERP 使用同一新镜像且健康，六个 HTTPS 静态资源哈希与镜像一致，14 项鉴权只读检查通过。切换前双库备份已下载并核验，既有主库、ERP 库、Redis、上传、备份与博客基础设施保留，业务数据切换前后一致。
@@ -221,7 +225,7 @@ docker compose down  # 停止并保留数据卷
 - 请求链路：`localhost:8087 → gateway → app-balancer:8087 → app:8087`；app 不映射宿主机 9100。
 - MySQL / Redis 宿主端口为 3310 / 6387；当前是本地开发配置，不应直接暴露公网。
 - 两个 app 共用数据库、Redis 和 `uploads-data` 卷，图片暂不迁移对象存储；仅支持同一 Docker 主机共享本地卷。
-- `docker compose up -d --scale app=3` 可临时扩到三个副本；要永久修改默认数量，请修改 Compose 的 `app.deploy.replicas`。Nginx 每 5 秒重新解析 app 地址，不自动重试业务请求。
+- 默认两个应用实例由 `app`、`app-secondary` 各运行一个；发号进程须显式配置独立且稳定的 workerId（0..1023，示例见 `.env.example`）。扩容时新增独立服务及 workerId，并加入 `server/docker/app-upstream.conf`，不要用 `--scale app` 复制相同节点号。Nginx 每 5 秒重新解析应用地址，不自动重试业务请求；演示配置仅运行 `app`。
 - 备份每个自然月首次运行时生成一次 `takeout-YYYYMM.sql.gz`，保存在 `mysql-backups` 卷；每小时检查并重试失败备份，重启不重复当月已成功的备份，当前不自动删除历史文件。
 - `docker compose logs backup` 查看备份结果；导出副本：`docker compose cp backup:/backups ./TemporaryCacheStorage/mysql-backups`。备份卷与数据库同机，仍需另外保留异机副本。
 - 运行日志统一保存在项目根目录 `logs/`：`logs/app/app.log`（应用）、`logs/gateway/gateway.log`（网关）、`logs/app-balancer/`（内部 Nginx）、`logs/public-nginx/`（公网 Nginx）。应用和网关按天/单文件 2MB 轮转并保留 30 天；Nginx 每天检查、超过 10MB 提前轮转并保留 14 份。HarmonyOS 客户端日志位于应用沙箱 `filesDir/logs/mobile/`。实时查看可用 `Get-Content logs/app/app.log -Wait` 或 `tail -f logs/app/app.log`。

@@ -3,7 +3,8 @@ param(
   [Parameter(Mandatory = $true)][string]$NotifyUrl,
   [string]$KeyDirectory = (Join-Path ([Environment]::GetFolderPath('UserProfile')) '.takeout-secrets\alipay-sandbox\9021000169644800'),
   [int]$Port = 18088,
-  [int]$DatabasePort = 3306
+  [int]$DatabasePort = 3306,
+  [ValidateRange(0,1023)][int]$WorkerId
 )
 
 $ErrorActionPreference = 'Stop'
@@ -23,6 +24,10 @@ function Read-SandboxKey([string]$name) {
   if ($value -eq '') { throw "Empty key file: $name" }
   return $value
 }
+
+$configuredWorker=if ($PSBoundParameters.ContainsKey('WorkerId')) { [string]$WorkerId } else { $env:TAKEOUT_SNOWFLAKE_WORKER_ID }
+if ($configuredWorker -notmatch '^\d{1,4}$' -or [int]$configuredWorker -gt 1023) { throw 'Set a separate sandbox Snowflake worker ID (0..1023) with -WorkerId or TAKEOUT_SNOWFLAKE_WORKER_ID.' }
+$env:TAKEOUT_SNOWFLAKE_WORKER_ID=$configuredWorker
 
 $env:TAKEOUT_ALIPAY_APP_PRIVATE_KEY = Read-SandboxKey '支付宝应用私钥.txt'
 $env:TAKEOUT_ALIPAY_PUBLIC_KEY = Read-SandboxKey '支付宝公钥.txt'

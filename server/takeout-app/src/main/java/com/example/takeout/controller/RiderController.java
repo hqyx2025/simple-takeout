@@ -1,5 +1,7 @@
 package com.example.takeout.controller;
 
+import com.example.takeout.common.CrudOperation;
+import com.example.takeout.common.RequireCrud;
 import com.example.takeout.common.ApiResponse;
 import com.example.takeout.common.BizException;
 import com.example.takeout.model.Order;
@@ -92,6 +94,7 @@ public class RiderController {
         return ApiResponse.ok(orderService.riderOrders(riderService.profile(userId).id(), page, pageSize));
     }
 
+    @RequireCrud({CrudOperation.UPDATE})
     @PostMapping("/orders/{id}/grab")
     public ApiResponse<Order.OrderView> grab(@RequestAttribute("userId") long userId,
                                              @RequestAttribute("role") int role,

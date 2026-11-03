@@ -130,7 +130,7 @@ class DomainTimeMySqlTest {
     @Test
     void seckillWindowsAndQuotaUseTypedTimesWithLegacyFallbackAfterEdits() {
         tx.executeWithoutResult(status -> {
-            jdbc.update("INSERT INTO stores(id,name,owner_id,create_time) VALUES(10,'store',9,?)", NOW);
+            jdbc.update("INSERT INTO stores(review_status,id,name,owner_id,create_time) VALUES(1,10,'store',9,?)", NOW);
             jdbc.update("INSERT INTO goods(id,store_id,name,price,create_time) VALUES(100,10,'goods',20,?)", NOW);
             SeckillDao dao = new SeckillDao(jdbc);
             long id = dao.insert(100, 10, 10, 2, BEFORE, AFTER, 1);

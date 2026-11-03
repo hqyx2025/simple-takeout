@@ -39,9 +39,9 @@ class OrderDaoRolePagingMySqlTest {
         jdbc = new JdbcTemplate(source);
         dao = new OrderDao(jdbc);
 
-        jdbc.update("INSERT INTO stores(id,name,owner_id,create_time) VALUES(10,'merchant store',9,'2026-01-01')");
-        jdbc.update("INSERT INTO stores(id,name,owner_id,create_time) VALUES(11,'merchant store two',9,'2026-01-01')");
-        jdbc.update("INSERT INTO stores(id,name,owner_id,create_time) VALUES(12,'other store',10,'2026-01-01')");
+        jdbc.update("INSERT INTO stores(review_status,id,name,owner_id,create_time) VALUES(1,10,'merchant store',9,'2026-01-01')");
+        jdbc.update("INSERT INTO stores(review_status,id,name,owner_id,create_time) VALUES(1,11,'merchant store two',9,'2026-01-01')");
+        jdbc.update("INSERT INTO stores(review_status,id,name,owner_id,create_time) VALUES(1,12,'other store',10,'2026-01-01')");
         jdbc.update("INSERT INTO employees(store_id,user_id,role_name,status,create_time) " +
                 "VALUES(12,21,'店员',1,'2026-01-01')");
         insertOrder(1, 7, 10, 1, 0, "", "");

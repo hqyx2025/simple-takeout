@@ -1,0 +1,7567 @@
+{
+  "measuredAt": "2026-11-03T20:49:18+0800",
+  "source": "current workspace final compiled classes",
+  "environment": {
+    "os": "Windows-11-10.0.26200-SP0",
+    "java": "25.0.2",
+    "mysql": "8.4.0",
+    "redis": "5.0.14 Windows isolated test runtime",
+    "network": "HTTP loopback; not campus network",
+    "appHeapMiB": 384,
+    "databasePool": 10,
+    "dataScale": {
+      "stores": 500,
+      "goods": 14971,
+      "orders": 10000,
+      "users": 20
+    }
+  },
+  "conditions": {
+    "requestsPerEndpoint": 30,
+    "concurrencyLevels": [
+      1,
+      4,
+      16
+    ],
+    "thresholdMs": 2000,
+    "minimumFastRatio": 0.95,
+    "p95Method": "nearest-rank including failures",
+    "connectionReuse": false,
+    "automaticRetries": 0,
+    "warmupExcluded": true,
+    "rateLimitEnabled": true,
+    "browseAccounts": 16,
+    "rateLimitExplanation": "Public browse measurements rotate 16 authenticated student test accounts under the unchanged default limits. Private order measurements use the owning account. A single-account burst was separately observed returning 429.",
+    "fixtureOrders": "synthetic query-volume fixtures, not payment/correctness evidence"
+  },
+  "results": [
+    {
+      "path": "/api/stores",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 17.680783333465417,
+      "p95Ms": 31.805599999643164,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 64.81250000069849
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 16.444000000774395
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 14.78560000032303
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 31.805599999643164
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 26.27049999864539
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 30.948200001148507
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 8.32050000099116
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 9.03679999828455
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 8.718000000953907
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 9.74300000234507
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 25.727600001118844
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 8.718499997485196
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 19.42390000112937
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 29.310999998415355
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 31.59620000224095
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 9.867000000667758
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 22.114799998234957
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 6.88839999929769
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 20.94500000021071
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 6.146100000478327
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 6.84479999836185
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 6.961900002352195
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 6.985799998801667
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 6.56399999934365
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 29.206399998656707
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 29.12859999923967
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 6.306899998890003
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 23.28280000074301
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.9962000013911165
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 7.522900003095856
+        }
+      ],
+      "role": "CUSTOMER",
+      "concurrency": 1
+    },
+    {
+      "path": "/api/stores/31",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 6.521969999933693,
+      "p95Ms": 25.161499997921055,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.1735000013432
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.69200000204728
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.778599999146536
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.882799999497365
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.8305999985605013
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 15.489000001252862
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.5581000008969568
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.0340000012074597
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.570400000171503
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.4158000016759615
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.4266000002389774
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 15.757500001200242
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.865499998733867
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.738299997872673
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.410799999779556
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.8893000016978476
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.987200001371093
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 17.43920000080834
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.9226000006019603
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.5844999981927685
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 25.161499997921055
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 15.38780000191764
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.3027999995974824
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 12.602300001162803
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.584399997431319
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.5857999971776735
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 25.780899999517715
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.791899998555891
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.939199999673292
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.076199998758966
+        }
+      ],
+      "role": "CUSTOMER",
+      "concurrency": 1
+    },
+    {
+      "path": "/api/stores/31/goods",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 36.239630000151614,
+      "p95Ms": 53.053299998282455,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 32.91659999740659
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 46.564299998863135
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 45.35990000294987
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 25.69940000103088
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 25.4069000002346
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 45.7724000007147
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 44.40769999928307
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 25.497399998130277
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 24.375699998927303
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 31.949799998983508
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.692200001183664
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 25.681900002382463
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 51.61280000174884
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.225800000451272
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 33.92099999837228
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 46.05960000117193
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 45.00209999969229
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 24.658400001499103
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 25.770600001123967
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 40.96220000064932
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.55500000077882
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 56.684600000153296
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 26.269800000591204
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 25.059800002054544
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 30.907299998943927
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 32.77439999874332
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 53.053299998282455
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 46.9639000002644
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 42.54360000049928
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 47.84049999943818
+        }
+      ],
+      "role": "CUSTOMER",
+      "concurrency": 1
+    },
+    {
+      "path": "/api/orders/page?page=1&pageSize=30",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 34.46279333329585,
+      "p95Ms": 48.18389999854844,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.01739999995334
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 45.67260000112583
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.732899998431094
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 33.0668999995396
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 29.54199999658158
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 46.295899999677204
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 24.61350000157836
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.39890000078594
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 25.31010000166134
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 47.28889999751118
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 47.38739999811514
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 48.18389999854844
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 45.2856999982032
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 25.608300002204487
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 38.076299999374896
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 24.53840000089258
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 37.2285000012198
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 24.506099998689024
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 23.376400000415742
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 48.158400000829715
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 22.712599999067606
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 23.252799997862894
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 24.318900002981536
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 21.541400001297006
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 46.602700000221375
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 46.661299998959294
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 49.13450000094599
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 23.278399999981048
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 37.93550000045798
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 26.15720000176225
+        }
+      ],
+      "role": "CUSTOMER",
+      "concurrency": 1
+    },
+    {
+      "path": "/api/orders/100000",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 9.807443333435609,
+      "p95Ms": 27.764500002376735,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.4938999997393694
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 24.987400000100024
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.7050999999337364
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.163300001324387
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 15.231899997161236
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.5050999977102038
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 26.55830000003334
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 15.369900000223424
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.956399999675341
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 12.93200000145589
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.368500001670327
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.908999998908257
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.278299998783041
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.865799997380236
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 21.16770000066026
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.364800002804259
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.199700000550365
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.2482999995409045
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 19.47160000054282
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.72670000049402
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.6056999995489605
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.7832999985548668
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.0000000006111804
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.1382999986817595
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.727000002778368
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.13249999942491
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 15.851500000280794
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.1010000020614825
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.764500002376735
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.6158000000577886
+        }
+      ],
+      "role": "CUSTOMER",
+      "concurrency": 1
+    },
+    {
+      "path": "/api/merchant/stores",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 37.13965000024473,
+      "p95Ms": 54.654899999150075,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 40.89560000284109
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.456399999413406
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.873199997178745
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 51.85160000110045
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 48.163299998122966
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.899900000193156
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.008900000713766
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.95509999850765
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 38.65660000155913
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 36.98259999873699
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.906300001835916
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.529499999218388
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.80399999776273
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 29.12080000169226
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 26.796800000738585
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.65509999881033
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 29.24190000339877
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.57800000029965
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 29.73050000218791
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 51.58830000073067
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 29.692399999476038
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 40.577800002211006
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 53.77490000319085
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 54.654899999150075
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 59.331399999791756
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 42.52569999880507
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 49.07499999899301
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 31.061999998200918
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.03419999955804
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 33.76680000292254
+        }
+      ],
+      "role": "MERCHANT",
+      "concurrency": 1
+    },
+    {
+      "path": "/api/merchant/stores/31/goods",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 32.34753000009126,
+      "p95Ms": 47.113500000705244,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.394900000217604
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.611699999397388
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.74200000203564
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 25.391999999555992
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 26.50309999808087
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 26.19100000083563
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 26.254299998981878
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 39.50520000216784
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 24.81660000194097
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 25.449799999478273
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 25.558699999237433
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 33.68369999952847
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 24.94999999908032
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 24.935899997217348
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 45.55070000060368
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 25.167800002236618
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 35.47890000118059
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 46.58210000343388
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 46.75700000007055
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 25.39289999913308
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 24.237699999503093
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 43.521999999939
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 29.248099999676924
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 49.07959999763989
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 24.86030000000028
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 24.629299998196075
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 44.15260000314447
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 47.113500000705244
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 46.90649999974994
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 25.7579999997688
+        }
+      ],
+      "role": "MERCHANT",
+      "concurrency": 1
+    },
+    {
+      "path": "/api/merchant/orders/page?page=1&pageSize=30",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 66.52760666656832,
+      "p95Ms": 86.98469999944791,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 52.549699998053256
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 57.144899998093024
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 64.27049999911105
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 51.896200002374826
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 52.69810000027064
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 73.94229999772506
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 78.84560000093188
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 73.19850000203587
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 64.39839999802643
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 87.94990000023972
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 67.79330000063055
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 86.98469999944791
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 50.9593999995559
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 59.561400001257425
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 51.57859999962966
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 79.5360999982222
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 52.00179999883403
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 83.08879999822238
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 56.338500002311775
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 71.41549999869312
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 51.96090000026743
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 65.43790000068839
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 72.20779999988736
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 74.2352999986906
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 59.854300001461525
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 72.81789999979082
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 69.32120000055875
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 62.49740000203019
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 79.40890000099898
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 71.93439999900875
+        }
+      ],
+      "role": "MERCHANT",
+      "concurrency": 1
+    },
+    {
+      "path": "/api/merchant/stats?storeId=31",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 51.40907333334326,
+      "p95Ms": 68.73930000074324,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 68.73930000074324
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 51.53640000207815
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 50.200300000142306
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 66.16350000331295
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 62.660999999934575
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.3896999998542
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 64.81079999866779
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.08199999973294
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 40.85850000046776
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 57.265600000391714
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 42.30969999844092
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 71.04569999864907
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 55.05249999987427
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 63.70549999701325
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 40.052800002740696
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.11919999922975
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 40.05709999910323
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.84339999846998
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 49.74719999881927
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 42.43200000200886
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 60.998400000244146
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.34720000001835
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 39.724199999909615
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 40.22899999836227
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 40.82070000004023
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 52.56310000186204
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 64.16870000248309
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.14369999660994
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 64.15990000095917
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 65.04510000013397
+        }
+      ],
+      "role": "MERCHANT",
+      "concurrency": 1
+    },
+    {
+      "path": "/api/admin/stores",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 32.11915666615823,
+      "p95Ms": 49.57229999854462,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 29.31660000103875
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 42.75240000060876
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 26.91449999838369
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.091799998743227
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 30.842899999697693
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 38.30229999948642
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.12269999756245
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.45420000064769
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 37.48229999837349
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 26.411599999846658
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 52.15959999986808
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.45320000051288
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 26.53439999994589
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 35.13259999817819
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 26.697400000557536
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.427899997041095
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.190900000481633
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.451400000369176
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.960399998846697
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 49.57229999854462
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 26.60929999910877
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.853700001491234
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.21649999875808
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.135100000246894
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.111800001875963
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.221799999300856
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.19209999870509
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 39.283699999941746
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.186399998754496
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 31.492899997829227
+        }
+      ],
+      "role": "ADMIN",
+      "concurrency": 1
+    },
+    {
+      "path": "/api/admin/orders/page?page=1&pageSize=30",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 37.952290000491,
+      "p95Ms": 53.87160000100266,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 29.966000001877546
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 40.49719999966328
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 48.52339999706601
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 39.2987000013818
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 53.38010000195936
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 48.27840000143624
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 47.2208999999566
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 38.08200000275974
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 61.50619999971241
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 30.288900001323782
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.32229999959236
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 29.356999999436084
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 29.185200000938494
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 31.805000002350425
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.659600000537466
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 53.87160000100266
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 33.81749999971362
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.362799999740673
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.9535000010801
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 49.32049999843002
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 42.75029999917024
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 47.08119999850169
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.79470000314177
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.741099998820573
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 34.0753999989829
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.3971000026213
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 53.239500000927364
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 30.246300000726478
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.50170000217622
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.04459999970277
+        }
+      ],
+      "role": "ADMIN",
+      "concurrency": 1
+    },
+    {
+      "path": "/api/rider/orders/pool",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 8.12806333330324,
+      "p95Ms": 20.820399997319328,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 20.810400001209928
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 15.717900001618546
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.6276999997207895
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.4435000013909303
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.510700000129873
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.514700001484016
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 20.820399997319328
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.888299997721333
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.1916000005148817
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.4084000033326447
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.3118999997677747
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.566099999967264
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.696499999728985
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 16.767899996921187
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.6457000021764543
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 13.33100000192644
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.864399997633882
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.3769999970681965
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 26.222899999993388
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 15.863399999943795
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 15.660400000342634
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 16.658900000038557
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.5363999995752238
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.5695999975141603
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.69520000074408
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.968599997984711
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 18.074200001137797
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.5050000003830064
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 14.230900000256952
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.362300001550466
+        }
+      ],
+      "role": "RIDER",
+      "concurrency": 1
+    },
+    {
+      "path": "/api/rider/orders/page?page=1&pageSize=30",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 8.789849999933116,
+      "p95Ms": 25.783099998079706,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 13.968300001579337
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 14.992400003393413
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.162500000849832
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 14.119600000412902
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.258399999846006
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.0780999984708615
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.190799998061266
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 24.01599999939208
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.2270000008575153
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 13.258399998449022
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.883300003304612
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.8242999978829175
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 25.783099998079706
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.289399999426678
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 12.645999999222113
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.0465999987209216
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 13.81250000122236
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.3789000006217975
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.3409999994328246
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 26.257999998051673
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.0980000008421484
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 13.265499997942243
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.3891999990155455
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.404200000455603
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.0217000019329134
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 23.680300000705756
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 15.798399999766843
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.1335000019462314
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 13.063200000033248
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.306899998075096
+        }
+      ],
+      "role": "RIDER",
+      "concurrency": 1
+    },
+    {
+      "path": "/api/stores",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 14.883579999999105,
+      "p95Ms": 28.681699997832766,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 7.334800000535324
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 12.602300001162803
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 9.440099998755613
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.00870000262512
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 17.97910000095726
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 12.705799999821465
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 16.36089999738033
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 16.35060000262456
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 18.334200001845602
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 13.857900001312373
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 30.2293999993708
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 18.56960000077379
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 14.698599999974249
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 10.623599999235012
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 10.714899999584304
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 12.359500000457047
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 9.32210000246414
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.681699997832766
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 8.894300000974908
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 23.76909999657073
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 7.2273000005225185
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 7.786699999996927
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 8.011499998247018
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 14.917299999069655
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 9.610799999791197
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 19.231800000852672
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 14.452100000198698
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 8.6498999989999
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 23.477899998397334
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 13.30489999963902
+        }
+      ],
+      "role": "CUSTOMER",
+      "concurrency": 4
+    },
+    {
+      "path": "/api/stores/31",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 6.495746666284201,
+      "p95Ms": 24.117900000419468,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 11.508100000355626
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 10.905600000114646
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 10.918599997239653
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 11.069600001064828
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.871299999242183
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 15.684000001783716
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.0447999997704756
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.4045999998634215
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.6543999993009493
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.6686000019253697
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.43649999902118
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.5505999983579386
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 26.347299997723894
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.1450999993248843
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 24.117900000419468
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.076900000247406
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 21.877400002267677
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 1.8777999976009596
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 1.9036000012420118
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 1.9161999989592005
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 12.882299997727387
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.395999999862397
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.50170000072103
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.4039999989327043
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.6526000001467764
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.3795999986759853
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.4865000013960525
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.367099998082267
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 1.9704999976966064
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 1.8531999994593207
+        }
+      ],
+      "role": "CUSTOMER",
+      "concurrency": 4
+    },
+    {
+      "path": "/api/stores/31/goods",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 36.62483666654831,
+      "p95Ms": 50.326600001426414,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 32.20369999689865
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 34.23040000052424
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 31.42680000019027
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 54.153799999767216
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 35.55580000102054
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 30.777200001466554
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 50.326600001426414
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 31.007199999294244
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 32.9332000001159
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 34.87429999950109
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 32.809299998916686
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 35.859999999956926
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 34.715699999651406
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 33.47840000060387
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 30.56569999898784
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.838700000051176
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 45.506900001782924
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.72439999919152
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 46.78350000176579
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.238200000487268
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 42.00689999925089
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 38.05560000182595
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 37.075599997479
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 43.66740000114078
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 46.680399998876965
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 37.723499997809995
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 36.20560000126716
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 45.2737999985402
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 30.256299996835878
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.790200001822086
+        }
+      ],
+      "role": "CUSTOMER",
+      "concurrency": 4
+    },
+    {
+      "path": "/api/orders/page?page=1&pageSize=30",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 20.585373333112027,
+      "p95Ms": 26.024400001915637,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 19.910600000002887
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 20.114599999942584
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 18.661099999008
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 18.991799999639625
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 19.617800000560237
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 17.95730000230833
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 18.311399999220157
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 18.7848000023223
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 20.33579999988433
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 20.735699999931967
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 20.677800002886215
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 19.434400001046015
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 26.024400001915637
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 25.16020000257413
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 25.299099997937446
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 25.226899997505825
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 19.84420000007958
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 19.831800000247313
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 18.070099999022204
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 18.52899999721558
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 20.430799999303417
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 19.373899998754496
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 38.67610000088462
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 17.53639999878942
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 19.00259999820264
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 19.390299999940908
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 18.559399999503512
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 17.631399998208508
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 18.25729999836767
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 17.184199998155236
+        }
+      ],
+      "role": "CUSTOMER",
+      "concurrency": 4
+    },
+    {
+      "path": "/api/orders/100000",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 4.2676600000656135,
+      "p95Ms": 17.52190000115661,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.779700000246521
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.0215000006137416
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.8937999995832797
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.0769000004511327
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.249999997933628
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.0208999996830244
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.8105000019422732
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.53099999888218
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.9273000006214716
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.016300001036143
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.5961999999708496
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.2437999980174936
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.5277999993704725
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.634699998452561
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.8741999994963408
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.366199999116361
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.68320000031963
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.3697999968135264
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.9785000006086193
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.145599999697879
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.967600001284154
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.489300001092488
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.181100000801962
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.2658000018273015
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.7996999997412786
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.277900003013201
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 20.394400002260227
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.805599997373065
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.578600000560982
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 17.52190000115661
+        }
+      ],
+      "role": "CUSTOMER",
+      "concurrency": 4
+    },
+    {
+      "path": "/api/merchant/stores",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 38.24947333341697,
+      "p95Ms": 53.428399998665554,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 33.59930000078748
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 31.284400000004098
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 35.92399999979534
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 45.11569999885978
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 35.9043999997084
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 37.37349999937578
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 33.20320000057109
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 33.17529999912949
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 35.565300000598654
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 61.89249999806634
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 38.96979999990435
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 32.64180000041961
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 32.54139999990002
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 31.373800000437768
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 53.428399998665554
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 35.77249999943888
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 33.16819999963627
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 34.701500000664964
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 36.612600000808015
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 42.158500000368804
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 36.03860000293935
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 39.98019999926328
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 35.61949999857461
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.22330000245711
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.61949999979697
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 33.39079999932437
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.347300000779796
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 44.11249999975553
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 43.02810000081081
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 36.71830000166665
+        }
+      ],
+      "role": "MERCHANT",
+      "concurrency": 4
+    },
+    {
+      "path": "/api/merchant/stores/31/goods",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 39.665346667000755,
+      "p95Ms": 51.79589999897871,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 37.05500000069151
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 30.095300000539282
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 29.349600001296494
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 36.07180000108201
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 30.950600001233397
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 51.52979999911622
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 34.33729999960633
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 46.99859999891487
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 54.284699999698205
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 47.77300000205287
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 44.280000001890585
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 33.81120000267401
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 51.79589999897871
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.953700002399273
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 44.955100001971005
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 50.7830999995349
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 31.13659999871743
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 44.827099998656195
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 29.940599997644313
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 49.131499999930384
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 30.108899998595007
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.615300001343712
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 33.81889999945997
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 51.02869999973336
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 43.55000000214204
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 34.32420000171987
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 50.115699999878416
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 33.655999999609776
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 44.10559999814723
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 34.57660000276519
+        }
+      ],
+      "role": "MERCHANT",
+      "concurrency": 4
+    },
+    {
+      "path": "/api/merchant/orders/page?page=1&pageSize=30",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 71.64104333302627,
+      "p95Ms": 90.42849999968894,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 56.464599998435006
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 73.41850000011618
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 63.006699998368276
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 77.42069999949308
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 67.19209999937448
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 69.67469999653986
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 90.42849999968894
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 71.85960000060732
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 78.38279999850783
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 65.86840000090888
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 87.2866999998223
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 85.24889999898733
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 93.08139999848208
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 89.57509999891045
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 69.84609999926761
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 69.34980000005453
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 75.46219999858295
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 74.56059999822173
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 59.30430000080378
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 71.06869999915943
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 71.04379999873345
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 61.53540000013891
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 82.6600000000326
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 54.02370000228984
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 57.8696000011405
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 70.21629999871948
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 57.67000000196276
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 80.26660000177799
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 70.19450000007055
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 55.25100000159
+        }
+      ],
+      "role": "MERCHANT",
+      "concurrency": 4
+    },
+    {
+      "path": "/api/merchant/stats?storeId=31",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 61.61069666644229,
+      "p95Ms": 79.81780000045546,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 50.904999996419065
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 55.968599997868296
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 53.28930000177934
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 45.27880000023288
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 73.62099999954808
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 60.342799999489216
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 55.782699997507734
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 52.09459999969113
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 73.3609000017168
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 71.14980000187643
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 77.04960000046412
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 54.99989999952959
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 80.18129999982193
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 74.41319999998086
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 64.29949999801465
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 54.00229999941075
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 61.3164999995206
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 51.48090000147931
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 53.9731999997457
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 60.21779999719001
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 73.3576999991783
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 60.88889999955427
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 55.31619999965187
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 57.58119999882183
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 70.62730000325246
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 56.75400000109221
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 59.793799999170005
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 79.81780000045546
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 56.10460000025341
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 54.35170000055223
+        }
+      ],
+      "role": "MERCHANT",
+      "concurrency": 4
+    },
+    {
+      "path": "/api/admin/stores",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 45.29520333295901,
+      "p95Ms": 68.9273999996658,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 42.027700001199264
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 39.27290000137873
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 30.813900000794092
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 46.64760000014212
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 50.861100000474835
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 45.393499996862374
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 45.13049999877694
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 50.84619999979623
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 70.19159999981639
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 68.9273999996658
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 62.89140000080806
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 49.452999999630265
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 44.79739999806043
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 37.10280000086641
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 42.194599998765625
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 53.92949999804841
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 37.65249999923981
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 37.29939999902854
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 32.68549999847892
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 34.597599998960504
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 42.129399997065775
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 36.60460000173771
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 38.59030000239727
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 65.79079999937676
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 38.25639999922714
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 50.616699998499826
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 36.26829999848269
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 48.87769999913871
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 38.72810000029858
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 40.27770000175224
+        }
+      ],
+      "role": "ADMIN",
+      "concurrency": 4
+    },
+    {
+      "path": "/api/admin/orders/page?page=1&pageSize=30",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 42.34489999956471,
+      "p95Ms": 59.050899999419926,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 43.06459999861545
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.36060000018915
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.50560000198311
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.88779999822145
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 37.803599996550474
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 36.76619999896502
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 35.889299997506896
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 56.1398999998346
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.79440000007162
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.01230000014766
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 51.87559999831137
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 36.000799998873845
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 31.161099999735598
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 55.35329999838723
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 34.243900001456495
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 59.050899999419926
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 54.747099999076454
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 38.574800000787945
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 50.398600000335136
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 39.93339999942691
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 53.84849999973085
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 32.36749999996391
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 37.39579999819398
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 37.45870000057039
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 36.1049000021012
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 36.61619999911636
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 32.96109999791952
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 33.29020000091987
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 62.52150000000256
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 39.218800000526244
+        }
+      ],
+      "role": "ADMIN",
+      "concurrency": 4
+    },
+    {
+      "path": "/api/rider/orders/pool",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 3.32362333368413,
+      "p95Ms": 7.24640000044019,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.7164999992237426
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.598700000817189
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.791599999909522
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.6089000020874664
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.9094000019540545
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.7286999975331128
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.607999998872401
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.6109999998880085
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.1497000018134713
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.992000001540873
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.646099997946294
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.515800002584001
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.538500000810018
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.4081000010482967
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 7.24640000044019
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.57040000037523
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.40259999918635
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.2181000022101216
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.7135999989695847
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.4481000000378117
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.477099998941412
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.8311999994912185
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.631600000313483
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.4825000000419095
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.5734000009833835
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.8115999994042795
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.701000001252396
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.5071000018215273
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.5349999996251427
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 16.736000001401408
+        }
+      ],
+      "role": "RIDER",
+      "concurrency": 4
+    },
+    {
+      "path": "/api/rider/orders/page?page=1&pageSize=30",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 3.6260299996987064,
+      "p95Ms": 7.080399998812936,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.9610999990836717
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.141200002573896
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.9810000014549587
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.7786999999079853
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.585199999884935
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 7.080399998812936
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.240399997390341
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.327499998908024
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.4179000029107556
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.2667999983241316
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.5574999999662396
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.5653999982750975
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.5812999992922414
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.963599999930011
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.011500000866363
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.9835999994247686
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.829300003213575
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.58409999878495
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.954100000759354
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.3560999979963526
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.3801999996067025
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.4795999997877516
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.5759999989531934
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.480499999364838
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.7302999988023657
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.5797999987844378
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.678999997442588
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.6596999996399973
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.188500002375804
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 23.860599998442922
+        }
+      ],
+      "role": "RIDER",
+      "concurrency": 4
+    },
+    {
+      "path": "/api/stores",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 36.54080000014801,
+      "p95Ms": 51.15710000245599,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 10.498499999812339
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 17.617800000152783
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 23.238300000230083
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.26899999854504
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 45.72120000011637
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 34.304799999517854
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 29.197700001532212
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 36.6530999999668
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 47.892599999613594
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 54.96080000011716
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 30.367699997441377
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 45.19120000259136
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 49.58679999981541
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 51.15710000245599
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 38.49890000128653
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 40.585800001281314
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 29.898900000262074
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 33.48370000094292
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 36.237700001947815
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 42.54330000185291
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 36.070899997866945
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 43.04559999945923
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 43.16040000048815
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 43.530099999770755
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 39.792100000340724
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 42.10629999943194
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 38.204799999220995
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 22.435300001234282
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 25.73159999883501
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 36.24199999831035
+        }
+      ],
+      "role": "CUSTOMER",
+      "concurrency": 16
+    },
+    {
+      "path": "/api/stores/31",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 4.19325666637936,
+      "p95Ms": 6.2556000011682045,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.205000000889413
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.702800000406569
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.0288999987533316
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.8559000020322856
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.581000000645872
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.4451999999873806
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.9936999999335967
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.778899997792905
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.0352999969618395
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.963399999018293
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.940599999623373
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 6.2556000011682045
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.980100002285326
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.740899999887915
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.177400001935894
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.074699998658616
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.965800002537435
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.958600001875311
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.3028999971284065
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 6.251399998291163
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 6.89819999752217
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.163499997957842
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.974600000423379
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.698099997767713
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.7023999975644983
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.24389999898267
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.063400003360584
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.7392999984149355
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.564300001016818
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.5118999985570554
+        }
+      ],
+      "role": "CUSTOMER",
+      "concurrency": 16
+    },
+    {
+      "path": "/api/stores/31/goods",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 63.16217333333043,
+      "p95Ms": 76.15829999849666,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 36.748200000147335
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 38.09460000047693
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 34.2793999989226
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 36.148399998637615
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 37.909499998932006
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 39.225900000019465
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 39.03750000245054
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 69.52239999736776
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 68.16109999999753
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 66.17890000052284
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 76.15829999849666
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 71.9494000004488
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 72.23839999642223
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 66.51129999954719
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 64.94449999809149
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 98.11110000009649
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 72.5326000028872
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 66.61439999879804
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 75.35309999730089
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 67.4475000014354
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 73.9039000000048
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 74.93289999911212
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 70.09649999963585
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 74.45519999964745
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 68.98780000119586
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 70.55320000290521
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 61.74219999957131
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 65.46630000229925
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 71.19380000222009
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 66.36690000232193
+        }
+      ],
+      "role": "CUSTOMER",
+      "concurrency": 16
+    },
+    {
+      "path": "/api/orders/page?page=1&pageSize=30",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 29.87875999994382,
+      "p95Ms": 32.756000000517815,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.243100001418497
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 30.987699999968754
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 31.617100001312792
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 29.79799999957322
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 30.73900000163121
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.39469999889843
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 32.52929999871412
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 34.938400000100955
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.02249999876949
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 32.06839999984368
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 30.65280000009807
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 31.78939999997965
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 30.320199999550823
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 32.241000000794884
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 31.006000001070788
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 31.785700000909856
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 23.47919999738224
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.638999999908265
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.13609999793698
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 29.127400001016213
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 32.6746999999159
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 31.333200000517536
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 32.756000000517815
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.295300002151635
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.560700000525685
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 27.77310000237776
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 26.85859999837703
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.85029999742983
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.0542999971658
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 28.691600000456674
+        }
+      ],
+      "role": "CUSTOMER",
+      "concurrency": 16
+    },
+    {
+      "path": "/api/orders/100000",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 4.674416666724331,
+      "p95Ms": 6.402600000001257,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.4242000001540873
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.9638999985763803
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.8758000009693205
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.6599000013666227
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.835399998934008
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.232100000081118
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.253200000675861
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.2236000006378163
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.327700000227196
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.278399999951944
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.370099999709055
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.813899999135174
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 6.402600000001257
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.290599998261314
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.394499999965774
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.173999998078216
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.247900000336813
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 6.128299999545561
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 6.465700000262586
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.09530000272207
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.884500001935521
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.403800001658965
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.617399998300243
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.264999999781139
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.571800000325311
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.162699999142205
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.998600001068553
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.930200000671903
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.9128999997046776
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.02849999954924
+        }
+      ],
+      "role": "CUSTOMER",
+      "concurrency": 16
+    },
+    {
+      "path": "/api/merchant/stores",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 60.51370999994106,
+      "p95Ms": 84.80929999859654,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 52.06679999901098
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 46.71299999972689
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 62.00940000053379
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 44.45249999844236
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 53.04949999845121
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 47.933599998941645
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 40.46869999729097
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 57.15790000249399
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 63.36190000001807
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 54.701199998817174
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 77.53329999832204
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 84.80929999859654
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 74.27300000199466
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 81.82169999781763
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 79.31210000242572
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 85.89009999923292
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 51.195199997891905
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 54.57939999905648
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 55.89230000259704
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 78.97370000137016
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 63.64110000140499
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 66.522500001156
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 60.68339999910677
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 46.656200000143144
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 63.37630000052741
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 57.7183999994304
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 52.813300000707386
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 51.746600001933984
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 52.6785000001837
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 53.38040000060573
+        }
+      ],
+      "role": "MERCHANT",
+      "concurrency": 16
+    },
+    {
+      "path": "/api/merchant/stores/31/goods",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 52.20424333322929,
+      "p95Ms": 73.97920000221347,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.15739999906509
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.48910000003525
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 38.24180000083288
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 40.20049999962794
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 38.107600001239916
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 38.54150000188383
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 37.89659999893047
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 73.24189999781083
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.37740000078338
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 73.03099999990081
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 68.12079999872367
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 71.40799999979208
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 74.80390000273474
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 73.97920000221347
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 71.1671999997634
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 73.16100000025472
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 63.94500000169501
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.091299997788155
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 40.242299997771624
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 40.10790000029374
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 62.53360000118846
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 64.81800000256044
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 65.02069999987725
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 65.95820000075037
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.13309999956982
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 39.41049999775714
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 37.31299999708426
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 36.30490000068676
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 36.56859999682638
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 35.75529999943683
+        }
+      ],
+      "role": "MERCHANT",
+      "concurrency": 16
+    },
+    {
+      "path": "/api/merchant/orders/page?page=1&pageSize=30",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 108.00934666694957,
+      "p95Ms": 174.30779999995138,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 100.55970000030356
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 101.42269999778364
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 119.0424999986135
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 177.00499999773456
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 102.78739999921527
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 102.88360000049579
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 100.72239999863086
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 103.0575000004319
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 117.96390000017709
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 173.68619999979273
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 102.87330000210204
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 174.30779999995138
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 147.4104000008083
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 171.86360000050627
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 172.40730000048643
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 169.99529999884544
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 89.59599999798229
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 88.00390000033076
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 86.89290000256733
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 84.72800000163261
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 86.60660000168718
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 90.34969999993336
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 87.22340000167605
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 76.47050000014133
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 75.50880000053439
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 66.98640000104206
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 69.33890000073006
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 73.78650000100606
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 65.96280000303523
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 60.83740000030957
+        }
+      ],
+      "role": "MERCHANT",
+      "concurrency": 16
+    },
+    {
+      "path": "/api/merchant/stats?storeId=31",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 88.41804333327066,
+      "p95Ms": 119.11319999853731,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 63.05969999812078
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 63.78200000108336
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 66.12030000178493
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 87.69590000156313
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 63.587599997845246
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 85.74489999955404
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 84.98580000014044
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 59.84909999824595
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 62.83419999817852
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 82.09310000165715
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 105.71319999871776
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 109.54329999731272
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 106.31610000200453
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 119.11319999853731
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 98.33639999851584
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 133.53250000000116
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 112.7027000002272
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 102.82619999998133
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 81.47390000158339
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 77.19269999870448
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 98.29870000248775
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 92.98370000033174
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 95.98709999772836
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 81.03919999848586
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 94.26729999904637
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 81.0674000022118
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 90.09500000320259
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 90.22100000220235
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 74.89870000063092
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 87.18039999803295
+        }
+      ],
+      "role": "MERCHANT",
+      "concurrency": 16
+    },
+    {
+      "path": "/api/admin/stores",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 58.17553666626433,
+      "p95Ms": 84.56519999890588,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 45.20090000005439
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.429900000366615
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 43.051299999206094
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 51.85889999847859
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 53.24259999906644
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 37.07159999976284
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 48.4398999979021
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 57.224500000302214
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 46.097499998722924
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 53.72429999988526
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 69.75320000128704
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 74.97660000080941
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 84.56519999890588
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 76.32069999817759
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 86.46090000183904
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 78.42059999893536
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 47.313999999460066
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 52.600600000005215
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 57.49350000041886
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 73.07880000007572
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 77.20729999709874
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 57.88140000004205
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 62.498999999661464
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 58.48880000121426
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 43.37659999873722
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 64.07760000001872
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 48.504899998079054
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 54.87899999934598
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 54.51080000057118
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 45.5151999994996
+        }
+      ],
+      "role": "ADMIN",
+      "concurrency": 16
+    },
+    {
+      "path": "/api/admin/orders/page?page=1&pageSize=30",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 61.671669999850565,
+      "p95Ms": 100.63779999836697,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 53.90110000007553
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 50.58619999908842
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 53.88210000091931
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 55.14210000183084
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 50.33509999702801
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 52.22940000021481
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 54.665099996782374
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 49.970700001722435
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 52.78360000011162
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 50.277800000912976
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 94.87109999827226
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 98.22740000163321
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 96.36970000065048
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 100.35490000154823
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 100.63779999836697
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 100.78889999931562
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 54.99690000215196
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 52.29030000191415
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 54.323599997587735
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 55.74010000054841
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 59.638999999151565
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 59.79740000111633
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 58.211499999742955
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 56.83080000017071
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 70.29939999847556
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 56.50130000140052
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 41.2421999972139
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 40.622000000439584
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 37.13589999824762
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 37.49669999888283
+        }
+      ],
+      "role": "ADMIN",
+      "concurrency": 16
+    },
+    {
+      "path": "/api/rider/orders/pool",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 4.696083333086183,
+      "p95Ms": 5.870999997569015,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.7472000003617723
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.653899999539135
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.1909999997878913
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.278999997040955
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.715799997735303
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.129299999476643
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.764599998248741
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.13890000001993
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.8487999993085396
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.010100001527462
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.10750000103144
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.878200001257937
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.689100001996849
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.831499998748768
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 6.233100000827108
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.870999997569015
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.047700000432087
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.905199999484466
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.28889999986859
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.847200001677265
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.257900000287918
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.596299997705501
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.655600001773564
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.379699999844888
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.878200001257937
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.979999997682171
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.62840000182041
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.621500000008382
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.132899997784989
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.5739999984798487
+        }
+      ],
+      "role": "RIDER",
+      "concurrency": 16
+    },
+    {
+      "path": "/api/rider/orders/page?page=1&pageSize=30",
+      "requests": 30,
+      "failures": 0,
+      "averageMs": 4.661246666849668,
+      "p95Ms": 6.792399999540066,
+      "successfulWithin2SecondsRatio": 1.0,
+      "passed": true,
+      "samples": [
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 2.9753999988315627
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.1304000003729016
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.1892000006337184
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.4082999991369434
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.4802000009221956
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.51790000058827
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.877000002830755
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.740899999887915
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.300500000681495
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.797199999098666
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.7297999990405515
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.510999999387423
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.96390000282554
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 6.291600002441555
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 7.132499998988351
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.646699999284465
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.900700001802761
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 6.792399999540066
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.798400001367554
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.455499998584855
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 6.683799998427276
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.324300000007497
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.681400001572911
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.915099998470396
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.439500000444241
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.34060000043246
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 5.167100000107894
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.975799998443108
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 4.487400001380593
+        },
+        {
+          "httpStatus": 200,
+          "code": 200,
+          "success": true,
+          "elapsedMs": 3.1828999999561347
+        }
+      ],
+      "role": "RIDER",
+      "concurrency": 16
+    }
+  ],
+  "passed": true
+}

@@ -62,6 +62,9 @@ services:
         -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai
         -Xms64m -Xmx384m -XX:+ExitOnOutOfMemoryError
         -Xlog:gc*,safepoint:file=/app/diagnostics/gc.log:time,uptime,level,tags:filecount=5,filesize=5M
+  app-secondary:
+    deploy:
+      replicas: 0
   gateway:
     environment:
       TAKEOUT_GATEWAY_TRUSTED_PROXY_REGEX: ${TAKEOUT_GATEWAY_TRUSTED_PROXY_REGEX:?Set the exact host nginx proxy address regex}

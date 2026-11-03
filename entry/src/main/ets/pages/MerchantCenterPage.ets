@@ -17,6 +17,14 @@ import { AddressSearchResult, searchAddress, joinAddressParts } from '../service
 import { syncAddressesRemote } from '../service/AppStorageManager'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { PageHeader } from '../components/PageHeader'
+import { post, put, ApiResponse } from '../service/HttpClient'
+
+interface StoreBusinessStatusRequest {
+  status: number
+  deliveryFee: number
+  minOrder: number
+  deliveryRadius: number
+}
 
 /** 商户最远配送半径软阈值（公里）：低于/高于会先弹确认框，服务端仍接受 */
 const MERCHANT_RADIUS_DEFAULT_KM: number = 30
@@ -332,6 +340,25 @@ export struct MerchantCenterPage {
     this.showAddStore = true
   }
 
+  private async resubmitStore(store: StoreItem): Promise<void> {
+    const response: ApiResponse<Object> = await post<Object>(`/api/merchant/stores/${store.id}/review`)
+    if (response.code === 200) {
+      promptAction.showToast({ message: '已重新提交审核' })
+      await this.refreshStores()
+    }
+  }
+
+  private async toggleStoreBusiness(store: StoreItem): Promise<void> {
+    const request: StoreBusinessStatusRequest = {
+      status: store.status === 1 ? 0 : 1, deliveryFee: -1, minOrder: -1, deliveryRadius: -1
+    }
+    const response: ApiResponse<Object> = await put<Object>(`/api/merchant/stores/${store.id}`, request)
+    if (response.code === 200) {
+      promptAction.showToast({ message: request.status === 1 ? '已设为营业' : '已设为休息' })
+      await this.refreshStores()
+    }
+  }
+
   async refreshStores() {
     this.myStores = await fetchMerchantStoresApi()
     const counts: Record<string, number> = {}
@@ -473,6 +500,22 @@ export struct MerchantCenterPage {
                   Text(store.name)
                     .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
                     .fontColor(COLORS.TEXT_PRIMARY)
+                  Text(store.reviewStatus === 0 ? '待审核' : store.reviewStatus === 2 ? '审核驳回'
+                    : store.platformStatus === 0 ? '平台已停用' : store.status === 1 ? '营业中' : '休息中')
+                    .fontSize(FONT_SIZE.SM).fontColor(MODULE_COLOR.MERCHANT)
+                  if (store.reviewStatus === 2 && (store.reviewReason ?? '') !== '') {
+                    Text(store.reviewReason ?? '').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+                  }
+                  if (store.reviewStatus === 2) {
+                    Button('重新提交审核').attributeModifier(new AppButtonStyle()).height(40)
+                      .id(`merchant-store-resubmit-${store.id}`)
+                      .onClick(() => { this.resubmitStore(store) })
+                  }
+                  if (store.reviewStatus === 1 && store.platformStatus === 1) {
+                    Button(store.status === 1 ? '设为休息' : '开始营业')
+                      .attributeModifier(new AppButtonStyle()).height(40)
+                      .onClick(() => { this.toggleStoreBusiness(store) })
+                  }
                   Row({ space: SPACING.SM }) {
                     Text(`月售${formatSales(store.monthlySales)}`)
                       .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
@@ -492,18 +535,19 @@ export struct MerchantCenterPage {
                   .onClick(() => { this.startEditStore(store) })
                 Text('管理 ›').id(`merchant-store-goods-${store.id}`)
                   .fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.MERCHANT)
+                  .height(44)
+                  .onClick(async () => {
+                    this.selectedStoreId = store.id
+                    this.selectedStoreGoods = await fetchMerchantGoodsApi(store.id)
+                    this.storeGoodsCounts[store.id.toString()] = this.selectedStoreGoods.length
+                    this.showAddStore = false
+                  })
               }
                 .attributeModifier(new AppCardStyle())
               .width('100%')
               .padding(SPACING.MD)
-              .onClick(async () => {
-                this.selectedStoreId = store.id
-                this.selectedStoreGoods = await fetchMerchantGoodsApi(store.id)
-                this.storeGoodsCounts[store.id.toString()] = this.selectedStoreGoods.length
-                this.showAddStore = false
-              })
             }
-          }, (item: StoreItem) => item.id.toString())
+          }, (item: StoreItem) => `${item.id}:${item.reviewStatus}:${item.platformStatus}:${item.status}`)
         }
         .width('100%')
         .padding({ left: SPACING.LG, right: SPACING.LG })
@@ -1055,7 +1099,7 @@ export struct MerchantCenterPage {
     this.showAddStore = false
     await this.refreshStores()
     this.creatingStore = false
-    promptAction.showToast({ message: '店铺创建成功，列表已刷新', duration: 1800 })
+    promptAction.showToast({ message: '店铺已提交，等待平台审核', duration: 1800 })
   }
 
   startEditStore(store: StoreItem) {

@@ -1,0 +1,2314 @@
+[
+  {
+    "path": "AppScope/app.json5",
+    "sha256": "0b9e9f368952fab5359abafd7a829bc62e99ccaf85842f1c8903be8e7db6c703"
+  },
+  {
+    "path": "AppScope/resources/base/element/string.json",
+    "sha256": "15f0cb7d00cc7d8da7104cdc844f7118386ecd5b0b23bed6ca4fd670c3ce4835"
+  },
+  {
+    "path": "AppScope/resources/base/media/layered_image.json",
+    "sha256": "3d18dcd7ed9e7d3d2c54c20cb80a44eb4877c661131c68a46e20b6e19d0bb476"
+  },
+  {
+    "path": "AppScope/resources/base/profile/configuration.json",
+    "sha256": "7347173394f99fd679f5aa9def78d6400411bd1b74e7455d0c597675afa719dc"
+  },
+  {
+    "path": "build-profile.json5",
+    "sha256": "810fc1e7293f5581220f36bc2383ed91a426f7697262b758d8e21ba3cce217bf"
+  },
+  {
+    "path": "entry/build-profile.json5",
+    "sha256": "10a12b84474f32ba7de1099c6265deb196c76fa72c5a86c7da0e44a35594e5ef"
+  },
+  {
+    "path": "entry/hvigorfile.ts",
+    "sha256": "7efb9286c5c2f735db59c10686102a5de0d44704f43696d05d802560a10eee41"
+  },
+  {
+    "path": "entry/oh-package-lock.json5",
+    "sha256": "60a99ef0d0fe53778014347396240dc43b34a2a03953084cd7b4f2d3030201b5"
+  },
+  {
+    "path": "entry/oh-package.json5",
+    "sha256": "a97ce1a53167756aa291ad318dc4305948c593f35e581ec0599382d885254563"
+  },
+  {
+    "path": "entry/src/main/ets/common/ClickLogger.ets",
+    "sha256": "44f120d95e708cd45c280b3f70c37bf31e768e884cde63fd2f5dd8565824e47d"
+  },
+  {
+    "path": "entry/src/main/ets/common/Constants.ets",
+    "sha256": "2d9e54bdceacbe52219bdfeb8862705d722df21dabddff3085ae1d12ae27358f"
+  },
+  {
+    "path": "entry/src/main/ets/common/NavigationThrottle.ets",
+    "sha256": "148e98aa7a407e03fed746023c1fa43f20c1e06aea120ab48c160c9a95600066"
+  },
+  {
+    "path": "entry/src/main/ets/common/PasswordPolicy.ets",
+    "sha256": "3e80f9d8123033d94ddab13bfb92bf0a62b74b415dc0638903bd4b91d67180e3"
+  },
+  {
+    "path": "entry/src/main/ets/common/QuickLoginConfig.ets",
+    "sha256": "070014b554f4c912bacd4ebb168bca44a6cd393a12fe6bcd2a57da984f082fdd"
+  },
+  {
+    "path": "entry/src/main/ets/common/UiNavigation.ets",
+    "sha256": "b31437cf274f97b26a423131e2b235475d3a97f2705edc31ca9972d513bbeb85"
+  },
+  {
+    "path": "entry/src/main/ets/common/theme/AppMotion.ets",
+    "sha256": "41fd30d49d78735778611928a1b7d95b2f273171dbb4bd20b78bf28e1534222b"
+  },
+  {
+    "path": "entry/src/main/ets/common/theme/AppTheme.ets",
+    "sha256": "7eea8e131c22aeb44e3a4adaef4cab7daa6d0bb0416e450588ebab67dae3def7"
+  },
+  {
+    "path": "entry/src/main/ets/common/theme/FloatingTabBarTheme.ets",
+    "sha256": "b93bf4ecd938357efb3f1b89d565eee01e0b32087df5bea36bd378165267e83d"
+  },
+  {
+    "path": "entry/src/main/ets/common/theme/HomeTheme.ets",
+    "sha256": "61ac9fd013266b1651bb3313d415598d6be82766c33a5ce77ed56c46e243722c"
+  },
+  {
+    "path": "entry/src/main/ets/common/theme/SoftPressModifier.ets",
+    "sha256": "51fac710773a4b791d26656a10404e856974563e8a6acad3d9c949d52e48dd81"
+  },
+  {
+    "path": "entry/src/main/ets/common/utils/BreakpointSystem.ets",
+    "sha256": "bad734f45cf1b87a1c7c7a1abfce58af0ce13ec738972c33562b80bbf9e0b860"
+  },
+  {
+    "path": "entry/src/main/ets/components/AdaptiveTabBar.ets",
+    "sha256": "7cb7b5ec661baef9636e344fca77ac62aab356e0e67e8890cb343fbc2c7d077a"
+  },
+  {
+    "path": "entry/src/main/ets/components/CartAddFlight.ets",
+    "sha256": "537bed3692d78010688f5c8d90374b45c3436b23dc49cf0f17e9a69bbb0f6480"
+  },
+  {
+    "path": "entry/src/main/ets/components/ChangePasswordDialog.ets",
+    "sha256": "0db2c1693a4095d9cc6d7893b17ef46f4fade1b4a2a695b3bd6870d4498bb7ee"
+  },
+  {
+    "path": "entry/src/main/ets/components/ConfirmDialog.ets",
+    "sha256": "76a07175b405066ae46565c74760760f39741c4f23e67fe4c3d8b5406d5673d6"
+  },
+  {
+    "path": "entry/src/main/ets/components/DateTimeField.ets",
+    "sha256": "fd1ed6b4a1b0dd33c81a3a4c3b1c384514f611f2036831b0b7b71916f83908cb"
+  },
+  {
+    "path": "entry/src/main/ets/components/EmailCaptchaField.ets",
+    "sha256": "a1dacfeeea15e99639137396e8ad8dcfe41a8f0db16cf9bf90cbd68d6e5be6d1"
+  },
+  {
+    "path": "entry/src/main/ets/components/EmptyState.ets",
+    "sha256": "f5202f10851744511c289a6c16dea91072b10eca5bcc558e708b3ae0c039db0b"
+  },
+  {
+    "path": "entry/src/main/ets/components/EvidenceImages.ets",
+    "sha256": "4a10db19dd3b93e2eb7cf9ef6eaa93515655286128add653b3f282056a34dde8"
+  },
+  {
+    "path": "entry/src/main/ets/components/FormInput.ets",
+    "sha256": "6da774603dc4bce3e2321d6b8306c432aab409421a2bc39618efa1411f441abd"
+  },
+  {
+    "path": "entry/src/main/ets/components/LoadingIndicator.ets",
+    "sha256": "135fad7d7c57260ef714b635baa772dc145038455d8b88ac9c76f2c32ae00a8b"
+  },
+  {
+    "path": "entry/src/main/ets/components/OrderStatusTimeline.ets",
+    "sha256": "ba71ad1af6ef22fe6686ab08e320a13b0ca8f3705ee747ede1c864f9ca41ddd7"
+  },
+  {
+    "path": "entry/src/main/ets/components/PageHeader.ets",
+    "sha256": "5037a2174ef6e8c949959db5f7a658cd7e9590d3e794cc997ebbe7211939e6b3"
+  },
+  {
+    "path": "entry/src/main/ets/components/PriceText.ets",
+    "sha256": "e74e715fac16aaf406af3c355b6d0c866384fb9daa4bcc4a95903157e22d12d1"
+  },
+  {
+    "path": "entry/src/main/ets/components/RatingStars.ets",
+    "sha256": "bcc5abea3d2fe239b23db4f4b0bd130a4756ac54a6285be1731a7fa49fea2ce9"
+  },
+  {
+    "path": "entry/src/main/ets/components/StatusBadge.ets",
+    "sha256": "18e362413465a9d25d99e0e60e6650c180cb8105edf5e6b1784635f315ba4133"
+  },
+  {
+    "path": "entry/src/main/ets/components/home/HomePage.ets",
+    "sha256": "7ca54b6d4cb4fe83322b92bc567123c50d7e6f8ed5944c93ca7b5b15a97af84d"
+  },
+  {
+    "path": "entry/src/main/ets/components/home/RecommendedStoreCardHost.ets",
+    "sha256": "8a652a1fc1c32755423d943a4642c1113bbcfc626a0ad02ee04aa7c7442597c5"
+  },
+  {
+    "path": "entry/src/main/ets/components/profile/ProfileMainPage.ets",
+    "sha256": "44fdf99001d3e66db55c395375cbd9f6e557baff199f1dce65fb7c236be3da22"
+  },
+  {
+    "path": "entry/src/main/ets/components/store/StoreDetailContent.ets",
+    "sha256": "e2e76afcf8cb56c826c72bccad7f0400042b04fa121046e8449f6a5373f2990a"
+  },
+  {
+    "path": "entry/src/main/ets/entryability/EntryAbility.ets",
+    "sha256": "91be10ecd33c67d725bc271d2614b5158c8efa65a14e88e08941f5c34eb777f2"
+  },
+  {
+    "path": "entry/src/main/ets/entrybackupability/EntryBackupAbility.ets",
+    "sha256": "09d87ca48fda71dd7e71e377ffb65090b2de14b8968d67b90a0ed1ed5c632584"
+  },
+  {
+    "path": "entry/src/main/ets/model/Models.ets",
+    "sha256": "ae1b558a18bca1ff4d4227651114de898db9de34277c6cc2335d3dd7229c4077"
+  },
+  {
+    "path": "entry/src/main/ets/model/server/Contracts.ets",
+    "sha256": "81ee3feb603ed29ab60b2d5d0eb7f7dd53ad8eb8e9033f7e5772bbfc9a794961"
+  },
+  {
+    "path": "entry/src/main/ets/model/server/Converters.ets",
+    "sha256": "d989878ff171d5a43df951babb21a23de738eeb1806fb8c76885ff2bf551b76f"
+  },
+  {
+    "path": "entry/src/main/ets/pages/AccountSecurityPage.ets",
+    "sha256": "432c5b27be22f416bd98fe2b9984c3a83f72ddfc95ff32966c1a18b7f4435787"
+  },
+  {
+    "path": "entry/src/main/ets/pages/AddBankCardPage.ets",
+    "sha256": "401330f4445468a8d589f6bdb6730deec3562018c55c58710c680aacb7d8fe65"
+  },
+  {
+    "path": "entry/src/main/ets/pages/AddressListPage.ets",
+    "sha256": "8c32cc7928bb892a0975e6d2df0b54dcdbfd951ab6c978d9c81ea293dcdc1d92"
+  },
+  {
+    "path": "entry/src/main/ets/pages/AdminAssistantPage.ets",
+    "sha256": "aaa44ae31c1e11ec1391be0b6f1c4026e44e77129e03f8624861c710bf152e57"
+  },
+  {
+    "path": "entry/src/main/ets/pages/AdminAuditPage.ets",
+    "sha256": "83d4ef6ce0ca6169fdb518c66d8c7618c6b12094c26b6fdf1072d16e5d7739ac"
+  },
+  {
+    "path": "entry/src/main/ets/pages/AdminCategoryPage.ets",
+    "sha256": "5e67f2b1a592265b7747bf7e228a01799abfef40dfc8e1359bdcb59404d69987"
+  },
+  {
+    "path": "entry/src/main/ets/pages/AdminCenterPage.ets",
+    "sha256": "4d0a3347bc87b809b9db463ba05aa4b8a96f8bde23dc847958fee76182be8fb6"
+  },
+  {
+    "path": "entry/src/main/ets/pages/AdminContentPage.ets",
+    "sha256": "1ef7b1a0624761d57367723bcac3442a3a2e3765daf416c5ac282c2cd4d7030c"
+  },
+  {
+    "path": "entry/src/main/ets/pages/AdminEmployeePage.ets",
+    "sha256": "ae9bc5382739ea1045ef39322f6f6dc1eb0ef71d6bb60d6638bcfb15a9863862"
+  },
+  {
+    "path": "entry/src/main/ets/pages/AdminMarketingPage.ets",
+    "sha256": "34b945f1680699c3f9459e64263f34763c0a3b1e845d6a6b6735d7252f319f80"
+  },
+  {
+    "path": "entry/src/main/ets/pages/AdminOrderPage.ets",
+    "sha256": "2d8680f17481ea89a33a078b2f515b594075ce02c0d8d2fc7842cfcaa51be279"
+  },
+  {
+    "path": "entry/src/main/ets/pages/AdminProductPage.ets",
+    "sha256": "f379a41ff6e237aff7a1f0073b1a347f72e72a92aaeb88e333d9bda953cac12e"
+  },
+  {
+    "path": "entry/src/main/ets/pages/AdminRefundPage.ets",
+    "sha256": "0f36d1ac222e64f76a5a12055419c35dada8f7485724b527957593e962b3901e"
+  },
+  {
+    "path": "entry/src/main/ets/pages/AdminRiderPage.ets",
+    "sha256": "8f5858148e537b5c4fc634ebae972a6741c334b8e49633d5dc8ea6c1c7a5afba"
+  },
+  {
+    "path": "entry/src/main/ets/pages/AdminStatisticsPage.ets",
+    "sha256": "519d3125825e94aa218dbf32cbf9e92b3986977bbc6b26c292514a05aa4b0436"
+  },
+  {
+    "path": "entry/src/main/ets/pages/AdminStorePage.ets",
+    "sha256": "ed4c8a4667ec5a5328699f47765a60fb6f8fe95d8ef86b7211f288c808339148"
+  },
+  {
+    "path": "entry/src/main/ets/pages/AdminUserPage.ets",
+    "sha256": "2f717233147444e4733fba62c0afee34799142592c67bcdc19a8424ffcb4bc09"
+  },
+  {
+    "path": "entry/src/main/ets/pages/AppSettingsPage.ets",
+    "sha256": "b3e6395ccfabcfe77f6db625004d232d9fb519b685cb7021b15570ab0a514ac8"
+  },
+  {
+    "path": "entry/src/main/ets/pages/AssistantPage.ets",
+    "sha256": "aa6024235e945fe56bf33290af29f8510acdfb4d8f757f587147b219f5ca58c6"
+  },
+  {
+    "path": "entry/src/main/ets/pages/BalancePage.ets",
+    "sha256": "45079c0565ac27deee40323f4075078884ce0abf825303d45cc7558d8c22d231"
+  },
+  {
+    "path": "entry/src/main/ets/pages/CartPage.ets",
+    "sha256": "0bee48830e9fe58cddd23d3677096f1015f36069ab89669f22667b87baeae6ed"
+  },
+  {
+    "path": "entry/src/main/ets/pages/CheckoutPage.ets",
+    "sha256": "6e0193a86fcfebc448728cbfa8afdfcc5a7f64b6bf9670148c25b92330b2ed3d"
+  },
+  {
+    "path": "entry/src/main/ets/pages/ConsentPage.ets",
+    "sha256": "efa41f90e1618a4e12dbb44505b8a2c14421d4480b6eb6b8a13332e7abb6404e"
+  },
+  {
+    "path": "entry/src/main/ets/pages/ContactCustomerServicePage.ets",
+    "sha256": "d3f7c2a8270e43eb9eda15c78daaded028d2fb02e4e292850c34afe9e550abdd"
+  },
+  {
+    "path": "entry/src/main/ets/pages/CouponCenterPage.ets",
+    "sha256": "fc320f91f282fa03ab481a3d6367c0ab638915daa717fba7c6e9b827f39fcbb2"
+  },
+  {
+    "path": "entry/src/main/ets/pages/FavoriteListPage.ets",
+    "sha256": "b150c1111a25be17c2d115ee53c11e8d58a8d3903fb5d9cf25b9994bda95e2dc"
+  },
+  {
+    "path": "entry/src/main/ets/pages/Index.ets",
+    "sha256": "82ce1aa03811b3d7cb3a0a07c8447dca451311b5054b74f5bce91611cca031aa"
+  },
+  {
+    "path": "entry/src/main/ets/pages/LocationPage.ets",
+    "sha256": "4a4670b089472e6499a506422ccf22fe81e1f8c68d37370c4f329674cd77c199"
+  },
+  {
+    "path": "entry/src/main/ets/pages/LoginPage.ets",
+    "sha256": "483a07c24952ce9191d1ebe800eff482e61b9fdea4abcf09fe0ceaeed1a257a2"
+  },
+  {
+    "path": "entry/src/main/ets/pages/MerchantAddGoodsPage.ets",
+    "sha256": "2cbc346ee11b6aa2b34544d66b0421747c175ba50ca4ec4305bb6836987758ce"
+  },
+  {
+    "path": "entry/src/main/ets/pages/MerchantCenterPage.ets",
+    "sha256": "5805083af8a4ae5bcf6ecd860f7eacb585b4f478efae8244d950ebc460ce35e1"
+  },
+  {
+    "path": "entry/src/main/ets/pages/MerchantEditGoodsPage.ets",
+    "sha256": "5ed9a0679c08e0df9a477b3804351d90c21605a0cfcd2b6987e4134204c8fdf1"
+  },
+  {
+    "path": "entry/src/main/ets/pages/MerchantMarketingPage.ets",
+    "sha256": "ce8807a7ea38fd97f849e0f80f20141e57dfedc94ba779dd7f81ef76eccfb833"
+  },
+  {
+    "path": "entry/src/main/ets/pages/MerchantOrdersPage.ets",
+    "sha256": "aba01f70a62b87259be3636277d09208d449cdbc2b622dc78d4545c74512b490"
+  },
+  {
+    "path": "entry/src/main/ets/pages/MerchantReviewsPage.ets",
+    "sha256": "0e6cfa9e4cbf90ea43f9a2d48a9ffb3d6f16f514e2c462083b0d2abe35e19219"
+  },
+  {
+    "path": "entry/src/main/ets/pages/MerchantStatsPage.ets",
+    "sha256": "c5184e30ca527feacaeec261a7df1741c196130817454ce24035cab94e54f854"
+  },
+  {
+    "path": "entry/src/main/ets/pages/OrderDetailPage.ets",
+    "sha256": "a78eaf1bbceb5e1eb459a44a02dfcb2a50f0891b4ec5ceeb806542e4db0640f4"
+  },
+  {
+    "path": "entry/src/main/ets/pages/OrderListPage.ets",
+    "sha256": "473c53eca2487deb961ba8bc594f3790d99eed9b935ead31ebb2ac7d428c2a9e"
+  },
+  {
+    "path": "entry/src/main/ets/pages/OrderSupportPage.ets",
+    "sha256": "fb16f98a654f7a6ef6a34c79cde1947981731b7e70cafd0fd7a5cc7e68131b02"
+  },
+  {
+    "path": "entry/src/main/ets/pages/PasswordResetPage.ets",
+    "sha256": "5c5d32ef1bace4fe93f67ca076fe2c206e1abf62978edd98cf3e5f1a081c6b9f"
+  },
+  {
+    "path": "entry/src/main/ets/pages/PrivacyPolicyPage.ets",
+    "sha256": "509b2fb4db14bbf86a1f915648aae26c18edeaeff9bd70848c61922dc664b878"
+  },
+  {
+    "path": "entry/src/main/ets/pages/ProductListPage.ets",
+    "sha256": "a4a0e367e901485f3b364b914394dd31b261f3294031bde4216971fc0130e4e5"
+  },
+  {
+    "path": "entry/src/main/ets/pages/ProfileEditPage.ets",
+    "sha256": "8d166e499efa15e14b942e6d90cdb585d02516c27048c6ea768af1e20288e64b"
+  },
+  {
+    "path": "entry/src/main/ets/pages/RankingPage.ets",
+    "sha256": "9fd4cf1028e3bb03a4048c938871d7ddcd3ae149476386c86220ef5b11d886f7"
+  },
+  {
+    "path": "entry/src/main/ets/pages/RegisterPage.ets",
+    "sha256": "81ef77d1c45a13e7d2fe4530a81bbb0f571e445df3bbd6f8cb7a1942c63277a9"
+  },
+  {
+    "path": "entry/src/main/ets/pages/ReviewImagePage.ets",
+    "sha256": "3c26bdcf0a3e795b69b677c94d219e9a43f8c54e916be4aa5a5d8eb0e86645dc"
+  },
+  {
+    "path": "entry/src/main/ets/pages/ReviewPage.ets",
+    "sha256": "bd98db16f7d8563f8c4ebab688cd72ba224006f2cf5175e888ec6fa32be75c42"
+  },
+  {
+    "path": "entry/src/main/ets/pages/RiderCenterPage.ets",
+    "sha256": "e8175873f0d90b1d50b7a220fd01ae0bbaed2f481761c751be355b41a647ba02"
+  },
+  {
+    "path": "entry/src/main/ets/pages/RiderOrderPoolPage.ets",
+    "sha256": "afb44a1591257e7621917d7b357b270245a6e45ecab694a32591b5404704a02c"
+  },
+  {
+    "path": "entry/src/main/ets/pages/RiderOrdersPage.ets",
+    "sha256": "6d872000a9a6f0903e497e0221f3747bfc21fb835d2b57ca36998deacdb96744"
+  },
+  {
+    "path": "entry/src/main/ets/pages/SearchPage.ets",
+    "sha256": "66a8ea1441270cb58621f0d6a3599676b097b9d9626ceb88ef4e906d45259413"
+  },
+  {
+    "path": "entry/src/main/ets/pages/SettingsPage.ets",
+    "sha256": "696a196349231ce68ce7a35e06c7ba3ae951f810f2c59b2b55ed5ed2f658063f"
+  },
+  {
+    "path": "entry/src/main/ets/pages/StoreDetailPage.ets",
+    "sha256": "94765314f33c3249550db11606681f15b38adcac69c576ad081fbb3d93e1f5fe"
+  },
+  {
+    "path": "entry/src/main/ets/service/ApiService.ets",
+    "sha256": "d6da22760d2cfec322c26466fb7cd8a4ceb9d053c0724347252558622e3dfe43"
+  },
+  {
+    "path": "entry/src/main/ets/service/AppLogger.ets",
+    "sha256": "c43119ea1d474b7aaa51c80d6f9d21afc758e9281e7e3a8168dc0f90caeb73e3"
+  },
+  {
+    "path": "entry/src/main/ets/service/AppStorageManager.ets",
+    "sha256": "93cf5b4e953365af4f5868a0fd71ac6fc8e4bf17a22ce764e8de9a3ec223d69a"
+  },
+  {
+    "path": "entry/src/main/ets/service/AppearanceSettings.ets",
+    "sha256": "c2aa09f2e278ad46739bf576fb7328c9328ad79114992231664779b00092d9cc"
+  },
+  {
+    "path": "entry/src/main/ets/service/AssistantAdminApi.ets",
+    "sha256": "f2a74d9d2a79d7da26a3d9e8dae8c6fbb6e2ad2a1cd90931b43e09ab0e8049ef"
+  },
+  {
+    "path": "entry/src/main/ets/service/CacheService.ets",
+    "sha256": "efc70f4aed68d75453d872ba56a90ed253c8e0fa3463059631ab8cee3a969f64"
+  },
+  {
+    "path": "entry/src/main/ets/service/CheckoutCouponRules.ets",
+    "sha256": "092000b3f0d7db13cbaf4a60e14708f3b985562fc02d0d2fb0380425c739b69b"
+  },
+  {
+    "path": "entry/src/main/ets/service/DataPersistence.ets",
+    "sha256": "bd840bc5dfb34c15ef3f995988d0e2bfd2338f0c047c249008fb95c666921d8f"
+  },
+  {
+    "path": "entry/src/main/ets/service/DeliveryFormSync.ets",
+    "sha256": "ba980af4469ad8500dcb394fc59e9c39dc2661462e5bfdf7adad5a26df9a930f"
+  },
+  {
+    "path": "entry/src/main/ets/service/HttpClient.ets",
+    "sha256": "856f179db44d7f7a4da3f60e1671a20ec1cdaf43a41fcad6ee3d38a0aafd5190"
+  },
+  {
+    "path": "entry/src/main/ets/service/LocationService.ets",
+    "sha256": "53bed30d4b4d5cdc5b59e235e92a5b26a432eb98f5f71af8d55fba0ff817d53a"
+  },
+  {
+    "path": "entry/src/main/ets/service/OrderCalculations.ets",
+    "sha256": "648fbd86df8d2c563cc18713fd029479cbf90a894ec5259747a807d4469c347f"
+  },
+  {
+    "path": "entry/src/main/ets/service/OrderStatus.ets",
+    "sha256": "c768ed4a97dc41e7906ae18d5ca280bd31228e1d9672a491f633d3d7929e9693"
+  },
+  {
+    "path": "entry/src/main/ets/service/PreferencesHelper.ets",
+    "sha256": "973b385527ea08bf8f6b43a242f5344aa5c59c34f10aa8c9dc694859f2cc56b1"
+  },
+  {
+    "path": "entry/src/main/ets/service/PushKitService.ets",
+    "sha256": "22ed0f014d0488a018b8af2dbf27e11309bb862647eaca36781b384f199bb564"
+  },
+  {
+    "path": "entry/src/main/ets/service/TokenStorage.ets",
+    "sha256": "b3b1071b01b9fe4b061ef1b27a425e016ab9d24e6119e0d0163fe759a1ab80c4"
+  },
+  {
+    "path": "entry/src/main/ets/service/api/AdminApi.ets",
+    "sha256": "8beaf330f4db530ac0f7c38b2d17f81ec7034241f9f0dc8ee359dd06ff2f67f7"
+  },
+  {
+    "path": "entry/src/main/ets/service/api/AfterSalesApi.ets",
+    "sha256": "2353112fd2a39fdb9ef41edab0823fb79c07c40ba1103342e8a2cf93ab55e051"
+  },
+  {
+    "path": "entry/src/main/ets/service/api/AssistantApi.ets",
+    "sha256": "265cfb5442a5113b5ffe411983b0e5ce9d631dc4354fd25b1cf9b7859e382a31"
+  },
+  {
+    "path": "entry/src/main/ets/service/api/AuthApi.ets",
+    "sha256": "4b7a9a643ba553824bed714ba0668629c2b0902ed0d2e3969b50f3c8ae0238fd"
+  },
+  {
+    "path": "entry/src/main/ets/service/api/CatalogApi.ets",
+    "sha256": "f093da85890ed333188abcc91ddcf1e1bdd5a1ecf0fe45875d566e0160bad6bd"
+  },
+  {
+    "path": "entry/src/main/ets/service/api/MerchantApi.ets",
+    "sha256": "5588013db1375f997708994376bf2471aecba29ff09943d3ff58c28d97de410b"
+  },
+  {
+    "path": "entry/src/main/ets/service/api/OrdersApi.ets",
+    "sha256": "1c73daa83f3c0fbbdec308a18e7b31d4deeb2beb79a08a7bb217a1d417d4da7e"
+  },
+  {
+    "path": "entry/src/main/ets/service/api/RiderApi.ets",
+    "sha256": "c9f607b25246c8b87b57f4eea2aa518e90cbf2431b4c6176a9387afe9a367fbe"
+  },
+  {
+    "path": "entry/src/main/ets/widget/DeliveryCard.ets",
+    "sha256": "7ef8a32958a69038fd25507cd8fb724450f75e171c43798c1c306685c850e753"
+  },
+  {
+    "path": "entry/src/main/ets/widget/DeliveryFormAbility.ets",
+    "sha256": "ae0e442119b6fe1846d35ae81c15244215424223bb2aa7518da6bd4ca004fc37"
+  },
+  {
+    "path": "entry/src/main/ets/widget/DeliveryLive.ets",
+    "sha256": "ca19d8fa1568be147bfcaa4f343f4306eef8a60543fa29dc7275f4947db31e61"
+  },
+  {
+    "path": "entry/src/main/ets/widget/DeliveryLiveAbility.ets",
+    "sha256": "99222a75d40a058db99a3b7c01607c05bb6502b6e8a8cecbdb08e489790e76f7"
+  },
+  {
+    "path": "entry/src/main/module.json5",
+    "sha256": "9997538aee765c50e6e547b231b5ca8c9400907db1bfa023b6a345be2eda2494"
+  },
+  {
+    "path": "entry/src/main/resources/base/element/color.json",
+    "sha256": "fb0b7f809a74581b4b41a84bedd28d872ea23543b063fcaa186bd56cb20bb74f"
+  },
+  {
+    "path": "entry/src/main/resources/base/element/float.json",
+    "sha256": "3ad317ad8b46b69683fce81f0e5b808dfde752594ec0334691917af7b5383a12"
+  },
+  {
+    "path": "entry/src/main/resources/base/element/string.json",
+    "sha256": "0802251de18bdaaf004c23831f322247ea34adb20f283a1306102f9a184b133d"
+  },
+  {
+    "path": "entry/src/main/resources/base/media/layered_image.json",
+    "sha256": "3d18dcd7ed9e7d3d2c54c20cb80a44eb4877c661131c68a46e20b6e19d0bb476"
+  },
+  {
+    "path": "entry/src/main/resources/base/profile/backup_config.json",
+    "sha256": "ab016122cd9d50be59356e8e1ec9cf09e0d3438d8c4e30a3356d7b951d784c25"
+  },
+  {
+    "path": "entry/src/main/resources/base/profile/delivery_form.json",
+    "sha256": "807cf6c090478ff3977944743e8dd3bb92251efd146d8dc96b622d8aba1a9c3f"
+  },
+  {
+    "path": "entry/src/main/resources/base/profile/main_pages.json",
+    "sha256": "961ebc2307c97917a9c32600fbad7db0155bec1160cad6535e4893ca6b54daae"
+  },
+  {
+    "path": "entry/src/main/resources/dark/element/color.json",
+    "sha256": "1502dd669ec848089c04cd90d5ede64986b8deb406b4cca658b73404c5e5c4b4"
+  },
+  {
+    "path": "entry/src/main/resources/rawfile/amap_map.html",
+    "sha256": "3bda6ab4200f8a89489d112bf21088706bd7b2183e0ac7f0b712b7e546e0ea63"
+  },
+  {
+    "path": "entry/src/main/resources/rawfile/order_failure_lottie.html",
+    "sha256": "d3944f9f02175a6a3686dc1baa0f363719d0dce96d34729fd8b5a704c981ae8f"
+  },
+  {
+    "path": "entry/src/mock/mock-config.json5",
+    "sha256": "8eb95bcbc154530931e15fc418c8b1fe991095671409552099ea1aa596999ede"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/Ability.test.ets",
+    "sha256": "8600c6681413e2ee3283671c6a67c2bb1421726559163aca8596ff17d2a389d6"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/AdminFlow.test.ets",
+    "sha256": "8820e01fd66d2a64c8cc1d2eb7ad733f32273e15f51035906b03fc8a5d9b2164"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/AllPagesReview.test.ets",
+    "sha256": "dcb0a9ad6228fa2fa824aea4d150e8c994404ba7817753309232c7b1aab06059"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/AuthLayout.test.ets",
+    "sha256": "742a1bed99886facfc581e97b880be7d5ecf5768725286c12d6fec66a2f51a3e"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/AuthTokenStorage.test.ets",
+    "sha256": "49a057a5c8c366ed1d762925bbae22581b8469b81e78053c3a69dcad9b2c45cc"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/BalancePage.test.ets",
+    "sha256": "8ac86124d5123962e6491c093bd48bfc27a908ec281460221cc669de36980196"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/CampusAcceptance.test.ets",
+    "sha256": "ef0bcebc3c0b63b277fc3663d7d1ecbbbca93d30755bddbfcea52c1bafa55c3e"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/CheckoutDeliveryTime.test.ets",
+    "sha256": "867e35d7bf084a0774efe7539dd5c28cecc247232bf2f4be562b43aeb3bb2920"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/CheckoutFlow.test.ets",
+    "sha256": "6ae7aad199366a9fb27c4fe62d1b3ed82307381974d5c8ed178901ab5783acbd"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/CheckoutGuard.test.ets",
+    "sha256": "af0b1d5574b67a2b8bab4f85ca1c9bf0eaf46d74aa103763e0006e0ce722fa19"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/ImportProbe.test.ets",
+    "sha256": "60e4ac3b4f6c04fc773b839ff433d6a17d65069fad599250faad4b4d9f319896"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/List.test.ets",
+    "sha256": "22bfd47ba6d6b560305060837b80828a00c1bb33d39910342334bef1c38c0522"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/LocationFlow.test.ets",
+    "sha256": "dd85ea9ddc9724b0e8275a8cf99be1b7edf7cc089531665bbbc350ec20d25611"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/LoginFlow.test.ets",
+    "sha256": "f43c8202408a205f89ba6ea1e2766767b394249ae7492d0277b525fa3daaf98e"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/MerchantFlow.test.ets",
+    "sha256": "a0b49aa0076bd466c50014d566a01ef1ca0d44131177fdeb8103ab7b7189f6ed"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/OrderMobilePayment.test.ets",
+    "sha256": "adf76049d68021c9cfce7021370996cff04118cdc3b99b5c8a25b58be6426233"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/OrderPaymentSelection.test.ets",
+    "sha256": "5de02cf2456d362f794c3a38b57dd49c19df2359d492f7928e933f03eaafbb0b"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/Probe.test.ets",
+    "sha256": "9104a1e722dee9f65222223c27ebd330a3728e0031edaaeb7c2cc041c687f462"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/ReviewFlow.test.ets",
+    "sha256": "75eb7002f147cc455836bd22fc6b016765099c5b5540eabd74d9c2356fe3f71b"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/RiderFlow.test.ets",
+    "sha256": "57aa2c47fe1051e16deef7634b73e477cfd4d68413a6f682ab7ca3c8c7e45232"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/SearchFlow.test.ets",
+    "sha256": "f3043fc9c563ca72aa1b83a9a98a51fb8f4f30de6d376de5798ec012c7d52e14"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/StoreCategoryFilter.test.ets",
+    "sha256": "c8c0231c3b16cfa31279e560bfde06c9168516818e4842169bd4bbebab60b61b"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/StoreDetailCart.test.ets",
+    "sha256": "8509740b45e1ca8bd34ff3f5e71e728d06f5351a1253147ede8528c4f1f395f4"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/StoreReviewFlow.test.ets",
+    "sha256": "a661ea317ec96a3c5b9b223844160db13b3f02a01d4ec1f1113b61eb3dfc63dc"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/UiTestHelper.ets",
+    "sha256": "729d312cb0b3cf7dc37f4a64c739d6c144e3136ef413a589c65d566355ead6d7"
+  },
+  {
+    "path": "entry/src/ohosTest/ets/test/UsernameCheck.test.ets",
+    "sha256": "9281e7f950955ec1076c56a1bf89f7687848028e8490abb2a7705e5f5f6dba40"
+  },
+  {
+    "path": "entry/src/ohosTest/module.json5",
+    "sha256": "462ca4e0c7cb551f4ba983e0d90e61c92133549231f240444f8b2f1c35a7ca4f"
+  },
+  {
+    "path": "entry/src/test/DataPersistence.test.ets",
+    "sha256": "d2e3b1ff2c634c00dc71056ed50a1269f9132594ad3d76e82e101f36a4a994bf"
+  },
+  {
+    "path": "entry/src/test/List.test.ets",
+    "sha256": "bc6738fb397da7ab00e872522f54d711320ad46d98eb7a1d1b9ff2aa642eb099"
+  },
+  {
+    "path": "entry/src/test/LocalUnit.test.ets",
+    "sha256": "ab72e1fa03e7c61ec51a52fe56fd366f66aa1a4415e18c7953daf5be14f488b7"
+  },
+  {
+    "path": "entry/src/test/NavigationThrottle.test.ets",
+    "sha256": "0cf9c6dddcf4dc23611fa2d219090f1b1df220474235d21fcbc3f62bda130f1e"
+  },
+  {
+    "path": "entry/src/test/OrderCalculations.test.ets",
+    "sha256": "ce4548c986f4155e9399dab733642e0759336c1dcf043084be10a914c688ecc1"
+  },
+  {
+    "path": "entry/src/test/OrderStatus.test.ets",
+    "sha256": "c7987892c76946ea12a16fae1ffccb1dbd569570d347bc4db3a706b63485b641"
+  },
+  {
+    "path": "hvigor/hvigor-config.json5",
+    "sha256": "e9c6675d4c479e3ac3cd3d36060892e93d53acb2252e3936ce145024bcd04ac2"
+  },
+  {
+    "path": "hvigorfile.ts",
+    "sha256": "383227660c07fa9335caf3e65b8975c65fcbcc8b910ba84d0bc67b22afcd56cd"
+  },
+  {
+    "path": "oh-package-lock.json5",
+    "sha256": "03e65ca6005aa815aafa9e4ccdbc3cc5c43bd0d8835d56acf4c0324743a24c5e"
+  },
+  {
+    "path": "oh-package.json5",
+    "sha256": "91f866c98d076bf6ab1a0c5ecc927d7c3abb277ff19b7d1943d1d87292df4a20"
+  },
+  {
+    "path": "scripts/account-session.test.cjs",
+    "sha256": "4e00c0a49f207e0a049975168b124c229f2bb9c7df7fd478ce59770799293fc9"
+  },
+  {
+    "path": "scripts/amap-map.test.cjs",
+    "sha256": "0b586e1fc97f446bf41571fd72c9cd1ea4b14b9e2b8cad243d7c86ba9bc80b40"
+  },
+  {
+    "path": "scripts/appearance-settings.test.cjs",
+    "sha256": "1c6a23f4b44a758c0efb78c680f9baf4cf79cb0846a11fc1bca06e83ccf678cf"
+  },
+  {
+    "path": "scripts/build-release.ps1",
+    "sha256": "ce7c4bcbc0804dd8d7468e634126e2b147fedb322600fda074b4921096a76799"
+  },
+  {
+    "path": "scripts/cache-service.test.cjs",
+    "sha256": "822f95356d6c2ed813ef49ecb2cbcb9bf85d3e47e4a9c10acbd9417e4faf6f6d"
+  },
+  {
+    "path": "scripts/cart-flight.test.cjs",
+    "sha256": "46a05d5668f2be897a61f23799369a0318581534727bba60d7ea6c5b3e16ccbb"
+  },
+  {
+    "path": "scripts/check-adaptive-ui.cjs",
+    "sha256": "435285dff23bfe0d839772307230154da60b6b7b49d1cb536f32f0b58da51f7f"
+  },
+  {
+    "path": "scripts/check-cart-flight.cjs",
+    "sha256": "b607e14dcc1d17945a0899413e4a058569f919e6666a73315a8413bee01d02ec"
+  },
+  {
+    "path": "scripts/check-delivery-form.cjs",
+    "sha256": "433f93812e0339974c262c83d59b818717a1ebc350d47a2d0a1da9f72c8458d4"
+  },
+  {
+    "path": "scripts/check-location-state.cjs",
+    "sha256": "5f70d3c11e5d9e947f63367173aea4b2e4c1afca0fd871465562a31fc98e5135"
+  },
+  {
+    "path": "scripts/checkout-coupon-session.test.cjs",
+    "sha256": "991f1d7cd67f070cf5a9a9f383385aec01d0c7d3a5194f6cd17bd88338611955"
+  },
+  {
+    "path": "scripts/device-checkout-regression.ps1",
+    "sha256": "ef97d905c89fe2bd81c62499cbf2ca96d3b553dffc625e51f69e45c60ee7bc8b"
+  },
+  {
+    "path": "scripts/device-merchant-regression.ps1",
+    "sha256": "2f5d0e2a18a702eb829a219169ae8916fb8b7ec31382fcc24dbcccd841383076"
+  },
+  {
+    "path": "scripts/device-review-regression.ps1",
+    "sha256": "c71912a87d9e3507cb1384554faf49b9f14385bd8b2bbaa1d05252b40056db81"
+  },
+  {
+    "path": "scripts/device-role-regression.ps1",
+    "sha256": "8f76f7fcae78fc36cf2b5e396e20782d3c6211f601fa2d6b091ef32e57144362"
+  },
+  {
+    "path": "scripts/device-test.ps1",
+    "sha256": "f3e7813206e5380182162a6ec1ea7f3801e458eabe824e206ff35bf01cde1d11"
+  },
+  {
+    "path": "scripts/device-uitest.ps1",
+    "sha256": "178c2f149c668ef932103fa51635a9cb4d66a6b4da8e95701093caca8ab9c88f"
+  },
+  {
+    "path": "scripts/enable-release-signing.ps1",
+    "sha256": "a62dbfa2c45358609a93e7db3c1cb4e86347f6d208a1d460356d1c9beaef75b2"
+  },
+  {
+    "path": "scripts/erp-page.test.cjs",
+    "sha256": "e160c92e8d4f64c30dd565d19942ee361e42eebc4940e96781d337d7848af52c"
+  },
+  {
+    "path": "scripts/export-database.ps1",
+    "sha256": "a09e622e872cba67e28c2fa957f6ceb04ff23ce5dc426e7e6abc1ff06892919b"
+  },
+  {
+    "path": "scripts/jvm-diagnostics.ps1",
+    "sha256": "87cf5abe7ab64f2545fed37c4f7536535f8e94f16844de56f571d50c5b695eec"
+  },
+  {
+    "path": "scripts/lib/device-env.ps1",
+    "sha256": "beeb5fead760e424a7d4cd7e652478ed029972c4751faf421ef2aa5e80d9d34a"
+  },
+  {
+    "path": "scripts/location-nearby.test.cjs",
+    "sha256": "dc2c7f07eb77a17f6873312e60583f7c25b4b056195bc9971b67d49b985f800e"
+  },
+  {
+    "path": "scripts/mobile-actions.test.cjs",
+    "sha256": "62dabd2cac5b42450e6abad31383f7b2098a5f9b14d49105a1b8361c4fa04d05"
+  },
+  {
+    "path": "scripts/mobile-business.test.cjs",
+    "sha256": "dae2dad21a264fd4c8381a5497c06a9555cac089fbbcbe7cfd3c1c8641902e83"
+  },
+  {
+    "path": "scripts/mobile-cache.test.cjs",
+    "sha256": "3dff883dcdcda8fd8172799751919784ebd4c8cff52539207b597b55679abbe0"
+  },
+  {
+    "path": "scripts/mobile-contracts.test.cjs",
+    "sha256": "36a6edcce132f657e39b29402895c081f31a4aa052156c7ecc10af6337ed4dba"
+  },
+  {
+    "path": "scripts/native-auth.test.cjs",
+    "sha256": "bb258db5c70abc5610e7a853ab7fa0341499ef84c3e63b05043eedd4a0dbcc2e"
+  },
+  {
+    "path": "scripts/quick-login.test.cjs",
+    "sha256": "9af5cf20f30d07ea049ca412f28c5f9b497503de215f471b8bea73c6b52cd64c"
+  },
+  {
+    "path": "scripts/release-check.ps1",
+    "sha256": "5ab76bdbf17a743dd570c0bf7c909fb023c66e145f72482d4a08368ecbbd4c46"
+  },
+  {
+    "path": "scripts/rider-chain-regression.ps1",
+    "sha256": "1b27400188a0884c5a4ba175af206a4b9ee3389e8fe52f6514343dcad204082b"
+  },
+  {
+    "path": "scripts/start-alipay-sandbox.ps1",
+    "sha256": "d62ee4d96aa975c67931f882654a825c7fb409fb1e9eaeb384bf159ecc9d7252"
+  },
+  {
+    "path": "scripts/start-service.ps1",
+    "sha256": "d124005f25997cf4702b28138750f213a4aa29271bd0180a2576089a48ab0878"
+  },
+  {
+    "path": "scripts/store-cart-rapid-click.test.cjs",
+    "sha256": "54999ec811b34aee7909f1272696cfcec7eae5a4730cd368075994fd336c9f0d"
+  },
+  {
+    "path": "scripts/ui-dump.ps1",
+    "sha256": "c496300718c18597c737f2699fc7f03d52ce49ae5192d1c7b055dcb0d52a188c"
+  },
+  {
+    "path": "scripts/ui-review-regression.test.cjs",
+    "sha256": "dcb5775cc1af166f9071473b5b7705009be839aeed3d61f66ff676e6e4cc45f6"
+  },
+  {
+    "path": "scripts/wallet-account.test.cjs",
+    "sha256": "15b4217ec41c3e842c28b22056563d3e44deb962def2c19020f77731bb0d594b"
+  },
+  {
+    "path": "scripts/web-assistant.test.cjs",
+    "sha256": "fb997f5b3611d4817cb3e8dacb694a25cc4bb7a3701ee742c88e3af36aa617dd"
+  },
+  {
+    "path": "scripts/web-auth-theme.test.cjs",
+    "sha256": "cadb0e6ced2af7a72ba4cf1e0f73f58d57704f8b3cf38c6f85d2171de0c97ddb"
+  },
+  {
+    "path": "scripts/web-browse.test.cjs",
+    "sha256": "c135760554b1bf6d06ec541ec097ae7c28d52b7781c96c321965f64fdd44cef9"
+  },
+  {
+    "path": "scripts/web-business-rules.test.cjs",
+    "sha256": "9fd76fa8794e401759fa0e2cdf320b1c7c51357c10112f58133fcd820e299db3"
+  },
+  {
+    "path": "scripts/web-location.test.cjs",
+    "sha256": "9880496c8352386f0deb3420d06935794ecdcb4d500790a1ca7749f7e5c99206"
+  },
+  {
+    "path": "scripts/web-session-cart.test.cjs",
+    "sha256": "74cadfc593ececbc9059143bce9ab7fbde8fc24d180906380c1c5504ed24bd59"
+  },
+  {
+    "path": "scripts/web-urls.test.cjs",
+    "sha256": "22eed5257cc5329d75e4c39dd4ebe2c67773f23a914ba9d3a13ee32fa166a20f"
+  },
+  {
+    "path": "server/catalog-photos/catalog-photos-v1/credits.html",
+    "sha256": "9a2e1a1e24e6d8ad8e13a9ba119438e642a9f95311c5aafd06e37842a64a654e"
+  },
+  {
+    "path": "server/catalog-photos/catalog-photos-v1/manifest.json",
+    "sha256": "6c333fdab3952525a76efd741fbc28bc2c1a337690a28bce47e0910f9f199704"
+  },
+  {
+    "path": "server/database/takeout-latest.sql",
+    "sha256": "f0f77aaba7774ab451b09a804455122d2e31d7ed617d7328f4276d7dc69fdc0b"
+  },
+  {
+    "path": "server/docker/settings-central.xml",
+    "sha256": "d4b7d75946d450ee164f186df63cb8c3380067162745992c8e1ad2d01f302bcd"
+  },
+  {
+    "path": "server/docker/settings.xml",
+    "sha256": "2ea6de3bd6e0b187089cd18863bf164fde685aef0ac1209c05ba79230c79af3a"
+  },
+  {
+    "path": "server/pom.xml",
+    "sha256": "c3122d5b565e9272f41ac43f79fa122536e7b69d07f94ff48c450a8b4f959554"
+  },
+  {
+    "path": "server/takeout-app/docker/healthcheck.java",
+    "sha256": "d0ee96658e8d16e16a28c5ebf0dc5c48dbf69739301c107cba88f5b53e926925"
+  },
+  {
+    "path": "server/takeout-app/pom.xml",
+    "sha256": "dea08754a7660a59d513afab2e32c4e2753b146f26ca59cf3192a99f666010f0"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/TakeoutApplication.java",
+    "sha256": "303e4cc89313abfabae253923bdf6748a150e9eea92f7ecbca099bb3c68c2dc7"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/common/SchedulerLock.java",
+    "sha256": "e65922ee8b7f26376215526023bd322002c737dfe423654717ad857311562aad"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/config/AfterSalesSchemaMigration.java",
+    "sha256": "5baf2492573d62cf19f87a802e2399503a0536cc917d548eca0a1fd73c5c1443"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/config/ApiRequestLoggingInterceptor.java",
+    "sha256": "e46cf1ba2dd2e01d929dd7a7587abf3d82714ffb1c26ad5ad973e37838afcb7c"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/config/BusinessRulesSchemaMigration.java",
+    "sha256": "847aab680c1973cabcddab2573bb9a4f18c8ddc86d5ab3fd671181c21a055f79"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/config/DataSeeder.java",
+    "sha256": "7e36fb5d7c5c324bc0f4a37607e2cafaae6f46fc0b828de3e379ff1cb081bb23"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/config/DemoModeWarning.java",
+    "sha256": "1ad8b34f7b438ab64227c1879ab6db37088449ff12951efbe91f430251fad5a6"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/config/OpenApiConfig.java",
+    "sha256": "3227724d8d0475787ede01195502d9bde5ed9ce1799f767540ae5eeb61f613c5"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/config/PaymentConfiguration.java",
+    "sha256": "3b8cba5660bbc8fa5d10ee7b7355ca2a8dda755c8529d6cb7e44403387e659e4"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/config/PaymentProperties.java",
+    "sha256": "fd3106a79826474e2442ee521dc27ba071593194a68737bb9d54db5d09b72ca1"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/config/ProductionHuaweiGuard.java",
+    "sha256": "8ba4b8ff14e9dc7ba5d30977932f1028916dd49f6b1d6e62acbf046bfa269e1e"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/config/ProductionPaymentGuard.java",
+    "sha256": "07488034539e344a2bc507970f332100088e50f6e7a975e844db97a9e3a292d2"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/config/RedisConfig.java",
+    "sha256": "fc0c88d8238c0f15f761684586a44bcfa16f3913f627846c7b9920633bf1baa8"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/config/SchemaMigration.java",
+    "sha256": "b2b5086a165caed6ed1b93500b285a1c1c5f85e5142fe1afc03db75a4838c45b"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/config/SecurityHeadersFilter.java",
+    "sha256": "29d482d6f1dd011f0313b2275f6722235985a74b1397676b14cd78c7c81ba7c3"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/config/SecuritySecretsGuard.java",
+    "sha256": "bb78f76af02d8b251a8f4676052b7e902790a50fe2acd33d81f2f29516ff18fb"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/config/WebConfig.java",
+    "sha256": "6fac1af6842901077acca705ed53303c2807d2ee901bffb0928f5a9721050454"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/controller/AdminAssistantController.java",
+    "sha256": "a336c5cda866ce6713b330440d0db5d7048a046bdd304c1fc9ff158acedc4b1e"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/controller/AdminContentController.java",
+    "sha256": "1a5e79eee5a15a44382ae05c8ce01d8ab23df30bea3869d4e89cdcf77df050ea"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/controller/AdminController.java",
+    "sha256": "46111f8c7a2e1dbba809ad7b9cd8c6a6635087e9eb4798df6d37767d2a02e161"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/controller/AdminOperationLogController.java",
+    "sha256": "35406af3dff5c09d949c933522f65295f7f5c0fd26b54bc7163eb9fec4f65dc7"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/controller/AdminRiderController.java",
+    "sha256": "37a4b173a897255bd6978fcc513360405c2cce0c6a3ca51a7c0ac2eafc6e80ad"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/controller/AfterSalesController.java",
+    "sha256": "de8ca1ec374cc238db04bc861dd4f575106fdebc27e9c409d6e54f0ea799b12a"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/controller/AssistantController.java",
+    "sha256": "c58323388d4dbb6d92af5a7fa02364e7dcb4e64fbd5c6fc421fecc913a1d997f"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/controller/AuthController.java",
+    "sha256": "5e534e28ccf2f8af9bd5d8361e460e975f9348ead0b75045d640bc9896096553"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/controller/CartController.java",
+    "sha256": "06182ab066b370164bb1977c467af3cc752a1583e6ccfdba5644248d32b34318"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/controller/ContentController.java",
+    "sha256": "8dc87a580d2375a5d35436ab0e0261331b1f7345eca3dae84d4b359515fc6d68"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/controller/ErpAuthorityController.java",
+    "sha256": "b53604fe5b8a3bd3895a20768f324c77340ff139358ec445e97e99fbb0375410"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/controller/GovernanceController.java",
+    "sha256": "1676fcc3269a80bb3b7d0cce7e2a8e2eff3f8284944e7ccdba83e4085e53daaf"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/controller/LocationController.java",
+    "sha256": "f21310b6c75b672618e9a6e6d08eb75ce338f8d6d7541cbf5d73fa68709be647"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/controller/OrderController.java",
+    "sha256": "5c2d2155db2ca5ad7361596e736926fceecd24fa34c6e7493e1220a7524f4dd4"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/controller/OrderOperationsController.java",
+    "sha256": "31db35720732b95e1913354aac2da282c6b0e4bc45d396b35ccefb60cd6b309c"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/controller/PaymentNotificationController.java",
+    "sha256": "0687133d72a7e57b2af55f3b4f3892f3821f6b7e6e6bd2d3ab4d25236dadc0a4"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/controller/RiderController.java",
+    "sha256": "a04fed8040060dd31fdfac7a2da9ae8de291b7bd7673e668e58a4ca544386b8d"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/controller/StoreController.java",
+    "sha256": "2c0e1a36576eb4f7b3c43f5896e745d31fb856d9dff537746c673893ef8876ca"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/controller/UploadController.java",
+    "sha256": "0081e4bb53f5d91e23768e933a9bf93016a2bf0171208e86080b68f60937614b"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/controller/UserCenterController.java",
+    "sha256": "8eb7a2d608c8ece22d9aee0dac67f412f168317221128b705fa266dd89595fa0"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/AddressDao.java",
+    "sha256": "052eb51caa47419116d742bf1e9a6a7251679777cdce8b99ee1480a20f9befad"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/AdminStatsDao.java",
+    "sha256": "43af0bb2186b1085a5c38d129e1388e1faa2bdf0a1b259190311e6534ef672cd"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/AfterSalesDao.java",
+    "sha256": "22889e7cbe337d6aa117b64cc55eaa32467dc6f20188a5a772357556db74711b"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/AnnouncementDao.java",
+    "sha256": "43f5f8cf86ffdf0998e508a87456e5f716045804fc40a36c4f3432e4cbe19b7b"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/BankCardDao.java",
+    "sha256": "00b1d716318b5a597c94deb5286423e2de9f0f06483f6afd655683061073817d"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/BannerDao.java",
+    "sha256": "1ab4697b1081ffa976572063f8538f4160787fb49aaa337303848832954fc1f6"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/CouponDao.java",
+    "sha256": "47b246858d6ba91562e873b87bbc11d4b31407a27f3e70b3279afc6da2394657"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/EmployeeDao.java",
+    "sha256": "eefa5be6e9ef87a70020236f17d7bec9313166ca42173bdb930b9aba8af8cb36"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/FavoriteDao.java",
+    "sha256": "290014864925ccf7ed75f29a926e0b36cf9e7f9653d2b7bfd69aff7fb7e60510"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/GoodsDao.java",
+    "sha256": "036b763f7eb6b857860be954b569fda017f10f9b928f19561c43733060a44f90"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/GoodsSpecDao.java",
+    "sha256": "3c0d2efe7dd4b43b61ee79365eec643ea5826118c54ea2ba57a6d2ae4ace62ca"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/JdbcDateTimes.java",
+    "sha256": "7a52fbc36123664b6c18f27df425bfff53fc20eda7952bb082cfbbd081a7250d"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/OperationAuditLogDao.java",
+    "sha256": "d5457a82f01fef3b2a33e0b495134a356e672cc538732f1ee01b209217b6f7b6"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/OrderDao.java",
+    "sha256": "2e86c7c47c562e44fabc925cefb45ce2f2dd85e5a244636f2053be529bce2dc1"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/OutboxEventDao.java",
+    "sha256": "5d0e316af15916463d2882d40d808c0ad7368bbc23e466e46b3b4b4b3f8757d6"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/PaymentRecordDao.java",
+    "sha256": "abaf13496aca385ccf04ceb330dbfcd4847b25c68e528456f2b2de73be213f7b"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/PaymentTransactionDao.java",
+    "sha256": "9b2feafaf413620ecfc20f351825ec8cd164ff21c8764e6443f949fdfbefa52c"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/PushTokenDao.java",
+    "sha256": "3f4ceab20bc09535c0dbc20309c089969c64863a48fdfeefe5c830be61c94545"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/RefundDao.java",
+    "sha256": "21b92f6724d2ba698dbf29b74f36fb17db64be89cad2748fd3ad1861ffc2129d"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/ReviewDao.java",
+    "sha256": "74fdb6fd36e195caaf0ebccfdcbd5115393019104380b9ebc331af1ff9855258"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/RiderDao.java",
+    "sha256": "22777c6f97ebd58fe949dcd8929d8a503854afb43e96bef99fa8a8f0b9eea5e9"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/SeckillDao.java",
+    "sha256": "be429fae26c1d453ad7d9ee9fd29498b402ee5409657c3c0335f7a711ad8d2f9"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/StoreDao.java",
+    "sha256": "9dc467249787961bb050894ca885c590136494a296f4067a678f6b82a8535295"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/TokenBlacklistDao.java",
+    "sha256": "5c3e5fa35bbd338052ce65c7d8bf141ce7c23db47541f9ca6fd442e1cdae7663"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/UserCouponDao.java",
+    "sha256": "e9e9d7c656e299b0f78ad25bada11581f192ab7feae0c534b5bcf08be2ca266e"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/dao/UserDao.java",
+    "sha256": "77a419d0629cecf4fb1bcce76cdd8c6161dc6c75a225b23e4efbdaa5754ad726"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/job/ExternalRefundRecoveryJob.java",
+    "sha256": "c07cf0d44b7b3f41a930a5a68890acb040ef5f62d0a173106915a910eeb1fa93"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/job/OrderAutoConfirmJob.java",
+    "sha256": "ef71dfcd88e5c7c0a2d40c4e110c25bd5a34f7ea2499092b8f546729e8eb3928"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/job/OrderTimeoutJob.java",
+    "sha256": "153816d95359ed825c76d8a9270ae7a1f2f3d9d67abb0ec68765094cc946dea2"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/job/OutboxRelayJob.java",
+    "sha256": "f27c617b5e071f3aab04055c1c2e734cc729d683c5d62aa62c19c05f7116a128"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/job/TokenCleanupJob.java",
+    "sha256": "f8311d791ecffdd7a8e34a0071fed34698b7952a0805160acc22c959b87e42b2"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/mapper/CartItemMapper.java",
+    "sha256": "f6d4afe7d79fae9f7f562348a0ef3a506e9c7e300d4769a88b4167407a57719f"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/model/CartItemEntity.java",
+    "sha256": "9213469db9c0152267ab72ffa5d83b42acc4c8be4de59ffb05e72a573b25042e"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/security/AuthInterceptor.java",
+    "sha256": "ff70a086abd5a098cf21b212b38e36118003c8d5ff55cd9dee9180e573ad5670"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/security/JwtUtil.java",
+    "sha256": "599355f0df8914858e978cb3ba7c8c7424df22da4226951afd4284fc7911bd8e"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/security/LoginRateLimiter.java",
+    "sha256": "f324411ec6e59a8ece65f95b59cd99d86ca3a2108e888682d78ad22d65003e0f"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/security/PasswordUtil.java",
+    "sha256": "cd8958f05fcf7f6bfd82c3cd3f1b9ca2dc577804013d2373111c97390c315016"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/security/PaymentPasswordUtil.java",
+    "sha256": "9d3cd77ae350a6015731074f31c41c7b2e74d96cc7bd7c9ccc79ae4bac039698"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/security/TokenRevocationService.java",
+    "sha256": "eafe524902399945a294f0c7e3172179ae58fa0bfcc8d561328c6a5be4ce061d"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/AdminService.java",
+    "sha256": "e353dd626179eed68e6b796b92ca8e4129400bb0a932717dabf87733aa58c59b"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/AfterSalesService.java",
+    "sha256": "2de854a900beace67343ff44a09a117d8ecbb63628dfb9357a75f812b89e2b5f"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/AssistantAiClient.java",
+    "sha256": "e9c928e572b89b44a97b7773460629e688c90350ce44fb677fb0341ce8006962"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/AssistantConfigService.java",
+    "sha256": "2eec2736eec3a8607863ec9f7462df02080ee4fa1609655f6b8d8a3cd87fbb80"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/AssistantService.java",
+    "sha256": "4af31b7b384a3c0f1e42f13440f5b77cb7cf613cb1f101e598c97cce0c5249a9"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/AuthService.java",
+    "sha256": "7b45559c89479b9f2b4ac40c013e657826c629d358df8ae075ecf31a4dbd3340"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/BankCardCrypto.java",
+    "sha256": "01a05969fd8966a6db0efa2f50aa68532521e7b93dfbeb00395f8ee33dbb5df0"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/CartService.java",
+    "sha256": "05bc80375116a847aafa8c500fe4fac959d9391523c8b208da984571202e641a"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/ContentService.java",
+    "sha256": "3e547517030732d9839f7600a1dfd31d84b7bc5db46d345bcbd311279202937c"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/ErpEventDelivery.java",
+    "sha256": "33e82ed74f3c653481bc0ec6f2bb361e857d68b6ef3aed55c4355d8465b65861"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/ExternalRefundAttemptService.java",
+    "sha256": "bd13dec2270a75d693ae7178bb34e32db0c6ae32a5c53250e1ab4439e478397b"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/FileStorageService.java",
+    "sha256": "80fd3f3bdd685df4b5ca6503420a73d701f6308aa4f1561a0b5cd95b150fcdb3"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/HotDataCacheService.java",
+    "sha256": "8dd0d563cfd7ca700ea3fb578881eb9ee831c4820a6116fb920e299c9ca026c3"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/HuaweiObsStorageService.java",
+    "sha256": "b3e5d78c8430baa7fa35ad395ff4514db4249ba07124b0d76e1ca68eb477001b"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/ImageUploadValidator.java",
+    "sha256": "8c1902a8b9d3583f40dff9cab902fc14068ddf41290150ad0d2b2b58a9e6c3f4"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/OrderOperationsService.java",
+    "sha256": "79ddbca9da796bbf748747b8c55bc52aa5e5c06d7d63b375418a98262a60a748"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/OrderService.java",
+    "sha256": "1fbcefe41fa59a75d6fa0519f38fdcec83d79807de21c12042cad015b29031b9"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/PromotionService.java",
+    "sha256": "1a74ce216cf2e3818383b04115b36d55426daa475048101a5fa9a2f0b1e4bbd5"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/PushNotificationService.java",
+    "sha256": "53d1b1d876bb1fb3b437029bc619ce06724c07213a5a0d48400bbcc7b9f0505b"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/PushTokenCrypto.java",
+    "sha256": "b56c6a4893fe57df92a7eeb545d09fc4eaea1bf27a8605a2946a050fa68c4d1e"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/PushTokenService.java",
+    "sha256": "37ad5ff510c11779f4ead0c58f8f21099e48792b6af2c8cb36d3bbf02849db2c"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/RefreshTokenService.java",
+    "sha256": "c6ddfbcade9f7d9969e6e95a446e46737cf4c929609a155f3e51c12b442ed9e1"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/RiderService.java",
+    "sha256": "4901b1042c266fb8d0e6ab606ef81deb8189515a3a2cf6a0b817e00e9606b81d"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/SmsCodeVerifier.java",
+    "sha256": "3d4b37b57aa44d8de721e6ea253ee7b6753a2dd9fcbf915f9bf7ef00b182c89e"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/SmsVerificationService.java",
+    "sha256": "21141b428933ebc1969953eb29a8828c15b6c7fe689865fad9b821489ce10d98"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/StoreService.java",
+    "sha256": "233d110c6480b3cbb5901eb3e0c40f973d30a32aab099c4290efeb2b9d87a069"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/UploadService.java",
+    "sha256": "9889eb6e582878a0ae93244d5732e50f419120c09f59b3bc84b8a23f86025b4a"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/UserCenterService.java",
+    "sha256": "2ff200359af63b59af47c3e1766c24768168d064cc9523d80952e914cbe8618b"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/mq/DomainEventConsumer.java",
+    "sha256": "065b2bc636515e56b44df873dedb719822356a1c53f12838c5e2b809f15617f3"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/mq/DomainEventPublisher.java",
+    "sha256": "f1f1d1262a26765f6df59e38ce0ac670ec248f7723e47ac709a2e4652ffbf09b"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/thirdparty/AlipayGateway.java",
+    "sha256": "c02f12ff227eb3b9d28661991059a254b5ff16c6f93fa4edc18067e43d3027d4"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/thirdparty/ExternalPaymentService.java",
+    "sha256": "997dc654ed809567db5e45979cffcef8156a9c05cf6dc0b0514c0446eddd1c9b"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/thirdparty/HuaweiCloudSmsSender.java",
+    "sha256": "6419f42d5e7f8a8d6af664bed8838d5332cde29715f0113486289522218ac193"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/thirdparty/HuaweiPushKitSender.java",
+    "sha256": "f6fe1262814fe7c04b023ce08a935f3feac038b225af0ff7f65c82da127665fa"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/thirdparty/MockSmsSender.java",
+    "sha256": "c6ee792618922ef91f4f34521db36adc98f4d66acedf8c6486aa4a9349ac747b"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/thirdparty/ObjectStorage.java",
+    "sha256": "34dfc9d3fc1c2287cff88903e29576779c863de32a80a767baec6a1d7ac3ba18"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/thirdparty/PaymentChannels.java",
+    "sha256": "1dbe2894e7e49e1761fcfc31d8e7cb12db07d09690eae3ea296973da5e413c25"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/thirdparty/PaymentGateway.java",
+    "sha256": "143a4f5fd3b4f3802171db8816e61b667f3804e70a20dc9041c3bfcce203268b"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/thirdparty/PushSender.java",
+    "sha256": "597fc8c000b38fecd7e344928c81b7c38bfebeab7a01ebf45612087d063c40c2"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/thirdparty/QQEmailSender.java",
+    "sha256": "5640ca1b29007e97f9e79fcd5a2d1d3d2ea30e890a1667f9f9f7d9cc47c30feb"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/thirdparty/SmsSender.java",
+    "sha256": "b83a5c04973b8693e2934eee0bedcb8cd4aa0d89d05bb5e92557317f64604361"
+  },
+  {
+    "path": "server/takeout-app/src/main/java/com/example/takeout/service/thirdparty/WechatPayGateway.java",
+    "sha256": "377c4c51ac82f541a56f400e4d85ce23a08cb45ef350ddfb1276f47aa562fdd8"
+  },
+  {
+    "path": "server/takeout-app/src/main/resources/after-sales-schema.sql",
+    "sha256": "30371faf2c5bf3f8265017485bd5c35cbf4fdc892d88e7cc06fcd468ce5bcae4"
+  },
+  {
+    "path": "server/takeout-app/src/main/resources/application-develop.yml",
+    "sha256": "434da6e18c5868e7fbbdab0941b5b0098b6ac46f580483d418e1b2d2d726b0bc"
+  },
+  {
+    "path": "server/takeout-app/src/main/resources/application-https.yml",
+    "sha256": "9557daf47207359462b909ab8b5857250b0ff0dff915188940b2bc237e888442"
+  },
+  {
+    "path": "server/takeout-app/src/main/resources/application-production.yml",
+    "sha256": "e92808a93e487cb349e82509762e86cf27d34a9558a7850af08054a135376637"
+  },
+  {
+    "path": "server/takeout-app/src/main/resources/application-sandbox.yml",
+    "sha256": "81554afa8892e3a2ad0493b355c3f755109f5c63f8bc9ec75ba4f5ec2069c41b"
+  },
+  {
+    "path": "server/takeout-app/src/main/resources/application.yml",
+    "sha256": "c7ce1d3d7dc1b2516f165c608b9133f883c86ace5b5ed35b23da6f836c7ac23d"
+  },
+  {
+    "path": "server/takeout-app/src/main/resources/business-rules.sql",
+    "sha256": "987081d53cdfa9838f42750bfcd14dfdd8863ae8acf4ebd4a55b74ab4f2360ca"
+  },
+  {
+    "path": "server/takeout-app/src/main/resources/logback-spring.xml",
+    "sha256": "4a470dcbf4102d5eed5a98f246b10f100f06cce6a24b3d642a0ba687b9356d32"
+  },
+  {
+    "path": "server/takeout-app/src/main/resources/schema.sql",
+    "sha256": "dd2e90d05efccebd3a2823c8fca828d4e240c2394ffbef795b77231d1b3b5c8e"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/common/GlobalExceptionHandlerTest.java",
+    "sha256": "4e3367ac79ef15189a3e8a465997d1635036ca433ad659686c1676fd7a32903c"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/common/SchedulerLockTest.java",
+    "sha256": "c7daea04fc1ad05ba276bb5a7743656013857244a790e1c2db3152a521decc51"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/common/SnowflakeIdGeneratorTest.java",
+    "sha256": "db507e84b240004c61aba73acb29b16a38b173d5dbed82a8e3dc7145f56a8fd4"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/common/TraceContextTest.java",
+    "sha256": "06b1a8f5c24c1102021e3c5be15f299234ba8773cdb6270bfeb92c8ef35f45c5"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/config/ApiRequestLoggingInterceptorAuditTest.java",
+    "sha256": "97ad031cd538dd2a4399a06273feaa052b1995dc8e7ba7de0eb40f221bf77a6d"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/config/ApiRequestLoggingInterceptorTraceTest.java",
+    "sha256": "f9010aef488923c66976afc5ee3d3fc4d0ebb3501a43d3fd4f711acd6ddf2a7c"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/config/ClientIpValveDefenseTest.java",
+    "sha256": "3313d290bb451f80b372e112edb1f512f345af330c4fef6035a2838cf0cc7e29"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/config/DataSeederDisabledTest.java",
+    "sha256": "77c8c555fb9a64519e40d41260739b81306e3bc35a3b92ae4f9ba9a414c3074d"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/config/DataSeederStockTest.java",
+    "sha256": "328b63f4dabb1ceb1c5f46afa19ef6b931ae1092c11b8ea48b9af6984dc0e1f3"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/config/OpenApiConfigTest.java",
+    "sha256": "503eccc3990021c99e37dd2fcddf9810615088418ab9a48e1b7d39c8409277cd"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/config/ProductionHuaweiGuardTest.java",
+    "sha256": "4272d727ee7c2ccab5fff758226a6c74ebcc205c9aacbed00a2ed59a03c6ac95"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/config/ProductionPaymentGuardTest.java",
+    "sha256": "4f1add2a748dde1db8db857ac44c87ac9542d8971f1d79ba1188e9319f5eedb0"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/config/RecoveryPublicRouteTest.java",
+    "sha256": "84968f4e4190ff449dec4c328abcf30b664e18c991e728179d98975683af02c6"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/config/Round3ResourceBoundaryTest.java",
+    "sha256": "62088cf1fb57e2b09620c23c1fff8620ebedafcc589d9a92500e422cf9551fad"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/config/Round4OperationalPolicyTest.java",
+    "sha256": "a6ada041a495465fdefcee904f224f5192e64b233ae2914e94f290c074793df4"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/config/Round8BrowseBoundaryTest.java",
+    "sha256": "170e86b9d7a6f2817dbce5754fe12c1d306b5247f8988eaecb57039c69f31516"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/config/SchemaMigrationAddressMySqlTest.java",
+    "sha256": "ba2948889f3c0f8a0666073bafd4bf6736b62d98651fb3cdd11469dc38c5e529"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/config/SchemaMigrationDomainTimeMySqlTest.java",
+    "sha256": "d99b630bd94005405b10485057572226cc9410bbdc1bc89974f2ca6df84f35a3"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/config/SchemaMigrationOrderCreateRequestMySqlTest.java",
+    "sha256": "8b283759f2ebb974f0b811e86a425f7c697ddd4e97d8753988d5c69ae21a5f32"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/config/SchemaMigrationOrderTimeMySqlTest.java",
+    "sha256": "ac771954d9c353f3f306c2d0abf19dd7a117ab6494eb3afb86e98136df34711d"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/config/SchemaMigrationRefundRequestMySqlTest.java",
+    "sha256": "699c54775d38a9f80e2af7b924e1c0c9682c0cc97883b29d5453a9f5d7410a07"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/config/SchemaMigrationStoreReviewMySqlTest.java",
+    "sha256": "dee6420784dc7cdb3becc89fca0507101e258d187f2c66a7a5338fd023b45b9f"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/config/SchemaMigrationUserPermissionsMySqlTest.java",
+    "sha256": "8ca6ebab63aa235d15127cbdb0628d4b6f3e8de46f5ee7ae978897d26165eef9"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/config/UsernameAvailabilityTest.java",
+    "sha256": "39b79058f9435d60332ddd8036097dde7e1f968fcd516db202bf82e1b6a682cf"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/config/WebBoundaryDefenseTest.java",
+    "sha256": "119a30796dba7c889e52a3fa119794c659c951186b9fe7d1fe48a8194cc7a8bb"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/controller/AdminAssistantControllerSecurityTest.java",
+    "sha256": "4c1705db765df9530902d01a6f9ee2edd0dea9f97edee5554a318ff00f2cd4d9"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/controller/AdminControllerSecurityTest.java",
+    "sha256": "67fc3ff66cc575bd2c769eb61789668848b841b9e451bfcf351fecf79f1d37b0"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/controller/AdminOperationLogControllerTest.java",
+    "sha256": "966f285e746f36c53fec7fde037efbdf223b2322bc6b1f9ca63057f61cc996f1"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/controller/AfterSalesControllerTest.java",
+    "sha256": "f9c3070dfcec78a87ee0726266699f9ccf1dff91cbb1ce1cbe95acdecc2d4a98"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/controller/AssistantControllerSecurityTest.java",
+    "sha256": "5238df98d4179616ae0cab1f4a57ec39c78bea1d8ecdb89e46f4061fd09187ab"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/controller/AuthControllerRateLimitTest.java",
+    "sha256": "9604d0856df89f7f40e87931660e3b7ce6488dd41c45a74ee8fd2273f76b5430"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/controller/AuthLoginStub.java",
+    "sha256": "6e7a622ff36b5ecb7e127f500a36c3df5a113b69c1462ab7ae3392037a095ba5"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/controller/AuthPaymentPasswordControllerTest.java",
+    "sha256": "1ad1b72fe48e4e3fae5e1b1938a055307571d68767689cc2210df5aac3484ceb"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/controller/AuthPushTokenControllerTest.java",
+    "sha256": "eb484d0ede7e604023cda10ca86f846f4fab3332d41a23085c6ef0a36ab2344d"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/controller/LocationControllerTest.java",
+    "sha256": "64a84d1910124184b72c0b77bc5a179a816e2a9a74d28efff54e056dc4b116e3"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/controller/OrderListPagingSecurityTest.java",
+    "sha256": "c712b1e85ee7f0d139025364cd1ca2f942b4abc04a77efb46d74b0aeccaf2eb0"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/controller/OrderPaymentControllerTest.java",
+    "sha256": "e745b4504a2c109b79994f0eae49fba78183062c974c30e0f3680d5f9b496c46"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/controller/OrderRefundControllerTest.java",
+    "sha256": "32a4c7eb0ff685e1194f25939d2129e8b746249d9161640e0919eb5e5e0239b0"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/controller/PaymentNotificationControllerTest.java",
+    "sha256": "7b836ca183deae0ed7acfb369f40842f1d3a7af515c7c49bdd615bc385844d84"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/controller/Round3EmailBudgetTest.java",
+    "sha256": "3bb709adbb78036899d4dec1437328fd4b537dbddeb60b1b509e8cf3b0265014"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/controller/Round3SourceLoginBudgetTest.java",
+    "sha256": "5c35dd4ab6bd69e76f91852001fa575413e0067fa861d4f54e38e99633826982"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/controller/Round4AccountLoginBudgetTest.java",
+    "sha256": "d90dd97524f995d54c0a08d46341265604e7e6d9095cfa117ec0e482943e527f"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/controller/RoundTwoLoginDefenseTest.java",
+    "sha256": "77624aa95d8b54219d0335bd9f5cad11ac2fd6e95a93f0e6c67d2f830a2a7693"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/controller/UserCenterBankCardControllerTest.java",
+    "sha256": "a90c7416b8a81901b4fdaec44a5f0173d83464a7b4299c7fb98a0eec7168aca0"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/dao/AdminDashboardSqlTest.java",
+    "sha256": "d56271e60f3a558bfe72f0b426747eaf193172fb0b26929d832ded35f563630d"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/dao/AdminStatsDaoSqlTest.java",
+    "sha256": "f137060ddc3de6b72af9b4ed3533052a368f86df4b201d2870cf11cc3c77967f"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/dao/BankCardDaoSqlTest.java",
+    "sha256": "eab028517b3f038785b4a72047926e8e002fe950ef98b39ac9f8c81287e9f612"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/dao/BusinessStatisticsMySqlTest.java",
+    "sha256": "8554a3a65588b8229f20eebcf0ae2924ce5ebcd7b4e336c3b5b309b4ca36c161"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/dao/DomainTimeMySqlTest.java",
+    "sha256": "6ba76a7d631809e6921a122d76374e7f28ef3fb5a2cd72429780a0e303a88b50"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/dao/EmployeeDefenseTest.java",
+    "sha256": "7f2d983ac2b879de1a9eae4dbf00db9335bb1c96373a5ac8fac730c939705cae"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/dao/GoodsDaoAdminPagingSqlTest.java",
+    "sha256": "1384c82711bdab7aea47ce235be65ac7e70201f4d3a2867aa0235afb3e8dcd7d"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/dao/OperationAuditLogDaoTest.java",
+    "sha256": "41722a69079f1e8b6570bf7095429efb18cf9dacce5c98f48d629299fac3079a"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/dao/OrderDaoAdminPagingSqlTest.java",
+    "sha256": "b026437ef2b0380c0bc827710a77c2e630c3225e38c6393d31e2eba84b6d99d4"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/dao/OrderDaoOrderItemsTest.java",
+    "sha256": "831c58bea9312e5210dee19aa371ce5bfc1bc050d6bf2c8bf42d39f06f23a20e"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/dao/OrderDaoRiderPoolMySqlTest.java",
+    "sha256": "e88870d93fe272cf10ed672170bb7ed4dca596823615d8dc01ca9d73c7312a5c"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/dao/OrderDaoRiderPoolSqlTest.java",
+    "sha256": "22f17b2d72699326b5cdff14407dd643cf143165d35a25fdc37a3da4e1402b99"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/dao/OrderDaoRolePagingMySqlTest.java",
+    "sha256": "761ba26040b6264ab830a6ffe4724ad4617e6ad25cc236995dafe469fcb6dc69"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/dao/OrderDaoRolePagingSqlTest.java",
+    "sha256": "484ddd91c4dd6a16b3cf3ff1e23c3187cad4d027558e4f4d9e7dafbf3abadd3a"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/dao/OutboxEventDaoClaimSqlTest.java",
+    "sha256": "b84510296d95e3c58843d09ff7fcc6ec4c10fbefc675d636c65224da45a791cc"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/dao/RefundDaoAdminPagingSqlTest.java",
+    "sha256": "7c89a79fd3ea8ff58ab5a1cd821c51f280cff3e0b5b541710af1728334cbadf3"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/dao/SeckillOnePerUserSqlTest.java",
+    "sha256": "509c3f42d588b481728a7765f5aaaa818410d65042c32c901537ba5a220e44be"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/dao/SetmealSqlTest.java",
+    "sha256": "c54c20279e8d43a357dd3936ab7de3b735502e0d94a04694cd75a93aa259af65"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/dao/SoftDeleteSqlTest.java",
+    "sha256": "bdb7e80b193ed54a73f6ddcdffa6307fead2de3f9275e9aecdb1ae6f40914c03"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/dao/UserDaoAdminPagingSqlTest.java",
+    "sha256": "85c57fdcee5ff8e00d72d74ba9f45c6067f0eac981d681bd1a5a4eaddd71345d"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/model/StoreDeliveryRadiusTest.java",
+    "sha256": "cc551a95378defed51c69de7681d60cfaaedf559ba786bd17dabf0453b2e2588"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/model/StoreDistanceTest.java",
+    "sha256": "e693f4b59534c2401633c3d601040f734f3db1ca9cd9fa9a70cabdfc75d18f88"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/security/AuthInterceptorSecurityTest.java",
+    "sha256": "b3fb40597be61e3da2bf10608ece62acb6eee49a77ecd15046d5df0128d66c96"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/security/JwtDefenseTest.java",
+    "sha256": "4954d391ac7857670263bf0ac7bef13eb12f3901769a65e5b1221372c3621304"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/security/LoginRateLimiterRedisTest.java",
+    "sha256": "a35738ca12202e1a416cc47eb388690f1ca0a999f2b6efe5107f8e997a9fe077"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/security/LoginRateLimiterTest.java",
+    "sha256": "ffcd4e4ceed471c6dce56d4fe356f795d24c8a3130e1ae265b630978b5c498ad"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/security/PasswordUtilTest.java",
+    "sha256": "1dcd58169bea9079cc2ae1f7e06f832273689eb72489519fd687da116119f654"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/security/PaymentPasswordUtilTest.java",
+    "sha256": "b2257d264d7d3b5e902d324cc49f8611c3efe1dbc9b6adcdfef01ff5cb7e91fc"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/security/Round3AccountRecoveryMySqlTest.java",
+    "sha256": "c4f6f471173ce7f11cc8e028bab0cfe24f179be5e90e16456a86f0d10aaa0cc2"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/security/Round3LoginConfigurationTest.java",
+    "sha256": "87a3fdad4a37773580354eaedcbdc2bbc3d34a201ca28d0e55a0ba3f90a10035"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/security/Round4PasswordCostPolicyTest.java",
+    "sha256": "202cf2a47b2fe3fcd23b6978b57eed4751f8aebc4a04d6787ebcb421189d9743"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/security/Round4RecoveryBoundaryTest.java",
+    "sha256": "191415b601a33dbb40abe4cee396aa85941906ea1313bf8bb2375b533625c896"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/security/Round6RedisHealthTest.java",
+    "sha256": "23dc44bb68f7817d7d072b9b5715bfe848e2681e9f50522b4dc0639aeb96fe29"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/security/Round7LegacyLoginActionTest.java",
+    "sha256": "e5cee9a1c79a9efdbac69751bee5e25bdaaf7418d25e8309602d00b4a833b5d9"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/security/TokenRevocationServiceTest.java",
+    "sha256": "3eeecb53153a117fbd7076f9eb5198b79c76fc3c9b8b90826caf25a4e270d0bf"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/security/UserCrudAuthorizationTest.java",
+    "sha256": "c021e8e58b43e80f523c25622906a40b0cdceefa234494b84ce243b20e327c63"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/AdminRefundConcurrencyMySqlTest.java",
+    "sha256": "4df1511978a6586b54ecdf15a302b7f0d08082f93a71b42b6aefc0de422830f7"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/AdminServiceMarketingTest.java",
+    "sha256": "a9652aba75efde043227a316811c97fc8a2d9c75a837a279ace0dd98af194c27"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/AdminServiceOrderFlowTest.java",
+    "sha256": "7ef7e64428f23a8358b672434e0af1cd49af4f26b5ec2eddb34bc65d55d4801c"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/AdminServiceOrderPagingTest.java",
+    "sha256": "22bcccf18aa4acdff829c27895fb6301915edf2c9ce43b246eacc7a9f746b561"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/AdminServiceProductPagingTest.java",
+    "sha256": "62f766390c40101632c2d2dab3fcc28445c527272d06138fa004274d0a932bd0"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/AdminServiceRefundPagingTest.java",
+    "sha256": "e64afb23ec44f5f74f23f3e5d3354a27871cbbf22359b765ec95470f94bd0932"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/AdminServiceUserPagingTest.java",
+    "sha256": "bade389b0af1b8a4d9c078a661234e8063d40620dbbad42e38f2a8e5bdda5a47"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/ApplicationBusinessMySqlTest.java",
+    "sha256": "e5bd7961583eb39242780ed7a6922547c0c40b8b6cb95d4887b544a181631337"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/AssistantAiClientTest.java",
+    "sha256": "973a24927e324df078d7b4d27dbed6dfa4cc908c1816caef5c8899dbc7b7b87f"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/AssistantConfigServiceTest.java",
+    "sha256": "7ba20f0d087f342c2daa53f3b44437e0acccc21b5233693ca9f3f320ed2b4e8a"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/AssistantServiceTest.java",
+    "sha256": "416146858655167dcb0c08410e150f70030f3910918b46f3b2f8b718f87fbe5a"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/AuditDefenseRegressionTest.java",
+    "sha256": "52115824158382f4e42bbc253994f0dad8453f265db3465843a5167a43c7712e"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/AuthEmailRecoveryTest.java",
+    "sha256": "5afdea0c10855673e657685496e9efa30f0ab52bf63231c412b0fcd9079386d1"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/AuthPaymentPasswordTest.java",
+    "sha256": "e990589a59c81d705290f2e5c441fca679e09b8532182a66d7c5f0a052f11dcc"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/AuthServiceSecurityTest.java",
+    "sha256": "2fad861f1796b877ec56cead566b1da2fd352a07cdf37bc55636600dd2bd4699"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/BankCardCryptoTest.java",
+    "sha256": "a905a319c315d5245628249693e9793c1f1253cce6a4d688492355b24d6f33d8"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/BusinessRulesMySqlTest.java",
+    "sha256": "b96401ac822f6dac99ec4796881cce287616ef6af1c2c8e9e29f221a1f5a65f4"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/CartServiceTest.java",
+    "sha256": "e70cf4dd424c181dc36271f30b183f241cb76598eec50d8c46b8327d8c0a401c"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/EmployeeServiceDefenseTest.java",
+    "sha256": "ad1dcb1cb096c60cafbda6d876d98851c945c58e485936274f3410755e2c391e"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/ExternalRefundRecoveryMySqlTest.java",
+    "sha256": "81ff7bbd1119544cfda01c8dce82c907745e2c8937beaf2342127a1bda4e5c6e"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/FileStorageServiceTest.java",
+    "sha256": "241c7c42f018fb43d5ca3386f1de9b0e9d42a2a94ff0b716ae4482bb667f6f19"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/HotDataCacheServiceTest.java",
+    "sha256": "d1539da60563784c46224dce01cc44538b3216693e1ff83ad2282bc8952eab4e"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/HuaweiObsStorageServiceTest.java",
+    "sha256": "60569b9536af4588cf19451a53e530c1cd43a5ca37d3e920f72e1e78bf63ea63"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/InputBoundaryTest.java",
+    "sha256": "f2d7eae5b61b5adc8149f663b3ef867caf3f3d06b7ce36c5f2a785d4ea9c1584"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/MerchantRejectServiceTest.java",
+    "sha256": "d0e0dd74f9db8844b53642f60ecfa5fff0db4b29cf29fd62597ffbc5ec8570c4"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/OrderBoundaryTest.java",
+    "sha256": "2cb226f37459cfd326750ad33677ce1c8de5acd6385fb61962f7371743bf8cf9"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/OrderConcurrencyMySqlTest.java",
+    "sha256": "ddc0dc2da401b1845dce137084c87f15603a5b234e6fcb822241ec699b5b6931"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/OrderServiceFlowTest.java",
+    "sha256": "fdd37ca287bb6b3f03189a86a071365ab99355ece93165b6545f0995ce608923"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/OrderServiceIdempotencyFallbackTest.java",
+    "sha256": "8e2c7fa7f9217fd0fefc265b52b46170ffb0f53d05796933cad2ee9fe45bb629"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/OrderServiceMerchantStatsTest.java",
+    "sha256": "b151656ca5d460d323e20c01a0003f7d90a2802fa697ef70ee71c371a2952914"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/OrderServiceOrderNoTest.java",
+    "sha256": "995a1ac17804d4118d4d9ea03889e42139972b94fbbf1f2af23651615de093ce"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/OrderServicePagingTest.java",
+    "sha256": "5415f81b48a214eab3e0bddfd549a64a94fbd98ddafef3c0f8a7349d93c92a2a"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/OrderServiceRiderFlowTest.java",
+    "sha256": "5dc1681668072548a2c2c7321cbc09205597430716aa99b687709682a1eb05c8"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/OrderServiceSecurityTest.java",
+    "sha256": "a26b2ef15327fd2dc657eddf61df132eb48fd8d1a097424d29218882b11403ba"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/PasswordPolicyTest.java",
+    "sha256": "f9ff8d96eb75abe1f0b8ea36801cba5553ba02e6b1a34be642e82a579aa6984b"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/PromotionServiceTest.java",
+    "sha256": "f0285c027f3ee3a3716f1db38f66b635ad90fa0563cb4699c082062b6c45306b"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/PushNotificationServiceTest.java",
+    "sha256": "45d2f5558bc559cd2098567267fd30d6d49526e56eafb2c805c9390bcfcfa44e"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/PushTokenServiceTest.java",
+    "sha256": "cc6c00470e4b6798add3a36755b1e881c856ec0e573db1ee6a1d0293d00becbd"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/RecoveryCodeRedisTest.java",
+    "sha256": "516fc8d0ba3a50072cac668f6ea1b3c5b4f37d7d008b43cf725f01a2ecc812c3"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/RefreshTokenServiceTest.java",
+    "sha256": "6c8a5b1ef334a30b606afdac6ddd6efcad743d015bd972d34844d275c999980a"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/RefundClosureTest.java",
+    "sha256": "541ea7126d6d879cbf85ef2744f6c00fe0d86c6a34b243706299eb9d325fb7c3"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/RiderServiceSecurityTest.java",
+    "sha256": "0c4db4c6903c372c3434969e2eddce47f5e3d60e593eab59b8acab0158429c24"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/Round10CatalogCapacityTest.java",
+    "sha256": "75184a363db492e58b39c1c08848d7df15e1d8fe244a3ba46ff789aa57e35b35"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/Round3LoginPrivacyTest.java",
+    "sha256": "62d7532460e56b010c6c1aba0ab25d75f94d993c114782d3b21dd398a7123abd"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/Round4LoginCpuBudgetTest.java",
+    "sha256": "9b089ac7285e8101b8fba789344d30faa73c6032109debaafe763aa6a36e4cee"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/Round5LoginAdmissionTest.java",
+    "sha256": "bd33708b135617e3bacc4d362b3c428bbf54a01563bcac064b39a4f8363ad742"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/Round6LoginRedisCapacityTest.java",
+    "sha256": "4a6dbd9c44dfd3e6b4f43235315eca0b59cec3cd56c440a90e1aefe4e2bf7733"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/Round8CacheRedisTest.java",
+    "sha256": "d373666aeef2f2cab04c117b3c92620289325af92ce0679571035ae24a0107a2"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/Round8CacheResourceTest.java",
+    "sha256": "6722bb13a7a40f5974aa3c964a065f716af3d4da202155e6eff9238b969fbd66"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/Round9CacheEfficiencyTest.java",
+    "sha256": "c17ab60378abe264803bfb7c66d9a3b729d6cff56c7d496cc47890c142d823b5"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/SmsVerificationServiceTest.java",
+    "sha256": "5cdf83272f12c33859cf46d0e6b9ffd10a1fad8f5ce2d24cf7c5a00954aac270"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/StoreRecommendedDistanceTest.java",
+    "sha256": "9323f812cf68cb4883c39f2b7668ed16730e2a01f9bc0a72978378dbccfee1d6"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/StoreServiceTransactionMySqlTest.java",
+    "sha256": "370264967bceea51f6747d2a6fccf91c45f65f10c023149b335d0cbe9c0ca078"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/UploadDefenseTest.java",
+    "sha256": "ab071947905467abba062a8b82dac6f9f6d7d9747413f5d4d1f6b8cd039aa39e"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/UserCenterAddressBoundaryTest.java",
+    "sha256": "e8d172e8a1db853bca79320b62b7d0e565aca775e33d9b59518e8a0abe22bcfb"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/UserCenterAddressConcurrencyMySqlTest.java",
+    "sha256": "70fd824455c105c7309efc149d804a70bacb7a8ae24583ca9fd9e89b5915ac22"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/UserCenterBankCardTest.java",
+    "sha256": "812b77440cbf04abbe63c4caabd232076c84ee91df36d4c747d3353a3f786000"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/UserCenterCouponClaimTest.java",
+    "sha256": "cee2af8202340394817e2a7c0bede77a2f91b5fcc06ad9dd6bdef506788146c0"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/UserCenterFullBankCardTest.java",
+    "sha256": "dce0f652a87c1008d1553ad3c539e2a36f6ff9a95d8719e376564bf2299e0390"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/UserCenterSearchTest.java",
+    "sha256": "b31e119606a3d15bb8c4f2018e2a620939de6446a6ac6322b60906395667d080"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/mq/DomainEventConsumerPushRetryTest.java",
+    "sha256": "1760e46a63e29673cbe0d313896994c43a3a71db4050d06b60b7a5663cfc347e"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/mq/DomainEventPublisherTest.java",
+    "sha256": "60e9847a0b0840703704e403ce80abb25664be770e4e77fbbf481f30c4f55a79"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/thirdparty/AlipayGatewayTest.java",
+    "sha256": "ececf3e46fca30ee250210fd85afa4ce476e43f79f2537c641791a0b647cf667"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/thirdparty/ExternalPaymentServiceTest.java",
+    "sha256": "6171c477336297cab5604667e10deabf1a12df349a20d5112847ca7a7f559fd7"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/thirdparty/HuaweiCloudSmsSenderTest.java",
+    "sha256": "6a92d6ad922ff10b58050ff0d17105c85a0722e98cb55ed30888cf683c4a32e8"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/thirdparty/HuaweiPushKitSenderTest.java",
+    "sha256": "55f411bee89963d9a5f7d2b689b32b060d860f67eeeb85f7eace9e8dce74f418"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/thirdparty/PaymentChannelsTest.java",
+    "sha256": "98a9f8da256d998e58430614b5c90b3fad19c35a560d3d7c5bcd0bd220ecab5d"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/thirdparty/PaymentNotificationConcurrencyMySqlTest.java",
+    "sha256": "5955d0af8d0cd60e5080c5efbd7e92267992bb5f204a279c234839f164b5a308"
+  },
+  {
+    "path": "server/takeout-app/src/test/java/com/example/takeout/service/thirdparty/QQEmailSenderTest.java",
+    "sha256": "05130920f6cdde16d6fcba5dc09fee67a3629438562e12bffab143731ac115ee"
+  },
+  {
+    "path": "server/takeout-common/pom.xml",
+    "sha256": "d9a4bf9dbdf7677dfbd2418d082f4de025f228a3a603f59dedacbb740cedf830"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/common/ApiResponse.java",
+    "sha256": "6db0060b406db73a7054cdd57b24ed3cca9fee2cb80e4247a359a66c28f97ddc"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/common/BizException.java",
+    "sha256": "0eb433a4ac4cdf515f53c091a3fc164a6f53a666ac759a0f751c3aa6d752f15e"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/common/BusinessIdGenerator.java",
+    "sha256": "a812ef49a00099847ea3ee8f074ec590eca586d7034a83d1282e3d7cfdd015b2"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/common/CrudOperation.java",
+    "sha256": "55d864444c6bc667188a53fa60c7192cb28adafb059d3b62bc2055146e9331a4"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/common/CrudPermissions.java",
+    "sha256": "5c8b80f25a13a0c9a597e8f68cb1f70f57f1623388a501c2c2a6b85d6fb4522d"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/common/GlobalExceptionHandler.java",
+    "sha256": "b1fea5ac4913ba2b4a500a2bc385fe284819699ea683e39ae1c60af4f4f1aaf0"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/common/InstanceId.java",
+    "sha256": "7ec33ce6534b650e7eec602f2734fb2a346e3a21944d13d5b9f00b7caa9da9bb"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/common/IntegrationSecret.java",
+    "sha256": "810f8090261213016ef3d07f744725f9b00f72239b68fdf917da1b8fc3a5e675"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/common/RequireCrud.java",
+    "sha256": "4dcb874ad6199a78f037e11cae0d983b5f5d61015395d4f64237747f758cc5cd"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/common/ResourceBoundaryFilter.java",
+    "sha256": "104c1985e23ebbb9a4c5723f8feab4ffee0f3f074ad4465d26958d0d50912f14"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/common/SnowflakeIdGenerator.java",
+    "sha256": "a09f513ac3f74fcfa29998278670399645fbb288f6aad581ce01fc0a73ba7e52"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/common/TraceContext.java",
+    "sha256": "b287a8b45473364b4fa64afd3821394b1a71c8877c94c8b714a1a41f20b122c0"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/Address.java",
+    "sha256": "7dfec8f2d42ce6bb1da47ccfa8eff458dbc853de0b147b34487f6386c8ab824d"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/AdminEmployee.java",
+    "sha256": "d375e023a67de08ce3e46a4e9b55ad939bd9511b03c93d0657f7e8711b3eb6a2"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/AdminProduct.java",
+    "sha256": "45e438919e6c9008989530bd49b2ff569f7b65faa90b12bb266e789ea021fcec"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/AdminStatistics.java",
+    "sha256": "0148387083705d513721a63d06c100c769e0e62456706328515da1ced00859a2"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/AdminUser.java",
+    "sha256": "8382fc912d016da5c61fea9e144948c47a0abab71c59d2759fd627a252264722"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/Announcement.java",
+    "sha256": "e9d971882892ea52ee8671627f4bbddbd0a864c61458531238d2bf086c0c80e8"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/BankCard.java",
+    "sha256": "fc5a3f7e982149bc3a0852f909443b0366d5652706872bc69063ee46316f6374"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/Banner.java",
+    "sha256": "5983545be0d35a2ac9311c02ae928bc4ef401e9636fcbe3ed5a4a4d51a8e7e63"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/CartItemView.java",
+    "sha256": "2384872ff8fa96e48c88a1ccd22cde2b94c2ac22a7746e95ae7f8af165ed90a6"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/Category.java",
+    "sha256": "e26f0436041e03e55fb08251432f8ae9d5cb6b7e0b52af0c334b6e411cec056a"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/Coupon.java",
+    "sha256": "b45264e32c413b82277ec798e7eb4accc99bb1beb53dee65f7352b29c3aacba8"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/Employee.java",
+    "sha256": "b9968cc0287a73fd84c1d8721eecb426fcbb3322adc15089cc3c0d8f84cba86b"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/Favorite.java",
+    "sha256": "2e7ec702f27932d2dc5d02d37f4ed5cc21c777f6cc7748e0bcb3ae28d380da01"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/Goods.java",
+    "sha256": "1783cc42b2caa88b28f66c2b86f046bb97bac4e43c0bc3e1eb39e02d26823905"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/GoodsSpec.java",
+    "sha256": "66afa5316a6a9019ffc57ef7a621cb98b844a38098c4ea2637b7a2e9cbefba6a"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/MarketingActivity.java",
+    "sha256": "46e7fbc4fa1a5cfedf9f36ad5b7ed817b9e9c5f580d837f20a8ba9877472e85f"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/Order.java",
+    "sha256": "31e0343a057797294ecf8015cb26a872d71c7fd3c54be7ec6e73819770e5139b"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/OrderCapabilities.java",
+    "sha256": "d6cb0580c321436e6288f7549988ffc9a0cd00325de34bba05b51dbf0bbbafed"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/PaymentRecord.java",
+    "sha256": "2896a7d65393bd0f645399576a6e9fc5ff1474ceffa197479ed18b2928a7f7df"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/PaymentTransaction.java",
+    "sha256": "2c872fbe24377943414f506471dc96ba2f7bc4dea55b824938b9962e0aed13f1"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/RefundReason.java",
+    "sha256": "8a64fcfffbfc4e179004720f15353e27d14dfde041d328cae9db4d0c8aec6cee"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/RefundRecord.java",
+    "sha256": "3d1d6e4845a70722c06cbce5c9b87d39a803b38abb16c2d8e9005626cc5a81b9"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/Review.java",
+    "sha256": "ab53b7b320ce0b6e6ec3243ce2eaac056aa2a52fc4a918080d96693ca9cd97ba"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/Rider.java",
+    "sha256": "bd60172bdf98af7f9a83ebbc7cc5b831008f3118e0355d3f25933f80c9182610"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/Seckill.java",
+    "sha256": "0f4fadeca3268af29473d441ee9d70a35a36f426045ead608d80f0a4e819fca3"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/Setmeal.java",
+    "sha256": "af774a12496a4f42961f24ef2479bcaeb867abd699b9dfa480621bb6b51c447a"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/SetmealItem.java",
+    "sha256": "fb4699f91bde51c34acded1bc4c647c4bd918874924036c0eddd19bb580c0f9a"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/SetmealOrder.java",
+    "sha256": "ba791407470dd66a4b2e7280fce5f21ae9fe5c567157fcd4399eeb0a0a930426"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/SpecialGoods.java",
+    "sha256": "54fb4c38dd82ab63357ebbc1b57394f93a127690ff1696e00b26a5e366325e79"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/Store.java",
+    "sha256": "d8c0863267e1b8cc2144b37c96eca18d5cc521a2a102c1594a2e17173455520f"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/StoreReview.java",
+    "sha256": "bd7bb4fedc7ed28e18eb1d2f6fdd40acdcb1653a04441e7082d7ba88f1fa9cab"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/User.java",
+    "sha256": "14b41c46a4ee35b2a0f50368e56e3d8a89b074b8149a2042f1f1dae85a7c36d6"
+  },
+  {
+    "path": "server/takeout-common/src/main/java/com/example/takeout/model/UserCoupon.java",
+    "sha256": "619863b9bcd0c9aa7466a6b8888689e900e918ad1947dfc68a2c7cad4be60cbb"
+  },
+  {
+    "path": "server/takeout-common/src/test/java/com/example/takeout/common/BusinessIdGeneratorStartupTest.java",
+    "sha256": "1b1e4835df9934476459094a49ffe68901f7836ea53868c17261adf39036b461"
+  },
+  {
+    "path": "server/takeout-common/src/test/java/com/example/takeout/common/ResourceBoundaryFilterTest.java",
+    "sha256": "c817486c1cd1ffd672da30a78ef469eb252974eb76469ac48580a4bd2df9c1ea"
+  },
+  {
+    "path": "server/takeout-erp/pom.xml",
+    "sha256": "ec7d2fb2aac5e69a75f68d81f477e872752fbb2505defa3ceaeb5e3657dde126"
+  },
+  {
+    "path": "server/takeout-erp/src/main/java/com/example/takeout/erp/ErpApplication.java",
+    "sha256": "262f27a5979a39b8ecf45d571d8e984a1555dec9889e5a5aea1ba749cacfaff4"
+  },
+  {
+    "path": "server/takeout-erp/src/main/java/com/example/takeout/erp/ErpController.java",
+    "sha256": "defb67636f7782fa133164389db506b77464e2f1ebed5406f4a79c8ea720bc83"
+  },
+  {
+    "path": "server/takeout-erp/src/main/java/com/example/takeout/erp/ErpDocumentNumberMigration.java",
+    "sha256": "27506fd749aed53d57c4936f424bfa7025502fbe34fcc552d618b4f175f43398"
+  },
+  {
+    "path": "server/takeout-erp/src/main/java/com/example/takeout/erp/ErpService.java",
+    "sha256": "f582a8d6187fb67e0a531048b3f8eee3ddf615f7574f40c187ae0e9504fcaf54"
+  },
+  {
+    "path": "server/takeout-erp/src/main/resources/application.yml",
+    "sha256": "5a072b80dc320b344a811716aa4370ca75d9230a218a8c9326a50f8a11b3f3b4"
+  },
+  {
+    "path": "server/takeout-erp/src/main/resources/erp-schema.sql",
+    "sha256": "18e7662f0c5ff33b7eebb5be053fb38fabc480f4fb4c5a92a94c46dd4afb098f"
+  },
+  {
+    "path": "server/takeout-erp/src/test/java/com/example/takeout/erp/ErpBoundaryTest.java",
+    "sha256": "16f6d3caec84c50c75782c2f91923cb275a8871b38b9568fa4a6c582c0938c54"
+  },
+  {
+    "path": "server/takeout-erp/src/test/java/com/example/takeout/erp/ErpMySqlTest.java",
+    "sha256": "1cb5b16647873ab3045b88ac4616ec2a34a14aaa23f9856ddc5e0a310936521c"
+  },
+  {
+    "path": "server/takeout-erp/src/test/java/com/example/takeout/erp/ErpPermissionTest.java",
+    "sha256": "0dc9a29b6508f0023bf657f3330d256ca7aa12a0bb772d2a953fd566d2635ce5"
+  },
+  {
+    "path": "server/takeout-gateway/pom.xml",
+    "sha256": "5e607e41f760bc567067a1ad2c924db5b0fd2d48b1fbe4da768a7cfaebeabdc4"
+  },
+  {
+    "path": "server/takeout-gateway/src/main/java/com/example/takeout/gateway/GatewayApplication.java",
+    "sha256": "e9529b6893f17a429a4f2ba6676f132e5a2f1af7e4d6027cd4d5b552c933774c"
+  },
+  {
+    "path": "server/takeout-gateway/src/main/java/com/example/takeout/gateway/web/ClientIpHeadersFilter.java",
+    "sha256": "a77d12347148550195e832ff2a4dada45ff386e40e180ddd1d6cee33000e927d"
+  },
+  {
+    "path": "server/takeout-gateway/src/main/java/com/example/takeout/gateway/web/GatewayFailureHandler.java",
+    "sha256": "9eae0e1c5e1144a535d15d134ee789b00df95e12cc9557708e151e01f31afb01"
+  },
+  {
+    "path": "server/takeout-gateway/src/main/java/com/example/takeout/gateway/web/SecurityHeadersFilter.java",
+    "sha256": "5cb8b25106768c954b46ff015b8e1c082343b9483707f50c8f19a3f09b340bde"
+  },
+  {
+    "path": "server/takeout-gateway/src/main/java/com/example/takeout/gateway/web/WebHomeController.java",
+    "sha256": "dccd3ef77f34777ac53552214766f4c00fe95ae142c2ad5fbc87f4cdf005345f"
+  },
+  {
+    "path": "server/takeout-gateway/src/main/resources/application.yml",
+    "sha256": "5eb12f2a98e3338e2c215e24ca747f99fe7754c080e107a1ec5b06f15db45514"
+  },
+  {
+    "path": "server/takeout-gateway/src/main/resources/logback-spring.xml",
+    "sha256": "114145d7475efcc191030f34354bc8c6193457883910381b5444dec093b29041"
+  },
+  {
+    "path": "server/takeout-gateway/src/main/resources/static/app.js",
+    "sha256": "22cadf7a5545168168870e81e5a220ba7638c248843c2b7c24ce241f505cfec3"
+  },
+  {
+    "path": "server/takeout-gateway/src/main/resources/static/erp.css",
+    "sha256": "146dd63b2870b1d7c14a5e6319d11f4b72952a3619a899c382a9ebbe78033e57"
+  },
+  {
+    "path": "server/takeout-gateway/src/main/resources/static/erp.js",
+    "sha256": "c45b48a5a68edef1d8a4a2e57eaf4c7297497ac1854e099a6be44282481f4d84"
+  },
+  {
+    "path": "server/takeout-gateway/src/main/resources/static/index.html",
+    "sha256": "fac32d35d66812fb7ccc05d2b772610937ca2a2db35c1b4e199338d01c1d6f4c"
+  },
+  {
+    "path": "server/takeout-gateway/src/main/resources/static/location.js",
+    "sha256": "328e08c6ac2f6e20829570ca090e7c62188c9990bc1e8a3730cf0aad838e8715"
+  },
+  {
+    "path": "server/takeout-gateway/src/main/resources/static/urls.js",
+    "sha256": "c3ae991c5833aadb9dc85a46f0246403b06f67d177dd98d705cbc8ed778c0c1c"
+  },
+  {
+    "path": "server/takeout-gateway/src/test/java/com/example/takeout/gateway/ClientIpHeadersFilterTest.java",
+    "sha256": "d917013a83dc7f45a555382f35b7c8343267aa55f69f7dff41b140a9fbf56df0"
+  },
+  {
+    "path": "server/takeout-gateway/src/test/java/com/example/takeout/gateway/GatewayXForwardedConfigTest.java",
+    "sha256": "da53ec304769358296b68cff3bf81b8a2d46b3272632990db874030e98e4b3a5"
+  },
+  {
+    "path": "server/takeout-gateway/src/test/java/com/example/takeout/gateway/web/GatewayFailureHandlerTest.java",
+    "sha256": "bf0ff37eedb2acf552290383defb61415641d6a1c0d7605a7335d4f0567a7b07"
+  }
+]

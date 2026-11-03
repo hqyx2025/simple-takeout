@@ -1,0 +1,7 @@
+{
+  "sourceClass": "com.example.takeout.service.ApplicationBusinessMySqlTest",
+  "scope": "review, balance payment, accept, ready, rider grab/pickup/deliver, confirmation, review, cancellation; existing scenario covers partial and settled refunds",
+  "time": "2026-11-03T19:16:39.636159800",
+  "rawEvidenceSha256": "07c5fa9d936738f6309147ac2032480c67e2b50ffffdadf6298875df9cd1c1ce",
+  "limits": "Earlier same-day 2-store HTTP correctness run; capacity results are separately archived in performance-large.json."
+}

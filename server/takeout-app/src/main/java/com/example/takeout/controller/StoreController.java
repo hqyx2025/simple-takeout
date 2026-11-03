@@ -8,6 +8,7 @@ import com.example.takeout.model.MarketingActivity;
 import com.example.takeout.model.Seckill;
 import com.example.takeout.model.Setmeal;
 import com.example.takeout.model.Store;
+import com.example.takeout.model.StoreReview;
 import com.example.takeout.model.SpecialGoods;
 import com.example.takeout.service.StoreService;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -323,6 +324,23 @@ public class StoreController {
                                                     @RequestBody StoreService.StorePatch patch) {
         requireMerchant(role);
         return ApiResponse.ok(storeService.updateStore(userId, storeId, patch));
+    }
+
+    @PostMapping("/merchant/stores/{storeId}/review")
+    @com.example.takeout.common.RequireCrud(com.example.takeout.common.CrudOperation.UPDATE)
+    public ApiResponse<Store.StoreView> submitStoreReview(@RequestAttribute("userId") long userId,
+                                                          @RequestAttribute("role") int role,
+                                                          @PathVariable long storeId) {
+        requireMerchant(role);
+        return ApiResponse.ok(storeService.submitStoreReview(userId, storeId));
+    }
+
+    @GetMapping("/merchant/stores/{storeId}/reviews")
+    public ApiResponse<List<StoreReview>> merchantStoreReviews(@RequestAttribute("userId") long userId,
+                                                               @RequestAttribute("role") int role,
+                                                               @PathVariable long storeId) {
+        requireMerchant(role);
+        return ApiResponse.ok(storeService.merchantStoreReviews(userId, storeId));
     }
 
     @PostMapping("/merchant/stores/{storeId}/goods")

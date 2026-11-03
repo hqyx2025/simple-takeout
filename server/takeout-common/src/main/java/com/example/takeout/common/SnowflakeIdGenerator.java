@@ -1,5 +1,6 @@
 package com.example.takeout.common;
 
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.LongSupplier;
 
 /**
@@ -13,16 +14,12 @@ import java.util.function.LongSupplier;
  * <p><b>结构（64 位，正数用 63 位）</b>：
  * {@code 0 | 41 位毫秒时间戳(相对起始纪元) | 10 位 workerId | 12 位序列号}</p>
  *
- * <p><b>workerId 从哪来</b>：本项目不引入配置中心，因此 workerId 默认由实例标识
- * （主机名 + 进程号）派生——见 {@link #workerIdFrom(String)}。派生的信息位只有 1024 个取值，
- * 理论上不同实例可能撞号；撞号时的后果是「同一毫秒内两个实例各生成一批 ID 可能重复」，
- * 概率极低（10 位哈希碰撞 × 同毫秒并发），且 orders.order_no 的 UNIQUE 约束是最终兜底，
- * 因此这是刻意的简化：{@code ponytail: workerId 由实例标识哈希派生，上限 1024 个不同实例；
- * 超过该规模或要求零碰撞时改为配置中心/Redis INCR 分配 workerId。}</p>
+ * <p>workerId 必须由部署配置分配，各进程独立且重启沿用；业务代码统一使用
+ * {@link BusinessIdGenerator}，禁止自行创建同 workerId 的并行生成器。</p>
  */
 public class SnowflakeIdGenerator {
 
-    /** 起始纪元（2026-01-01T00:00:00Z），缩短时间戳长度以延长可用年限。 */
+    /** 起始纪元（2026-01-01T00:00:00Z），有效时间跨度为 2^41 毫秒。 */
     private static final long EPOCH = 1_767_225_600_000L;
 
     private static final int WORKER_BITS = 10;
@@ -66,24 +63,27 @@ public class SnowflakeIdGenerator {
         if (timestamp < lastTimestamp) {
             long rollback = lastTimestamp - timestamp;
             if (rollback > MAX_ROLLBACK_MS) {
-                // 大幅回拨：宁可失败也不产出可能重复的 ID（调用方有唯一键+重试兜底）
+                // 大幅回拨直接停止发号；唯一键重试无法修复系统时钟。
                 throw new IllegalStateException("时钟回拨 " + rollback + "ms，拒绝生成 ID");
             }
             // 小幅回拨：自旋等到追回上一毫秒，避免重复
             timestamp = waitUntil(lastTimestamp);
         }
 
+        long nextSequence = 0L;
         if (timestamp == lastTimestamp) {
-            sequence = (sequence + 1) & SEQUENCE_MASK;
-            if (sequence == 0) {
+            nextSequence = (sequence + 1) & SEQUENCE_MASK;
+            if (nextSequence == 0) {
                 // 同毫秒内序列号用尽（4096 个）：等到下一毫秒
                 timestamp = waitUntil(lastTimestamp + 1);
             }
-        } else {
-            sequence = 0L;
         }
 
+        if (timestamp < EPOCH || timestamp - EPOCH >= (1L << 41)) {
+            throw new IllegalStateException("当前时间超出雪花 ID 的有效纪元");
+        }
         lastTimestamp = timestamp;
+        sequence = nextSequence;
         return ((timestamp - EPOCH) << TIMESTAMP_SHIFT) | (workerId << WORKER_SHIFT) | sequence;
     }
 
@@ -92,21 +92,15 @@ public class SnowflakeIdGenerator {
         return Long.toString(nextId());
     }
 
-    /**
-     * 等到真实时钟追回到目标毫秒。
-     *
-     * <p>{@code clock} 是测试可注入的，因此这里用「反复询问时钟」而非 {@code Thread.sleep} 实现，
-     * 保证注入固定时钟时不会真的睡死（测试里的固定时钟由序列号自增保证不重复）。</p>
-     */
+    /** 限时等待真实时钟恢复；不得伪造未来时间，否则重试或重启后可能重复发号。 */
     private long waitUntil(long targetTimestamp) {
+        long deadline = System.nanoTime() + 10_000_000L;
         long timestamp = clock.getAsLong();
-        int spins = 0;
         while (timestamp < targetTimestamp) {
-            if (++spins > 10_000) {
-                // 时钟停摆或大幅回拨：停止自旋，交给调用方按 UNIQUE 冲突重试
-                return targetTimestamp;
+            if (System.nanoTime() >= deadline || Thread.currentThread().isInterrupted()) {
+                throw new IllegalStateException("时钟未恢复，拒绝生成雪花 ID，请检查系统时间");
             }
-            Thread.onSpinWait();
+            LockSupport.parkNanos(100_000L);
             timestamp = clock.getAsLong();
         }
         return timestamp;
@@ -116,20 +110,7 @@ public class SnowflakeIdGenerator {
         return workerId >= 0 && workerId <= MAX_WORKER_ID;
     }
 
-    /**
-     * 从实例标识派生 workerId。
-     *
-     * <p>同一实例标识必须恒定（否则重启后 ID 可能撞上旧值），因此用确定性哈希而非随机数。
-     * 空值/非法输入也要返回合法 workerId，保证服务永远能启动。</p>
-     */
-    public static long workerIdFrom(String instanceId) {
-        if (instanceId == null || instanceId.isBlank()) {
-            return 0L;
-        }
-        long hash = 1125899906842597L; // 大素数种子
-        for (int i = 0; i < instanceId.length(); i++) {
-            hash = 31 * hash + instanceId.charAt(i);
-        }
-        return Math.floorMod(hash, MAX_WORKER_ID + 1);
+    public long workerId() {
+        return workerId;
     }
 }

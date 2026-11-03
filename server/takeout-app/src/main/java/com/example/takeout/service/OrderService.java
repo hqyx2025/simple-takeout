@@ -1,7 +1,7 @@
 package com.example.takeout.service;
 
 import com.example.takeout.common.BizException;
-import com.example.takeout.common.OrderIdGenerator;
+import com.example.takeout.common.BusinessIdGenerator;
 import com.example.takeout.dao.AddressDao;
 import com.example.takeout.dao.CouponDao;
 import com.example.takeout.dao.GoodsDao;
@@ -287,9 +287,10 @@ public class OrderService {
             throw new BizException("订单商品不能为空");
         }
         Store store = storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
-        if (store.status() != 1) {
+        if (!store.acceptingOrders()) {
             throw new BizException("店铺当前未营业");
         }
+        storeDao.lockForOrderAdmission(storeId, true);
         double deliveryFee = store.deliveryFee();
         Address address = addressDao.listByUser(userId).stream()
                 .filter(a -> a.id() == addressId)
@@ -643,6 +644,7 @@ public class OrderService {
         if (order.status() != 0) {
             throw new BizException(order.status() == 5 ? "订单已取消，无法支付" : "订单已支付，请勿重复支付");
         }
+        storeDao.lockForOrderAdmission(order.storeId(), false);
         PayDeadline deadline = payDeadline(order);
         if (deadline.epochMs() > 0 && System.currentTimeMillis() > deadline.epochMs()) {
             throw new BizException("订单已超过支付时限，请重新下单");
@@ -1109,6 +1111,7 @@ public class OrderService {
         switch (action) {
             case "accept" -> {          // 商户接单：1 → 2
                 requireStatus(order, 1);
+                storeDao.lockForOrderAdmission(order.storeId(), false);
                 requireStatusUpdated(orderDao.updateStatusFrom(orderId, 1, 2, "accept_time", now));
             }
             case "ready" -> {           // 出餐完成：写 ready_time，进入骑手待取餐池（数字状态仍为 2）
@@ -1150,9 +1153,10 @@ public class OrderService {
         if (rider == null || rider.status() != 1) {
             return List.of();
         }
+        Map<Long, Boolean> withinRange = new HashMap<>();
         return orderDao.listRiderPool().stream()
                 .filter(order -> operations == null || "RIDER".equals(operations.mode(order.id())))
-                .filter(order -> riderCanServe(rider, order.storeId()))
+                .filter(order -> withinRange.computeIfAbsent(order.storeId(), storeId -> riderCanServe(rider, storeId)))
                 .map(order -> {
                     Order.OrderView view = toView(order, 3);
                     return view.forRiderPool().withCapabilities(view.capabilities());
@@ -1165,7 +1169,7 @@ public class OrderService {
         if (!rider.hasLocation()) {
             return false;
         }
-        Store store = storeDao.findById(storeId).orElse(null);
+        Store store = storeDao.findForDispatch(storeId).orElse(null);
         if (store == null) {
             return false;
         }
@@ -1377,6 +1381,7 @@ public class OrderService {
                 rating, requireMaxLength(content, 512, "评价内容"), toJson(tags == null ? List.of() : tags),
                 toJson(images == null ? List.of() : images), anonymous == 0 ? 0 : 1, now);
         // 评价后重算店铺与商品平均评分
+        storeDao.lockForRating(order.storeId());
         goodsDao.updateRating(selectedGoodsId, round1(reviewDao.avgGoodsRating(selectedGoodsId)));
         storeDao.updateRating(order.storeId(), round1(reviewDao.avgRating(order.storeId())));
         // 订单内全部商品评价完才标记整单已评价
@@ -1571,16 +1576,14 @@ public class OrderService {
     }
 
     private String genOrderNo() {
-        return OrderIdGenerator.nextOrderNo();
+        return BusinessIdGenerator.nextId();
     }
 
     /**
      * 落库订单，遇订单号唯一键冲突换号重试一次。
      *
-     * <p>雪花 ID 由「时间戳+workerId+序列号」保证不重复，但 workerId 是从实例标识哈希派生的
-     * （见 {@code SnowflakeIdGenerator.workerIdFrom}），两个实例理论上有撞号可能。撞号时的唯一表现
-     * 就是 {@code orders.order_no} 的 UNIQUE 约束报错。这里换一个订单号重试一次即可——
-     * 重试仍失败说明是别的问题，原样抛出交给上层处理。</p>
+     * <p>完整雪花 ID 配合独立配置的 workerId 发号；唯一索引仍作为最后防线，
+     * 换号重试仍冲突时停止，避免掩盖节点配置或时钟异常。</p>
      *
      * <p><b>注意</b>：本方法必须在事务内调用，且重试仅针对本行 INSERT。MySQL 的唯一键冲突
      * 只回滚该语句，不影响同事务内已完成的库存扣减与秒杀名额占用。</p>
@@ -1593,13 +1596,13 @@ public class OrderService {
                 throw e;
             }
             log.warn("[下单] 订单号冲突，换号重试一次 orderNo={} workerId={}",
-                    order.orderNo(), OrderIdGenerator.workerId());
+                    order.orderNo(), BusinessIdGenerator.workerId());
             try {
                 return orderDao.insert(order.withOrderNo(genOrderNo()));
             } catch (DuplicateKeyException retryFailure) {
                 // 连续两次撞号已不是概率问题，直接失败让上层/用户重试，避免掩盖真实故障
                 log.warn("[下单] 换号重试仍冲突 orderNo={} workerId={}",
-                        order.orderNo(), OrderIdGenerator.workerId());
+                        order.orderNo(), BusinessIdGenerator.workerId());
                 throw new BizException("订单号生成冲突，请重试");
             }
         }

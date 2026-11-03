@@ -165,7 +165,7 @@ class OrderConcurrencyMySqlTest {
         adminProxy.addAdvice(new TransactionInterceptor(new DataSourceTransactionManager(source),
                 new AnnotationTransactionAttributeSource()));
         adminService = (AdminService) adminProxy.getProxy();
-        jdbc.update("INSERT INTO stores(id,name,owner_id,create_time,latitude,longitude) VALUES(10,'test',99,'2026-01-01 00:00:00',30.5,114.3)");
+        jdbc.update("INSERT INTO stores(review_status,id,name,owner_id,create_time,latitude,longitude) VALUES(1,10,'test',99,'2026-01-01 00:00:00',30.5,114.3)");
         for (int id = 1; id <= 8; id++) {
             jdbc.update("INSERT INTO users(id,username,phone,password,balance,create_time) VALUES(?,?,?,'test',1000,?)",
                     id, "user" + id, "1380000000" + id, "2026-01-01 00:00:00");
@@ -261,7 +261,7 @@ class OrderConcurrencyMySqlTest {
     }
 
     @Test void employeeFromAnotherStoreSurvivesAuthorizedStoreDeletionAttempt() {
-        jdbc.update("INSERT INTO stores(id,name,owner_id,create_time) VALUES(11,'other',98,NOW())");
+        jdbc.update("INSERT INTO stores(review_status,id,name,owner_id,create_time) VALUES(1,11,'other',98,NOW())");
         jdbc.update("INSERT INTO employees(id,store_id,user_id,role_name,status,create_time) VALUES(1,11,2,'clerk',1,NOW())");
         var stores = new StoreService(new StoreDao(jdbc), mock(GoodsDao.class), mock(GoodsSpecDao.class),
                 mock(SeckillDao.class), new ObjectMapper(), mock(HotDataCacheService.class), new EmployeeDao(jdbc));
@@ -403,7 +403,7 @@ class OrderConcurrencyMySqlTest {
                 assertTrue(bothRowsRead.await(10, TimeUnit.SECONDS));
                 return row;
             }).when(mapper).selectOne(any());
-            var target = new CartService(mapper, new GoodsDao(jdbc, specs), new StoreDao(jdbc), specs);
+            var target = new CartService(mapper, new GoodsDao(jdbc, specs), new StoreDao(jdbc), specs, new UserDao(jdbc));
             var proxy = new ProxyFactory(target);
             proxy.addAdvice(new TransactionInterceptor(new DataSourceTransactionManager(source),
                     new AnnotationTransactionAttributeSource()));
@@ -433,7 +433,7 @@ class OrderConcurrencyMySqlTest {
     void directOrderDoesNotDeleteMatchingCartSku() {
         jdbc.update("INSERT INTO goods_specs(id,goods_id,name,price,stock,create_time) " +
                 "VALUES(301,102,'small',10,1000,'2026-01-01 00:00:00')");
-        jdbc.update("INSERT INTO stores(id,name,owner_id,create_time) VALUES(11,'other-store',99,'2026-01-01 00:00:00')");
+        jdbc.update("INSERT INTO stores(review_status,id,name,owner_id,create_time) VALUES(1,11,'other-store',99,'2026-01-01 00:00:00')");
         jdbc.update("INSERT INTO goods(id,store_id,name,price,stock,create_time) " +
                 "VALUES(200,11,'other-goods',10,1000,'2026-01-01 00:00:00')");
         jdbc.update("INSERT INTO cart_items(user_id,goods_id,spec_id,quantity,create_time,update_time) " +
@@ -452,7 +452,7 @@ class OrderConcurrencyMySqlTest {
     void cartCheckoutLocksAndConsumesExactLocalSkuSetAcrossStores() {
         jdbc.update("INSERT INTO goods_specs(id,goods_id,name,price,stock,create_time) " +
                 "VALUES(301,102,'small',10,1000,'2026-01-01 00:00:00')");
-        jdbc.update("INSERT INTO stores(id,name,owner_id,create_time) VALUES(11,'other-store',99,'2026-01-01 00:00:00')");
+        jdbc.update("INSERT INTO stores(review_status,id,name,owner_id,create_time) VALUES(1,11,'other-store',99,'2026-01-01 00:00:00')");
         jdbc.update("INSERT INTO goods(id,store_id,name,price,stock,create_time) " +
                 "VALUES(200,11,'other-goods',10,1000,'2026-01-01 00:00:00')");
         jdbc.update("INSERT INTO cart_items(user_id,goods_id,spec_id,quantity,create_time,update_time) " +
@@ -473,7 +473,7 @@ class OrderConcurrencyMySqlTest {
 
     @Test
     void multiStoreCheckoutCreatesSecondOrderAfterFirstStoreRowsWereDeleted() {
-        jdbc.update("INSERT INTO stores(id,name,owner_id,create_time,latitude,longitude) VALUES(11,'other-store',99,'2026-01-01 00:00:00',30.5,114.3)");
+        jdbc.update("INSERT INTO stores(review_status,id,name,owner_id,create_time,latitude,longitude) VALUES(1,11,'other-store',99,'2026-01-01 00:00:00',30.5,114.3)");
         jdbc.update("INSERT INTO goods(id,store_id,name,price,stock,create_time) " +
                 "VALUES(200,11,'other-goods',10,1000,'2026-01-01 00:00:00')");
         jdbc.update("INSERT INTO cart_items(user_id,goods_id,spec_id,quantity,create_time,update_time) " +
@@ -495,7 +495,7 @@ class OrderConcurrencyMySqlTest {
                 "VALUES(1,102,300,1,NOW(),NOW())");
         var source = jdbc.getDataSource();
         var specs = new GoodsSpecDao(jdbc);
-        var target = new CartService(cartItems, new GoodsDao(jdbc, specs), new StoreDao(jdbc), specs);
+        var target = new CartService(cartItems, new GoodsDao(jdbc, specs), new StoreDao(jdbc), specs, new UserDao(jdbc));
         var proxy = new ProxyFactory(target);
         proxy.addAdvice(new TransactionInterceptor(new DataSourceTransactionManager(source),
                 new AnnotationTransactionAttributeSource()));

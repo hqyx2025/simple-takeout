@@ -1,5 +1,8 @@
 package com.example.takeout.service;
 
+import com.example.takeout.common.CrudOperation;
+import com.example.takeout.common.CrudPermissions;
+import com.example.takeout.model.User;
 import com.example.takeout.common.BizException;
 import com.example.takeout.dao.AddressDao;
 import com.example.takeout.dao.BankCardDao;
@@ -287,6 +290,7 @@ public class UserCenterService {
                 .map(f -> storeDao.findById(f.storeId()))
                 .filter(java.util.Optional::isPresent)
                 .map(java.util.Optional::get)
+                .filter(Store::available)
                 .map(this::toView)
                 .toList();
     }
@@ -295,12 +299,18 @@ public class UserCenterService {
         return favoriteDao.exists(userId, storeId);
     }
 
+    @Transactional
     public boolean toggleFavorite(long userId, long storeId) {
-        storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
-        if (favoriteDao.exists(userId, storeId)) {
+        // 切换操作按当前状态分别要求新增或删除权限；账号行锁也串行化同账号的并发切换。
+        User actor = userDao.findByIdForUpdate(userId).orElseThrow(() -> new BizException(401, "用户不存在"));
+        boolean exists = favoriteDao.exists(userId, storeId);
+        CrudPermissions.from(actor).require(exists ? CrudOperation.DELETE : CrudOperation.CREATE);
+        Store store = storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
+        if (exists) {
             favoriteDao.delete(userId, storeId);
             return false;
         }
+        if (!store.available()) throw new BizException("店铺暂不可用");
         favoriteDao.insert(userId, storeId, LocalDateTime.now().format(FMT));
         return true;
     }

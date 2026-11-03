@@ -1,0 +1,194 @@
+[
+  {
+    "number": 1,
+    "doi": "10.12677/sd.2024.149253",
+    "url": "https://api.crossref.org/works/10.12677/sd.2024.149253",
+    "title": [
+      "College Students’ Takeaway Consumption Behavior, Influencing Factors and Standardized Management—Taking the Chenggong Campus of Yunnan University as an Example"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2024
+        ]
+      ]
+    },
+    "publisher": "Hans Publishers",
+    "status": "metadata retrieved",
+    "citation": "艾雯琪, 唐伟嘉, 白沂鑫, 等. 大学生外卖消费行为、影响因素及规范化管理——以云南大学呈贡校区为例[J]. 可持续发展, 2024, 14(9): 2214-2222. DOI:10.12677/sd.2024.149253."
+  },
+  {
+    "number": 2,
+    "doi": "10.12677/orf.2024.141089",
+    "url": "https://api.crossref.org/works/10.12677/orf.2024.141089",
+    "title": [
+      "Optimisation of Takeaway Delivery Routes Considering Multiple Distribution Centres"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2024
+        ]
+      ]
+    },
+    "publisher": "Hans Publishers",
+    "status": "metadata retrieved",
+    "citation": "宋茗. 考虑多配送中心的外卖配送路径优化研究[J]. 运筹与模糊学, 2024, 14(1): 960-976. DOI:10.12677/orf.2024.141089."
+  },
+  {
+    "number": 3,
+    "doi": "10.12677/sea.2026.154050",
+    "url": "https://api.crossref.org/works/10.12677/sea.2026.154050",
+    "title": [
+      "Design and Implementation of Campus Errand Service Platform Based on Uni-App and Spring Boot"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2026
+        ]
+      ]
+    },
+    "publisher": "Hans Publishers",
+    "status": "metadata retrieved",
+    "citation": "孟丽, 徐贞顺. 基于Uni-App与Spring Boot的校园代领跑腿平台设计与实现[J]. 软件工程与应用, 2026, 15(4): 547-559. DOI:10.12677/sea.2026.154050."
+  },
+  {
+    "number": 4,
+    "doi": "10.12677/orf.2024.144410",
+    "url": "https://api.crossref.org/works/10.12677/orf.2024.144410",
+    "title": [
+      "The Game and Cooperation between Takeout Platform Merchants and Takeout Workers"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2024
+        ]
+      ]
+    },
+    "publisher": "Hans Publishers",
+    "status": "metadata retrieved",
+    "citation": "杜佩佳, 刘生敏. 外卖平台商家与外卖员的博弈与合作[J]. 运筹与模糊学, 2024, 14(4): 406-412. DOI:10.12677/orf.2024.144410."
+  },
+  {
+    "number": 5,
+    "doi": "10.1007/s11067-024-09643-1",
+    "url": "https://api.crossref.org/works/10.1007/s11067-024-09643-1",
+    "title": [
+      "Meal Delivery Routing Problem with Stochastic Meal Preparation Times and Customer Locations"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2024,
+          9,
+          18
+        ]
+      ]
+    },
+    "publisher": "Springer Science and Business Media LLC",
+    "status": "metadata retrieved",
+    "citation": "KANCHARLA S R, VAN WOENSEL T, WALLER S T, et al. Meal Delivery Routing Problem with Stochastic Meal Preparation Times and Customer Locations[J]. Networks and Spatial Economics, 2024, 24(4): 997-1020. DOI:10.1007/s11067-024-09643-1."
+  },
+  {
+    "number": 6,
+    "doi": "10.1007/s10479-024-06249-1",
+    "status": "metadata retrieved",
+    "citation": "SAVELSBERGH M, ULMER M W. Challenges and opportunities in crowdsourced delivery planning and operations—an update[J]. Annals of Operations Research, 2024, 343(2): 639-661. DOI:10.1007/s10479-024-06249-1.",
+    "url": "https://api.crossref.org/works/10.1007/s10479-024-06249-1",
+    "title": [
+      "Challenges and opportunities in crowdsourced delivery planning and operations—an update"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2024,
+          9,
+          10
+        ]
+      ]
+    },
+    "publisher": "Springer Science and Business Media LLC"
+  },
+  {
+    "number": 7,
+    "doi": "10.1371/journal.pone.0318432",
+    "url": "https://api.crossref.org/works/10.1371/journal.pone.0318432",
+    "title": [
+      "Pickup and delivery planning for the crowdsourced freight delivery routing problem"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2025,
+          2,
+          24
+        ]
+      ]
+    },
+    "publisher": "Public Library of Science (PLoS)",
+    "status": "metadata retrieved",
+    "citation": "ZHANG J. Pickup and delivery planning for the crowdsourced freight delivery routing problem[J]. PLOS ONE, 2025, 20(2): e0318432. DOI:10.1371/journal.pone.0318432."
+  },
+  {
+    "number": 8,
+    "doi": "10.12677/csa.2025.157184",
+    "url": "https://api.crossref.org/works/10.12677/csa.2025.157184",
+    "title": [
+      "Design and Realization of Harmony Health Management APP “Walking Guard” Based on Cloud + AI"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2025
+        ]
+      ]
+    },
+    "publisher": "Hans Publishers",
+    "status": "metadata retrieved",
+    "citation": "王艳, 高彦菊, 熊保吉, 等. 基于云+AI的鸿蒙健康管理APP“健行卫士”设计与实现[J]. 计算机科学与应用, 2025, 15(7): 93-99. DOI:10.12677/csa.2025.157184."
+  },
+  {
+    "number": 9,
+    "type": "book",
+    "verification": "publisher metadata preserved from 2026-10-28 primary-source review; checked locally",
+    "citation": "郑强, 余兰亭, 黄尚文. 鸿蒙HarmonyOS NEXT应用开发实践[M]. 北京: 清华大学出版社, 2026."
+  },
+  {
+    "number": 10,
+    "type": "book",
+    "verification": "publisher metadata preserved from 2026-10-28 primary-source review; checked locally",
+    "citation": "李智威. 鸿蒙ArkUI应用开发[M]. 北京: 清华大学出版社, 2026."
+  },
+  {
+    "number": 11,
+    "type": "book",
+    "verification": "publisher metadata preserved from 2026-10-28 primary-source review; checked locally",
+    "citation": "陈恒. Spring Boot从入门到实战（第2版·微课视频版）[M]. 北京: 清华大学出版社, 2024."
+  },
+  {
+    "number": 12,
+    "doi": "10.12677/sea.2026.154047",
+    "url": "https://api.crossref.org/works/10.12677/sea.2026.154047",
+    "title": [
+      "Intelligent University Asset Management System Based on React and Spring Boot"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2026
+        ]
+      ]
+    },
+    "publisher": "Hans Publishers",
+    "status": "metadata retrieved",
+    "citation": "孙倩倩, 王小青, 沈任. 基于React和Spring Boot的智能高校资产管理系统[J]. 软件工程与应用, 2026, 15(4): 511-518. DOI:10.12677/sea.2026.154047."
+  },
+  {
+    "number": 13,
+    "type": "book",
+    "verification": "publisher metadata preserved from 2026-10-28 primary-source review; checked locally",
+    "citation": "肖宏启, 杨丰嘉, 李玉, 等. MySQL数据库设计与应用（第2版·微课视频版）[M]. 北京: 清华大学出版社, 2024."
+  }
+]

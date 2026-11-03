@@ -64,6 +64,7 @@ class InputBoundaryTest {
     @Test
     void storeImagePersistsOnCreateAndUpdateWithLengthGuard() {
         when(storeDao.categoryExists(1)).thenReturn(true);
+        when(storeDao.findById(0)).thenReturn(Optional.of(openStore()));
         storeService.createStore(OWNER_ID, "测试店", 1, 3, 20, "30分钟", "公告", "北京市海淀区",
                 39.9, 116.4, 0, "/uploads/20260917/shop.png");
 
@@ -72,6 +73,7 @@ class InputBoundaryTest {
         assertEquals("/uploads/20260917/shop.png", insertCaptor.getValue().image());
 
         when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore()));
+        when(storeDao.findByIdForUpdate(STORE_ID)).thenReturn(Optional.of(openStore()));
         storeService.updateStore(OWNER_ID, STORE_ID, new StoreService.StorePatch("测试店", 3, 20, "30分钟",
                 "公告", null, null, null, -1, 0, "/uploads/20260917/shop2.png"));
         ArgumentCaptor<Store> updateCaptor = ArgumentCaptor.forClass(Store.class);

@@ -1,6 +1,7 @@
 ﻿param(
   [Parameter(Mandatory=$true)][ValidateSet('app','erp','gateway')][string]$Service,
   [int]$Port=0,
+  [ValidateRange(0,1023)][int]$WorkerId,
   [switch]$RecordJfr,
   [switch]$HeapDumpOnOom
 )
@@ -18,6 +19,12 @@ if ($Port -eq 0) { $Port=@{app=9100;erp=9200;gateway=8087}[$Service] }
 if ($Service -eq 'app') { $env:TAKEOUT_APP_PORT="$Port" }
 if ($Service -eq 'erp') { $env:TAKEOUT_ERP_PORT="$Port" }
 if ($Service -eq 'gateway') { $env:TAKEOUT_GATEWAY_PORT="$Port" }
+if ($Service -ne 'gateway') {
+  $configuredWorker=if ($PSBoundParameters.ContainsKey('WorkerId')) { [string]$WorkerId } else { [Environment]::GetEnvironmentVariable('TAKEOUT_' + $Service.ToUpperInvariant() + '_SNOWFLAKE_WORKER_ID') }
+  if ([string]::IsNullOrWhiteSpace($configuredWorker)) { $configuredWorker=$env:TAKEOUT_SNOWFLAKE_WORKER_ID }
+  if ($configuredWorker -notmatch '^\d{1,4}$' -or [int]$configuredWorker -gt 1023) { throw 'Set a stable, unique Snowflake worker ID (0..1023) with -WorkerId or TAKEOUT_SNOWFLAKE_WORKER_ID.' }
+  $env:TAKEOUT_SNOWFLAKE_WORKER_ID=$configuredWorker
+}
 $heap=if ($Service -eq 'app') {384} else {192}
 $options=@('-Dfile.encoding=UTF-8','-Duser.timezone=Asia/Shanghai',"-Djdk.net.unixdomain.tmpdir=$diagnostic",'-Xms64m',"-Xmx$($heap)m",'-XX:+ExitOnOutOfMemoryError',"-Xlog:gc*,safepoint:file=TemporaryCacheStorage/jvm/$Service/gc-%p.log:time,uptime,level,tags:filecount=5,filesize=5M", "-XX:ErrorFile=$diagnostic/hs_err_pid%p.log")
 if ($RecordJfr) { $options+="-XX:StartFlightRecording=settings=profile,duration=60s,maxsize=64m,filename=$diagnostic/start-$([DateTimeOffset]::Now.ToUnixTimeSeconds()).jfr" }

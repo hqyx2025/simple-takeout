@@ -1,6 +1,7 @@
 package com.example.takeout.dao;
 
 import com.example.takeout.model.User;
+import com.example.takeout.common.CrudPermissions;
 import com.example.takeout.model.AdminEmployee;
 import com.example.takeout.model.AdminUser;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -28,7 +29,11 @@ public class UserDao {
             rs.getString("create_time"),
             rs.getString("password_changed_at"),
             rs.getString("payment_password_hash"),
-            rs.getString("email")
+            rs.getString("email"),
+            rs.getInt("can_create") == 1,
+            rs.getInt("can_read") == 1,
+            rs.getInt("can_update") == 1,
+            rs.getInt("can_delete") == 1
     );
 
     private final JdbcTemplate jdbc;
@@ -145,6 +150,11 @@ public class UserDao {
 
     public void updateStatus(long id, int status) {
         jdbc.update("UPDATE users SET status = ? WHERE id = ? AND role <> 2", status, id);
+    }
+
+    public void updateCrudPermissions(long id, CrudPermissions permissions) {
+        jdbc.update("UPDATE users SET can_create=?,can_read=?,can_update=?,can_delete=? WHERE id=? AND role<>2",
+                permissions.canCreate(), permissions.canRead(), permissions.canUpdate(), permissions.canDelete(), id);
     }
 
     public AdminEmployee insertEmployee(String username, String phone, String passwordHash, String now) {

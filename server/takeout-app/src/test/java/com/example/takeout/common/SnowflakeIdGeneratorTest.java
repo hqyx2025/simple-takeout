@@ -17,6 +17,7 @@ import java.util.stream.IntStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * 雪花 ID 生成器测试。
@@ -101,20 +102,18 @@ class SnowflakeIdGeneratorTest {
     }
 
     @Test
-    void parsesWorkerIdFromInstanceIdDeterministically() {
-        // workerId 必须可在没有配置中心的情况下从实例标识派生，且同一实例恒定
-        assertEquals(SnowflakeIdGenerator.workerIdFrom("order-service-01"),
-                SnowflakeIdGenerator.workerIdFrom("order-service-01"),
-                "同一实例标识必须派生出相同 workerId");
-        assertTrue(SnowflakeIdGenerator.isValidWorkerId(SnowflakeIdGenerator.workerIdFrom("host-a-1234-abcd")));
-        assertTrue(SnowflakeIdGenerator.isValidWorkerId(SnowflakeIdGenerator.workerIdFrom(null)));
-        assertTrue(SnowflakeIdGenerator.isValidWorkerId(SnowflakeIdGenerator.workerIdFrom("")));
+    void requiresExplicitValidWorkerId() {
+        for (String value : new String[]{null, "", " ", "host-a", "-1", "1024", "1.0"}) {
+            assertThrows(IllegalArgumentException.class, () -> BusinessIdGenerator.configuredWorkerId(value));
+        }
+        assertEquals(0, BusinessIdGenerator.configuredWorkerId("0"));
+        assertEquals(1023, BusinessIdGenerator.configuredWorkerId(" 1023 "));
     }
 
     @Test
     void clockRollbackDoesNotProduceDuplicateIds() {
         // 时钟回拨：不能倒退序号导致重复 ID，必须自旋等待或抛错，绝不静默产出重复值
-        SnowflakeIdGenerator generator = new SnowflakeIdGenerator(1L, () -> 1_700_000_000_000L);
+        SnowflakeIdGenerator generator = new SnowflakeIdGenerator(1L, () -> 1_800_000_000_000L);
         Set<Long> ids = new HashSet<>();
         for (int i = 0; i < 100; i++) {
             ids.add(generator.nextId());
@@ -124,13 +123,58 @@ class SnowflakeIdGeneratorTest {
 
     @Test
     void exposesNoDuplicateAcrossBatchesAfterClockRollback() {
-        long[] clock = {1_700_000_000_000L};
+        long[] clock = {1_800_000_000_000L};
         SnowflakeIdGenerator generator = new SnowflakeIdGenerator(1L, () -> clock[0]);
         Set<Long> ids = new HashSet<>(Collections.singletonList(generator.nextId()));
         // 模拟时钟回拨 5ms
         clock[0] -= 5;
+        assertThrows(IllegalStateException.class, generator::nextId);
+        clock[0] += 5;
         ids.add(generator.nextId());
 
         assertEquals(2, ids.size(), "时钟回拨也不得产生重复 ID：" + ids);
+    }
+
+    @Test
+    void exhaustedSequenceNeverFakesTimeOrReusesAnIdAfterFailedWait() {
+        long[] clock = {1_800_000_000_000L};
+        var generator = new SnowflakeIdGenerator(7, () -> clock[0]);
+        Set<Long> ids = new HashSet<>();
+        for (int i = 0; i < 4096; i++) assertTrue(ids.add(generator.nextId()));
+        assertThrows(IllegalStateException.class, generator::nextId);
+        assertThrows(IllegalStateException.class, generator::nextId);
+        clock[0]++;
+        assertTrue(ids.add(generator.nextId()));
+    }
+
+    @Test
+    void waitsForSmallRollbackButRejectsLargeRollbackAndInvalidEpoch() {
+        long now = 1_800_000_000_000L;
+        var clock = new java.util.concurrent.atomic.AtomicLong(now);
+        var generator = new SnowflakeIdGenerator(7, clock::getAndIncrement);
+        long first = generator.nextId();
+        clock.set(now - 5);
+        assertTrue(generator.nextId() > first);
+        clock.set(now - 6);
+        assertThrows(IllegalStateException.class, generator::nextId);
+        assertThrows(IllegalStateException.class, () -> new SnowflakeIdGenerator(7, () -> 0).nextId());
+        assertThrows(IllegalStateException.class, () -> new SnowflakeIdGenerator(7,
+                () -> 1_767_225_600_000L + (1L << 41)).nextId());
+    }
+
+    @Test
+    void fullIdsStayDistinctAcrossTheOldSevenDigitWraparound() {
+        long[] clock = {1_800_000_000_000L};
+        var generator = new SnowflakeIdGenerator(7, () -> clock[0]);
+        long first = generator.nextId();
+        clock[0] += 78_125;
+        long second = generator.nextId();
+        assertEquals(first % 10_000_000, second % 10_000_000);
+        assertTrue(second > first);
+        long businessId = Long.parseLong(BusinessIdGenerator.nextId());
+        long timestamp = (businessId >>> 22) + 1_767_225_600_000L;
+        assertTrue(Math.abs(System.currentTimeMillis() - timestamp) < 1000,
+                "业务入口必须保留完整雪花时间位，不能再拼日期或截断");
+        assertEquals(BusinessIdGenerator.workerId(), (businessId >>> 12) & 1023);
     }
 }

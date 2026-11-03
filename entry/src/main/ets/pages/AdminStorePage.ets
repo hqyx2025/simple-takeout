@@ -1,7 +1,7 @@
 import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 /**
  * 管理端-店铺管理页（大纲 9.3 商户管理-经营状态）
- * 查看全部店铺并切换营业状态（营业中/已暂停），仅 ADMIN 可进入
+ * 入驻审核、平台管控与审核记录，仅 ADMIN 可进入
  */
 import { AppMotion } from '../common/theme/AppMotion'
 import { User, UserRole } from '../model/Models'
@@ -19,6 +19,23 @@ interface AdminStore {
   recommended: number
   ownerId: number
   categoryId: number
+  address: string
+  reviewStatus: number
+  platformStatus: number
+  reviewReason: string
+}
+
+interface StoreReviewRequest {
+  status: number
+  reason: string
+}
+
+interface StoreReviewRecord {
+  id: number
+  status: number
+  operatorId: number
+  reason: string
+  createTime: string
 }
 
 interface AdminStoreStatusRequest {
@@ -56,6 +73,13 @@ export struct AdminStorePage {
   // -1 全部 / 1 营业中 / 0 已暂停（列表已在内存中，本地筛选即可，无需后端参数）
   @State statusFilter: number = -1
   @State displayStores: AdminStore[] = []
+  @State loading: boolean = false
+  @State loadFailed: boolean = false
+  @State busy: boolean = false
+  @State reviewingId: number = 0
+  @State reviewReason: string = ''
+  @State historyId: number = 0
+  @State reviewRecords: StoreReviewRecord[] = []
   // 刷新回来的同 id 新对象会被 ForEach 复用，营业/推荐状态变更后按钮不刷新。
 
   aboutToAppear(): void {
@@ -69,8 +93,12 @@ export struct AdminStorePage {
   }
 
   async refresh(): Promise<void> {
+    this.loading = true
     const resp: ApiResponse<AdminStore[]> = await get<AdminStore[]>('/api/admin/stores')
-    this.stores = resp.code === 200 && resp.data !== null ? resp.data : []
+    this.loading = false
+    this.loadFailed = resp.code !== 200 || !Array.isArray(resp.data)
+    if (this.loadFailed) { return }
+    this.stores = resp.data ?? []
     this.applyFilter()
   }
 
@@ -82,16 +110,46 @@ export struct AdminStorePage {
     }
     this.displayStores = this.statusFilter === -1
       ? this.stores
-      : this.stores.filter((store: AdminStore) => store.status === this.statusFilter)
+      : this.stores.filter((store: AdminStore) => this.statusFilter === 2
+        ? store.reviewStatus === 0 : store.platformStatus === this.statusFilter)
+  }
+
+  private async reviewStore(store: AdminStore, status: number): Promise<void> {
+    if (this.busy) { return }
+    if (status === 2 && this.reviewReason.trim() === '') {
+      promptAction.showToast({ message: '请填写驳回原因' })
+      return
+    }
+    this.busy = true
+    const request: StoreReviewRequest = { status: status, reason: status === 2 ? this.reviewReason.trim() : '' }
+    const response: ApiResponse<Object> = await put<Object>(`/api/admin/stores/${store.id}/review`, request)
+    this.busy = false
+    if (response.code === 200) {
+      this.reviewingId = 0
+      this.historyId = 0
+      promptAction.showToast({ message: status === 1 ? '审核已通过' : '申请已驳回' })
+      await this.refresh()
+    }
+  }
+
+  private async showHistory(store: AdminStore): Promise<void> {
+    const response: ApiResponse<StoreReviewRecord[]> = await get<StoreReviewRecord[]>(`/api/admin/stores/${store.id}/reviews`)
+    if (response.code === 200 && response.data !== null) {
+      this.historyId = store.id
+      this.reviewRecords = response.data
+    }
   }
 
   /** 切换店铺营业状态：1 营业中 ↔ 0 已暂停（后端校验 status 合法性）。 */
   async toggleStore(store: AdminStore): Promise<void> {
-    const nextStatus: number = store.status === 1 ? 0 : 1
+    if (this.busy) { return }
+    this.busy = true
+    const nextStatus: number = store.platformStatus === 1 ? 0 : 1
     const req: AdminStoreStatusRequest = { status: nextStatus }
     const resp: ApiResponse<Object> = await put<Object>(`/api/admin/stores/${store.id}/status`, req)
+    this.busy = false
     if (resp.code === 200) {
-      promptAction.showToast({ message: nextStatus === 1 ? '店铺已恢复营业' : '店铺已暂停营业', duration: 1500 })
+      promptAction.showToast({ message: nextStatus === 1 ? '平台已解除停用' : '平台已停用店铺', duration: 1500 })
       await this.refresh()
     } else {
       promptAction.showToast({ message: resp.message || '店铺营业状态更新失败，请稍后重试', duration: 1800 })
@@ -130,12 +188,12 @@ export struct AdminStorePage {
           .backgroundColor(this.statusFilter === -1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.statusFilter === -1 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
           .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.statusFilter = -1; this.applyFilter() })
-        Button('营业中').height(44)
+        Button('正常').height(44)
           .attributeModifier(new AppButtonStyle()).id('admin-store-status-open').fontSize(FONT_SIZE.SM)
           .backgroundColor(this.statusFilter === 1 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.statusFilter === 1 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
           .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.statusFilter = 1; this.applyFilter() })
-        Button('已暂停').height(44)
+        Button('已停用').height(44)
           .attributeModifier(new AppButtonStyle()).id('admin-store-status-closed').fontSize(FONT_SIZE.SM)
           .backgroundColor(this.statusFilter === 0 ? MODULE_COLOR.ADMIN : COLORS.BG_PRIMARY)
           .fontColor(this.statusFilter === 0 ? COLORS.ON_PRIMARY : COLORS.TEXT_SECONDARY)
@@ -145,11 +203,19 @@ export struct AdminStorePage {
       // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在筛选行下方
       List({ space: SPACING.MD }) {
         ListItem() {
-          Text('推荐状态决定是否展示在用户发现页；距离超过 2 公里的店铺不会出现在附近推荐中。')
-            .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%')
+          Button('待审核').attributeModifier(new AppButtonStyle()).height(44)
+            .id('admin-store-status-pending')
+            .onClick(() => { this.statusFilter = 2; this.applyFilter() })
         }
 
-        if (this.displayStores.length === 0) {
+        if (this.loading || this.loadFailed) {
+          ListItem() {
+            Text(this.loading ? '加载中…' : '加载失败，请点击刷新重试')
+              .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+          }
+        }
+
+        if (!this.loading && !this.loadFailed && this.displayStores.length === 0) {
           ListItem() {
             Text(this.statusFilter === -1 ? '暂无店铺' : '当前筛选条件下暂无店铺')
               .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%').padding(SPACING.MD)
@@ -157,6 +223,7 @@ export struct AdminStorePage {
         }
         ForEach(this.displayStores, (store: AdminStore) => {
           ListItem() {
+            Column({ space: SPACING.SM }) {
             Row({ space: SPACING.MD }) {
               Text(store.name.substring(0, 1))
                 .width(40).height(40).textAlign(TextAlign.Center)
@@ -166,7 +233,14 @@ export struct AdminStorePage {
                 .borderRadius(BORDER_RADIUS.ROUND)
               Column({ space: SPACING.XS }) {
                 Text(store.name).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY)
-                StatusBadge({ text: store.status === 1 ? '营业中' : '已暂停', mode: store.status === 1 ? 'success' : 'gray' })
+                Text(store.address ?? '').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+                StatusBadge({ text: store.reviewStatus === 0 ? '待审核' : store.reviewStatus === 2 ? '审核驳回' : '审核通过',
+                  mode: store.reviewStatus === 1 ? 'success' : 'gray' })
+                Text(store.platformStatus === 0 ? '平台已停用' : store.status === 1 ? '商户营业中' : '商户休息中')
+                  .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+                if (store.reviewReason !== '') {
+                  Text(store.reviewReason).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+                }
               }.alignItems(HorizontalAlign.Start).layoutWeight(1)
               Column({ space: SPACING.XS }) {
                 Button(store.recommended === 1 ? '取消推荐' : '推荐到发现')
@@ -175,18 +249,48 @@ export struct AdminStorePage {
                   .backgroundColor(store.recommended === 1 ? COLORS.TAG_BG : MODULE_COLOR.ADMIN)
                   .borderRadius(BORDER_RADIUS.ROUND)
                   .onClick(() => { this.toggleRecommend(store) })
-                Button(store.status === 1 ? '暂停营业' : '恢复营业')
+                Button(store.platformStatus === 1 ? '平台停用' : '解除停用')
                   .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
+                  .id(`admin-store-platform-${store.id}`)
                   .fontColor(store.status === 1 ? COLORS.WARNING : COLORS.ON_PRIMARY)
                   .backgroundColor(store.status === 1 ? COLORS.TAG_BG : COLORS.SUCCESS)
                   .borderRadius(BORDER_RADIUS.ROUND)
                   .onClick(() => { this.toggleStore(store) })
+                Button('审核记录').attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
+                  .onClick(() => { this.showHistory(store) })
               }
+            }
+            if (store.reviewStatus === 0) {
+              Row({ space: SPACING.SM }) {
+                Button('通过审核').attributeModifier(new AppButtonStyle()).height(44).enabled(!this.busy)
+                  .id(`admin-store-approve-${store.id}`).onClick(() => { this.reviewStore(store, 1) })
+                Button('驳回申请').attributeModifier(new AppButtonStyle()).height(44).enabled(!this.busy)
+                  .id(`admin-store-reject-open-${store.id}`)
+                  .onClick(() => { this.reviewingId = store.id; this.reviewReason = '' })
+              }
+            }
+            if (this.reviewingId === store.id) {
+              Text('驳回原因').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_PRIMARY).width('100%')
+              TextInput({ text: this.reviewReason, placeholder: '例如：请补充完整的店铺地址' })
+                .id('admin-store-review-reason')
+                .maxLength(512).onChange((value: string) => { this.reviewReason = value })
+              Button('确认驳回').attributeModifier(new AppButtonStyle()).height(44).enabled(!this.busy)
+                .id(`admin-store-reject-${store.id}`).onClick(() => { this.reviewStore(store, 2) })
+            }
+            if (this.historyId === store.id) {
+              if (this.reviewRecords.length === 0) {
+                Text('历史店铺无入驻审核记录').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+              }
+              ForEach(this.reviewRecords, (record: StoreReviewRecord) => {
+                Text(`${record.createTime} · ${record.status === 0 ? '提交审核' : record.status === 1 ? '通过' : '驳回'} · 操作人 ${record.operatorId}${record.reason ? '：' + record.reason : ''}`)
+                  .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+              }, (record: StoreReviewRecord) => record.id.toString())
+            }
             }
               .attributeModifier(new AppCardStyle())
             .width('100%').padding(SPACING.MD)
           }
-        }, (store: AdminStore) => `${store.id}`)
+        }, (store: AdminStore) => `${store.id}:${store.reviewStatus}:${store.platformStatus}:${store.status}:${store.recommended}`)
       }
       .width('100%').layoutWeight(1).scrollBar(BarState.Off)
       .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })

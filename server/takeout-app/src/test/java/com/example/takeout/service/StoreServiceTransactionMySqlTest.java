@@ -61,7 +61,7 @@ class StoreServiceTransactionMySqlTest {
         var source = new DriverManagerDataSource(base + database + options, username, password);
         new ResourceDatabasePopulator(new ClassPathResource("schema.sql")).execute(source);
         jdbc = new JdbcTemplate(source);
-        jdbc.update("INSERT INTO stores(id,name,owner_id,create_time) VALUES(10,'test',99,'2026-01-01 00:00:00')");
+        jdbc.update("INSERT INTO stores(review_status,id,name,owner_id,create_time) VALUES(1,10,'test',99,'2026-01-01 00:00:00')");
         jdbc.update("INSERT INTO categories(id,name,type) VALUES(1,'test','PLATFORM')");
 
         cache = mock(HotDataCacheService.class);

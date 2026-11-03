@@ -27,8 +27,28 @@ public record Store(
         int status,
         int recommended,
         String createTime,
-        int deliveryRadius
+        int deliveryRadius,
+        int reviewStatus,
+        int platformStatus,
+        String reviewReason
 ) {
+    /** 历史店铺兼容构造；新店必须显式使用待审核状态。 */
+    public Store(long id, String name, String image, double rating, int monthlySales, double deliveryFee,
+                 double minOrder, String deliveryTime, String distance, String tags, String notice,
+                 String address, Double latitude, Double longitude, int categoryId, String categoryIds,
+                 long ownerId, int status, int recommended, String createTime, int deliveryRadius) {
+        this(id, name, image, rating, monthlySales, deliveryFee, minOrder, deliveryTime, distance, tags, notice,
+                address, latitude, longitude, categoryId, categoryIds, ownerId, status, recommended, createTime,
+                deliveryRadius, 1, 1, "");
+    }
+
+    public boolean available() {
+        return reviewStatus == 1 && platformStatus == 1;
+    }
+
+    public boolean acceptingOrders() {
+        return available() && status == 1;
+    }
     /** 兼容旧测试数据与旧调用方：历史店铺没有地址坐标。 */
     public Store(long id, String name, String image, double rating, int monthlySales, double deliveryFee,
                  double minOrder, String deliveryTime, String distance, String tags, String notice,
@@ -54,12 +74,12 @@ public record Store(
         if (!validCoordinates(userLatitude, userLongitude) || !validCoordinates(latitude, longitude)) {
             return new Store(id, name, image, rating, monthlySales, deliveryFee, minOrder, deliveryTime,
                     UNKNOWN_DISTANCE, tags, notice, address, latitude, longitude, categoryId, categoryIds,
-                    ownerId, status, recommended, createTime, deliveryRadius);
+                    ownerId, status, recommended, createTime, deliveryRadius, reviewStatus, platformStatus, reviewReason);
         }
         double distanceKm = haversine(userLatitude, userLongitude, latitude, longitude);
         return new Store(id, name, image, rating, monthlySales, deliveryFee, minOrder, deliveryTime,
                 formatDistance(distanceKm), tags, notice, address, latitude, longitude, categoryId, categoryIds,
-                ownerId, status, recommended, createTime, deliveryRadius);
+                ownerId, status, recommended, createTime, deliveryRadius, reviewStatus, platformStatus, reviewReason);
     }
 
     /** 商户未填最远配送半径时使用的默认值（米）：30 公里（约一个小城市范围）。 */
@@ -151,7 +171,10 @@ public record Store(
             int status,
             int recommended,
             int deliveryRadius,
-            boolean deliverable
+            boolean deliverable,
+            int reviewStatus,
+            int platformStatus,
+            String reviewReason
     ) {
     }
 
@@ -164,6 +187,6 @@ public record Store(
         return new StoreView(id, name, image, rating, monthlySales, deliveryFee, minOrder,
                 deliveryTime, distance, tagsList, notice, address, latitude, longitude,
                 categoryId, categoryIdsList, ownerId, status, recommended,
-                deliveryRadius, canDeliver(userLatitude, userLongitude));
+                deliveryRadius, canDeliver(userLatitude, userLongitude), reviewStatus, platformStatus, reviewReason);
     }
 }

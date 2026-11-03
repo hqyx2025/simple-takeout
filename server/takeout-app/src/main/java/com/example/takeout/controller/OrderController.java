@@ -1,5 +1,7 @@
 package com.example.takeout.controller;
 
+import com.example.takeout.common.CrudOperation;
+import com.example.takeout.common.RequireCrud;
 import com.example.takeout.common.ApiResponse;
 import com.example.takeout.common.BizException;
 import com.example.takeout.model.Order;
@@ -78,6 +80,7 @@ public class OrderController {
     }
 
     /** BALANCE 同步扣款；ALIPAY/WECHAT 只创建预支付，支付结果由验签通知确认。 */
+    @RequireCrud({CrudOperation.UPDATE})
     @PostMapping("/orders/{id}/pay")
     public ApiResponse<Order.OrderView> pay(@RequestAttribute("userId") long userId, @PathVariable long id,
                                             @RequestParam String channel,
@@ -101,6 +104,7 @@ public class OrderController {
         @Override public String toString() { return "PaymentRequest[redacted]"; }
     }
 
+    @RequireCrud({CrudOperation.READ, CrudOperation.UPDATE})
     @PostMapping("/orders/{id}/payment/query")
     public ApiResponse<Order.OrderView> queryPayment(@RequestAttribute("userId") long userId,
                                                     @PathVariable long id) {
@@ -142,6 +146,7 @@ public class OrderController {
         return ApiResponse.ok(orderService.refundHistory(userId, id));
     }
 
+    @RequireCrud({CrudOperation.UPDATE})
     @PostMapping("/orders/{id}/refunds/{refundId}/appeal")
     public ApiResponse<RefundRecord> appeal(@RequestAttribute("userId") long userId,
                                             @RequestAttribute("role") int role, @PathVariable long id,
@@ -180,6 +185,7 @@ public class OrderController {
         return ApiResponse.ok(orderService.merchantFlow(userId, id, action));
     }
 
+    @RequireCrud({CrudOperation.UPDATE})
     @PostMapping("/merchant/orders/{id}/reject")
     public ApiResponse<Order.OrderView> merchantReject(@RequestAttribute("userId") long userId,
                                                        @RequestAttribute("role") int role,

@@ -76,10 +76,10 @@ services:
       context: ./server
       dockerfile: Dockerfile
     image: takeout-server:${TAKEOUT_RELEASE:-1.0.0}
-    # 无 container_name，允许 Compose 启动多个 app 副本。
+    # 固定发号节点：每个服务一个实例，扩容时新增独立服务及 workerId，禁止 --scale 复用节点号。
     restart: unless-stopped
     deploy:
-      replicas: 2
+      replicas: 1
       resources:
         limits:
           cpus: '1.0'
@@ -149,6 +149,7 @@ services:
       TAKEOUT_LOG_DIR: /app/logs
       # 应用在容器内监听 8087；对外由 gateway 暴露同一个 8087（统一对外入口）
       TAKEOUT_APP_PORT: "8087"
+      TAKEOUT_SNOWFLAKE_WORKER_ID: ${TAKEOUT_APP_SNOWFLAKE_WORKER_ID:?Assign a unique Snowflake worker ID to app}
       TAKEOUT_ERP_ENABLED: "true"
       TAKEOUT_ERP_URI: http://erp:9200
       TAKEOUT_INTEGRATION_SECRET: ${TAKEOUT_INTEGRATION_SECRET:?Set a separate integration secret of at least 32 characters}
@@ -178,6 +179,12 @@ services:
       options:
         max-size: 10m
         max-file: '3'
+
+  app-secondary:
+    extends:
+      service: app
+    environment:
+      TAKEOUT_SNOWFLAKE_WORKER_ID: ${TAKEOUT_APP_SECONDARY_SNOWFLAKE_WORKER_ID:?Assign a distinct Snowflake worker ID to app-secondary}
 
   # 每个自然月首个运行时备份一次；重启不重复，失败每小时重试，保留历史备份。
   backup:
@@ -307,6 +314,7 @@ services:
       TAKEOUT_BIND_ADDRESS: 0.0.0.0
       TAKEOUT_ERP_DB_URL: jdbc:mysql://erp-mysql:3306/takeout_erp?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
       TAKEOUT_ERP_DB_USERNAME: takeout_erp
+      TAKEOUT_SNOWFLAKE_WORKER_ID: ${TAKEOUT_ERP_SNOWFLAKE_WORKER_ID:?Assign a unique Snowflake worker ID to erp}
       TAKEOUT_ERP_DB_PASSWORD: ${TAKEOUT_ERP_DB_PASSWORD:?Set an ERP database password}
       TAKEOUT_INTEGRATION_SECRET: ${TAKEOUT_INTEGRATION_SECRET:?Set a separate integration secret of at least 32 characters}
       TAKEOUT_APP_URI: http://app-balancer:8087

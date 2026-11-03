@@ -1,0 +1,10 @@
+{
+  "checkedAt": "2026-11-03T21:32:55.414347+08:00",
+  "url": "https://hqyx.website/takeout/",
+  "homeHttpStatus": 200,
+  "appJsHttpStatus": 200,
+  "appJsSha256": "22cadf7a5545168168870e81e5a220ba7638c248843c2b7c24ce241f505cfec3",
+  "catalogHttpStatus": 200,
+  "catalogCode": 200,
+  "stores": 540
+}

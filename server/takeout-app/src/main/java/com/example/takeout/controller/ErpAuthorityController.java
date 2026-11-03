@@ -21,9 +21,14 @@ public class ErpAuthorityController {
         if(role!=2 && found.ownerId()!=user)throw new BizException(403,"无权操作本门店");
     }
     @GetMapping("/context")
+    @RequireCrud({})
     public ApiResponse<?> context(@RequestAttribute("userId") long user,@RequestAttribute("role") int role,
-            @RequestParam long storeId,@RequestHeader(value="X-Integration-Key",required=false) String key){
-        authorize(user,role,storeId,key);return ApiResponse.ok(Map.of("userId",user,"role",role,"storeId",storeId));
+            @RequestParam long storeId,@RequestHeader(value="X-Integration-Key",required=false) String key,
+            @RequestAttribute("crudPermissions") CrudPermissions permissions,
+            @RequestParam(defaultValue="READ") CrudOperation operation){
+        authorize(user,role,storeId,key);
+        permissions.require(operation);
+        return ApiResponse.ok(Map.of("userId",user,"role",role,"storeId",storeId));
     }
     @GetMapping("/finance")
     @Transactional(readOnly=true)

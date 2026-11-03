@@ -112,8 +112,9 @@ class OrderServiceOrderNoTest {
         String orderNo = captor.getValue().orderNo();
         assertTrue(orderNo.matches("\\d+"), "订单号必须只含数字：" + orderNo);
         assertTrue(orderNo.length() <= 32, "订单号必须能放进 orders.order_no VARCHAR(32)：" + orderNo);
-        // 雪花 ID 至少 18 位（当前纪元下），远大于旧格式的 18 位时间戳+4 随机数
-        assertTrue(orderNo.length() >= 15, "订单号应是雪花 ID 而非旧的时间戳+随机数格式：" + orderNo);
+        long timestamp = (Long.parseLong(orderNo) >>> 22) + 1_767_225_600_000L;
+        assertTrue(Math.abs(System.currentTimeMillis() - timestamp) < 1000,
+                "订单号必须保留完整雪花 ID，不能截断后拼接日期：" + orderNo);
     }
 
     @Test

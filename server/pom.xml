@@ -50,6 +50,21 @@
     <module>takeout-erp</module>
   </modules>
 
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!-- Reserved for isolated test JVMs; runtime nodes must configure their own worker ID. -->
+          <environmentVariables>
+            <TAKEOUT_SNOWFLAKE_WORKER_ID>1023</TAKEOUT_SNOWFLAKE_WORKER_ID>
+          </environmentVariables>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
   <dependencyManagement>
     <dependencies>
       <!-- Keep the Spring Cloud 2025.0 line compatible with Spring Boot 3.5. -->

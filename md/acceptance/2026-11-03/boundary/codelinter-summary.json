@@ -1,0 +1,429 @@
+{
+  "counts": {
+    "error": 0,
+    "warn": 48,
+    "suggestion": 2
+  },
+  "files": [
+    {
+      "filePath": "entry/src/main/ets/pages/AdminAssistantPage.ets",
+      "messages": [
+        {
+          "line": 103,
+          "column": 5,
+          "severity": "warn",
+          "message": "Replace state variables with local variables for temporary calculation",
+          "rule": "@performance/hp-arkui-use-local-var-to-replace-state-var"
+        },
+        {
+          "line": 120,
+          "column": 7,
+          "severity": "warn",
+          "message": "Replace state variables with local variables for temporary calculation",
+          "rule": "@performance/hp-arkui-use-local-var-to-replace-state-var"
+        },
+        {
+          "line": 125,
+          "column": 5,
+          "severity": "warn",
+          "message": "Replace state variables with local variables for temporary calculation",
+          "rule": "@performance/hp-arkui-use-local-var-to-replace-state-var"
+        },
+        {
+          "line": 127,
+          "column": 7,
+          "severity": "warn",
+          "message": "Replace state variables with local variables for temporary calculation",
+          "rule": "@performance/hp-arkui-use-local-var-to-replace-state-var"
+        },
+        {
+          "line": 130,
+          "column": 9,
+          "severity": "warn",
+          "message": "Replace state variables with local variables for temporary calculation",
+          "rule": "@performance/hp-arkui-use-local-var-to-replace-state-var"
+        }
+      ]
+    },
+    {
+      "filePath": "entry/src/main/ets/pages/CheckoutPage.ets",
+      "messages": [
+        {
+          "line": 487,
+          "column": 13,
+          "severity": "warn",
+          "message": "Avoid frequent state variable reads inside loop logic",
+          "rule": "@performance/hp-arkui-no-state-var-access-in-loop"
+        },
+        {
+          "line": 488,
+          "column": 13,
+          "severity": "warn",
+          "message": "Avoid frequent state variable reads inside loop logic",
+          "rule": "@performance/hp-arkui-no-state-var-access-in-loop"
+        },
+        {
+          "line": 491,
+          "column": 13,
+          "severity": "warn",
+          "message": "Avoid frequent state variable reads inside loop logic",
+          "rule": "@performance/hp-arkui-no-state-var-access-in-loop"
+        },
+        {
+          "line": 495,
+          "column": 11,
+          "severity": "warn",
+          "message": "Avoid frequent state variable reads inside loop logic",
+          "rule": "@performance/hp-arkui-no-state-var-access-in-loop"
+        },
+        {
+          "line": 497,
+          "column": 11,
+          "severity": "warn",
+          "message": "Avoid frequent state variable reads inside loop logic",
+          "rule": "@performance/hp-arkui-no-state-var-access-in-loop"
+        },
+        {
+          "line": 505,
+          "column": 13,
+          "severity": "warn",
+          "message": "Avoid frequent state variable reads inside loop logic",
+          "rule": "@performance/hp-arkui-no-state-var-access-in-loop"
+        },
+        {
+          "line": 506,
+          "column": 15,
+          "severity": "warn",
+          "message": "Avoid frequent state variable reads inside loop logic",
+          "rule": "@performance/hp-arkui-no-state-var-access-in-loop"
+        },
+        {
+          "line": 508,
+          "column": 13,
+          "severity": "warn",
+          "message": "Avoid frequent state variable reads inside loop logic",
+          "rule": "@performance/hp-arkui-no-state-var-access-in-loop"
+        },
+        {
+          "line": 513,
+          "column": 11,
+          "severity": "warn",
+          "message": "Avoid frequent state variable reads inside loop logic",
+          "rule": "@performance/hp-arkui-no-state-var-access-in-loop"
+        },
+        {
+          "line": 515,
+          "column": 11,
+          "severity": "warn",
+          "message": "Avoid frequent state variable reads inside loop logic",
+          "rule": "@performance/hp-arkui-no-state-var-access-in-loop"
+        },
+        {
+          "line": 525,
+          "column": 11,
+          "severity": "warn",
+          "message": "Avoid frequent state variable reads inside loop logic",
+          "rule": "@performance/hp-arkui-no-state-var-access-in-loop"
+        },
+        {
+          "line": 526,
+          "column": 11,
+          "severity": "warn",
+          "message": "Avoid frequent state variable reads inside loop logic",
+          "rule": "@performance/hp-arkui-no-state-var-access-in-loop"
+        },
+        {
+          "line": 532,
+          "column": 9,
+          "severity": "warn",
+          "message": "Avoid frequent state variable reads inside loop logic",
+          "rule": "@performance/hp-arkui-no-state-var-access-in-loop"
+        },
+        {
+          "line": 540,
+          "column": 11,
+          "severity": "warn",
+          "message": "Avoid frequent state variable reads inside loop logic",
+          "rule": "@performance/hp-arkui-no-state-var-access-in-loop"
+        },
+        {
+          "line": 542,
+          "column": 9,
+          "severity": "warn",
+          "message": "Avoid frequent state variable reads inside loop logic",
+          "rule": "@performance/hp-arkui-no-state-var-access-in-loop"
+        },
+        {
+          "line": 545,
+          "column": 9,
+          "severity": "warn",
+          "message": "Avoid frequent state variable reads inside loop logic",
+          "rule": "@performance/hp-arkui-no-state-var-access-in-loop"
+        },
+        {
+          "line": 546,
+          "column": 9,
+          "severity": "warn",
+          "message": "Avoid frequent state variable reads inside loop logic",
+          "rule": "@performance/hp-arkui-no-state-var-access-in-loop"
+        },
+        {
+          "line": 547,
+          "column": 9,
+          "severity": "warn",
+          "message": "Avoid frequent state variable reads inside loop logic",
+          "rule": "@performance/hp-arkui-no-state-var-access-in-loop"
+        },
+        {
+          "line": 548,
+          "column": 9,
+          "severity": "warn",
+          "message": "Avoid frequent state variable reads inside loop logic",
+          "rule": "@performance/hp-arkui-no-state-var-access-in-loop"
+        }
+      ]
+    },
+    {
+      "filePath": "entry/src/main/ets/components/DateTimeField.ets",
+      "messages": [
+        {
+          "line": 4,
+          "column": 15,
+          "severity": "warn",
+          "message": "Preferentially use the @Builder method instead of custom components.",
+          "rule": "@performance/avoid-overusing-custom-component-check"
+        }
+      ]
+    },
+    {
+      "filePath": "entry/src/main/ets/components/EmptyState.ets",
+      "messages": [
+        {
+          "line": 10,
+          "column": 15,
+          "severity": "warn",
+          "message": "Preferentially use the @Builder method instead of custom components.",
+          "rule": "@performance/avoid-overusing-custom-component-check"
+        }
+      ]
+    },
+    {
+      "filePath": "entry/src/main/ets/components/EvidenceImages.ets",
+      "messages": [
+        {
+          "line": 45,
+          "column": 9,
+          "severity": "warn",
+          "message": "Avoid frequent state variable reads inside loop logic",
+          "rule": "@performance/hp-arkui-no-state-var-access-in-loop"
+        },
+        {
+          "line": 48,
+          "column": 9,
+          "severity": "warn",
+          "message": "Avoid frequent state variable reads inside loop logic",
+          "rule": "@performance/hp-arkui-no-state-var-access-in-loop"
+        },
+        {
+          "line": 49,
+          "column": 9,
+          "severity": "warn",
+          "message": "Avoid frequent state variable reads inside loop logic",
+          "rule": "@performance/hp-arkui-no-state-var-access-in-loop"
+        }
+      ]
+    },
+    {
+      "filePath": "entry/src/main/ets/pages/MerchantCenterPage.ets",
+      "messages": [
+        {
+          "line": 1064,
+          "column": 5,
+          "severity": "warn",
+          "message": "Replace state variables with local variables for temporary calculation",
+          "rule": "@performance/hp-arkui-use-local-var-to-replace-state-var"
+        },
+        {
+          "line": 1075,
+          "column": 9,
+          "severity": "warn",
+          "message": "Replace state variables with local variables for temporary calculation",
+          "rule": "@performance/hp-arkui-use-local-var-to-replace-state-var"
+        },
+        {
+          "line": 1086,
+          "column": 7,
+          "severity": "warn",
+          "message": "Replace state variables with local variables for temporary calculation",
+          "rule": "@performance/hp-arkui-use-local-var-to-replace-state-var"
+        },
+        {
+          "line": 1101,
+          "column": 5,
+          "severity": "warn",
+          "message": "Replace state variables with local variables for temporary calculation",
+          "rule": "@performance/hp-arkui-use-local-var-to-replace-state-var"
+        },
+        {
+          "line": 1165,
+          "column": 5,
+          "severity": "warn",
+          "message": "Replace state variables with local variables for temporary calculation",
+          "rule": "@performance/hp-arkui-use-local-var-to-replace-state-var"
+        },
+        {
+          "line": 1180,
+          "column": 7,
+          "severity": "warn",
+          "message": "Replace state variables with local variables for temporary calculation",
+          "rule": "@performance/hp-arkui-use-local-var-to-replace-state-var"
+        },
+        {
+          "line": 1187,
+          "column": 9,
+          "severity": "warn",
+          "message": "Replace state variables with local variables for temporary calculation",
+          "rule": "@performance/hp-arkui-use-local-var-to-replace-state-var"
+        },
+        {
+          "line": 1199,
+          "column": 7,
+          "severity": "warn",
+          "message": "Replace state variables with local variables for temporary calculation",
+          "rule": "@performance/hp-arkui-use-local-var-to-replace-state-var"
+        },
+        {
+          "line": 1204,
+          "column": 5,
+          "severity": "warn",
+          "message": "Replace state variables with local variables for temporary calculation",
+          "rule": "@performance/hp-arkui-use-local-var-to-replace-state-var"
+        }
+      ]
+    },
+    {
+      "filePath": "entry/src/main/ets/pages/MerchantEditGoodsPage.ets",
+      "messages": [
+        {
+          "line": 96,
+          "column": 5,
+          "severity": "warn",
+          "message": "Replace state variables with local variables for temporary calculation",
+          "rule": "@performance/hp-arkui-use-local-var-to-replace-state-var"
+        },
+        {
+          "line": 101,
+          "column": 7,
+          "severity": "warn",
+          "message": "Replace state variables with local variables for temporary calculation",
+          "rule": "@performance/hp-arkui-use-local-var-to-replace-state-var"
+        },
+        {
+          "line": 121,
+          "column": 5,
+          "severity": "warn",
+          "message": "Replace state variables with local variables for temporary calculation",
+          "rule": "@performance/hp-arkui-use-local-var-to-replace-state-var"
+        }
+      ]
+    },
+    {
+      "filePath": "entry/src/main/ets/components/PageHeader.ets",
+      "messages": [
+        {
+          "line": 18,
+          "column": 15,
+          "severity": "warn",
+          "message": "Preferentially use the @Builder method instead of custom components.",
+          "rule": "@performance/avoid-overusing-custom-component-check"
+        }
+      ]
+    },
+    {
+      "filePath": "entry/src/main/ets/components/PriceText.ets",
+      "messages": [
+        {
+          "line": 8,
+          "column": 15,
+          "severity": "warn",
+          "message": "Preferentially use the @Builder method instead of custom components.",
+          "rule": "@performance/avoid-overusing-custom-component-check"
+        }
+      ]
+    },
+    {
+      "filePath": "entry/src/main/ets/pages/ProductListPage.ets",
+      "messages": [
+        {
+          "line": 342,
+          "column": 9,
+          "severity": "suggestion",
+          "message": "Set cachedCount to an appropriate value when using LazyForEach in grids",
+          "rule": "@performance/hp-arkui-set-cache-count-for-lazyforeach-grid"
+        },
+        {
+          "line": 345,
+          "column": 15,
+          "severity": "warn",
+          "message": "Use reusable components to define complex components whenever possible",
+          "rule": "@performance/hp-arkui-use-reusable-component"
+        }
+      ]
+    },
+    {
+      "filePath": "entry/src/main/ets/components/RatingStars.ets",
+      "messages": [
+        {
+          "line": 8,
+          "column": 15,
+          "severity": "warn",
+          "message": "Preferentially use the @Builder method instead of custom components.",
+          "rule": "@performance/avoid-overusing-custom-component-check"
+        }
+      ]
+    },
+    {
+      "filePath": "entry/src/main/ets/components/home/RecommendedStoreCardHost.ets",
+      "messages": [
+        {
+          "line": 15,
+          "column": 15,
+          "severity": "warn",
+          "message": "Preferentially use the @Builder method instead of custom components.",
+          "rule": "@performance/avoid-overusing-custom-component-check"
+        }
+      ]
+    },
+    {
+      "filePath": "entry/src/main/ets/components/StatusBadge.ets",
+      "messages": [
+        {
+          "line": 9,
+          "column": 15,
+          "severity": "warn",
+          "message": "Preferentially use the @Builder method instead of custom components.",
+          "rule": "@performance/avoid-overusing-custom-component-check"
+        }
+      ]
+    },
+    {
+      "filePath": "entry/src/main/ets/components/store/StoreDetailContent.ets",
+      "messages": [
+        {
+          "line": 561,
+          "column": 7,
+          "severity": "suggestion",
+          "message": "Set cachedCount to an appropriate value when using LazyForEach in grids",
+          "rule": "@performance/hp-arkui-set-cache-count-for-lazyforeach-grid"
+        },
+        {
+          "line": 595,
+          "column": 13,
+          "severity": "warn",
+          "message": "Use reusable components to define complex components whenever possible",
+          "rule": "@performance/hp-arkui-use-reusable-component"
+        }
+      ]
+    }
+  ]
+}

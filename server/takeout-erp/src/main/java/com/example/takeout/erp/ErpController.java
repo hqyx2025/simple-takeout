@@ -26,10 +26,13 @@ public class ErpController {
         this.app=RestClient.builder().baseUrl(uri).requestFactory(factory).build();
     }
     private JsonNode authority(String auth,long store,String resource) {
+        return authority(auth,store,resource,CrudOperation.READ);
+    }
+    private JsonNode authority(String auth,long store,String resource,CrudOperation operation) {
         if(store<=0)throw new BizException(400,"请选择门店");
         if(auth==null || !auth.startsWith("Bearer "))throw new BizException(401,"请先登录");
         try {
-            var result=app.get().uri("/api/internal/erp/"+resource+"?storeId="+store)
+            var result=app.get().uri("/api/internal/erp/"+resource+"?storeId="+store+"&operation="+operation.name())
                     .header("Authorization",auth).header("X-Integration-Key",secret).retrieve().body(JsonNode.class);
             if(result==null || result.path("code").asInt()!=200)throw new BizException(503,"门店权限服务响应异常");
             return result.path("data");
@@ -56,8 +59,16 @@ public class ErpController {
     public ApiResponse<?> write(@PathVariable long store,@PathVariable String action,
             @RequestHeader(value="Authorization",required=false) String auth,
             @RequestHeader(value="Idempotency-Key",required=false) String key,@RequestBody ErpService.Command command) {
-        long actor=authority(auth,store,"context").path("userId").asLong();
+        long actor=authority(auth,store,"context",operationFor(action)).path("userId").asLong();
         return ApiResponse.ok(service.execute(store,actor,action,key,command));
+    }
+    static CrudOperation operationFor(String action) {
+        return switch(action) {
+            case "suppliers", "materials", "purchases", "receive", "adjust", "pay" -> CrudOperation.CREATE;
+            case "supplier-update", "supplier-status", "submit", "confirm", "close", "review",
+                    "reverse", "reverse-receipt", "payment-correct", "reverse-payment", "supplier-refund" -> CrudOperation.UPDATE;
+            default -> throw new BizException(404,"操作不存在");
+        };
     }
     public record Event(long id,String type,long orderId,String payload) {}
     @PostMapping("/internal/events")

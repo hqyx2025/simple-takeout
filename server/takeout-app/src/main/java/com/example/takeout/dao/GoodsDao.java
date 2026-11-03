@@ -134,7 +134,7 @@ public class GoodsDao {
     public List<SpecialGoods> listSpecialGoods(int limit) {
         return attachSpecsToSpecial(jdbc.query("SELECT g.*, COALESCE(sold.sales, 0) AS real_sales, s.name AS store_name, s.distance AS store_distance " +
                         "FROM goods g JOIN stores s ON s.id = g.store_id " + MONTHLY_SALES_JOIN +
-                        "WHERE g.status = 1 AND g.is_special = 1 AND g.stock > 0 AND g.deleted = 0 AND s.status = 1 " +
+                        "WHERE g.status = 1 AND g.is_special = 1 AND g.stock > 0 AND g.deleted = 0 AND s.status = 1 AND s.review_status = 1 AND s.platform_status = 1 " +
                         "ORDER BY g.create_time DESC, real_sales DESC, g.id DESC LIMIT ?",
                 SPECIAL_MAPPER, monthlySalesArgs(limit)));
     }
@@ -143,7 +143,7 @@ public class GoodsDao {
     public List<SpecialGoods> listTopGoods(int limit) {
         return attachSpecsToSpecial(jdbc.query("SELECT g.*, COALESCE(sold.sales, 0) AS real_sales, s.name AS store_name, s.distance AS store_distance " +
                         "FROM goods g JOIN stores s ON s.id = g.store_id " + MONTHLY_SALES_JOIN +
-                        "WHERE g.status = 1 AND g.deleted = 0 AND s.status = 1 " +
+                        "WHERE g.status = 1 AND g.deleted = 0 AND s.status = 1 AND s.review_status = 1 AND s.platform_status = 1 " +
                         "ORDER BY real_sales DESC, g.rating DESC, g.id DESC LIMIT ?",
                 SPECIAL_MAPPER, monthlySalesArgs(limit)));
     }

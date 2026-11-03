@@ -70,7 +70,7 @@ class ExternalRefundRecoveryMySqlTest {
         manager = new DataSourceTransactionManager(source);
         db.update("INSERT INTO users(id,username,phone,password,balance,create_time) VALUES " +
                 "(2,'customer','13800000002','test',0,NOW()),(4,'merchant','13800000004','test',2,NOW())");
-        db.update("INSERT INTO stores(id,name,owner_id,create_time) VALUES(3,'store',4,NOW())");
+        db.update("INSERT INTO stores(review_status,id,name,owner_id,create_time) VALUES(1,3,'store',4,NOW())");
         db.update("INSERT INTO orders(id,order_no,user_id,store_id,store_name,status,items,address,delivery_fee," +
                 "pay_amount,escrow_status,reviewed,create_time,pay_time,complete_time) " +
                 "VALUES(7,'NO7',2,3,'store',4,'[]','{}',3,13,1,1,NOW(),NOW(),NOW())");

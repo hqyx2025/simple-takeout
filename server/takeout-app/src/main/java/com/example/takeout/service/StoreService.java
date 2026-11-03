@@ -16,6 +16,7 @@ import com.example.takeout.model.Setmeal;
 import com.example.takeout.model.SetmealItem;
 import com.example.takeout.model.SpecialGoods;
 import com.example.takeout.model.Store;
+import com.example.takeout.model.StoreReview;
 import com.example.takeout.service.mq.DomainEventPublisher;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -66,6 +67,7 @@ public class StoreService {
 
     /** 店铺当前生效的营销活动（折扣/新客立减/满赠），供前端展示。 */
     public List<MarketingActivity> listStoreActivities(long storeId) {
+        requirePublicStore(storeId);
         return storeDao.listActiveMarketingActivities(storeId, LocalDateTime.now().format(FMT));
     }
 
@@ -282,6 +284,7 @@ public class StoreService {
     // ============ 套餐与组合购 ============
 
     public List<Setmeal> listStoreSetmeals(long storeId) {
+        requirePublicStore(storeId);
         return storeDao.listSetmealsByStore(storeId, true);
     }
 
@@ -383,7 +386,13 @@ public class StoreService {
 
     public Store.StoreView storeDetail(long id) {
         Store store = sourceStore(id);
-        return store == null ? null : toView(store);
+        return store == null || !store.available() ? null : toView(store);
+    }
+
+    private Store requirePublicStore(long id) {
+        Store store = storeDao.findById(id).orElseThrow(() -> new BizException(404, "店铺不存在"));
+        if (!store.available()) throw new BizException(404, "店铺暂不可用");
+        return store;
     }
 
     private Store sourceStore(long id) {
@@ -392,7 +401,7 @@ public class StoreService {
     }
 
     public List<Goods> listGoods(long storeId) {
-        storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
+        requirePublicStore(storeId);
         return cache.get(HotDataCacheService.Keys.storeGoods(storeId),
                 new TypeReference<List<Goods>>() {
                 },
@@ -477,7 +486,7 @@ public class StoreService {
         if (!Double.isFinite(amount) || amount < 0) {
             throw new BizException("金额参数不合法");
         }
-        Store store = storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
+        Store store = requirePublicStore(storeId);
         double gap = round2(Math.max(store.minOrder() - amount, 0));
         List<Goods> suggestions = gap <= 0 ? List.of() : goodsDao.listCheapest(storeId, 4);
         return new BundleView(store.id(), store.name(), store.minOrder(), round2(amount), gap, suggestions);
@@ -525,6 +534,7 @@ public class StoreService {
         return goodsDao.listByStoreAll(storeId);
     }
 
+    @Transactional
     public Store.StoreView createStore(long ownerId, String name, int categoryId, double deliveryFee,
                                        double minOrder, String deliveryTime, String notice,
                                        String address, Double latitude, Double longitude, int deliveryRadius,
@@ -548,14 +558,17 @@ public class StoreService {
                 deliveryTime == null || deliveryTime.isBlank() ? "30分钟"
                         : requireMaxLength(deliveryTime, 32, "配送时间"),
                 "0.0km", "[\"新店特惠\"]", requireMaxLength(notice, 512, "店铺公告"),
-                normalizedAddress, latitude, longitude, categoryId, "[" + categoryId + "]", ownerId, 1, 0, now, deliveryRadius);
+                normalizedAddress, latitude, longitude, categoryId, "[" + categoryId + "]", ownerId, 1, 0, now,
+                deliveryRadius, 0, 1, "");
         long id = storeDao.insert(store);
+        storeDao.insertReview(id, 0, ownerId, "", now);
         invalidateStoreAndGoodsCache();
-        return storeDetail(id);
+        return toView(storeDao.findById(id).orElseThrow(() -> new BizException("店铺创建失败")));
     }
 
     @Transactional
     public Store.StoreView updateStore(long ownerId, long storeId, StorePatch patch) {
+        storeDao.findByIdForUpdate(storeId).orElseThrow(() -> new BizException("店铺不存在"));
         Store store = requireOwned(ownerId, storeId);
         // 与创建店铺同口径的有限性校验：NaN 会让所有比较恒为 false，使起送价校验被完全绕过；
         // 1e400 这类字面量会被解析成 Infinity，使该店永远达不到起送价。负数仍按「不修改」处理。
@@ -592,7 +605,23 @@ public class StoreService {
             storeDao.updateStatus(storeId, patch.status());
         }
         invalidateStoreAndGoodsCache();
-        return storeDetail(storeId);
+        return toView(storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在")));
+    }
+
+    @Transactional
+    public Store.StoreView submitStoreReview(long ownerId, long storeId) {
+        Store store = storeDao.findByIdForUpdate(storeId).orElseThrow(() -> new BizException("店铺不存在"));
+        requireOwned(ownerId, storeId);
+        if (store.reviewStatus() != 2) throw new BizException(409, "仅被驳回的店铺可以重新提交审核");
+        storeDao.updateReview(storeId, 0, "");
+        storeDao.insertReview(storeId, 0, ownerId, "", LocalDateTime.now().format(FMT));
+        invalidateStoreAndGoodsCache();
+        return toView(storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在")));
+    }
+
+    public List<StoreReview> merchantStoreReviews(long ownerId, long storeId) {
+        requireOwned(ownerId, storeId);
+        return storeDao.reviews(storeId);
     }
 
     @Transactional
@@ -728,7 +757,7 @@ public class StoreService {
 
     /** 用户端：店铺详情展示的店内商户分类。 */
     public List<Category> publicMerchantCategories(long storeId) {
-        Store store = storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
+        Store store = requirePublicStore(storeId);
         return cache.get(HotDataCacheService.Keys.storeCategories(storeId),
                 new TypeReference<List<Category>>() {
                 },

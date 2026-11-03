@@ -1,0 +1,52 @@
+{
+  "tests": [
+    {
+      "name": "BoundaryFlow",
+      "run": 3,
+      "passed": 3,
+      "failures": 0,
+      "errors": 0,
+      "rawLogSha256": "95e849994af0c3f0c8a6cef6b0849f25983484676b8d79282365a1d6a3deec3c",
+      "executedAt": "2026-11-03T22:53:26+08:00"
+    },
+    {
+      "name": "CampusAcceptance",
+      "run": 1,
+      "passed": 1,
+      "failures": 0,
+      "errors": 0,
+      "rawLogSha256": "e7a1543ef6e77c7a9919029c017d3246e4be22aaf766b86faae65e630bce719c",
+      "executedAt": "2026-11-03T23:01:19+08:00"
+    }
+  ],
+  "stages": [
+    "[BoundaryFlow] PASS rejected refunds restore actual unsettled/settled server states",
+    "[BoundaryFlow] PASS A/B/A account address/cart/order isolation",
+    "[BoundaryFlow] PASS interrupted API connection and explicit UI read retry",
+    "[BoundaryFlow] PASS committed create response lost, original intent reconciled; one order, no debit",
+    "[CampusAcceptance] PASS UI settled partial refund through administrator",
+    "[CampusAcceptance] PASS UI unpaid cancellation and single order identity",
+    "[CampusAcceptance] PASS merchant net settlement after partial refund"
+  ],
+  "environment": "API 26 Pura X View emulator, 2210x2416 pixels, isolated package and backend",
+  "appearance": {
+    "modes": [
+      "light",
+      "dark"
+    ],
+    "fontScales": [
+      1,
+      1.3
+    ],
+    "maximumInAppSetting": 1.3,
+    "checks": [
+      "merchant preparing/ready/assigned labels",
+      "refund filters and rejection buttons within screen",
+      "unsettled/settled rejection server states"
+    ]
+  },
+  "accountIsolation": "A/B/A real authentication and server sync; addresses, carts and orders checked; hidden old page stacks cleared in test harness",
+  "network": "Local proxy cuts actual API TCP connections and drops a successful order-create response after upstream commit. Retry uses original intent; one pending order and no debit. Does not emulate airplane mode, Wi-Fi roaming or campus network.",
+  "faultCountersScope": "network-faults.json aggregates the two executed network cases; the first run failed a separate appearance locator and passed its network/account cases. The final complete run is 3/3.",
+  "limits": "Affected pages and application maximum text scale only; not all-page accessibility or physical-device acceptance."
+}

@@ -64,10 +64,10 @@ export async function approveRefundApi(refundId: number): Promise<boolean> {
   return resp.code === 200
 }
 
-export async function rejectRefundApi(refundId: number, reason: string): Promise<boolean> {
+export async function rejectRefundApi(refundId: number, reason: string): Promise<RefundRecord | null> {
   const req: RefundRejectRequest = { rejectReason: reason }
   const resp: ApiResponse<RefundRecord> = await post<RefundRecord>(`/api/admin/refunds/${refundId}/reject`, req)
-  return resp.code === 200
+  return resp.code === 200 ? resp.data : null
 }
 
 // ==================== 管理端订单与员工 ====================

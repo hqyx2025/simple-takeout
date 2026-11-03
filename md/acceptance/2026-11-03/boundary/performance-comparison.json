@@ -1,0 +1,23 @@
+{
+  "beforeP95Ms": 7043.167700001504,
+  "afterP95Ms": 85.67429999675369,
+  "requestsPerRun": 2400,
+  "durationSeconds": 300,
+  "conditions": {
+    "durationSeconds": 300,
+    "elapsedSeconds": 299.9036205000011,
+    "targetRequestsPerSecond": 8,
+    "maxInFlight": 8,
+    "securityLimitsUnchanged": true,
+    "automaticRetries": 0,
+    "connectionReuse": false,
+    "browseAccounts": 16,
+    "syntheticDataOnly": true
+  },
+  "riderPoolOrders": 200,
+  "riderAssignedOrders": 1000,
+  "change": "Dispatch uses a store-only read without monthly-sales aggregation; per-request range result is reused for repeated stores. Grab still rechecks current store coordinates/radius.",
+  "beforeSourceHashManifest": "../source-hashes.json",
+  "afterSourceHashManifest": "source-hashes.json",
+  "limits": "Two bounded same-host loopback runs; no campus network, physical device or long-peak claim. Baseline overlapped brief device activity; final run used the same database/Redis/app limits and unchanged rate limits."
+}

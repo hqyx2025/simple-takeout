@@ -11,7 +11,7 @@
  */
 import { Driver, ON } from '@kit.TestKit'
 import { describe, it, expect } from '@ohos/hypium'
-import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, waitAny, openQuickLoginDialog } from './UiTestHelper'
+import { isFound, requireComponent, launchAppUnderTest, clickByIdOrText, waitAny, openQuickLoginDialog, scrollUntilVisible } from './UiTestHelper'
 
 export default function loginFlowTest() {
   describe('LoginFlow', () => {
@@ -31,7 +31,7 @@ export default function loginFlowTest() {
 
       // 登录表单三个控件必须可被驱动找到
       requireComponent(await driver.waitForComponent(ON.id('login-phone'), 15000), 'login-phone')
-      requireComponent(await driver.findComponent(ON.id('login-password')), 'login-password')
+      requireComponent(await scrollUntilVisible(driver, 'login-password'), 'login-password')
       requireComponent(await driver.findComponent(ON.id('login-submit')), 'login-submit')
 
       expect(await clickByIdOrText(driver, 'login-method-email', '验证码登录')).assertTrue()
@@ -40,15 +40,15 @@ export default function loginFlowTest() {
       expect(isFound(await driver.findComponent(ON.id('login-password')))).assertFalse()
       expect(await clickByIdOrText(driver, 'login-submit', '登录')).assertTrue()
       await driver.delayMs(500)
-      const error = requireComponent(await driver.findComponent(ON.id('login-phone-error')), 'login-phone-error')
+      const error = requireComponent(await scrollUntilVisible(driver, 'login-phone-error'), 'login-phone-error')
       expect(await error.getText()).assertContain('手机号')
       expect(await clickByIdOrText(driver, 'login-method-password', '密码登录')).assertTrue()
-      requireComponent(await driver.findComponent(ON.id('login-password')), 'login-password')
+      requireComponent(await driver.waitForComponent(ON.id('login-password'), 5000), 'login-password')
       expect(isFound(await driver.findComponent(ON.id('login-error')))).assertFalse()
 
       expect(await clickByIdOrText(driver, 'login-mode-register', '注册')).assertTrue()
       await driver.delayMs(500)
-      requireComponent(await driver.findComponent(ON.id('login-confirm-password')), 'login-confirm-password')
+      requireComponent(await scrollUntilVisible(driver, 'login-confirm-password'), 'login-confirm-password')
       expect(await clickByIdOrText(driver, 'login-mode-login', '登录')).assertTrue()
       await driver.delayMs(500)
 

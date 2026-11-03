@@ -1,6 +1,7 @@
 package com.example.takeout.service.thirdparty;
 
 import com.example.takeout.common.BizException;
+import com.example.takeout.common.BusinessIdGenerator;
 import com.example.takeout.config.PaymentProperties;
 import com.example.takeout.dao.OrderDao;
 import com.example.takeout.dao.PaymentRecordDao;
@@ -15,7 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
-import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
@@ -26,8 +26,6 @@ import java.util.Map;
 public class ExternalPaymentService {
 
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-    private static final SecureRandom RANDOM = new SecureRandom();
-    private static final char[] TRADE_CHARS = "0123456789ABCDEFGHJKMNPQRSTVWXYZ".toCharArray();
 
     private final PaymentProperties properties;
     private final Map<String, PaymentGateway> gateways;
@@ -140,7 +138,7 @@ public class ExternalPaymentService {
         }
 
         BigDecimal amount = BigDecimal.valueOf(order.payAmount()).setScale(2);
-        String outTradeNo = newOutTradeNo(channel, order.id());
+        String outTradeNo = newOutTradeNo(channel);
         long id;
         try {
             id = transactionDao.insertPending(order.id(), order.userId(), channel, amount, outTradeNo,
@@ -380,11 +378,9 @@ public class ExternalPaymentService {
         }
     }
 
-    private static String newOutTradeNo(String channel, long orderId) {
-        StringBuilder suffix = new StringBuilder(10);
-        for (int i = 0; i < 10; i++) suffix.append(TRADE_CHARS[RANDOM.nextInt(TRADE_CHARS.length)]);
+    private static String newOutTradeNo(String channel) {
         char prefix = PaymentChannels.WECHAT.equals(channel) ? 'W' : 'A';
-        return prefix + Long.toUnsignedString(orderId, 32) + suffix;
+        return prefix + BusinessIdGenerator.nextId();
     }
 
     private static String refundNo(PaymentTransaction payment) {

@@ -1,5 +1,7 @@
 package com.example.takeout.controller;
 
+import com.example.takeout.common.CrudOperation;
+import com.example.takeout.common.RequireCrud;
 import com.example.takeout.common.ApiResponse;
 import com.example.takeout.common.BizException;
 import com.example.takeout.service.OrderOperationsService;
@@ -43,6 +45,7 @@ public class OrderOperationsController {
             @RequestParam(defaultValue="OPEN") String status,@RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="30") int pageSize) {
         requireAdmin(role);return ApiResponse.ok(operations.adminIssues(status,page,pageSize));
     }
+    @RequireCrud({CrudOperation.UPDATE})
     @PostMapping("/admin/delivery-issues/{id}/resolve")
     public ApiResponse<OrderOperationsService.DeliveryIssue> resolve(@RequestAttribute("userId") long user,
             @RequestAttribute("role") int role,@PathVariable long id,@RequestBody ResolveRequest request) {

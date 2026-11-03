@@ -1,0 +1,108 @@
+{
+  "createdAt": "2026-11-03T21:38:15+08:00",
+  "baseCommit": "3aea5e6c5a4ebea8fce8f3a3d00b573c401ee3ef",
+  "dirtyWorkspace": true,
+  "sourceHashList": "source-hashes.json",
+  "sourceFiles": 578,
+  "sourceHashListSha256": "856facf54672c9c7915abe06e62dcfbfd1c2635cd532034da409d4490a1847f5",
+  "artifacts": [
+    {
+      "name": "normal-domain debug HAP",
+      "path": "entry/build/default/outputs/default/entry-default-unsigned.hap",
+      "sha256": "748457aef1bd1cc80a7651f3f41cc45373b3b0e5db4987c820536427833b639e",
+      "bytes": 10205315
+    },
+    {
+      "name": "revised manuscript",
+      "filename": "彭志强_基于鸿蒙的校园外卖服务平台的设计与实现_论文_2026-11-03整改版.docx",
+      "sha256": "85391c4e60106bcce9bfaba28bc6684dd242371d608e2b1dd12e912d5a3aaa41"
+    },
+    {
+      "name": "isolated device main HAP",
+      "privateLocalPath": "TemporaryCacheStorage/rectification-20261103/default.hap",
+      "sha256": "5406eec0e3cfd3870c257d647512e822b53e2349281681f61d3a94bb49eb55dd"
+    },
+    {
+      "name": "isolated device test HAP",
+      "privateLocalPath": "TemporaryCacheStorage/rectification-20261103/ohosTest.hap",
+      "sha256": "30341a6bee099b8442005d74772898588f77a524f88998edd96462353fdceb45"
+    }
+  ],
+  "conditions": [
+    "Base commit alone does not identify the tested dirty workspace; use source-hashes.json",
+    "Device bundle temporarily replaced with .review and test-only local API/account overrides; original bundle sources restored byte-for-byte",
+    "Normal delivery HAP built after test bundle, without test-only account overrides and with domain API configuration",
+    "No source commit/push; no new server/web changes in final native/material continuation",
+    "Prior same-day deployment store-review-20261103-r2 remains live; native MerchantOrders stale callback fix is in delivered HAP"
+  ],
+  "evidence": [
+    {
+      "path": "backend-summary.json",
+      "sha256": "b1e8716cb0e482ac0c644b7b09ab776fcf7efc1c87bd0c6bdeb43cd2ff88c060"
+    },
+    {
+      "path": "codelinter-summary.json",
+      "sha256": "0be609da86e9c2b997d1264ea2854bffbe4fffdfb1d58ef426e15b4085a3e620"
+    },
+    {
+      "path": "device-stages.json",
+      "sha256": "389e8c07d1dbab98d71927ac99f24eadf02779daab89d29b2f4b000e938d294e"
+    },
+    {
+      "path": "device-summary.json",
+      "sha256": "8070a7a2d7e3875e5742e1725f88941fe7896e703d7e787ce5b3f3587869c213"
+    },
+    {
+      "path": "http-summary.json",
+      "sha256": "ad7fc201d721e1a7d681c18c540ac99998a6d98d2f6c18966f2fc056b0050852"
+    },
+    {
+      "path": "manuscript-audit.json",
+      "sha256": "470c39c680b9040d3dc3885fd4c1c648817c4e1f7e4b41fabf3a0328d47ce0bf"
+    },
+    {
+      "path": "node-summary.json",
+      "sha256": "d9f060b72b90521f479529d5594c3fe1c9928642f2c9ee41c64fd2b280de026b"
+    },
+    {
+      "path": "online-summary.json",
+      "sha256": "9b189b7c7335030b61223e20bc57a0c9718baa6b42f53e1b150117fe27e91892"
+    },
+    {
+      "path": "performance-large.json",
+      "sha256": "7ab3998697cb2bf447ccd224039b476a87a4ed0fdd3f31f8bb37c549b6527f30"
+    },
+    {
+      "path": "performance-p95.png",
+      "sha256": "4765ea9f49d915f7d320b355171594f0a8b8903d065bca1df40c00655a64de84"
+    },
+    {
+      "path": "README.md",
+      "sha256": "9938ead257c6ea0bd854c27e168bfd687b76739d1fa1bef52c60c55b4207fb16"
+    },
+    {
+      "path": "reference-verification.json",
+      "sha256": "13c31337c9b1cdc116feeaa4952d639aa10e5c4576e4d9c71cb2d96121742616"
+    },
+    {
+      "path": "screenshots/01-paid.png",
+      "sha256": "5d75915bbdd7cafe3d3e6e310a25afe2a74af4e5fe8ca09d8cd005804d8afe5c"
+    },
+    {
+      "path": "screenshots/02-merchant-ready.png",
+      "sha256": "e2b36c07ea165290cb3af4f35631dff84c5cec15b820c75d7616912f5e66dd36"
+    },
+    {
+      "path": "screenshots/03-rider-delivered.png",
+      "sha256": "5918be7f1c8b205b9d763779b9ecccd54d193274760db1d084fdc04ed33d0c89"
+    },
+    {
+      "path": "screenshots/04-admin-refund.png",
+      "sha256": "11ee0ccd8266f5ae311cd95d3377d207093830a5f07c12f13326b82eace644cc"
+    },
+    {
+      "path": "source-hashes.json",
+      "sha256": "856facf54672c9c7915abe06e62dcfbfd1c2635cd532034da409d4490a1847f5"
+    }
+  ]
+}

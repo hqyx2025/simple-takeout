@@ -1,5 +1,7 @@
 package com.example.takeout.controller;
 
+import com.example.takeout.common.CrudOperation;
+import com.example.takeout.common.RequireCrud;
 import com.example.takeout.common.ApiResponse;
 import com.example.takeout.common.BizException;
 import com.example.takeout.service.AssistantAiClient;
@@ -41,6 +43,7 @@ public class AdminAssistantController {
         return ApiResponse.ok(configService.save(request));
     }
 
+    @RequireCrud({CrudOperation.READ})
     @PostMapping("/test")
     public ApiResponse<String> test(@RequestAttribute("role") int role) {
         requireAdmin(role);

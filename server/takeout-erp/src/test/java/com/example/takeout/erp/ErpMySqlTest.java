@@ -67,6 +67,10 @@ class ErpMySqlTest {
         var tasks=new ArrayList<Callable<Map<String,Object>>>();for(int i=0;i<24;i++){final var service=i%2==0?first:second;tasks.add(()->service.execute(10,99,"receive",key,c));}
         try(var pool=Executors.newFixedThreadPool(12)){var results=pool.invokeAll(tasks);long id=((Number)results.getFirst().get().get("id")).longValue();for(var result:results)assertEquals(id,((Number)result.get().get("id")).longValue());}
         assertEquals(new BigDecimal("100.000"),balance());assertEquals(1,db.queryForObject("SELECT COUNT(*) FROM erp_receipts",Integer.class));
+        String number=db.queryForObject("SELECT document_no FROM erp_receipts",String.class);
+        assertTrue(number.matches("RK[0-9]{1,19}"));
+        var retry=second.execute(10,99,"receive",key,c);
+        assertEquals(number,db.queryForObject("SELECT document_no FROM erp_receipts WHERE id=?",String.class,retry.get("id")));
         assertThrows(BizException.class,()->first.execute(10,99,"receive",key,cmd(receipt("2"))));
     }
     @Test void competingReceiptsCannotOverReceiveAndPaymentsCannotOverpay()throws Exception {
@@ -163,6 +167,34 @@ class ErpMySqlTest {
         assertEquals(5,first.list(10,"suppliers",((Number)page.getLast().get("id")).longValue(),50,null,null,"分页供应商",true).size());
         assertEquals(1,first.list(10,"suppliers",0,50,null,null,"联系104",true).size());
     }
+    @Test void documentNumbersAreStringsUniqueAndPreservedAcrossLegacyMigration()throws Exception {
+        long receipt=run("receive",receipt("1"));
+        long adjustment=run("adjust","{\"materialId\":"+material+",\"kind\":\"LOSS\",\"quantity\":1,\"reason\":\"破损\"}");
+        long payment=run("pay","{\"id\":"+purchase+",\"amount\":10,\"reference\":\"BANK-ID-MIGRATION\"}");
+        var documents=Map.of("erp_purchases",purchase,"erp_receipts",receipt,
+                "erp_adjustments",adjustment,"erp_payments",payment);
+        var prefixes=Map.of("erp_purchases","CG","erp_receipts","RK","erp_adjustments","TZ","erp_payments","FK");
+        var seen=new HashSet<String>();
+        for(var entry:documents.entrySet()) {
+            String table=entry.getKey(),number=db.queryForObject("SELECT document_no FROM "+table+" WHERE id=?",String.class,entry.getValue());
+            assertTrue(number.matches(prefixes.get(table)+"[0-9]{1,19}"));
+            assertTrue(seen.add(number.substring(2)),"所有单据共享同一个完整雪花序列");
+            db.execute("ALTER TABLE "+table+" DROP INDEX uk_"+table+"_document_no, DROP COLUMN document_no");
+        }
+        new ErpDocumentNumberMigration(db);
+        new ErpDocumentNumberMigration(db);
+        for(var entry:documents.entrySet()) {
+            String table=entry.getKey();
+            assertEquals(prefixes.get(table)+"-L-"+entry.getValue(),
+                    db.queryForObject("SELECT document_no FROM "+table+" WHERE id=?",String.class,entry.getValue()));
+        }
+        assertEquals(new BigDecimal("100.000"),balance());
+        assertEquals(new BigDecimal("10.00"),first.finance(10).get("paid"));
+        new ResourceDatabasePopulator(new ClassPathResource("erp-schema.sql")).execute(pool);
+        long next=run("receive",receipt("1"));
+        assertTrue(db.queryForObject("SELECT document_no FROM erp_receipts WHERE id=?",String.class,next).matches("RK[0-9]{1,19}"));
+    }
+
     @Test void inboxDeduplicatesDurablyAndRejectsContentCollision(){
         first.event(1,"ORDER_PAID",100,"{\"amount\":10}");second.event(1,"ORDER_PAID",100,"{\"amount\":10}");
         assertEquals(1,db.queryForObject("SELECT COUNT(*) FROM erp_event_inbox",Integer.class));

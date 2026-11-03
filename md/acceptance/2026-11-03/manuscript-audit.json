@@ -1,0 +1,64 @@
+{
+  "date": "2026-11-03",
+  "filename": "彭志强_基于鸿蒙的校园外卖服务平台的设计与实现_论文_2026-11-03整改版.docx",
+  "sha256": "85391c4e60106bcce9bfaba28bc6684dd242371d608e2b1dd12e912d5a3aaa41",
+  "originalFilename": "彭志强_基于鸿蒙的校园外卖服务平台的设计与实现_论文_文献修订版.docx",
+  "originalSha256": "7570a9c8ad3241b2ea4fd4f98cd0c203173bb31fbd5dae88acd2f87363021f5f",
+  "originalPreserved": true,
+  "pages": 36,
+  "visualQA": "All final pages inspected at full page resolution; regenerated changed pages re-inspected. WPS COM PDF export plus bundled Poppler rasterization.",
+  "bodyCount": {
+    "method": "Chinese ideographs in body paragraphs only; excludes abstracts, TOC, headings, table/caption text, references, appendices and acknowledgements",
+    "chineseCharacters": 11706,
+    "minimumRequired": 5000,
+    "passed": true
+  },
+  "abstract": {
+    "chineseCharacters": 338,
+    "englishWords": 287
+  },
+  "citations": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13
+  ],
+  "bibliographyNumbers": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13
+  ],
+  "superscriptCitations": true,
+  "comments": 0,
+  "highlights": 0,
+  "trackedInsertionsOrDeletions": 0,
+  "contentsAndPageFieldsUpdated": true,
+  "signatures": "School/student/teacher signatures, month and dates kept blank for actual signing",
+  "references": {
+    "liveJournalMetadata": 9,
+    "booksCheckedAgainstPreservedPublisherMetadata": 4
+  },
+  "limits": [
+    "School plagiarism system, final human review and signing not performed",
+    "9 journal DOI metadata responses retrieved live; reference 6 succeeded on retry. 4 book metadata records checked against preserved publisher review. No all-live claim."
+  ]
+}

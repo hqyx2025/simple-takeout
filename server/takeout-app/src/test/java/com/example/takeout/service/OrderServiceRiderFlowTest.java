@@ -87,6 +87,7 @@ class OrderServiceRiderFlowTest {
     }
 
     private void stubStore() {
+        when(storeDao.findForDispatch(STORE_ID)).thenAnswer(invocation -> storeDao.findById(STORE_ID));
         when(storeDao.hasMerchantAccess(OWNER_ID, STORE_ID)).thenReturn(true);
         // 门店与骑手相距约 60 米，落在默认 25 公里骑手半径内
         when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(
@@ -102,6 +103,7 @@ class OrderServiceRiderFlowTest {
     }
 
     private void stubFarStore() {
+        when(storeDao.findForDispatch(FAR_STORE_ID)).thenAnswer(invocation -> storeDao.findById(FAR_STORE_ID));
         // 纬度 +0.9 度 ≈ 100 公里，远超骑手半径
         when(storeDao.findById(FAR_STORE_ID)).thenReturn(Optional.of(
                 new Store(FAR_STORE_ID, "远店", "", 4.5, 0, 5, 10, "30分钟", "1km", "[]", "",
@@ -129,6 +131,17 @@ class OrderServiceRiderFlowTest {
         assertEquals("", pool.get(0).remark());
         assertEquals(0, pool.get(0).userId());
         assertTrue(!pool.get(0).address().detail().contains("测试地址"));
+    }
+
+    @Test
+    void poolChecksEachStoreRangeOncePerRequest() {
+        stubActiveRider();
+        stubStore();
+        when(orderDao.listRiderPool()).thenReturn(List.of(storedOrder(2), storedOrder(2), storedOrder(2)));
+        assertEquals(3, service.riderPool(RIDER_ID).size());
+        org.mockito.Mockito.verify(storeDao, org.mockito.Mockito.times(1)).findForDispatch(STORE_ID);
+        service.riderPool(RIDER_ID);
+        org.mockito.Mockito.verify(storeDao, org.mockito.Mockito.times(2)).findForDispatch(STORE_ID);
     }
 
     /** 抢单前的响应只提供接单决策所需信息，序列化输出也不能夹带顾客或商品隐私。 */

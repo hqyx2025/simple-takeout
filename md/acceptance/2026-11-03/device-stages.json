@@ -1,0 +1,10 @@
+{
+  "syntheticData": true,
+  "stages": [
+    "[CampusAcceptance] PASS UI confirm and review",
+    "[CampusAcceptance] PASS UI settled partial refund through administrator",
+    "[CampusAcceptance] created order=7",
+    "[CampusAcceptance] PASS UI unpaid cancellation and single order identity",
+    "[CampusAcceptance] PASS merchant net settlement after partial refund"
+  ]
+}

@@ -83,6 +83,10 @@ class ExternalPaymentServiceTest {
         when(gateway.createAppPayment(anyString(), anyString(), any(), any())).thenReturn("sandbox-app-order");
         var launch = service.startPayment("ALIPAY", pendingOrder(), "APP");
         assertEquals("APP", launch.paymentMode());
+        assertTrue(launch.outTradeNo().matches("A[0-9]{1,19}"));
+        long id = Long.parseLong(launch.outTradeNo().substring(1));
+        assertTrue(Math.abs(System.currentTimeMillis() - ((id >>> 22) + 1_767_225_600_000L)) < 1000);
+        assertTrue(launch.outTradeNo().length() <= 32);
         assertEquals("sandbox-app-order", launch.appOrderInfo());
         assertTrue(launch.paymentSandbox());
         verify(gateway).createAppPayment(anyString(), anyString(), any(), any());

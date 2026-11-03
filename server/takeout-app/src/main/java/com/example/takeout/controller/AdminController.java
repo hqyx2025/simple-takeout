@@ -1,7 +1,10 @@
 package com.example.takeout.controller;
 
+import com.example.takeout.common.CrudOperation;
+import com.example.takeout.common.RequireCrud;
 import com.example.takeout.common.ApiResponse;
 import com.example.takeout.common.BizException;
+import com.example.takeout.common.CrudPermissions;
 import com.example.takeout.model.Category;
 import com.example.takeout.model.AdminEmployee;
 import com.example.takeout.model.AdminStatistics;
@@ -11,6 +14,7 @@ import com.example.takeout.model.Order;
 import com.example.takeout.model.RefundRecord;
 import com.example.takeout.model.Seckill;
 import com.example.takeout.model.Store;
+import com.example.takeout.model.StoreReview;
 import com.example.takeout.service.AdminService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -78,6 +82,23 @@ public class AdminController {
         adminService.updateStoreStatus(id, req.status());
         return ApiResponse.ok();
     }
+
+    @PutMapping("/stores/{id}/review")
+    public ApiResponse<Void> reviewStore(@RequestAttribute("role") int role,
+                                          @RequestAttribute("userId") long adminId,
+                                          @PathVariable long id, @RequestBody StoreReviewRequest req) {
+        requireAdmin(role);
+        adminService.reviewStore(adminId, id, req.status(), req.reason());
+        return ApiResponse.ok();
+    }
+
+    @GetMapping("/stores/{id}/reviews")
+    public ApiResponse<List<StoreReview>> storeReviews(@RequestAttribute("role") int role, @PathVariable long id) {
+        requireAdmin(role);
+        return ApiResponse.ok(adminService.storeReviews(id));
+    }
+
+    public record StoreReviewRequest(int status, String reason) { }
 
     @PutMapping("/stores/{id}/recommend")
     public ApiResponse<Void> updateStoreRecommended(@RequestAttribute("role") int role,
@@ -202,6 +223,19 @@ public class AdminController {
         return ApiResponse.ok();
     }
 
+    @GetMapping("/users/{id}/permissions")
+    public ApiResponse<CrudPermissions> userPermissions(@RequestAttribute("role") int role, @PathVariable long id) {
+        requireAdmin(role);
+        return ApiResponse.ok(adminService.userPermissions(id));
+    }
+
+    @PutMapping("/users/{id}/permissions")
+    public ApiResponse<CrudPermissions> updateUserPermissions(@RequestAttribute("role") int role, @PathVariable long id,
+                                                             @RequestBody CrudPermissions permissions) {
+        requireAdmin(role);
+        return ApiResponse.ok(adminService.updateUserPermissions(id, permissions));
+    }
+
     @GetMapping("/products")
     public ApiResponse<AdminService.ProductPage> products(@RequestAttribute("role") int role,
                                                           @RequestParam(required = false) String keyword,
@@ -297,12 +331,14 @@ public class AdminController {
         return ApiResponse.ok(adminService.refundDetail(id));
     }
 
+    @RequireCrud({CrudOperation.UPDATE})
     @PostMapping("/refunds/{id}/approve")
     public ApiResponse<RefundRecord> approveRefund(@RequestAttribute("role") int role, @PathVariable long id) {
         requireAdmin(role);
         return ApiResponse.ok(adminService.approveRefund(id));
     }
 
+    @RequireCrud({CrudOperation.UPDATE})
     @PostMapping("/refunds/{id}/reject")
     public ApiResponse<RefundRecord> rejectRefund(@RequestAttribute("role") int role, @PathVariable long id,
                                                   @RequestBody RefundRejectRequest req) {

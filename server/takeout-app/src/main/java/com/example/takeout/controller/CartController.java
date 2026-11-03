@@ -1,6 +1,7 @@
 package com.example.takeout.controller;
 
 import com.example.takeout.common.ApiResponse;
+import com.example.takeout.common.RequireCrud;
 import com.example.takeout.model.CartItemView;
 import com.example.takeout.service.CartService;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -32,12 +33,14 @@ public class CartController {
     }
 
     @PostMapping("/items")
+    @RequireCrud({})
     public ApiResponse<List<CartItemView>> add(@RequestAttribute("userId") long userId,
                                                @RequestBody CartItemRequest req) {
         return ApiResponse.ok(service.add(userId, req.goodsId(), req.specId(), req.quantity()));
     }
 
     @PutMapping("/items/{goodsId}")
+    @RequireCrud({})
     public ApiResponse<List<CartItemView>> setQuantity(@RequestAttribute("userId") long userId,
                                                        @PathVariable long goodsId,
                                                        @RequestParam(defaultValue = "0") long specId,

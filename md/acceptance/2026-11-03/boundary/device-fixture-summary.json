@@ -1,0 +1,19 @@
+{
+  "database": "isolated local device database",
+  "refundOrdersCreatedThroughHttp": [
+    8,
+    9
+  ],
+  "refundFixtures": {
+    "unsettledRefundId": 4,
+    "unsettledOrderId": 8,
+    "settledRefundId": 5,
+    "settledOrderId": 9
+  },
+  "syntheticMerchantLabelOrders": [
+    300001,
+    300002,
+    300003
+  ],
+  "accountCount": 5
+}

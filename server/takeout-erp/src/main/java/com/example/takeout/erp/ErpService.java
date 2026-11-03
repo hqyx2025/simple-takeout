@@ -1,6 +1,7 @@
 package com.example.takeout.erp;
 
 import com.example.takeout.common.BizException;
+import com.example.takeout.common.BusinessIdGenerator;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -73,7 +74,8 @@ public class ErpService {
                 var supplier=owned("erp_suppliers",s,c.supplierId());
                 check(Boolean.TRUE.equals(supplier.get("enabled")),"供应商已停用");
                 check(c.lines()!=null && !c.lines().isEmpty() && c.lines().size()<=50,"采购明细须为1至50项");
-                db.update("INSERT INTO erp_purchases(store_id,supplier_id,operator_id) VALUES(?,?,?)",s,c.supplierId(),actor);
+                db.update("INSERT INTO erp_purchases(store_id,supplier_id,operator_id,document_no) VALUES(?,?,?,?)",
+                        s,c.supplierId(),actor,"CG"+BusinessIdGenerator.nextId());
                 long p=lastId(); var seen=new HashSet<Long>(); BigDecimal total=BigDecimal.ZERO;
                 for (Line line:c.lines()) {
                     check(line!=null && line.materialId()!=null && seen.add(line.materialId()),"物料重复或无效");
@@ -106,8 +108,8 @@ public class ErpService {
                 var m=owned("erp_materials",s,c.materialId()); BigDecimal book=decimal(m,"balance"),actual;
                 if(c.kind().equals("LOSS")) actual=book.subtract(positive(c.quantity(),3)); else actual=quantity(c.quantity());
                 check(actual.signum()>=0 && book.compareTo(actual)!=0,"调整数量无效或无差异");
-                db.update("INSERT INTO erp_adjustments(store_id,material_id,kind,book_qty,actual_qty,reason,operator_id) VALUES(?,?,?,?,?,?,?)",
-                        s,c.materialId(),c.kind(),book,actual,text(c.reason(),255),actor); return lastId();
+                db.update("INSERT INTO erp_adjustments(store_id,material_id,kind,book_qty,actual_qty,reason,operator_id,document_no) VALUES(?,?,?,?,?,?,?,?)",
+                        s,c.materialId(),c.kind(),book,actual,text(c.reason(),255),actor,"TZ"+BusinessIdGenerator.nextId()); return lastId();
             }
             case "review" -> {
                 var a=owned("erp_adjustments",s,c.id());check(a.get("status").equals("SUBMITTED"),"调整单已审核");
@@ -130,8 +132,8 @@ public class ErpService {
                 var p=owned("erp_purchases",s,c.id()); BigDecimal amount=positive(c.amount(),2);
                 check(decimal(p,"paid").add(amount).compareTo(decimal(p,"payable"))<=0,"付款不能超过已收货应付余额");
                 claimReference(s,text(c.reference(),100));
-                db.update("INSERT INTO erp_payments(store_id,purchase_id,amount,reference,operator_id) VALUES(?,?,?,?,?)",
-                        s,c.id(),amount,text(c.reference(),100),actor);
+                db.update("INSERT INTO erp_payments(store_id,purchase_id,amount,reference,operator_id,document_no) VALUES(?,?,?,?,?,?)",
+                        s,c.id(),amount,text(c.reference(),100),actor,"FK"+BusinessIdGenerator.nextId());
                 long id=lastId();db.update("UPDATE erp_purchases SET paid=paid+? WHERE id=?",amount,c.id());return id;
             }
             case "payment-correct", "reverse-payment", "supplier-refund" -> { return paymentEvent(s,actor,action,c); }
@@ -169,7 +171,8 @@ public class ErpService {
     private long receive(long s,long actor,Command c) {
         var p=owned("erp_purchases",s,c.id());check(p.get("status").equals("CONFIRMED"),"仅已确认采购单可收货");
         check(c.lines()!=null && !c.lines().isEmpty() && c.lines().size()<=50,"收货明细须为1至50项");
-        db.update("INSERT INTO erp_receipts(store_id,purchase_id,operator_id) VALUES(?,?,?)",s,c.id(),actor);long receipt=lastId();
+        db.update("INSERT INTO erp_receipts(store_id,purchase_id,operator_id,document_no) VALUES(?,?,?,?)",
+                s,c.id(),actor,"RK"+BusinessIdGenerator.nextId());long receipt=lastId();
         BigDecimal payable=decimal(p,"payable"); var seen=new HashSet<Long>();
         var lines=new ArrayList<>(c.lines());check(lines.stream().allMatch(l->l!=null && l.materialId()!=null),"收货物料无效");
         lines.sort(Comparator.comparing(Line::materialId));

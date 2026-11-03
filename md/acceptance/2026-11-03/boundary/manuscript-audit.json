@@ -1,0 +1,109 @@
+{
+  "date": "2026-11-03",
+  "filename": "彭志强_基于鸿蒙的校园外卖服务平台的设计与实现_论文_2026-11-03整改版.docx",
+  "sha256": "492e5e99518ad6f4cd2e7adce3ce4f04d345a3d4d0834d68b992ff5aab535a86",
+  "originalFilename": "彭志强_基于鸿蒙的校园外卖服务平台的设计与实现_论文_文献修订版.docx",
+  "originalSha256": "7570a9c8ad3241b2ea4fd4f98cd0c203173bb31fbd5dae88acd2f87363021f5f",
+  "originalPreserved": true,
+  "pages": 36,
+  "visualQA": "Latest 36-page render verified. Changed pages opened at full resolution; other page images match the previously fully inspected render byte-for-byte.",
+  "bodyCount": {
+    "method": "Chinese ideographs in body paragraphs only; excludes abstracts, TOC, headings, table/caption text, references, appendices and acknowledgements",
+    "chineseCharacters": 11866,
+    "minimumRequired": 5000,
+    "passed": true
+  },
+  "abstract": {
+    "chineseCharacters": 338,
+    "englishWords": 287
+  },
+  "citations": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13
+  ],
+  "bibliographyNumbers": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13
+  ],
+  "superscriptCitations": true,
+  "comments": 0,
+  "highlights": 0,
+  "trackedInsertionsOrDeletions": 0,
+  "contentsAndPageFieldsUpdated": true,
+  "signatures": "School/student/teacher signatures, month and dates kept blank for actual signing",
+  "references": {
+    "liveJournalMetadata": 9,
+    "booksCheckedAgainstPreservedPublisherMetadata": 4
+  },
+  "limits": [
+    "School plagiarism system, final human review and signing not performed",
+    "9 journal DOI metadata responses retrieved live; reference 6 succeeded on retry. 4 book metadata records checked against preserved publisher review. No all-live claim."
+  ],
+  "figuresUpdated": [
+    "4-1 independent ERP/database/internal authorization",
+    "4-2 settled partial refunds and rejected refund restoration"
+  ],
+  "backendTestCount": 736,
+  "unchangedInspectedPages": [
+    1,
+    2,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    16,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    31,
+    34,
+    36
+  ],
+  "visuallyRecheckedPages": [
+    3,
+    4,
+    15,
+    17,
+    28,
+    29,
+    30,
+    32,
+    33,
+    35
+  ]
+}

@@ -1,5 +1,7 @@
 package com.example.takeout.controller;
 
+import com.example.takeout.common.CrudOperation;
+import com.example.takeout.common.RequireCrud;
 import com.example.takeout.common.*;
 import com.zaxxer.hikari.HikariDataSource;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,6 +40,7 @@ public class GovernanceController {
         admin(role);return ApiResponse.ok(Map.of("summary",db.queryForMap("SELECT COUNT(*) pending,COALESCE(MAX(retry_count),0) maxRetries,MIN(create_time) oldest FROM outbox_events WHERE status=0"),
                 "events",db.queryForList("SELECT id,event_type,order_id,retry_count,lease_until,create_time FROM outbox_events WHERE status=0 ORDER BY retry_count DESC,id LIMIT 100")));
     }
+    @RequireCrud({CrudOperation.UPDATE})
     @PostMapping("/api/admin/outbox/{id}/retry")
     @org.springframework.transaction.annotation.Transactional
     public ApiResponse<?> retry(@RequestAttribute("role") int role,@RequestAttribute("userId") long user,@PathVariable long id){

@@ -1,0 +1,76 @@
+{
+  "environment": "API 26 DevEco emulator; isolated bundle and local backend, separate from production data",
+  "physicalDevice": false,
+  "tests": [
+    {
+      "name": "CampusAcceptance",
+      "source": "entry/src/ohosTest/ets/test/CampusAcceptance.test.ets",
+      "scope": [
+        "UI create pending order",
+        "invalid payment PIN rejected; balance unchanged",
+        "balance payment; exact debit",
+        "merchant accept and ready",
+        "rider grab/pickup/deliver; income/count checked",
+        "customer confirm and review",
+        "settled partial refund approved through admin UI; user balance and merchant net settlement checked",
+        "second UI order cancelled; terminal and unique order checked"
+      ],
+      "run": 1,
+      "passed": 1,
+      "failures": 0,
+      "errors": 0,
+      "executedAt": "2026-11-03T21:31:36+08:00",
+      "rawLogSha256": "e7a1543ef6e77c7a9919029c017d3246e4be22aaf766b86faae65e630bce719c"
+    },
+    {
+      "name": "LoginFlow",
+      "source": "entry/src/ohosTest/ets/test/LoginFlow.test.ets",
+      "scope": [
+        "privacy consent",
+        "password/email login tabs and validation",
+        "register and return",
+        "four role quick-login controls"
+      ],
+      "run": 1,
+      "passed": 1,
+      "failures": 0,
+      "errors": 0,
+      "executedAt": "2026-11-03T21:25:49+08:00",
+      "rawLogSha256": "3f4b448cb80fbce45d6857ab6edd9e4cffaf5bbde384cab268d68ae2f2200369"
+    },
+    {
+      "name": "AdminFlow",
+      "source": "entry/src/ohosTest/ets/test/AdminFlow.test.ets",
+      "scope": [
+        "administrator enters management directly",
+        "12 management entries visible",
+        "8 management pages opened with title assertions"
+      ],
+      "run": 1,
+      "passed": 1,
+      "failures": 0,
+      "errors": 0,
+      "executedAt": "2026-11-03T21:28:59+08:00",
+      "rawLogSha256": "f77b4f207132b9e2eff39d121ef0474a4abf161c410d2f007e4ed9bca5e41a3a"
+    },
+    {
+      "name": "StoreReviewFlow",
+      "source": "entry/src/ohosTest/ets/test/StoreReviewFlow.test.ets",
+      "scope": [
+        "admin rejection with reason",
+        "merchant resubmit",
+        "admin approval",
+        "platform suspension",
+        "light/dark screenshots"
+      ],
+      "run": 1,
+      "passed": 1,
+      "failures": 0,
+      "errors": 0,
+      "executedAt": "2026-11-03T19:14:19+08:00",
+      "rawLogSha256": "30ede4d821f0cf832c98498e7dc63b6471b11ba354f9a622d663ea2974c1fed1"
+    }
+  ],
+  "authentication": "CampusAcceptance uses real loginRemote between roles; subsequent business mutations use production UI handlers. Test navigation clears old stacks. Location permission pre-granted.",
+  "limits": "Not a full-page accessibility audit or physical-device/campus-network acceptance. Test-only local API and synthetic-account configuration is excluded from the archive."
+}

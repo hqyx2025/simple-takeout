@@ -405,19 +405,20 @@ public class HotDataCacheService implements org.springframework.beans.factory.In
             return "store:" + storeId + ":categories";
         }
 
-        public static final String ALL_STORES = "stores:source:all";
-        public static final String RECOMMENDED_STORES = "stores:source:recommended";
-        public static final String SPECIAL_GOODS = "goods:source:special";
-        public static final String RANK_GOODS = "goods:source:rank";
-        public static final String SECKILLS = "seckills:source:active";
+        // 准入字段加入缓存载荷，旧目录不能当作已经按审核/管控过滤的数据复用。
+        public static final String ALL_STORES = "stores:source:all:admission-v1";
+        public static final String RECOMMENDED_STORES = "stores:source:recommended:admission-v1";
+        public static final String SPECIAL_GOODS = "goods:source:special:admission-v1";
+        public static final String RANK_GOODS = "goods:source:rank:admission-v1";
+        public static final String SECKILLS = "seckills:source:active:admission-v1";
 
         /** 缓存不含用户坐标的原始目录；距离、半径和数量在读取后计算。 */
         public static String storeList(Integer categoryId) {
-            return categoryId == null || categoryId == 0 ? ALL_STORES : "stores:source:category:" + categoryId;
+            return categoryId == null || categoryId == 0 ? ALL_STORES : "stores:source:category:" + categoryId + ":admission-v1";
         }
 
         public static String storeSource(long storeId) {
-            return "store:" + storeId + ":source";
+            return "store:" + storeId + ":source:admission-v1";
         }
 
         /** 所有与店铺/商品展示相关的缓存（店铺或商品变更时整体失效）。 */

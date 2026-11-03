@@ -53,7 +53,7 @@ public class SeckillDao {
                         "FROM seckills s " +
                         "JOIN goods g ON g.id = s.goods_id " +
                         "JOIN stores st ON st.id = s.store_id " +
-                        "WHERE s.status = 1 AND g.status = 1 AND st.status = 1 " +
+                        "WHERE s.status = 1 AND g.status = 1 AND st.status = 1 AND st.review_status = 1 AND st.platform_status = 1 " +
                         "AND s.sold < s.quota " + IN_WINDOW +
                         "AND NOT EXISTS (SELECT 1 FROM goods_specs sp WHERE sp.goods_id = g.id AND sp.status = 1) " +
                         "ORDER BY " + JdbcDateTimes.value("s.end_time") + ", s.id LIMIT ?",

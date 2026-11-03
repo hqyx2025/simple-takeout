@@ -1,0 +1,8 @@
+{
+  "tests": 217,
+  "passed": 217,
+  "failures": 0,
+  "skipped": 0,
+  "command": "node --test scripts/*.test.cjs",
+  "rawLogSha256": "e6f10e1f51c5f054c40f651ba21db0690c06a1b3a0f78cc686ea17c7ede1776a"
+}

@@ -110,6 +110,10 @@ export function toStoreItem(s: ServerStore): StoreItem {
     categoryId: s.categoryId,
     categoryIds: s.categoryIds || [],
     ownerId: s.ownerId,
+    status: s.status,
+    reviewStatus: s.reviewStatus ?? 0,
+    platformStatus: s.platformStatus ?? 0,
+    reviewReason: s.reviewReason ?? '',
     recommended: s.recommended || 0,
     deliveryRadius: s.deliveryRadius ?? 0,
     deliverable: s.deliverable === true

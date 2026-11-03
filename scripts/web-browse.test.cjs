@@ -118,11 +118,41 @@ function browser(sidebarCollapsed='0',options={}){
     }
   });
   const source=fs.readFileSync('server/takeout-gateway/src/main/resources/static/app.js','utf8');
-  vm.runInContext(source.replace('  boot();','  globalThis.browseTest = {state,renderBrowse,renderCheckout,renderPage,renderShell,orderCard,handleAction,couponEligible,couponUnavailableReason,checkoutAmounts,checkoutDraft,merchantRejectPayload,addressForm,addressPayload,addressText,resetAccountState,loginWith,openAuth,closeAuth,applyAuthRoute,boot,logout};'),context);
+  vm.runInContext(source.replace('  boot();','  globalThis.browseTest = {state,renderBrowse,renderCheckout,renderPage,renderShell,orderCard,handleAction,bindForms,couponEligible,couponUnavailableReason,checkoutAmounts,checkoutDraft,merchantRejectPayload,addressForm,addressPayload,addressText,resetAccountState,loginWith,openAuth,closeAuth,applyAuthRoute,boot,logout};'),context);
   Object.assign(context.browseTest.state,{user:{role:0},token:'test',location:{latitude:22.74967,longitude:108.452009},page:'discover'});
   return {...context.browseTest,element,requests,calls,dialogs,observers,confirmMessages,promptMessages,stores,coupons,storage,session,media,location,history,context};
 }
 const cardCount=html=>(html.match(/class="store-card"/g)||[]).length;
+
+test('store admission and platform control are distinct from merchant business status',async()=>{
+  const store={id:31,name:'待审门店',address:'校园食堂',reviewStatus:0,platformStatus:1,status:0};
+  const b=browser('0',{onRequest(path){if(path==='/api/admin/stores')return {ok:true,status:200,json:async()=>({code:200,data:[store]})};}});
+  Object.assign(b.state,{user:{id:2,role:2},role:2,page:'stores'});
+  await b.renderPage();
+  assert.match(b.element('app').innerHTML,/待审核/);
+  assert.match(b.element('app').innerHTML,/商户休息中/);
+  assert.match(b.element('app').innerHTML,/name="reason" required maxlength="512"/);
+  assert.match(b.element('app').innerHTML,/admin-store-status[^>]*31:0/);
+  await b.handleAction('admin-store-approve',31);
+  const approval=b.calls.find(call=>call.path==='/api/admin/stores/31/review');
+  assert.equal(approval.init.method,'PUT');
+  assert.deepEqual(JSON.parse(approval.init.body),{status:1,reason:''});
+});
+
+test('merchant sees rejection reason, resubmits, and cannot restore a platform-disabled shop',async()=>{
+  const store={id:31,name:'测试门店',reviewStatus:2,reviewReason:'请补充门牌 <script>',platformStatus:1,status:1};
+  const b=browser('0',{merchantStores:[store]});
+  Object.assign(b.state,{user:{id:8,role:1},role:1,page:'catalog'});
+  await b.renderPage();
+  assert.match(b.element('app').innerHTML,/审核驳回/);
+  assert.match(b.element('app').innerHTML,/请补充门牌 &lt;script&gt;/);
+  await b.handleAction('merchant-store-resubmit',31);
+  assert.equal(b.calls.find(call=>call.path==='/api/merchant/stores/31/review').init.method,'POST');
+  store.reviewStatus=1;store.platformStatus=0;
+  await b.renderPage();
+  assert.match(b.element('app').innerHTML,/平台已停用/);
+  assert.doesNotMatch(b.element('app').innerHTML,/data-action="merchant-store-business"/);
+});
 
 test('guests browse all stores and details without login or location but cart stays protected',async()=>{
   const b=browser('0',{stores:[{id:1,name:'远方店铺',distance:'2000km',deliverable:false,tags:[]}]});
@@ -507,7 +537,7 @@ test('customer sees merchant rejection source and server reason without relabeli
 test('assistant identifies itself accurately and defers售后结果 to order state',async()=>{
   const b=browser();Object.assign(b.state,{page:'assistant',assistantHistory:[{role:'assistant',content:'请查看订单'}]});
   await b.renderPage();
-  assert.match(b.element('app').innerHTML,/智能助手/);
+  assert.match(b.element('chatHistory').innerHTML,/智能助手/);
   assert.match(b.element('app').innerHTML,/自动回答，退款与售后结果以订单状态为准/);
   assert.doesNotMatch(b.element('app').innerHTML,/<strong>客服<\/strong>/);
 });

@@ -7,6 +7,22 @@ const ok=data=>({ok:true,status:200,json:async()=>({code:200,data})});
 const unauthorized=()=>({ok:false,status:401,json:async()=>({code:401,message:'登录已过期'})});
 const user={id:2,role:0,username:'测试用户'};
 
+test('cart renders the server product photo and keeps SKU controls and totals',async()=>{
+  const b=browser('0',{cart:[
+    {storeId:1,storeName:'测试店铺',goodsId:11,specId:7,specName:'大份',quantity:3,price:8.83,goods:{name:'鸡肉饭',image:'/uploads/chicken.jpg?size=small&v=2'}},
+    {storeId:1,storeName:'测试店铺',goodsId:12,specId:0,quantity:1,price:10,goods:{name:'无图商品'}}
+  ]});
+  b.state.page='cart';await b.renderPage();
+  const html=b.element('app').innerHTML;
+  assert.match(html,/<img[^>]*src="\/uploads\/chicken\.jpg\?size=small&amp;v=2"[^>]*alt="鸡肉饭"/);
+  assert.match(html,/暂无图片/);
+  assert.match(html,/大份/);
+  assert.match(html,/data-action="cart-inc" data-id="11" data-spec="7"/);
+  assert.match(html,/data-action="cart-dec" data-id="11" data-spec="7"/);
+  assert.match(html,/全部商品合计 ¥36\.49/);
+  assert.equal(b.calls.some(call=>/\/api\/goods/.test(call.path)),false,'cart photos come from the existing server cart response');
+});
+
 test('reload restores the verified session and server cart quantity; logout clears both',async()=>{
   const first=browser();
   await first.loginWith({phone:'13800138000',password:'password',loginType:'CUSTOMER'});

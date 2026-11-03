@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS erp_materials (
  UNIQUE KEY uk_material_name(store_id,name), KEY idx_material_store(store_id,id), CHECK(balance >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 CREATE TABLE IF NOT EXISTS erp_purchases (
+ document_no VARCHAR(32) NOT NULL, UNIQUE KEY uk_erp_purchases_document_no(document_no),
  id BIGINT AUTO_INCREMENT PRIMARY KEY, store_id BIGINT NOT NULL, supplier_id BIGINT NOT NULL,
  status VARCHAR(16) NOT NULL DEFAULT 'DRAFT', ordered_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
  payable DECIMAL(18,2) NOT NULL DEFAULT 0, paid DECIMAL(18,2) NOT NULL DEFAULT 0,
@@ -24,6 +25,7 @@ CREATE TABLE IF NOT EXISTS erp_purchase_lines (
  CHECK(quantity > 0 AND received >= 0 AND received <= quantity AND factor > 0 AND unit_price > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 CREATE TABLE IF NOT EXISTS erp_receipts (
+ document_no VARCHAR(32) NOT NULL, UNIQUE KEY uk_erp_receipts_document_no(document_no),
  id BIGINT AUTO_INCREMENT PRIMARY KEY, store_id BIGINT NOT NULL, purchase_id BIGINT NOT NULL,
  operator_id BIGINT NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, KEY idx_receipt_store(store_id,id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -36,6 +38,7 @@ CREATE TABLE IF NOT EXISTS erp_ledger (
  UNIQUE KEY uk_ledger_reversal(reversal_of), KEY idx_ledger_store(store_id,id), CHECK(after_qty >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 CREATE TABLE IF NOT EXISTS erp_adjustments (
+ document_no VARCHAR(32) NOT NULL, UNIQUE KEY uk_erp_adjustments_document_no(document_no),
  id BIGINT AUTO_INCREMENT PRIMARY KEY, store_id BIGINT NOT NULL, material_id BIGINT NOT NULL,
  kind VARCHAR(16) NOT NULL, book_qty DECIMAL(18,3) NOT NULL, actual_qty DECIMAL(18,3) NOT NULL,
  reason VARCHAR(255) NOT NULL, status VARCHAR(16) NOT NULL DEFAULT 'SUBMITTED',
@@ -43,6 +46,7 @@ CREATE TABLE IF NOT EXISTS erp_adjustments (
  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, KEY idx_adjust_store(store_id,id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 CREATE TABLE IF NOT EXISTS erp_payments (
+ document_no VARCHAR(32) NOT NULL, UNIQUE KEY uk_erp_payments_document_no(document_no),
  id BIGINT AUTO_INCREMENT PRIMARY KEY, store_id BIGINT NOT NULL, purchase_id BIGINT NOT NULL,
  amount DECIMAL(18,2) NOT NULL, reference VARCHAR(100) NOT NULL, operator_id BIGINT NOT NULL,
  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uk_payment_reference(store_id,reference),

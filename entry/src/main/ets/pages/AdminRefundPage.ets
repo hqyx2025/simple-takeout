@@ -1,12 +1,12 @@
 import { AppButtonStyle, AppCardStyle, AppTextAreaStyle } from '../common/theme/AppTheme'
 /**
  * 管理端-退款审批页（大纲 9.7 退款处理）
- * 已送达订单退款审批：原渠道退款或拒绝并恢复已送达，不恢复餐品库存。
+ * 原渠道退款，不恢复已送达餐品库存；拒绝后的履约与结算状态由服务端决定。
  */
 import { AppMotion } from '../common/theme/AppMotion'
 import { User, UserRole, RefundRecord, RefundPageData } from '../model/Models'
 import { fetchAdminRefundsPageApi, approveRefundApi, rejectRefundApi } from '../service/ApiService'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, getOrderStatusText } from '../common/Constants'
 import { StatusBadge } from '../components/StatusBadge'
 import { PageHeader } from '../components/PageHeader'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
@@ -194,15 +194,17 @@ export struct AdminRefundPage {
     const epoch: number = getAuthSessionEpoch()
     this.submitting = true
     this.actionError = ''
-    const ok: boolean = await rejectRefundApi(this.rejectingRefundId, this.rejectReason.trim())
-    const latest: RefundRecord | null = !ok && this.canApplyResponse(epoch)
-      ? await fetchAdminRefundDetailApi(this.rejectingRefundId) : null
+    const result: RefundRecord | null = await rejectRefundApi(this.rejectingRefundId, this.rejectReason.trim())
+    const latest: RefundRecord | null = result ?? (this.canApplyResponse(epoch)
+      ? await fetchAdminRefundDetailApi(this.rejectingRefundId) : null)
     this.submitting = false
     if (!this.canApplyResponse(epoch)) { return }
-    if (ok || latest?.status === 'REJECTED') {
+    if (latest?.status === 'REJECTED') {
       this.showRejectDialog = false
       this.rejectReason = ''
-      promptAction.showToast({ message: '已拒绝退款申请，订单恢复为已送达', duration: 1800 })
+      const restoredEscrow: number | undefined = latest.originalEscrow ?? latest.settledBefore
+      promptAction.showToast({ message: restoredEscrow === undefined ? '已拒绝退款申请，请刷新查看订单状态'
+        : `已拒绝退款申请，订单状态：${getOrderStatusText(4, restoredEscrow)}`, duration: 2200 })
       await this.refresh()
     } else if (latest?.status === 'REFUNDED') {
       this.showRejectDialog = false
@@ -288,8 +290,9 @@ export struct AdminRefundPage {
         // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
         List({ space: SPACING.MD }) {
           ListItem() {
-            Text('同意后按原支付渠道退款；已送达餐品不恢复库存。拒绝理由会展示给用户，订单恢复为已送达。')
+            Text('同意后按原支付渠道退款，已送达餐品不恢复库存。拒绝理由会展示给用户，已结算订单保留结算状态。')
               .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%')
+              .id('admin-refund-policy')
           }
 
           if (this.loadFailed) {
@@ -406,8 +409,9 @@ export struct AdminRefundPage {
               .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
             Scroll() {
               Column({ space: SPACING.MD }) {
-                Text('拒绝理由将展示给用户（必填）。请说明核实结果与处理依据，拒绝后订单恢复为已送达。')
+                Text('拒绝理由将展示给用户（必填）。请说明核实结果与处理依据；已结算订单保留结算状态，未结算订单恢复为待确认收货。')
                   .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).width('100%')
+                  .id('admin-refund-reject-policy')
                 TextArea({ placeholder: '例：已核实配送记录，请补充未收到餐的具体情况后重新申请', text: this.rejectReason })
                   .attributeModifier(new AppTextAreaStyle())
                   .width('100%').height(100)

@@ -94,6 +94,10 @@ export interface StoreItem {
   categoryId: number
   categoryIds?: number[]
   ownerId: number  // 商户用户ID
+  status?: number
+  reviewStatus?: number // 0 待审核 / 1 通过 / 2 驳回
+  platformStatus?: number // 0 平台停用 / 1 正常
+  reviewReason?: string
   recommended?: number // 平台是否推荐到发现页：0否 1是
   deliveryRadius?: number // 配送半径（米，0=不限）
   deliverable?: boolean // 当前定位下是否在配送范围内（服务端判定）

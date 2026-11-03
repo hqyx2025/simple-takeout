@@ -9,7 +9,7 @@
   const STATUS = ['待付款', '待接单', '制作中', '配送中', '已送达', '已取消', '退款中'];
   const MARKETING_LABELS = { DISCOUNT: '折扣', NEW_USER: '新客立减', GIFT: '满赠' };
   const NAV = {
-    0: [['首页', 'home', '⌂'], ['搜索与榜单', 'discover', '⌕'], ['购物车', 'cart', '▣'], ['我的订单', 'orders', '▤'], ['收藏与优惠券', 'perks', '♡'], ['地址与钱包', 'account', '◎'], ['个人设置', 'settings', '⚙'], ['智能客服', 'assistant', '?']],
+    0: [['首页', 'home', '⌂'], ['搜索与榜单', 'discover', '⌕'], ['购物车', 'cart', '▣'], ['我的订单', 'orders', '▤'], ['收藏与优惠券', 'perks', '♡'], ['地址与钱包', 'account', '◎'], ['个人设置', 'settings', '⚙'], ['智能客服', 'assistant', 'headset']],
     1: [['经营概况', 'overview', '▦'], ['订单处理', 'merchant-orders', '▤'], ['门店与商品', 'catalog', '▣'], ['采购与库存', 'erp', '▤'], ['评价回复', 'reviews', '☆'], ['营销活动', 'marketing', '◇'], ['售后待偿账目', 'after-sales-ledger', '↩']],
     2: [['平台总览', 'overview', '▦'], ['分类管理', 'categories', '▦'], ['店铺审核', 'stores', '⌂'], ['全平台订单', 'admin-orders', '▤'], ['退款审批', 'refunds', '↩'], ['配送异常', 'delivery-issues', '⚑'], ['用户与商品', 'users', '♙'], ['骑手管理', 'riders', '➤'], ['内容管理', 'content', '▧'], ['员工管理', 'employees', '♧'], ['采购与库存', 'erp', '▤'], ['操作日志', 'audit', '≡'], ['营销监管', 'admin-marketing', '◇']],
     3: [['待抢订单', 'rider-pool', '⌖'], ['配送订单', 'rider-orders', '➤'], ['骑手资料', 'rider-profile', '♙']]
@@ -683,13 +683,13 @@
     const email = authInput(registration ? '邮箱' : '绑定邮箱', 'email', '请输入邮箱', 'email', 'maxlength="254" autocomplete="email"');
     const password = authInput('密码', 'password', registration ? '请输入 6 至 64 位密码' : '请输入密码', 'password',
       registration ? 'id="authPassword" minlength="6" maxlength="64" autocomplete="new-password" aria-describedby="authPasswordRules"' : 'autocomplete="current-password"', 'lock');
-    const verification = `<div class="auth-captcha">${authInput('图片校对码', 'captchaCode', '输入右图 5 位字符', 'text', 'maxlength="5" autocomplete="off"')}<button class="btn captcha-image" type="button" data-action="captcha-refresh" aria-label="更换图片校对码"><img id="authCaptchaImage" alt="图片校对码" hidden><span id="authCaptchaLabel">点击加载</span></button><input type="hidden" name="captchaId"></div><div class="auth-code-row">${authInput('邮箱验证码', 'code', '请输入 6 位验证码', 'text', 'inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code"')}<button class="btn" type="button" data-action="send-code">获取验证码</button></div><p id="authCodeStatus" class="help-text" role="status"></p>`;
+    const verification = `<div class="auth-captcha">${authInput('图片校对码', 'captchaCode', '5 位字符', 'text', 'maxlength="5" autocomplete="off"')}<button class="btn captcha-image" type="button" data-action="captcha-refresh" aria-label="更换图片校对码"><img id="authCaptchaImage" alt="图片校对码" hidden><span id="authCaptchaLabel">点击加载</span></button><input type="hidden" name="captchaId"></div><div class="auth-code-row">${authInput('邮箱验证码', 'code', '6 位验证码', 'text', 'inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code"')}<button class="btn" type="button" data-action="send-code">获取验证码</button></div><p id="authCodeStatus" class="help-text" role="status"></p>`;
     const roles = [['CUSTOMER','用户点餐','user'],['MERCHANT','商户管理','store'],['RIDER','骑手配送','rider'],['ADMIN','管理端','shield']];
     const selected = previous.loginType || 'CUSTOMER';
     const roleSelector = '<fieldset class="auth-roles"><legend>选择登录身份</legend><input type="hidden" name="loginType" value="' + esc(selected) + '"><div>' + roles.map(([role,label,icon]) => `<button type="button" class="auth-role" data-action="auth-role" data-id="${role}" aria-pressed="${role === selected}">${authIcon(icon)}${label}</button>`).join('') + '</div></fieldset>';
     const methods = '<div class="auth-tabs" aria-label="登录方式"><button class="btn ' + (mode === 'email' ? '' : 'active') + '" type="button" data-action="auth-switch" data-id="login" aria-pressed="' + (mode !== 'email') + '">密码登录</button><button class="btn ' + (mode === 'email' ? 'active' : '') + '" type="button" data-action="auth-switch" data-id="email" aria-pressed="' + (mode === 'email') + '">验证码登录</button></div>';
     form.innerHTML = '<div class="auth-fields">' + (registration
-      ? '<div class="auth-identity">' + authInput('用户名','username','请输入用户名','text','maxlength="64" autocomplete="username"') + email + phone + '</div>'
+      ? '<div class="auth-identity">' + authInput('用户名','username','请输入用户名','text','maxlength="64" autocomplete="username"') + phone + email + '</div>'
         + '<div class="auth-verification">' + verification + '</div><div class="auth-passwords"><div class="auth-password-field">' + password
         + '<div class="auth-strength" id="authStrength" hidden aria-live="polite"><i></i><i></i><i></i><span id="authStrengthLabel"></span></div><p class="auth-rules" id="authPasswordRules" hidden>6 至 64 位，支持数字、英文字母和 ' + PASSWORD_SYMBOLS + '</p>'
         + '</div>' + authInput('确认密码','confirmPassword','请再次输入相同密码','password','id="authConfirmPassword" minlength="6" maxlength="64" autocomplete="new-password"','lock') + '</div>'
@@ -706,7 +706,8 @@
       if (input && previous[name]) input.value = previous[name];
     }
     showAuthError(''); authVisibility(true);
-    form.querySelector('input:not([type="hidden"])')?.focus();
+    form.querySelector('input:not([type="hidden"])')?.focus({preventScroll:true});
+    $('authPage').scrollTop = 0;
     if (mode === 'email' || registration) { updateCodeButton(); void refreshAuthCaptcha(); }
   };
   const applyAuthRoute = () => {
@@ -808,7 +809,7 @@
     $('navCaption').textContent = logged ? ({ 0: '用户服务', 1: '商户工作台', 2: '平台管理', 3: '配送工作台' }[state.role] || '工作台') : '浏览';
     let nav = logged ? (NAV[state.role] || NAV[0]) : [['首页', 'home', '⌂'], ['搜索与榜单', 'discover', '⌕']];
     if (!logged && state.role === 0 && !nav.some(x => x[1] === 'home')) nav = NAV[0].slice(0, 2);
-    $('nav').innerHTML = nav.map(([label, page, icon]) => `<button class="nav-item ${state.page === page ? 'active' : ''}" data-page="${page}" title="${esc(label)}" aria-label="${esc(label)}"><span class="nav-icon" aria-hidden="true">${icon}</span><span class="nav-label">${esc(label)}</span></button>`).join('');
+    $('nav').innerHTML = nav.map(([label, page, icon]) => `<button class="nav-item ${state.page === page ? 'active' : ''}" data-page="${page}" title="${esc(label)}" aria-label="${esc(label)}"><span class="nav-icon" aria-hidden="true">${page==='assistant'?'<svg><use href="auth-icons.svg?v=20261102-headset#headset"></use></svg>':icon}</span><span class="nav-label">${esc(label)}</span></button>`).join('');
     $('topCart').onclick = () => { if (requireUser()) navigate('cart'); };
     $('topLogin').onclick = () => openAuth(); $('topLogout').onclick = logout;
   }
@@ -882,7 +883,7 @@
     const role = state.role;
     storeObserver?.disconnect(); storeObserver = null;
     state.locationVersion++; state.locating = false;
-    const app = $('app'); app.innerHTML = empty('正在读取服务端数据…');
+    const app = $('app'); app.classList.toggle('assistant-page', page === 'assistant'); app.innerHTML = empty('正在读取服务端数据…');
     const load = async path => {
       const data = await get(path);
       if (!isCurrentRender(version, page, role)) throw staleRender;
@@ -969,7 +970,7 @@
     await refreshCart(load);
     const groups = Object.groupBy ? Object.groupBy(state.cart, x=>x.storeId) : state.cart.reduce((a,x)=>((a[x.storeId] ||= []).push(x),a),{});
     const total = state.cart.reduce((s,x)=>s+Number(x.price||0)*x.quantity,0);
-    $('app').innerHTML = `${pageHead('购物车','')}${state.cart.length ? Object.values(groups).map(items=>`<section class="page-panel section"><div class="row-between"><h2 class="section-title">${esc(items[0].storeName)}</h2><span class="subtle">同一店铺商品一次结算</span></div>${items.map(x=>`<div class="cart-row"><div class="row-main"><strong>${esc(x.goods?.name || '商品')}</strong><small>${esc(x.specName||'')} · ¥${cash(x.price)}</small></div><div class="stepper"><button class="btn small" data-action="cart-dec" data-id="${x.goodsId}" data-spec="${x.specId||0}">−</button><b>${x.quantity}</b><button class="btn small" data-action="cart-inc" data-id="${x.goodsId}" data-spec="${x.specId||0}">+</button></div></div>`).join('')}<div class="form-actions">${btn('清空本店','cart-clear',items[0].storeId,'danger')} ${btn('去结算','checkout',items[0].storeId,'primary')}</div></section>`).join('') : empty('购物车为空，请先选择店铺和商品')}<div class="panel-foot"><strong>全部商品合计 ¥${cash(total)}</strong></div>`;
+    $('app').innerHTML = `${pageHead('购物车','')}${state.cart.length ? Object.values(groups).map(items=>`<section class="page-panel section"><div class="row-between"><h2 class="section-title">${esc(items[0].storeName)}</h2><span class="subtle">同一店铺商品一次结算</span></div>${items.map(x=>`<div class="cart-row food-row"><div class="food-image">${x.goods?.image?`<img loading="lazy" decoding="async" src="${esc(assetURL(x.goods.image))}" alt="${esc(x.goods.name || '商品')}">`:'暂无图片'}</div><div class="food-info"><h3>${esc(x.goods?.name || '商品')}</h3>${x.specName?`<p>${esc(x.specName)}</p>`:''}<div class="price">¥${cash(x.price)}</div></div><div class="food-actions stepper"><button class="btn small" data-action="cart-dec" data-id="${x.goodsId}" data-spec="${x.specId||0}" aria-label="减少${esc(x.goods?.name || '商品')}数量">−</button><b>${x.quantity}</b><button class="btn small" data-action="cart-inc" data-id="${x.goodsId}" data-spec="${x.specId||0}" aria-label="增加${esc(x.goods?.name || '商品')}数量">+</button></div></div>`).join('')}<div class="form-actions">${btn('清空本店','cart-clear',items[0].storeId,'danger')} ${btn('去结算','checkout',items[0].storeId,'primary')}</div></section>`).join('') : empty('购物车为空，请先选择店铺和商品')}<div class="panel-foot cart-total"><strong>全部商品合计 ¥${cash(total)}</strong></div>`;
   };
   const renderCheckout = async (load = get) => {
     const existingDraft = state.checkoutStoreId ? checkoutDraft(state.checkoutStoreId) : null;
@@ -1079,7 +1080,16 @@
     $('app').innerHTML=`${pageHead('地址与钱包','',`${state.checkoutReturnStoreId?btn('继续确认订单','checkout',state.checkoutReturnStoreId,'primary'):''}${btn('刷新','refresh')}`)}<div class="grid two"><section><div class="row-between"><h2 class="section-title">收货地址</h2>${btn('新增地址','address-new')}</div>${state.editAddress!==null?addressForm(state.editAddress):''}${state.addresses.map(a=>`<article class="item-card"><div class="row-between"><strong>${esc(a.name)} · ${esc(a.phone)} ${a.tag?`<span class="tag">${esc(a.tag)}</span>`:''} ${a.isDefault?'<span class="tag">默认</span>':''}</strong><div class="td-actions">${!a.isDefault?btn('设为默认','address-default',a.id,'small'):''}${btn('编辑','address-edit',a.id,'small')}${btn('删除','address-delete',a.id,'small danger')}</div></div><div class="subtle" style="margin-top:6px">${esc(addressText(a))}</div></article>`).join('')||empty('暂无地址')}</section><section><h2 class="section-title">账户余额</h2><div class="metric"><div class="metric-label">可用余额</div><div class="metric-value">¥${cash(user?.balance)}</div><div class="subtle">可用于订单余额支付</div></div><p class="help-text">演示充值已停用，余额不足时请选择支付宝支付。</p><div class="row-between section"><h2 class="section-title">银行卡</h2>${btn('绑定银行卡','bank-add')}</div>${(cards||[]).map(c=>`<article class="item-card row-between"><div><strong>${esc(c.bankName)}</strong><div class="subtle">${esc(c.cardType)} · ${esc(c.cardNoMasked)}</div></div><div class="td-actions">${btn('查看卡号','bank-reveal',c.id,'small')}${btn('解绑','bank-delete',c.id,'small danger')}</div></article>`).join('')||empty('暂无绑定银行卡')}<p class="help-text">银行卡完整号码仅在添加时提交，服务端只返回掩码号码。</p></section></div>`;
   };
   const renderSettings = async (load = get) => { const user=await load('/api/auth/me');state.user=user; $('app').innerHTML=`${pageHead('个人设置')}<div class="grid two"><section class="page-panel"><h2 class="section-title">个人资料</h2><form data-form="profile" class="field-stack"><label class="field">用户名<input class="input" name="username" required value="${esc(user.username)}"></label><label class="field">手机号<input class="input" name="phone" required value="${esc(user.phone)}"></label><label class="field">邮箱<input class="input" name="email" type="email" value="${esc(user.email||'')}"></label><label class="field">当前密码验证<input class="input" name="currentPassword" type="password"></label><button class="btn primary">保存资料</button></form></section><section class="page-panel"><h2 class="section-title">账号安全</h2><form data-form="password" class="field-stack"><label class="field">当前密码<input class="input" name="oldPassword" type="password" required></label><label class="field">新密码<input class="input" name="newPassword" type="password" minlength="8" required></label><button class="btn primary">修改密码</button></form><div class="muted-sep"></div><form data-form="payment-password" class="field-stack"><label class="field">登录密码<input class="input" name="loginPassword" type="password" required></label><label class="field">支付密码（6 位数字）<input class="input" name="paymentPassword" type="password" inputmode="numeric" pattern="[0-9]{6}" required></label><button class="btn">设置支付密码</button></form><div class="muted-sep"></div><h2 class="section-title">隐私与协议</h2><details><summary>隐私政策</summary><p class="subtle">本演示应用将账号、地址、订单和购物车保存在项目服务端。仅用于体验，不要输入真实支付信息。</p></details></section></div>`; };
-  const renderAssistant = () => { $('app').innerHTML=`${pageHead('智能客服','自动回答，退款与售后结果以订单状态为准')}<div class="page-panel"><div id="chatHistory" class="field-stack" style="min-height:220px;max-height:55vh;overflow:auto">${state.assistantHistory.map(m=>`<div class="surface"><strong>${m.role==='user'?'我':'智能助手'}</strong><div>${esc(m.content)}</div></div>`).join('')||empty('你好，有什么可以帮你？')}</div><form data-form="assistant" class="form-grid section"><label class="field full">输入问题<textarea class="textarea" name="question" required placeholder="例如：我的订单什么时候送达？"></textarea></label><div class="form-actions full"><button class="btn primary">发送</button></div></form></div>`; };
+  const assistantQuestions = ['我的订单到哪了', '余额还有多少', '推荐几家店', '退款怎么申请', '优惠券怎么用', '怎么设置收货地址'];
+  const renderAssistantHistory = (messages = state.assistantHistory) => {
+    const history = $('chatHistory');
+    history.innerHTML = messages.map(m=>`<div class="assistant-message ${m.role==='user'?'from-user':''}"><strong>${m.role==='user'?'我':'智能助手'}</strong><div>${esc(m.content)}</div></div>`).join('') || empty('你好，有什么可以帮你？');
+    history.scrollTop = history.scrollHeight;
+  };
+  const renderAssistant = () => {
+    $('app').innerHTML=`${pageHead('智能客服','自动回答，退款与售后结果以订单状态为准')}<div class="assistant-shell"><div id="chatHistory" class="assistant-history" role="log" aria-label="聊天记录" aria-live="polite" tabindex="0"></div><form id="assistantForm" data-form="assistant" class="assistant-composer"><div class="assistant-presets" role="group" aria-label="常见问题">${assistantQuestions.map(q=>`<button class="btn small" type="button" data-action="assistant-question" data-id="${esc(q)}">${esc(q)}</button>`).join('')}</div><label class="field" for="assistantQuestion">输入问题</label><div class="assistant-input-row"><textarea class="textarea" id="assistantQuestion" name="question" required rows="2" placeholder="例如：我的订单什么时候送达？"></textarea><button class="btn primary" type="submit">发送</button></div></form></div>`;
+    renderAssistantHistory();
+  };
   const loadMerchantStores = async (load = get) => {
     state.merchantStores = await load('/api/merchant/stores') || [];
     if (!state.merchantStores.some(store => Number(store.id) === Number(state.activeStoreId))) {
@@ -1087,6 +1097,9 @@
     }
   };
   const merchantStoreSelect = () => `<select class="select" id="merchantStoreSelect">${state.merchantStores.map(s=>`<option value="${s.id}" ${Number(s.id)===Number(state.activeStoreId)?'selected':''}>${esc(s.name)}</option>`).join('')}</select>`;
+  const storeReviewLabel = store => Number(store.reviewStatus) === 1 ? '审核通过' : Number(store.reviewStatus) === 2 ? '审核驳回' : '待审核';
+  const merchantStoreStatus = store => store ? `<div class="notice-line">${statusTag(storeReviewLabel(store),Number(store.reviewStatus)===1?'good':'warn')} ${esc(Number(store.platformStatus)===0?'平台已停用':Number(store.status)===1?'营业中':'休息中')}${store.reviewReason?`<p>${esc(store.reviewReason)}</p>`:''}<div class="td-actions">${Number(store.reviewStatus)===2?btn('重新提交审核','merchant-store-resubmit',store.id,'small primary'):''}${Number(store.reviewStatus)===1&&Number(store.platformStatus)===1?btn(Number(store.status)===1?'设为休息':'开始营业','merchant-store-business',store.id,'small'):''}${btn('审核记录','merchant-store-reviews',store.id,'small')}</div></div>` : '';
+  const storeReviewHistory = records => records.length ? table(['时间','结果','操作人','审核意见'],records.map(r=>[esc(r.createTime),esc(Number(r.status)===0?'提交审核':Number(r.status)===1?'通过':'驳回'),esc(r.operatorId),esc(r.reason||'—')])) : empty('历史店铺无入驻审核记录');
   const renderMerchant = async (page, load = get) => {
     if (page === 'after-sales-ledger') {
       const data = await load('/api/merchant/after-sales/ledger?page=' + state.ledgerPage + '&pageSize=20');
@@ -1110,7 +1123,7 @@
       if (!state.merchantStores.length) { $('app').innerHTML=`${pageHead('门店与商品')}<div class="page-panel"><h2 class="section-title">创建门店</h2>${merchantStoreForm()}</div>`; return; }
       const [goods,cats] = await Promise.all([load(`/api/merchant/stores/${state.activeStoreId}/goods`),load('/api/merchant/categories')]); state.merchantGoods=goods||[];
       const editingStore = state.merchantStoreEdit || null;
-      $('app').innerHTML=`${pageHead('门店与商品','管理商品上下架、库存、规格和店内分类',`${merchantStoreSelect()} ${btn('新增门店','merchant-store-new')}`)}${state.editGoods==='store'||editingStore?`<div class="page-panel section"><h2 class="section-title">${editingStore?'编辑门店':'创建门店'}</h2>${merchantStoreForm(editingStore)}</div>`:''}<div class="toolbar">${btn('新增商品','merchant-goods-new','', 'primary')} ${btn('店内分类','merchant-categories')} ${btn('套餐管理','merchant-setmeals')} ${btn('门店员工','merchant-employees')} ${btn('编辑门店','merchant-store-edit',state.activeStoreId)} ${btn('配送方式','merchant-fulfillment',state.activeStoreId)}</div>${state.editGoods&&state.editGoods!=='store'?merchantGoodsForm(state.editGoods,cats||[]):''}<div class="table-wrap"><table><thead><tr><th>商品</th><th>分类</th><th>售价</th><th>库存</th><th>销量</th><th>状态</th><th>操作</th></tr></thead><tbody>${state.merchantGoods.map(g=>`<tr><td><strong>${esc(g.name)}</strong><div class="subtle">${esc(g.description||'')}</div></td><td>${esc((cats||[]).find(c=>c.id===g.merchantCategoryId)?.name||'未分组')}</td><td>¥${cash(g.price)}</td><td>${g.stock}</td><td>${g.sales}</td><td>${statusTag(g.status===1?'上架':'下架',g.status===1?'good':'warn')}</td><td><div class="td-actions">${btn('编辑','merchant-goods-edit',g.id,'small')}${btn('规格','merchant-goods-specs',g.id,'small')}${btn(g.status===1?'下架':'上架','merchant-goods-toggle',g.id,'small')}${btn('删除','merchant-goods-delete',g.id,'small danger')}</div></td></tr>`).join('')||'<tr><td colspan="7">暂无商品</td></tr>'}</tbody></table></div>`;
+      $('app').innerHTML=`${pageHead('门店与商品','管理商品上下架、库存、规格和店内分类',`${merchantStoreSelect()} ${btn('新增门店','merchant-store-new')}`)}${merchantStoreStatus(state.merchantStores.find(s=>Number(s.id)===Number(state.activeStoreId)))}${state.editGoods==='store'||editingStore?`<div class="page-panel section"><h2 class="section-title">${editingStore?'编辑门店':'创建门店'}</h2>${merchantStoreForm(editingStore)}</div>`:''}<div class="toolbar">${btn('新增商品','merchant-goods-new','', 'primary')} ${btn('店内分类','merchant-categories')} ${btn('套餐管理','merchant-setmeals')} ${btn('门店员工','merchant-employees')} ${btn('编辑门店','merchant-store-edit',state.activeStoreId)} ${btn('配送方式','merchant-fulfillment',state.activeStoreId)}</div>${state.editGoods&&state.editGoods!=='store'?merchantGoodsForm(state.editGoods,cats||[]):''}<div class="table-wrap"><table><thead><tr><th>商品</th><th>分类</th><th>售价</th><th>库存</th><th>销量</th><th>状态</th><th>操作</th></tr></thead><tbody>${state.merchantGoods.map(g=>`<tr><td><strong>${esc(g.name)}</strong><div class="subtle">${esc(g.description||'')}</div></td><td>${esc((cats||[]).find(c=>c.id===g.merchantCategoryId)?.name||'未分组')}</td><td>¥${cash(g.price)}</td><td>${g.stock}</td><td>${g.sales}</td><td>${statusTag(g.status===1?'上架':'下架',g.status===1?'good':'warn')}</td><td><div class="td-actions">${btn('编辑','merchant-goods-edit',g.id,'small')}${btn('规格','merchant-goods-specs',g.id,'small')}${btn(g.status===1?'下架':'上架','merchant-goods-toggle',g.id,'small')}${btn('删除','merchant-goods-delete',g.id,'small danger')}</div></td></tr>`).join('')||'<tr><td colspan="7">暂无商品</td></tr>'}</tbody></table></div>`;
       $('merchantStoreSelect')?.addEventListener('change',e=>{state.activeStoreId=Number(e.target.value);state.editGoods=null;renderPage();}); return;
     }
     if (page === 'reviews') {
@@ -1161,7 +1174,7 @@
     }
     if (page === 'stores') {
       state.adminStores=await load('/api/admin/stores')||[];
-      $('app').innerHTML=`${pageHead('店铺审核','控制店铺营业状态与首页推荐')}${table(['店铺','分类','评分 / 月售','状态','推荐','操作'],state.adminStores.map(s=>[`<strong>${esc(s.name)}</strong><div class="subtle">${esc(s.address||'')}</div>`,esc(s.categoryName||s.categoryId),`${s.rating} / ${s.monthlySales}`,statusTag(s.status?'营业中':'已下架',s.status?'good':'warn'),s.recommended?'是':'否',`${btn(s.status?'下架':'通过','admin-store-status',`${s.id}:${s.status?0:1}`,'small')} ${btn(s.recommended?'取消推荐':'设为推荐','admin-store-recommend',`${s.id}:${s.recommended?0:1}`,'small')}`]))}`; return;
+      $('app').innerHTML=`${pageHead('店铺审核','',btn('刷新','refresh'))}${table(['店铺','入驻审核','经营状态','操作'],state.adminStores.map(s=>[`<strong>${esc(s.name)}</strong><div class="subtle">${esc(s.address||'')}</div>`,`${statusTag(storeReviewLabel(s),Number(s.reviewStatus)===1?'good':'warn')}${s.reviewReason?`<p>${esc(s.reviewReason)}</p>`:''}`,`${statusTag(Number(s.platformStatus)===1?'平台正常':'平台停用',Number(s.platformStatus)===1?'good':'warn')}<div class="subtle">${Number(s.status)===1?'商户营业中':'商户休息中'}</div>`,`<div class="td-actions">${Number(s.reviewStatus)===0?btn('通过审核','admin-store-approve',s.id,'small primary'):''}${btn(Number(s.platformStatus)===1?'平台停用':'解除停用','admin-store-status',`${s.id}:${Number(s.platformStatus)===1?0:1}`,'small')} ${btn(s.recommended?'取消推荐':'设为推荐','admin-store-recommend',`${s.id}:${s.recommended?0:1}`,'small')}${btn('审核记录','admin-store-reviews',s.id,'small')}</div>${Number(s.reviewStatus)===0?`<details><summary>驳回申请</summary><form data-form="store-review" data-id="${s.id}" class="form-grid"><label class="field full">驳回原因<textarea class="input" name="reason" required maxlength="512" placeholder="例如：请补充完整的店铺地址"></textarea></label><button class="btn danger">确认驳回</button></form></details>`:''}`]))}<div id="storeReviewHistory"></div>`; return;
     }
     if (page === 'admin-orders') {
       const data=await load(`/api/admin/orders/page?page=${state.adminOrdersPage}&pageSize=20`);const total=Number(data?.total||0);const pageSize=Number(data?.pageSize||20);const lastPage=Math.max(1,Math.ceil(total/pageSize));
@@ -1252,7 +1265,8 @@
         else if (name === 'password') { await formSend('/api/auth/password','PUT',{oldPassword:data.oldPassword,newPassword:data.newPassword}); toast('密码已修改，请重新登录'); await logout(); }
         else if (name === 'payment-password') { await formSend('/api/auth/payment-password','POST',{loginPassword:data.loginPassword,paymentPassword:data.paymentPassword}); await logout();toast('支付密码已设置，请重新登录'); }
         else if (name === 'address') { const id=Number(form.dataset.id||0); const payload=addressPayload(data,f.get('isDefault')!==null); await formSend(id?`/api/addresses/${id}`:'/api/addresses',id?'PUT':'POST',payload); state.editAddress=null;toast('地址已保存');await renderPage(); }
-        else if (name === 'merchant-store') { const p={name:data.name,categoryId:Number(data.categoryId),deliveryFee:Number(data.deliveryFee),minOrder:Number(data.minOrder),deliveryTime:data.deliveryTime,notice:data.notice,address:data.address,latitude:Number(data.latitude||0),longitude:Number(data.longitude||0),image:data.image||'',deliveryRadius:Number(data.deliveryRadius||0)}; const id=Number(form.dataset.id||0); await formSend(id?`/api/merchant/stores/${id}`:'/api/merchant/stores',id?'PUT':'POST',id?{...p,status:-1}:p); state.editGoods=null;state.merchantStoreEdit=null;toast('门店已保存');await renderPage(); }
+        else if (name === 'store-review') { const reason=String(data.reason||'').trim();if(!reason){toast('请填写驳回原因',true);return;}await formSend(`/api/admin/stores/${Number(form.dataset.id)}/review`,'PUT',{status:2,reason});toast('申请已驳回');await renderPage(); }
+        else if (name === 'merchant-store') { const p={name:data.name,categoryId:Number(data.categoryId),deliveryFee:Number(data.deliveryFee),minOrder:Number(data.minOrder),deliveryTime:data.deliveryTime,notice:data.notice,address:data.address,latitude:Number(data.latitude||0),longitude:Number(data.longitude||0),image:data.image||'',deliveryRadius:Number(data.deliveryRadius||0)}; const id=Number(form.dataset.id||0); await formSend(id?`/api/merchant/stores/${id}`:'/api/merchant/stores',id?'PUT':'POST',id?{...p,status:-1}:p); state.editGoods=null;state.merchantStoreEdit=null;toast(id?'门店已保存':'门店已提交，等待平台审核');await renderPage(); }
         else if (name === 'merchant-goods') { const p={name:data.name,description:data.description||'',price:Number(data.price),originalPrice:Number(data.originalPrice||data.price),image:data.image||'',categoryId:Number(data.categoryId),merchantCategoryId:Number(data.merchantCategoryId||0),stock:Number(data.stock||0),tag:data.tag||'',special:f.get('special')===null?false:true,status:1}; const id=Number(form.dataset.id||0); await formSend(id?`/api/merchant/goods/${id}`:`/api/merchant/stores/${state.activeStoreId}/goods`,id?'PUT':'POST',p);state.editGoods=null;toast('商品已保存');await renderPage(); }
         else if (name === 'merchant-activity') { await formSend(`/api/merchant/activities?storeId=${state.activeStoreId}`,'POST',{type:data.type,title:data.title,discountRate:Number(data.discountRate||0),reduceAmount:Number(data.reduceAmount||0),threshold:Number(data.threshold||0),giftGoodsId:Number(data.giftGoodsId||0),startTime:data.startTime,endTime:data.endTime,status:1});state.editGoods=null;toast('活动已创建');await renderPage(); }
         else if (name === 'merchant-seckill') { await formSend(`/api/merchant/seckills?storeId=${state.activeStoreId}`,'POST',{goodsId:Number(data.goodsId),price:Number(data.price),quota:Number(data.quota),startTime:data.startTime,endTime:data.endTime,status:1});state.editGoods=null;toast('秒杀已创建');await renderPage(); }
@@ -1262,7 +1276,20 @@
         else if (name === 'admin-banner') { await formSend('/api/admin/banners','POST',{title:data.title,subtitle:data.subtitle||'',image:data.image||'',color:data.color||'',linkType:data.linkType||'NONE',linkValue:data.linkValue||'',sort:Number(data.sort||0)});state.editGoods=null;toast('Banner 已创建');await renderPage(); }
         else if (name === 'admin-announcement') { await formSend('/api/admin/announcements','POST',{title:data.title,content:data.content});state.editGoods=null;toast('公告已创建');await renderPage(); }
         else if (name === 'admin-employee') { await formSend('/api/admin/employees','POST',{username:data.username,phone:data.phone,password:data.password});state.editGoods=null;toast('员工已创建');await renderPage(); }
-        else if (name === 'assistant') { const question=data.question;state.assistantHistory.push({role:'user',content:question});const answer=await formSend('/api/assistant/chat','POST',{question,history:state.assistantHistory.map(x=>({role:x.role,content:x.content}))});state.assistantHistory.push({role:'assistant',content:answer?.answer||answer?.content||'暂时无法回答'});await renderPage(); }
+        else if (name === 'assistant') {
+          const question=String(data.question||'').trim();
+          if (!question) { form.elements.question.value=''; form.elements.question.focus(); return; }
+          const messages=[...state.assistantHistory,{role:'user',content:question}];
+          const presets=form.querySelectorAll('[data-action="assistant-question"]');
+          presets.forEach(button=>button.disabled=true);form.elements.question.readOnly=true;submitter.textContent='发送中…';form.setAttribute('aria-busy','true');
+          renderAssistantHistory(messages);
+          try {
+            const answer=await formSend('/api/assistant/chat','POST',{question,history:messages.map(x=>({role:x.role,content:x.content}))});
+            state.assistantHistory.push({role:'user',content:question},{role:'assistant',content:answer?.answer||answer?.content||'暂时无法回答'});
+            renderAssistantHistory();form.elements.question.value='';form.elements.question.focus({preventScroll:true});
+          } catch(error) { if(isCurrentContext(context))renderAssistantHistory();throw error; }
+          finally { if(form.isConnected&&isCurrentContext(context)){presets.forEach(button=>button.disabled=false);form.elements.question.readOnly=false;submitter.textContent='发送';form.setAttribute('aria-busy','false');} }
+        }
       } catch(error) { if (error !== staleRender) toast(error.message,true); }
       finally { if (submitter?.isConnected && isCurrentContext(context)) submitter.disabled = false; }
     });
@@ -1309,6 +1336,11 @@
         showAuthError(''); return;
       }
       if (action === 'send-code') return sendAuthCode();
+      if (action === 'assistant-question' && state.page === 'assistant' && assistantQuestions.includes(id)) {
+        const form=$('assistantForm');
+        if(form.querySelector('button[type="submit"]').disabled)return;
+        form.elements.question.value=id;form.requestSubmit();return;
+      }
       if (action === 'captcha-refresh') return refreshAuthCaptcha();
       if (action === 'go') return navigate(id);
       if (action === 'refresh') return renderPage();
@@ -1505,6 +1537,9 @@
         }
         return;
       }
+      if (action === 'merchant-store-resubmit') {await actionSend(`/api/merchant/stores/${id}/review`,'POST');toast('已重新提交审核');return renderPage();}
+      if (action === 'merchant-store-business') {const store=state.merchantStores.find(s=>Number(s.id)===Number(id));if(!store)return;await actionSend(`/api/merchant/stores/${id}`,'PUT',{status:Number(store.status)===1?0:1,deliveryFee:-1,minOrder:-1,deliveryRadius:-1});toast('营业状态已更新');return renderPage();}
+      if (action === 'merchant-store-reviews' || action === 'admin-store-reviews') {const prefix=action==='admin-store-reviews'?'admin':'merchant';const records=await actionLoad(`/api/${prefix}/stores/${id}/reviews`);const html=`<div class="page-panel"><h2>审核记录</h2>${storeReviewHistory(records||[])}</div>`;if(prefix==='admin')$('storeReviewHistory').innerHTML=html;else $('app').insertAdjacentHTML('beforeend',html);return;}
       if (action === 'merchant-store-new') { state.editGoods='store';state.merchantStoreEdit=null;return renderPage(); }
       if (action === 'merchant-store-edit') { state.editGoods=null;state.merchantStoreEdit=state.merchantStores.find(s=>Number(s.id)===Number(id));return renderPage(); }
       if (action === 'merchant-goods-new') { state.editGoods={};return renderPage(); }
@@ -1564,6 +1599,7 @@
       }
       if (action === 'admin-category-new') {state.editGoods='category';return renderPage();}
       if (action === 'admin-category-delete') {await actionSend(`/api/admin/categories/${id}`,'DELETE');return renderPage();}
+      if (action === 'admin-store-approve') {await actionSend(`/api/admin/stores/${id}/review`,'PUT',{status:1,reason:''});toast('审核已通过');return renderPage();}
       if (action === 'admin-store-status') {const [sid,status]=String(id).split(':');await actionSend(`/api/admin/stores/${sid}/status`,'PUT',{status:Number(status)});return renderPage();}
       if (action === 'admin-store-recommend') {const [sid,recommended]=String(id).split(':');await actionSend(`/api/admin/stores/${sid}/recommend`,'PUT',{recommended:Number(recommended)});return renderPage();}
       if (action === 'admin-orders-page') {state.adminOrdersPage=Math.max(1,Number(id)||1);return renderPage();}

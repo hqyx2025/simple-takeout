@@ -44,7 +44,7 @@ class BusinessStatisticsMySqlTest {
         new ResourceDatabasePopulator(new ClassPathResource("schema.sql")).execute(source);
         jdbc = new JdbcTemplate(source);
         new AfterSalesSchemaMigration(jdbc).run(null);
-        jdbc.update("INSERT INTO stores(id,name,owner_id,monthly_sales,create_time) VALUES(1,'real',10,9999,?), (2,'other',11,8888,?)", stamp(LocalDateTime.now()), stamp(LocalDateTime.now()));
+        jdbc.update("INSERT INTO stores(review_status,id,name,owner_id,monthly_sales,create_time) VALUES(1,1,'real',10,9999,?), (1,2,'other',11,8888,?)", stamp(LocalDateTime.now()), stamp(LocalDateTime.now()));
         jdbc.update("INSERT INTO goods(id,store_id,name,sales,create_time) VALUES(1,1,'real',9999,?), (2,2,'other',0,?), (3,1,'seed only',8888,?)", stamp(LocalDateTime.now()), stamp(LocalDateTime.now()), stamp(LocalDateTime.now()));
     }
 
