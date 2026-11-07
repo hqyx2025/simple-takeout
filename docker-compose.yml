@@ -44,7 +44,7 @@ services:
         max-file: '3'
 
   redis:
-    image: redis:7.4.11-alpine
+    image: redis:8.10.2-alpine
     container_name: takeout-redis-compose
     restart: unless-stopped
     environment:
