@@ -245,7 +245,7 @@ export struct AssistantPage {
           .width('100%').height(52)
           .backgroundColor(Color.Transparent)
 
-          // 输入与发送共用一个悬浮容器。
+          // 输入区与发送按钮各自保持清晰边界，长问题不挤压发送操作。
           Row({ space: SPACING.SM }) {
             FormInput({ label: '输入问题',
               value: this.input,
@@ -256,19 +256,17 @@ export struct AssistantPage {
               onInputSubmit: () => { this.send(this.input) } }).layoutWeight(1)
             Button(this.sending ? '发送中' : '发送')
               .attributeModifier(new AppButtonStyle())
-              .height(42).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_WHITE)
+              .width(72).height(AppTheme.CONTROL_HEIGHT).margin({ top: 24 })
+              .fontSize(FONT_SIZE.MD).fontColor(AppTheme.PRIMARY_TEXT)
               .backgroundColor(this.sending ? COLORS.TEXT_HINT : AppTheme.ASSISTANT_SEND)
               .borderRadius(BORDER_RADIUS.ROUND)
               .id('assistant-send')
               .onClick(() => { this.send(this.input) })
           }
-          .width('75%')
-          .padding({ left: SPACING.XS, right: SPACING.MD, top: SPACING.XS, bottom: SPACING.XS })
+          .width('100%').alignItems(VerticalAlign.Top)
+          .padding({ left: SPACING.LG, right: SPACING.LG })
           .margin({ top: SPACING.SM, bottom: SPACING.MD })
           .backgroundColor(Color.Transparent)
-          .backgroundEffect({ radius: FloatingTabBarTheme.GLASS_BLUR_RADIUS,
-            saturation: FloatingTabBarTheme.GLASS_SATURATION, color: FloatingTabBarTheme.GLASS_COLOR })
-          .border({ width: 1, color: COLORS.DIVIDER }).borderRadius(BORDER_RADIUS.CIRCLE)
           .id('assistant-composer')
         }
         .width('100%')

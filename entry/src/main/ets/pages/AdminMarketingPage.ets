@@ -251,7 +251,7 @@ export struct AdminMarketingPage {
             }, (item: AdminSeckill) => `seckill-${item.id}`)
           }
         }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.XL })
-      }.layoutWeight(1).scrollBar(BarState.Off)
+      }.align(Alignment.Top).layoutWeight(1).scrollBar(BarState.Off)
     }.width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)
 
     if (this.showDeleteConfirm) {

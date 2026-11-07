@@ -9,6 +9,7 @@ import { StatusBadge } from '../components/StatusBadge'
 import { PageHeader } from '../components/PageHeader'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
+import { KeyboardAvoidMode } from '@kit.ArkUI'
 
 @Entry
 @Component
@@ -44,6 +45,16 @@ export struct AdminEmployeePage {
   @State formUsername: string = ''
   @State formPhone: string = ''
   @State formPassword: string = ''
+  private previousKeyboardAvoidMode: KeyboardAvoidMode = KeyboardAvoidMode.OFFSET
+
+  onPageShow(): void {
+    this.previousKeyboardAvoidMode = this.getUIContext().getKeyboardAvoidMode()
+    this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE)
+  }
+
+  onPageHide(): void {
+    this.getUIContext().setKeyboardAvoidMode(this.previousKeyboardAvoidMode)
+  }
 
   aboutToAppear(): void {
     logInfo('Page', '进入员工管理页 AdminEmployeePage')
@@ -131,6 +142,7 @@ export struct AdminEmployeePage {
   }
 
   build() {
+    Stack() {
     Column() {
       PageHeader({
         title: '员工管理',
@@ -183,48 +195,57 @@ export struct AdminEmployeePage {
       .width('100%').layoutWeight(1).scrollBar(BarState.Off)
       .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
 
+    }.width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)
       if (this.showForm) {
         Column() {
-          Column({ space: SPACING.SM }) {
+          Column() {
             Text(this.editingId === 0 ? '新增员工' : '编辑员工')
-              .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
+              .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
+              .width('100%').padding({ bottom: SPACING.LG })
+            Scroll() {
+              Column({ space: SPACING.MD }) {
+                FormInput({ label: '员工姓名',
+                  value: this.formUsername,
+                  placeholder: '请输入员工姓名，如：黄焖鸡老板',
+                  onChange: (value: string) => { this.formUsername = value },
+                  fieldId: 'AdminEmployeePage-formUsername',
+                  required: true }).width('100%')
 
-            FormInput({ label: '员工姓名',
-              value: this.formUsername,
-              placeholder: '请输入员工姓名，如：黄焖鸡老板',
-              onChange: (value: string) => { this.formUsername = value },
-              fieldId: 'AdminEmployeePage-formUsername',
-              required: true }).width('100%')
+                FormInput({ label: '手机号',
+                  value: this.formPhone,
+                  placeholder: '请输入 11 位手机号，如：13600136000',
+                  inputType: InputType.PhoneNumber,
+                  onChange: (value: string) => { this.formPhone = value },
+                  fieldId: 'AdminEmployeePage-formPhone',
+                  required: true }).width('100%')
+                if (this.editingId === 0) {
 
-            FormInput({ label: '手机号',
-              value: this.formPhone,
-              placeholder: '请输入 11 位手机号，如：13600136000',
-              inputType: InputType.PhoneNumber,
-              onChange: (value: string) => { this.formPhone = value },
-              fieldId: 'AdminEmployeePage-formPhone',
-              required: true }).width('100%')
-            if (this.editingId === 0) {
-
-              FormInput({ label: '初始密码',
-                value: this.formPassword,
-                placeholder: '请输入至少 6 位初始密码',
-                inputType: InputType.Password,
-                onChange: (value: string) => { this.formPassword = value },
-                fieldId: 'AdminEmployeePage-formPassword',
-                required: true }).width('100%')
-            }
+                  FormInput({ label: '初始密码',
+                    value: this.formPassword,
+                    placeholder: '请输入至少 6 位初始密码',
+                    inputType: InputType.Password,
+                    onChange: (value: string) => { this.formPassword = value },
+                    fieldId: 'AdminEmployeePage-formPassword',
+                    required: true }).width('100%')
+                }
+              }.width('100%')
+            }.width('100%').layoutWeight(1).align(Alignment.Top).scrollBar(BarState.Off)
+              .id('admin-employee-form-scroll')
             Row({ space: SPACING.SM }) {
               Button('取消')
+                .id('admin-employee-form-cancel')
                 .attributeModifier(new AppButtonStyle()).layoutWeight(1).height(40)
+                .fontColor(COLORS.TEXT_SECONDARY).backgroundColor(COLORS.INPUT)
                 .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.closeForm() })
               Button('保存')
+                .id('admin-employee-form-save')
                 .attributeModifier(new AppButtonStyle()).layoutWeight(1).height(40).fontColor(COLORS.ON_PRIMARY)
                 .backgroundColor(MODULE_COLOR.ADMIN)
                 .borderRadius(BORDER_RADIUS.ROUND).onClick(() => { this.saveEmployee() })
-            }.width('100%')
+            }.width('100%').padding({ top: SPACING.LG })
           }
             .attributeModifier(new AppCardStyle())
-          .width('90%').constraintSize({ maxWidth: 460 }).padding(SPACING.LG)
+          .width('90%').height('75%').constraintSize({ maxWidth: 460, maxHeight: 600 }).padding(SPACING.LG)
         }
         .width('100%').height('100%').backgroundColor(COLORS.OVERLAY)
         .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
@@ -249,13 +270,15 @@ export struct AdminEmployeePage {
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
         StatusBadge({ text: employee.status === 1 ? '启用中' : '已停用', mode: employee.status === 1 ? 'success' : 'gray' })
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-      Row({ space: SPACING.XS }) {
+      Column({ space: SPACING.SM }) {
         Button('编辑')
-          .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS).onClick(() => { this.openEdit(employee) })
+          .attributeModifier(new AppButtonStyle()).height(44).fontSize(FONT_SIZE.SM)
+          .fontColor(COLORS.PRIMARY).backgroundColor(COLORS.TAG_BG).onClick(() => { this.openEdit(employee) })
         Button(employee.status === 1 ? '停用' : '启用')
           .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
           .fontColor(employee.status === 1 ? COLORS.ERROR : COLORS.SUCCESS)
-          .onClick(() => { this.toggleStatus(employee) }).backgroundColor(COLORS.ERROR_LIGHT)
+          .onClick(() => { this.toggleStatus(employee) })
+          .backgroundColor(employee.status === 1 ? COLORS.ERROR_LIGHT : COLORS.SUCCESS_LIGHT)
       }
     }
       .attributeModifier(new AppCardStyle())

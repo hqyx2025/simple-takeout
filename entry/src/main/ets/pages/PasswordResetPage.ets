@@ -218,10 +218,10 @@ export struct PasswordResetPage {
                   helpText: '6 位验证码，可整段粘贴或使用系统自动填入',
                   required: true }).layoutWeight(1)
                 Button(this.sendingCode ? '发送中…' : this.cooldownSeconds > 0 ? this.cooldownSeconds + '秒后重发' : '获取验证码')
-                  .attributeModifier(new AppButtonStyle()).height(44).width(120)
+                  .attributeModifier(new AppButtonStyle()).height(52).width(132).margin({ top: 24 })
                   .enabled(!this.busy && !this.sendingCode && this.cooldownSeconds === 0)
                   .id('password-reset-send-code').onClick(() => { this.sendCode() })
-              }.width('100%')
+              }.width('100%').alignItems(VerticalAlign.Top)
             }.width('100%')
             FormInput({ required: true, compact: true, label: this.mode === 'login' ? '新登录密码' : '新支付密码',
               placeholder: this.mode === 'login' ? '请输入 6 至 64 位密码' : '请输入 6 位数字', value: this.newPassword,
@@ -236,7 +236,7 @@ export struct PasswordResetPage {
               onChange: (value: string) => { this.confirmPassword = this.mode === 'payment' ? value.replace(/[^0-9]/g, '') : value; this.clearFeedback() } })
           }.width('100%').constraintSize({ maxWidth: AppTheme.FORM_MAX_WIDTH })
         }.width('100%').padding({ left: 24, right: 24, top: 16, bottom: 12 })
-      }.layoutWeight(1).width('100%').scrollBar(BarState.Off)
+      }.align(Alignment.Top).layoutWeight(1).width('100%').scrollBar(BarState.Off)
       Row() {
         Button(this.busy ? '提交中…' : '确认重置').attributeModifier(new AppButtonStyle())
           .height(44).width('100%').constraintSize({ maxWidth: AppTheme.FORM_MAX_WIDTH }).enabled(!this.busy && !this.sendingCode)

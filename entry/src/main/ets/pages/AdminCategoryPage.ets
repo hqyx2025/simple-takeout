@@ -7,7 +7,7 @@ import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/App
 import { AppMotion } from '../common/theme/AppMotion'
 import { User, UserRole, Category } from '../model/Models'
 import { ApiResponse, get, post, put, del } from '../service/HttpClient'
-import { COLORS, COLORS_PRIMARY_HEX, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentIndexFromText } from '../common/Constants'
+import { COLORS, COLORS_PRIMARY_HEX, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentIndexFromText, categoryIcon } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { PageHeader } from '../components/PageHeader'
@@ -156,8 +156,8 @@ export struct AdminCategoryPage {
           ForEach(this.categories, (category: Category) => {
             ListItem() {
               Row({ space: SPACING.MD }) {
-                Text(category.icon)
-                  .width(36).height(36).textAlign(TextAlign.Center).fontSize(FONT_SIZE.LG)
+                Image(categoryIcon(category.name, category.icon ?? ''))
+                  .width(40).height(40).padding(8).objectFit(ImageFit.Contain).accessibilityLevel('no')
                   .backgroundColor(accentBg(accentIndexFromText(category.name)))
                   .borderRadius(BORDER_RADIUS.MD)
                 if (this.editingCategoryId === category.id) {
@@ -182,6 +182,7 @@ export struct AdminCategoryPage {
                   }
                   .layoutWeight(1).alignItems(HorizontalAlign.Start)
                   Text('编辑')
+                    .constraintSize({ minWidth: 44, minHeight: 44 }).textAlign(TextAlign.Center)
                     .fontSize(FONT_SIZE.SM).fontColor(MODULE_COLOR.ADMIN)
                     .padding({ left: SPACING.SM, right: SPACING.SM, top: SPACING.XS, bottom: SPACING.XS })
                     .onClick(() => {
@@ -189,6 +190,7 @@ export struct AdminCategoryPage {
                       this.editCategoryName = category.name
                     })
                   Text('删除')
+                    .constraintSize({ minWidth: 44, minHeight: 44 }).textAlign(TextAlign.Center)
                     .fontSize(FONT_SIZE.SM).fontColor(COLORS.ERROR)
                     .padding({ left: SPACING.SM, right: SPACING.SM, top: SPACING.XS, bottom: SPACING.XS })
                     .onClick(() => {

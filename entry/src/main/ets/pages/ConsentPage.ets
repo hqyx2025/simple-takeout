@@ -82,6 +82,7 @@ export struct ConsentPage {
         .textAlign(TextAlign.Start)
 
       Text('查看《隐私政策》全文')
+        .constraintSize({ minHeight: 44 })
         .fontSize(FONT_SIZE.MD)
         .fontColor(COLORS.PRIMARY)
         .width('100%')

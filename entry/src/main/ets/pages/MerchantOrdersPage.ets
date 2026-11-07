@@ -706,7 +706,7 @@ struct MerchantRejectOrderDialog {
             required: true }).width('100%')
         }
         .width('100%')
-      }
+      }.align(Alignment.Top)
       .layoutWeight(1).scrollBar(BarState.Auto)
 
       if (this.errorText !== '') {

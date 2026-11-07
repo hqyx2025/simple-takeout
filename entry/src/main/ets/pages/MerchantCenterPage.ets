@@ -424,27 +424,33 @@ export struct MerchantCenterPage {
           .onClick(() => { this.openAddStoreForm() })
 
         // 我的店铺
-        Row() {
+        Column({ space: SPACING.SM }) {
           Text('我的店铺')
             .fontSize(FONT_SIZE.LG)
             .fontWeight(FontWeight.Bold)
             .fontColor(COLORS.TEXT_PRIMARY)
-            .layoutWeight(1)
-          Text('评价管理')
-            .fontSize(FONT_SIZE.SM)
-            .fontColor(MODULE_COLOR.MERCHANT)
-            .id('merchant-reviews-entry')
-            .onClick(() => { router.pushUrl({ url: 'pages/MerchantReviewsPage' }) })
-          Text('营销管理').id('merchant-marketing-entry')
-            .fontSize(FONT_SIZE.SM)
-            .fontColor(MODULE_COLOR.MERCHANT)
-            .margin({ left: SPACING.LG })
-            .onClick(() => { router.pushUrl({ url: 'pages/MerchantMarketingPage' }) })
-          Text('分类管理').id('merchant-category-entry')
-            .fontSize(FONT_SIZE.SM)
-            .fontColor(MODULE_COLOR.MERCHANT)
-            .margin({ left: SPACING.LG })
-            .onClick(() => { this.showManageCategories = true })
+            .width('100%')
+          Row({ space: SPACING.SM }) {
+            Text('评价管理')
+              .constraintSize({ minHeight: 44 }).layoutWeight(1).textAlign(TextAlign.Center)
+              .backgroundColor(COLORS.INPUT).borderRadius(BORDER_RADIUS.MD)
+              .fontSize(FONT_SIZE.SM)
+              .fontColor(MODULE_COLOR.MERCHANT)
+              .id('merchant-reviews-entry')
+              .onClick(() => { router.pushUrl({ url: 'pages/MerchantReviewsPage' }) })
+            Text('营销管理').id('merchant-marketing-entry')
+              .constraintSize({ minHeight: 44 }).layoutWeight(1).textAlign(TextAlign.Center)
+              .backgroundColor(COLORS.INPUT).borderRadius(BORDER_RADIUS.MD)
+              .fontSize(FONT_SIZE.SM)
+              .fontColor(MODULE_COLOR.MERCHANT)
+              .onClick(() => { router.pushUrl({ url: 'pages/MerchantMarketingPage' }) })
+            Text('分类管理').id('merchant-category-entry')
+              .constraintSize({ minHeight: 44 }).layoutWeight(1).textAlign(TextAlign.Center)
+              .backgroundColor(COLORS.INPUT).borderRadius(BORDER_RADIUS.MD)
+              .fontSize(FONT_SIZE.SM)
+              .fontColor(MODULE_COLOR.MERCHANT)
+              .onClick(() => { this.showManageCategories = true })
+          }.width('100%')
         }
         .width('100%')
         .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.SM })
@@ -452,6 +458,7 @@ export struct MerchantCenterPage {
         List({ space: SPACING.SM }) {
           ForEach(this.myStores, (store: StoreItem) => {
             ListItem() {
+              Column({ space: SPACING.MD }) {
               Row({ space: SPACING.MD }) {
                 if (store.image !== '') {
                   Image(merchantImageSource(store.image))
@@ -500,21 +507,28 @@ export struct MerchantCenterPage {
                 }
                 .layoutWeight(1)
                 .alignItems(HorizontalAlign.Start)
-                Blank()
+              }.width('100%').alignItems(VerticalAlign.Top)
+              Row({ space: SPACING.SM }) {
                 Text('配送方式').fontSize(FONT_SIZE.SM).fontColor(MODULE_COLOR.MERCHANT)
+                  .layoutWeight(1).height(44).textAlign(TextAlign.Center)
+                  .backgroundColor(COLORS.INPUT).borderRadius(BORDER_RADIUS.MD)
                   .onClick(() => { router.pushUrl({ url: 'pages/OrderSupportPage', params: { storeId: store.id } }) })
                 Text('编辑').fontSize(FONT_SIZE.SM).fontColor(MODULE_COLOR.MERCHANT)
+                  .layoutWeight(1).height(44).textAlign(TextAlign.Center)
+                  .backgroundColor(COLORS.INPUT).borderRadius(BORDER_RADIUS.MD)
                   .padding({ left: SPACING.SM, right: SPACING.SM })
                   .onClick(() => { this.startEditStore(store) })
                 Text('管理 ›').id(`merchant-store-goods-${store.id}`)
                   .fontSize(FONT_SIZE.MD).fontColor(MODULE_COLOR.MERCHANT)
-                  .height(44)
+                  .layoutWeight(1).height(44).textAlign(TextAlign.Center)
+                  .backgroundColor(COLORS.TAG_BG).borderRadius(BORDER_RADIUS.MD)
                   .onClick(async () => {
                     this.selectedStoreId = store.id
                     this.selectedStoreGoods = await fetchMerchantGoodsApi(store.id)
                     this.storeGoodsCounts[store.id.toString()] = this.selectedStoreGoods.length
                     this.showAddStore = false
                   })
+              }.width('100%')
               }
                 .attributeModifier(new AppCardStyle())
               .width('100%')
@@ -633,7 +647,7 @@ export struct MerchantCenterPage {
                 }
               }
               .width('100%')
-            }
+            }.align(Alignment.Top)
             .width('100%').layoutWeight(1).scrollBar(BarState.Off)
             Row({ space: SPACING.MD }) {
               Button('取消')
@@ -776,7 +790,7 @@ export struct MerchantCenterPage {
                 }
               }
               .width('100%')
-            }
+            }.align(Alignment.Top)
             .width('100%').layoutWeight(1).scrollBar(BarState.Off)
             Row({ space: SPACING.MD }) {
               Button('取消')
@@ -865,12 +879,14 @@ export struct MerchantCenterPage {
                       Text(category.name)
                         .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY).layoutWeight(1)
                       Text('改名')
+                        .constraintSize({ minWidth: 44, minHeight: 44 }).textAlign(TextAlign.Center)
                         .fontSize(FONT_SIZE.XS).fontColor(MODULE_COLOR.MERCHANT)
                         .onClick(() => {
                           this.editingCategoryId = category.id
                           this.editCategoryName = category.name
                         })
                       Text('删除')
+                        .constraintSize({ minWidth: 44, minHeight: 44 }).textAlign(TextAlign.Center)
                         .fontSize(FONT_SIZE.XS).fontColor(COLORS.ERROR)
                         .onClick(() => { this.doDeleteCategory(category) })
                     }

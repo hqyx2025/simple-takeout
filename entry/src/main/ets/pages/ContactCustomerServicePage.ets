@@ -128,7 +128,7 @@ export struct ContactCustomerServicePage {
         }
         .width('100%')
         .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.XXL })
-      }
+      }.align(Alignment.Top)
       .layoutWeight(1)
       .scrollBar(BarState.Off)
       .backgroundColor(COLORS.BG_PRIMARY)

@@ -23,6 +23,7 @@ export class AppTheme {
   static readonly CONTROL_RADIUS: number = 14
   static readonly CARD_RADIUS: number = 18
   static readonly FILTER_HEIGHT: number = 44
+  static readonly TOUCH_SIZE: number = 44
   static readonly REFRESH_OFFSET: number = 64
   static readonly SHEET_RADIUS: number = 24
 }
@@ -103,6 +104,7 @@ export class AppButtonStyle extends SoftPressModifier {
     super.applyNormalAttribute(button)
     button.type(ButtonType.Normal).fontSize(14).fontWeight(FontWeight.Medium)
       .fontColor(AppTheme.PRIMARY_TEXT).backgroundColor(AppTheme.PRIMARY)
+      .constraintSize({ minWidth: AppTheme.TOUCH_SIZE, minHeight: AppTheme.TOUCH_SIZE })
       .borderRadius(AppTheme.CONTROL_RADIUS)
   }
 }

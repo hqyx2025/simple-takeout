@@ -139,8 +139,6 @@ export struct AddBankCardPage {
                 .enabled(!this.saving).id('bank-card-type-credit')
                 .onClick(() => { this.cardType = '信用卡' })
             }.width('100%')
-            Text('完整卡号').fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Medium).fontColor(AppTheme.TEXT).width('100%')
-              .id('bank-card-full-number')
             FormInput({ label: '完整卡号',
               value: this.fullCardNumber,
               placeholder: '请输入 16～19 位银行卡号',
@@ -150,7 +148,7 @@ export struct AddBankCardPage {
               fieldId: 'bank-card-last4',
               validator: (value: string): string => /^[0-9]{16,19}$/.test(value) ? '' : '请输入 16～19 位完整银行卡号',
               onChange: (value: string) => { this.fullCardNumber = value.replace(/[^0-9]/g, '') },
-              required: true }).width('100%')
+              required: true }).width('100%').id('bank-card-full-number')
           }.attributeModifier(new AppCardStyle()).padding(SPACING.LG).width('100%')
           Text('完整卡号仅用于安全绑定，服务端加密保存；钱包页默认只展示卡号后四位。')
             .fontSize(FONT_SIZE.SM).fontColor(AppTheme.MUTED).width('100%')

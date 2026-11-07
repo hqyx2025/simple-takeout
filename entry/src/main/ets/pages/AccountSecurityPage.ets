@@ -195,7 +195,7 @@ export struct AccountSecurityPage {
               })
           }.attributeModifier(new AppCardStyle()).padding(SPACING.LG).width('100%')
         }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.XXL })
-      }.layoutWeight(1).width('100%').scrollBar(BarState.Off)
+      }.align(Alignment.Top).layoutWeight(1).width('100%').scrollBar(BarState.Off)
     }.width('100%').height('100%').backgroundColor(COLORS.BG_PRIMARY)
   }
 }

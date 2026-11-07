@@ -640,7 +640,7 @@ export struct CheckoutPage {
             }
             .width('100%')
             .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.XL })
-          }
+          }.align(Alignment.Top)
           .layoutWeight(1)
           .scrollBar(BarState.Off)
 
@@ -1068,7 +1068,7 @@ Image($r('app.media.home_location')).width(FONT_SIZE.XL).height(FONT_SIZE.XL).ob
             .fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.TEXT_SECONDARY)
             .textAlign(TextAlign.Start)
-        }
+        }.align(Alignment.Top)
         .width('100%')
         .height(72)
         .scrollBar(BarState.Off)

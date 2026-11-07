@@ -48,7 +48,7 @@ export struct EmailCaptchaField {
           validator: (value: string): string => /^[A-Za-z0-9]{5}$/.test(value) ? '' : '请输入右图的 5 位字符',
           onChange: (value: string) => { this.captchaCode = value },
           required: true }).layoutWeight(1)
-        Button({ type: ButtonType.Normal }).width(120).height(44).padding(2)
+        Button({ type: ButtonType.Normal }).width(120).height(52).padding(2).margin({ top: 24 })
           .backgroundColor(AppTheme.INPUT).border({ width: 1, color: AppTheme.BORDER }).borderRadius(AppTheme.CONTROL_RADIUS)
           .enabled(!this.loading && !this.disabled).id('email-captcha-refresh').accessibilityText('更换图片校对码')
           .onClick(() => { this.reload() })
@@ -66,7 +66,7 @@ export struct EmailCaptchaField {
       Text(this.loading ? '加载中…' : '点击重试').fontSize(13).fontColor(AppTheme.TEXT)
         .hitTestBehavior(HitTestMode.None)
     } else {
-      Image(this.image).width(116).height(40).objectFit(ImageFit.Contain).id('email-captcha-image')
+      Image(this.image).width(116).height(48).objectFit(ImageFit.Contain).id('email-captcha-image')
         .hitTestBehavior(HitTestMode.None).accessibilityText('图片校对码')
     }
   }

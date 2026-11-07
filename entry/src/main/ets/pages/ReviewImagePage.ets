@@ -27,6 +27,7 @@ export struct ReviewImagePage {
   }
 
   @StorageLink('reviewPreviewUrl') imageUrl: string = ''
+  @State imageFailed: boolean = false
 
   aboutToAppear(): void {
     if (this.imageUrl === '') {
@@ -41,33 +42,32 @@ export struct ReviewImagePage {
   }
 
   build() {
-    Stack({ alignContent: Alignment.Center }) {
-      // 黑色遮罩背景：全屏预览时点任意位置返回
-      Column()
-        .width('100%')
-        .height('100%')
-        .backgroundColor(COLORS.BG_PRIMARY)
-
-      if (this.imageUrl !== '') {
-        Image(this.imageUrl)
-          .width('100%')
-          .height('78%')
-          .objectFit(ImageFit.Contain)
-          .id('review-image-preview')
-      }
-
-      Column() {
-        PageHeader({ title: '评价图片', onBack: () => { this.close() } })
-      }.width('100%').align(Alignment.Top)
-
+    Column() {
+      PageHeader({ title: '评价图片', onBack: () => { this.close() } })
+      Stack({ alignContent: Alignment.Center }) {
+        if (this.imageUrl !== '') {
+          Image(this.imageUrl)
+            .width('100%').height('100%')
+            .objectFit(ImageFit.Contain)
+            .id('review-image-preview')
+            .accessibilityText('评价原图')
+            .onError(() => { this.imageFailed = true })
+            .onComplete(() => { this.imageFailed = false })
+        }
+        if (this.imageFailed) {
+          Text('图片暂时无法加载')
+            .fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_SECONDARY)
+            .padding(SPACING.XL).id('review-image-error')
+        }
+      }.width('100%').layoutWeight(1)
       Text('点击任意位置返回')
         .fontSize(FONT_SIZE.SM)
         .fontColor(COLORS.TEXT_HINT)
-        .margin({ bottom: SPACING.XL })
-        .align(Alignment.Bottom)
+        .padding({ top: SPACING.MD, bottom: SPACING.XL })
     }
     .width('100%')
     .height('100%')
+    .backgroundColor(COLORS.BG_PRIMARY)
     .id('review-image-page')
     .onClick(() => { this.close() })
   }

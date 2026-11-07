@@ -130,7 +130,7 @@ export struct MerchantStatsPage {
         }
         .width('100%')
         .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.XL })
-      }
+      }.align(Alignment.Top)
       .layoutWeight(1)
       .scrollBar(BarState.Off)
       .backgroundColor(COLORS.BG_PRIMARY)
@@ -148,6 +148,7 @@ export struct MerchantStatsPage {
         .fontColor(COLORS.ERROR)
         .layoutWeight(1)
       Text('重试')
+        .constraintSize({ minWidth: 44, minHeight: 44 }).textAlign(TextAlign.Center)
         .fontSize(FONT_SIZE.SM)
         .fontColor(MODULE_COLOR.MERCHANT)
         .fontWeight(FontWeight.Bold)

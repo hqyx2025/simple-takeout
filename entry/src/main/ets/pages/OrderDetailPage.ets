@@ -786,7 +786,7 @@ export struct OrderDetailPage {
             }
             .width('100%')
             .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.LG })
-          }
+          }.align(Alignment.Top)
           .layoutWeight(1)
           .scrollBar(BarState.Off)
           .backgroundColor(COLORS.BG_PRIMARY)
@@ -1131,7 +1131,7 @@ export struct OrderDetailPage {
               inputHeight: 100,
               required: true }).width('100%')
           }.width('100%').padding({ bottom: SPACING.SM })
-        }.layoutWeight(1).scrollBar(BarState.Auto).width('100%')
+        }.align(Alignment.Top).layoutWeight(1).scrollBar(BarState.Auto).width('100%')
 
         if (this.refundSubmitError !== '') {
           Text(this.refundSubmitError).width('100%').fontSize(FONT_SIZE.SM).fontColor(COLORS.ERROR)

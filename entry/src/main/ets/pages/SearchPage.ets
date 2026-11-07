@@ -255,6 +255,7 @@ export struct SearchPage {
           .fontColor(COLORS.TEXT_PRIMARY)
           .layoutWeight(1)
         Text('清空')
+          .constraintSize({ minWidth: 44, minHeight: 44 }).textAlign(TextAlign.Center)
           .fontSize(FONT_SIZE.SM)
           .fontColor(COLORS.TEXT_HINT)
           .onClick(() => { this.clearHistory() })

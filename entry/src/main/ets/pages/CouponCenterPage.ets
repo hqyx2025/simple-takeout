@@ -71,7 +71,7 @@ export struct CouponCenterPage {
   build() {
     Column() {
       // 导航栏
-      PageHeader({ title: '优惠券中心', topPadding: 40, onBack: () => { this.onBack() } })
+      PageHeader({ title: '优惠券中心', onBack: () => { this.onBack() } })
 
       SegmentButton({ options: this.tabOptions, selectedIndexes: $selectedTabs })
         .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
@@ -156,69 +156,70 @@ export struct CouponCenterPage {
   // 优惠券卡片
   @Builder
   CouponCard(coupon: Coupon) {
-    Row() {
-      // 左侧金额区
-      Column({ space: 4 }) {
-        Text(`¥${coupon.amount}`)
-          .fontSize(FONT_SIZE.BIG_TITLE)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.currentTab === 2 ? COLORS.TEXT_HINT : COLORS.ON_PRIMARY)
-        Text(`满${coupon.minOrder}元可用`)
-          .fontSize(FONT_SIZE.XS)
-          .fontColor(this.currentTab === 2 ? COLORS.TEXT_HINT : COLORS.ON_PRIMARY)
-      }
-      .width(100)
-      .height(80)
-      .backgroundColor(this.currentTab === 2 ? COLORS.DIVIDER : MODULE_COLOR.COUPON)
-      .borderRadius({ topLeft: BORDER_RADIUS.LG, bottomLeft: BORDER_RADIUS.LG })
-      .justifyContent(FlexAlign.Center)
-      .alignItems(HorizontalAlign.Center)
+    Column({ space: SPACING.MD }) {
+      Row({ space: SPACING.MD }) {
+        // 左侧金额区
+        Column({ space: 4 }) {
+          Text(`¥${coupon.amount}`)
+            .fontSize(FONT_SIZE.BIG_TITLE)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.currentTab === 2 ? COLORS.TEXT_HINT : COLORS.PRIMARY)
+          Text(`满${coupon.minOrder}元可用`)
+            .fontSize(FONT_SIZE.SM)
+            .fontColor(COLORS.TEXT_SECONDARY)
+        }
+        .constraintSize({ minWidth: 92 })
+        .padding(SPACING.MD)
+        .backgroundColor(this.currentTab === 2 ? COLORS.STATUS_GRAY_BG : COLORS.TAG_BG)
+        .borderRadius(BORDER_RADIUS.MD)
+        .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Center)
 
-      // 右侧信息区
-      Column({ space: 4 }) {
-        Text(coupon.storeName ? coupon.storeName : '通用券')
-          .fontSize(FONT_SIZE.LG)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.currentTab === 2 ? COLORS.TEXT_HINT : COLORS.TEXT_PRIMARY)
-        Text(coupon.condition)
-          .fontSize(FONT_SIZE.SM)
-          .fontColor(this.currentTab === 2 ? COLORS.TEXT_HINT : COLORS.TEXT_SECONDARY)
-        Text(`有效期: ${coupon.startTime} ~ ${coupon.endTime}`)
-          .fontSize(FONT_SIZE.XS)
-          .fontColor(COLORS.TEXT_HINT)
-      }
-      .layoutWeight(1)
-      .padding({ left: SPACING.MD })
-      .alignItems(HorizontalAlign.Start)
-
-      // 按钮：领取/已领取/使用/已使用
-      if (this.currentTab === 0) {
-        Button(this.isClaimed(coupon) ? '已领取' : '领取')
-          .attributeModifier(new AppButtonStyle()).height(40)
-          .fontSize(FONT_SIZE.SM)
-          .fontColor(this.isClaimed(coupon) ? COLORS.TEXT_HINT : COLORS.ON_PRIMARY)
-          .backgroundColor(this.isClaimed(coupon) ? COLORS.DIVIDER : MODULE_COLOR.COUPON)
-          .borderRadius(BORDER_RADIUS.ROUND)
-          .margin({ right: SPACING.MD })
-          .onClick(() => { this.doClaim(coupon) })
-      } else if (this.currentTab === 1) {
-        Button('使用')
-          .attributeModifier(new AppButtonStyle()).height(40)
-          .fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)
-          .backgroundColor(COLORS.PRIMARY)
-          .borderRadius(BORDER_RADIUS.ROUND)
-          .margin({ right: SPACING.MD })
-          .onClick(() => { this.onSelectCoupon(coupon) })
-      } else {
-        Text('已使用')
-          .fontSize(FONT_SIZE.SM)
-          .fontColor(COLORS.TEXT_HINT)
-          .margin({ right: SPACING.MD })
-      }
+        // 右侧信息区
+        Column({ space: 4 }) {
+          Text(coupon.storeName ? coupon.storeName : '通用券')
+            .fontSize(FONT_SIZE.LG)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.currentTab === 2 ? COLORS.TEXT_HINT : COLORS.TEXT_PRIMARY)
+          Text(coupon.condition)
+            .fontSize(FONT_SIZE.SM)
+            .fontColor(this.currentTab === 2 ? COLORS.TEXT_HINT : COLORS.TEXT_SECONDARY)
+        }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+      }.width('100%').alignItems(VerticalAlign.Top)
+      Text(`有效期: ${coupon.startTime} ~ ${coupon.endTime}`)
+        .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).width('100%')
+      Row() {
+        // 按钮：领取/已领取/使用/已使用
+        if (this.currentTab === 0) {
+          Button(this.isClaimed(coupon) ? '已领取' : '领取')
+            .attributeModifier(new AppButtonStyle()).height(40)
+            .fontSize(FONT_SIZE.SM)
+            .fontColor(this.isClaimed(coupon) ? COLORS.TEXT_HINT : COLORS.ON_PRIMARY)
+            .backgroundColor(this.isClaimed(coupon) ? COLORS.DIVIDER : MODULE_COLOR.COUPON)
+            .borderRadius(BORDER_RADIUS.ROUND)
+            .layoutWeight(1)
+            .onClick(() => { this.doClaim(coupon) })
+        } else if (this.currentTab === 1) {
+          Button('使用')
+            .attributeModifier(new AppButtonStyle()).height(40)
+            .fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)
+            .backgroundColor(COLORS.PRIMARY)
+            .borderRadius(BORDER_RADIUS.ROUND)
+            .layoutWeight(1)
+            .onClick(() => { this.onSelectCoupon(coupon) })
+        } else {
+          Text('已使用')
+            .fontSize(FONT_SIZE.SM)
+            .fontColor(COLORS.TEXT_HINT)
+            .width('100%').textAlign(TextAlign.End)
+        }
+      }.width('100%')
     }
       .attributeModifier(new AppCardStyle())
     .width('100%')
-    .height(80)
+    .padding(SPACING.LG)
   }
 
   // 判断是否已领取

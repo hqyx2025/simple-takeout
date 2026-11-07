@@ -192,7 +192,6 @@ export struct AdminAssistantPage {
                   fieldId: 'admin-assistant-model',
                   onChange: (value: string) => { this.model = value },
                   required: true }).width('100%')
-                Text('API Key').fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Medium).fontColor(AppTheme.TEXT).width('100%')
                 Text(this.clearApiKey ? '待清除密钥，保存后生效' : (this.hasApiKey ? '服务端已保存密钥，留空可保留' : '尚未配置密钥'))
                   .fontSize(FONT_SIZE.SM).fontColor(this.clearApiKey ? COLORS.ERROR : AppTheme.MUTED)
                   .width('100%').id('admin-assistant-key-status')

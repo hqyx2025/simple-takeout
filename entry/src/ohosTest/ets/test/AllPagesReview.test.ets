@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@ohos/hypium'
-import { Driver, ON, Component, abilityDelegatorRegistry } from '@kit.TestKit'
+import { Driver, ON, Component, MatchPattern, abilityDelegatorRegistry } from '@kit.TestKit'
 import { window, UIContext } from '@kit.ArkUI'
 import { UIAbility } from '@kit.AbilityKit'
 import BuildProfile from 'BuildProfile'
@@ -77,6 +77,11 @@ async function verifyScreen(driver: Driver, context: UIContext, target: ReviewTa
   const size = await driver.getDisplaySize()
   const bounds = await title.getBounds()
   expect(bounds.left >= 0 && bounds.right <= size.x && bounds.top >= 0 && bounds.bottom <= size.y).assertTrue()
+  if (target.page === 'ReviewImagePage') {
+    expect(bounds.top < context.vp2px(140)).assertTrue()
+    const image = requireComponent(await driver.findComponent(ON.id('review-image-preview')), 'review image')
+    expect((await image.getBounds()).top >= bounds.bottom).assertTrue()
+  }
   expect(await driver.screenCap(screenshotDirectory + '/' + name + '.png')).assertTrue()
   console.info('[AllPagesReview] PASS ' + name)
 }
@@ -208,6 +213,27 @@ async function roleReview(role: UserRole): Promise<void> {
         await driver.delayMs(500)
       }
     }
+    if (role === UserRole.ADMIN) {
+      await navigate(context, 'AdminEmployeePage', fixture)
+      await waitTitle(driver, '员工管理')
+      await (await waitEnabled(driver, 'page-header-action')).click()
+      const name = requireComponent(await driver.waitForComponent(ON.id('AdminEmployeePage-formUsername'), 5000), 'employee name')
+      await name.inputText('界面布局检查')
+      await driver.delayMs(800)
+      const save = requireComponent(await driver.findComponent(ON.id('admin-employee-form-save')), 'employee footer')
+      const rect = await save.getBounds(); const size = await driver.getDisplaySize()
+      expect(rect.top >= 0 && rect.bottom <= size.y && rect.right <= size.x && rect.bottom > rect.top).assertTrue()
+      const keyboard = mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_KEYBOARD).bottomRect
+      if (keyboard.height > 0) { expect(rect.bottom <= keyboard.top).assertTrue() }
+      const label = await requireComponent(await driver.findComponent(ON.id('AdminEmployeePage-formUsername-label')), 'persistent employee label').getBounds()
+      const field = await name.getBounds()
+      expect(label.bottom > label.top && label.top >= 0 && label.bottom <= field.top).assertTrue()
+      expect(await driver.screenCap(screenshotDirectory + '/2-dark-large-EmployeeForm.png')).assertTrue()
+      expect(await clickByIdOrText(driver, 'admin-employee-form-cancel', '取消')).assertTrue()
+      await driver.waitForIdle(500, 5000)
+      expect(isFound(await driver.findComponent(ON.id('admin-employee-form-save')))).assertFalse()
+      console.info('[AllPagesReview] PASS employee-form-keyboard-footer-and-cancel')
+    }
     if (role === UserRole.MERCHANT) {
       await navigate(context, 'MerchantMarketingPage', fixture)
       const edit = requireComponent(await scrollUntilVisible(driver, 'marketing-edit-' + fixture.giftActivityId.toString()), 'gift edit')
@@ -334,6 +360,62 @@ export default function allPagesReviewTest(): void {
         await driver.screenCap(screenshotDirectory + '/states-failure.png')
         throw new Error(error instanceof Error ? error.message : 'UI state check failed; see states-failure.png')
       } finally { await saveAppearanceSettings(ability.context, 'system', 1, 'auto') }
+    })
+  })
+  describe('UiPolishDetails', () => {
+    it('preview_header_and_coupon_content_survive_large_text', 0, async () => {
+      expect(BuildProfile.UI_TEST_BASE_URL.startsWith('http://10.0.2.2:')).assertTrue()
+      const fixture: ReviewFixtures = (JSON.parse(BuildProfile.QUICK_LOGIN_CONFIG) as ReviewConfiguration).fixtures
+      const driver: Driver = Driver.create()
+      await launchAppUnderTest(driver)
+      const ability: UIAbility = await abilityDelegatorRegistry.getAbilityDelegator().getCurrentTopAbility()
+      const context: UIContext = (await window.getLastWindow(ability.context)).getUIContext()
+      screenshotDirectory = ability.context.filesDir + '/ui-review'
+      const mode: string = AppStorage.get<string>('appearanceColorMode') ?? 'system'
+      const scale: number = AppStorage.get<number>('appearanceFontScale') ?? 1
+      const hand: string = AppStorage.get<string>('navigationHandMode') ?? 'auto'
+      const account: QuickLoginAccount | undefined = getQuickLoginAccount(UserRole.CUSTOMER, getApiBaseUrl())
+      if (account === undefined) { throw new Error('Isolated customer unavailable') }
+      expect((await loginRemote(account.phone, account.password, 'USER'))?.role).assertEqual(UserRole.CUSTOMER)
+      await syncStoresFromServer()
+      try {
+        for (const variant of ['light', 'dark', 'light-large', 'dark-large']) {
+          await saveAppearanceSettings(ability.context, variant.startsWith('dark') ? 'dark' : 'light', variant.endsWith('large') ? 1.3 : 1, 'center')
+          AppStorage.setOrCreate<string>('reviewPreviewUrl', fixture.image.startsWith('http') ? fixture.image : getApiBaseUrl() + fixture.image)
+          await navigate(context, 'ReviewImagePage', fixture)
+          await verifyScreen(driver, context, new ReviewTarget('ReviewImagePage', '评价图片'), 'details-' + variant + '-Preview')
+          context.runScopedTask((): void => { context.getRouter().back() })
+          await driver.delayMs(400)
+          await navigate(context, 'CouponCenterPage', fixture)
+          await waitTitle(driver, '优惠券中心')
+          await requireComponent(await driver.waitForComponent(ON.text('我的优惠券'), 5000), 'owned coupons').click()
+          await driver.delayMs(800)
+          const dates: Component[] = await driver.findComponents(ON.text('有效期:', MatchPattern.CONTAINS))
+          expect(dates.length > 0).assertTrue()
+          const bounds = await dates[0].getBounds(); const display = await driver.getDisplaySize()
+          expect(bounds.top >= 0 && bounds.bottom <= display.y && bounds.right <= display.x && bounds.left >= 0).assertTrue()
+          expect(await driver.screenCap(screenshotDirectory + '/details-' + variant + '-Coupons.png')).assertTrue()
+          context.runScopedTask((): void => { context.getRouter().back() })
+          await driver.delayMs(400)
+          for (const target of [new ReviewTarget('ProductListPage', '附近全部商品'), new ReviewTarget('AddBankCardPage', '添加银行卡')]) {
+            AppStorage.setOrCreate<string>('productListTitle', '附近全部商品')
+            await navigate(context, target.page, fixture)
+            await verifyScreen(driver, context, target, 'details-' + variant + '-' + target.page)
+            context.runScopedTask((): void => { context.getRouter().back() })
+            await driver.delayMs(400)
+          }
+          await navigate(context, 'Index', fixture)
+          expect(await clickByIdOrText(driver, 'tab-1', 'AI助手')).assertTrue()
+          const send = requireComponent(await driver.waitForComponent(ON.id('assistant-send'), 5000), 'assistant send')
+          await driver.waitForIdle(500, 5000)
+          await driver.delayMs(500)
+          const sendBounds = await send.getBounds()
+          expect(sendBounds.left >= 0 && sendBounds.right <= display.x && sendBounds.bottom <= display.y).assertTrue()
+          expect(await driver.screenCap(screenshotDirectory + '/details-' + variant + '-Composer.png')).assertTrue()
+          context.runScopedTask((): void => { context.getRouter().back() })
+          await driver.delayMs(400)
+        }
+      } finally { await saveAppearanceSettings(ability.context, mode, scale, hand) }
     })
   })
   describe('AllPagesUser', () => { it('all_user_pages_in_four_appearance_variants', 0, async () => { await roleReview(UserRole.CUSTOMER) }) })

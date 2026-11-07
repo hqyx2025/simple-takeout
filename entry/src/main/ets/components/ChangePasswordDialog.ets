@@ -104,7 +104,7 @@ export struct ChangePasswordDialog {
           required: true })
 
           }.width('100%')
-        }.width('100%').layoutWeight(1)
+        }.align(Alignment.Top).width('100%').layoutWeight(1)
         Row({ space: SPACING.MD }) {
           Button('取消')
             .attributeModifier(new AppButtonStyle())

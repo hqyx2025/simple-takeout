@@ -1,7 +1,7 @@
 import { AppTheme } from '../common/theme/AppTheme'
 import { PASSWORD_HINT, newPasswordError, passwordStrength } from '../common/PasswordPolicy'
 
-/** 浮动标签、帮助和失焦反馈；页面仍负责提交校验与业务规则。 */
+/** 标签常驻、示例置于输入区；页面仍负责提交校验与业务规则。 */
 @Component
 export struct FormInput {
   @Prop label: string = ''
@@ -75,20 +75,27 @@ export struct FormInput {
   }
 
   build() {
-    Column({ space: 4 }) {
-      Stack({ alignContent: Alignment.TopStart }) {
+    Column({ space: 6 }) {
+      Text(this.label)
+        .fontSize(13).fontWeight(FontWeight.Medium)
+        .fontColor(this.focused ? AppTheme.ACCENT : AppTheme.TEXT)
+        .width('100%').id(this.fieldId + '-label')
+        .accessibilityLevel('no')
+      Column() {
         if (this.multiline) {
-          TextArea({ text: this.value })
+          TextArea({ text: this.value, placeholder: this.placeholder })
             .width('100%').height(this.inputHeight).fontSize(16).fontColor(AppTheme.TEXT)
-            .backgroundColor(Color.Transparent).padding({ left: 14, right: 14, top: 24, bottom: 10 })
+            .placeholderColor(AppTheme.MUTED)
+            .backgroundColor(Color.Transparent).padding(14)
             .maxLength(this.maxLength).enabled(this.isEnabled).caretColor(AppTheme.ACCENT)
             .id(this.fieldId).accessibilityText(this.label)
             .onChange((value: string) => { this.change(value) })
             .onFocus(() => { this.focused = true }).onBlur(() => { this.validateOnBlur() })
         } else {
-          TextInput({ text: this.value })
-            .width('100%').height(56).fontSize(16).fontColor(AppTheme.TEXT)
-            .backgroundColor(Color.Transparent).padding({ left: 14, right: 14, top: 19, bottom: 3 })
+          TextInput({ text: this.value, placeholder: this.placeholder })
+            .width('100%').height(AppTheme.CONTROL_HEIGHT).fontSize(16).fontColor(AppTheme.TEXT)
+            .placeholderColor(AppTheme.MUTED)
+            .backgroundColor(Color.Transparent).padding({ left: 14, right: 14 })
             .type(this.oneTimeCode ? InputType.ONE_TIME_CODE : this.inputType)
             .enableAutoFill(true).showPasswordIcon(this.showPassword).inputFilter(this.filter)
             .maxLength(this.maxLength).enabled(this.isEnabled).caretColor(AppTheme.ACCENT)
@@ -97,19 +104,13 @@ export struct FormInput {
             .onFocus(() => { this.focused = true }).onBlur(() => { this.validateOnBlur() })
             .onSubmit(() => { this.validateOnBlur(); this.onInputSubmit() })
         }
-        Text(this.label)
-          .fontSize(this.focused || this.value ? 12 : 16)
-          .fontColor(this.focused ? AppTheme.ACCENT : AppTheme.MUTED)
-          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-          .margin({ left: 14, right: 14, top: this.focused || this.value ? 5 : 18 })
-          .hitTestBehavior(HitTestMode.None).accessibilityLevel('no')
       }.width('100%').backgroundColor(AppTheme.INPUT).borderRadius(AppTheme.CONTROL_RADIUS)
         .border({ width: this.focused ? 1.5 : 1,
           color: this.localError || this.errorMessage ? AppTheme.ERROR
             : this.focused ? AppTheme.ACCENT : AppTheme.BORDER })
-      if (!(this.localError || this.errorMessage) && (this.helpText || this.placeholder || this.passwordRules)
+      if (!(this.localError || this.errorMessage) && (this.helpText || this.passwordRules)
         && !this.hasCompleteValue(this.value)) {
-        Text(this.passwordRules ? PASSWORD_HINT : this.helpText || this.placeholder)
+        Text(this.passwordRules ? PASSWORD_HINT : this.helpText)
           .fontSize(12).fontColor(AppTheme.MUTED).width('100%').id(this.fieldId + (this.passwordRules ? '-rules' : '-help'))
       }
       if (this.passwordRules && this.value) {

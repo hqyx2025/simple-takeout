@@ -87,7 +87,7 @@ struct RegisterPage {
             isEnabled: !this.submitting && !this.sendingCode, errorMessage: this.errorField === 'login-confirm-password' ? this.errorMsg : '',
             onChange: (value: string) => { this.confirmPassword = value; this.clearFeedback() } })
         }.width('100%').constraintSize({ maxWidth: AppTheme.FORM_MAX_WIDTH }).padding({ top: 16, bottom: 12 }).flexShrink(0)
-      }.width('100%').layoutWeight(1).padding({ left: 24, right: 24 }).scrollBar(BarState.Off)
+      }.align(Alignment.Top).width('100%').layoutWeight(1).padding({ left: 24, right: 24 }).scrollBar(BarState.Off)
       Row() {
         Button(this.submitting ? '注册中…' : '注册', { type: ButtonType.Normal })
           .attributeModifier(new AppButtonStyle()).height(44).width('100%')
@@ -142,7 +142,7 @@ struct RegisterPage {
           helpText: '6 位验证码，可整段粘贴或使用系统自动填入',
           required: true }).layoutWeight(1)
         Button(this.sendingCode ? '发送中…' : this.cooldownSeconds > 0 ? this.cooldownSeconds + '秒后重发' : '获取验证码')
-          .attributeModifier(new AppButtonStyle()).height(44).width(120).id('register-send-code')
+          .attributeModifier(new AppButtonStyle()).height(52).width(132).margin({ top: 24 }).id('register-send-code')
           .enabled(!this.sendingCode && this.cooldownSeconds === 0 && !this.submitting)
           .onClick(() => { this.sendVerificationCode() })
       }.width('100%').alignItems(VerticalAlign.Top).flexShrink(0)

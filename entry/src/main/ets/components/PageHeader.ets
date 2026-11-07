@@ -63,7 +63,7 @@ export struct PageHeader {
   }
 
   build() {
-    Row({ space: SPACING.MD }) {
+    Row({ space: SPACING.SM }) {
       if (this.showBack) {
         this.backButton()
       }
@@ -74,7 +74,10 @@ export struct PageHeader {
           .fontSize(FONT_SIZE.XXL)
           .fontWeight(FontWeight.Bold)
           .fontColor(this.titleColor)
-          .maxLines(1)
+          .maxLines(2)
+          .minFontSize(FONT_SIZE.LG)
+          .maxFontSize(FONT_SIZE.XXL)
+          .heightAdaptivePolicy(TextHeightAdaptivePolicy.MIN_FONT_SIZE_FIRST)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .width('100%')
           .textAlign(TextAlign.Start)
@@ -109,7 +112,7 @@ export struct PageHeader {
     }
     .width('100%')
     .height(64 + this.topPadding)
-    .padding({ left: SPACING.XL, right: SPACING.XL, top: this.topPadding })
+    .padding({ left: SPACING.LG, right: SPACING.LG, top: this.topPadding })
     .backgroundColor(this.headerBgColor)
     .border({ width: { bottom: 1 }, color: AppTheme.BORDER })
   }

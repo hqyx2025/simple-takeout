@@ -878,7 +878,7 @@ export struct LocationPage {
         }
         .width('100%')
         .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.LG })
-      }
+      }.align(Alignment.Top)
       .scrollBar(BarState.Off)
       .layoutWeight(1)
       .onReachEnd(() => {

@@ -140,7 +140,7 @@ struct AppSettingsPage {
           .backgroundColor(COLORS.BG_CARD)
           .border({ width: 1, color: COLORS.DIVIDER }).borderRadius(AppTheme.CARD_RADIUS)
         }.width('100%').constraintSize({ maxWidth: 680 }).padding(SPACING.LG)
-      }.width('100%').layoutWeight(1).scrollBar(BarState.Off)
+      }.align(Alignment.Top).width('100%').layoutWeight(1).scrollBar(BarState.Off)
       Row() {
         Button(this.saving ? '保存中…' : '恢复默认设置')
           .attributeModifier(new AppButtonStyle()).width('100%')

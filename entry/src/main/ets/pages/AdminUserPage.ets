@@ -217,7 +217,8 @@ export struct AdminUserPage {
       Button(item.status === 1 ? '停用' : '启用')
         .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
         .fontColor(item.status === 1 ? COLORS.ERROR : COLORS.SUCCESS)
-        .onClick(() => { this.toggleStatus(item) }).backgroundColor(COLORS.ERROR_LIGHT)
+        .onClick(() => { this.toggleStatus(item) })
+        .backgroundColor(item.status === 1 ? COLORS.ERROR_LIGHT : COLORS.SUCCESS_LIGHT)
     }
       .attributeModifier(new AppCardStyle()).width('100%').padding(SPACING.MD)
   }

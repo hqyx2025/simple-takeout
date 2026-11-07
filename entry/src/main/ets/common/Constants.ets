@@ -58,8 +58,8 @@ export class SPACING {
 
 // 字体大小
 export class FONT_SIZE {
-  static readonly XS: number = 10
-  static readonly SM: number = 12
+  static readonly XS: number = 11
+  static readonly SM: number = 13
   static readonly MD: number = 14
   static readonly LG: number = 16
   static readonly XL: number = 18
@@ -76,6 +76,19 @@ export class BORDER_RADIUS {
   static readonly XL: number = 24
   static readonly ROUND: number = 14
   static readonly CIRCLE: number = 999
+}
+
+/** 分类仅映射本地展示图标，保留服务端名称、顺序和原始 icon 数据。 */
+export function categoryIcon(name: string, icon: string = ''): Resource {
+  const label: string = name + icon
+  if (label.includes('饮') || label.includes('茶') || label.includes('🧋')) { return $r('app.media.home_drink') }
+  if (label.includes('甜') || label.includes('糕') || label.includes('🍰')) { return $r('app.media.home_cake') }
+  if (label.includes('火锅') || label.includes('🍲')) { return $r('app.media.home_pot') }
+  if (label.includes('烧烤') || label.includes('🍢')) { return $r('app.media.home_skewer') }
+  if (label.includes('寿司') || label.includes('🍣')) { return $r('app.media.home_sushi') }
+  if (label.includes('快餐') || label.includes('🍟')) { return $r('app.media.home_fries') }
+  if (label.includes('美食') || label.includes('汉堡') || label.includes('🍔')) { return $r('app.media.home_burger') }
+  return $r('app.media.home_bowl')
 }
 
 // 订单状态文本（status=4 时需结合托管状态 escrowStatus 区分：

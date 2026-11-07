@@ -26,16 +26,19 @@ export struct FormSelect {
 
   build() {
     Column({ space: 4 }) {
-      Text(this.label).fontSize(12).fontColor(AppTheme.MUTED).width('100%')
+      Text(this.label).fontSize(13).fontWeight(FontWeight.Medium).fontColor(AppTheme.TEXT).width('100%')
       if (this.options.length <= 8) {
         Select(this.options).selected(this.selected)
           .value(this.selected >= 0 && this.selected < this.options.length ? this.options[this.selected].value : '请选择')
           .width('100%').height(52).fontColor(AppTheme.TEXT).backgroundColor(AppTheme.INPUT)
+          .border({ width: 1, color: AppTheme.BORDER }).borderRadius(AppTheme.CONTROL_RADIUS)
+          .accessibilityText(this.label)
           .enabled(this.isEnabled).id(this.fieldId)
           .onSelect((index: number) => { this.onSelect(index, String(this.options[index].value)) })
       } else {
         Button(this.selected >= 0 && this.selected < this.options.length ? String(this.options[this.selected].value) : '请选择')
           .width('100%').constraintSize({ minHeight: 52 }).fontColor(AppTheme.TEXT).backgroundColor(AppTheme.INPUT)
+          .border({ width: 1, color: AppTheme.BORDER }).borderRadius(AppTheme.CONTROL_RADIUS)
           .enabled(this.isEnabled).id(this.fieldId).accessibilityText(this.label)
           .onClick(() => { this.open = !this.open; this.query = '' })
         if (this.open) {
@@ -45,7 +48,7 @@ export struct FormSelect {
             Column() {
               ForEach(this.options, (option: SelectOption, index: number) => { this.option(option, index) })
             }.width('100%')
-          }.width('100%').constraintSize({ maxHeight: 220 })
+          }.align(Alignment.Top).width('100%').constraintSize({ maxHeight: 220 })
           if (!this.options.some((option: SelectOption): boolean => String(option.value).toLocaleLowerCase().includes(this.query.toLocaleLowerCase()))) {
             Text('没有匹配项，请换个关键词').fontSize(13).fontColor(AppTheme.MUTED)
           }

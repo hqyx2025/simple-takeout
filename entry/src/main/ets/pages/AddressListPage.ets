@@ -372,7 +372,7 @@ export struct AddressListPage {
               }
               .width('100%')
               .enabled(!this.saving)
-            }
+            }.align(Alignment.Top)
             .width('100%')
             .layoutWeight(1)
             .scrollBar(BarState.Auto)

@@ -253,7 +253,8 @@ export struct AdminOrderPage {
     }
     if (this.canRunOrderAction(order, 'cancel')) {
       Button(order.status === 0 ? '取消' : '取消并退款').attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
-        .fontColor(COLORS.ERROR).enabled(this.actioningOrderId === 0 && !this.loading).id(`admin-order-cancel-${order.id}`)
+        .fontColor(COLORS.ERROR).backgroundColor(COLORS.ERROR_LIGHT)
+        .enabled(this.actioningOrderId === 0 && !this.loading).id(`admin-order-cancel-${order.id}`)
         .onClick(() => { this.runOrderAction(order.id, 'cancel', order.status === 0 ? '订单已取消' : '订单已取消并退款') })
     }
     if (order.status === 2 && (order.readyTime ?? '') !== '' && !this.canRunOrderAction(order, 'deliver')) {

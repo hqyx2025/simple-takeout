@@ -234,7 +234,7 @@ struct OrderSupportPage {
             }
           }
         }.width('100%').padding(SPACING.LG).alignItems(HorizontalAlign.Start)
-      }.layoutWeight(1).width('100%')
+      }.layoutWeight(1).width('100%').align(Alignment.Top).scrollBar(BarState.Off)
       if (this.evidenceRefundId > 0) {
         Button('提交商家举证').attributeModifier(new AppButtonStyle()).width('100%').height(44)
           .enabled(!this.busy && !this.evidenceUploading).onClick(() => { this.submitEvidence() })

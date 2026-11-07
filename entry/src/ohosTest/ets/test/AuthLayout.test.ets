@@ -5,6 +5,7 @@ import { UIAbility } from '@kit.AbilityKit'
 import { fileIo } from '@kit.CoreFileKit'
 import { launchAppUnderTest, requireComponent, clickByIdOrText, scrollUntilVisible, isFound } from './UiTestHelper'
 import { saveAppearanceSettings } from '../../../main/ets/service/AppearanceSettings'
+import { logout } from '../../../main/ets/service/AppStorageManager'
 
 async function verifyForm(driver: Driver, ids: string[], submitId: string, full: boolean): Promise<void> {
   await driver.delayMs(500)
@@ -39,6 +40,8 @@ export default function authLayoutTest() {
     it('AuthLayout_compact_forms_light_dark_and_large_text', 0, async () => {
       const driver: Driver = Driver.create()
       await launchAppUnderTest(driver)
+      logout()
+      requireComponent(await driver.waitForComponent(ON.id('login-phone'), 10000), 'guest login form')
       const ability: UIAbility = await abilityDelegatorRegistry.getAbilityDelegator().getCurrentTopAbility()
       const ui = (await window.getLastWindow(ability.context)).getUIContext()
       const previousMode: string = AppStorage.get<string>('appearanceColorMode') ?? 'system'

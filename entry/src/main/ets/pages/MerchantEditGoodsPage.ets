@@ -604,7 +604,7 @@ Row() {
       }
       .width('100%')
       .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.XL })
-    }
+    }.align(Alignment.Top)
     .layoutWeight(1).scrollBar(BarState.Off)
   }
 

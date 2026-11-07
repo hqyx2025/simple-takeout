@@ -5,7 +5,7 @@ import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 import { AppMotion } from '../common/theme/AppMotion'
 import { Address, GoodsItem, StoreItem } from '../model/Models'
 import { getAllStoresList, getGoodsForStore, syncStoresFromServer, syncGoodsFromServer } from '../service/AppStorageManager'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, merchantImageSource, DEFAULT_MERCHANT_IMAGE, accentBg, accentFg } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, merchantImageSource, DEFAULT_MERCHANT_IMAGE } from '../common/Constants'
 import { EmptyState } from '../components/EmptyState'
 import { PageHeader } from '../components/PageHeader'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
@@ -340,15 +340,9 @@ EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', actionLabe
         EmptyState({ icon: $r('app.media.home_bowl'), title: '暂无符合条件的商品', description: '可以换个分类或查看附近全部商品' })
       } else {
         List({ space: SPACING.SM }) {
-          LazyForEach(this.dataSource, (item: ProductListItem, index: number) => {
+          LazyForEach(this.dataSource, (item: ProductListItem) => {
             ListItem() {
               Row({ space: SPACING.MD }) {
-                // 左侧模块色条：相邻条目颜色不同，视觉上把整片白底切分开
-                Column()
-                  .width(4)
-                  .height(72)
-                  .backgroundColor(accentFg(index))
-                  .borderRadius(BORDER_RADIUS.SM)
                 Image(merchantImageSource(item.goods.image))
                   .alt(DEFAULT_MERCHANT_IMAGE)
                   .width(72)
@@ -365,10 +359,11 @@ EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', actionLabe
                     .maxLines(1)
                     .textOverflow({ overflow: TextOverflow.Ellipsis })
                   Text(`¥${item.goods.price.toFixed(2)}`)
+                    .flexShrink(0)
                     .fontSize(FONT_SIZE.LG)
                     .fontWeight(FontWeight.Bold)
                     .fontColor(COLORS.PRICE_RED)
-                }
+                }.width('100%')
                 Text(item.goods.description)
                   .fontSize(FONT_SIZE.SM)
                   .fontColor(COLORS.TEXT_SECONDARY)
@@ -377,6 +372,7 @@ EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', actionLabe
                   .width('100%')
                 Row({ space: SPACING.SM }) {
                   Text(item.store.name)
+                    .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                     .fontSize(FONT_SIZE.SM)
                     .fontColor(COLORS.PRIMARY)
                   Text(`月售${item.goods.sales}`)
@@ -395,12 +391,11 @@ EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', actionLabe
                   }
                 }
                 .width('100%')
-              }
+              }.layoutWeight(1).alignItems(HorizontalAlign.Start)
               }
               .width('100%')
               .padding(SPACING.LG)
-              .backgroundColor(accentBg(index))
-              .borderRadius(BORDER_RADIUS.LG)
+              .attributeModifier(new AppCardStyle())
               .onClick(() => { this.openStore(item) })
             }
           }, (item: ProductListItem) => `${item.store.id}-${item.goods.id}`)

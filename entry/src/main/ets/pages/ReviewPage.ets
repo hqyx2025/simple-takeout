@@ -259,7 +259,7 @@ export struct ReviewPage {
           }
           .width('100%')
           .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.XL })
-        }
+        }.align(Alignment.Top)
         .layoutWeight(1)
         .scrollBar(BarState.Off)
         .backgroundColor(COLORS.BG_PRIMARY)
@@ -352,6 +352,9 @@ export struct ReviewPage {
       Row({ space: SPACING.XS }) {
         ForEach(this.starList, (star: number) => {
           Text('★')
+            .width(44).height(44).textAlign(TextAlign.Center)
+            .accessibilityText(star.toString() + '星')
+            .accessibilitySelected(this.rating === star)
             .fontSize(FONT_SIZE.BIG_TITLE)
             .fontColor(star <= this.rating ? COLORS.PRIMARY : COLORS.DIVIDER)
             .padding({ left: SPACING.XS, right: SPACING.XS })

@@ -694,6 +694,7 @@ export struct StoreDetailContent {
       if (this.hasSpecs(goods)) {
         // 多规格菜品：规格价与规格库存各不相同，统一走选规格弹窗（后端要求 specId）
         Text('选规格')
+          .constraintSize({ minWidth: 64, minHeight: AppTheme.TOUCH_SIZE }).textAlign(TextAlign.Center)
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)
           .backgroundColor(COLORS.PRIMARY)
           .borderRadius(BORDER_RADIUS.ROUND)
@@ -703,16 +704,18 @@ export struct StoreDetailContent {
           })
       } else {
         if (this.getQty(goods.id) > 0) {
-          Text('-').id(`goods-minus-${goods.id}`).width(32).height(32).fontSize(16).fontColor(COLORS.ON_PRIMARY)
-            .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.CIRCLE)
+          Text('-').id(`goods-minus-${goods.id}`).width(44).height(44).fontSize(20).fontColor(COLORS.PRIMARY)
+            .accessibilityText('减少' + goods.name + '数量')
+            .backgroundColor(COLORS.TAG_BG).borderRadius(BORDER_RADIUS.CIRCLE)
             .textAlign(TextAlign.Center).onClick(() => {
               this.changeGoodsQuantity(goods, -1)
             })
           Text(this.getQty(goods.id).toString()).id(`goods-qty-${goods.id}`)
-            .width(28).height(32).fontSize(FONT_SIZE.MD)
+            .width(28).height(44).fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.TEXT_PRIMARY).textAlign(TextAlign.Center)
         }
-        Text('+').id(`goods-plus-${goods.id}`).width(32).height(32).fontSize(16).fontColor(COLORS.ON_PRIMARY)
+        Text('+').id(`goods-plus-${goods.id}`).width(44).height(44).fontSize(20).fontColor(COLORS.ON_PRIMARY)
+          .accessibilityText('添加' + goods.name + '到购物车')
           .backgroundColor(COLORS.PRIMARY).borderRadius(BORDER_RADIUS.CIRCLE)
           .textAlign(TextAlign.Center).onClick(() => {
             this.addGoodsToCart(goods)
@@ -811,7 +814,7 @@ export struct StoreDetailContent {
         .backgroundColor(COLORS.PRIMARY)
         .borderRadius(BORDER_RADIUS.ROUND)
         .id('store-checkout')
-        .width(100)
+        .width(132)
         .onClick(() => {
           if (this.cartCount > 0) {
             AppStorage.setOrCreate<number>('checkoutStoreId', this.storeId)

@@ -8,7 +8,7 @@ import { isLoggedIn, getAllStoresList, syncCategoriesFromServer, syncBannersRemo
 import { fetchRecommendedStoresApi, fetchSpecialGoodsApi } from '../../service/ApiService'
 
 import { FloatingTabBarTheme } from '../../common/theme/FloatingTabBarTheme'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, formatSales, merchantImageSource, DEFAULT_MERCHANT_IMAGE, MODULE_COLOR, MODULE_BG, accentFg, accentIndexFromText } from '../../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, formatSales, merchantImageSource, DEFAULT_MERCHANT_IMAGE, MODULE_COLOR, MODULE_BG, accentFg, accentIndexFromText, categoryIcon } from '../../common/Constants'
 
 import { RatingStars } from '../../components/RatingStars'
 
@@ -303,19 +303,6 @@ export struct HomePage {
     return rowCount * 80
   }
 
-  // 仅映射展示资源；分类名称、ID、顺序和服务器 icon 字段保持原样。
-  private getCategoryIcon(category: Category): Resource {
-    const label: string = category.name + (category.icon ?? '')
-    if (label.includes('饮') || label.includes('茶') || label.includes('🧋')) { return $r('app.media.home_drink') }
-    if (label.includes('甜') || label.includes('糕') || label.includes('🍰')) { return $r('app.media.home_cake') }
-    if (label.includes('火锅') || label.includes('🍲')) { return $r('app.media.home_pot') }
-    if (label.includes('烧烤') || label.includes('🍢')) { return $r('app.media.home_skewer') }
-    if (label.includes('寿司') || label.includes('🍣')) { return $r('app.media.home_sushi') }
-    if (label.includes('快餐') || label.includes('🍟')) { return $r('app.media.home_fries') }
-    if (label.includes('美食') || label.includes('汉堡') || label.includes('🍔')) { return $r('app.media.home_burger') }
-    return $r('app.media.home_bowl')
-  }
-
   @Builder
   homeEmpty(icon: Resource, title: string, description: string) {
     Column({ space: SPACING.SM }) {
@@ -415,7 +402,7 @@ export struct HomePage {
               GridItem() {
                 Column({ space: SPACING.XS }) {
                   Stack() {
-                    Image(this.getCategoryIcon(cat))
+                    Image(categoryIcon(cat.name, cat.icon ?? ''))
                       .width(HomeTheme.CATEGORY_SIZE - SPACING.SM * 2)
                       .height(HomeTheme.CATEGORY_SIZE - SPACING.SM * 2)
                       .accessibilityLevel('no')
@@ -670,7 +657,7 @@ export struct HomePage {
           }
           Blank().height(FloatingTabBarTheme.CONTENT_INSET + this.bottomInset)
           }
-        }
+        }.align(Alignment.Top)
         .width('100%')
         .height('100%')
         .scrollBar(BarState.Off)

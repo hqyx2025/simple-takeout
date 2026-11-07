@@ -234,6 +234,7 @@ export struct RiderCenterPage {
                   .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
                   .layoutWeight(1)
                 Toggle({ type: ToggleType.Switch, isOn: this.rider!.online === 1 })
+                  .selectedColor(COLORS.PRIMARY).accessibilityText('接单状态')
                   .id('rider-online-toggle')
                   .onChange(() => { this.toggleOnline() })
               }
@@ -249,6 +250,7 @@ export struct RiderCenterPage {
                 Text('修改密码').fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
               }
               .margin({ top: SPACING.SM })
+              .constraintSize({ minHeight: 44 }).accessibilityText('修改密码')
               .id('rider-change-pwd')
               .onClick(() => { this.showChangePwd = true })
             }
@@ -279,17 +281,17 @@ export struct RiderCenterPage {
               Text('接单范围')
                 .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
                 .fontColor(MODULE_COLOR.RIDER).width('100%')
-              Row({ space: SPACING.MD }) {
+              Column({ space: SPACING.SM }) {
                 FormInput({ label: '配送半径（公里）',
                   value: this.radiusInput,
                   placeholder: `配送半径（公里），如：${RIDER_RADIUS_DEFAULT_KM}`,
                   inputType: InputType.Number,
                   fieldId: 'rider-radius-input',
                   onChange: (v: string) => { this.radiusInput = v },
-                  required: true }).layoutWeight(1)
+                  required: true }).width('100%')
                 Button(this.savingRadius ? '保存中...' : '保存半径')
                   .attributeModifier(new AppButtonStyle())
-                  .height(44).fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.RIDER)
+                  .width('100%').height(44).fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.RIDER)
                   .borderRadius(BORDER_RADIUS.ROUND)
                   .id('rider-radius-save')
                   .onClick(() => { this.onSaveRadius() })

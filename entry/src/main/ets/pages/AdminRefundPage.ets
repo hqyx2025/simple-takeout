@@ -425,7 +425,7 @@ export struct AdminRefundPage {
                   Text(this.actionError).fontSize(FONT_SIZE.SM).fontColor(COLORS.ERROR)
                 }
               }.width('100%').alignItems(HorizontalAlign.Start)
-            }.width('100%').layoutWeight(1).scrollBar(BarState.Auto)
+            }.align(Alignment.Top).width('100%').layoutWeight(1).scrollBar(BarState.Auto)
             Row({ space: SPACING.MD }) {
               Button('取消')
                 .attributeModifier(new AppButtonStyle())

@@ -66,7 +66,7 @@ export struct LocationSearchField {
           Column({ space: 4 }) {
             ForEach(this.matches, (place: AddressSearchResult) => { this.result(place) })
           }.width('100%')
-        }.width('100%').constraintSize({ maxHeight: 240 })
+        }.align(Alignment.Top).width('100%').constraintSize({ maxHeight: 240 })
       }
       if (this.message) { Text(this.message).fontSize(13).fontColor(AppTheme.MUTED) }
     }.width('100%')
