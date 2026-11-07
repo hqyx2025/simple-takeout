@@ -17,7 +17,7 @@
 # cache 挂载会覆盖掉 COPY 进去的镜像配置（实测导致 Maven 直连 central 失败）。
 # Maven 依赖用 buildkit cache mount 跨构建持久化，避免每次全量重下、随机断流
 # 只补缺件即可；若需换镜像改 server/docker/settings.xml，仅构建期生效。
-FROM maven:3.9-eclipse-temurin-25 AS build
+FROM maven:3.9-eclipse-temurin-26 AS build
 WORKDIR /workspace
 
 ARG MAVEN_SETTINGS=docker/settings.xml
