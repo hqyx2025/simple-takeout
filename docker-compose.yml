@@ -224,7 +224,7 @@ services:
   # API 网关：对外唯一入口，保持 :8087 契约与前端 BASE_URL 一致。
   # 与应用共用同一镜像，只换启动的 jar。
   app-balancer:
-    image: nginx:1.28.3-alpine
+    image: nginx:1.31.7-alpine
     restart: unless-stopped
     depends_on:
       app:
