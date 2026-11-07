@@ -62,7 +62,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
       - name: Upload unsigned debug HAP
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: entry-unsigned-debug-hap
           path: entry/build/default/outputs/default/entry-default-unsigned.hap
