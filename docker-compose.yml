@@ -14,7 +14,7 @@
 
 services:
   mysql:
-    image: mysql:8.4.6
+    image: mysql:26.10.0
     container_name: takeout-mysql
     restart: unless-stopped
     environment:
@@ -278,7 +278,7 @@ services:
 
   # 每个自然月首个运行时备份一次；重启不重复，失败每小时重试，保留历史备份。
   backup:
-    image: mysql:8.4.6
+    image: mysql:26.10.0
     container_name: takeout-mysql-backup
     restart: unless-stopped
     depends_on:
@@ -365,7 +365,7 @@ services:
       - ./logs/gateway:/app/logs
 
   erp-mysql:
-    image: mysql:8.4.6
+    image: mysql:26.10.0
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${TAKEOUT_ERP_MYSQL_ROOT_PASSWORD:?Set a separate ERP MySQL root password}
@@ -432,7 +432,7 @@ services:
         max-file: '3'
 
   erp-backup:
-    image: mysql:8.4.6
+    image: mysql:26.10.0
     restart: unless-stopped
     depends_on:
       erp-mysql:
