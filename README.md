@@ -15,7 +15,7 @@ HarmonyOS NEXT 原生客户端与 Spring Boot 交易系统，覆盖用户、商�
 > HarmonyOS NEXT 外卖点餐 App（毕业设计 / 学习项目，业务对标美团外卖）。
 >
 > 前端为单 HAP 工程（ArkTS + ArkUI，API 26），后端为 Spring Boot 服务端（Java 25），
-> 数据存储于 MySQL，热点数据缓存与领域事件使用 Redis，并提供 Docker Compose 一键环境。
+> 数据存储于 MySQL，Redis 提供热点缓存，RocketMQ 承载领域事件，并提供 Docker Compose 一键环境。
 >
 > 覆盖**四端**：用户（点外卖）— 商户（接单出餐）— 骑手（抢单配送）— 平台管理。
 
@@ -143,13 +143,13 @@ HarmonyOS NEXT 原生客户端与 Spring Boot 交易系统，覆盖用户、商�
   防**雪崩**（TTL 叠加随机抖动）。**缓存 Redis 故障时回源数据库；登录限流遇到慢调用或故障时改用有界本地窗口**。初次慢调用及恢复探测仍有延迟，降级时跨副本限流预算暂不共享。
 - **领域事件异步化**：采用**事务性 Outbox** —— 事件与业务写入在**同一事务**落 `outbox_events` 表
   （要么一起提交、要么一起回滚，不会出现「幽灵事件」或「丢事件」），提交后由定时中继搬运到
-  Redis Stream，消费组 + 去重键保证幂等。下单/支付/取消/退款事件异步驱动下游动作，
+  RocketMQ，消费组 + MySQL 持久回执去重。下单/支付/取消/退款事件异步驱动下游动作，
   **下单主流程保持同步事务**（防超卖依赖数据库条件更新的原子性）。
 - **资金平台托管**：用户支付后资金 `escrow_status=0` 托管，确认收货后才结算给商户。
 - **幂等与并发安全**：下单使用数据库唯一键兜底、Redis 快速拦截；退款/结算使用带状态条件的更新防止竞态和重复入账；
   库存/秒杀名额用乐观锁（`WHERE stock >= ?`、`sold + ? <= quota`）防超卖。
   **刻意不依赖 Redis 锁**：Redis 锁覆盖不到数据库写入，宕机时反而更弱。
-- **容器化**：`docker compose up -d --build` 一条命令拉起后端 + MySQL + Redis（含健康检查与启动顺序）。
+- **容器化**：`docker compose up -d --build` 一条命令拉起后端 + MySQL + Redis + RocketMQ（含健康检查与启动顺序）。
 
 ## 技术栈
 
@@ -161,8 +161,8 @@ HarmonyOS NEXT 原生客户端与 Spring Boot 交易系统，覆盖用户、商�
 | 后端数据访问 | JdbcTemplate + 既有 MyBatis-Plus 映射 | 主服务 DAO 位于 `server/takeout-app`；ERP 数据访问位于 `server/takeout-erp`；购物车使用既有实体 / Mapper |
 | 数据库 | MySQL 8.4 | 主库 `takeout` 和独立 ERP 库 `takeout_erp`；自动建表、兼容旧库增量迁移；默认禁用数据播种 |
 | 缓存 | Redis 7（Lettuce 连接池） | 热点浏览数据缓存；故障快速降级（500ms 超时 + 短连接超时） |
-| 消息 | Redis Stream + 事务性 Outbox | 领域事件异步投递，**未引入 RabbitMQ/RocketMQ 等外部 MQ** |
-| 容器化 | Docker · Docker Compose | 后端镜像基于 JDK 25 多阶段构建；MySQL 8.4 + Redis 7 |
+| 消息 | RocketMQ 5.x + 事务性 Outbox | 交易与通知共用 RocketMQ；MySQL 持久回执去重，失败重投与死信队列 |
+| 容器化 | Docker · Docker Compose | 后端镜像基于 JDK 25 多阶段构建；MySQL 8.4 + Redis 7 + RocketMQ 5.5.0 |
 | 地图 | 高德 Web 端 JS API v2.0 | 通过 ArkUI `Web` 组件内嵌运行，模拟器/真机均可用，无 native 依赖 |
 | 测试 | JUnit 5、Hypium、Node.js 原生测试 | `server/*/src/test`、`entry/src/test`、`entry/src/ohosTest`、`scripts/*.test.cjs`；2026-10-25 的 594 项为安全基线，六批 UX 与后续发布验证以 [实施记录](md/archive/人性化改造诊断与实施方案.md) 为准；设备 HAP 编译通过不等于 UiTest 已运行 |
 
@@ -181,13 +181,30 @@ flowchart LR
   API -->|"热点读缓存 / 失败降级回源"| Redis[("Redis 7")]
   API -->|"同一事务写入事件"| Outbox[("outbox_events")]
   Outbox --> Relay["OutboxRelayJob<br/>定时搬运"]
-  Relay --> Stream[("Redis Stream<br/>takeout:stream:domain-events")]
+  Relay --> MQ[("RocketMQ<br/>takeout-domain-events")]
   Relay -->|"持久重试 / 收件箱幂等"| ERP
-  Stream --> Consumer["DomainEventConsumer<br/>消费组 + 幂等去重"]
+  MQ --> Consumer["DomainEventConsumer<br/>消费组 + MySQL 持久回执"]
 ```
 
-> 事件流的关键点：**事件先随业务事务落库**，再由中继异步搬运到 Stream。
-> 中继**永不放弃投递**（事件已在库中，重试近乎零成本），因此 Redis 短暂故障不会导致事件丢失。
+> 事件流的关键点：**事件先随业务事务落库**，再由中继异步搬运到 RocketMQ。
+> 中继**永不放弃投递**（事件已在库中，重试近乎零成本），因此 Broker 短暂故障时事件保留在 Outbox 等待恢复。
+
+RocketMQ 通过官方 remoting 客户端接入，不依赖 Spring starter；兼容当前 Boot 4 / Java 25。
+Compose 创建私有 NameServer、Broker 和 Topic/消费组初始化任务，不发布 MQ 宿主端口。宿主机运行 Java 时，先执行 `docker compose -f docker-compose.rocketmq-local.yml up -d rocketmq-init` 和 `docker compose -f docker-compose.rocketmq-local.yml wait rocketmq-init`，设置 `TAKEOUT_ROCKETMQ_NAMESRV_ADDR=localhost:19876`；该独立开发编排只向本机回环暴露 NameServer/Broker，不与生产编排叠加。
+Broker 使用持久卷与 `SYNC_FLUSH`，当前单 Broker **不具备副本容灾能力**。Broker 默认保留消息 168 小时，磁盘压力可能提前清理；需监控磁盘和消费积压，保留时长不能当作无限重放保证。
+资金、库存及订单状态仍在本地事务更新，事务性 Outbox 保证事件随业务提交；不叠加另一套半消息事务。
+ERP 仍通过现有带收件箱幂等的内部 HTTP 接收事件；通知消费不承担入账。
+
+通知处理成功提交 `mq_consumptions` 后才 ACK；处理失败由 Broker 重投，默认 16 次后进入 `%DLQ%<消费组>`，异常消息不会被当成成功丢弃。
+可用 `docker compose exec rocketmq-broker sh mqadmin consumerProgress -n rocketmq-namesrv:9876 -g takeout-notifications` 检查积压，使用 `topicStatus -n rocketmq-namesrv:9876 -t '%DLQ%takeout-notifications'` 检查死信（消费组自定义时替换名称）。
+初始化共用 `server/docker/rocketmq-init.sh`，逐条核对 Broker 的成功确认；即使 `mqadmin` 异常退出码为 0，也会阻止应用启动。
+消费监控每 30 秒读取 Broker 和 MySQL：`takeout_mq_consumer_pending` 为当前可见队列积压，`takeout_mq_dead_letters` 为尚未重放的死信，`takeout_mq_consumer_failed` / `takeout_mq_consumer_oldest_failure_seconds` 为持久化的未恢复失败数 / 首次失败时长。失败状态覆盖 Broker 延迟退避和进程重启，重复失败不重置首次时间，实际消费成功才清除；格式错误的消息按稳定的客户端标识保留一份失败状态，供人工调查。若追踪写库失败，仅该次采用一秒 Broker 重试，恢复后尽快补记；最大重试次数及死信机制保留。消费者在应用初始化、迁移完成后才开始调度。`takeout_mq_collector_available=0` 表示采集失败、积压未知。Prometheus 对可见积压或未恢复失败持续五分钟告警，并保留死信及采集失败告警；通过既有 monitoring 编排启用。
+单 app 的 demo 部署在 monitoring 编排之后叠加 `docker-compose.monitoring-demo.yml`，仅采集实际运行的 app / ERP / Gateway；MQ 数据存储于 `${TAKEOUT_DATA_DIR}/rocketmq`。Prometheus 仅绑定本机回环，规则在服务端评估；未配置外部告警接收器时不会向外发送通知。
+管理员可使用有效登录令牌调用 `GET /api/admin/mq` 查看最近一次采集，定位并修复推送故障后调用 `POST /api/admin/mq/dead-letters/replay?limit=10`（需要修改权限，单次 1～10 条）。重放先取得 MySQL 消费组行锁，覆盖读取位置、重新投递、提交位置整个批次；锁竞争或数据库故障不会无锁放行。重放保留原正文及 `eventId`，确认重新投递成功后才提交 `<通知消费组>-replay` 的持久位置，并写操作审计；失败可重试，不清空消费回执。非法正文保留供人工调查，不会自动跳过。重放成功不等于业务处理已成功，需同时核验消费积压和持久回执。外部推送无法与数据库原子提交，发送后提交前崩溃仍可能重复通知，不承诺 exactly once。
+
+从旧 Redis Stream 版本切换时，在维护窗口停止交易写入及旧中继，保留旧消费者直至 `XINFO GROUPS takeout:stream:domain-events` 的 `lag=0` 且 `pending=0`，再停止旧实例、启动新版本。
+不要直接删除旧 Stream 或重置已投递 Outbox；新版本不会自动搬运旧 Stream 中的消息。Flyway V3 / V4 自动创建消费回执、失败跟踪及重放锁表。Redis 继续用于缓存与限流，不再提供消息队列。
+
 
 ## 仓库结构
 
@@ -213,7 +230,7 @@ simple-takeout/
 │   ├── takeout-gateway/       # API 网关
 │   └── pom.xml                # Maven 聚合根
 │   └── Dockerfile            # 多阶段构建（JDK 25）
-├── docker-compose.yml        # 一键环境：app + MySQL 8.4 + Redis 7
+├── docker-compose.yml        # 一键环境：app + MySQL 8.4 + Redis 7 + RocketMQ
 ├── logs/                     # 运行日志（按服务分目录，内容不入库）
 ├── signing/                  # Release 签名配置模板（勿提交真实证书/密码）
 ├── scripts/                  # 设备实测 / 上架体检等 PowerShell 脚本
@@ -349,7 +366,10 @@ Release 构建需要签名与证书：参考 `signing/release-signing.template.j
 | `TAKEOUT_SMS_DAILY_LIMIT` / `TAKEOUT_SMS_HOURLY_LIMIT` | `5` / `100` | 邮箱验证码按收件目标隔离的日／小时限额 |
 | `TAKEOUT_CACHE_ENABLED` | `true` | 热点缓存总开关 |
 | `TAKEOUT_CACHE_MAX_ENTRY_BYTES` | `1048576` | 八个固定热点目录的编码值上限，字节；启动接受 65536..4194304，动态区仍最多 64 KiB |
-| `TAKEOUT_MQ_ENABLED` | `true` | 领域事件（Outbox + Stream）总开关 |
+| `TAKEOUT_MQ_ENABLED` | `true` | 领域事件（Outbox + RocketMQ）总开关；ERP 启用时不可关闭 |
+| `TAKEOUT_ROCKETMQ_NAMESRV_ADDR` | `localhost:9876` | 本机开发的 NameServer；Compose 内固定为 `rocketmq-namesrv:9876` |
+| `TAKEOUT_ROCKETMQ_TOPIC` | `takeout-domain-events` | 领域事件 Topic；Compose 初始化时显式创建 |
+| `TAKEOUT_ROCKETMQ_CONSUMER_GROUP` | `takeout-notifications` | 通知消费组；所有 app 副本使用相同组名 |
 | `TAKEOUT_CACHE_TTL_SECONDS` / `_JITTER_SECONDS` | `300` / `120` | 缓存基础 TTL 与防雪崩抖动上限（秒） |
 | `TAKEOUT_CACHE_NULL_TTL_SECONDS` | `60` | 防穿透空值占位 TTL（秒） |
 | `TAKEOUT_PAY_TIMEOUT_MINUTES` | `15` | 待付款订单支付时限（分钟） |

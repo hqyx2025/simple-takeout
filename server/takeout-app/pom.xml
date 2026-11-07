@@ -24,6 +24,21 @@
   </properties>
 
   <dependencies>
+    <!-- Plain client avoids coupling RocketMQ's Spring starter to Spring Boot 4. -->
+    <dependency>
+      <groupId>org.apache.rocketmq</groupId>
+      <artifactId>rocketmq-client</artifactId>
+      <version>5.5.1</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.rocketmq</groupId>
+      <artifactId>rocketmq-tools</artifactId>
+      <version>5.5.1</version>
+      <!-- Broker-side plugins are not used by the administrative client. -->
+      <exclusions>
+        <exclusion><groupId>org.apache.rocketmq</groupId><artifactId>rocketmq-broker</artifactId></exclusion>
+      </exclusions>
+    </dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-actuator</artifactId></dependency>
     <dependency><groupId>io.micrometer</groupId><artifactId>micrometer-registry-prometheus</artifactId></dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-flyway</artifactId></dependency>

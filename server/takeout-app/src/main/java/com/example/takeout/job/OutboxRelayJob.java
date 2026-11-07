@@ -16,7 +16,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
- * Outbox 中继：把数据库里待投递的领域事件搬运到 Redis Stream。
+ * Outbox 中继：把数据库里待投递的领域事件搬运到 RocketMQ。
  *
  * <p>投递采用「至少一次」语义：投递成功即置 status=1。
  * 若在投递成功后、置位前崩溃，事件会被重复投递，因此
@@ -26,7 +26,7 @@ import java.util.List;
  * {@code FOR UPDATE SKIP LOCKED} 行级认领，同一事件只会被一个实例搬运；
  * 认领后崩溃的行在租约过期后由其他实例接手，不会永久滞留。</p>
  *
- * <p>Redis 不可用时事件保留在表中等待下一轮，不会丢失。</p>
+ * <p>RocketMQ 不可用时事件保留在表中等待下一轮，不会丢失。</p>
  */
 @Component
 public class OutboxRelayJob {
@@ -80,7 +80,7 @@ public class OutboxRelayJob {
             String owner = InstanceId.current();
             // 行级认领：事务内 SELECT ... FOR UPDATE SKIP LOCKED 并盖认领戳。
             // 多实例下同一事件只会出现在一个实例的返回结果里，从根上消除重复搬运。
-            // Bound each scan; reserve HTTP/Redis/SQL time for the whole batch, not just one event.
+            // Bound each scan; reserve HTTP/RocketMQ/SQL time for the whole batch, not just one event.
             List<OutboxEventDao.OutboxEvent> pending = outboxDao.claimPending(Math.max(1,Math.min(batchSize,10)), owner, now,
                     now + Math.max(claimLeaseMs,105000));
             if (pending.isEmpty()) {
@@ -91,7 +91,7 @@ public class OutboxRelayJob {
             for (OutboxEventDao.OutboxEvent event : pending) {
                 // 事件已持久化在数据库中，重试几乎零成本；
                 // 因此这里【永不放弃】投递，只统计重试次数用于告警。
-                // 若因重试上限而跳过，Redis 的短暂故障就会变成事件的永久丢失（实测踩过）。
+                // 若因重试上限而跳过，RocketMQ 的短暂故障就会变成事件的永久丢失（实测踩过）。
                 if (publisher.deliver(event.id(), event.eventType(), event.orderId(), event.payload())) {
                     outboxDao.markSent(event.id(),owner);
                     sent++;
@@ -105,9 +105,9 @@ public class OutboxRelayJob {
                 log.info("[Outbox] 投递完成 sent={} retried={} claimed={} owner={}",
                         sent, retried, pending.size(), owner);
             }
-            // 重试次数偏高说明 Redis 长期不可用，需要运维介入
+            // 重试次数偏高说明 RocketMQ 长期不可用，需要运维介入
             if (retried > 0 && outboxDao.countExhausted(maxRetry) > 0) {
-                log.warn("[Outbox] 存在重试超过 {} 次仍未投递成功的事件 count={}，请检查 ERP/Redis 下游及管理端补偿入口",
+                log.warn("[Outbox] 存在重试超过 {} 次仍未投递成功的事件 count={}，请检查 ERP/RocketMQ 下游及管理端补偿入口",
                         maxRetry, outboxDao.countExhausted(maxRetry));
             }
         } catch (Exception e) {
@@ -136,7 +136,7 @@ public class OutboxRelayJob {
                 }
                 int exhausted = outboxDao.countExhausted(maxRetry);
                 if (exhausted > 0) {
-                    log.warn("[Outbox] 存在重试超过 {} 次仍未成功的事件 count={}，请检查 Redis 与消费端", maxRetry, exhausted);
+                    log.warn("[Outbox] 存在重试超过 {} 次仍未成功的事件 count={}，请检查 RocketMQ 与消费端", maxRetry, exhausted);
                 }
             });
         } catch (Exception e) {

@@ -1,227 +1,125 @@
 package com.example.takeout.service.mq;
 
-import com.example.takeout.common.InstanceId;
 import com.example.takeout.common.TraceContext;
+import com.example.takeout.config.RocketMqConfiguration;
+import com.example.takeout.dao.DomainEventInbox;
 import com.example.takeout.service.PushNotificationService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PreDestroy;
+import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
+import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyContext;
+import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
+import org.apache.rocketmq.client.consumer.listener.MessageListenerConcurrently;
+import org.apache.rocketmq.common.message.MessageExt;
+import org.apache.rocketmq.common.message.MessageConst;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.connection.stream.Consumer;
-import org.springframework.data.redis.connection.stream.MapRecord;
-import org.springframework.data.redis.connection.stream.PendingMessages;
-import org.springframework.data.redis.connection.stream.RecordId;
-import org.springframework.data.redis.connection.stream.ReadOffset;
-import org.springframework.data.redis.connection.stream.StreamOffset;
-import org.springframework.data.redis.connection.stream.StreamReadOptions;
-import org.springframework.data.redis.connection.stream.StreamRecords;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.domain.Range;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 
-import java.time.Duration;
 import java.util.List;
-import java.util.Map;
-import java.util.ArrayList;
+import java.util.Set;
 
-/**
- * 领域事件消费者：从 Redis Stream 读取事件并执行「可延迟」的下游动作。
- *
- * <p><b>消费组 + 幂等</b>：使用消费者组（consumer group）保证同一事件在同组内
- * 只被一个实例消费；读完即 ACK。由于中继是「至少一次」投递，
- * 这里用 Redis SETGET 式去重键（eventId）做幂等，重复事件直接跳过。</p>
- *
- * <p><b>为什么这些动作可以异步？</b>
- * 消费端只做通知类副作用（商户提醒、运营统计等），不参与订单金额、
- * 库存与状态机的写入，因此即使延迟或被重复消费也不影响业务正确性。</p>
- *
- * <p>Redis 不可用时消费者静默跳过，不影响主流程；事件仍安全保存在 outbox 表中。</p>
- */
+/** Notifications only. RocketMQ owns retries and DLQ; MySQL owns durable consumption receipts. */
 @Component
-public class DomainEventConsumer {
-
+public class DomainEventConsumer implements MessageListenerConcurrently {
     private static final Logger log = LoggerFactory.getLogger(DomainEventConsumer.class);
+    private static final Set<String> TYPES = Set.of(DomainEventPublisher.ORDER_CREATED,
+            DomainEventPublisher.ORDER_PAID, DomainEventPublisher.ORDER_CANCELLED,
+            DomainEventPublisher.ORDER_REFUNDED, DomainEventPublisher.ORDER_SETTLED);
 
-    private static final String GROUP = "takeout-consumers";
-
-    /**
-     * 消费者名必须「每实例不同」。
-     *
-     * <p>Redis Stream 消费组按消费者名区分成员：所有实例都叫 {@code consumer-1} 时，
-     * 消费组会把它们当成<b>同一个消费者</b>——消息在实例间互相抢占，实例各自还没法
-     * 追踪自己的未 ACK 消息（PENDING 列表混在一起）。带上实例标识后每个实例是独立成员。</p>
-     */
-    private final String consumerName = "consumer-" + InstanceId.current();
-
-    /** 幂等去重键前缀。 */
-    private static final String DEDUP_PREFIX = "takeout:event:consumed:";
-
-    private final ObjectProvider<StringRedisTemplate> redisProvider;
+    private final RocketMqConfiguration configuration;
+    private final DomainEventInbox inbox;
+    private final ObjectMapper objectMapper;
     private final ObjectProvider<PushNotificationService> pushNotifications;
+    private DefaultMQPushConsumer consumer;
+    private boolean closed;
+    private volatile boolean ready;
 
     @Value("${takeout.mq.enabled:true}")
     private boolean enabled = true;
 
-    @Value("${takeout.mq.consumer-batch:20}")
-    private int batchSize = 20;
-
-    /** 幂等去重键保留时长（小时）。 */
-    @Value("${takeout.mq.dedup-hours:24}")
-    private int dedupHours = 24;
-
-    public DomainEventConsumer(ObjectProvider<StringRedisTemplate> redisProvider,
-                               ObjectProvider<PushNotificationService> pushNotifications) {
-        this.redisProvider = redisProvider;
+    public DomainEventConsumer(RocketMqConfiguration configuration, DomainEventInbox inbox,
+                               ObjectMapper objectMapper, ObjectProvider<PushNotificationService> pushNotifications) {
+        this.configuration = configuration;
+        this.inbox = inbox;
+        this.objectMapper = objectMapper;
         this.pushNotifications = pushNotifications;
     }
 
-    @Scheduled(fixedDelayString = "${takeout.mq.consumer-scan-ms:2000}",
+    // Broker downtime must not prevent the application from accepting local business transactions.
+    @EventListener(ApplicationReadyEvent.class)
+    public void applicationReady() { ready = true; }
+
+    @Scheduled(fixedDelayString = "${takeout.mq.consumer-start-retry-ms:30000}",
             initialDelayString = "${takeout.mq.consumer-initial-ms:15000}")
-    public void consume() {
-        if (!enabled) {
-            return;
-        }
-        StringRedisTemplate redis = redisProvider.getIfAvailable();
-        if (redis == null) {
-            return;
-        }
+    public synchronized void startConsumer() {
+        if (!ready || !enabled || closed || consumer != null) return;
+        DefaultMQPushConsumer candidate = null;
         try {
-            ensureGroup(redis);
-            List<MapRecord<String, Object, Object>> records = new ArrayList<>();
-            // Reclaim abandoned consumers after the processing lease; retry this consumer's unacknowledged records first.
-            PendingMessages abandoned = redis.opsForStream().pending(DomainEventPublisher.STREAM_KEY, GROUP,
-                    Range.unbounded(), batchSize);
-            if (abandoned != null) {
-                RecordId[] ids = abandoned.stream().filter(item -> item.getElapsedTimeSinceLastDelivery()
-                                .compareTo(Duration.ofMinutes(5)) >= 0)
-                        .map(item -> item.getId()).toArray(RecordId[]::new);
-                if (ids.length > 0) redis.opsForStream().claim(DomainEventPublisher.STREAM_KEY, GROUP,
-                        consumerName, Duration.ofMinutes(5), ids);
-            }
-            List<MapRecord<String, Object, Object>> pending = redis.opsForStream().read(
-                    Consumer.from(GROUP, consumerName), StreamReadOptions.empty().count(batchSize),
-                    StreamOffset.create(DomainEventPublisher.STREAM_KEY, ReadOffset.from("0")));
-            if (pending != null) records.addAll(pending);
-            List<MapRecord<String, Object, Object>> fresh = redis.opsForStream().read(
-                    Consumer.from(GROUP, consumerName),
-                    StreamReadOptions.empty().count(batchSize),
-                    StreamOffset.create(DomainEventPublisher.STREAM_KEY, ReadOffset.lastConsumed()));
-            if (fresh != null) records.addAll(fresh);
-            if (records.isEmpty()) {
-                return;
-            }
-            for (MapRecord<String, Object, Object> record : records) {
-                String previous = TraceContext.current();
-                String trace = TraceContext.normalize(str(record.getValue().get("traceId")));
-                TraceContext.bind(trace == null ? "event-" + record.getId() : trace);
-                try {
-                    if (handle(redis, record)) {
-                        redis.opsForStream().acknowledge(DomainEventPublisher.STREAM_KEY, GROUP, record.getId());
-                    }
-                } catch (Exception e) {
-                    // 单条处理失败不 ACK，留待下次重读；不阻塞其余事件
-                    log.warn("[事件消费] 处理失败 id={}", record.getId(), e);
-                } finally {
-                    TraceContext.clear();
-                    TraceContext.bind(previous);
-                }
-            }
+            candidate = configuration.newConsumer();
+            candidate.registerMessageListener(this);
+            candidate.start();
+            consumer = candidate;
+            log.info("[事件消费] RocketMQ 已启动 group={} topic={}", configuration.consumerGroup(), configuration.topic());
         } catch (Exception e) {
-            log.warn("[事件消费] 读取失败（将在下一轮重试）", e);
+            if (candidate != null) candidate.shutdown();
+            log.warn("[事件消费] RocketMQ 启动失败，将重试", e);
         }
     }
 
-    /**
-     * 确保 Stream 与消费者组存在。
-     *
-     * <p>Stream 只有在第一条消息写入后才存在，因此这里先按需创建空 Stream
-     * （XADD 一条占位会被立即裁掉，更简单的做法是用 XGROUP CREATE 的 MKSTREAM 语义：
-     * 在 key 不存在时直接创建组即可让 Stream 同时建立）。
-     * 否则消费者在首条事件到来前每轮都会拿到 NOGROUP 并刷警告日志。</p>
-     */
-    private void ensureGroup(StringRedisTemplate redis) {
-        try {
-            if (Boolean.TRUE.equals(redis.hasKey(DomainEventPublisher.STREAM_KEY))) {
-                redis.opsForStream().createGroup(DomainEventPublisher.STREAM_KEY, ReadOffset.from("0"), GROUP);
-                return;
-            }
-            // key 不存在：写入一条占位并立刻删除，使 Stream 建立后再建组
-            MapRecord<String, String, String> placeholder = StreamRecords
-                    .mapBacked(Map.of("bootstrap", "1"))
-                    .withStreamKey(DomainEventPublisher.STREAM_KEY);
-            org.springframework.data.redis.connection.stream.RecordId id =
-                    redis.opsForStream().add(placeholder);
-            redis.opsForStream().createGroup(DomainEventPublisher.STREAM_KEY, ReadOffset.from("0"), GROUP);
-            if (id != null) {
-                redis.opsForStream().delete(DomainEventPublisher.STREAM_KEY, id);
-            }
-            log.info("[事件消费] 已初始化 Stream 与消费组 stream={} group={}",
-                    DomainEventPublisher.STREAM_KEY, GROUP);
-        } catch (Exception e) {
-            // BUSYGROUP：组已存在，属正常情况
-            if (e.getMessage() == null || !e.getMessage().contains("BUSYGROUP")) {
-                log.debug("[事件消费] 创建消费组跳过：{}", e.getMessage());
-            }
-        }
-    }
-
-    /**
-     * 处理单条事件。
-     *
-     * @return true 表示可 ACK；false 表示应重试
-     */
-    private boolean handle(StringRedisTemplate redis, MapRecord<String, Object, Object> record) {
-        Map<Object, Object> fields = record.getValue();
-        String eventId = str(fields.get("eventId"));
-        String eventType = str(fields.get("eventType"));
-        String orderId = str(fields.get("orderId"));
-
-        if (eventId == null || eventId.isBlank()) {
-            // 无 eventId 无法幂等，直接 ACK 丢弃，避免毒消息卡住队列
-            log.warn("[事件消费] 事件缺少 eventId，已丢弃 type={}", eventType);
-            return true;
-        }
-
-        // 幂等：用 setIfAbsent 原子抢占去重键（多实例安全）。
-        // 抢占成功说明自己是第一个处理该事件的工作者；抢占失败说明另一实例正在处理或已处理过。
-        // 先用短 TTL（5 分钟）作为处理中锁，处理成功后延长到 dedupHours。
-        // 若处理失败不延长，短 TTL 过期后另一实例可重试。
-        Boolean claimed = redis.opsForValue()
-                .setIfAbsent(DEDUP_PREFIX + eventId, "processing", Duration.ofMinutes(5));
-        if (!Boolean.TRUE.equals(claimed)) {
-            String state = redis.opsForValue().get(DEDUP_PREFIX + eventId);
-            // "1" marks completed events written by previous application versions.
-            return "done".equals(state) || "1".equals(state);
-        }
-
-        switch (eventType == null ? "" : eventType) {
-            case DomainEventPublisher.ORDER_CREATED ->
-                    log.info("[事件消费] 订单已创建，通知商户备餐 orderId={}", orderId);
-            case DomainEventPublisher.ORDER_PAID ->
-                    log.info("[事件消费] 订单已支付，触发商家接单提醒 orderId={}", orderId);
-            case DomainEventPublisher.ORDER_CANCELLED ->
-                    log.info("[事件消费] 订单已取消，触发库存/名额归还确认 orderId={}", orderId);
-            case DomainEventPublisher.ORDER_REFUNDED ->
-                    log.info("[事件消费] 订单已退款，触发财务对账记录 orderId={}", orderId);
-            default -> log.info("[事件消费] 未识别事件类型 type={} orderId={}（已忽略）", eventType, orderId);
-        }
-        PushNotificationService notifications = pushNotifications.getIfAvailable();
-        if (notifications != null && orderId != null) {
+    @Override
+    public ConsumeConcurrentlyStatus consumeMessage(List<MessageExt> messages, ConsumeConcurrentlyContext context) {
+        for (MessageExt message : messages) {
+            String previous = TraceContext.current();
+            DomainEvent event = null;
+            // UNIQ_KEY survives retries; ORIGIN_MESSAGE_ID may instead contain the original physical offset ID.
+            String identity = message.getProperty(MessageConst.PROPERTY_UNIQ_CLIENT_MESSAGE_ID_KEYIDX);
+            if (identity == null || identity.isBlank()) identity = message.getProperty(MessageConst.PROPERTY_ORIGIN_MESSAGE_ID);
+            if (identity == null || identity.isBlank()) identity = message.getMsgId();
+            String messageKey = DomainEventInbox.failureKey(0, String.valueOf(identity));
             try {
-                notifications.notifyOrderEvent(eventType, Long.parseLong(orderId));
+                event = objectMapper.readValue(message.getBody(), DomainEvent.class);
+                if (event.eventId() <= 0 || event.orderId() <= 0 || event.eventType() == null
+                        || !TYPES.contains(event.eventType())) {
+                    throw new IllegalArgumentException("Invalid domain event: " + message.getMsgId());
+                }
+                String trace = TraceContext.normalize(event.traceId());
+                TraceContext.bind(trace == null ? "event-" + event.eventId() : trace);
+                DomainEvent current = event;
+                inbox.runOnce(configuration.consumerGroup(), current.eventId(), () -> {
+                    PushNotificationService notifications = pushNotifications.getIfAvailable();
+                    if (notifications != null) notifications.notifyOrderEvent(current.eventType(), current.orderId());
+                });
+                inbox.resolveFailure(configuration.consumerGroup(), messageKey);
             } catch (Exception e) {
-                log.warn("[事件消费] 推送发送失败 type={} orderId={}", eventType, orderId);
-                redis.delete(DEDUP_PREFIX + eventId);
-                return false;
+                try {
+                    long eventId = event == null ? 0 : event.eventId();
+                    inbox.recordFailure(configuration.consumerGroup(), eventId > 0
+                            ? DomainEventInbox.failureKey(eventId, "") : messageKey, eventId);
+                } catch (Exception recordingFailure) {
+                    // Do not hide an unrecorded failure in a 20-minute backoff. The retry budget/DLQ still applies.
+                    if (context != null) context.setDelayLevelWhenNextConsume(1);
+                    log.warn("[事件消费] 失败状态写入未完成，消息仍交由 Broker 重试", recordingFailure);
+                }
+                log.warn("[事件消费] 处理失败，将由 RocketMQ 重投 msgId={} attempts={}",
+                        message.getMsgId(), message.getReconsumeTimes(), e);
+                return ConsumeConcurrentlyStatus.RECONSUME_LATER;
+            } finally {
+                TraceContext.clear();
+                TraceContext.bind(previous);
             }
         }
-        // 处理成功：延长去重键 TTL 到配置值，防止同一事件在 dedupHours 内被重复投递
-        redis.opsForValue().set(DEDUP_PREFIX + eventId, "done", Duration.ofHours(Math.max(dedupHours, 1)));
-        return true;
+        return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
     }
 
-    private String str(Object value) {
-        return value == null ? null : String.valueOf(value);
+    @PreDestroy
+    public synchronized void shutdown() {
+        closed = true;
+        if (consumer != null) consumer.shutdown();
     }
 }

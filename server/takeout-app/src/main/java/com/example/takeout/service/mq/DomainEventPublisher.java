@@ -7,9 +7,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.connection.stream.MapRecord;
-import org.springframework.data.redis.connection.stream.StreamRecords;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import org.apache.rocketmq.client.producer.DefaultMQProducer;
+import org.apache.rocketmq.client.producer.SendStatus;
+import org.apache.rocketmq.common.message.Message;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -19,24 +19,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
 /**
- * 领域事件发布器（事务性 Outbox + Redis Stream）。
- *
- * <p><b>设计要点：为什么不用「下单后直接发消息」？</b>
- * 下单是一个本地事务，扣库存、占秒杀名额、核销优惠券必须原子提交。
- * 如果在事务内直接写 Redis，Redis 成功但数据库回滚就会产生「幽灵订单事件」；
- * 如果提交后再写 Redis，进程在两者之间崩溃又会丢事件。因此这里采用
- * <b>事务性 Outbox</b>：事件先以同一事务写入数据库 {@code outbox_events} 表
- * （要么和订单一起提交，要么一起回滚，绝不丢失或凭空产生），
- * 再由 {@link OutboxRelayJob} 异步搬运到 Redis Stream。</p>
- *
- * <p><b>为什么订单主流程保持同步？</b>
- * 秒杀/库存的防超卖依赖数据库条件更新（{@code WHERE stock >= ?}、
- * {@code sold + ? <= quota}）在本地事务内的原子性。把下单本身改成异步
- * 需要引入 saga 与补偿事务，收益（吞吐）远小于复杂度与一致性风险，
- * 因此异步化只覆盖「可延迟」的下游动作（通知、报表、埋点等）。</p>
- *
- * <p>Redis 不可用时：事件仍然安全落在数据库 outbox 表中，等待重投，
- * 业务主流程完全不受影响（与缓存层同样的降级思路）。</p>
+ * Events commit in the same MySQL transaction as the business data.
+ * The durable Outbox retries delivery to RocketMQ; financial writes remain synchronous.
+ * A broker outage delays downstream work without losing the committed event.
  */
 @Service
 public class DomainEventPublisher {
@@ -44,44 +29,6 @@ public class DomainEventPublisher {
     private static final Logger log = LoggerFactory.getLogger(DomainEventPublisher.class);
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-
-    /** Stream 键名。 */
-    public static final String STREAM_KEY = "takeout:stream:domain-events";
-
-    private static final org.springframework.data.redis.core.script.RedisScript<Long> TRIM_ACKNOWLEDGED =
-            org.springframework.data.redis.core.script.RedisScript.of("""
-                local length = redis.call('XLEN', KEYS[1])
-                local target = tonumber(ARGV[1])
-                if length <= target then return 0 end
-                local groups = redis.call('XINFO', 'GROUPS', KEYS[1])
-                if #groups == 0 then return 0 end
-                local function less(a, b)
-                  local am, as = string.match(a, '^(%d+)%-(%d+)$')
-                  local bm, bs = string.match(b, '^(%d+)%-(%d+)$')
-                  if #am ~= #bm then return #am < #bm end
-                  if am ~= bm then return am < bm end
-                  if #as ~= #bs then return #as < #bs end
-                  return as < bs
-                end
-                local safe = nil
-                for _, group in ipairs(groups) do
-                  local name, delivered, pending
-                  for i = 1, #group, 2 do
-                    if group[i] == 'name' then name = group[i+1] end
-                    if group[i] == 'last-delivered-id' then delivered = group[i+1] end
-                    if group[i] == 'pending' then pending = tonumber(group[i+1]) end
-                  end
-                  if not delivered or delivered == '0-0' then return 0 end
-                  local boundary = delivered
-                  if pending > 0 then boundary = redis.call('XPENDING', KEYS[1], name)[2] end
-                  if not safe or less(boundary, safe) then safe = boundary end
-                end
-                local candidates = redis.call('XRANGE', KEYS[1], '-', '+', 'COUNT', math.min(length-target, 100))
-                if #candidates == 0 then return 0 end
-                local cutoff = candidates[#candidates][1]
-                if less(safe, cutoff) then cutoff = safe end
-                return redis.call('XTRIM', KEYS[1], 'MINID', cutoff)
-                """, Long.class);
 
     /** 事件类型常量。 */
     public static final String ORDER_CREATED = "ORDER_CREATED";
@@ -91,22 +38,22 @@ public class DomainEventPublisher {
     public static final String ORDER_SETTLED = "ORDER_SETTLED";
 
     private final OutboxEventDao outboxDao;
-    private final ObjectProvider<StringRedisTemplate> redisProvider;
+    private final ObjectProvider<DefaultMQProducer> producerProvider;
     private final ObjectMapper objectMapper;
 
     @Value("${takeout.mq.enabled:true}")
     private boolean enabled = true;
 
-    @Value("${takeout.mq.stream-maxlen:10000}")
-    private long streamMaxLen = 10000;
+    @Value("${takeout.mq.topic:takeout-domain-events}")
+    private String topic = "takeout-domain-events";
 
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     private com.example.takeout.service.ErpEventDelivery erpDelivery;
 
-    public DomainEventPublisher(OutboxEventDao outboxDao, ObjectProvider<StringRedisTemplate> redisProvider,
+    public DomainEventPublisher(OutboxEventDao outboxDao, ObjectProvider<DefaultMQProducer> producerProvider,
                                 ObjectMapper objectMapper) {
         this.outboxDao = outboxDao;
-        this.redisProvider = redisProvider;
+        this.producerProvider = producerProvider;
         this.objectMapper = objectMapper;
     }
 
@@ -140,13 +87,13 @@ public class DomainEventPublisher {
     }
 
     /**
-     * 立即把单条事件投递到 Redis Stream（供中继任务调用）。
+     * 同步投递单条事件到 RocketMQ，仅 SEND_OK 才确认 Outbox（供中继任务调用）。
      *
      * @return true 表示投递成功
      */
     public boolean deliver(long eventId, String eventType, long orderId, String payloadJson) {
-        StringRedisTemplate redis = redisProvider.getIfAvailable();
-        if (redis == null) {
+        DefaultMQProducer producer = producerProvider.getIfAvailable();
+        if (producer == null) {
             return false;
         }
         String previous = TraceContext.current();
@@ -160,28 +107,19 @@ public class DomainEventPublisher {
         TraceContext.bind(trace == null ? "event-" + eventId : trace);
         try {
             if (erpDelivery != null && !erpDelivery.deliver(eventId,eventType,orderId,payloadJson)) return false;
-            Map<String, String> fields = Map.of(
-                    "eventId", String.valueOf(eventId),
-                    "eventType", eventType,
-                    "orderId", String.valueOf(orderId),
-                    "payload", payloadJson == null ? "{}" : payloadJson,
-                    "occurredAt", LocalDateTime.now().format(FMT),
-                    "traceId", TraceContext.current());
-            MapRecord<String, String, String> record = StreamRecords.mapBacked(fields).withStreamKey(STREAM_KEY);
-            redis.opsForStream().add(record);
-            // Retention is a target: pending/unread messages are never sacrificed to a length cap.
-            // Redis noeviction supplies the hard memory boundary; failed XADD stays in the durable Outbox.
-            if (streamMaxLen > 0) {
-                try {
-                    redis.execute(TRIM_ACKNOWLEDGED, java.util.List.of(STREAM_KEY), String.valueOf(streamMaxLen));
-                } catch (Exception ignored) {
-                    // 裁剪失败不影响投递结果
-                }
+            var envelope = new DomainEvent(eventId, eventType, orderId,
+                    payloadJson == null ? "{}" : payloadJson, TraceContext.current());
+            var message = new Message(topic, eventType, "takeout-event-" + eventId,
+                    objectMapper.writeValueAsBytes(envelope));
+            var result = producer.send(message);
+            if (result == null || result.getSendStatus() != SendStatus.SEND_OK) {
+                log.warn("[事件] RocketMQ 未确认持久化 eventId={} result={}（保留 Outbox 重试）", eventId, result);
+                return false;
             }
             log.info("[事件] 投递完成 eventId={} type={}", eventId, eventType);
             return true;
         } catch (Exception e) {
-            log.warn("[事件] ERP/Stream 下游投递失败 eventId={} type={}（等待 Outbox 退避重试）", eventId, eventType, e);
+            log.warn("[事件] ERP/RocketMQ 下游投递失败 eventId={} type={}（等待 Outbox 退避重试）", eventId, eventType, e);
             return false;
         } finally {
             TraceContext.clear();

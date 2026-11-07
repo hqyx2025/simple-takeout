@@ -5,11 +5,13 @@ on:
   push:
     paths:
       - 'server/**'
+      - 'docker-compose.rocketmq-local.yml'
       - '.github/workflows/backend.yml'
       - 'scripts/backend-evidence.py'
   pull_request:
     paths:
       - 'server/**'
+      - 'docker-compose.rocketmq-local.yml'
       - '.github/workflows/backend.yml'
       - 'scripts/backend-evidence.py'
 
@@ -30,6 +32,10 @@ jobs:
       TAKEOUT_DB_PASSWORD: ci-test
       TAKEOUT_TEST_REDIS_PORT: '6387'
       TAKEOUT_MANAGEMENT_PORT: '0'
+      TAKEOUT_ROCKETMQ_TEST: '1'
+      TAKEOUT_ROCKETMQ_NAMESRV_ADDR: localhost:19876
+      TAKEOUT_ROCKETMQ_TOPIC: takeout-ci-domain-events
+      TAKEOUT_ROCKETMQ_CONSUMER_GROUP: takeout-ci-notifications
     services:
       mysql:
         image: mysql:8.4
@@ -54,6 +60,13 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
+      - name: Validate monitoring rules
+        run: docker run --rm --entrypoint /bin/promtool -v "$PWD/server/monitoring:/rules:ro" -w /rules prom/prometheus:v3.16.0 test rules alerts.test.yml
+      - name: Start isolated RocketMQ
+        run: |
+          docker run --rm --entrypoint sh -v "$PWD/server/docker:/case:ro" apache/rocketmq:5.5.0 /case/rocketmq-init.test.sh
+          docker compose -f docker-compose.rocketmq-local.yml up -d rocketmq-init
+          docker compose -f docker-compose.rocketmq-local.yml wait rocketmq-init
       - name: Run backend tests
         run: |
           export TAKEOUT_PERSONAL_DATA_ENCRYPTION_SECRET="$(openssl rand -base64 32)"
@@ -75,3 +88,6 @@ jobs:
             server/**/target/site/jacoco/**
             server/takeout-coverage/target/site/jacoco-aggregate/**
           if-no-files-found: error
+      - name: Stop isolated RocketMQ
+        if: always()
+        run: docker compose -f docker-compose.rocketmq-local.yml down -v

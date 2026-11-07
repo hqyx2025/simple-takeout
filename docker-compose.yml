@@ -71,6 +71,80 @@ services:
         max-size: 10m
         max-file: '3'
 
+  # Private remoting transport; no host ports or public management console.
+  rocketmq-namesrv:
+    image: apache/rocketmq:5.5.0
+    restart: unless-stopped
+    command: ["sh", "mqnamesrv"]
+    environment:
+      JAVA_OPT_EXT: "-Xms128m -Xmx128m -Xmn64m"
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/9876'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+
+  rocketmq-store-init:
+    image: apache/rocketmq:5.5.0
+    user: '0:0'
+    restart: on-failure
+    command: ["sh", "-ec", "chown rocketmq:rocketmq /home/rocketmq/store"]
+    volumes:
+      - rocketmq-store:/home/rocketmq/store
+
+  rocketmq-broker:
+    image: apache/rocketmq:5.5.0
+    restart: unless-stopped
+    command: ["sh", "mqbroker", "-c", "/home/rocketmq/broker.conf"]
+    environment:
+      JAVA_OPT_EXT: "-Xms256m -Xmx256m -Xmn128m -XX:MaxDirectMemorySize=256m"
+    depends_on:
+      rocketmq-namesrv:
+        condition: service_healthy
+      rocketmq-store-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./server/docker/rocketmq-broker.conf:/home/rocketmq/broker.conf:ro
+      - rocketmq-store:/home/rocketmq/store
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/10911'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+
+  rocketmq-init:
+    image: apache/rocketmq:5.5.0
+    restart: on-failure
+    depends_on:
+      rocketmq-broker:
+        condition: service_healthy
+    environment:
+      JAVA_OPT_EXT: "-Xms64m -Xmx128m"
+      TAKEOUT_ROCKETMQ_TOPIC: ${TAKEOUT_ROCKETMQ_TOPIC:-takeout-domain-events}
+      TAKEOUT_ROCKETMQ_CONSUMER_GROUP: ${TAKEOUT_ROCKETMQ_CONSUMER_GROUP:-takeout-notifications}
+    volumes:
+      - ./server/docker/rocketmq-init.sh:/home/rocketmq/takeout-init.sh:ro
+    command: ["sh", "/home/rocketmq/takeout-init.sh"]
+
   app:
     build:
       context: ./server
@@ -89,6 +163,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      rocketmq-init:
+        condition: service_completed_successfully
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:?SPRING_PROFILES_ACTIVE must be explicitly set to develop or production}
       # 容器内用服务名互联；MySQL 端口是容器内 3306（不是宿主映射的 3310）
@@ -100,6 +176,10 @@ services:
       TAKEOUT_REDIS_PORT: 6379
       TAKEOUT_REDIS_USERNAME: ${TAKEOUT_REDIS_USERNAME:-}
       TAKEOUT_REDIS_PASSWORD: ${TAKEOUT_REDIS_PASSWORD:?Set a Redis password}
+      TAKEOUT_MQ_ENABLED: "true"
+      TAKEOUT_ROCKETMQ_NAMESRV_ADDR: rocketmq-namesrv:9876
+      TAKEOUT_ROCKETMQ_TOPIC: ${TAKEOUT_ROCKETMQ_TOPIC:-takeout-domain-events}
+      TAKEOUT_ROCKETMQ_CONSUMER_GROUP: ${TAKEOUT_ROCKETMQ_CONSUMER_GROUP:-takeout-notifications}
       TAKEOUT_CLAIM_MAX_CONCURRENT: ${TAKEOUT_CLAIM_MAX_CONCURRENT:-4}
       TAKEOUT_COUPON_CLAIM_RPS: ${TAKEOUT_COUPON_CLAIM_RPS:-20}
       TAKEOUT_RIDER_GRAB_RPS: ${TAKEOUT_RIDER_GRAB_RPS:-30}
@@ -374,6 +454,7 @@ services:
         max-file: '3'
 
 volumes:
+  rocketmq-store:
   mysql-data:
   redis-data:
   uploads-data:

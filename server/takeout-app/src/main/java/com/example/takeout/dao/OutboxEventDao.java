@@ -13,7 +13,7 @@ import java.util.Optional;
  * 事务性 Outbox 数据访问。
  *
  * 事件与业务数据在同一事务写入，保证「业务成功则事件必达、业务回滚则事件不存在」；
- * 中继任务扫描 status=0 的记录投递到 Redis Stream，成功后置为 1。
+ * 中继任务扫描 status=0 的记录投递到 RocketMQ，成功后置为 1。
  *
  * <p><b>多实例行级认领</b>：原实现在多实例下会让两个中继同时捞到同一批事件（重复搬运）。
  * 现改为 {@code SELECT ... FOR UPDATE SKIP LOCKED} 在事务内一次性「选出并盖认领戳」：

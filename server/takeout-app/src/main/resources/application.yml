@@ -205,10 +205,11 @@ takeout:
     rebuild-lock-ms: ${TAKEOUT_CACHE_REBUILD_LOCK_MS:3000}
     rebuild-wait-ms: ${TAKEOUT_CACHE_REBUILD_WAIT_MS:500}
   mq:
-    # 领域事件（事务性 Outbox + Redis Stream）总开关；关闭后不写事件表、不投递
+    # 事务性 Outbox + RocketMQ；资金/库存写入仍在 MySQL 本地事务内。
     enabled: ${TAKEOUT_MQ_ENABLED:true}
-    # Stream 最大长度（近似裁剪，防止无限增长）
-    stream-maxlen: ${TAKEOUT_MQ_STREAM_MAXLEN:10000}
+    namesrv-addr: ${TAKEOUT_ROCKETMQ_NAMESRV_ADDR:localhost:9876}
+    topic: ${TAKEOUT_ROCKETMQ_TOPIC:takeout-domain-events}
+    consumer-group: ${TAKEOUT_ROCKETMQ_CONSUMER_GROUP:takeout-notifications}
     # Outbox 中继扫描间隔（毫秒）与首次延迟
     relay-scan-ms: ${TAKEOUT_MQ_RELAY_SCAN_MS:2000}
     relay-initial-ms: 10000
@@ -221,11 +222,9 @@ takeout:
     retain-hours: ${TAKEOUT_MQ_RETAIN_HOURS:72}
     cleanup-scan-ms: 3600000
     cleanup-initial-ms: 60000
-    # 消费端：批量大小、扫描间隔与幂等去重键保留小时数
-    consumer-batch: ${TAKEOUT_MQ_CONSUMER_BATCH:20}
-    consumer-scan-ms: ${TAKEOUT_MQ_CONSUMER_SCAN_MS:2000}
+    # Broker 恢复后自动重试启动；消费失败由 RocketMQ 退避重投，16 次后进入 DLQ。
+    consumer-start-retry-ms: ${TAKEOUT_MQ_CONSUMER_START_RETRY_MS:30000}
     consumer-initial-ms: 15000
-    dedup-hours: ${TAKEOUT_MQ_DEDUP_HOURS:24}
   order:
     # 待付款支付时限（分钟）：超时由 OrderTimeoutJob 自动取消并回滚库存/优惠券
     pay-timeout-minutes: ${TAKEOUT_PAY_TIMEOUT_MINUTES:15}

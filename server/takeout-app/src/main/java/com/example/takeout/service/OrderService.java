@@ -531,7 +531,7 @@ public class OrderService {
         }
         // 浏览销量按真实支付订单派生；待付款不制造月销量。
         invalidateStockDependentCache();
-        // 领域事件：与订单同事务写入 Outbox，提交后由中继投递到 Redis Stream
+        // 领域事件：与订单同事务写入 Outbox，提交后由中继投递到 RocketMQ
         eventPublisher.publish(DomainEventPublisher.ORDER_CREATED, id,
                 Map.of("userId", userId, "storeId", storeId, "payAmount", payAmount));
         if (cartCheckout) {

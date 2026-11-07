@@ -1,0 +1,5 @@
+# Apply after docker-compose.monitoring.yml for the single-app demo deployment.
+services:
+  prometheus:
+    volumes:
+      - ./server/monitoring/prometheus-demo.yml:/etc/prometheus/prometheus.yml:ro

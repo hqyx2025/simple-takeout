@@ -80,6 +80,11 @@ services:
     volumes:
       - ./server/docker/mysql-backup-daily.sh:/backup.sh:ro
 volumes:
+  rocketmq-store:
+    driver_opts:
+      type: none
+      o: bind
+      device: ${TAKEOUT_DATA_DIR:?Set the mounted data directory}/rocketmq
   mysql-data:
     driver_opts:
       type: none

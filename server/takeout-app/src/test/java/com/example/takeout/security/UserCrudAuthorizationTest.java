@@ -71,6 +71,15 @@ class UserCrudAuthorizationTest {
                 () -> request("POST", "/api/orders/1/pay", handler(OrderController.class, "pay"))).getCode());
     }
 
+    @Test void mqReplayRequiresUpdatePermissionForItsPostAction() {
+        var endpoint = handler(com.example.takeout.controller.RocketMqAdminController.class, "replay");
+        current(user(false, true, true, false));
+        assertTrue(request("POST", "/api/admin/mq/dead-letters/replay", endpoint));
+        current(user(true, true, false, true));
+        assertEquals(403, assertThrows(BizException.class,
+                () -> request("POST", "/api/admin/mq/dead-letters/replay", endpoint)).getCode());
+    }
+
     @Test void safeUserViewNeverResetsDeniedPermissions() {
         User safe = user(false, false, false, false).safe();
         assertFalse(safe.canCreate());

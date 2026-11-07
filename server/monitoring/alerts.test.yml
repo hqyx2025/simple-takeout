@@ -48,3 +48,63 @@ tests:
       - {eval_time: 6m, alertname: TakeoutTargetDown, exp_alerts: []}
       - {eval_time: 6m, alertname: TakeoutOutboxDelayed, exp_alerts: []}
       - {eval_time: 6m, alertname: TakeoutOutboxCollectorUnavailable, exp_alerts: []}
+  - name: mq-consumer-stalled
+    interval: 1m
+    input_series:
+      - series: 'takeout_mq_consumer_pending{job="takeout",instance="app:9101",group="takeout-notifications"}'
+        values: '4+0x10'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: TakeoutMqConsumerBacklog
+        exp_alerts:
+          - exp_labels: {job: takeout, instance: 'app:9101', group: takeout-notifications, severity: warning}
+            exp_annotations: {summary: 'MQ consumer backlog persists: app:9101 / takeout-notifications'}
+  - name: mq-dead-letter-requires-action
+    interval: 1m
+    input_series:
+      - series: 'takeout_mq_dead_letters{job="takeout",instance="app:9101",group="takeout-notifications"}'
+        values: '1+0x10'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: TakeoutMqDeadLetters
+        exp_alerts:
+          - exp_labels: {job: takeout, instance: 'app:9101', group: takeout-notifications, severity: critical}
+            exp_annotations: {summary: 'MQ dead letters require replay: app:9101 / takeout-notifications'}
+  - name: mq-collector-unavailable
+    interval: 1m
+    input_series:
+      - series: 'takeout_mq_collector_available{job="takeout",instance="app:9101",group="takeout-notifications"}'
+        values: '0+0x10'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: TakeoutMqCollectorUnavailable
+        exp_alerts:
+          - exp_labels: {job: takeout, instance: 'app:9101', group: takeout-notifications, severity: warning}
+            exp_annotations: {summary: 'MQ consumer backlog is unknown: app:9101 / takeout-notifications'}
+  - name: mq-healthy
+    interval: 1m
+    input_series:
+      - series: 'takeout_mq_consumer_pending{job="takeout",instance="app:9101",group="takeout-notifications"}'
+        values: '0+0x10'
+      - series: 'takeout_mq_dead_letters{job="takeout",instance="app:9101",group="takeout-notifications"}'
+        values: '0+0x10'
+      - series: 'takeout_mq_collector_available{job="takeout",instance="app:9101",group="takeout-notifications"}'
+        values: '1+0x10'
+    alert_rule_test:
+      - {eval_time: 6m, alertname: TakeoutMqConsumerBacklog, exp_alerts: []}
+      - {eval_time: 6m, alertname: TakeoutMqDeadLetters, exp_alerts: []}
+      - {eval_time: 6m, alertname: TakeoutMqCollectorUnavailable, exp_alerts: []}
+  - name: mq-delayed-retry-remains-unfinished
+    interval: 1m
+    input_series:
+      - series: 'takeout_mq_consumer_pending{job="takeout",instance="app:9101",group="takeout-notifications"}'
+        values: '1 0 0 0 0 0 0 0 0 0'
+      - series: 'takeout_mq_consumer_failed{job="takeout",instance="app:9101",group="takeout-notifications"}'
+        values: '0 1 1 1 1 1 1 0 0 0'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: TakeoutMqConsumerBacklog
+        exp_alerts:
+          - exp_labels: {job: takeout, instance: 'app:9101', group: takeout-notifications, severity: warning}
+            exp_annotations: {summary: 'MQ consumer backlog persists: app:9101 / takeout-notifications'}
+      - {eval_time: 8m, alertname: TakeoutMqConsumerBacklog, exp_alerts: []}

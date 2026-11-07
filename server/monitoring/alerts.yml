@@ -37,3 +37,21 @@ groups:
         labels: {severity: warning}
         annotations:
           summary: 'Outbox backlog is unknown: {{ $labels.instance }}'
+      - alert: TakeoutMqConsumerBacklog
+        expr: (takeout_mq_consumer_pending{job="takeout"} > 0) or (takeout_mq_consumer_failed{job="takeout"} > 0)
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: 'MQ consumer backlog persists: {{ $labels.instance }} / {{ $labels.group }}'
+      - alert: TakeoutMqDeadLetters
+        expr: takeout_mq_dead_letters{job="takeout"} > 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: 'MQ dead letters require replay: {{ $labels.instance }} / {{ $labels.group }}'
+      - alert: TakeoutMqCollectorUnavailable
+        expr: takeout_mq_collector_available{job="takeout"} == 0
+        for: 2m
+        labels: {severity: warning}
+        annotations:
+          summary: 'MQ consumer backlog is unknown: {{ $labels.instance }} / {{ $labels.group }}'
