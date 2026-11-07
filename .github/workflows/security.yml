@@ -27,7 +27,8 @@ jobs:
       - uses: actions/checkout@v4
         with: {persist-credentials: false}
       - name: Build the actual runtime image
-        run: docker build -f server/Dockerfile -t takeout-security:ci server
+        # Hosted runners use Central; the regional mirror may lag new releases.
+        run: docker build --build-arg MAVEN_SETTINGS=docker/settings-central.xml -f server/Dockerfile -t takeout-security:ci server
       - name: Scan runtime image
         uses: aquasecurity/trivy-action@0.35.0
         with:
