@@ -37,7 +37,9 @@ HarmonyOS NEXT 原生客户端与 Spring Boot 交易系统，覆盖用户、商�
 
 本机完整回归为后端 **802 项通过、0 失败/错误/跳过**，聚合行覆盖率 **72.63%**；Node/真实无头浏览器 **226 项通过**，API 26 debug HAP **BUILD SUCCESSFUL**，六项关键保护已完成反向验证。最终应用镜像 Trivy 扫描的**可修复 HIGH/CRITICAL 为 0**，使用 `--ignore-unfixed`，不代表所有级别或所有基础设施镜像无漏洞。
 
-用户已授权更新文档、推送 GitHub 和部署线上；**当前正在准备发布，尚未把本轮写为已上线**。验收方法、源码/镜像身份和真实边界见 [11/07 工程验收](md/acceptance/2026-11-07/README.md)，完整原始证据位置见 [开发草稿](md/开发草稿-2026-11-07.md)。本轮 HAP 未签名且无可用设备，真实第三方支付/退款、物理 GPS、长期容量及独立 CI 尚未验收；历史设备与 CI 结果不移用为本轮结果。
+**已于 2026-11-07 17:15:33 +0800 发布 `engineering-boot4-20261107-r1`**，运行源码 [`3ce067c`](https://github.com/hqyx2025/simple-takeout/commit/3ce067caaa5bdfd92cd1ff7f0822382deae7f6ab) 已推送 GitHub。App / ERP / Gateway 使用同一被测镜像且健康，八个 HTTPS 网页资源与产物哈希一致，14 项授权只读检查通过，540 店目录正常；切换前双库和私有配置已备份，业务总量一致，资料加密迁移完成，博客及原基础设施保持运行。
+
+[Backend CI](https://github.com/hqyx2025/simple-takeout/actions/runs/42358171295) 实际执行 **802 项零跳过**；[Frontend CI](https://github.com/hqyx2025/simple-takeout/actions/runs/42358171300) 构建与脚本检查通过，其中8项浏览器用例缺少Playwright而跳过，本机已执行通过；[Security CI](https://github.com/hqyx2025/simple-takeout/actions/runs/42358171303) 正在独立构建扫描，不能写为通过。验收方法、源码/镜像身份和真实边界见 [11/07 工程验收](md/acceptance/2026-11-07/README.md)，完整原始证据位置见 [开发草稿](md/开发草稿-2026-11-07.md)。HAP 未签名且无可用设备，真实第三方支付/退款、物理 GPS、长期容量仍未验收；线上只读核验不代表真实交易验收。
 
 ### 历史：业务闭环与边界补验（2026-10-28 至 11-03）
 
@@ -543,7 +545,7 @@ ERP 独立数据库的供应商、耗材、采购单 / 明细、收货、调整�
 
 ## 已知未完成项
 
-本轮部署状态待本次发布核验。送达售后、部分退款证据、持久配送异常及 ERP 纠错已补齐；六批实施当时的边界见 [诊断文档后续状态及第六批遗留边界](md/archive/人性化改造诊断与实施方案.md)；来自 [md/archive/未完成.txt](md/archive/未完成.txt) 的真机 UI 自动化、AppAnalyzer 和 Release 签名仍待完成，手机端 HTTPS 尚未进行物理真机验证。源码 / 服务器同步不等于 AppGallery 发布或正式支付验收。
+本轮已完成 GitHub 推送、线上部署与只读核验，独立安全CI仍在运行，前端CI有8项浏览器用例按依赖跳过。送达售后、部分退款证据、持久配送异常及 ERP 纠错已补齐；六批实施当时的边界见 [诊断文档后续状态及第六批遗留边界](md/archive/人性化改造诊断与实施方案.md)；来自 [md/archive/未完成.txt](md/archive/未完成.txt) 的真机 UI 自动化、AppAnalyzer 和 Release 签名仍待完成，手机端 HTTPS 尚未进行物理真机验证。源码 / 服务器同步不等于 AppGallery 发布或正式支付验收。
 
 ## 说明
 

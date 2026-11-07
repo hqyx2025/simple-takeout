@@ -1,0 +1,81 @@
+{
+  "release": "engineering-boot4-20261107-r1",
+  "source_commit": "3ce067caaa5bdfd92cd1ff7f0822382deae7f6ab",
+  "image_id": "sha256:05f88a355c10c82745d2f766bae7fdef225ce6b6b1c4323c0cac5786f761a52e",
+  "artifact_sha256": {
+    "takeout-app.jar": "6a4ba64494e507429e0686846c95b0c30cc17e2f53f5da0c5d0db7922cb63b82",
+    "takeout-erp.jar": "04fb8692700c8834e4ff76d36ac826f37dd0f43f41ab9720d4e34472132992e3",
+    "takeout-gateway.jar": "0adfd2d256e4d901b51de2eeed591525bd69b2d9918c2ad79324d059d2d54b47"
+  },
+  "deployed_at": "2026-11-07 17:15:33 +0800",
+  "credentials_preserved": true,
+  "infrastructure_unchanged": true,
+  "https_static_verified": true,
+  "store_count": 540,
+  "business_aggregates_unchanged": true,
+  "private_data_migrated": true,
+  "authorized_read_checks": 14,
+  "public_checks": [
+    {
+      "path": "/",
+      "status": 200,
+      "sha256": "ab782bc4ac0a3778302aceef79f93e03061593fbe0f68d7dd2ce92c3f5a7caa6"
+    },
+    {
+      "path": "/takeout/",
+      "status": 200,
+      "sha256": "8754c0ebf0afe9f19ec185a0e99a6b8d7cad009c6e70b4cb896da4d4f2cda374"
+    },
+    {
+      "path": "/takeout/health",
+      "status": 200,
+      "sha256": "663cc3c04b424c054c609ad05c28cd15f3a8d51b7572e89fa70482e7f9b4b644"
+    },
+    {
+      "path": "/takeout/api/stores",
+      "status": 200,
+      "sha256": "76dda1d5f9582f69c2150c865d3827018415a4023f023862c6a42dfc8c658824",
+      "store_count": 540
+    },
+    {
+      "path": "/takeout/actuator/prometheus",
+      "status": 404,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/takeout/internal/metrics",
+      "status": 404,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/takeout/v3/api-docs",
+      "status": 404,
+      "sha256": "1c709b9b6ac33250d886eb933a8e07c6d1021a976d1cdb07abecd1dae8f6e1c7"
+    },
+    {
+      "path": "/takeout/api/erp/stores/1/materials",
+      "status": 401,
+      "sha256": "d28d2f3ff2915f1d00dda18a6f7fa5f9d03c456d79f32b56a3d568ffdcea496c"
+    }
+  ],
+  "ci": {
+    "Security": {
+      "status": "in_progress",
+      "conclusion": null,
+      "url": "https://github.com/hqyx2025/simple-takeout/actions/runs/42358171303"
+    },
+    "Frontend": {
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/hqyx2025/simple-takeout/actions/runs/42358171300"
+    },
+    "Backend": {
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/hqyx2025/simple-takeout/actions/runs/42358171295"
+    }
+  },
+  "frontend_ci_browser_skips": 8,
+  "local_browser_checks_passed": true,
+  "external_channel_acceptance": false
+}
