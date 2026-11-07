@@ -1,3 +1,4 @@
+import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /**
  * 管理端-分类管理页（大纲 9.4 平台分类管理）
@@ -134,9 +135,12 @@ export struct AdminCategoryPage {
           // 新增分类
           ListItem() {
             Row({ space: SPACING.SM }) {
-              TextInput({ placeholder: '新增分类名称', text: this.newCategoryName })
-                .attributeModifier(new AppInputStyle())
-                .layoutWeight(1).onChange((value: string) => { this.newCategoryName = value })
+              FormInput({ label: '新增分类名称',
+                value: this.newCategoryName,
+                placeholder: '新增分类名称',
+                onChange: (value: string) => { this.newCategoryName = value },
+                fieldId: 'AdminCategoryPage-newCategoryName',
+                required: true }).layoutWeight(1)
               Button('新增')
                 .attributeModifier(new AppButtonStyle()).height(42).fontSize(FONT_SIZE.SM)
                 .backgroundColor(MODULE_COLOR.ADMIN).onClick(() => { this.createCategory() })
@@ -157,9 +161,12 @@ export struct AdminCategoryPage {
                   .backgroundColor(accentBg(accentIndexFromText(category.name)))
                   .borderRadius(BORDER_RADIUS.MD)
                 if (this.editingCategoryId === category.id) {
-                  TextInput({ placeholder: '分类名称', text: this.editCategoryName })
-                    .attributeModifier(new AppInputStyle())
-                    .layoutWeight(1).onChange((value: string) => { this.editCategoryName = value })
+                  FormInput({ label: '分类名称',
+                    value: this.editCategoryName,
+                    placeholder: '分类名称',
+                    onChange: (value: string) => { this.editCategoryName = value },
+                    fieldId: 'AdminCategoryPage-editCategoryName',
+                    required: true }).layoutWeight(1)
                   Button('保存')
                     .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS).fontColor(COLORS.ON_PRIMARY).backgroundColor(COLORS.SUCCESS)
                     .borderRadius(BORDER_RADIUS.ROUND)

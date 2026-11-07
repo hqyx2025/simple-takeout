@@ -1,3 +1,4 @@
+import { FormInput } from '../components/FormInput'
 import { AppTheme, AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /**
  * 我的钱包页（余额 + 已绑定银行卡）。
@@ -481,12 +482,15 @@ export struct RevealCardDialog {
           .fontSize(FONT_SIZE.SM).fontColor(AppTheme.MUTED).backgroundColor(Color.Transparent)
           .height(40).onClick(() => { this.close() })
       }.width('100%')
-      Text('请输入支付密码验证身份，验证通过后仅临时显示完整卡号。')
-        .fontSize(FONT_SIZE.SM).fontColor(AppTheme.MUTED).width('100%')
-      TextInput({ text: this.paymentPassword, placeholder: '6 位数字支付密码' })
-        .attributeModifier(new AppInputStyle()).width('100%').maxLength(6).type(InputType.Password)
-        .id('wallet-reveal-payment-password')
-        .onChange((value: string) => { this.paymentPassword = value.replace(/[^0-9]/g, '') })
+
+      FormInput({ label: '支付密码',
+        value: this.paymentPassword,
+        placeholder: '6 位数字支付密码',
+        inputType: InputType.Password,
+        maxLength: 6,
+        fieldId: 'wallet-reveal-payment-password',
+        onChange: (value: string) => { this.paymentPassword = value.replace(/[^0-9]/g, '') },
+        required: true }).width('100%')
       Button('确认显示')
         .attributeModifier(new AppButtonStyle()).width('100%').height(AppTheme.CONTROL_HEIGHT)
         .id('wallet-reveal-submit').onClick(() => { this.submit() })

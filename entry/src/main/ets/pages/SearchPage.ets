@@ -1,3 +1,4 @@
+import { MatchText } from '../components/MatchText'
 import { AppButtonStyle, AppCardStyle, AppSearchStyle } from '../common/theme/AppTheme'
 import { PageHeader } from '../components/PageHeader'
 import { LoadingIndicator } from '../components/LoadingIndicator'
@@ -41,6 +42,7 @@ export struct SearchPage {
   @State searchFailed: boolean = false
   private lastSearchKeyword: string = ''
   private searchRequest: number = 0
+  private suggestTimer: number = -1
   // 直接压栈独立 StoreDetailPage，返回时回到搜索页（不再 back 给首页代跳）
   onStoreClick: (store: StoreItem) => void = (store: StoreItem) => {
     if (store.id <= 0) {
@@ -112,6 +114,7 @@ export struct SearchPage {
   }
 
   aboutToDisappear(): void {
+    clearTimeout(this.suggestTimer)
     this.resetSearch()
   }
 
@@ -145,6 +148,8 @@ export struct SearchPage {
           .onChange((value: string) => {
             this.searchText = value
             this.resetSearch()
+            clearTimeout(this.suggestTimer)
+            if (value.trim()) { this.suggestTimer = setTimeout(() => { this.doSearch() }, 300) }
           })
           .onSubmit(() => { this.doSearch() })
         Button('搜索', { type: ButtonType.Normal })
@@ -365,12 +370,7 @@ export struct SearchPage {
       }
 
       Column({ space: SPACING.XS }) {
-        Text(store.name)
-          .fontSize(FONT_SIZE.LG)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.TEXT_PRIMARY)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        MatchText({ text: store.name, query: this.searchText })
 
         Row({ space: SPACING.SM }) {
           Text(`${store.rating}分`)

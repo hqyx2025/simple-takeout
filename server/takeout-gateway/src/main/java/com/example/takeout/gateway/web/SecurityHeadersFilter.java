@@ -7,7 +7,16 @@ import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
 @Component
-public class SecurityHeadersFilter implements WebFilter {
+public class SecurityHeadersFilter implements WebFilter,
+        org.springframework.context.ApplicationListener<org.springframework.boot.web.server.context.WebServerInitializedEvent> {
+    private volatile int managementPort = -1;
+
+    @Override
+    public void onApplicationEvent(org.springframework.boot.web.server.context.WebServerInitializedEvent event) {
+        if ("management".equals(event.getApplicationContext().getServerNamespace())) {
+            managementPort = event.getWebServer().getPort();
+        }
+    }
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         var headers = exchange.getResponse().getHeaders();
@@ -18,7 +27,9 @@ public class SecurityHeadersFilter implements WebFilter {
                 + "style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; "
                 + "connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'");
         String path=exchange.getRequest().getPath().value();
-        if(path.startsWith("/api/internal/") || path.startsWith("/internal/") || path.startsWith("/actuator")){
+        var local = exchange.getRequest().getLocalAddress();
+        boolean managementRequest = local != null && local.getPort() == managementPort;
+        if(path.startsWith("/api/internal/") || path.startsWith("/internal/") || (path.startsWith("/actuator") && !managementRequest)){
             exchange.getResponse().setStatusCode(org.springframework.http.HttpStatus.NOT_FOUND);
             return exchange.getResponse().setComplete();
         }

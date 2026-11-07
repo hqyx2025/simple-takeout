@@ -7,7 +7,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * 简单外卖后端服务入口
- * Spring Boot 3.5 + Java 25 + MySQL
+ * Spring Boot 4 / Spring 7 + Java 25 + MySQL
  * @EnableScheduling：待付款订单超时自动取消（OrderTimeoutJob）
  */
 @SpringBootApplication

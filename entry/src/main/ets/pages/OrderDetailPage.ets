@@ -1,3 +1,4 @@
+import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppTextAreaStyle } from '../common/theme/AppTheme'
 /**
  * 订单详情页
@@ -18,6 +19,7 @@ import { PageHeader } from '../components/PageHeader'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { logInfo } from '../service/AppLogger'
 import { bundleManager } from '@kit.AbilityKit'
+import { KeyboardAvoidMode } from '@kit.ArkUI'
 import { getAuthSessionEpoch, getServerClockOffsetMs, getApiBaseUrl } from '../service/HttpClient'
 
 class RefundReasonOption {
@@ -59,6 +61,7 @@ export struct OrderDetailPage {
   @StorageLink('user') @Watch('onOwnerChanged') sessionUser: User = createEmptyUser()
   private detailOwner: number = 0
   private detailRole: number = -1
+  private previousKeyboardAvoidMode: KeyboardAvoidMode = KeyboardAvoidMode.OFFSET
   @State order: Order | null = null
   @StorageLink('isLoggedIn') @Watch('onLoginChanged') loggedIn: boolean = false
   @StorageLink('appForeground') @Watch('onAppForegroundChanged') appForeground: boolean = true
@@ -290,6 +293,8 @@ export struct OrderDetailPage {
   }
 
   onPageShow(): void {
+    this.previousKeyboardAvoidMode = this.getUIContext().getKeyboardAvoidMode()
+    this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE)
     this.pageActive = true
     if (this.order !== null && (this.order.status === 4 || this.order.status === 6 || this.refundRecords.length > 0)) {
       this.refreshRefundProgress()
@@ -302,6 +307,7 @@ export struct OrderDetailPage {
   }
 
   onPageHide(): void {
+    this.getUIContext().setKeyboardAvoidMode(this.previousKeyboardAvoidMode)
     this.pageActive = false
     this.stopPaymentPolling()
     this.stopPayCountdown()
@@ -1097,10 +1103,15 @@ export struct OrderDetailPage {
           Column({ space: SPACING.SM }) {
             Text(`可退余额：¥${(this.order?.capabilities?.refundRemaining ?? this.order?.payAmount ?? 0).toFixed(2)}（审核通过后原路退回）`)
               .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-            Text('申请金额（元）').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_PRIMARY)
-            TextInput({ text: this.refundAmount, placeholder: '例如：10.50' }).type(InputType.NUMBER_DECIMAL)
-              .enabled(this.refundAppealId === 0 && !this.refundSubmitting && !this.refundPayloadLocked)
-              .id('order-refund-amount').onChange((value: string) => { this.refundAmount = value })
+
+            FormInput({ label: '退款金额（元）',
+              value: this.refundAmount,
+              placeholder: '例如：10.50',
+              inputType: InputType.NUMBER_DECIMAL,
+              isEnabled: this.refundAppealId === 0 && !this.refundSubmitting && !this.refundPayloadLocked,
+              fieldId: 'order-refund-amount',
+              onChange: (value: string) => { this.refundAmount = value },
+              required: true })
             EvidenceImages({ images: $refundImages, uploading: $refundUploading, disabled: this.refundSubmitting || this.refundPayloadLocked, contextVersion: (): number => this.refundDialogVersion })
             Text('退款原因（请选择一项）').fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Medium)
               .fontColor(COLORS.TEXT_PRIMARY).width('100%').margin({ top: SPACING.SM })
@@ -1109,10 +1120,16 @@ export struct OrderDetailPage {
             }, (opt: RefundReasonOption) => opt.code)
             Text(this.refundReasonType === 'OTHER' ? '补充说明（必填）' : '补充说明（选填）')
               .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY).width('100%').margin({ top: SPACING.SM })
-            TextArea({ text: this.refundReason, placeholder: '例如：少送了一份米饭，最多50字' })
-              .attributeModifier(new AppTextAreaStyle()).width('100%').height(100).maxLength(50)
-              .enabled(!this.refundSubmitting && !this.refundPayloadLocked).id('order-refund-note')
-              .onChange((value: string) => { this.refundReason = value })
+            FormInput({ label: '退款原因',
+              value: this.refundReason,
+              placeholder: '例如：少送了一份米饭，最多50字',
+              maxLength: 50,
+              isEnabled: !this.refundSubmitting && !this.refundPayloadLocked,
+              fieldId: 'order-refund-note',
+              onChange: (value: string) => { this.refundReason = value },
+              multiline: true,
+              inputHeight: 100,
+              required: true }).width('100%')
           }.width('100%').padding({ bottom: SPACING.SM })
         }.layoutWeight(1).scrollBar(BarState.Auto).width('100%')
 
@@ -1539,22 +1556,16 @@ export struct OrderDetailPage {
         .width('100%')
         .margin({ bottom: SPACING.MD })
         if (this.payChannel === 'BALANCE') {
-          Text('支付密码')
-            .fontSize(FONT_SIZE.SM)
-            .fontColor(COLORS.TEXT_PRIMARY)
-            .width('100%')
-          TextInput({ placeholder: '请输入 6 位数字支付密码', text: this.balancePaymentPassword })
-            .type(InputType.Password)
-            .inputFilter('[0-9]')
-            .maxLength(6)
-            .fontColor(COLORS.TEXT_PRIMARY)
-            .backgroundColor(COLORS.BG_PRIMARY)
-            .border({ width: 1, color: COLORS.DIVIDER })
-            .borderRadius(BORDER_RADIUS.MD)
-            .height(44)
-            .margin({ bottom: SPACING.MD })
-            .id('order-payment-password')
-            .onChange((value: string) => { this.balancePaymentPassword = value })
+
+          FormInput({ label: '支付密码',
+            value: this.balancePaymentPassword,
+            placeholder: '请输入 6 位数字支付密码',
+            inputType: InputType.Password,
+            maxLength: 6,
+            fieldId: 'order-payment-password',
+            onChange: (value: string) => { this.balancePaymentPassword = value },
+            filter: '[0-9]',
+            required: true }).margin({ bottom: SPACING.MD })
         }
       }
       Row({ space: SPACING.MD }) {

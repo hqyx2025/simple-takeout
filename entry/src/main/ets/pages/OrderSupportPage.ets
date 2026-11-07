@@ -1,3 +1,4 @@
+import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppTextAreaStyle } from '../common/theme/AppTheme'
 import { COLORS, SPACING, FONT_SIZE } from '../common/Constants'
 import { PageHeader } from '../components/PageHeader'
@@ -199,8 +200,16 @@ struct OrderSupportPage {
                 ForEach(this.types, (item: IssueType) => { this.TypeButton(item) }, (item: IssueType) => item.code)
               }
               Text(this.role === UserRole.ADMIN ? '处理说明（必填）' : '异常说明（必填）').fontColor(COLORS.TEXT_PRIMARY)
-              TextArea({ text: this.note, placeholder: '请说明实际情况，最多500字' }).attributeModifier(new AppTextAreaStyle()).height(100).maxLength(500)
-                .enabled(!this.busy && !this.issueLocked).onChange((value: string) => { this.note = value })
+              FormInput({ label: '情况说明',
+                value: this.note,
+                placeholder: '请说明实际情况，最多500字',
+                maxLength: 500,
+                isEnabled: !this.busy && !this.issueLocked,
+                onChange: (value: string) => { this.note = value },
+                fieldId: 'OrderSupportPage-note',
+                multiline: true,
+                inputHeight: 100,
+                required: true })
             }
             Text('配送异常历史').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_PRIMARY)
             if (!this.loading && this.issues.length === 0) { Text('暂无配送异常记录').fontColor(COLORS.TEXT_HINT) }
@@ -210,9 +219,17 @@ struct OrderSupportPage {
             }
             ForEach(this.refunds, (record: RefundRecord) => { this.RefundCard(record) }, (record: RefundRecord) => record.id.toString() + '-' + record.status + '-' + (record.merchantResponse ?? ''))
             if (this.evidenceRefundId > 0) {
-              Text('商家举证说明（必填）').fontColor(COLORS.TEXT_PRIMARY)
-              TextArea({ text: this.evidenceResponse, placeholder: '例如：已补送餐品，并附实际照片' }).attributeModifier(new AppTextAreaStyle()).height(100).maxLength(500)
-                .enabled(!this.busy).onChange((value: string) => { this.evidenceResponse = value })
+
+              FormInput({ label: '举证说明',
+                value: this.evidenceResponse,
+                placeholder: '例如：已补送餐品，并附实际照片',
+                maxLength: 500,
+                isEnabled: !this.busy,
+                onChange: (value: string) => { this.evidenceResponse = value },
+                fieldId: 'OrderSupportPage-evidenceResponse',
+                multiline: true,
+                inputHeight: 100,
+                required: true })
               EvidenceImages({ images: $evidenceImages, uploading: $evidenceUploading, disabled: this.busy, contextVersion: (): number => this.pageVersion })
             }
           }

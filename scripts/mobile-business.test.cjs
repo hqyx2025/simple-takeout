@@ -60,11 +60,12 @@ function exportedFunction(text, name) {
   return text.slice(start, text.indexOf(String.fromCharCode(10) + '}', start) + 2);
 }
 function uploadRuntime(responses, refreshResult = 1) {
+  let progressCallback;
   const exports = {}, tokens = [], pending = [], counters = { refresh: 0, expire: 0, open: 0, close: 0, destroy: 0, toast: 0 };
   const context = {
     exports, authToken: 'old', refreshToken: 'refresh-old', authSessionEpoch: 1, lastApiErrorMessage: '',
     fileIo: { openSync: () => { counters.open++; return { fd: 3 }; }, statSync: () => ({ size: 4 }), readSync() {}, closeSync() { counters.close++; }, OpenMode: { READ_ONLY: 0 } },
-    http: { createHttp: () => ({ request: async (_, options) => { tokens.push(options.header.Authorization); const next = responses.shift(); if (typeof next === 'function') return await next(context); return next; }, destroy() { counters.destroy++; } }), RequestMethod: { POST: 1 }, HttpDataType: { STRING: 1 } },
+    http: { createHttp: () => ({ on(type, callback) { progressCallback = callback; }, request: async (_, options) => { progressCallback?.({sendSize:2,totalSize:4}); tokens.push(options.header.Authorization); const next = responses.shift(); if (typeof next === 'function') return await next(context); return next; }, destroy() { counters.destroy++; } }), RequestMethod: { POST: 1 }, HttpDataType: { STRING: 1 } },
     API_CONFIG: { CONNECT_TIMEOUT: 1000, TIMEOUT: 2000 }, buildFileName: () => 'a.jpg', buildContentType: () => 'image/jpeg', logError() {},
     refreshAfterUnauthorized: async () => { counters.refresh++; context.authToken = 'new'; return refreshResult; },
     expireLocalSession: async () => { counters.expire++; context.authSessionEpoch++; context.authToken = ''; },
@@ -72,10 +73,17 @@ function uploadRuntime(responses, refreshResult = 1) {
   };
   const code = ts.transpileModule(exportedFunction(source('service/HttpClient.ets'), 'uploadFile'), { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS } }).outputText;
   vm.runInNewContext(code, context);
-  return { context, counters, tokens, upload: show => exports.uploadFile('/upload', '/a.jpg', show) };
+  return { context, counters, tokens, upload: (show, progress) => exports.uploadFile('/upload', '/a.jpg', show, progress) };
 }
 const unauthorized = { responseCode: 401, result: '' };
 const uploaded = { responseCode: 200, result: JSON.stringify({ code: 200, data: { url: '/uploads/a.jpg' } }) };
+
+test('upload reports sent bytes then success and rejects oversize before allocating or sending', async () => {
+  const r=uploadRuntime([uploaded]),progress=[];
+  await r.upload(false,percent=>progress.push(percent));assert.deepEqual(progress,[50,100]);
+  const large=uploadRuntime([uploaded]);large.context.fileIo.statSync=()=>({size:5*1024*1024+1});
+  assert.equal(await large.upload(false),null);assert.equal(large.tokens.length,0);assert.equal(large.counters.close,1);
+});
 test('upload retries HTTP and business 401 once after refresh, reusing file and rotating token', async () => {
   for (const first of [unauthorized, { responseCode: 200, result: JSON.stringify({ code: 401 }) }]) {
     const r = uploadRuntime([first, uploaded]);

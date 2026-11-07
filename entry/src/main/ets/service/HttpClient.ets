@@ -271,11 +271,11 @@ async function request<T>(method: string, url: string, data?: Object, showErrorT
     return result
   } catch (err) {
     logError('Http', `后端请求异常：${operation}，请检查网络和服务端状态`, err)
-    lastApiErrorMessage = '网络请求失败，请确认后端服务已启动'
+    lastApiErrorMessage = '网络连接暂不可用，请检查网络后重试'
     if (showErrorToast) {
       notifyApiError(lastApiErrorMessage)
     }
-    return { code: 500, message: '网络请求失败，请确认后端服务已启动', data: undefined as T }
+    return { code: 500, message: lastApiErrorMessage, data: undefined as T }
   }
 }
 
@@ -379,7 +379,8 @@ export async function del<T>(url: string, showErrorToast: boolean = true): Promi
  * @ohos.net.http 的 multiFormDataList 直接提交文件二进制，保证真机/模拟器一致。
  * 注意：file.picker 返回的 URI 为 file://datashare://... ，需用 fileIo 读成 ArrayBuffer 后上传。
  */
-export async function uploadFile(url: string, fileUri: string, showErrorToast: boolean = true): Promise<UploadResult | null> {
+export async function uploadFile(url: string, fileUri: string, showErrorToast: boolean = true,
+  onProgress: (percent: number) => void = () => {}): Promise<UploadResult | null> {
   const requestToken: string = authToken
   const requestRefreshToken: string = refreshToken
   const requestEpoch: number = authSessionEpoch
@@ -389,6 +390,11 @@ export async function uploadFile(url: string, fileUri: string, showErrorToast: b
   try {
     file = fileIo.openSync(fileUri, fileIo.OpenMode.READ_ONLY)
     const stat: fileIo.Stat = fileIo.statSync(file.fd)
+    if (stat.size <= 0 || stat.size > 5 * 1024 * 1024) {
+      lastApiErrorMessage = '请选择不超过 5MB 的图片'
+      if (showErrorToast) { notifyApiError(lastApiErrorMessage) }
+      return null
+    }
     const buffer: ArrayBuffer = new ArrayBuffer(stat.size)
     fileIo.readSync(file.fd, buffer)
     const fileName: string = buildFileName(fileUri)
@@ -398,6 +404,11 @@ export async function uploadFile(url: string, fileUri: string, showErrorToast: b
     for (let attempt: number = 0; attempt < 2; attempt++) {
       if (requestEpoch !== authSessionEpoch) { return null }
       httpRequest = http.createHttp()
+      httpRequest.on('dataSendProgress', (progress: http.DataSendProgressInfo) => {
+        if (requestEpoch === authSessionEpoch && progress.totalSize > 0) {
+          onProgress(Math.min(99, Math.floor(progress.sendSize * 100 / progress.totalSize)))
+        }
+      })
       const header: Record<string, string> = {
         'Content-Type': 'multipart/form-data', 'Authorization': `Bearer ${attempt === 0 ? requestToken : authToken}`
       }
@@ -426,6 +437,7 @@ export async function uploadFile(url: string, fileUri: string, showErrorToast: b
         lastApiErrorMessage = '登录验证失败，请重试或重新登录'
       } else if (response.responseCode === 200 && parsed?.code === 200 && parsed.data !== undefined && parsed.data !== null) {
         lastApiErrorMessage = ''
+        onProgress(100)
         return parsed.data
       } else {
         lastApiErrorMessage = parsed?.message ?? '图片上传失败，请稍后重试'
@@ -437,7 +449,7 @@ export async function uploadFile(url: string, fileUri: string, showErrorToast: b
   } catch (err) {
     if (requestEpoch !== authSessionEpoch) { return null }
     logError('Http', '后端请求异常：上传评价图片，请检查网络和服务端状态', err)
-    lastApiErrorMessage = '图片上传失败，请确认后端服务已启动'
+    lastApiErrorMessage = '网络连接暂不可用，请检查网络后重试'
     if (showErrorToast) { notifyApiError(lastApiErrorMessage) }
     return null
   } finally {

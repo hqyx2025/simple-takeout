@@ -1,7 +1,9 @@
 """Build and import the same additive demonstration catalog on local/cloud MySQL."""
 import argparse
+import base64
 import gzip
 import hashlib
+import hmac
 import json
 import math
 import os
@@ -124,25 +126,48 @@ def envfile(path):
             key,value=line.split('=',1);result[key.strip()]=value.strip().strip('\"\'')
     return result
 
+def personal_fingerprint(secret, purpose, value):
+    try:key=base64.b64decode(secret,validate=True)
+    except ValueError:raise RuntimeError('The configured personal-data index key is invalid.') from None
+    if len(key)!=32:raise RuntimeError('The configured personal-data index key is invalid.')
+    digest=hmac.new(hashlib.sha256(key).digest(),(purpose+'\0'+value).encode('utf-8'),hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(digest).decode('ascii').rstrip('=')
+
 class Database:
     def __init__(self,args):
         self.cloud=args.cloud;self.env=os.environ.copy()
+        cfg=envfile(ROOT/'.env') if (ROOT/'.env').exists() else {}
+        if args.local_config:cfg.update(envfile(Path(args.local_config)))
+        cfg.update({k:v for k,v in os.environ.items() if k.startswith('TAKEOUT_DB_') or k=='TAKEOUT_PERSONAL_DATA_INDEX_SECRET'})
         if self.cloud:
             self.base=['docker','exec','-i','takeout-mysql','sh','-c']
             self.name='takeout';self.client=[]
         else:
-            cfg=envfile(ROOT/'.env') if (ROOT/'.env').exists() else {}
-            if args.local_config:cfg.update(envfile(Path(args.local_config)))
-            cfg.update({k:v for k,v in os.environ.items() if k.startswith('TAKEOUT_DB_')})
             self.name=cfg.get('TAKEOUT_DB_NAME','takeout')
             self.client=['--protocol=TCP','--connect-timeout=5','-h',cfg.get('TAKEOUT_DB_HOST','127.0.0.1'),'-P',cfg.get('TAKEOUT_DB_PORT','3310'),'-u',cfg.get('TAKEOUT_DB_USERNAME','root')]
             self.env['MYSQL_PWD']=cfg.get('TAKEOUT_DB_PASSWORD','')
             self.mysql=shutil.which('mysql') or r'C:\Software\Application\mysql\mysql-8.4.0-winx64\bin\mysql.exe'
             self.dump=str(Path(self.mysql).with_name('mysqldump.exe' if os.name=='nt' else 'mysqldump'))
+        self.index_secret=cfg.get('TAKEOUT_PERSONAL_DATA_INDEX_SECRET','')
+        self.encrypted_users=self.run("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='users' AND COLUMN_NAME='phone_lookup';").strip()=='1'
+        if self.encrypted_users:
+            if not self.index_secret and self.cloud:
+                # Keep values in process memory; never put a key on the command line or in output.
+                metadata=subprocess.run(['docker','inspect','takeout-mysql','--format','{{json .Config.Labels}}'],capture_output=True,text=True,check=True)
+                project=(json.loads(metadata.stdout) or {}).get('com.docker.compose.project','')
+                if project:
+                    apps=subprocess.run(['docker','ps','-q','--filter','label=com.docker.compose.project='+project,'--filter','label=com.docker.compose.service=app'],capture_output=True,text=True,check=True).stdout.split()
+                    if apps:
+                        result=subprocess.run(['docker','exec',apps[0],'printenv','TAKEOUT_PERSONAL_DATA_INDEX_SECRET'],capture_output=True,text=True)
+                        if result.returncode==0:self.index_secret=result.stdout.strip()
+            if not self.index_secret:raise RuntimeError('Encrypted users require TAKEOUT_PERSONAL_DATA_INDEX_SECRET through private configuration.')
+            fingerprint=personal_fingerprint(self.index_secret,'index-key-check','takeout-personal-data-v1')
+            stored=self.run('SELECT index_check FROM personal_data_key_state WHERE id=1;').strip()
+            if stored and stored!=fingerprint:raise RuntimeError('Personal-data index key does not match this database; nothing was imported.')
 
     def command(self,dump=False):
         options=['--default-character-set=utf8mb4']
-        if dump:options+=['--single-transaction','--quick','--no-tablespaces','--set-gtid-purged=OFF','--column-statistics=0','--skip-add-drop-table',self.name]+TABLES
+        if dump:options+=['--single-transaction','--quick','--no-tablespaces','--set-gtid-purged=OFF','--column-statistics=0','--skip-add-drop-table',self.name]+TABLES+(['user_phone_search','personal_data_key_state','flyway_schema_history'] if self.encrypted_users else [])
         else:options+=['--batch','--raw','--skip-column-names',self.name]
         if self.cloud:
             import shlex
@@ -156,10 +181,19 @@ class Database:
 
     def rows(self,table,expected):
         cols=list(expected[0]); output=[]
+        by_id={row['id']:row for row in expected}
         for start in range(0,len(expected),300):
             ids=','.join(str(r['id']) for r in expected[start:start+300]); fields=','.join(f"'{c}',`{c}`" for c in cols)
+            if table=='users' and self.encrypted_users:fields+=",'__phone_lookup',phone_lookup"
             result=self.run(f'SELECT JSON_OBJECT({fields}) FROM `{table}` WHERE id IN ({ids}) ORDER BY id;')
-            output.extend(json.loads(line) for line in result.splitlines() if line)
+            for line in result.splitlines():
+                if not line:continue
+                row=json.loads(line)
+                if table=='users' and self.encrypted_users:
+                    lookup=row.pop('__phone_lookup',None);phone=by_id[row['id']]['phone']
+                    expected_lookup=personal_fingerprint(self.index_secret,'phone:exact',phone)
+                    if lookup==expected_lookup and row['phone']=='~'+expected_lookup[:19]:row['phone']=phone
+                output.append(row)
         return sorted(output,key=lambda r:r['id'])
 
     def preflight(self,catalog):
@@ -174,7 +208,11 @@ class Database:
             for row in self.rows(table,expected):
                 assert all(row[key]==by_id[row['id']][key] for key in IDENTITY[table]), f'ID collision in {table}: {row["id"]}'
         phones=','.join(literal(r['phone']) for r in catalog['tables']['users']);names=','.join(literal(r['username']) for r in catalog['tables']['users'])
-        existing=self.run(f'SELECT id FROM users WHERE phone IN ({phones}) OR username IN ({names});')
+        indexed=''
+        if self.encrypted_users:
+            lookups=','.join(literal(personal_fingerprint(self.index_secret,'phone:exact',r['phone'])) for r in catalog['tables']['users'])
+            indexed=f' OR phone_lookup IN ({lookups})'
+        existing=self.run(f'SELECT id FROM users WHERE phone IN ({phones}) OR username IN ({names}){indexed};')
         assert all(int(value) in {r['id'] for r in catalog['tables']['users']} for value in existing.splitlines()), 'Demo merchant identity collision.'
         print('PREFLIGHT_OK',self.name,flush=True)
 

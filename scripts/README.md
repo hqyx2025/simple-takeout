@@ -1,10 +1,15 @@
 # 脚本说明
 
-2026-10-28 当前验证：Windows/JDK 25 后端 711 项，实际执行 703 项全部通过，8 项因未配置 Redis 专项环境跳过；全部 Node 行为回归 170 项通过；API 26 debug HAP 构建成功且未签名，本轮无可用设备。真实 MySQL 包含 Spring HTTP 余额交易贯通和 7 个外部退款故障恢复用例，支付渠道在故障注入中使用测试替身。后续 GitHub Linux / MySQL / Redis CI 711 项全部执行通过、无跳过，服务器已发布 `business-20261028-closure-r1` 并完成只读核验。范围与证据见 [本次会话归档](../md/archive/会话记录-2026-10-28-业务闭环与发布.md)。2026-10-27 的 Docker 676 项、模拟器六类及双实例压测属于 [历史验证](../md/archive/会话记录-2026-10-27-微服务ERP并发JVM与部署.md)，下文更早数字也仅为历史基线。
+2026-11-07 当前验证：Boot 4 / Java 25 后端 **802 项通过、0 失败/错误/跳过**，聚合行覆盖率 **72.63%**；Node/真实无头浏览器 **226 项通过**，API 26 debug HAP 构建成功、未签名，无可用设备。真实 MySQL/Redis 与四进程集成及六项关键保护反向验证已执行，外部支付等渠道部分使用测试替身；独立 CI 与线上发布等待本轮实际结果，不复用历史成绩。命令和边界见 [11/07 验收](../md/acceptance/2026-11-07/README.md)。
+
+2026-10-28 历史验证：Windows/JDK 25 后端 711 项，实际执行 703 项全部通过，8 项因未配置 Redis 专项环境跳过；全部 Node 行为回归 170 项通过；API 26 debug HAP 构建成功且未签名，当轮无可用设备。后续 GitHub Linux / MySQL / Redis CI 711 项全部执行通过、无跳过，当时发布 `business-20261028-closure-r1`。范围与证据见 [会话归档](../md/archive/会话记录-2026-10-28-业务闭环与发布.md)。下文更早数字均为各自历史基线。
 
 | 脚本 | 用途 | 前置条件 / 产物 |
 | --- | --- | --- |
 | `start-service.ps1` | 分别启动 app / erp / gateway | JDK 25，已导入私有配置；先构建对应模块及 common |
+| `initialize-personal-data.ps1` | 只初始化被 Git 忽略的本机配置中空缺的两把私人资料密钥 | UTF-8；兼容 Windows PowerShell 5；保留已有值，不打印密钥；旧库升级前保管好数据库和旧密钥备份 |
+| `backend-evidence.py`、`backend-evidence.test.py` | 汇总本次实际 Surefire / 聚合 JaCoCo，拒绝缺失、失败、跳过或陈旧证据 | `--since` 为 Maven 开始前的 Unix 时间；CI 使用 `--minimum-line-coverage 0.70`；JSON 报告写 `TemporaryCacheStorage/`，不采集秘密环境变量 |
+| `database-diagnostics.sql` | 只读查看数据库版本、隔离级别、索引、预筛执行计划与归一化 SQL 耗时摘要 | 私有 MySQL 连接；不启用原始慢日志，不修改数据；预筛 EXPLAIN 不能代表完整多表查询或容量 |
 | `governance-load.py` | 有上限的本机阶梯 / 定速混合负载，分别统计业务错误、429 和过载 503 | 写入只允许显式启用的隔离环境；禁止指向体验站或生产数据；日志写入 `TemporaryCacheStorage/` |
 | `jvm-diagnostics.ps1` | 进程快照、线程转储、按需 JFR；堆转储需显式选择 | JDK 25，本项目 Java 进程；产物限制在私有临时目录，禁止公开下载 |
 | `device-uitest.ps1`、`device-test.ps1` | 构建、安装并运行设备 UiTest | DevEco Studio、hdc、已连接设备；日志写入 `TemporaryCacheStorage/` |
@@ -27,7 +32,7 @@
 
 2026-10-25 安全复测基线版本为 `defense-20261025-225329`。[终轮报告](../md/audit/round10/第十轮防御-回复.md) 对应的临时执行脚本与原始输出保存在 `TemporaryCacheStorage/round10-defense/`，文档原稿和更新证据在 `TemporaryCacheStorage/docs-current-sync/`；用户要求留存，不清理这些证据。历史线上验收脚本会创建 QA 账号，不能当作只读探活重复执行。
 
-六批业务与交互改造当前随 `ux-20261026-1950-sync-r2` 于 2026-10-26 20:30:14 +0800 发布到体验站，运行源码提交 `fc37a1471bf55f52c21b915c73afd65e73e9529a`；实际改动和限制见 [诊断与实施记录](../md/人性化改造诊断与实施方案.md)。HTTPS 首页与 4 个静态资源哈希匹配构建，R2 管理员 / 未登录只读检查 5 项通过，540 店与四个服务容器健康已核验；未启用其他角色作测试，也未运行线上交易链。GitHub Backend CI（`40322568519`）已成功，Frontend CI（`40327383209`，`4777346`）已由本机 `windows-deveco` 通过，全部 15 个脚本文件通过，unsigned debug HAP 已上传为 `entry-unsigned-debug-hap`（保留 7 天）。正式支付、物理真机、Release 签名、完整证据工单与结算后售后政策仍需专项完成。
+六批业务与交互改造当前随 `ux-20261026-1950-sync-r2` 于 2026-10-26 20:30:14 +0800 发布到体验站，运行源码提交 `fc37a1471bf55f52c21b915c73afd65e73e9529a`；实际改动和限制见 [诊断与实施记录](../md/archive/人性化改造诊断与实施方案.md)。HTTPS 首页与 4 个静态资源哈希匹配构建，R2 管理员 / 未登录只读检查 5 项通过，540 店与四个服务容器健康已核验；未启用其他角色作测试，也未运行线上交易链。GitHub Backend CI（`40322568519`）已成功，Frontend CI（`40327383209`，`4777346`）已由本机 `windows-deveco` 通过，全部 15 个脚本文件通过，unsigned debug HAP 已上传为 `entry-unsigned-debug-hap`（保留 7 天）。正式支付、物理真机、Release 签名、完整证据工单与结算后售后政策仍需专项完成。
 
 从仓库根目录执行 Web 与结算规则回归：
 

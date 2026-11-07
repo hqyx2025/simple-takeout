@@ -1,0 +1,52 @@
+# Explicit opt-in: docker compose -f docker-compose.yml -f docker-compose.monitoring.yml --profile monitoring up -d
+# Management listeners have no host port mappings. Only local dashboards are published.
+services:
+  app:
+    environment:
+      TAKEOUT_MANAGEMENT_ADDRESS: 0.0.0.0
+  app-secondary:
+    environment:
+      TAKEOUT_MANAGEMENT_ADDRESS: 0.0.0.0
+  erp:
+    environment:
+      TAKEOUT_MANAGEMENT_ADDRESS: 0.0.0.0
+  gateway:
+    environment:
+      TAKEOUT_MANAGEMENT_ADDRESS: 0.0.0.0
+  prometheus:
+    image: prom/prometheus:v3.16.0@sha256:e04987641b57704f408e31f6373ba4138ecf27cb4a165d24aabb6c38fddd0f06
+    profiles: [monitoring]
+    restart: unless-stopped
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d", "--storage.tsdb.retention.size=1GB"]
+    ports: ["127.0.0.1:9090:9090"]
+    volumes:
+      - ./server/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./server/monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 384M
+  grafana:
+    image: grafana/grafana:13.3.0@sha256:488984b716c0862639f91a698adbe2862677a5a07bad42da5f03f3030883b205
+    profiles: [monitoring]
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${TAKEOUT_GRAFANA_PASSWORD:?Set a separate Grafana administrator password}
+      GF_AUTH_ANONYMOUS_ENABLED: 'false'
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+    ports: ["127.0.0.1:3000:3000"]
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./server/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./server/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 384M
+volumes:
+  prometheus-data:
+  grafana-data:

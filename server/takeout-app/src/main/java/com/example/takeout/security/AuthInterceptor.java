@@ -103,6 +103,9 @@ public class AuthInterceptor implements HandlerInterceptor {
             return true;
         } catch (BizException e) {
             throw e;
+        } catch (org.springframework.dao.DataAccessException e) {
+            // 数据库暂时不可用不能被包装为 401，否则客户端会错误清除正常登录态。
+            throw e;
         } catch (Exception e) {
             throw new BizException(401, "登录凭证无效或已过期");
         }

@@ -1,3 +1,4 @@
+import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppTextAreaStyle, AppTheme } from '../common/theme/AppTheme'
 /**
  * 结算页
@@ -944,20 +945,18 @@ Image($r('app.media.home_location')).width(FONT_SIZE.XL).height(FONT_SIZE.XL).ob
   @Builder
   RemarkCard() {
     Column({ space: SPACING.SM }) {
-      Text('订单备注')
-        .fontSize(FONT_SIZE.MD)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(COLORS.TEXT_PRIMARY)
-      TextArea({ placeholder: '例如：少辣、不要香菜（选填，最多50字）', text: this.remark })
-        .attributeModifier(new AppTextAreaStyle())
-        .width('100%')
-        .height(80)
-        .maxLength(50)
-        .enabled(!this.submitting && !this.submissionUncertain)
-        .id('checkout-remark')
-        .onChange((value: string) => {
+
+      FormInput({ label: '订单备注',
+        value: this.remark,
+        placeholder: '例如：少辣、不要香菜（选填，最多50字）',
+        maxLength: 50,
+        isEnabled: !this.submitting && !this.submissionUncertain,
+        fieldId: 'checkout-remark',
+        onChange: (value: string) => {
           if (!this.submitting && !this.submissionUncertain) { this.remark = value }
-        })
+        },
+        multiline: true,
+        inputHeight: 80 }).width('100%')
     }
       .attributeModifier(new AppCardStyle())
     .width('100%')

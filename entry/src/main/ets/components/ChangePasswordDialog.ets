@@ -1,3 +1,4 @@
+import { FormInput } from './FormInput'
 import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /**
  * 修改密码弹窗（四端共用）。
@@ -74,40 +75,36 @@ export struct ChangePasswordDialog {
           .fontSize(FONT_SIZE.XL)
           .fontWeight(FontWeight.Bold)
           .fontColor(COLORS.TEXT_PRIMARY)
+        Scroll() {
+          Column({ space: SPACING.SM }) {
         Text('修改成功后本机登录会失效，需要用新密码重新登录。')
           .fontSize(FONT_SIZE.SM)
           .fontColor(COLORS.TEXT_HINT)
+        FormInput({ label: '当前登录密码',
+          value: this.oldPwd,
+          placeholder: '请输入当前登录密码',
+          inputType: InputType.Password,
+          onChange: (value: string) => { this.oldPwd = value },
+          fieldId: 'ChangePasswordDialog-oldPwd',
+          required: true })
+        FormInput({ label: '新登录密码',
+          value: this.newPwd,
+          placeholder: '请输入新密码，如：takeout2026',
+          inputType: InputType.Password,
+          onChange: (value: string) => { this.newPwd = value },
+          fieldId: 'ChangePasswordDialog-newPwd',
+          passwordRules: true,
+          required: true })
+        FormInput({ label: '确认新密码',
+          value: this.confirmPwd, validator: (value: string): string => value === this.newPwd ? '' : '两次输入的密码不一致',
+          placeholder: '请再次输入新密码',
+          inputType: InputType.Password,
+          onChange: (value: string) => { this.confirmPwd = value },
+          fieldId: 'ChangePasswordDialog-confirmPwd',
+          required: true })
 
-        Text('原密码（必填）')
-          .fontSize(FONT_SIZE.SM)
-          .fontColor(COLORS.TEXT_SECONDARY)
-          .width('100%')
-          .margin({ top: SPACING.SM })
-        TextInput({ placeholder: '请输入当前登录密码', text: this.oldPwd })
-          .attributeModifier(new AppInputStyle())
-          .type(InputType.Password)
-          .onChange((value: string) => { this.oldPwd = value })
-
-        Text('新密码（必填，至少 6 位）')
-          .fontSize(FONT_SIZE.SM)
-          .fontColor(COLORS.TEXT_SECONDARY)
-          .width('100%')
-          .margin({ top: SPACING.SM })
-        TextInput({ placeholder: '请输入新密码，如：takeout2026', text: this.newPwd })
-          .attributeModifier(new AppInputStyle())
-          .type(InputType.Password)
-          .onChange((value: string) => { this.newPwd = value })
-
-        Text('确认新密码（必填）')
-          .fontSize(FONT_SIZE.SM)
-          .fontColor(COLORS.TEXT_SECONDARY)
-          .width('100%')
-          .margin({ top: SPACING.SM })
-        TextInput({ placeholder: '请再次输入新密码', text: this.confirmPwd })
-          .attributeModifier(new AppInputStyle())
-          .type(InputType.Password)
-          .onChange((value: string) => { this.confirmPwd = value })
-
+          }.width('100%')
+        }.width('100%').layoutWeight(1)
         Row({ space: SPACING.MD }) {
           Button('取消')
             .attributeModifier(new AppButtonStyle())
@@ -136,7 +133,7 @@ export struct ChangePasswordDialog {
         .margin({ top: SPACING.MD })
       }
         .attributeModifier(new AppCardStyle())
-      .width('86%').constraintSize({ maxWidth: 460 })
+      .width('86%').height('80%').constraintSize({ maxWidth: 460 })
       .padding(SPACING.XL)
     }
     .width('100%')

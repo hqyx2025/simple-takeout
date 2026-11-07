@@ -1,3 +1,4 @@
+import { FormSelect } from '../components/FormSelect'
 import { AppButtonStyle, AppCardStyle, AppTheme } from '../common/theme/AppTheme'
 import { SPACING, getMarketingTypeText } from '../common/Constants'
 import { MarketingActivity, MerchantSeckill, StoreItem, GoodsItem, User, UserRole, createEmptyUser } from '../model/Models'
@@ -171,10 +172,12 @@ export struct MerchantMarketingPage {
       Text(label).fontSize(14).fontColor(AppTheme.TEXT).width('100%')
       if (this.goodsOptions.length === 0) { Text('暂无可选的无规格商品').fontSize(14).fontColor(AppTheme.MUTED) }
       else {
-        Select(this.goodsOptions).value(selectedId > 0 ? this.goodsName(selectedId) : '请选择商品')
-          .selected(this.goods.findIndex((item: GoodsItem): boolean => item.id === selectedId))
-          .width('100%').id(id).enabled(!this.saving).accessibilityText(label)
-          .onSelect((index: number) => { if (gift) { this.giftGoodsId = this.goods[index].id } else { this.seckillGoodsId = this.goods[index].id } })
+        FormSelect({ label: label,
+          options: this.goodsOptions,
+          selected: this.goods.findIndex((item: GoodsItem): boolean => item.id === selectedId),
+          isEnabled: !this.saving,
+          fieldId: id,
+          onSelect: (index: number) => { if (gift) { this.giftGoodsId = this.goods[index].id } else { this.seckillGoodsId = this.goods[index].id } } })
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
@@ -186,10 +189,12 @@ export struct MerchantMarketingPage {
         FormInput({ label: '活动名称', value: this.title, placeholder: '例如：全店八折', fieldId: 'marketing-title', isEnabled: !this.saving,
           onChange: (value: string) => { this.title = value } })
         Text('活动类型').fontSize(14).fontColor(AppTheme.TEXT)
-        Select([new MarketingSelectOption('折扣'), new MarketingSelectOption('新客立减'), new MarketingSelectOption('满赠')])
-          .value(this.typeLabel(this.type)).selected(this.type === 'DISCOUNT' ? 0 : this.type === 'NEW_USER' ? 1 : 2)
-          .width('100%').id('marketing-type').enabled(!this.saving)
-          .onSelect((index: number) => { this.type = index === 0 ? 'DISCOUNT' : index === 1 ? 'NEW_USER' : 'GIFT' })
+        FormSelect({ label: '活动类型',
+          options: [new MarketingSelectOption('折扣'), new MarketingSelectOption('新客立减'), new MarketingSelectOption('满赠')],
+          selected: this.type === 'DISCOUNT' ? 0 : this.type === 'NEW_USER' ? 1 : 2,
+          isEnabled: !this.saving,
+          fieldId: 'marketing-type',
+          onSelect: (index: number) => { this.type = index === 0 ? 'DISCOUNT' : index === 1 ? 'NEW_USER' : 'GIFT' } })
         if (this.type === 'DISCOUNT') {
           FormInput({ label: '折扣率', value: this.discountRate, placeholder: '例如：0.8 表示八折', fieldId: 'marketing-discount',
             inputType: InputType.NUMBER_DECIMAL, isEnabled: !this.saving, onChange: (value: string) => { this.discountRate = value } })
@@ -251,10 +256,11 @@ export struct MerchantMarketingPage {
           actionEnabled: !this.saving && !this.loading,
           onAction: () => { if (!this.saving && !this.loading) { this.openForm(this.section === 'activities' ? 'activity' : 'seckill') } } })
         if (this.stores.length > 0 && this.form === '') {
-          Select(this.stores.map((store: StoreItem): MarketingSelectOption => new MarketingSelectOption(store.name)))
-            .value(this.stores.find((store: StoreItem): boolean => store.id === this.selectedStoreId)?.name ?? '')
-            .id('marketing-store').enabled(!this.saving && !this.loading)
-            .onSelect((index: number) => { this.selectedStoreId = this.stores[index].id; this.loadStoreData() })
+          FormSelect({ label: '操作门店',
+          options: this.stores.map((store: StoreItem): MarketingSelectOption => new MarketingSelectOption(store.name)),
+          isEnabled: !this.saving && !this.loading,
+          fieldId: 'marketing-store',
+          onSelect: (index: number) => { this.selectedStoreId = this.stores[index].id; this.loadStoreData() } })
           Row({ space: SPACING.SM }) {
             Button('活动').attributeModifier(new AppButtonStyle()).layoutWeight(1).id('marketing-tab-activities')
               .backgroundColor(this.section === 'activities' ? AppTheme.PRIMARY : AppTheme.INPUT).fontColor(this.section === 'activities' ? AppTheme.PRIMARY_TEXT : AppTheme.TEXT).onClick(() => { this.section = 'activities' })

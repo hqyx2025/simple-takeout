@@ -1,0 +1,45 @@
+name: Security
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['server/**', 'docker-compose*.yml', '.github/**']
+  push:
+    branches: [master]
+    paths: ['server/**', 'docker-compose*.yml', '.github/**']
+permissions:
+  contents: read
+jobs:
+  dependencies:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+  image:
+    # The image is local to this ephemeral runner. No registry login or push.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - name: Build the actual runtime image
+        run: docker build -f server/Dockerfile -t takeout-security:ci server
+      - name: Scan runtime image
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: takeout-security:ci
+          format: table
+          output: image-vulnerabilities.txt
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: image-security-report
+          path: image-vulnerabilities.txt
+          if-no-files-found: error

@@ -8,7 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.boot.builder.SpringApplicationBuilder;
-import org.springframework.boot.web.context.WebServerApplicationContext;
+import org.springframework.boot.web.server.context.WebServerApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.web.client.RestClient;
@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Exercises actual Spring wiring, additive migrations, HTTP authorization and transaction boundaries. */
 @EnabledIfEnvironmentVariable(named="TAKEOUT_MYSQL_CONCURRENCY_TEST",matches="1")
 class ApplicationBusinessMySqlTest {
+    private final String requestScope=UUID.randomUUID().toString();
     private String key() { byte[] bytes=new byte[32];new SecureRandom().nextBytes(bytes);return Base64.getEncoder().encodeToString(bytes); }
     @Test void firstOrderSelfDeliveryPartialRefundConfirmationAndSettledRefundRemainConsistentOverHttp() {
         String base="jdbc:mysql://"+System.getenv().getOrDefault("TAKEOUT_DB_HOST","127.0.0.1")+":"+System.getenv().getOrDefault("TAKEOUT_DB_PORT","3310")+"/";
@@ -35,6 +36,7 @@ class ApplicationBusinessMySqlTest {
                 "--spring.datasource.hikari.maximum-pool-size=2","--spring.datasource.hikari.minimum-idle=0",
                 "--takeout.jwt.secret="+key(),"--takeout.sms.hmac-secret="+key(),
                 "--takeout.assistant.encryption-secret="+key(),"--takeout.wallet.encryption-secret="+key(),
+                "--takeout.personal-data.encryption-secret="+key(),"--takeout.personal-data.index-secret="+key(),
                 "--takeout.erp.integration-secret="+key(),"--takeout.payment.sandbox=false","--takeout.payment.real-enabled=false",
                 "--takeout.sms.qq.smtp-host=127.0.0.1","--takeout.sms.qq.smtp-port=1",
                 "--takeout.sms.qq.username=isolated-test@example.invalid","--takeout.sms.qq.auth-code=local-test-only",
@@ -43,6 +45,15 @@ class ApplicationBusinessMySqlTest {
                 "--spring.data.redis.connect-timeout=25ms","--spring.data.redis.lettuce.pool.min-idle=0",
                 "--takeout.upload.dir=../../TemporaryCacheStorage/business-http-uploads")) {
             JdbcTemplate db=context.getBean(JdbcTemplate.class);
+            var adapter=context.getBean(org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.class);
+            var rawConverter=adapter.getMessageConverters().stream().filter(converter->converter.canRead(String.class,org.springframework.http.MediaType.APPLICATION_JSON)).findFirst().orElseThrow();
+            var stringConverter=assertInstanceOf(org.springframework.http.converter.StringHttpMessageConverter.class,rawConverter);
+            String signedBody="{\"resource\":\"原始支付回调\"}";
+            var rawInput=new org.springframework.mock.http.MockHttpInputMessage(signedBody.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            rawInput.getHeaders().setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+            assertEquals(signedBody,assertDoesNotThrow(()->stringConverter.read(String.class,rawInput)),"signed callback bytes must retain their original String contract");
+            assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE version='1' AND success=1", Integer.class));
+            context.getBean(org.flywaydb.core.Flyway.class).validate();
             String now=LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
             db.update("INSERT INTO users(id,username,phone,password,role,balance,create_time,payment_password_hash) VALUES(1,'customer','13800000001','unused',0,200,?,?)",now,PaymentPasswordUtil.hash("135790"));
             db.update("INSERT INTO users(id,username,phone,password,role,balance,create_time) VALUES(2,'admin','13800000002','unused',2,0,?),(99,'merchant','13800000099','unused',1,0,?)",now,now);
@@ -55,11 +66,11 @@ class ApplicationBusinessMySqlTest {
             JwtUtil jwt=context.getBean(JwtUtil.class);
             String customer=jwt.generateToken(1,0),merchant=jwt.generateToken(99,1),operator=jwt.generateToken(2,2);
             int port=((WebServerApplicationContext)context).getWebServer().getPort();
-            RestClient http=RestClient.create("http://127.0.0.1:"+port);
+            RestClient http=com.example.takeout.common.JsonRestClients.builder().baseUrl("http://127.0.0.1:"+port).build();
             ObjectMapper json=context.getBean(ObjectMapper.class);
             assertEquals("MERCHANT",call(http,json,"PUT","/api/merchant/stores/10/fulfillment",merchant,Map.of("mode","MERCHANT")).path("mode").asText());
             Map<String,Object> request=Map.of("storeId",10,"addressId",20,"items",List.of(Map.of("goodsId",100,"quantity",1,"price",1)),
-                    "idempotencyKey","http-first-order-stable-key","deliveryType","DELIVERY");
+                    "idempotencyKey","http-first-order-"+schema,"deliveryType","DELIVERY");
             JsonNode created=call(http,json,"POST","/api/orders",customer,request);
             long id=created.path("id").asLong();assertTrue(id>0);assertEquals(0,created.path("status").asInt());
             assertEquals(80.0,created.path("payAmount").asDouble(),0.001);
@@ -67,11 +78,11 @@ class ApplicationBusinessMySqlTest {
             assertEquals(id,call(http,json,"POST","/api/orders",customer,request).path("id").asLong());
             call(http,json,"POST","/api/orders/"+id+"/pay?channel=BALANCE",customer,Map.of("paymentPassword","135790"));
             for(String action:List.of("accept","ready","deliver","complete")) call(http,json,"PUT","/api/merchant/orders/"+id+"/"+action,merchant,Map.of());
-            JsonNode first=call(http,json,"POST","/api/orders/"+id+"/refund",customer,Map.of("reasonType","OTHER","reason","少送餐品","amount",10,"idempotencyKey","http-first-refund-stable-key"));
+            JsonNode first=call(http,json,"POST","/api/orders/"+id+"/refund",customer,Map.of("reasonType","OTHER","reason","少送餐品","amount",10,"idempotencyKey","http-first-refund-"+requestScope));
             call(http,json,"POST","/api/admin/refunds/"+first.path("id").asLong()+"/approve",operator,Map.of());
             call(http,json,"PUT","/api/orders/"+id+"/confirm",customer,Map.of());
             assertEquals(67.0,db.queryForObject("SELECT balance FROM users WHERE id=99",Double.class),0.001);
-            JsonNode second=call(http,json,"POST","/api/orders/"+id+"/refund",customer,Map.of("reasonType","OTHER","reason","补充核实","amount",10,"idempotencyKey","http-second-refund-stable-key"));
+            JsonNode second=call(http,json,"POST","/api/orders/"+id+"/refund",customer,Map.of("reasonType","OTHER","reason","补充核实","amount",10,"idempotencyKey","http-second-refund-"+requestScope));
             call(http,json,"POST","/api/admin/refunds/"+second.path("id").asLong()+"/approve",operator,Map.of());
             assertEquals(140.0,db.queryForObject("SELECT balance FROM users WHERE id=1",Double.class),0.001);
             assertEquals(57.0,db.queryForObject("SELECT balance FROM users WHERE id=99",Double.class),0.001);
@@ -135,7 +146,7 @@ class ApplicationBusinessMySqlTest {
                         "image","","description","","tag","")).path("id").asLong();
         assertTrue(goods>0);
         Map<String,Object> request=Map.of("storeId",store,"addressId",20,"items",List.of(Map.of("goodsId",goods,"quantity",1)),
-                "idempotencyKey","campus-review-first");
+                "idempotencyKey","campus-review-first-"+requestScope);
         call(http,json,"PUT",management+"/status",admin,Map.of("status",0));
         call(http,json,"PUT",owned,merchant,Map.of("status",1,"reviewStatus",1,"platformStatus",1));
         assertEquals(0,db.queryForObject("SELECT platform_status FROM stores WHERE id=?",Integer.class,store));
@@ -173,7 +184,7 @@ class ApplicationBusinessMySqlTest {
         assertEquals(3.0,db.queryForObject("SELECT total_income FROM riders WHERE user_id=4",Double.class),0.001);
         assertEquals(77.0,db.queryForObject("SELECT balance FROM users WHERE id=99",Double.class),0.001);
         long cancelled=call(http,json,"POST","/api/orders",customer,Map.of("storeId",store,"addressId",20,
-                "items",List.of(Map.of("goodsId",goods,"quantity",1)),"idempotencyKey","campus-review-cancel")).path("id").asLong();
+                "items",List.of(Map.of("goodsId",goods,"quantity",1)),"idempotencyKey","campus-review-cancel-"+requestScope)).path("id").asLong();
         call(http,json,"PUT","/api/orders/"+cancelled+"/cancel",customer,Map.of());
         assertEquals(9,db.queryForObject("SELECT stock FROM goods WHERE id=?",Integer.class,goods));
         measureCurrentVersion(http,json,customer,store,order,db);

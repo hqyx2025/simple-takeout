@@ -1,3 +1,4 @@
+import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /** 平台商品监管：搜索全部店铺商品、强制上下架和删除违规商品。 */
 import { AppMotion } from '../common/theme/AppMotion'
@@ -118,9 +119,11 @@ export struct AdminProductPage {
       })
 
       Row({ space: SPACING.SM }) {
-        TextInput({ placeholder: '搜索商品名或店铺名', text: this.keyword })
-          .attributeModifier(new AppInputStyle())
-          .layoutWeight(1).onChange((value: string) => { this.keyword = value })
+        FormInput({ label: '搜索关键词',
+          value: this.keyword,
+          placeholder: '搜索商品名或店铺名',
+          onChange: (value: string) => { this.keyword = value },
+          fieldId: 'AdminProductPage-keyword' }).layoutWeight(1)
         Button('搜索')
           .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM).onClick(() => { this.refresh() })
       }.width('100%').padding(SPACING.LG).backgroundColor(MODULE_BG.ADMIN)

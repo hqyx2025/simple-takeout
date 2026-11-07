@@ -29,6 +29,7 @@ COPY takeout-common/pom.xml takeout-common/pom.xml
 COPY takeout-app/pom.xml takeout-app/pom.xml
 COPY takeout-gateway/pom.xml takeout-gateway/pom.xml
 COPY takeout-erp/pom.xml takeout-erp/pom.xml
+COPY takeout-coverage/pom.xml takeout-coverage/pom.xml
 
 COPY takeout-common/src ./takeout-common/src
 COPY takeout-app/src ./takeout-app/src
@@ -42,6 +43,17 @@ RUN javac -d /workspace /workspace/healthcheck.java
 
 # ---------- 运行阶段 ----------
 FROM eclipse-temurin:25-jre
+# Apply available distribution security fixes; keep the same OS/runtime family.
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+# The base image's Pebble helper was built with a vulnerable Go standard library.
+# Preserve the helper with Canonical's patched, checksum-verified release (Go 1.27.3).
+ADD --checksum=sha256:e9d84f9e461a89abb4437af26a784917bd85cf1612c8de142a3b4449dff332d0 https://github.com/canonical/pebble/releases/download/v1.33.2/pebble_v1.33.2_linux_amd64.tar.gz /tmp/pebble-security.tar.gz
+RUN mkdir /tmp/pebble-security \
+    && tar -xzf /tmp/pebble-security.tar.gz -C /tmp/pebble-security \
+    && install -m 755 /tmp/pebble-security/pebble /usr/bin/pebble \
+    && rm -rf /tmp/pebble-security /tmp/pebble-security.tar.gz
 # The upstream image tag still carries 25.0.4.1. Install the published security
 # release from Adoptium and verify its official SHA-256 before using it.
 # The JDK distribution also supplies jcmd/jfr for controlled, in-container diagnostics.

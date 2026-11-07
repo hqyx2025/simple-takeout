@@ -1,3 +1,4 @@
+import { FormInput } from '../components/FormInput'
 import { COLORS, FONT_SIZE, SPACING } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { AppButtonStyle, AppCardStyle, AppInputStyle, AppTheme } from '../common/theme/AppTheme'
@@ -172,30 +173,41 @@ export struct AdminAssistantPage {
               }.attributeModifier(new AppCardStyle()).padding(SPACING.LG).width('100%')
 
               Column({ space: SPACING.MD }) {
-                Text('接口地址').fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Medium).fontColor(AppTheme.TEXT).width('100%')
-                TextInput({ text: this.endpoint, placeholder: 'https://api.example.com/v1/chat/completions' })
-                  .attributeModifier(new AppInputStyle()).width('100%').maxLength(500)
-                  .enabled(!this.busy).id('admin-assistant-endpoint')
-                  .onChange((value: string) => { this.endpoint = value })
-                Text('填写服务商提供的完整 HTTPS 请求地址。')
-                  .fontSize(FONT_SIZE.SM).fontColor(AppTheme.MUTED).width('100%')
-                Text('模型名称').fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Medium).fontColor(AppTheme.TEXT).width('100%')
-                TextInput({ text: this.model, placeholder: '例如：服务商提供的模型 ID' })
-                  .attributeModifier(new AppInputStyle()).width('100%').maxLength(100)
-                  .enabled(!this.busy).id('admin-assistant-model')
-                  .onChange((value: string) => { this.model = value })
+
+                FormInput({ label: '接口地址',
+                  value: this.endpoint,
+                  placeholder: 'https://api.example.com/v1/chat/completions',
+                  maxLength: 500,
+                  isEnabled: !this.busy,
+                  fieldId: 'admin-assistant-endpoint',
+                  onChange: (value: string) => { this.endpoint = value },
+                  required: true }).width('100%')
+
+
+                FormInput({ label: '模型 ID',
+                  value: this.model,
+                  placeholder: '例如：服务商提供的模型 ID',
+                  maxLength: 100,
+                  isEnabled: !this.busy,
+                  fieldId: 'admin-assistant-model',
+                  onChange: (value: string) => { this.model = value },
+                  required: true }).width('100%')
                 Text('API Key').fontSize(FONT_SIZE.MD).fontWeight(FontWeight.Medium).fontColor(AppTheme.TEXT).width('100%')
                 Text(this.clearApiKey ? '待清除密钥，保存后生效' : (this.hasApiKey ? '服务端已保存密钥，留空可保留' : '尚未配置密钥'))
                   .fontSize(FONT_SIZE.SM).fontColor(this.clearApiKey ? COLORS.ERROR : AppTheme.MUTED)
                   .width('100%').id('admin-assistant-key-status')
-                TextInput({ text: this.apiKey, placeholder: this.hasApiKey ? '输入新密钥以替换，留空保留' : '请输入 API Key' })
-                  .attributeModifier(new AppInputStyle()).type(InputType.Password)
-                  .showPasswordIcon(false).width('100%').maxLength(4096)
-                  .enabled(!this.busy).id('admin-assistant-api-key')
-                  .onChange((value: string) => {
+                FormInput({ label: 'API Key',
+                  value: this.apiKey,
+                  placeholder: this.hasApiKey ? '输入新密钥以替换，留空保留' : '请输入 API Key',
+                  inputType: InputType.Password,
+                  maxLength: 4096,
+                  isEnabled: !this.busy,
+                  fieldId: 'admin-assistant-api-key',
+                  onChange: (value: string) => {
                     this.apiKey = value
                     if (value.trim() !== '') { this.clearApiKey = false }
-                  })
+                  },
+                  showPassword: false }).width('100%')
                 Text('密钥仅发送到服务端保存，不在设备上缓存或回显。保存完成后输入框会清空。')
                   .fontSize(FONT_SIZE.SM).fontColor(AppTheme.MUTED).width('100%')
                 if (this.hasApiKey) {

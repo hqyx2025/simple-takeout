@@ -65,7 +65,7 @@ class Round3AccountRecoveryMySqlTest {
             env.put("TAKEOUT_QQ_SMTP_AUTH_CODE", "not-used-no-mail-sent"); env.put("TAKEOUT_DATA_SEED_ENABLED", "false");
             env.put("TAKEOUT_CACHE_ENABLED", "false"); env.put("TAKEOUT_MQ_ENABLED", "false");
             env.put("TAKEOUT_LOG_DIR", output.resolve("recovery-child-logs").toString());
-            for (String key : List.of("TAKEOUT_JWT_SECRET", "TAKEOUT_VERIFICATION_HMAC_SECRET", "TAKEOUT_ASSISTANT_ENCRYPTION_SECRET", "TAKEOUT_WALLET_ENCRYPTION_SECRET")) {
+            for (String key : List.of("TAKEOUT_JWT_SECRET", "TAKEOUT_VERIFICATION_HMAC_SECRET", "TAKEOUT_ASSISTANT_ENCRYPTION_SECRET", "TAKEOUT_WALLET_ENCRYPTION_SECRET", "TAKEOUT_PERSONAL_DATA_ENCRYPTION_SECRET", "TAKEOUT_PERSONAL_DATA_INDEX_SECRET")) {
                 byte[] bytes = new byte[32]; new java.security.SecureRandom().nextBytes(bytes); env.put(key, Base64.getEncoder().encodeToString(bytes));
             }
             start("before"); long beforePid = process.pid();
@@ -97,7 +97,9 @@ class Round3AccountRecoveryMySqlTest {
     private void start(String phase) throws Exception {
         String executable = System.getProperty("os.name").toLowerCase(Locale.ROOT).startsWith("windows") ? "java.exe" : "java";
         String java = Path.of(System.getProperty("java.home"), "bin", executable).toString();
-        var builder = new ProcessBuilder(java, "-cp", System.getProperty("surefire.test.class.path", System.getProperty("java.class.path")),
+        // 子进程也使用 TCP 回退，避免 Windows/JDK 的域套接字兼容问题。
+        var builder = new ProcessBuilder(java, "-Djdk.net.unixdomain.tmpdir=" + working.resolve("no-unix-sockets"),
+                "-cp", System.getProperty("surefire.test.class.path", System.getProperty("java.class.path")),
                 "com.example.takeout.TakeoutApplication", "--server.address=127.0.0.1", "--server.port=" + port,
                 "--server.tomcat.protocol=org.apache.coyote.http11.Http11Nio2Protocol", "--takeout.payment.sandbox=false",
                 "--takeout.payment.real-enabled=false", "--takeout.payment.mock-enabled=false", "--takeout.upload.local-enabled=true",

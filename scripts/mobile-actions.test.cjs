@@ -21,6 +21,7 @@ function runtime(role, file, methods) {
   const context = { exports, getAuthSessionEpoch: () => 1, AppStorage: { get: key => key === 'user' ? user : true }, getCurrentUser: () => user,
     UserRole: { CUSTOMER: 0, MERCHANT: 1, ADMIN: 2, RIDER: 3 }, promptAction: { showToast() {} }, logInfo() {},
     adminOrderActionApi: async (...args) => { calls.push(args); return false; }, merchantActionRemote: async (...args) => { calls.push(args); return false; }, rejectMerchantOrderApi: async (...args) => { calls.push(args); return false; },
+    grabOrderRemote: async (...args) => { calls.push(args); return true; },
     CustomDialogController: function (options) { dialogs.push(options.builder); return { open() {}, close() {} }; }, MerchantRejectOrderDialog: props => props,
     DialogAlignment: { Center: 0 }, AppButtonStyle: class {}, FONT_SIZE: {}, COLORS: {}, Button: button, Text: () => ({ fontSize() { return this; }, fontColor() { return this; } }) };
   const compiled = ts.transpileModule(code, { reportDiagnostics: true, compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS } });
@@ -98,6 +99,9 @@ test('rider pickup, delivery and pool grab dispatch reject stale visible orders 
   const current = { ...stale, capabilities: { allowedActions: [] } };
   r.page.activeOrder = () => current; r.page.acting = false;
   await r.page.pickup(stale); current.status = 3; await r.page.deliver(stale); assert.equal(r.calls.length, 0);
-  const pool = runtime(3, 'RiderOrderPoolPage', ['grab']); pool.page.orders = [current]; pool.page.grabbingOrderId = 0;
+  const pool = runtime(3, 'RiderOrderPoolPage', ['canApplyResponse', 'grab']);
+  Object.assign(pool.page, { orders: [current], grabbingOrderId: 0, poolRequestVersion: 1, ownerId: pool.user.id, finishGrab() {} });
   await pool.page.grab(stale); assert.equal(pool.calls.length, 0);
+  current.capabilities.allowedActions = ['RIDER_GRAB'];
+  await pool.page.grab(stale); assert.equal(pool.calls.length, 1, 'the fixture must reach the real dispatch when permitted');
 });

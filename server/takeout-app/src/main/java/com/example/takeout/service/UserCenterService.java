@@ -7,6 +7,7 @@ import com.example.takeout.common.BizException;
 import com.example.takeout.dao.AddressDao;
 import com.example.takeout.dao.BankCardDao;
 import com.example.takeout.dao.CouponDao;
+import com.example.takeout.dao.CouponStockDao;
 import com.example.takeout.dao.FavoriteDao;
 import com.example.takeout.dao.GoodsDao;
 import com.example.takeout.dao.ReviewDao;
@@ -57,13 +58,15 @@ public class UserCenterService {
     private final UserCouponDao userCouponDao;
     private final UserDao userDao;
     private final BankCardCrypto bankCardCrypto;
+    private final CouponStockDao couponStockDao;
 
     /** Spring production constructor: payment password and card crypto are explicit dependencies. */
     @Autowired
     public UserCenterService(CouponDao couponDao, FavoriteDao favoriteDao, AddressDao addressDao,
                              ReviewDao reviewDao, StoreDao storeDao, GoodsDao goodsDao,
                              BankCardDao bankCardDao, ObjectMapper objectMapper,
-                             UserCouponDao userCouponDao, UserDao userDao, BankCardCrypto bankCardCrypto) {
+                             UserCouponDao userCouponDao, UserDao userDao, BankCardCrypto bankCardCrypto,
+                             CouponStockDao couponStockDao) {
         this.couponDao = couponDao;
         this.favoriteDao = favoriteDao;
         this.addressDao = addressDao;
@@ -75,6 +78,16 @@ public class UserCenterService {
         this.userCouponDao = userCouponDao;
         this.userDao = userDao;
         this.bankCardCrypto = bankCardCrypto;
+        this.couponStockDao = couponStockDao;
+    }
+
+    /** 兼容不涉及领券库存的旧测试构造。 */
+    public UserCenterService(CouponDao couponDao, FavoriteDao favoriteDao, AddressDao addressDao,
+                             ReviewDao reviewDao, StoreDao storeDao, GoodsDao goodsDao,
+                             BankCardDao bankCardDao, ObjectMapper objectMapper,
+                             UserCouponDao userCouponDao, UserDao userDao, BankCardCrypto bankCardCrypto) {
+        this(couponDao, favoriteDao, addressDao, reviewDao, storeDao, goodsDao, bankCardDao,
+                objectMapper, userCouponDao, userDao, bankCardCrypto, null);
     }
 
     /** 兼容仅覆盖非钱包能力的旧单元测试构造。 */
@@ -220,12 +233,13 @@ public class UserCenterService {
 
     public List<Coupon> listCoupons(long userId) {
         // 惰性过期：查询前先把过期未使用的券置为失效，保证列表状态与实际可用性一致
-        couponDao.expireOutdated(LocalDateTime.now().format(FMT));
+        couponDao.expireOutdated(userId, LocalDateTime.now().format(FMT));
         return couponDao.listByUser(userId);
     }
 
-    @Transactional
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public Coupon claimCoupon(long userId, long storeId, String name, double threshold, double amount) {
+        if (storeId < 0) throw new BizException("店铺参数无效");
         if (storeId > 0) {
             storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
         }
@@ -238,18 +252,25 @@ public class UserCenterService {
         if (userCouponDao.exists(userId, storeId, campaignName)) {
             throw new BizException("该优惠券每人限领一次，请勿重复领取");
         }
+        if (couponStockDao == null) throw new BizException(503, "领券库存尚未就绪，请稍后重试");
+        // 已售罄时不再写台账再回滚，持续涌入的新账号请求也不会产生无效写锁。
+        if (!couponStockDao.hasAvailable(campaignName)) {
+            throw new BizException(409, "该优惠券已领完，请刷新领券中心");
+        }
         String now = LocalDateTime.now().format(FMT);
         String expire = LocalDateTime.now().plusDays(30).format(FMT);
-        long id = couponDao.insert(userId, storeId, campaignName, threshold, amount, expire, "claim", now);
+        // 先占领取唯一键，重复请求不再先生成一张随后回滚的优惠券。
         try {
             userCouponDao.insert(userId, storeId, campaignName, threshold, amount, now, expire);
         } catch (DuplicateKeyException e) {
             throw new BizException("该优惠券每人限领一次，请勿重复领取");
         }
-        return couponDao.listByUser(userId).stream()
-                .filter(c -> c.id() == id)
-                .findFirst()
-                .orElseThrow(() -> new BizException("领券失败"));
+        if (!couponStockDao.reserve(campaignName, userId)) {
+            // SKIP LOCKED 没取到名额也可能是最后几张仍在处理中，不能永久缓存为售罄。
+            throw new BizException(409, "该优惠券已领完或正在被领取，请稍后刷新");
+        }
+        long id = couponDao.insert(userId, storeId, campaignName, threshold, amount, expire, "claim", now);
+        return new Coupon(id, userId, storeId, campaignName, threshold, amount, 0, expire, "claim", now);
     }
 
     /** 领取中心可领活动列表（服务端白名单，前端据此渲染）。 */

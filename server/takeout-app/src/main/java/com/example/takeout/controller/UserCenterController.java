@@ -62,6 +62,7 @@ public class UserCenterController {
     @PostMapping("/coupons/claim")
     public ApiResponse<Coupon> claim(@RequestAttribute("userId") long userId,
                                      @RequestBody ClaimCouponRequest req) {
+        if (loginRateLimiter != null) loginRateLimiter.recordAttempt("coupon-claim", "u" + userId);
         return ApiResponse.ok(service.claimCoupon(userId, req.storeId(), req.name(), req.threshold(), req.amount()));
     }
 

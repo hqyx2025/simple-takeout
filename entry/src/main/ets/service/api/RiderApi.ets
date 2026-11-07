@@ -1,8 +1,8 @@
 import { get, post, put, ApiResponse } from '../HttpClient'
 
-import { Order, OrderPageData, Rider } from '../../model/Models'
+import { Order, OrderPageData, Rider, RiderPoolSlice } from '../../model/Models'
 
-import { ServerOrder, ServerOrderPage, ServerRider, RiderRadiusRequest, RiderLocationRequest, RiderStatusRequest, AdminStatusRequest } from '../../model/server/Contracts'
+import { ServerOrder, ServerOrderPage, ServerRider, ServerRiderPoolSlice, RiderRadiusRequest, RiderLocationRequest, RiderStatusRequest, AdminStatusRequest } from '../../model/server/Contracts'
 import { toOrder, toOrderPageData, toRider } from '../../model/server/Converters'
 
 // ==================== 骑手端（role=3） ====================
@@ -49,6 +49,23 @@ export async function fetchRiderPoolResultApi(showErrorToast: boolean = true): P
     return null
   }
   return resp.data.map((o: ServerOrder) => toOrder(o))
+}
+
+export async function fetchRiderPoolPageResultApi(page: number = 1, pageSize: number = 30,
+  showErrorToast: boolean = true): Promise<OrderPageData | null> {
+  const resp: ApiResponse<ServerOrderPage> = await get<ServerOrderPage>(
+    `/api/rider/orders/pool/page?page=${page}&pageSize=${pageSize}`, showErrorToast)
+  if (resp.code !== 200 || resp.data === null || resp.data === undefined) { return null }
+  return toOrderPageData(resp, page, pageSize)
+}
+
+export async function fetchRiderPoolSliceResultApi(afterId: number = 0, pageSize: number = 30,
+  showErrorToast: boolean = true): Promise<RiderPoolSlice | null> {
+  const resp: ApiResponse<ServerRiderPoolSlice> = await get<ServerRiderPoolSlice>(
+    `/api/rider/orders/pool/next?afterId=${afterId}&pageSize=${pageSize}`, showErrorToast)
+  if (resp.code !== 200 || resp.data === null || resp.data === undefined) { return null }
+  return { list: resp.data.list.map((order: ServerOrder) => toOrder(order)),
+    hasMore: resp.data.hasMore, nextAfterId: resp.data.nextAfterId }
 }
 
 export async function fetchRiderOrdersPageApi(page: number = 1, pageSize: number = 30): Promise<OrderPageData> {

@@ -76,7 +76,7 @@ class DomainTimeMySqlTest {
             long usedExpired = dao.insert(7, 10, "used expired", 0, 5, BEFORE, "test", NOW);
             assertTrue(dao.markUsed(usedExpired));
 
-            assertEquals(2, dao.expireOutdated(NOW));
+            assertEquals(2, dao.expireOutdated(7, NOW));
             assertEquals(2, jdbc.queryForObject("SELECT status FROM coupons WHERE id = ?", Integer.class, stale));
             assertEquals(0, jdbc.queryForObject("SELECT status FROM coupons WHERE id = ?", Integer.class, future));
             assertNull(typedTime("coupons", "expire_time", unlimited));

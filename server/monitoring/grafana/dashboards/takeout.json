@@ -1,0 +1,20 @@
+{
+  "uid": "takeout-operations",
+  "title": "简单外卖 · 运行状态",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "time": {"from": "now-1h", "to": "now"},
+  "tags": ["takeout"],
+  "panels": [
+    {"id": 1, "title": "服务可达", "type": "stat", "gridPos": {"x": 0, "y": 0, "w": 24, "h": 4}, "datasource": {"type": "prometheus", "uid": "takeout-prometheus"}, "targets": [{"expr": "up{job=\"takeout\"}", "legendFormat": "{{instance}}"}], "fieldConfig": {"defaults": {"min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "red"}, {"color": "green", "value": 1}]}}}},
+    {"id": 2, "title": "HTTP 请求 / 秒", "type": "timeseries", "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "takeout-prometheus"}, "targets": [{"expr": "sum by (instance) (rate(http_server_requests_seconds_count{job=\"takeout\"}[5m]))", "legendFormat": "{{instance}}"}]},
+    {"id": 3, "title": "HTTP P95", "type": "timeseries", "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "takeout-prometheus"}, "fieldConfig": {"defaults": {"unit": "s"}}, "targets": [{"expr": "histogram_quantile(0.95, sum by (le, instance) (rate(http_server_requests_seconds_bucket{job=\"takeout\",uri!~\"/actuator.*|/health\"}[5m])))", "legendFormat": "{{instance}}"}]},
+    {"id": 4, "title": "HTTP 5xx / 秒", "type": "timeseries", "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "takeout-prometheus"}, "targets": [{"expr": "sum by (instance) (rate(http_server_requests_seconds_count{job=\"takeout\",status=~\"5..\"}[5m]))", "legendFormat": "{{instance}}"}]},
+    {"id": 5, "title": "JVM 堆内存", "type": "timeseries", "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "takeout-prometheus"}, "fieldConfig": {"defaults": {"unit": "bytes"}}, "targets": [{"expr": "sum by (instance) (jvm_memory_used_bytes{job=\"takeout\",area=\"heap\"})", "legendFormat": "{{instance}}"}]},
+    {"id": 6, "title": "进程 CPU", "type": "timeseries", "gridPos": {"x": 0, "y": 20, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "takeout-prometheus"}, "fieldConfig": {"defaults": {"unit": "percentunit"}}, "targets": [{"expr": "process_cpu_usage{job=\"takeout\"}", "legendFormat": "{{instance}}"}]},
+    {"id": 7, "title": "数据库连接等待", "type": "timeseries", "gridPos": {"x": 12, "y": 20, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "takeout-prometheus"}, "targets": [{"expr": "hikaricp_connections_pending{job=\"takeout\"}", "legendFormat": "{{instance}} / {{pool}}"}]},
+    {"id": 8, "title": "Outbox 待投递事件（副本共享同库，不求和）", "type": "timeseries", "gridPos": {"x": 0, "y": 28, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "takeout-prometheus"}, "targets": [{"expr": "takeout_outbox_pending{job=\"takeout\"}", "legendFormat": "{{instance}}"}]},
+    {"id": 9, "title": "Outbox 最老待投递时间", "type": "timeseries", "gridPos": {"x": 12, "y": 28, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "takeout-prometheus"}, "fieldConfig": {"defaults": {"unit": "s"}}, "targets": [{"expr": "takeout_outbox_oldest_age_seconds{job=\"takeout\"}", "legendFormat": "{{instance}}"}]}
+  ]
+}

@@ -40,6 +40,8 @@ public class LoginRateLimiter implements org.springframework.beans.factory.Initi
             Map.entry("payment-password-set", new Policy(5, 60, 600)),
             // 下单按账号（非 IP）限流：多店结算一次会连续提交 N 笔订单，故放宽到 10/min，
             Map.entry("order", new Policy(10, 60, 60)),
+            Map.entry("coupon-claim", new Policy(15, 60, 60)),
+            Map.entry("rider-grab", new Policy(30, 60, 10)),
             Map.entry("browse", new Policy(120, 60, 60)),
             // 客户端每 3 秒自动查单，留出手动刷新余量。
             Map.entry("payment-query", new Policy(30, 60, 60)),
@@ -56,6 +58,8 @@ public class LoginRateLimiter implements org.springframework.beans.factory.Initi
     private static final long LOGIN_REDIS_RETRY_NANOS = java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
     private record RedisHealth(long retryAt, boolean probing) {}
     private final java.util.concurrent.atomic.AtomicReference<RedisHealth> loginRedisHealth =
+            new java.util.concurrent.atomic.AtomicReference<>(new RedisHealth(0, false));
+    private final java.util.concurrent.atomic.AtomicReference<RedisHealth> claimRedisHealth =
             new java.util.concurrent.atomic.AtomicReference<>(new RedisHealth(0, false));
     private static final DefaultRedisScript<Long> RECORD = new DefaultRedisScript<>(
             "if redis.call('EXISTS', KEYS[2]) == 1 then return 0 end; "
@@ -258,13 +262,15 @@ public class LoginRateLimiter implements org.springframework.beans.factory.Initi
 
     /** 登录 Redis 慢调用/故障后退到已有本地窗口；冷却结束仅一个请求探测恢复。 */
     private <T> T loginRedis(String action, java.util.function.Supplier<T> operation) {
-        if (!LOGIN_ACTIONS.contains(action)) return operation.get();
-        RedisHealth ticket = loginRedisHealth.get();
+        java.util.concurrent.atomic.AtomicReference<RedisHealth> health = LOGIN_ACTIONS.contains(action) ? loginRedisHealth
+                : ("coupon-claim".equals(action) || "rider-grab".equals(action)) ? claimRedisHealth : null;
+        if (health == null) return operation.get();
+        RedisHealth ticket = health.get();
         long start = System.nanoTime();
         if (ticket.retryAt() != 0) {
             if (ticket.probing() || start - ticket.retryAt() < 0) return null;
             RedisHealth probe = new RedisHealth(ticket.retryAt(), true);
-            if (!loginRedisHealth.compareAndSet(ticket, probe)) return null;
+            if (!health.compareAndSet(ticket, probe)) return null;
             ticket = probe;
         }
         boolean completed = false;
@@ -276,12 +282,12 @@ public class LoginRateLimiter implements org.springframework.beans.factory.Initi
         } finally {
             long now = System.nanoTime();
             if (!completed || now - start >= LOGIN_REDIS_SLOW_NANOS) {
-                if (loginRedisHealth.compareAndSet(ticket, new RedisHealth(now + LOGIN_REDIS_RETRY_NANOS, false))) {
+                if (health.compareAndSet(ticket, new RedisHealth(now + LOGIN_REDIS_RETRY_NANOS, false))) {
                     log.warn("[登录限流] Redis 慢调用或故障，5 秒内使用本地窗口 action={}", action);
                 }
             } else if (ticket.probing()) {
                 // 使用状态对象身份作代次；旧的在途成功不能关闭后来打开的短路。
-                loginRedisHealth.compareAndSet(ticket, new RedisHealth(0, false));
+                health.compareAndSet(ticket, new RedisHealth(0, false));
             }
         }
     }

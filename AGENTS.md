@@ -21,6 +21,7 @@
   ```
 - 后端设置 `JAVA_HOME` 为 JDK 25，再运行 `mvn -f server/pom.xml test`；应用运行模块为 `takeout-app`，对外端口 8087，本机 MySQL / Redis 连接端口为 3310 / 6387。
 - 设备可用时验证受影响页面；设备不可用如实说明。Code Linter / AppAnalyzer / Release 签名仅在相关任务中执行。
+- 编写测试、汇报验证或发布前，执行[测试验收要求](md/开发参考.md#测试验收要求)：交付可复现命令与原始证据，关键保护须有反向验证，明确真实依赖、模拟与未验证边界。
 - 临时脚本、截图、日志放 `TemporaryCacheStorage/`；UTF-8 文件使用编辑工具或显式 UTF-8 读写，禁止 PowerShell 默认编码读写源码。`.ps1` 带 UTF-8 BOM。
 
 ## UI 基准

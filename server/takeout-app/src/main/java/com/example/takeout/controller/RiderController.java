@@ -8,6 +8,8 @@ import com.example.takeout.model.Order;
 import com.example.takeout.model.Rider;
 import com.example.takeout.service.OrderService;
 import com.example.takeout.service.RiderService;
+import com.example.takeout.security.LoginRateLimiter;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -30,10 +32,17 @@ public class RiderController {
 
     private final RiderService riderService;
     private final OrderService orderService;
+    private final LoginRateLimiter rateLimiter;
 
-    public RiderController(RiderService riderService, OrderService orderService) {
+    @Autowired
+    public RiderController(RiderService riderService, OrderService orderService, LoginRateLimiter rateLimiter) {
         this.riderService = riderService;
         this.orderService = orderService;
+        this.rateLimiter = rateLimiter;
+    }
+
+    public RiderController(RiderService riderService, OrderService orderService) {
+        this(riderService, orderService, null);
     }
 
     @GetMapping("/profile")
@@ -57,6 +66,24 @@ public class RiderController {
                                                    @RequestAttribute("role") int role) {
         requireRider(role);
         return ApiResponse.ok(orderService.riderPool(riderService.profile(userId).id()));
+    }
+
+    @GetMapping("/orders/pool/page")
+    public ApiResponse<OrderService.OrderPage> poolPage(@RequestAttribute("userId") long userId,
+                                                       @RequestAttribute("role") int role,
+                                                       @RequestParam(defaultValue = "1") int page,
+                                                       @RequestParam(defaultValue = "30") int pageSize) {
+        requireRider(role);
+        return ApiResponse.ok(orderService.riderPool(riderService.profile(userId).id(), page, pageSize));
+    }
+
+    @GetMapping("/orders/pool/next")
+    public ApiResponse<OrderService.RiderPoolSlice> poolNext(@RequestAttribute("userId") long userId,
+                                                           @RequestAttribute("role") int role,
+                                                           @RequestParam(defaultValue = "0") long afterId,
+                                                           @RequestParam(defaultValue = "30") int pageSize) {
+        requireRider(role);
+        return ApiResponse.ok(orderService.riderPoolAfter(riderService.profile(userId).id(), afterId, pageSize));
     }
 
     /** 设置本人配送半径（米）。 */
@@ -100,6 +127,7 @@ public class RiderController {
                                              @RequestAttribute("role") int role,
                                              @PathVariable long id) {
         requireRider(role);
+        if (rateLimiter != null) rateLimiter.recordAttempt("rider-grab", "u" + userId);
         return ApiResponse.ok(orderService.riderGrab(requireOnlineRider(userId).id(), id));
     }
 

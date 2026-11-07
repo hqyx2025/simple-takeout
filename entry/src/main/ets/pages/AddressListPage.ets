@@ -1,3 +1,5 @@
+import { LocationSearchField } from '../components/LocationSearchField'
+import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /**
  * 地址管理页面
@@ -11,7 +13,7 @@ import { PageHeader } from '../components/PageHeader'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { common } from '@kit.AbilityKit'
-import { GeoPosition, getCurrentPosition, reverseGeocodePosition } from '../service/LocationService'
+import { AddressSearchResult, GeoPosition, getCurrentPosition, reverseGeocodePosition } from '../service/LocationService'
 
 const MAX_ADDRESS_COUNT: number = 20
 
@@ -284,18 +286,20 @@ export struct AddressListPage {
                 .width('100%')
                 .textAlign(TextAlign.Center)
 
-            Text('收货人').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY).width('100%')
-            TextInput({ placeholder: '收货人姓名（如：张女士）', text: this.formData.name })
-              .attributeModifier(new AppInputStyle()).id('address-name').accessibilityText('收货人')
-              .width('100%')
-              .onChange((v: string) => { this.formData.name = v })
+            FormInput({ label: '收货人',
+              value: this.formData.name,
+              placeholder: '收货人姓名（如：张女士）',
+              fieldId: 'address-name',
+              onChange: (v: string) => { this.formData.name = v },
+              required: true }).width('100%')
 
-            Text('联系电话').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY).width('100%')
-            TextInput({ placeholder: '11 位手机号（如：13800138000）', text: this.formData.phone })
-              .attributeModifier(new AppInputStyle()).id('address-phone').accessibilityText('联系电话')
-              .width('100%')
-              .type(InputType.PhoneNumber)
-              .onChange((v: string) => { this.formData.phone = v })
+            FormInput({ label: '联系电话',
+              value: this.formData.phone,
+              placeholder: '11 位手机号（如：13800138000）',
+              inputType: InputType.PhoneNumber,
+              fieldId: 'address-phone',
+              onChange: (v: string) => { this.formData.phone = v },
+              required: true }).width('100%')
 
               Row() {
                 Text('地图位置')
@@ -311,10 +315,13 @@ export struct AddressListPage {
               }
               .width('100%')
 
-            TextInput({ placeholder: '地图位置（如：南宁学院东门）', text: this.formData.address })
-              .attributeModifier(new AppInputStyle())
-              .width('100%').id('address-map-address').accessibilityText('地图位置')
-              .onChange((v: string) => { this.changeMapAddress(v) })
+            LocationSearchField({ value: this.formData.address, fieldId: 'address-map-address',
+              onChange: (value: string) => { this.changeMapAddress(value) },
+              onSelect: (place: AddressSearchResult) => {
+                this.changeMapAddress(place.district + ' ' + place.address + ' ' + place.name)
+                this.formData.latitude = place.latitude; this.formData.longitude = place.longitude
+                this.selectTag(this.formData.tag)
+              } })
 
             Text(this.hasFormCoordinates() ? '已定位'
               : '地址已修改，请重新定位')
@@ -322,11 +329,11 @@ export struct AddressListPage {
               .fontColor(this.hasFormCoordinates() ? COLORS.TEXT_SECONDARY : COLORS.TEXT_HINT)
               .width('100%')
 
-            Text('详细地址（选填）').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_PRIMARY).width('100%')
-            TextInput({ placeholder: '楼栋、楼层或门牌（如：3 栋 1206，东门进入）', text: this.formData.detail })
-              .attributeModifier(new AppInputStyle()).id('address-detail').accessibilityText('详细地址（选填）')
-              .width('100%')
-              .onChange((v: string) => { this.formData.detail = v })
+            FormInput({ label: '楼栋、楼层与门牌',
+              value: this.formData.detail,
+              placeholder: '楼栋、楼层或门牌（如：3 栋 1206，东门进入）',
+              fieldId: 'address-detail',
+              onChange: (v: string) => { this.formData.detail = v } }).width('100%')
 
             Text('学校、园区请填写宿舍楼或取餐点；确无门牌可留空')
               .fontSize(FONT_SIZE.XS)

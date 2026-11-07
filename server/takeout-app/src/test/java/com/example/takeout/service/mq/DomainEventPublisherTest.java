@@ -32,6 +32,33 @@ import static org.mockito.Mockito.when;
  */
 class DomainEventPublisherTest {
 
+    @org.junit.jupiter.api.AfterEach
+    void clearTrace() { com.example.takeout.common.TraceContext.clear(); }
+
+    @Test
+    void persistsOriginatingTraceWithoutMutatingBusinessPayload() throws Exception {
+        com.example.takeout.common.TraceContext.bind("original-request");
+        var payload = new java.util.LinkedHashMap<String,Object>(Map.of("userId", 1L));
+        publisher.publish(DomainEventPublisher.ORDER_CREATED, 42L, payload);
+        var json = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(outboxDao).insert(anyString(), org.mockito.ArgumentMatchers.eq(42L), json.capture(), anyString());
+        assertTrue(new ObjectMapper().readTree(json.getValue()).path("_traceId").asText().equals("original-request"));
+        org.junit.jupiter.api.Assertions.assertEquals(Map.of("userId", 1L), payload);
+    }
+
+    @Test
+    void retryDeliversOriginalTraceAndRestoresSchedulerMdcEvenOnFailure() {
+        com.example.takeout.common.TraceContext.bind("scheduler");
+        when(streamOps.add(any())).thenAnswer(invocation -> {
+            org.junit.jupiter.api.Assertions.assertEquals("original-request", com.example.takeout.common.TraceContext.current());
+            org.springframework.data.redis.connection.stream.MapRecord<?,?,?> record = invocation.getArgument(0);
+            org.junit.jupiter.api.Assertions.assertEquals("original-request", record.getValue().get("traceId"));
+            throw new IllegalStateException("injected Redis outage");
+        });
+        assertFalse(publisher.deliver(1, DomainEventPublisher.ORDER_CREATED, 42, "{\"_traceId\":\"original-request\"}"));
+        org.junit.jupiter.api.Assertions.assertEquals("scheduler", com.example.takeout.common.TraceContext.current());
+    }
+
     private OutboxEventDao outboxDao;
     private StringRedisTemplate redis;
     private StreamOperations<String, Object, Object> streamOps;

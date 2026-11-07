@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -30,7 +31,7 @@ class OrderDaoRiderPoolSqlTest {
     @SuppressWarnings("unchecked")
     private String captureQuerySql() {
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
-        verify(jdbc).query(sql.capture(), any(RowMapper.class));
+        verify(jdbc).query(sql.capture(), any(RowMapper.class), eq(22.8), eq(22.8), eq(108.3), eq(25000), eq(30), eq(0L));
         return sql.getValue();
     }
 
@@ -38,9 +39,13 @@ class OrderDaoRiderPoolSqlTest {
     void riderPoolOnlySelectsReadyUnassignedCookingOrders() {
         when(jdbc.query(anyString(), any(RowMapper.class))).thenReturn(java.util.List.of());
 
-        dao.listRiderPool();
+        dao.listRiderPool(22.8, 108.3, 25000, 30, 0L);
 
         String sql = captureQuerySql();
+        assertTrue(sql.contains("LIMIT ? OFFSET ?"));
+        assertTrue(sql.contains("COALESCE(f.mode, 'RIDER') = 'RIDER'"));
+        assertTrue(sql.contains("s.latitude BETWEEN -90 AND 90"));
+        assertTrue(sql.contains(", o.id ASC"));
         // 池子的四个条件缺一不可：制作中 + 已出餐 + 未分配骑手 + 仅外卖配送。
         assertTrue(sql.contains("status = 2"), "池子必须只取制作中的订单：" + sql);
         assertTrue(sql.contains("ready_time <> ''"), "池子必须只取商家已出餐的订单：" + sql);

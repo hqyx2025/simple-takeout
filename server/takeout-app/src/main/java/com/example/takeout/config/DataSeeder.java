@@ -19,12 +19,16 @@ import java.util.concurrent.ThreadLocalRandom;
  * 与客户端 MockDataService 对齐：8 分类、30 家店铺、每家 30 商品、5 个测试账号
  */
 @Component
+@org.springframework.core.annotation.Order(400)
 public class DataSeeder implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(DataSeeder.class);
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final JdbcTemplate jdbc;
+    private final com.example.takeout.dao.UserDao userDao;
+    private final com.example.takeout.dao.RiderDao riderDao;
+    private final com.example.takeout.dao.AddressDao addressDao;
 
     @Value("${takeout.data-seed.enabled:false}")
     private boolean seedEnabled = false;
@@ -38,7 +42,13 @@ public class DataSeeder implements ApplicationRunner {
     }
 
     public DataSeeder(JdbcTemplate jdbc) {
-        this.jdbc = jdbc;
+        this(jdbc, new com.example.takeout.dao.UserDao(jdbc), new com.example.takeout.dao.RiderDao(jdbc), new com.example.takeout.dao.AddressDao(jdbc));
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public DataSeeder(JdbcTemplate jdbc, com.example.takeout.dao.UserDao userDao,
+                      com.example.takeout.dao.RiderDao riderDao, com.example.takeout.dao.AddressDao addressDao) {
+        this.jdbc = jdbc; this.userDao = userDao; this.riderDao = riderDao; this.addressDao = addressDao;
     }
 
     @Override
@@ -187,12 +197,8 @@ public class DataSeeder implements ApplicationRunner {
     }
 
     private void ensureAdminUser() {
-        Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM users WHERE phone = ?", Integer.class,
-                "13100131000");
-        if (count == null || count == 0) {
-            jdbc.update("INSERT INTO users(username, avatar, phone, password, role, balance, create_time) " +
-                            "VALUES(?,?,?,?,?,?,?)",
-                    "平台管理员", "", "13100131000", PasswordUtil.hash(demoAdminPassword), 2, 0.0, now());
+        if (!userDao.existsByPhone("13100131000")) {
+            userDao.insert("平台管理员", "13100131000", PasswordUtil.hash(demoAdminPassword), 2, 0.0, now());
             log.info("已补充管理端测试账号 phone=13100131000");
         }
     }
@@ -207,21 +213,15 @@ public class DataSeeder implements ApplicationRunner {
     private void ensureRiderUser() {
         String phone = "13300133000";
         String name = "骑手小李";
-        Long userId = jdbc.query("SELECT id FROM users WHERE phone = ?",
-                (rs, i) -> rs.getLong("id"), phone).stream().findFirst().orElse(null);
+        Long userId = userDao.findByPhone(phone).map(com.example.takeout.model.User::id).orElse(null);
         if (userId == null) {
-            jdbc.update("INSERT INTO users(username, avatar, phone, password, role, balance, create_time) " +
-                            "VALUES(?,?,?,?,?,?,?)",
-                    name, "", phone, seedPasswordHash(), 3, 0.0, now());
-            userId = jdbc.queryForObject("SELECT id FROM users WHERE phone = ?", Long.class, phone);
+            userId = userDao.insert(name, phone, seedPasswordHash(), 3, 0.0, now()).id();
             log.info("已补充骑手端测试账号 phone={}", phone);
         }
         Integer profileCount = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM riders WHERE user_id = ?", Integer.class, userId);
         if (profileCount == null || profileCount == 0) {
-            jdbc.update("INSERT INTO riders(user_id, name, phone, online, total_orders, total_income, " +
-                            "status, create_time) VALUES(?,?,?,0,0,0,1,?)",
-                    userId, name, phone, now());
+            riderDao.insert(userId, name, phone, now());
             log.info("已补充骑手档案 user_id={}", userId);
         }
     }
@@ -363,8 +363,7 @@ public class DataSeeder implements ApplicationRunner {
         };
         int created = 0;
         for (String[] seed : seeds) {
-            Long userId = jdbc.query("SELECT id FROM users WHERE phone = ?",
-                    (rs, i) -> rs.getLong("id"), seed[0]).stream().findFirst().orElse(null);
+            Long userId = userDao.findByPhone(seed[0]).map(com.example.takeout.model.User::id).orElse(null);
             if (userId == null) {
                 continue;
             }
@@ -465,16 +464,11 @@ public class DataSeeder implements ApplicationRunner {
      * 配单要求门店落在骑手半径内，骑手没有位置时抢单池恒为空——新库和老库都要能开箱抢单。
      */
     private void ensureRiderDeliveryRange() {
-        List<Long> riderUserIds = jdbc.queryForList(
-                "SELECT user_id FROM riders WHERE latitude IS NULL OR longitude IS NULL", Long.class);
-        for (Long userId : riderUserIds) {
-            jdbc.update("UPDATE riders SET latitude = ?, longitude = ?, location_address = ? "
-                            + "WHERE user_id = ? AND (latitude IS NULL OR longitude IS NULL)",
-                    SEED_BASE_LATITUDE, SEED_BASE_LONGITUDE, "南宁市青秀区（默认接单位置）", userId);
+        int updated = 0;
+        for (var rider : riderDao.listAll()) if (rider.latitude() == null || rider.longitude() == null) {
+            riderDao.updateLocation(rider.id(), SEED_BASE_LATITUDE, SEED_BASE_LONGITUDE, "南宁市青秀区（默认接单位置）"); updated++;
         }
-        if (!riderUserIds.isEmpty()) {
-            log.info("已为 {} 名骑手补齐默认接单位置（南宁）", riderUserIds.size());
-        }
+        if (updated > 0) log.info("已为 {} 名骑手补齐默认接单位置（南宁）", updated);
     }
 
     private long[] ensureMerchantUsers() {
@@ -485,16 +479,9 @@ public class DataSeeder implements ApplicationRunner {
         };
         long[] ids = new long[merchants.length];
         for (int i = 0; i < merchants.length; i++) {
-            List<Long> existing = jdbc.queryForList("SELECT id FROM users WHERE phone = ? LIMIT 1",
-                    Long.class, merchants[i][1]);
-            if (existing.isEmpty()) {
-                jdbc.update("INSERT INTO users(username, avatar, phone, password, role, balance, create_time) " +
-                                "VALUES(?,?,?,?,?,?,?)",
-                        merchants[i][0], "", merchants[i][1], seedPasswordHash(), 1, 0.0, now());
-                ids[i] = jdbc.queryForObject("SELECT id FROM users WHERE phone = ?", Long.class, merchants[i][1]);
-            } else {
-                ids[i] = existing.get(0);
-            }
+            var existing = userDao.findByPhone(merchants[i][1]);
+            ids[i] = existing.isPresent() ? existing.get().id()
+                    : userDao.insert(merchants[i][0], merchants[i][1], seedPasswordHash(), 1, 0.0, now()).id();
         }
         return ids;
     }
@@ -554,10 +541,7 @@ public class DataSeeder implements ApplicationRunner {
         long[] ids = new long[accounts.length];
         for (int i = 0; i < accounts.length; i++) {
             String[] a = accounts[i];
-            jdbc.update("INSERT INTO users(username, avatar, phone, password, role, balance, create_time) VALUES(?,?,?,?,?,?,?)",
-                    a[0], "", a[1], seedPasswordHash(), Integer.parseInt(a[2]),
-                    Double.parseDouble(a[3]), now());
-            ids[i] = jdbc.queryForObject("SELECT id FROM users WHERE phone = ?", Long.class, a[1]);
+            ids[i] = userDao.insert(a[0], a[1], seedPasswordHash(), Integer.parseInt(a[2]), Double.parseDouble(a[3]), now()).id();
         }
         return ids;
     }
@@ -647,12 +631,9 @@ public class DataSeeder implements ApplicationRunner {
         jdbc.update("INSERT INTO coupons(user_id, store_id, name, threshold, amount, status, expire_time, source, create_time) VALUES(?,?,?,?,?,?,?,?,?)",
                 user2Id, 0, "新客立减券", 20, 5, 0, expire, "default", now);
         // 默认地址
-        jdbc.update("INSERT INTO addresses(user_id, name, phone, detail, is_default, create_time) VALUES(?,?,?,?,?,?)",
-                user1Id, "小张", "13800138000", "华中科技大学紫菘公寓3栋502", 1, now);
-        jdbc.update("INSERT INTO addresses(user_id, name, phone, detail, is_default, create_time) VALUES(?,?,?,?,?,?)",
-                user1Id, "小张", "13800138000", "光谷广场步行街B座1201", 0, now);
-        jdbc.update("INSERT INTO addresses(user_id, name, phone, detail, is_default, create_time) VALUES(?,?,?,?,?,?)",
-                user2Id, "小王", "13900139000", "华中科技大学韵苑公寓5栋301", 1, now);
+        addressDao.insert(user1Id, "小张", "13800138000", "华中科技大学紫菘公寓3栋502", 1, null, null, null, null, "", now);
+        addressDao.insert(user1Id, "小张", "13800138000", "光谷广场步行街B座1201", 0, null, null, null, null, "", now);
+        addressDao.insert(user2Id, "小王", "13900139000", "华中科技大学韵苑公寓5栋301", 1, null, null, null, null, "", now);
         // 默认评价（前两家店各 3 条）
         List<Long> storeIds = jdbc.queryForList("SELECT id FROM stores ORDER BY id LIMIT 2", Long.class);
         String[] contents = {"味道很好，分量足，配送也快！", "包装很用心，菜还是热的，好评",

@@ -1,3 +1,4 @@
+import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /**
  * 个人信息编辑页
@@ -164,15 +165,14 @@ export struct ProfileEditPage {
     Column({ space: SPACING.MD }) {
       // 昵称
       Row() {
-        Text('账号')
-          .fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.TEXT_SECONDARY)
-          .width(72)
-        TextInput({ placeholder: '唯一账号，例如 takeout_user', text: this.username })
-          .attributeModifier(new AppInputStyle())
-          .layoutWeight(1)
-          .maxLength(64)
-          .onChange((value: string) => { this.username = value })
+
+        FormInput({ label: '用户名',
+          value: this.username,
+          placeholder: '唯一账号，例如 takeout_user',
+          maxLength: 64,
+          onChange: (value: string) => { this.username = value },
+          fieldId: 'ProfileEditPage-username',
+          required: true }).layoutWeight(1)
       }
       .width('100%')
       .alignItems(VerticalAlign.Center)
@@ -180,15 +180,13 @@ export struct ProfileEditPage {
       Divider().color(COLORS.DIVIDER)
 
       Row() {
-        Text('当前密码')
-          .fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.TEXT_SECONDARY)
-          .width(72)
-        TextInput({ placeholder: '修改手机号或邮箱时必填', text: this.currentPassword })
-          .attributeModifier(new AppInputStyle())
-          .layoutWeight(1)
-          .type(InputType.Password)
-          .onChange((value: string) => { this.currentPassword = value })
+
+        FormInput({ label: '当前登录密码',
+          value: this.currentPassword,
+          placeholder: '修改手机号或邮箱时必填',
+          inputType: InputType.Password,
+          onChange: (value: string) => { this.currentPassword = value },
+          fieldId: 'ProfileEditPage-currentPassword' }).layoutWeight(1)
       }
       .width('100%')
       .alignItems(VerticalAlign.Center)
@@ -197,15 +195,14 @@ export struct ProfileEditPage {
 
       // 找回密码邮箱
       Row() {
-        Text('邮箱')
-          .fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.TEXT_SECONDARY)
-          .width(72)
-        TextInput({ placeholder: '用于找回密码', text: this.email })
-          .attributeModifier(new AppInputStyle())
-          .layoutWeight(1)
-          .type(InputType.Email)
-          .onChange((value: string) => { this.email = value })
+
+        FormInput({ label: '邮箱',
+          value: this.email,
+          placeholder: '用于找回密码',
+          inputType: InputType.Email,
+          onChange: (value: string) => { this.email = value },
+          fieldId: 'ProfileEditPage-email',
+          required: true }).layoutWeight(1)
       }
       .width('100%')
       .alignItems(VerticalAlign.Center)
@@ -214,16 +211,15 @@ export struct ProfileEditPage {
 
       // 手机号
       Row() {
-        Text('手机号')
-          .fontSize(FONT_SIZE.MD)
-          .fontColor(COLORS.TEXT_SECONDARY)
-          .width(72)
-        TextInput({ placeholder: '请输入手机号', text: this.phone })
-          .attributeModifier(new AppInputStyle())
-          .layoutWeight(1)
-          .maxLength(11)
-          .type(InputType.PhoneNumber)
-          .onChange((value: string) => { this.phone = value })
+
+        FormInput({ label: '手机号',
+          value: this.phone,
+          placeholder: '请输入手机号',
+          inputType: InputType.PhoneNumber,
+          maxLength: 11,
+          onChange: (value: string) => { this.phone = value },
+          fieldId: 'ProfileEditPage-phone',
+          required: true }).layoutWeight(1)
       }
       .width('100%')
       .alignItems(VerticalAlign.Center)

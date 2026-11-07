@@ -12,9 +12,20 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.*;
 
 class LocationControllerTest {
-    private final RestClient.Builder builder = RestClient.builder().baseUrl("https://restapi.amap.com");
+    private final RestClient.Builder builder = com.example.takeout.common.JsonRestClients.builder().baseUrl("https://restapi.amap.com");
     private final MockRestServiceServer upstream = MockRestServiceServer.bindTo(builder).build();
     private final LocationController controller = new LocationController("test-key", "", builder.build());
+
+    @Test void districtCascadeUsesValidatedParentAndOnlyImmediateChildren() {
+        assertThrows(BizException.class, () -> controller.districts("110000&subdistrict=3"));
+        upstream.expect(requestTo(startsWith("https://restapi.amap.com/v3/config/district")))
+                .andExpect(queryParam("keywords", "110000"))
+                .andExpect(queryParam("subdistrict", "1"))
+                .andExpect(queryParam("extensions", "base"))
+                .andRespond(withSuccess("{\"status\":\"1\",\"districts\":[{\"districts\":[{\"name\":\"北京市\",\"adcode\":\"110100\"}]}]}", MediaType.APPLICATION_JSON));
+        assertEquals("110100", controller.districts("110000").data().path("districts").get(0).path("districts").get(0).path("adcode").asText());
+        upstream.verify();
+    }
 
     @Test void convertsBrowserCoordinatesBeforeReverseGeocoding() {
         Locale before = Locale.getDefault();

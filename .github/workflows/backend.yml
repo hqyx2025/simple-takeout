@@ -1,14 +1,17 @@
 name: Backend
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - 'server/**'
       - '.github/workflows/backend.yml'
+      - 'scripts/backend-evidence.py'
   pull_request:
     paths:
       - 'server/**'
       - '.github/workflows/backend.yml'
+      - 'scripts/backend-evidence.py'
 
 permissions:
   contents: read
@@ -26,6 +29,7 @@ jobs:
       TAKEOUT_DB_USERNAME: root
       TAKEOUT_DB_PASSWORD: ci-test
       TAKEOUT_TEST_REDIS_PORT: '6387'
+      TAKEOUT_MANAGEMENT_PORT: '0'
     services:
       mysql:
         image: mysql:8.4
@@ -51,4 +55,23 @@ jobs:
           java-version: '25'
           cache: maven
       - name: Run backend tests
-        run: mvn -f server/pom.xml --batch-mode --no-transfer-progress test
+        run: |
+          export TAKEOUT_PERSONAL_DATA_ENCRYPTION_SECRET="$(openssl rand -base64 32)"
+          export TAKEOUT_PERSONAL_DATA_INDEX_SECRET="$(openssl rand -base64 32)"
+          date +%s > test-started.txt
+          mvn -f server/pom.xml --batch-mode --no-transfer-progress verify
+      - name: Require executed tests without skips
+        if: always()
+        run: |
+          python3 scripts/backend-evidence.test.py
+          python3 scripts/backend-evidence.py --since "$(cat test-started.txt)" --minimum-line-coverage 0.70 --output TemporaryCacheStorage/backend-summary.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-test-evidence
+          path: |
+            TemporaryCacheStorage/backend-summary.json
+            server/**/target/surefire-reports/TEST-*.xml
+            server/**/target/site/jacoco/**
+            server/takeout-coverage/target/site/jacoco-aggregate/**
+          if-no-files-found: error

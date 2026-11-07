@@ -4,6 +4,7 @@ import com.example.takeout.model.Order;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
+import com.example.takeout.service.PersonalDataCrypto;
 
 import java.util.List;
 import java.util.ArrayList;
@@ -18,7 +19,7 @@ public class OrderDao {
 
     private static final String DATE_PARAMETER = JdbcDateTimes.PARAMETER;
 
-    private static final RowMapper<Order> MAPPER = (rs, i) -> new Order(
+    private final RowMapper<Order> MAPPER = (rs, i) -> new Order(
             rs.getLong("id"),
             rs.getString("order_no"),
             rs.getLong("user_id"),
@@ -26,7 +27,7 @@ public class OrderDao {
             rs.getString("store_name"),
             rs.getInt("status"),
             rs.getString("items"),
-            rs.getString("address"),
+            readAddress(rs.getString("address")),
             rs.getDouble("goods_amount"),
             rs.getDouble("delivery_fee"),
             rs.getDouble("discount"),
@@ -52,10 +53,20 @@ public class OrderDao {
     );
 
     private final JdbcTemplate jdbc;
+    private final PersonalDataCrypto crypto;
 
     public OrderDao(JdbcTemplate jdbc) {
-        this.jdbc = jdbc;
+        this(jdbc, null);
     }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public OrderDao(JdbcTemplate jdbc, PersonalDataCrypto crypto) {
+        this.jdbc = jdbc; this.crypto = crypto;
+    }
+
+    private String readAddress(String address) { return crypto == null ? address : crypto.readLegacy(address, "orders.address"); }
+
+    private String storeAddress(String address) { return crypto == null ? address : crypto.encrypt(address, "orders.address"); }
 
     /** 与订单、库存和优惠券共用事务；唯一键防重，失败回滚后允许原请求重试。 */
     public void reserveCreateRequest(long userId, String requestKey) {
@@ -105,7 +116,7 @@ public class OrderDao {
         jdbc.update("INSERT INTO orders(order_no, user_id, store_id, store_name, status, items, address, goods_amount, delivery_fee, discount, coupon_id, pay_amount, remark, reviewed, escrow_status, create_time, pay_time, accept_time, deliver_time, complete_time, expect_time, create_time_dt, pay_time_dt, accept_time_dt, deliver_time_dt, complete_time_dt, expect_time_dt, delivery_type) " +
                         "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? ," + DATE_PARAMETER + "," + DATE_PARAMETER + "," +
                         DATE_PARAMETER + "," + DATE_PARAMETER + "," + DATE_PARAMETER + "," + DATE_PARAMETER + ",?)",
-                o.orderNo(), o.userId(), o.storeId(), o.storeName(), o.status(), o.items(), o.address(),
+                o.orderNo(), o.userId(), o.storeId(), o.storeName(), o.status(), o.items(), storeAddress(o.address()),
                 o.goodsAmount(), o.deliveryFee(), o.discount(), o.couponId(), o.payAmount(), o.remark(),
                 o.reviewed(), 0, o.createTime(), o.payTime(), o.acceptTime(), o.deliverTime(),
                 o.completeTime(), o.expectTime(), o.createTime(), o.payTime(), o.acceptTime(), o.deliverTime(),
@@ -269,6 +280,11 @@ public class OrderDao {
 
     public Optional<Order> findByIdForUpdate(long id) {
         return jdbc.query("SELECT * FROM orders WHERE id = ? FOR UPDATE", MAPPER, id).stream().findFirst();
+    }
+
+    /** 抢单只竞争这一笔订单；繁忙时立即失败，不让骑手请求排队占用连接。必须在事务内调用。 */
+    public Optional<Order> findByIdForGrab(long id) {
+        return jdbc.query("SELECT * FROM orders WHERE id = ? FOR UPDATE SKIP LOCKED", MAPPER, id).stream().findFirst();
     }
 
     /**
@@ -463,10 +479,49 @@ public class OrderDao {
     }
 
     /** 待取餐池：已出餐但尚未分配骑手。 */
-    public List<Order> listRiderPool() {
-        return jdbc.query("SELECT * FROM orders WHERE status = 2 AND ready_time <> '' " +
-                        "AND rider_id = 0 AND delivery_type = 'DELIVERY' ORDER BY " + dateTimeExpression("ready_time"),
-                MAPPER);
+    // 与 Store.distanceKmTo 使用相同的地球半径及 Haversine 算法；范围和履约方式先过滤再分页。
+    private static final String RIDER_POOL_JOINS = " FROM orders o JOIN stores s ON s.id = o.store_id " +
+            "LEFT JOIN order_fulfillment f ON f.order_id = o.id ";
+    private static final String RIDER_POOL_FILTER = "WHERE o.status = 2 AND o.ready_time <> '' AND o.rider_id = 0 " +
+            "AND o.delivery_type = 'DELIVERY' AND COALESCE(f.mode, 'RIDER') = 'RIDER' " +
+            "AND s.latitude BETWEEN -90 AND 90 AND s.longitude BETWEEN -180 AND 180 " +
+            "AND 12742000 * ASIN(SQRT(LEAST(1, GREATEST(0, " +
+            "POW(SIN(RADIANS(s.latitude - ?) / 2), 2) + COS(RADIANS(?)) * COS(RADIANS(s.latitude)) * " +
+            "POW(SIN(RADIANS(s.longitude - ?) / 2), 2))))) <= ?";
+    private static final String RIDER_POOL_FROM = RIDER_POOL_JOINS + RIDER_POOL_FILTER;
+
+    public int countRiderPool(double latitude, double longitude, int radius) {
+        Integer total = jdbc.queryForObject("SELECT COUNT(*)" + RIDER_POOL_FROM, Integer.class,
+                latitude, latitude, longitude, radius);
+        return total == null ? 0 : total;
+    }
+
+    public record RiderPoolRow(Order order, String readyTime) {}
+
+    public List<RiderPoolRow> listRiderPool(double latitude, double longitude, int radius, int size, long offset) {
+        return jdbc.query("SELECT o.*" + RIDER_POOL_FROM + " ORDER BY " +
+                        dateTimeExpression("o.ready_time") + ", o.id ASC LIMIT ? OFFSET ?",
+                (rs, n) -> new RiderPoolRow(MAPPER.mapRow(rs, n), rs.getString("ready_time")),
+                latitude, latitude, longitude, radius, size, offset);
+    }
+
+    /** 出餐时间只写一次；即便上一页订单已被抢走，仍用原排序位置继续，避免 OFFSET 跳单。 */
+    public List<RiderPoolRow> listRiderPoolAfter(double latitude, double longitude, int radius, int limit, long afterId) {
+        String sort = riderPoolSortTime("o.ready_time");
+        String sql = "SELECT o.*" + RIDER_POOL_JOINS +
+                (afterId == 0 ? "" : "JOIN orders previous ON previous.id = ? ") + RIDER_POOL_FILTER +
+                (afterId == 0 ? "" : " AND (" + sort + ", o.id) > (" +
+                        riderPoolSortTime("previous.ready_time") + ", previous.id)") +
+                " ORDER BY " + sort + ", o.id ASC LIMIT ?";
+        RowMapper<RiderPoolRow> mapper = (rs, n) -> new RiderPoolRow(MAPPER.mapRow(rs, n), rs.getString("ready_time"));
+        return afterId == 0
+                ? jdbc.query(sql, mapper, latitude, latitude, longitude, radius, limit)
+                : jdbc.query(sql, mapper, afterId, latitude, latitude, longitude, radius, limit);
+    }
+
+    private static String riderPoolSortTime(String column) {
+        // 旧数据可能含无效出餐时间，保持其排在有效时间之前，并用 id 稳定排序。
+        return "COALESCE(" + dateTimeExpression(column) + ", CAST('1000-01-01 00:00:00' AS DATETIME))";
     }
 
     /** 骑手抢单：条件更新，防并发重复抢单（失败=已被他人抢走）。 */

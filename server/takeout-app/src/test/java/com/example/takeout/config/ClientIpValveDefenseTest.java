@@ -5,7 +5,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.catalina.valves.RemoteIpValve;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.web.embedded.tomcat.TomcatServletWebServerFactory;
+import org.springframework.boot.tomcat.servlet.TomcatServletWebServerFactory;
 import java.io.IOException;
 import java.net.URI;
 import static org.junit.jupiter.api.Assertions.assertEquals;

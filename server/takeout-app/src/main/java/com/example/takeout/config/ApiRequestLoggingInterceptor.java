@@ -43,7 +43,8 @@ public class ApiRequestLoggingInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         request.setAttribute(START_TIME, System.nanoTime());
-        String traceId = TraceContext.normalize(request.getHeader(TraceContext.HEADER));
+        String traceId = request.getAttribute(TraceContext.ATTR) instanceof String existing
+                ? TraceContext.normalize(existing) : TraceContext.normalize(request.getHeader(TraceContext.HEADER));
         if (traceId == null) {
             traceId = UUID.randomUUID().toString().replace("-", "");
         }
@@ -88,6 +89,7 @@ public class ApiRequestLoggingInterceptor implements HandlerInterceptor {
                                  Object userId, Object role, String traceId) {
         if (operationLogDao == null || !(userId instanceof Number operatorId)
                 || !(role instanceof Number operatorRole)
+                || request.getAttribute(com.example.takeout.common.DatabaseAvailability.FAILURE_ATTRIBUTE) != null
                 || "GET".equalsIgnoreCase(request.getMethod())
                 || "OPTIONS".equalsIgnoreCase(request.getMethod())) {
             return;
@@ -113,6 +115,9 @@ public class ApiRequestLoggingInterceptor implements HandlerInterceptor {
                     status < 400 ? "SUCCESS" : "FAILURE", status, traceId,
                     Instant.now().toEpochMilli());
         } catch (RuntimeException e) {
+            if (com.example.takeout.common.DatabaseAvailability.unavailable(e)) {
+                request.setAttribute(com.example.takeout.common.DatabaseAvailability.FAILURE_ATTRIBUTE, Boolean.TRUE);
+            }
             log.warn("操作审计写入失败 traceId={} path={}", traceId, path, e);
         }
     }

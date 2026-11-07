@@ -78,7 +78,7 @@ class Round3ResourceBoundaryTest {
     }
 
     @Test void malformedPercentAndNulPathsAreRejectedByActualTomcatBeforeMvc() throws Exception {
-        var factory = new org.springframework.boot.web.embedded.tomcat.TomcatServletWebServerFactory(0);
+        var factory = new org.springframework.boot.tomcat.servlet.TomcatServletWebServerFactory(0);
         factory.setAddress(java.net.InetAddress.getLoopbackAddress());
         factory.setProtocol("org.apache.coyote.http11.Http11Nio2Protocol");
         var server = factory.getWebServer(servletContext -> {

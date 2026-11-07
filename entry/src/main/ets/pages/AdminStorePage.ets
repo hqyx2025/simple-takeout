@@ -1,3 +1,4 @@
+import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 /**
  * 管理端-店铺管理页（大纲 9.3 商户管理-经营状态）
@@ -270,10 +271,14 @@ export struct AdminStorePage {
               }
             }
             if (this.reviewingId === store.id) {
-              Text('驳回原因').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_PRIMARY).width('100%')
-              TextInput({ text: this.reviewReason, placeholder: '例如：请补充完整的店铺地址' })
-                .id('admin-store-review-reason')
-                .maxLength(512).onChange((value: string) => { this.reviewReason = value })
+
+              FormInput({ label: '审核说明',
+                value: this.reviewReason,
+                placeholder: '例如：请补充完整的店铺地址',
+                maxLength: 512,
+                fieldId: 'admin-store-review-reason',
+                onChange: (value: string) => { this.reviewReason = value },
+                required: true })
               Button('确认驳回').attributeModifier(new AppButtonStyle()).height(44).enabled(!this.busy)
                 .id(`admin-store-reject-${store.id}`).onClick(() => { this.reviewStore(store, 2) })
             }

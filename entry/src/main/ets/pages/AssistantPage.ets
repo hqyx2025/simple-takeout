@@ -1,3 +1,4 @@
+import { FormInput } from '../components/FormInput'
 import { PageHeader } from '../components/PageHeader'
 import { AppTheme, AppButtonStyle } from '../common/theme/AppTheme'
 import { FloatingTabBarTheme } from '../common/theme/FloatingTabBarTheme'
@@ -246,17 +247,13 @@ export struct AssistantPage {
 
           // 输入与发送共用一个悬浮容器。
           Row({ space: SPACING.SM }) {
-            TextInput({ placeholder: '想问点什么？例如：我的订单到哪了', text: this.input })
-              .height(AppTheme.CONTROL_HEIGHT).fontSize(16)
-              .fontColor(AppTheme.TEXT).placeholderColor(AppTheme.MUTED).caretColor(AppTheme.ACCENT)
-              .backgroundColor(Color.Transparent)
-              .border({ width: 0 }).borderRadius(BORDER_RADIUS.CIRCLE)
-              .padding({ left: SPACING.MD, right: SPACING.XS })
-              .layoutWeight(1)
-              .id('assistant-input')
-              .maxLength(MAX_QUESTION_LENGTH)
-              .onChange((value: string) => { this.input = value })
-              .onSubmit(() => { this.send(this.input) })
+            FormInput({ label: '输入问题',
+              value: this.input,
+              placeholder: '想问点什么？例如：我的订单到哪了',
+              maxLength: MAX_QUESTION_LENGTH,
+              fieldId: 'assistant-input',
+              onChange: (value: string) => { this.input = value },
+              onInputSubmit: () => { this.send(this.input) } }).layoutWeight(1)
             Button(this.sending ? '发送中' : '发送')
               .attributeModifier(new AppButtonStyle())
               .height(42).fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_WHITE)

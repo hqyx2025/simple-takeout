@@ -1149,16 +1149,48 @@ public class OrderService {
      * 与骑手半径（骑手设置的接单位置到门店）。骑手未设置接单位置时无法判定，返回空池（前端提示去设置）。
      */
     public List<Order.OrderView> riderPool(long riderId) {
+        return riderPool(riderId, 1, 30).list();
+    }
+
+    public OrderPage riderPool(long riderId, int page, int pageSize) {
+        int current = Math.max(1, page);
+        int size = Math.clamp(pageSize, 1, 100);
         Rider rider = riderDao.findById(riderId).orElse(null);
-        if (rider == null || rider.status() != 1) {
-            return List.of();
+        if (rider == null || rider.status() != 1 || !rider.hasLocation()) {
+            return new OrderPage(List.of(), 0, current, size, false);
         }
-        Map<Long, Boolean> withinRange = new HashMap<>();
-        return orderDao.listRiderPool().stream()
-                .filter(order -> operations == null || "RIDER".equals(operations.mode(order.id())))
-                .filter(order -> withinRange.computeIfAbsent(order.storeId(), storeId -> riderCanServe(rider, storeId)))
-                .map(order -> {
-                    Order.OrderView view = toView(order, 3);
+        int radius = rider.deliveryRadius() > 0 ? rider.deliveryRadius() : Rider.DEFAULT_DELIVERY_RADIUS_METERS;
+        int total = orderDao.countRiderPool(rider.latitude(), rider.longitude(), radius);
+        List<Order.OrderView> list = riderPoolViews(orderDao.listRiderPool(rider.latitude(), rider.longitude(), radius,
+                size, (long) (current - 1) * size));
+        return new OrderPage(list, total, current, size, (long) current * size < total);
+    }
+
+    public record RiderPoolSlice(List<Order.OrderView> list, boolean hasMore, long nextAfterId) {}
+
+    public RiderPoolSlice riderPoolAfter(long riderId, long afterId, int pageSize) {
+        if (afterId < 0) { throw new BizException("订单列表位置无效，请刷新后重试"); }
+        int size = Math.clamp(pageSize, 1, 100);
+        Rider rider = riderDao.findById(riderId).orElse(null);
+        if (rider == null || rider.status() != 1 || !rider.hasLocation()) {
+            return new RiderPoolSlice(List.of(), false, 0);
+        }
+        int radius = rider.deliveryRadius() > 0 ? rider.deliveryRadius() : Rider.DEFAULT_DELIVERY_RADIUS_METERS;
+        List<OrderDao.RiderPoolRow> rows = orderDao.listRiderPoolAfter(rider.latitude(), rider.longitude(), radius,
+                size + 1, afterId);
+        boolean hasMore = rows.size() > size;
+        List<Order.OrderView> list = riderPoolViews(hasMore ? rows.subList(0, size) : rows);
+        return new RiderPoolSlice(list, hasMore, hasMore ? list.getLast().id() : 0);
+    }
+
+    private List<Order.OrderView> riderPoolViews(List<OrderDao.RiderPoolRow> rows) {
+        return rows.stream()
+                .map(row -> {
+                    Order order = row.order();
+                    Order.OrderView view = order.toView(List.of(), new Order.AddressInfo(0, "", "", ""), "", 0L, "", "", row.readyTime());
+                    if (operations != null) {
+                        view = view.withCapabilities(operations.capabilities(order, row.readyTime(), 3, "RIDER", 0));
+                    }
                     return view.forRiderPool().withCapabilities(view.capabilities());
                 })
                 .toList();
@@ -1190,19 +1222,28 @@ public class OrderService {
         return rider;
     }
 
-    /** 骑手抢单：条件更新，防并发重复抢单。 */
-    @Transactional
+    /** 骑手抢单：范围校验不持锁；只在最终裁决阶段短暂占用订单行，竞争失败立即返回。 */
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public Order.OrderView riderGrab(long riderId, long orderId) {
         Rider rider = requireActiveRider(riderId);
-        Order order = orderDao.findByIdForUpdate(orderId).orElseThrow(() -> new BizException("订单不存在"));
-        requireNoExternalCancellation(orderId);
-        if (operations != null) operations.requireMode(orderId, "RIDER");
+        Order order = requireOrder(orderId);
         // 抢单也要过半径判定：否则用订单 id 直接调用接口就能绕开派单范围
         if (!riderCanServe(rider, order.storeId())) {
+            // 失败路径也保留退款恢复/配送方式的错误优先级，但无需占用订单行。
+            requireNoExternalCancellation(orderId);
+            if (operations != null) operations.requireMode(orderId, "RIDER");
             throw new BizException("该订单不在您的配送范围内，请调整接单范围或接单位置");
         }
+        order = orderDao.findByIdForGrab(orderId)
+                .orElseThrow(() -> new BizException(409, "该订单正在被处理，请刷新订单池后重试"));
+        requireNoExternalCancellation(orderId);
+        if (operations != null) operations.requireMode(orderId, "RIDER");
+        // 响应丢失后的本人重试返回原接单结果，不能误报为被其他骑手接走。
+        if (order.status() == 2 && orderDao.findRiderId(orderId) == riderId) {
+            return toRiderView(order);
+        }
         if (!orderDao.tryAssignRider(orderId, riderId)) {
-            throw new BizException("手慢了，该订单已被其他骑手接走");
+            throw new BizException(409, "手慢了，该订单已被其他骑手接走或已不支持接单");
         }
         return toRiderView(requireOrder(orderId));
     }

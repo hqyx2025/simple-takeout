@@ -5,7 +5,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Import;
 @SpringBootApplication
 @Import({GlobalExceptionHandler.class,com.example.takeout.common.ResourceBoundaryFilter.class,
-        com.example.takeout.common.BusinessIdGenerator.class})
+        com.example.takeout.common.BusinessIdGenerator.class,com.example.takeout.common.RequestTraceFilter.class,
+        com.example.takeout.common.JsonContractConfiguration.class})
 public class ErpApplication {
     public static void main(String[] args) { SpringApplication.run(ErpApplication.class, args); }
 }

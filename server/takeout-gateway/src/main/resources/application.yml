@@ -1,3 +1,21 @@
+management:
+  server:
+    port: ${TAKEOUT_MANAGEMENT_PORT:8088}
+    address: ${TAKEOUT_MANAGEMENT_ADDRESS:127.0.0.1}
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+  endpoint:
+    health:
+      show-details: never
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+
 server:
   # 对外统一入口，与前端 BASE_URL 的 8087 保持一致。
   port: ${TAKEOUT_GATEWAY_PORT:8087}

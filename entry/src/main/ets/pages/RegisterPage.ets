@@ -63,26 +63,26 @@ struct RegisterPage {
               .backgroundColor(this.errorMsg ? AppTheme.ERROR_BG : AppTheme.SUCCESS_BG)
               .id(this.errorMsg ? 'register-error' : 'register-success')
           }
-          FormInput({ compact: true, label: '用户名', placeholder: '请输入用户名', value: this.username,
+          FormInput({ required: true, compact: true, label: '用户名', placeholder: '请输入用户名', value: this.username,
             icon: $r('app.media.login_user'), fieldId: 'login-username', maxLength: 64,
             isEnabled: !this.submitting && !this.sendingCode,
             errorMessage: this.usernameError || (this.errorField === 'login-username' ? this.errorMsg : ''),
             onChange: (value: string) => { this.usernameChanged(value) },
             onInputBlur: () => { this.checkUsername() } })
-          FormInput({ compact: true, label: '邮箱', placeholder: '请输入邮箱', value: this.email,
+          FormInput({ required: true, compact: true, label: '邮箱', placeholder: '请输入邮箱', value: this.email,
             icon: $r('app.media.login_user'), inputType: InputType.Email, fieldId: 'login-email', maxLength: 254,
             isEnabled: !this.submitting && !this.sendingCode, errorMessage: this.errorField === 'login-email' ? this.errorMsg : '',
             onChange: (value: string) => { this.email = value; this.emailCode = ''; this.clearFeedback() } })
-          FormInput({ compact: true, label: '手机号', placeholder: '请输入 11 位手机号', value: this.phone,
+          FormInput({ required: true, compact: true, label: '手机号', placeholder: '请输入 11 位手机号', value: this.phone,
             icon: $r('app.media.login_phone'), inputType: InputType.PhoneNumber, fieldId: 'login-phone', maxLength: 11,
             isEnabled: !this.submitting && !this.sendingCode, errorMessage: this.errorField === 'login-phone' ? this.errorMsg : '',
             onChange: (value: string) => { this.phone = value; this.emailCode = ''; this.clearFeedback() } })
           this.verificationCodeField()
-          FormInput({ compact: true, label: '密码', placeholder: '请输入 6 至 64 位密码', value: this.password,
+          FormInput({ required: true, compact: true, label: '密码', placeholder: '请输入 6 至 64 位密码', value: this.password,
             icon: $r('app.media.login_lock'), inputType: InputType.Password, fieldId: 'login-password', maxLength: 64, passwordRules: true,
             isEnabled: !this.submitting && !this.sendingCode, errorMessage: this.errorField === 'login-password' ? this.errorMsg : '',
             onChange: (value: string) => { this.password = value; this.clearFeedback() } })
-          FormInput({ compact: true, label: '确认密码', placeholder: '请再次输入相同密码', value: this.confirmPassword,
+          FormInput({ required: true, compact: true, label: '确认密码', placeholder: '请再次输入相同密码', value: this.confirmPassword, validator: (value: string): string => value === this.password ? '' : '两次输入的密码不一致',
             icon: $r('app.media.login_lock'), inputType: InputType.Password, fieldId: 'login-confirm-password', maxLength: 64,
             isEnabled: !this.submitting && !this.sendingCode, errorMessage: this.errorField === 'login-confirm-password' ? this.errorMsg : '',
             onChange: (value: string) => { this.confirmPassword = value; this.clearFeedback() } })
@@ -104,8 +104,6 @@ struct RegisterPage {
     this.clearFeedback()
     if (this.usernameCheckTimer !== -1) { clearTimeout(this.usernameCheckTimer) }
     this.usernameCheckTimer = -1
-    if (!value.trim()) { return }
-    this.usernameCheckTimer = setTimeout(() => { this.usernameCheckTimer = -1; this.checkUsername() }, 400)
   }
 
   private async checkUsername(): Promise<boolean> {
@@ -130,24 +128,24 @@ struct RegisterPage {
       EmailCaptchaField({ captchaId: $captchaId, captchaCode: $captchaCode,
         disabled: this.submitting || this.sendingCode,
         errorMessage: this.errorField === 'email-captcha-input' ? this.errorMsg : '' })
-      Text('邮箱验证码').fontSize(13).fontWeight(FontWeight.Medium).fontColor(AppTheme.TEXT).width('100%')
       Row({ space: 8 }) {
-        TextInput({ text: this.emailCode, placeholder: '请输入 6 位验证码' })
-          .attributeModifier(new AppInputStyle()).type(InputType.Number).maxLength(6)
-          .height(44).layoutWeight(1).id('register-email-code')
-          .enabled(!this.submitting && !this.sendingCode)
-          .border({ width: this.errorField.endsWith('email-code') ? 1.5 : 1,
-            color: this.errorField.endsWith('email-code') ? AppTheme.ERROR : AppTheme.BORDER })
-          .onChange((value: string) => { this.emailCode = value; this.clearFeedback() })
+        FormInput({ label: '邮箱验证码',
+          value: this.emailCode,
+          placeholder: '请输入 6 位验证码',
+          inputType: InputType.Number,
+          maxLength: 6,
+          isEnabled: !this.submitting && !this.sendingCode,
+          fieldId: 'register-email-code',
+          errorMessage: this.errorField === 'register-email-code' ? this.errorMsg : '',
+          onChange: (value: string) => { this.emailCode = value; this.clearFeedback() },
+          oneTimeCode: true,
+          helpText: '6 位验证码，可整段粘贴或使用系统自动填入',
+          required: true }).layoutWeight(1)
         Button(this.sendingCode ? '发送中…' : this.cooldownSeconds > 0 ? this.cooldownSeconds + '秒后重发' : '获取验证码')
           .attributeModifier(new AppButtonStyle()).height(44).width(120).id('register-send-code')
           .enabled(!this.sendingCode && this.cooldownSeconds === 0 && !this.submitting)
           .onClick(() => { this.sendVerificationCode() })
-      }.width('100%').height(44).flexShrink(0)
-      if (this.errorMsg && this.errorField.endsWith('email-code')) {
-        Text(this.errorMsg).fontSize(13).fontColor(AppTheme.ERROR).width('100%')
-          .id('register-email-code-error')
-      }
+      }.width('100%').alignItems(VerticalAlign.Top).flexShrink(0)
     }.width('100%').margin({ bottom: 8 }).flexShrink(0)
   }
 

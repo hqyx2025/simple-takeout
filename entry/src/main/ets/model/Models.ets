@@ -241,6 +241,12 @@ export interface OrderPageData {
   hasMore: boolean
 }
 
+export interface RiderPoolSlice {
+  list: Order[]
+  hasMore: boolean
+  nextAfterId: number
+}
+
 // 用户模型（支持双角色）
 export interface User {
   id: number

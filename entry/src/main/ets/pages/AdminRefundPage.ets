@@ -1,3 +1,4 @@
+import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppTextAreaStyle } from '../common/theme/AppTheme'
 /**
  * 管理端-退款审批页（大纲 9.7 退款处理）
@@ -409,14 +410,17 @@ export struct AdminRefundPage {
               .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
             Scroll() {
               Column({ space: SPACING.MD }) {
-                Text('拒绝理由将展示给用户（必填）。请说明核实结果与处理依据；已结算订单保留结算状态，未结算订单恢复为待确认收货。')
-                  .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-                  .id('admin-refund-reject-policy')
-                TextArea({ placeholder: '例：已核实配送记录，请补充未收到餐的具体情况后重新申请', text: this.rejectReason })
-                  .attributeModifier(new AppTextAreaStyle())
-                  .width('100%').height(100)
-                  .maxLength(255).enabled(!this.submitting).id('admin-refund-reject-reason')
-                  .onChange((value: string) => { this.rejectReason = value })
+
+                FormInput({ label: '驳回原因',
+                  value: this.rejectReason,
+                  placeholder: '例：已核实配送记录，请补充未收到餐的具体情况后重新申请',
+                  maxLength: 255,
+                  isEnabled: !this.submitting,
+                  fieldId: 'admin-refund-reject-reason',
+                  onChange: (value: string) => { this.rejectReason = value },
+                  multiline: true,
+                  inputHeight: 100,
+                  required: true }).width('100%')
                 if (this.actionError !== '') {
                   Text(this.actionError).fontSize(FONT_SIZE.SM).fontColor(COLORS.ERROR)
                 }

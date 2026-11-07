@@ -1,6 +1,7 @@
 /* Store-scoped operating-supplies procurement. All facts and mutations come from ERP APIs. */
 window.TakeoutErp = (() => {
   'use strict';
+  const requestInput = async (label, value = '') => window.TakeoutForms ? window.TakeoutForms.prompt(label, value) : window.prompt(label, value);
   const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const labels = {DRAFT:'草稿',SUBMITTED:'待审核',CONFIRMED:'已确认',CLOSED:'已关闭',APPROVED:'已通过',REJECTED:'已拒绝',COUNT:'盘点',LOSS:'报损',RECEIPT:'收货',ADJUST:'调整',REVERSAL:'冲销'};
   Object.assign(labels,{suppliers:'新增供应商','supplier-update':'修改供应商','supplier-status':'供应商启停',materials:'建立物料',purchases:'创建采购',submit:'提交采购',confirm:'确认采购',close:'关闭采购',receive:'收货入库','reverse-receipt':'收货冲销',adjust:'提交调整',review:'审核调整',reverse:'调整冲销',pay:'登记付款','payment-correct':'凭证纠错','reverse-payment':'付款冲销','supplier-refund':'供应商退款'});
@@ -39,7 +40,7 @@ window.TakeoutErp = (() => {
     const path=resource=>`/api/erp/stores/${store}/${resource}`;
     const call=async(resource,options)=>{if(!active())throw new Error('页面已切换，请重新进入');const requestStore=store,result=await api(path(resource),options);if(!active() || requestStore!==store)throw new Error('页面或门店已切换');return result;};
     const materialName=id=>materials.find(m=>Number(m.id)===Number(id))?.name || `物料 ${id}`;
-    const ids=(label,name,records)=>'<div data-erp-picker="'+ (name==='supplierId'?'suppliers':'materials') +'"><label class="field">搜索'+label+'<input class="input" data-erp-search maxlength="100" placeholder="输入名称后点击搜索"></label>'+button('搜索','picker-search')+select(label,name,records.map(r=>[r.id,`${r.name} (${r.unit || r.contact || r.id})`]))+'<div class="form-actions">'+button('上一批','picker-previous')+button('下一批','picker-next')+'</div><p role="status" data-erp-picker-status></p></div>';
+    const ids=(label,name,records)=>'<div data-erp-picker="'+ (name==='supplierId'?'suppliers':'materials') +'"><label class="field">搜索'+label+'<input class="input" data-erp-search maxlength="100" placeholder="输入名称，实时显示匹配项"></label>'+button('搜索','picker-search')+select(label,name,records.map(r=>[r.id,`${r.name} (${r.unit || r.contact || r.id})`]))+'<div data-erp-matches class="form-options" hidden></div><div class="form-actions">'+button('上一批','picker-previous')+button('下一批','picker-next')+'</div><p role="status" data-erp-picker-status></p></div>';
     function renderPending() {
       const target=shell.querySelector('[data-erp-pending]');
       target.innerHTML=[...pending.values()].filter(r=>r.store===store).map(r=>`<article class="page-panel"><h2>待核对的未确认请求</h2><p>门店 ${r.store} · ${text(r.action)} · 请求号 ${esc(r.key)}</p><pre>${esc(JSON.stringify(r.payload,null,2))}</pre>${button('核对并重试原请求','retry-pending',r.key)}</article>`).join('');
@@ -61,6 +62,8 @@ window.TakeoutErp = (() => {
         selected.innerHTML='<option value="">请选择</option>'+results.map(r=>`<option value="${esc(r.id)}">${esc(r.name)} (${esc(r.unit || r.contact || r.id)})</option>`).join('');
         if(value && !results.some(r=>String(r.id)===value))selected.insertAdjacentHTML('beforeend',`<option value="${esc(value)}">${esc(label)}</option>`);
         selected.value=value;node.erpPage={...next,rows:results};
+        const matches=node.querySelector('[data-erp-matches]');
+        if(matches && window.TakeoutForms){matches.replaceChildren();matches.hidden=!next.query;for(const item of results){const option=document.createElement('button');option.type='button';window.TakeoutForms.highlight(option,item.name,next.query);option.onclick=()=>{if(selected.disabled)return;selected.value=String(item.id);selected.dispatchEvent(new Event('change',{bubbles:true}));matches.hidden=true;};matches.append(option);}}
         status.textContent=`本批 ${results.length} 条，已选项保持；可继续搜索或翻页。`;
       }catch(e){if(node.isConnected && current===node.erpVersion)status.textContent=e.message;}
     }
@@ -134,6 +137,11 @@ window.TakeoutErp = (() => {
       }finally{busy=false;controls.forEach(c=>{if(c.isConnected)c.disabled=false;});}
     }
 
+    shell.addEventListener('input',e=>{
+      if(!e.target.matches('[data-erp-search]')||e.isComposing)return;
+      const picker=e.target.closest('[data-erp-picker]');clearTimeout(picker.searchTimer);picker.erpVersion=(picker.erpVersion||0)+1;
+      picker.searchTimer=setTimeout(()=>{if(picker.isConnected)void pickerPage(picker,'picker-search');},300);
+    });
     shell.addEventListener('submit',async e=>{
       const f=e.target.closest('[data-erp-form]');if(!f)return;e.preventDefault();
       if(f.dataset.uncertain){const old=JSON.parse(f.dataset.uncertain);return write(old.action,old.payload,f);}
@@ -166,14 +174,14 @@ window.TakeoutErp = (() => {
         if(a==='clear-supplier'){supplierFilter=0;before=0;history=[];return refresh();}
         if(a==='supplier-status'){const [supplier,enabled]=id.split(':');return write(a,{id:Number(supplier),enabled:enabled==='1'});}
         if(['payment-correct','reverse-payment','supplier-refund'].includes(a)){
-          const reason=window.prompt('请填写原因。仅追加审计记录，原付款保留：');if(!reason?.trim())return;
+          const reason=await requestInput('请填写原因。仅追加审计记录，原付款保留：');if(!reason?.trim())return;
           const payload={id:Number(id),reason};
-          if(a!=='reverse-payment'){payload.reference=window.prompt(a==='supplier-refund'?'实际到账的唯一退款凭证号：':'正确的新付款凭证号：');if(!payload.reference?.trim())return;}
-          if(a==='supplier-refund'){payload.amount=window.prompt('实际收到的供应商退款金额（元，最多两位小数）：');if(!payload.amount?.trim())return;}
+          if(a!=='reverse-payment'){payload.reference=await requestInput(a==='supplier-refund'?'实际到账的唯一退款凭证号：':'正确的新付款凭证号：');if(!payload.reference?.trim())return;}
+          if(a==='supplier-refund'){payload.amount=await requestInput('实际收到的供应商退款金额（元，最多两位小数）：');if(!payload.amount?.trim())return;}
           if(!window.confirm(a==='reverse-payment'?'确认原付款登记有误？将冲销其尚未冲退余额；实际收到退款请选择供应商退款。':`请核对门店 ${store}、付款 ${id}：\n${JSON.stringify(payload,null,2)}`))return;
           return write(a,payload);
         }
-        if(['reverse','reverse-receipt'].includes(a)){const reason=window.prompt('请填写冲销原因。生效后追加反向流水，保留原记录：');if(!reason?.trim())return;return write(a,{id:Number(id),reason});}
+        if(['reverse','reverse-receipt'].includes(a)){const reason=await requestInput('请填写冲销原因。生效后追加反向流水，保留原记录：');if(!reason?.trim())return;return write(a,{id:Number(id),reason});}
         if(['approve','reject'].includes(a))return write('review',{id:Number(id),approve:a==='approve'});
         if(['submit','confirm','close'].includes(a)){if(a==='close' && !window.confirm('关闭后不能继续收货，已收货应付及付款记录保留。确定关闭？'))return;return write(a,{id:Number(id)});}
       }catch(error){if(active())toast(error.message,true);}

@@ -42,7 +42,7 @@ public class LocationController {
         var factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(4));
         factory.setReadTimeout(Duration.ofSeconds(8));
-        return RestClient.builder().baseUrl("https://restapi.amap.com").requestFactory(factory).build();
+        return com.example.takeout.common.JsonRestClients.builder().baseUrl("https://restapi.amap.com").requestFactory(factory).build();
     }
 
     /** Browser coordinates are WGS84; convert before querying Amap or saving GCJ02 data. */
@@ -103,6 +103,17 @@ public class LocationController {
         if (value.isEmpty() || value.length() > 160) throw new BizException("地址关键词无效");
         return proxy("/v3/geocode/geo", UriComponentsBuilder.newInstance()
                 .queryParam("address", value).queryParam("output", "JSON"));
+    }
+
+    /** 返回下一层行政区，省、市、区均使用地图服务的真实编码。 */
+    @GetMapping(value = "/districts", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ApiResponse<JsonNode> districts(@RequestParam(defaultValue = "中国") String parent) {
+        if (!"中国".equals(parent) && !parent.matches("[0-9]{6}")) {
+            throw new BizException("行政区编码无效");
+        }
+        return ApiResponse.ok(checked("/v3/config/district", UriComponentsBuilder.newInstance()
+                .queryParam("keywords", parent).queryParam("subdistrict", 1)
+                .queryParam("extensions", "base")));
     }
 
     private ApiResponse<JsonNode> proxy(String path, UriComponentsBuilder builder) {

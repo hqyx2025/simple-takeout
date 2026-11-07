@@ -1,3 +1,4 @@
+import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppTextAreaStyle } from '../common/theme/AppTheme'
 /**
  * 商户评价管理页
@@ -216,15 +217,17 @@ export struct MerchantReviewsPage {
   ReplyDialog() {
     Column() {
       Column({ space: SPACING.MD }) {
-        Text('回复评价')
-          .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(MODULE_COLOR.MERCHANT)
-          .width('100%').textAlign(TextAlign.Center)
-        Text('回复会展示在用户评价下方')
-          .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%')
-        TextArea({ placeholder: '请输入回复内容，最多200字', text: this.replyText })
-          .attributeModifier(new AppTextAreaStyle())
-          .width('100%').height(100).maxLength(200)
-          .onChange((value: string) => { this.replyText = value })
+
+
+        FormInput({ label: '回复内容',
+          value: this.replyText,
+          placeholder: '请输入回复内容，最多200字',
+          maxLength: 200,
+          onChange: (value: string) => { this.replyText = value },
+          fieldId: 'MerchantReviewsPage-replyText',
+          multiline: true,
+          inputHeight: 100,
+          required: true }).width('100%')
         Row({ space: SPACING.MD }) {
           Button('取消')
             .attributeModifier(new AppButtonStyle())

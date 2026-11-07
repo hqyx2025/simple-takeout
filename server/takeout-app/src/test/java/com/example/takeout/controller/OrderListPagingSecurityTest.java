@@ -31,4 +31,16 @@ class OrderListPagingSecurityTest {
 
         assertEquals(403, error.getCode());
     }
+
+    @Test
+    void onlyRiderRoleCanReadPoolPage() {
+        var controller = new RiderController(mock(RiderService.class), mock(OrderService.class));
+        for (int role : new int[]{0, 1, 2}) {
+            BizException error = assertThrows(BizException.class,
+                    () -> controller.poolPage(9, role, 1, 30));
+            assertEquals(403, error.getCode());
+            assertEquals(403, assertThrows(BizException.class,
+                    () -> controller.poolNext(9, role, 0, 30)).getCode());
+        }
+    }
 }

@@ -1,6 +1,7 @@
 package com.example.takeout.service.mq;
 
 import com.example.takeout.common.InstanceId;
+import com.example.takeout.common.TraceContext;
 import com.example.takeout.service.PushNotificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -111,6 +112,9 @@ public class DomainEventConsumer {
                 return;
             }
             for (MapRecord<String, Object, Object> record : records) {
+                String previous = TraceContext.current();
+                String trace = TraceContext.normalize(str(record.getValue().get("traceId")));
+                TraceContext.bind(trace == null ? "event-" + record.getId() : trace);
                 try {
                     if (handle(redis, record)) {
                         redis.opsForStream().acknowledge(DomainEventPublisher.STREAM_KEY, GROUP, record.getId());
@@ -118,6 +122,9 @@ public class DomainEventConsumer {
                 } catch (Exception e) {
                     // 单条处理失败不 ACK，留待下次重读；不阻塞其余事件
                     log.warn("[事件消费] 处理失败 id={}", record.getId(), e);
+                } finally {
+                    TraceContext.clear();
+                    TraceContext.bind(previous);
                 }
             }
         } catch (Exception e) {

@@ -4,7 +4,7 @@ import java.util.List;
 
 /**
  * 订单（status：0待付款 1待接单 2制作中 3配送中 4已送达 5已取消 6退款中）
- * items/address 以 JSON 字符串存储，DTO 输出转为结构体
+ * items 为 JSON；address 在领域对象中为 JSON，由 OrderDao 加密存储并兼容读取，DTO 输出转结构体
  */
 public record Order(
         long id,

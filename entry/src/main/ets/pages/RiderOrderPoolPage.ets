@@ -5,10 +5,12 @@ import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 import { AppMotion } from '../common/theme/AppMotion'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
-import { Order, OrderPageData, Rider, User, UserRole } from '../model/Models'
+import { Order, OrderPageData, Rider, RiderPoolSlice, User, UserRole } from '../model/Models'
+import { OrderDataSource } from '../model/OrderDataSource'
 import { canOrderAction } from '../service/OrderStatus'
 import { grabOrderRemote, getLastRemoteErrorMessage, fetchRiderProfileRemote, reportRiderLocationRemote, startRiderLocationTimer } from '../service/AppStorageManager'
-import { fetchRiderOrdersPageResultApi, fetchRiderPoolResultApi } from '../service/api/RiderApi'
+import { fetchRiderOrdersPageResultApi, fetchRiderPoolSliceResultApi } from '../service/api/RiderApi'
+import { getAuthSessionEpoch } from '../service/HttpClient'
 import { logInfo } from '../service/AppLogger'
 import { PageHeader } from '../components/PageHeader'
 
@@ -30,16 +32,25 @@ export struct RiderOrderPoolPage {
       .opacity(0)
   }
 
+  private orderDataSource: OrderDataSource = new OrderDataSource()
   @State orders: Order[] = []
   @State loading: boolean = false
   @State loadFailed: boolean = false
+  @State loadingMore: boolean = false
+  @State moreFailed: boolean = false
+  @State hasMore: boolean = false
+  private nextAfterId: number = 0
   @State grabbingOrderId: number = 0
   @State rider: Rider | null = null
-  @StorageLink('isLoggedIn') loggedIn: boolean = false
-  @StorageLink('user') user: User = { id: 0, username: '', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER, balance: 0, coupons: [], orders: [], storeIds: [] }
+  @StorageLink('isLoggedIn') @Watch('onSessionChanged') loggedIn: boolean = false
+  @StorageLink('user') @Watch('onSessionChanged') user: User = { id: 0, username: '', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER, balance: 0, coupons: [], orders: [], storeIds: [] }
   private poolRequestVersion: number = 0
+  private pageActive: boolean = false
+  private ownerId: number = 0
 
   async aboutToAppear(): Promise<void> {
+    this.pageActive = true
+    this.ownerId = this.user.id
     logInfo('Page', '进入抢单大厅 RiderOrderPoolPage')
     if (!this.loggedIn || this.user.role !== UserRole.RIDER) {
       promptAction.showToast({ message: '仅骑手账号可以进入抢单大厅', duration: 1600 })
@@ -53,24 +64,75 @@ export struct RiderOrderPoolPage {
     const requestVersion: number = this.poolRequestVersion + 1
     this.poolRequestVersion = requestVersion
     this.loading = true
+    this.loadingMore = false
+    this.moreFailed = false
     this.loadFailed = false
+    const epoch: number = getAuthSessionEpoch()
     try {
       const rider: Rider | null = await fetchRiderProfileRemote(false)
-      const orders: Order[] | null = await fetchRiderPoolResultApi(false)
-      if (requestVersion !== this.poolRequestVersion) {
+      if (!this.canApplyResponse(requestVersion, epoch)) { return false }
+      const result: RiderPoolSlice | null = await fetchRiderPoolSliceResultApi(0, 30, false)
+      if (!this.canApplyResponse(requestVersion, epoch)) {
         return false
       }
-      if (rider === null || orders === null) {
+      if (rider === null || result === null) {
         this.loadFailed = true
         return false
       }
       this.rider = rider
-      this.orders = orders
+      this.orders = result.list
+      this.orderDataSource.setData(this.orders)
+      this.nextAfterId = result.nextAfterId
+      this.hasMore = result.hasMore
       return true
     } finally {
       if (requestVersion === this.poolRequestVersion) {
         this.loading = false
       }
+    }
+  }
+
+  aboutToDisappear(): void {
+    this.pageActive = false
+    this.poolRequestVersion += 1
+    this.grabbingOrderId = 0
+  }
+
+  private canApplyResponse(version: number, epoch: number): boolean {
+    return this.pageActive && version === this.poolRequestVersion && epoch === getAuthSessionEpoch() &&
+      this.loggedIn && this.user.id === this.ownerId && this.user.role === UserRole.RIDER
+  }
+
+  private onSessionChanged(): void {
+    if (this.loggedIn && this.user.id === this.ownerId && this.user.role === UserRole.RIDER) { return }
+    this.poolRequestVersion += 1
+    this.orders = []
+    this.orderDataSource.setData([])
+    this.rider = null
+    this.hasMore = false
+    this.nextAfterId = 0
+    this.loading = false
+    this.loadingMore = false
+    this.grabbingOrderId = 0
+  }
+
+  private async loadMore(): Promise<void> {
+    if (this.loading || this.loadingMore || !this.hasMore) { return }
+    const version: number = this.poolRequestVersion
+    const epoch: number = getAuthSessionEpoch()
+    this.loadingMore = true
+    this.moreFailed = false
+    try {
+      const result: RiderPoolSlice | null = await fetchRiderPoolSliceResultApi(this.nextAfterId, 30, false)
+      if (!this.canApplyResponse(version, epoch)) { return }
+      if (result === null) { this.moreFailed = true; return }
+      const existingIds: Set<number> = new Set<number>(this.orders.map((order: Order) => order.id))
+      this.orders = this.orders.concat(result.list.filter((order: Order) => !existingIds.has(order.id)))
+      this.orderDataSource.setData(this.orders)
+      this.nextAfterId = result.nextAfterId
+      this.hasMore = result.hasMore
+    } finally {
+      if (version === this.poolRequestVersion) { this.loadingMore = false }
     }
   }
 
@@ -102,6 +164,9 @@ export struct RiderOrderPoolPage {
   }
 
   private async grab(order: Order): Promise<void> {
+    const version: number = this.poolRequestVersion
+    const epoch: number = getAuthSessionEpoch()
+    if (!this.canApplyResponse(version, epoch)) { return }
     const current: Order | undefined = this.orders.find((item: Order) => item.id === order.id)
     if (current === undefined || !canOrderAction(current, 'RIDER_GRAB', true)) { return }
     if (this.grabbingOrderId !== 0) {
@@ -116,11 +181,13 @@ export struct RiderOrderPoolPage {
       } catch (_) {
         ok = false
       }
+      if (!this.canApplyResponse(version, epoch)) { return }
       if (ok) {
         this.finishGrab()
       } else {
         const errorMessage: string = getLastRemoteErrorMessage()
         const result: OrderPageData | null = await fetchRiderOrdersPageResultApi(1, 30, false)
+        if (!this.canApplyResponse(version, epoch)) { return }
         const assigned: Order | undefined = result === null ? undefined
           : result.list.find((item: Order) => item.id === order.id && item.status >= 2 && item.status <= 4)
         if (assigned !== undefined) {
@@ -132,11 +199,12 @@ export struct RiderOrderPoolPage {
             message: errorMessage === '' ? '手慢了，该订单已被其他骑手接走' : errorMessage,
             duration: 2500
           })
+          this.grabbingOrderId = 0
           await this.loadPool()
         }
       }
     } finally {
-      this.grabbingOrderId = 0
+      if (this.canApplyResponse(version, epoch)) { this.grabbingOrderId = 0 }
     }
   }
 
@@ -149,7 +217,7 @@ export struct RiderOrderPoolPage {
 
   build() {
     Column() {
-      PageHeader({ title: '抢单大厅', backText: '‹ 返回', backId: 'rider-pool-back', titleColor: COLORS.TEXT_PRIMARY, headerBgColor: COLORS.BG_PRIMARY, actionLabel: '刷新', onAction: () => { this.loadPool() }, onBack: () => { router.back() } })
+      PageHeader({ title: '抢单大厅', backText: '‹ 返回', backId: 'rider-pool-back', titleColor: COLORS.TEXT_PRIMARY, headerBgColor: COLORS.BG_PRIMARY, actionLabel: '刷新', actionEnabled: !this.loading && this.grabbingOrderId === 0, onAction: () => { this.loadPool() }, onBack: () => { router.back() } })
 
       if (this.rangeText() !== '') {
         Text(this.rangeText())
@@ -186,13 +254,22 @@ export struct RiderOrderPoolPage {
       } else {
         // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
         List({ space: SPACING.SM }) {
-          ForEach(this.orders, (order: Order) => {
+          LazyForEach(this.orderDataSource, (order: Order) => {
             ListItem() {
               this.PoolCard(order)
             }
           }, (order: Order) => order.id.toString())
+          if (this.hasMore) {
+            ListItem() {
+              Button(this.loadingMore ? '加载中…' : this.moreFailed ? '加载失败，点击重试' : '加载更多')
+                .attributeModifier(new AppButtonStyle()).width('100%').height(44)
+                .enabled(!this.loadingMore).id('rider-pool-load-more')
+                .onClick(() => { this.loadMore() })
+            }
+          }
         }
         .width('100%').layoutWeight(1).scrollBar(BarState.Off)
+        .cachedCount(3)
         .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.XXL })
       }
     }

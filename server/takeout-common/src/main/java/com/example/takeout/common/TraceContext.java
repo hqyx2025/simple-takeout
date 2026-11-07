@@ -30,6 +30,11 @@ public final class TraceContext {
     private TraceContext() {
     }
 
+    public static String resolve(String incoming) {
+        String normalized = normalize(incoming);
+        return normalized == null ? java.util.UUID.randomUUID().toString().replace("-", "") : normalized;
+    }
+
     /**
      * 归一化上游传入的 traceId。
      *

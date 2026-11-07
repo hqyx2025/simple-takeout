@@ -128,7 +128,7 @@ export async function searchNearbyAddress(position: GeoPosition, page: number = 
  * 相比 WebView 内的输入提示，该接口可以直接将“中关村”等地名转换为坐标，
  * 由页面复用顶部地图组件进行定位。
  */
-export async function searchAddress(keyword: string): Promise<AddressSearchResult[]> {
+export async function searchAddress(keyword: string, showErrorToast: boolean = true): Promise<AddressSearchResult[]> {
   const value: string = keyword.trim()
   if (value === '') {
     return []
@@ -136,7 +136,7 @@ export async function searchAddress(keyword: string): Promise<AddressSearchResul
   try {
     // POI 文本搜索优先返回“中关村”这类地名/地标，而不是只返回道路级地理编码。
     const placeResponse: ApiResponse<AmapPoiResponse> = await get<AmapPoiResponse>(
-      `/api/location/search?keyword=${encodeURIComponent(value)}`)
+      `/api/location/search?keyword=${encodeURIComponent(value)}`, showErrorToast)
     const placeData: AmapPoiResponse = placeResponse.data
     const placeResults: AddressSearchResult[] = []
     if (placeData.status === '1' && placeData.pois !== undefined) {
@@ -163,7 +163,7 @@ export async function searchAddress(keyword: string): Promise<AddressSearchResul
 
     // POI 无结果时再尝试地理编码，兼容道路、门牌号等纯地址关键词。
     const geocodeResponse: ApiResponse<AmapGeocodeResponse> = await get<AmapGeocodeResponse>(
-      `/api/location/geocode?address=${encodeURIComponent(value)}`)
+      `/api/location/geocode?address=${encodeURIComponent(value)}`, showErrorToast)
     const data: AmapGeocodeResponse = geocodeResponse.data
     if (data.status !== '1' || data.geocodes === undefined) {
       logWarn('Location', `地址搜索无结果 keyword=${value} info=${data.info}`)

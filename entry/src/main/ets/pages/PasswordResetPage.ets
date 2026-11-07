@@ -192,11 +192,11 @@ export struct PasswordResetPage {
       Scroll() {
         Column() {
           Column({ space: 8 }) {
-            FormInput({ compact: true, label: '绑定手机号', placeholder: '请输入11位手机号', value: this.phone,
+            FormInput({ required: true, compact: true, label: '绑定手机号', placeholder: '请输入11位手机号', value: this.phone,
               inputType: InputType.PhoneNumber, maxLength: 11, fieldId: 'password-reset-phone', isEnabled: !this.busy && !this.sendingCode,
               errorMessage: this.errorField === 'password-reset-phone' ? this.errorMsg : '',
               onChange: (value: string) => { this.phone = value; this.code = ''; this.clearFeedback() } })
-            FormInput({ compact: true, label: '绑定邮箱', placeholder: '请输入邮箱', value: this.email,
+            FormInput({ required: true, compact: true, label: '绑定邮箱', placeholder: '请输入邮箱', value: this.email,
               inputType: InputType.Email, fieldId: 'password-reset-email', isEnabled: !this.busy && !this.sendingCode,
               errorMessage: this.errorField === 'password-reset-email' ? this.errorMsg : '',
               onChange: (value: string) => { this.email = value; this.code = ''; this.clearFeedback() } })
@@ -204,28 +204,32 @@ export struct PasswordResetPage {
               disabled: this.busy || this.sendingCode,
               errorMessage: this.errorField === 'email-captcha-input' ? this.errorMsg : '' })
             Column({ space: 4 }) {
-              Text('邮箱验证码').fontSize(13).fontColor(AppTheme.TEXT).width('100%')
               Row({ space: 8 }) {
-                TextInput({ text: this.code, placeholder: '请输入 6 位验证码' }).attributeModifier(new AppInputStyle())
-                  .height(44).type(InputType.Number).maxLength(6).layoutWeight(1).id('password-reset-code')
-                  .enabled(!this.busy && !this.sendingCode)
-                  .onChange((value: string) => { this.code = value; this.clearFeedback() })
+                FormInput({ label: '邮箱验证码',
+                  value: this.code,
+                  placeholder: '请输入 6 位验证码',
+                  inputType: InputType.Number,
+                  maxLength: 6,
+                  isEnabled: !this.busy && !this.sendingCode,
+                  fieldId: 'password-reset-code',
+          errorMessage: this.errorField === 'password-reset-code' ? this.errorMsg : '',
+                  onChange: (value: string) => { this.code = value; this.clearFeedback() },
+                  oneTimeCode: true,
+                  helpText: '6 位验证码，可整段粘贴或使用系统自动填入',
+                  required: true }).layoutWeight(1)
                 Button(this.sendingCode ? '发送中…' : this.cooldownSeconds > 0 ? this.cooldownSeconds + '秒后重发' : '获取验证码')
                   .attributeModifier(new AppButtonStyle()).height(44).width(120)
                   .enabled(!this.busy && !this.sendingCode && this.cooldownSeconds === 0)
                   .id('password-reset-send-code').onClick(() => { this.sendCode() })
               }.width('100%')
-              if (this.errorMsg && this.errorField === 'password-reset-code') {
-                Text(this.errorMsg).fontSize(13).fontColor(AppTheme.ERROR).width('100%').id('password-reset-code-error')
-              }
             }.width('100%')
-            FormInput({ compact: true, label: this.mode === 'login' ? '新登录密码' : '新支付密码',
+            FormInput({ required: true, compact: true, label: this.mode === 'login' ? '新登录密码' : '新支付密码',
               placeholder: this.mode === 'login' ? '请输入 6 至 64 位密码' : '请输入 6 位数字', value: this.newPassword,
               inputType: InputType.Password, maxLength: this.mode === 'payment' ? 6 : 64, passwordRules: this.mode === 'login',
               fieldId: 'password-reset-new', isEnabled: !this.busy && !this.sendingCode,
               errorMessage: this.errorField === 'password-reset-new' ? this.errorMsg : '',
               onChange: (value: string) => { this.newPassword = this.mode === 'payment' ? value.replace(/[^0-9]/g, '') : value; this.clearFeedback() } })
-            FormInput({ compact: true, label: '确认新密码', placeholder: '请再次输入相同密码', value: this.confirmPassword,
+            FormInput({ required: true, compact: true, label: '确认新密码', placeholder: '请再次输入相同密码', value: this.confirmPassword, validator: (value: string): string => value === this.newPassword ? '' : '两次输入的密码不一致',
               inputType: InputType.Password, maxLength: this.mode === 'payment' ? 6 : 64,
               fieldId: 'password-reset-confirm', isEnabled: !this.busy && !this.sendingCode,
               errorMessage: this.errorField === 'password-reset-confirm' ? this.errorMsg : '',

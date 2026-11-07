@@ -2,6 +2,7 @@ import abilityTest from './Ability.test';
 import storeReviewFlowTest from './StoreReviewFlow.test';
 import campusAcceptanceTest from './CampusAcceptance.test';
 import boundaryFlowTest from './BoundaryFlow.test';
+import narrowScreenFlowTest from './NarrowScreenFlow.test';
 import allPagesReviewTest from './AllPagesReview.test';
 import loginFlowTest from './LoginFlow.test';
 import authLayoutTest from './AuthLayout.test';
@@ -44,6 +45,7 @@ export default function testsuite() {
   storeReviewFlowTest();
   campusAcceptanceTest();
   boundaryFlowTest();
+  narrowScreenFlowTest();
   probeTest();
   importProbeTest();
   authTokenStorageTest();

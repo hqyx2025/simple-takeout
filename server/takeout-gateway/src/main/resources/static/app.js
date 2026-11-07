@@ -1,5 +1,6 @@
 (() => {
   'use strict';
+  const requestInput = async (label, value = '') => window.TakeoutForms ? window.TakeoutForms.prompt(label, value) : window.prompt(label, value);
   // 清除旧版长期凭证；当前标签页会话通过 sessionStorage 跨刷新恢复。
   localStorage.removeItem('takeout.demo.token'); localStorage.removeItem('takeout.demo.refresh');
   const SESSION_KEY = 'takeout.session';
@@ -140,6 +141,23 @@
   };
   const get = (path) => api(path);
   const send = (path, method, data) => api(path, { method, body: data === undefined ? undefined : JSON.stringify(data) });
+  // XMLHttpRequest exposes real per-file upload progress; preserve the same auth/session boundary as api().
+  const uploadWithProgress = (file, progress, cancellation) => new Promise((resolve, reject) => {
+    const token=state.token,request=new XMLHttpRequest(),data=new FormData();data.append('file',file);
+    request.open('POST',TakeoutUrls.localPath('/api/upload',document.baseURI));
+    request.setRequestHeader('Authorization',`Bearer ${token}`);request.timeout=60000;
+    cancellation(()=>request.abort());
+    request.upload.onprogress=event=>{if(event.lengthComputable)progress(Math.min(99,Math.floor(event.loaded*100/event.total)));};
+    request.onerror=()=>reject(new Error('图片上传失败，请检查网络后重试'));
+    request.ontimeout=()=>reject(new Error('图片上传超时，请重试'));
+    request.onabort=()=>reject(new Error('已取消上传'));
+    request.onload=()=>{
+      if(token!==state.token){reject(staleRender);return;}
+      if(request.status===401){resetAccountState();renderShell();void renderPage();reject(new Error('登录已过期，请重新登录'));return;}
+      try{const result=JSON.parse(request.responseText);if(request.status!==200||result.code!==200)throw new Error(result.message||'图片上传失败');resolve(result.data);}catch(error){reject(error);}
+    };
+    request.send(data);
+  });
   const secureLocationLink = () => !window.isSecureContext ? '<a class="btn" href="https://hqyx.website/takeout/">打开 HTTPS 精确定位入口</a>' : '';
   const locationNotice = () => `<section class="surface section" data-browse-location>
     <div class="row-between location-heading"><div><strong>${esc(state.locationLabel || '全部店铺')}</strong><div class="help-text">展示全部营业店铺，位置和距离不影响浏览。下单时需定位收货地址，超出商家配送范围无法下单。</div></div><div class="td-actions"><button class="btn primary" type="button" data-action="location-change" aria-expanded="false" aria-controls="browseLocationPicker">更换位置</button>${btn('获取当前位置','locate-device')}${state.locationLabel ? btn('清除位置','location-clear') : ''}</div></div>
@@ -151,7 +169,7 @@
       <div class="location-results" data-location-results aria-live="polite"></div>
     </form></section>`;
   async function searchPlaces(form) {
-    const keyword = form.elements.locationKeyword.value.trim();
+    const keyword = ((form.dataset.region || '') + form.elements.locationKeyword.value.trim()).slice(0,80);
     const results = form.querySelector('[data-location-results]');
     const token = state.token;
     const request = String(Number(form.dataset.locationRequest || 0) + 1);
@@ -167,6 +185,7 @@
       const places = (Array.isArray(data.pois) ? data.pois : []).map(TakeoutLocation.place).filter(Boolean);
       const action = form.dataset.form === 'browse-location' ? 'location-select' : 'address-select';
       results.innerHTML = places.map(place => `<button class="btn location-result" type="button" data-action="${action}" data-address="${esc(place.address)}" data-longitude="${place.longitude}" data-latitude="${place.latitude}">${esc(place.address)}</button>`).join('') || '<p class="help-text">未找到可定位地点，请补充城市名称后重新搜索。</p>';
+      results.querySelectorAll('button').forEach(button=>window.TakeoutForms?.highlight(button,button.textContent,form.elements.locationKeyword.value));
     } catch (error) { if (active()) results.textContent = error.message || '地点搜索失败，请稍后重试。'; }
     finally { buttons.forEach(button => { button.disabled = false; }); }
   }
@@ -193,7 +212,7 @@
           const address = form.dataset.form === 'address'
             ? form.elements.mapAddress
             : form.elements.detail || form.elements.address;
-          if (address) address.value = location.address;
+          if (address) { address.value = location.address; address.closest('.floating-control')?.classList.add('has-value'); }
           if (form.dataset.form === 'address') form.dataset.coordinateAddress = location.address;
           status.textContent = `已填入当前位置${Number.isFinite(position.accuracy) ? `，设备精度约 ${Math.ceil(position.accuracy)} 米` : ''}。请核对地址并补充门牌号，点击保存后生效。`;
         } else {
@@ -279,6 +298,8 @@
   const evidenceLinks = (label, images) => (images || []).filter(url => typeof url === 'string' && /^\/uploads\/[^?#]+$/.test(url)).map((url,index) => `<a class="btn small" href="${esc(assetURL(url))}" target="_blank" rel="noopener">${esc(label)} ${index+1}</a>`).join('');
   const uploadEvidence = async (form, active) => {
     const input = form.querySelector('[name="evidenceFiles"]');
+    const managed=window.TakeoutForms?.uploads.get(input);
+    if(managed){const urls=await managed.send(uploadWithProgress,active);if(urls.some(url=>!/^\/uploads\/[^?#]+$/.test(url||'')))throw new Error('图片地址无效，请重试');return urls;}
     const files = Array.from(input?.files || []);
     if (files.length > 9) throw new Error('证据图片最多9张');
     const images = [];
@@ -521,13 +542,22 @@
     const dialog = document.createElement('dialog');
     dialog.className = 'dialog';
     dialog.setAttribute('aria-labelledby', 'reviewDialogTitle');
-    dialog.innerHTML = `<form method="dialog" class="field-stack"><h2 id="reviewDialogTitle">评价商品</h2><label class="field">商品<select class="select" name="goodsId" required>${goods.map(([id,name])=>`<option value="${id}">${esc(name)}</option>`).join('')}</select></label><label class="field">评分<select class="select" name="rating" required><option value="">请选择 1–5 星</option>${[1,2,3,4,5].map(rating=>`<option value="${rating}">${rating} 星</option>`).join('')}</select></label><fieldset><legend>标签（可选）</legend><div class="toolbar">${['味道好','分量足','包装好','需要改进'].map(tag=>`<label><input type="checkbox" name="tags" value="${tag}"> ${tag}</label>`).join('')}</div></fieldset><label class="field">评价内容（可选）<textarea class="textarea" name="content" maxlength="512" placeholder="说说这道商品的实际体验"></textarea></label><div class="form-actions"><button class="btn" value="cancel" formnovalidate>取消</button><button class="btn primary" value="submit">提交评价</button></div></form>`;
-    dialog.addEventListener('close', () => {
+    dialog.innerHTML = `<form method="dialog" class="field-stack"><h2 id="reviewDialogTitle">评价商品</h2><label class="field">商品<select class="select" name="goodsId" required>${goods.map(([id,name])=>`<option value="${id}">${esc(name)}</option>`).join('')}</select></label><label class="field">评分<select class="select" name="rating" required><option value="">请选择 1–5 星</option>${[1,2,3,4,5].map(rating=>`<option value="${rating}">${rating} 星</option>`).join('')}</select></label><fieldset><legend>标签（可选）</legend><div class="toolbar">${['味道好','分量足','包装好','需要改进'].map(tag=>`<label><input type="checkbox" name="tags" value="${tag}"> ${tag}</label>`).join('')}</div></fieldset><label class="field">评价内容（可选）<textarea class="textarea" name="content" maxlength="512" placeholder="说说这道商品的实际体验"></textarea></label><label class="field">评价图片（选填）<input type="file" name="evidenceFiles" multiple data-max-files="3"></label><p class="form-error" data-review-upload-error role="alert"></p><div class="form-actions"><button class="btn" value="cancel" formnovalidate>取消</button><button class="btn primary" value="submit">提交评价</button></div></form>`;
+    let uploadedImages=[];
+    const form=dialog.querySelector('form'),token=state.token;
+    form.addEventListener('submit',async event=>{
+      if(event.submitter?.value==='cancel')return;
+      event.preventDefault();const submit=form.querySelector('button.primary');if(submit.disabled)return;submit.disabled=true;
+      try{uploadedImages=await uploadEvidence(form,()=>dialog.isConnected&&state.token===token);if(dialog.isConnected&&state.token===token)dialog.close('submit');}
+      catch(error){if(dialog.isConnected)form.querySelector('[data-review-upload-error]').textContent=error.message||'上传失败，请重试';}
+      finally{submit.disabled=false;}
+    });
+    dialog.addEventListener('close' , () => {
       if (dialog.returnValue !== 'submit') { dialog.remove(); resolve(null); return; }
       const data = new FormData(dialog.querySelector('form'));
       const result = { goodsId: Number(data.get('goodsId')), rating: Number(data.get('rating')),
         content: String(data.get('content') || '').trim(), tags: data.getAll('tags').map(String),
-        images: [], anonymous: 0 };
+        images: uploadedImages, anonymous: 0 };
       dialog.remove(); resolve(result);
     }, { once: true });
     document.body.append(dialog); dialog.showModal(); dialog.querySelector('[name="goodsId"]')?.focus();
@@ -658,7 +688,7 @@
     $('authStrength').hidden = !value;
     $('authStrength').dataset.level = String(strength);
     $('authStrengthLabel').textContent = invalid ? '字符无效' : ['', '弱', '中', '强'][strength];
-    $('authPasswordRules').hidden = document.activeElement !== $('authPassword');
+    $('authPasswordRules').hidden = true;
   };
   const openAuth = (mode = 'login', route = 'push') => {
     if (!['login', 'email', 'register'].includes(mode)) mode = 'login';
@@ -1260,6 +1290,9 @@
       if (submitter?.disabled) return;
       if (submitter) submitter.disabled = true;
       try {
+        const imageInput=form.querySelector('[name="imageFile"]');
+        const uploader=window.TakeoutForms?.uploads.get(imageInput);
+        if(uploader?.items().length){const urls=await uploader.send(uploadWithProgress,()=>form.isConnected&&isCurrentContext(context));data.image=urls[0]||'';}
         if (name === 'browse-location') { await searchPlaces(form); }
         else if (name === 'profile') { state.user=await formSend('/api/auth/me','PUT',{username:data.username,phone:data.phone,email:data.email||'',currentPassword:data.currentPassword||''}); toast('资料已保存'); renderShell(); await renderPage(); }
         else if (name === 'password') { await formSend('/api/auth/password','PUT',{oldPassword:data.oldPassword,newPassword:data.newPassword}); toast('密码已修改，请重新登录'); await logout(); }
@@ -1453,7 +1486,7 @@
         }
       }
       if (action === 'pay') { const paymentPassword=await guarded(requestPaymentPassword(),context,connected);if(paymentPassword===null)return;await actionSend(`/api/orders/${id}/pay?channel=BALANCE&mode=QR`,'POST',{paymentPassword});toast('余额支付成功');return renderPage(); }
-      if (action === 'alipay-pay') { const result=await actionSend(`/api/orders/${id}/pay?channel=ALIPAY&mode=QR`,'POST'); if(result?.paymentUrl){ window.prompt('请在支付宝沙箱中扫描或复制此支付链接，支付后回到订单点击刷新：',result.paymentUrl); } else { toast('支付宝沙箱预支付已创建，请刷新订单'); } return renderPage(); }
+      if (action === 'alipay-pay') { const result=await actionSend(`/api/orders/${id}/pay?channel=ALIPAY&mode=QR`,'POST'); if(result?.paymentUrl){ await requestInput('请在支付宝沙箱中扫描或复制此支付链接，支付后回到订单点击刷新：',result.paymentUrl); } else { toast('支付宝沙箱预支付已创建，请刷新订单'); } return renderPage(); }
       if (action === 'alipay-query') { const result=await actionSend(`/api/orders/${id}/payment/query`,'POST'); toast(result?.status===1?'支付宝支付已确认':'支付宝尚未完成支付'); return renderPage(); }
       if (action === 'cancel-order') {
         const order=state.orders.find(item=>Number(item.id)===Number(id));
@@ -1481,19 +1514,21 @@
         const form = el.closest('form');
         state.locationVersion++; state.locating = false;
         form.querySelector('[data-action="locate-device"]').disabled = false;
-        form.elements.mapAddress.value = el.dataset.address;
+        const addressInput=form.elements.mapAddress || form.elements.address;
+        addressInput.value = el.dataset.address;
+        addressInput.dispatchEvent(new Event('input',{bubbles:true}));
         form.dataset.coordinateAddress = el.dataset.address;
         const coordinate = TakeoutLocation.coordinates(el.dataset.longitude, el.dataset.latitude);
         form.elements.latitude.value = coordinate?.latitude ?? ''; form.elements.longitude.value = coordinate?.longitude ?? '';
         form.querySelector('[data-location-results]').textContent = '已选择地图位置，请继续填写楼栋、楼层与门牌。';
-        form.elements.doorDetail.focus(); return;
+        (form.elements.doorDetail || addressInput).focus(); return;
       }
       if (action === 'address-edit') { state.editAddress=state.addresses.find(a=>Number(a.id)===Number(id))||{};return renderPage(); }
       if (action === 'address-form-close') { state.editAddress=null;return renderPage(); }
       if (action === 'address-default') { await actionSend(`/api/addresses/${id}/default`,'PUT');toast('默认地址已更新');return renderPage(); }
       if (action === 'address-delete') { await actionSend(`/api/addresses/${id}`,'DELETE');toast('地址已删除');return renderPage(); }
-      if (action === 'bank-add') { const bankName=window.prompt('银行名称','中国工商银行');const cardType=window.prompt('卡类型','储蓄卡');const fullCardNumber=window.prompt('完整卡号（仅本次提交）','');if(bankName&&cardType&&fullCardNumber)await actionSend('/api/wallet/bank-cards','POST',{bankName,cardType,fullCardNumber});return renderPage(); }
-      if (action === 'bank-reveal') { const paymentPassword=window.prompt('请输入支付密码以查看完整卡号','');if(paymentPassword){const result=await actionSend(`/api/wallet/bank-cards/${id}/reveal`,'POST',{paymentPassword});if(result?.cardNumber)toast(`完整卡号：${result.cardNumber}`);else toast('支付密码校验失败',true);}return; }
+      if (action === 'bank-add') { const bankName=await requestInput('银行名称','中国工商银行');const cardType=await requestInput('卡类型','储蓄卡');const fullCardNumber=await requestInput('完整卡号（仅本次提交）','');if(bankName&&cardType&&fullCardNumber)await actionSend('/api/wallet/bank-cards','POST',{bankName,cardType,fullCardNumber});return renderPage(); }
+      if (action === 'bank-reveal') { const paymentPassword=await requestInput('请输入支付密码以查看完整卡号','');if(paymentPassword){const result=await actionSend(`/api/wallet/bank-cards/${id}/reveal`,'POST',{paymentPassword});if(result?.cardNumber)toast(`完整卡号：${result.cardNumber}`);else toast('支付密码校验失败',true);}return; }
       if (action === 'bank-delete') { await actionSend(`/api/wallet/bank-cards/${id}`,'DELETE');return renderPage(); }
       if (action === 'claim-coupon') { await actionSend('/api/coupons/claim','POST',{storeId:0,name:'网页领取券',threshold:Number(el.dataset.threshold),amount:Number(el.dataset.amount)});toast('优惠券已领取');return renderPage(); }
       const browseView = browseViews.find(view => view[0] === action);
@@ -1553,10 +1588,10 @@
       if (action === 'merchant-activity-delete') {await actionSend(`/api/merchant/activities/${id}?storeId=${state.activeStoreId}`,'DELETE');return renderPage();}
       if (action === 'merchant-seckill-status') {const s=state.merchantSeckills.find(x=>Number(x.id)===Number(id));await actionSend(`/api/merchant/seckills/${id}/status?storeId=${state.activeStoreId}`,'PUT',{status:s.status?0:1});return renderPage();}
       if (action === 'merchant-seckill-delete') {await actionSend(`/api/merchant/seckills/${id}?storeId=${state.activeStoreId}`,'DELETE');return renderPage();}
-      if (action === 'merchant-categories') { const categories=await actionLoad('/api/merchant/categories')||[]; const name=window.prompt(`当前分类：${categories.map(c=>c.name).join('、')||'暂无'}\n输入新分类名称，取消则不创建`,''); if(name&&name.trim()) { await actionSend('/api/merchant/categories','POST',{name:name.trim(),sort:categories.length}); toast('店内分类已创建'); } return renderPage(); }
-      if (action === 'merchant-goods-specs') { const goods=state.merchantGoods.find(g=>Number(g.id)===Number(id));const current=(goods?.specs||[]).map(s=>`${s.name}:${s.price}:${s.stock}`).join(',');const text=window.prompt('规格格式：名称:价格:库存，多个用英文逗号分隔',current);if(text!==null){const specs=text.split(',').map((part,index)=>{const [name,price,stock]=part.split(':');return {id:goods?.specs?.[index]?.id||0,name:(name||'').trim(),price:Number(price||0),stock:Number(stock||0)};}).filter(s=>s.name);await actionSend(`/api/merchant/goods/${id}/specs`,'PUT',{specs});toast('规格已保存');}return renderPage(); }
-      if (action === 'merchant-setmeals') { const setmeals=await actionLoad(`/api/merchant/setmeals?storeId=${state.activeStoreId}`)||[];const name=window.prompt(`当前套餐：${setmeals.map(s=>s.name).join('、')||'暂无'}\n输入新套餐名称，取消则不创建`,'');if(name&&name.trim()){const goodsIds=window.prompt('输入套餐商品 ID，英文逗号分隔','');const items=(goodsIds||'').split(',').map(gid=>({id:0,setmealId:0,goodsId:Number(gid.trim()),goodsName:'',quantity:1})).filter(x=>x.goodsId>0);if(items.length)await actionSend(`/api/merchant/setmeals?storeId=${state.activeStoreId}`,'POST',{name:name.trim(),description:'网页创建套餐',price:Number(window.prompt('套餐价格','20')||20),originalPrice:Number(window.prompt('套餐原价','25')||25),image:'',items});toast('套餐已创建');}return renderPage(); }
-      if (action === 'merchant-employees') { const employees=await actionLoad(`/api/merchant/employees?storeId=${state.activeStoreId}`)||[];const userId=window.prompt(`当前员工：${employees.map(e=>e.username).join('、')||'暂无'}\n输入要添加的用户 ID，取消则不添加`,'');if(userId) {const roleName=window.prompt('员工角色','STAFF')||'STAFF';await actionSend(`/api/merchant/employees?storeId=${state.activeStoreId}`,'POST',{userId:Number(userId),roleName});toast('员工已添加');}return renderPage(); }
+      if (action === 'merchant-categories') { const categories=await actionLoad('/api/merchant/categories')||[]; const name=await requestInput(`当前分类：${categories.map(c=>c.name).join('、')||'暂无'}\n输入新分类名称，取消则不创建`,''); if(name&&name.trim()) { await actionSend('/api/merchant/categories','POST',{name:name.trim(),sort:categories.length}); toast('店内分类已创建'); } return renderPage(); }
+      if (action === 'merchant-goods-specs') { const goods=state.merchantGoods.find(g=>Number(g.id)===Number(id));const current=(goods?.specs||[]).map(s=>`${s.name}:${s.price}:${s.stock}`).join(',');const text=await requestInput('规格格式：名称:价格:库存，多个用英文逗号分隔',current);if(text!==null){const specs=text.split(',').map((part,index)=>{const [name,price,stock]=part.split(':');return {id:goods?.specs?.[index]?.id||0,name:(name||'').trim(),price:Number(price||0),stock:Number(stock||0)};}).filter(s=>s.name);await actionSend(`/api/merchant/goods/${id}/specs`,'PUT',{specs});toast('规格已保存');}return renderPage(); }
+      if (action === 'merchant-setmeals') { const setmeals=await actionLoad(`/api/merchant/setmeals?storeId=${state.activeStoreId}`)||[];const name=await requestInput(`当前套餐：${setmeals.map(s=>s.name).join('、')||'暂无'}\n输入新套餐名称，取消则不创建`,'');if(name&&name.trim()){const goodsIds=await requestInput('输入套餐商品 ID，英文逗号分隔','');const items=(goodsIds||'').split(',').map(gid=>({id:0,setmealId:0,goodsId:Number(gid.trim()),goodsName:'',quantity:1})).filter(x=>x.goodsId>0);if(items.length)await actionSend(`/api/merchant/setmeals?storeId=${state.activeStoreId}`,'POST',{name:name.trim(),description:'网页创建套餐',price:Number(await requestInput('套餐价格','20')||20),originalPrice:Number(await requestInput('套餐原价','25')||25),image:'',items});toast('套餐已创建');}return renderPage(); }
+      if (action === 'merchant-employees') { const employees=await actionLoad(`/api/merchant/employees?storeId=${state.activeStoreId}`)||[];const userId=await requestInput(`当前员工：${employees.map(e=>e.username).join('、')||'暂无'}\n输入要添加的用户 ID，取消则不添加`,'');if(userId) {const roleName=await requestInput('员工角色','STAFF')||'STAFF';await actionSend(`/api/merchant/employees?storeId=${state.activeStoreId}`,'POST',{userId:Number(userId),roleName});toast('员工已添加');}return renderPage(); }
       if (action === 'merchant-flow') {const [oid,flow]=String(id).split(':');if(['deliver','complete'].includes(flow)&&(!currentOrder||!canOrder(currentOrder,flow==='deliver'?'MERCHANT_DELIVER':'MERCHANT_COMPLETE'))){toast('此订单当前不可由商家配送，请刷新后重试',true);return;}if(flow==='complete'&&!window.confirm('确认自配送餐品已交给用户或放到约定地点？'))return;await actionSend(`/api/merchant/orders/${oid}/${flow}`,'PUT');toast('订单状态已更新');return renderPage();}
       if (action === 'merchant-reject') {const order=state.merchantOrders.find(item=>Number(item.id)===Number(id));if(!order){toast('订单状态已变化，请刷新后重试',true);return;}if(Number(order.status)!==1){toast('仅待接单订单可以拒绝',true);return;}if(await requestMerchantReject(order)){toast('已通知用户，款项已按原支付渠道退回');return renderPage();}return;}
       if (action === 'rider-online') {state.rider=await actionSend('/api/rider/status','PUT',{online:Number(id)});toast(Number(id)?'已上线':'已下线');return renderPage();}
@@ -1566,13 +1601,13 @@
         if(action==='rider-store-address'){
           const store=await actionLoad(`/api/stores/${order.storeId}`);
           if(!store?.address){toast('门店暂未提供取餐地址，请联系平台确认',true);return;}
-          window.prompt(`${store.name||order.storeName||'取餐门店'}的地址（可选中复制）`,store.address);return;
+          await requestInput(`${store.name||order.storeName||'取餐门店'}的地址（可选中复制）`,store.address);return;
         }
         const address=addressText(order.address);if(!address){toast('收货地址待补充，请联系用户确认',true);return;}
         try {
           if(!window.navigator?.clipboard?.writeText)throw new Error('clipboard-unavailable');
           await guarded(window.navigator.clipboard.writeText(address),context,connected);toast('收货地址已复制');
-        }catch(error){if(error===staleRender)return;window.prompt('浏览器未能自动复制，请选中以下收货地址手动复制',address);}
+        }catch(error){if(error===staleRender)return;await requestInput('浏览器未能自动复制，请选中以下收货地址手动复制',address);}
         return;
       }
       if (['rider-grab','rider-pickup','rider-deliver'].includes(action)) {
@@ -1656,19 +1691,17 @@
     renderUsernameError();
     if (e.target.name === 'username') {
       if (e.isComposing) return;
-      const name = e.target.value.trim();
-      if (name) usernameCheckTimer = setTimeout(() => { void checkAuthUsername(name); }, 400);
       return;
     }
     updatePasswordFeedback();
-    const confirm = $('authConfirmPassword');
-    const mismatch = Boolean(confirm.value && confirm.value !== $('authPassword').value);
-    confirm.setAttribute('aria-invalid', String(mismatch));
-    if (mismatch) showAuthError('两次输入的密码不一致，请重新输入确认密码。');
   });
   $('authForm').addEventListener('focusin', updatePasswordFeedback);
   $('authForm').addEventListener('focusout', e => {
     if (e.target.name === 'username') void checkAuthUsername(e.target.value);
+    if ($('authForm').dataset.mode === 'register' && e.target.name === 'confirmPassword'
+      && e.target.value && e.target.value !== $('authPassword').value) {
+      showAuthError('两次输入的密码不一致，请重新输入确认密码。');
+    }
     setTimeout(updatePasswordFeedback, 0);
   });
   $('authForm').addEventListener('invalid', e => showAuthError(e.target.validationMessage, e.target.name), true);
@@ -1749,5 +1782,20 @@
     applyAuthRoute();
     await Promise.all([loadCartCount(), renderPage()]);
   };
+  window.TakeoutForms?.configure({
+    options: async name => {
+      const token=state.token,storeId=state.activeStoreId;
+      const items=await get(name==='categoryId'?'/api/categories':`/api/merchant/stores/${storeId}/goods`);
+      if(token!==state.token||storeId!==state.activeStoreId)return [];
+      return (Array.isArray(items)?items:[]).filter(item=>name==='categoryId'||!(item.specs?.length));
+    },
+    districts: parent => get('/api/location/districts?parent='+encodeURIComponent(parent)),
+    searchPlaces,
+    searchStores: async keyword => {
+      const token=state.token,result=await get('/api/search?keyword='+encodeURIComponent(keyword));
+      if(token!==state.token)return [];
+      return Array.isArray(result)?result:result?.stores||[];
+    }
+  });
   boot();
 })();

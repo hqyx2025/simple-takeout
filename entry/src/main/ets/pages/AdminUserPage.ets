@@ -1,3 +1,4 @@
+import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /** 平台用户和商户账号管理：查看账号并启用/停用，不修改余额和业务数据。 */
 import { AppMotion } from '../common/theme/AppMotion'
@@ -124,9 +125,11 @@ export struct AdminUserPage {
       })
 
       Row({ space: SPACING.SM }) {
-        TextInput({ placeholder: '搜索姓名或手机号', text: this.keyword })
-          .attributeModifier(new AppInputStyle()).layoutWeight(1)
-          .onChange((value: string) => { this.keyword = value })
+        FormInput({ label: '搜索关键词',
+          value: this.keyword,
+          placeholder: '搜索姓名或手机号',
+          onChange: (value: string) => { this.keyword = value },
+          fieldId: 'AdminUserPage-keyword' }).layoutWeight(1)
         Button('搜索')
           .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM).onClick(() => { this.refresh() })
       }.width('100%').padding(SPACING.LG).backgroundColor(MODULE_BG.ADMIN)

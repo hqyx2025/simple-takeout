@@ -1,0 +1,32 @@
+.form-field{display:flex;flex-direction:column;gap:5px;min-width:0;position:relative;flex:1}
+.floating-control{display:block;position:relative;min-width:0;width:100%}
+.floating-control>input,.floating-control>textarea{width:100%;min-height:56px;padding:23px 14px 7px;font-size:16px;line-height:1.4;caret-color:var(--accent);border-radius:12px}
+.floating-control>textarea{min-height:100px}
+.floating-label{position:absolute;inset:17px 14px auto;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;pointer-events:none;color:var(--muted);font-size:16px;line-height:22px}
+.floating-control:focus-within>.floating-label,.floating-control.has-value>.floating-label,.floating-control:has(input:autofill)>.floating-label{inset-block-start:4px;font-size:12px;line-height:18px}
+.floating-control:focus-within>.floating-label{color:var(--accent-dark)}
+.form-help,.form-error{display:block;margin:0;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.form-help{color:var(--muted)}.form-error{color:var(--red)}.form-help[hidden],.form-error[hidden]{display:none}
+.form-field:has(>.form-error:not([hidden]))>.form-help{display:none}
+.floating-control>[aria-invalid=true]{border-color:var(--red)}
+.form-field .auth-icon{display:none}.auth-input-wrap:has(.form-field){display:block;border:0;background:none;height:auto;padding:0}
+.auth-input:has(.form-field){display:block;border:0;background:none;height:auto;padding:0}.auth-input:has(.form-field)>svg{display:none}.auth-input .floating-control>.input{padding:23px 14px 7px;height:56px;border:1px solid var(--line);background:var(--surface)}
+#authForm .auth-input:has(.form-field){border:0;outline:0;padding:0;background:transparent}
+#authForm .auth-input .floating-control>.input{padding:23px 14px 7px;height:56px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink)}
+#authForm .auth-input .floating-control>.input:focus{border-color:var(--accent-dark);outline:1px solid var(--accent-dark)}
+#authForm .auth-input .floating-control>[aria-invalid=true]{border-color:var(--red)}
+#authForm .auth-code-row>.btn{margin-top:0;min-height:56px}
+.field:has(.form-field){gap:0}.form-field .input{max-width:none}.auth-code-row,.auth-captcha{align-items:start}
+.auth-code-row>button,.auth-captcha>button{margin-top:0;min-height:56px}
+.form-options{display:grid;gap:2px;max-height:240px;overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px;z-index:5}
+.form-options[hidden]{display:none}.form-options button{text-align:left;border:0;background:transparent;color:var(--ink);padding:10px;min-height:44px;border-radius:8px}
+.form-options button:hover,.form-options button:focus{background:var(--paper);outline:2px solid var(--accent);outline-offset:-2px}
+mark{background:var(--paper);color:var(--accent-dark);font-weight:700}
+[data-theme=dark] .floating-control:focus-within>.floating-label,[data-theme=dark] mark,[data-theme=dark] .tag-input-list button{color:#f5a17d}
+[data-theme=dark] #authForm .auth-input .floating-control>.input:focus{border-color:#f5a17d;outline-color:#f5a17d}
+.upload-zone{display:grid;gap:8px;padding:16px;border:1px dashed var(--line);border-radius:12px;background:var(--surface);color:var(--ink);cursor:pointer}
+.upload-zone.drag-over{border-color:var(--accent);background:var(--paper)}.upload-zone input{max-width:100%}
+.upload-row{display:flex;gap:10px;align-items:center;padding-block:8px;min-width:0}.upload-row img{width:48px;height:48px;object-fit:cover;border-radius:8px}.upload-info{flex:1;min-width:0}.upload-info span{display:block;overflow-wrap:anywhere;font-size:13px}.upload-info progress{width:100%;height:6px;accent-color:var(--accent)}
+.tag-input-list{display:flex;flex-wrap:wrap;gap:6px;margin-block:6px}.tag-input-list button{border:1px solid var(--line);border-radius:20px;min-height:36px;background:var(--paper);color:var(--accent-dark);padding:5px 12px}
+.region-picker{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;grid-column:1/-1}.region-picker .form-field{min-width:0}.region-picker .form-error{grid-column:1/-1}
+@media(max-width:560px){.region-picker{grid-template-columns:1fr}.form-field{flex-basis:160px}.toolbar:has(.form-field){align-items:start}.auth-code-row .form-field,.auth-captcha .form-field{flex-basis:auto}}

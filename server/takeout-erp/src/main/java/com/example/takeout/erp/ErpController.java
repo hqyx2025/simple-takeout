@@ -23,7 +23,7 @@ public class ErpController {
         if(secret.length()<32)throw new IllegalStateException("Integration secret requires at least 32 characters");
         this.service=service;this.db=db;this.secret=secret;
         var factory=new SimpleClientHttpRequestFactory();factory.setConnectTimeout(Duration.ofMillis(500));factory.setReadTimeout(Duration.ofSeconds(2));
-        this.app=RestClient.builder().baseUrl(uri).requestFactory(factory).build();
+        this.app=JsonRestClients.builder().baseUrl(uri).requestFactory(factory).build();
     }
     private JsonNode authority(String auth,long store,String resource) {
         return authority(auth,store,resource,CrudOperation.READ);
@@ -33,7 +33,8 @@ public class ErpController {
         if(auth==null || !auth.startsWith("Bearer "))throw new BizException(401,"请先登录");
         try {
             var result=app.get().uri("/api/internal/erp/"+resource+"?storeId="+store+"&operation="+operation.name())
-                    .header("Authorization",auth).header("X-Integration-Key",secret).retrieve().body(JsonNode.class);
+                    .header("Authorization",auth).header("X-Integration-Key",secret)
+                    .header(TraceContext.HEADER,TraceContext.current()).retrieve().body(JsonNode.class);
             if(result==null || result.path("code").asInt()!=200)throw new BizException(503,"门店权限服务响应异常");
             return result.path("data");
         } catch(HttpClientErrorException e){

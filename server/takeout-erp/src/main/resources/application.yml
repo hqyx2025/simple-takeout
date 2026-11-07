@@ -1,3 +1,21 @@
+management:
+  server:
+    port: ${TAKEOUT_MANAGEMENT_PORT:9201}
+    address: ${TAKEOUT_MANAGEMENT_ADDRESS:127.0.0.1}
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+  endpoint:
+    health:
+      show-details: never
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+
 server:
   port: ${TAKEOUT_ERP_PORT:9200}
   address: ${TAKEOUT_BIND_ADDRESS:127.0.0.1}
@@ -9,6 +27,14 @@ server:
     accept-count: 32
     connection-timeout: 3s
 spring:
+  http:
+    converters:
+      preferred-json-mapper: jackson2
+  flyway:
+    locations: classpath:db/migration/erp
+    baseline-on-migrate: true
+    baseline-version: 0
+    clean-disabled: true
   application:
     name: takeout-erp
   datasource:
@@ -25,7 +51,7 @@ spring:
     init:
       mode: always
       schema-locations: classpath:erp-schema.sql
-  jackson:
+  jackson2:
     deserialization:
       fail-on-unknown-properties: true
   jdbc:

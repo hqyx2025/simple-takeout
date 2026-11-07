@@ -77,9 +77,13 @@ test('support report retries the same idempotency key and payload after an uncon
   r.pending[1](false); await retry; assert.equal(r.page.pendingIssue.note, '无法联系用户'); assert.equal(r.page.busy, false);
 });
 test('image evidence rejects completions belonging to an earlier page version', () => {
-  const text = source('components/EvidenceImages.ets'), exports = {}, state = { epoch: 1, version: 4 };
+  const text = source('components/ImageUpload.ets'), exports = {}, state = { epoch: 1, version: 4 };
   run('export class Evidence {' + method(text, 'current') + '}', { exports, getAuthSessionEpoch: () => state.epoch, AppStorage: { get: key => key === 'user' ? { id: 1 } : true } });
-  const evidence = new exports.Evidence(); Object.assign(evidence, { alive: true, version: 1, contextVersion: () => state.version });
-  assert.equal(evidence.current(1, 1, 1, 4), true); state.version++;
-  assert.equal(evidence.current(1, 1, 1, 4), false); assert.equal(evidence.current(1, 2, 1, 5), false);
+  const evidence = new exports.Evidence(); Object.assign(evidence, { alive: true, pending: [{id:1}], contextVersion: () => state.version });
+  assert.equal(evidence.current(1, 4, 1), true); state.version++;
+  assert.equal(evidence.current(1, 4, 1), false);
+  assert.equal(evidence.current(1, 5, 1), true); state.epoch++;
+  assert.equal(evidence.current(1, 5, 1), false);
+  assert.equal(evidence.current(2, 5, 1), true); evidence.pending=[];
+  assert.equal(evidence.current(2, 5, 1), false);
 });

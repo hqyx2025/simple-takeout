@@ -73,12 +73,12 @@ export struct LoginPage {
             this.roleSelector()
             this.loginMethodSelector()
 
-            FormInput({ compact: true, label: '手机号', placeholder: '请输入11位手机号', value: this.phone,
+            FormInput({ required: true, compact: true, label: '手机号', placeholder: '请输入11位手机号', value: this.phone,
               icon: $r('app.media.login_phone'), inputType: InputType.PhoneNumber, fieldId: 'login-phone', maxLength: 11,
               isEnabled: !this.submitting && !this.sendingCode, errorMessage: this.errorField === 'login-phone' ? this.errorMsg : '',
               onChange: (value: string) => { this.phone = value; this.emailCode = ''; this.clearFeedback() } }).margin({ bottom: 4 })
             if (this.useEmailLogin) {
-              FormInput({ compact: true, label: '绑定邮箱', placeholder: '请输入邮箱', value: this.email,
+              FormInput({ required: true, compact: true, label: '绑定邮箱', placeholder: '请输入邮箱', value: this.email,
                 icon: $r('app.media.login_user'), inputType: InputType.Email, fieldId: 'login-email', isEnabled: !this.submitting && !this.sendingCode,
                 errorMessage: this.errorField === 'login-email' ? this.errorMsg : '',
                 onChange: (value: string) => { this.email = value; this.emailCode = ''; this.clearFeedback() } }).margin({ bottom: 4 })
@@ -87,7 +87,7 @@ export struct LoginPage {
               this.verificationCodeField()
             }
             if (!this.useEmailLogin) {
-              FormInput({ compact: true, label: '密码', placeholder: '请输入密码', value: this.password,
+              FormInput({ required: true, compact: true, label: '密码', placeholder: '请输入密码', value: this.password,
                 icon: $r('app.media.login_lock'), inputType: InputType.Password, fieldId: 'login-password', maxLength: 64,
                 isEnabled: !this.submitting && !this.sendingCode, errorMessage: this.errorField === 'login-password' ? this.errorMsg : '',
                 onChange: (value: string) => { this.password = value; this.clearFeedback() } }).margin({ bottom: 4 })
@@ -175,24 +175,24 @@ export struct LoginPage {
       EmailCaptchaField({ captchaId: $captchaId, captchaCode: $captchaCode,
         disabled: this.submitting || this.sendingCode,
         errorMessage: this.errorField === 'email-captcha-input' ? this.errorMsg : '' })
-      Text('邮箱验证码').fontSize(13).fontWeight(FontWeight.Medium).fontColor(AppTheme.TEXT).width('100%')
       Row({ space: 8 }) {
-        TextInput({ text: this.emailCode, placeholder: '请输入 6 位验证码' })
-          .attributeModifier(new AppInputStyle()).type(InputType.Number).maxLength(6)
-          .height(44).layoutWeight(1).id('login-email-code')
-          .enabled(!this.submitting && !this.sendingCode)
-          .border({ width: this.errorField.endsWith('email-code') ? 1.5 : 1,
-            color: this.errorField.endsWith('email-code') ? AppTheme.ERROR : AppTheme.BORDER })
-          .onChange((value: string) => { this.emailCode = value; this.clearFeedback() })
+        FormInput({ label: '邮箱验证码',
+          value: this.emailCode,
+          placeholder: '请输入 6 位验证码',
+          inputType: InputType.Number,
+          maxLength: 6,
+          isEnabled: !this.submitting && !this.sendingCode,
+          fieldId: 'login-email-code',
+          errorMessage: this.errorField === 'login-email-code' ? this.errorMsg : '',
+          onChange: (value: string) => { this.emailCode = value; this.clearFeedback() },
+          oneTimeCode: true,
+          helpText: '6 位验证码，可整段粘贴或使用系统自动填入',
+          required: true }).layoutWeight(1)
         Button(this.sendingCode ? '发送中…' : this.cooldownSeconds > 0 ? this.cooldownSeconds + '秒后重发' : '获取验证码')
           .attributeModifier(new AppButtonStyle()).height(44).width(120).id('login-send-code')
           .enabled(!this.sendingCode && this.cooldownSeconds === 0 && !this.submitting)
           .onClick(() => { this.sendVerificationCode() })
-      }.width('100%').height(44).flexShrink(0)
-      if (this.errorMsg && this.errorField.endsWith('email-code')) {
-        Text(this.errorMsg).fontSize(13).fontColor(AppTheme.ERROR).width('100%')
-          .id('login-email-code-error')
-      }
+      }.width('100%').alignItems(VerticalAlign.Top).flexShrink(0)
     }.width('100%').margin({ bottom: 8 }).flexShrink(0)
   }
 

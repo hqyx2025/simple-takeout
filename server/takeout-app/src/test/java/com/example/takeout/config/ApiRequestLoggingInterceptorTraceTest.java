@@ -24,6 +24,16 @@ class ApiRequestLoggingInterceptorTraceTest {
 
     private final ApiRequestLoggingInterceptor interceptor = new ApiRequestLoggingInterceptor();
 
+    @Test
+    void retainsTheIdAlreadyGeneratedBeforeAuthenticationAndAdmission() {
+        var request = new MockHttpServletRequest("GET", "/api/orders");
+        request.setAttribute(TraceContext.ATTR, "filter-generated");
+        var response = new MockHttpServletResponse();
+        interceptor.preHandle(request, response, new Object());
+        assertEquals("filter-generated", TraceContext.current());
+        assertEquals("filter-generated", response.getHeader(TraceContext.HEADER));
+    }
+
     @AfterEach
     void cleanUp() {
         TraceContext.clear();

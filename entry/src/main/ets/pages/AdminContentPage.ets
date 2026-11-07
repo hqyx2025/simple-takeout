@@ -1,3 +1,4 @@
+import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppInputStyle, AppTextAreaStyle } from '../common/theme/AppTheme'
 /**
  * 管理端内容管理（演进项已落地）：首页轮播 Banner 与平台公告
@@ -276,16 +277,20 @@ export struct AdminContentPage {
     Column() {
       Column({ space: SPACING.MD }) {
         Text('新增 Banner').fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY).width('100%').textAlign(TextAlign.Center)
-        Text('标题（必填）').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-        TextInput({ placeholder: '请输入 Banner 标题，如：新人专享 满20减15', text: this.bannerTitle })
-          .attributeModifier(new AppInputStyle())
-          .width('100%')
-          .onChange((v: string) => { this.bannerTitle = v })
-        Text('背景色（选填，默认品牌橙）').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-        TextInput({ placeholder: '#FF6B35', text: this.bannerColor })
-          .attributeModifier(new AppInputStyle())
-          .width('100%')
-          .onChange((v: string) => { this.bannerColor = v })
+
+        FormInput({ label: 'Banner 标题',
+          value: this.bannerTitle,
+          placeholder: '请输入 Banner 标题，如：新人专享 满20减15',
+          onChange: (v: string) => { this.bannerTitle = v },
+          fieldId: 'AdminContentPage-bannerTitle',
+          required: true }).width('100%')
+
+        FormInput({ label: '主题色',
+          value: this.bannerColor,
+          placeholder: '#FF6B35',
+          onChange: (v: string) => { this.bannerColor = v },
+          fieldId: 'AdminContentPage-bannerColor',
+          required: true }).width('100%')
         Row({ space: SPACING.MD }) {
           Button('取消')
             .attributeModifier(new AppButtonStyle()).layoutWeight(1).height(42)
@@ -310,16 +315,23 @@ export struct AdminContentPage {
     Column() {
       Column({ space: SPACING.MD }) {
         Text('发布公告').fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY).width('100%').textAlign(TextAlign.Center)
-        Text('标题（必填）').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-        TextInput({ placeholder: '请输入公告标题', text: this.announcementTitle })
-          .attributeModifier(new AppInputStyle())
-          .width('100%')
-          .onChange((v: string) => { this.announcementTitle = v })
-        Text('内容（必填）').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).width('100%')
-        TextArea({ placeholder: '请输入公告内容，最多200字', text: this.announcementContent })
-          .attributeModifier(new AppTextAreaStyle())
-          .width('100%').height(100).maxLength(200)
-          .onChange((v: string) => { this.announcementContent = v })
+
+        FormInput({ label: '公告标题',
+          value: this.announcementTitle,
+          placeholder: '请输入公告标题',
+          onChange: (v: string) => { this.announcementTitle = v },
+          fieldId: 'AdminContentPage-announcementTitle',
+          required: true }).width('100%')
+
+        FormInput({ label: '公告内容',
+          value: this.announcementContent,
+          placeholder: '请输入公告内容，最多200字',
+          maxLength: 200,
+          onChange: (v: string) => { this.announcementContent = v },
+          fieldId: 'AdminContentPage-announcementContent',
+          multiline: true,
+          inputHeight: 100,
+          required: true }).width('100%')
         Row({ space: SPACING.MD }) {
           Button('取消')
             .attributeModifier(new AppButtonStyle()).layoutWeight(1).height(42)

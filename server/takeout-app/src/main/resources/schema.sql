@@ -180,6 +180,15 @@ CREATE TABLE IF NOT EXISTS order_items (
     KEY idx_order_items_spec (spec_id, order_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 每种领券活动总计 5 个独立名额；NULL=可领，0=已计入的历史领取，正数=领取账号。
+CREATE TABLE IF NOT EXISTS coupon_campaign_stock (
+    campaign_name VARCHAR(64) NOT NULL,
+    slot_no INT NOT NULL,
+    claimed_user_id BIGINT DEFAULT NULL,
+    PRIMARY KEY (campaign_name, slot_no),
+    KEY idx_coupon_stock_available (campaign_name, claimed_user_id, slot_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS coupons (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT NOT NULL,

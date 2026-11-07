@@ -58,8 +58,10 @@ public class OrderOperationsService {
         return Map.of("mode",mode);
     }
     public OrderCapabilities capabilities(Order order,String readyTime,int role) {
-        String mode=mode(order.id());
-        long rider=orders.findRiderId(order.id());
+        return capabilities(order, readyTime, role, mode(order.id()), orders.findRiderId(order.id()));
+    }
+    /** 已由列表查询读取的履约快照，避免逐单回查；仅供服务端内部使用。 */
+    public OrderCapabilities capabilities(Order order,String readyTime,int role,String mode,long rider) {
         AfterSalesService sales=afterSales.getObject();
         BigDecimal remaining=role==0 && order.status()!=0 && order.status()!=5 && order.escrowStatus()!=2
                 ? sales.remainingRefund(order) : BigDecimal.ZERO;

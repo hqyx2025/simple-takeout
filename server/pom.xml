@@ -18,7 +18,7 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>3.5.16</version>
+    <version>4.0.9</version>
     <relativePath/>
   </parent>
 
@@ -33,11 +33,12 @@
     <java.version>25</java.version>
     <maven.compiler.release>25</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <spring-cloud.version>2025.0.3</spring-cloud.version>
+    <spring-cloud.version>2025.1.4</spring-cloud.version>
     <!-- Security fixes released after the Spring Boot 3.5 BOM baseline. -->
-    <tomcat.version>10.1.61</tomcat.version>
-    <netty.version>4.1.139.Final</netty.version>
-    <jackson-bom.version>2.21.8</jackson-bom.version>
+    <tomcat.version>11.0.27</tomcat.version>
+    <netty.version>4.2.19.Final</netty.version>
+    <jackson-bom.version>3.1.7</jackson-bom.version>
+    <jackson-2-bom.version>2.21.8</jackson-2-bom.version>
     <log4j2.version>2.26.1</log4j2.version>
     <commons-lang3.version>3.21.0</commons-lang3.version>
     <bouncycastle.version>1.86</bouncycastle.version>
@@ -48,10 +49,20 @@
     <module>takeout-app</module>
     <module>takeout-gateway</module>
     <module>takeout-erp</module>
+    <module>takeout-coverage</module>
   </modules>
 
   <build>
     <plugins>
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <version>0.8.14</version>
+        <executions>
+          <execution><goals><goal>prepare-agent</goal></goals></execution>
+          <execution><id>coverage-report</id><phase>test</phase><goals><goal>report</goal></goals></execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>

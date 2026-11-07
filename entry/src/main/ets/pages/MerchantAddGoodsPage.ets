@@ -1,3 +1,7 @@
+import { FormSelect } from '../components/FormSelect'
+import { TagInput } from '../components/TagInput'
+import { ImageUpload } from '../components/ImageUpload'
+import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /** 商户新增商品页：表单确认后才写入数据库，并在返回前重新读取商品数据。 */
 import { AppMotion } from '../common/theme/AppMotion'
@@ -66,6 +70,8 @@ export struct MerchantAddGoodsPage {
   @State specRows: SpecRow[] = []
   @State specStockTotal: number = 0
   @State submitting: boolean = false
+  @State imageUploading: boolean = false
+  @State originalTag: string = '新品'
   private nextSpecKey: number = 1
 
   async aboutToAppear(): Promise<void> {
@@ -234,7 +240,7 @@ export struct MerchantAddGoodsPage {
   }
 
   private async confirmAdd(): Promise<void> {
-    if (this.submitting) {
+    if (this.submitting || this.imageUploading) {
       promptAction.showToast({ message: '提交中，请稍候', duration: 1400 })
       return
     }
@@ -278,7 +284,7 @@ export struct MerchantAddGoodsPage {
       stock: stock,
       sales: 0,
       rating: 5.0,
-      tag: this.isSpecial ? '特价团购' : '新品',
+      tag: this.originalTag,
       isOnShelf: true,
       isSpecial: this.isSpecial
     }
@@ -314,56 +320,17 @@ export struct MerchantAddGoodsPage {
     router.back()
   }
 
-  /** 选择并上传商品图片：成功后写入 this.image（相对 /uploads/ 地址）。 */
-  private async pickImage(): Promise<void> {
-    try {
-      const picker: photoAccessHelper.PhotoViewPicker = new photoAccessHelper.PhotoViewPicker()
-      const options: photoAccessHelper.PhotoSelectOptions = new photoAccessHelper.PhotoSelectOptions()
-      options.MIMEType = photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE
-      options.maxSelectNumber = 1
-      const result: photoAccessHelper.PhotoSelectResult = await picker.select(options)
-      if (!result.photoUris || result.photoUris.length === 0) {
-        return
-      }
-      const uploaded = await uploadImageApi(result.photoUris[0], false)
-      if (uploaded !== null && uploaded.url !== '') {
-        this.image = uploaded.url
-        promptAction.showToast({ message: '图片已上传', duration: 1500 })
-      } else {
-        promptAction.showToast({ message: '图片上传失败，请重试', duration: 2200 })
-      }
-    } catch (err) {
-      promptAction.showToast({ message: '选择图片失败，请重试', duration: 2200 })
-    }
-  }
 
   @Builder
   CategoryOptions() {
-    Scroll() {
-      Row({ space: SPACING.SM }) {
-        Text('未分组')
-          .fontSize(FONT_SIZE.SM)
-          .fontColor(this.categoryId === 0 ? accentFg(accentIndexFromText('未分组')) : COLORS.TEXT_SECONDARY)
-          .backgroundColor(this.categoryId === 0 ? accentBg(accentIndexFromText('未分组')) : COLORS.BG_PRIMARY)
-          .padding({ left: SPACING.MD, right: SPACING.MD, top: SPACING.SM, bottom: SPACING.SM })
-          .borderRadius(BORDER_RADIUS.ROUND)
-          .onClick(() => { this.selectCategory(0) })
-        ForEach(this.categories, (category: Category) => {
-          Text(category.name)
-            .fontSize(FONT_SIZE.SM)
-            .fontColor(this.categoryId === category.id ? accentFg(accentIndexFromText(category.name)) : COLORS.TEXT_SECONDARY)
-            .backgroundColor(this.categoryId === category.id ? accentBg(accentIndexFromText(category.name)) : COLORS.BG_PRIMARY)
-            .padding({ left: SPACING.MD, right: SPACING.MD, top: SPACING.SM, bottom: SPACING.SM })
-            .borderRadius(BORDER_RADIUS.ROUND)
-            .onClick(() => { this.selectCategory(category.id) })
-        }, (category: Category) => category.id.toString())
-      }
-      .padding({ left: SPACING.XS, right: SPACING.LG })
-    }
-    .width('100%')
-    .height(44)
-    .scrollable(ScrollDirection.Horizontal)
-    .scrollBar(BarState.Off)
+    FormSelect({ label: '店内分类', options: this.categoryOptions(),
+      selected: this.categories.findIndex((item: Category) => item.id === this.categoryId) + 1,
+      fieldId: 'merchant-goods-category', onSelect: (index: number) => { this.selectCategory(index === 0 ? 0 : this.categories[index - 1].id) } })
+  }
+
+  private categoryOptions(): SelectOption[] {
+    const options: SelectOption[] = [{ value: '未分组' }]
+    return options.concat(this.categories.map((item: Category): SelectOption => { return { value: item.name } }))
   }
 
   @Builder
@@ -381,11 +348,14 @@ export struct MerchantAddGoodsPage {
   @Builder
   NumberField(label: string, placeholder: string, value: string, hint: string, onChange: (value: string) => void) {
     Column({ space: SPACING.XS }) {
-      this.FieldLabel(label, true)
-      TextInput({ placeholder: placeholder, text: value })
-        .attributeModifier(new AppInputStyle())
-        .width('100%').type(InputType.Number)
-        .onChange((next: string) => { onChange(next) })
+
+      FormInput({ label: label,
+        value: value,
+        placeholder: placeholder,
+        inputType: label === '库存' ? InputType.Number : InputType.NUMBER_DECIMAL,
+        onChange: (next: string) => { onChange(next) },
+        fieldId: 'MerchantAddGoodsPage-value-' + label,
+        required: true }).width('100%')
       if (hint !== '') {
         Text(hint)
           .fontSize(FONT_SIZE.XS).fontColor(MODULE_COLOR.MERCHANT)
@@ -405,20 +375,28 @@ export struct MerchantAddGoodsPage {
       .width(18).height(40)
       .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
 
-      TextInput({ placeholder: '如：大份/加辣', text: row.name })
-        .attributeModifier(new AppInputStyle())
-        .layoutWeight(1)
-        .onChange((value: string) => { this.setSpecName(index, value) })
+      FormInput({ label: '规格名称',
+        value: row.name,
+        placeholder: '如：大份/加辣',
+        onChange: (value: string) => { this.setSpecName(index, value) },
+        fieldId: 'MerchantAddGoodsPage-row-name' + '-' + index,
+        required: true }).layoutWeight(1)
 
-      TextInput({ placeholder: '价格', text: row.price })
-        .attributeModifier(new AppInputStyle())
-        .width(62).type(InputType.Number)
-        .onChange((value: string) => { this.setSpecPrice(index, value) })
+      FormInput({ label: '价格',
+        value: row.price,
+        placeholder: '价格',
+        inputType: InputType.NUMBER_DECIMAL,
+        onChange: (value: string) => { this.setSpecPrice(index, value) },
+        fieldId: 'MerchantAddGoodsPage-row-price' + '-' + index,
+        required: true }).width(62)
 
-      TextInput({ placeholder: '库存', text: row.stock })
-        .attributeModifier(new AppInputStyle())
-        .width(62).type(InputType.Number)
-        .onChange((value: string) => { this.setSpecStock(index, value) })
+      FormInput({ label: '库存',
+        value: row.stock,
+        placeholder: '库存',
+        inputType: InputType.Number,
+        onChange: (value: string) => { this.setSpecStock(index, value) },
+        fieldId: 'MerchantAddGoodsPage-row-stock' + '-' + index,
+        required: true }).width(62)
 
       Column() {
         Image($r('app.media.ui_close')).width(FONT_SIZE.SM).height(FONT_SIZE.SM).objectFit(ImageFit.Contain)
@@ -499,42 +477,41 @@ export struct MerchantAddGoodsPage {
             }
             .width('100%')
             Column({ space: SPACING.XS }) {
-              this.FieldLabel('商品名称', true)
-              TextInput({ placeholder: '如：宫保鸡丁', text: this.goodsName })
-                .attributeModifier(new AppInputStyle()).id('merchant-goods-name')
-                .width('100%')
-                .onChange((value: string) => { this.goodsName = value })
+
+              FormInput({ label: '商品名称',
+                value: this.goodsName,
+                placeholder: '如：宫保鸡丁',
+                fieldId: 'merchant-goods-name',
+                onChange: (value: string) => { this.goodsName = value },
+                required: true }).width('100%')
             }
             Column({ space: SPACING.XS }) {
-              this.FieldLabel('商品描述', false)
-              TextInput({ placeholder: '如：招牌菜，微辣', text: this.goodsDescription })
-                .attributeModifier(new AppInputStyle()).id('merchant-goods-description')
-                .width('100%')
-                .onChange((value: string) => { this.goodsDescription = value })
+
+              FormInput({ label: '商品描述',
+                value: this.goodsDescription,
+                placeholder: '如：招牌菜，微辣',
+                fieldId: 'merchant-goods-description',
+                onChange: (value: string) => { this.goodsDescription = value } }).width('100%')
             }
             Row({ space: SPACING.MD }) {
               this.NumberField('售价', '如：25.00', this.price, '', (value: string) => { this.price = value })
               this.NumberField('库存', '0-9999', this.stock, this.specStockHint(), (value: string) => { this.stock = value })
             }
             Column({ space: SPACING.XS }) {
-              this.FieldLabel('原价', false)
-              TextInput({ placeholder: '特价时填写，如：30.00', text: this.originalPrice })
-                .attributeModifier(new AppInputStyle()).id('merchant-goods-original-price')
-                .width('100%').type(InputType.Number)
-                .onChange((value: string) => { this.originalPrice = value })
+
+              FormInput({ label: '原价（元）',
+                value: this.originalPrice,
+                placeholder: '特价时填写，如：30.00',
+                inputType: InputType.NUMBER_DECIMAL,
+                fieldId: 'merchant-goods-original-price',
+                onChange: (value: string) => { this.originalPrice = value } }).width('100%')
             }
             Column({ space: SPACING.XS }) {
               this.FieldLabel('商品图片', false)
-              Row({ space: SPACING.MD }) {
-                Image(merchantImageSource(this.image))
-                  .alt(DEFAULT_MERCHANT_IMAGE)
-                  .width(72).height(72).objectFit(ImageFit.Cover).borderRadius(BORDER_RADIUS.MD)
-                Button(this.image === '' ? '＋ 上传图片' : '更换图片')
-                  .attributeModifier(new AppButtonStyle())
-                  .fontSize(FONT_SIZE.SM).height(40).borderRadius(BORDER_RADIUS.MD).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.MERCHANT)
-                  .onClick(() => { this.pickImage() })
-              }
-              .width('100%').alignItems(VerticalAlign.Center)
+              ImageUpload({ images: this.image ? [this.image] : [], maxFiles: 1, disabled: this.submitting,
+                onChange: (images: string[]) => { this.image = images[0] ?? '' },
+                onBusy: (busy: boolean) => { this.imageUploading = busy } })
+              TagInput({ value: this.originalTag, isEnabled: !this.submitting, onChange: (value: string) => { this.originalTag = value } })
             }
             Row() {
               Text('加入特价团购')

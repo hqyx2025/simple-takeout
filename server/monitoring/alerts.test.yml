@@ -1,0 +1,50 @@
+rule_files:
+  - alerts.yml
+evaluation_interval: 1m
+tests:
+  - name: unavailable-target
+    interval: 1m
+    input_series:
+      - series: 'up{job="takeout",instance="app:9101"}'
+        values: '0+0x10'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: TakeoutTargetDown
+        exp_alerts:
+          - exp_labels: {job: takeout, instance: 'app:9101', severity: critical}
+            exp_annotations: {summary: 'Service metrics unavailable: app:9101'}
+  - name: delayed-durable-events
+    interval: 1m
+    input_series:
+      - series: 'takeout_outbox_oldest_age_seconds{job="takeout",instance="app:9101"}'
+        values: '600+0x10'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: TakeoutOutboxDelayed
+        exp_alerts:
+          - exp_labels: {job: takeout, instance: 'app:9101', severity: warning}
+            exp_annotations: {summary: 'Oldest undelivered event exceeds five minutes: app:9101'}
+  - name: unknown-backlog-is-not-healthy
+    interval: 1m
+    input_series:
+      - series: 'takeout_outbox_collector_available{job="takeout",instance="app:9101"}'
+        values: '0+0x10'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: TakeoutOutboxCollectorUnavailable
+        exp_alerts:
+          - exp_labels: {job: takeout, instance: 'app:9101', severity: warning}
+            exp_annotations: {summary: 'Outbox backlog is unknown: app:9101'}
+  - name: healthy-service
+    interval: 1m
+    input_series:
+      - series: 'up{job="takeout",instance="app:9101"}'
+        values: '1+0x10'
+      - series: 'takeout_outbox_oldest_age_seconds{job="takeout",instance="app:9101"}'
+        values: '0+0x10'
+      - series: 'takeout_outbox_collector_available{job="takeout",instance="app:9101"}'
+        values: '1+0x10'
+    alert_rule_test:
+      - {eval_time: 6m, alertname: TakeoutTargetDown, exp_alerts: []}
+      - {eval_time: 6m, alertname: TakeoutOutboxDelayed, exp_alerts: []}
+      - {eval_time: 6m, alertname: TakeoutOutboxCollectorUnavailable, exp_alerts: []}

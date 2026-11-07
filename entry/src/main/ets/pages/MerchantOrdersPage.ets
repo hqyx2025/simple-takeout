@@ -1,3 +1,4 @@
+import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppFilterStyle, AppTextAreaStyle } from '../common/theme/AppTheme'
 /**
  * 商户订单管理页
@@ -693,14 +694,16 @@ struct MerchantRejectOrderDialog {
             }, (item: CartItem, index: number) => `${index}_${this.itemKey(item)}`)
           }
 
-          Text('补充说明（选填）')
-            .fontSize(FONT_SIZE.SM).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
-            .width('100%').margin({ top: SPACING.SM })
-          TextArea({ text: this.note, placeholder: '例如：原料临时售罄，预计晚餐时段恢复' })
-            .attributeModifier(new AppTextAreaStyle()).width('100%').height(92).maxLength(100)
-            .enabled(!this.submitting)
-            .id('merchant-reject-note')
-            .onChange((value: string) => { this.note = value })
+          FormInput({ label: '情况说明',
+            value: this.note,
+            placeholder: '例如：原料临时售罄，预计晚餐时段恢复',
+            maxLength: 100,
+            isEnabled: !this.submitting,
+            fieldId: 'merchant-reject-note',
+            onChange: (value: string) => { this.note = value },
+            multiline: true,
+            inputHeight: 92,
+            required: true }).width('100%')
         }
         .width('100%')
       }

@@ -1,6 +1,7 @@
 package com.example.takeout.service.mq;
 
 import com.example.takeout.dao.OutboxEventDao;
+import com.example.takeout.common.TraceContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,6 +48,41 @@ public class DomainEventPublisher {
     /** Stream 键名。 */
     public static final String STREAM_KEY = "takeout:stream:domain-events";
 
+    private static final org.springframework.data.redis.core.script.RedisScript<Long> TRIM_ACKNOWLEDGED =
+            org.springframework.data.redis.core.script.RedisScript.of("""
+                local length = redis.call('XLEN', KEYS[1])
+                local target = tonumber(ARGV[1])
+                if length <= target then return 0 end
+                local groups = redis.call('XINFO', 'GROUPS', KEYS[1])
+                if #groups == 0 then return 0 end
+                local function less(a, b)
+                  local am, as = string.match(a, '^(%d+)%-(%d+)$')
+                  local bm, bs = string.match(b, '^(%d+)%-(%d+)$')
+                  if #am ~= #bm then return #am < #bm end
+                  if am ~= bm then return am < bm end
+                  if #as ~= #bs then return #as < #bs end
+                  return as < bs
+                end
+                local safe = nil
+                for _, group in ipairs(groups) do
+                  local name, delivered, pending
+                  for i = 1, #group, 2 do
+                    if group[i] == 'name' then name = group[i+1] end
+                    if group[i] == 'last-delivered-id' then delivered = group[i+1] end
+                    if group[i] == 'pending' then pending = tonumber(group[i+1]) end
+                  end
+                  if not delivered or delivered == '0-0' then return 0 end
+                  local boundary = delivered
+                  if pending > 0 then boundary = redis.call('XPENDING', KEYS[1], name)[2] end
+                  if not safe or less(boundary, safe) then safe = boundary end
+                end
+                local candidates = redis.call('XRANGE', KEYS[1], '-', '+', 'COUNT', math.min(length-target, 100))
+                if #candidates == 0 then return 0 end
+                local cutoff = candidates[#candidates][1]
+                if less(safe, cutoff) then cutoff = safe end
+                return redis.call('XTRIM', KEYS[1], 'MINID', cutoff)
+                """, Long.class);
+
     /** 事件类型常量。 */
     public static final String ORDER_CREATED = "ORDER_CREATED";
     public static final String ORDER_PAID = "ORDER_PAID";
@@ -86,7 +122,10 @@ public class DomainEventPublisher {
         }
         String json;
         try {
-            json = objectMapper.writeValueAsString(payload == null ? Map.of() : payload);
+            Map<String,Object> fields = new java.util.LinkedHashMap<>(payload == null ? Map.of() : payload);
+            // Persist correlation with the event; retries never depend on the originating HTTP thread.
+            if (!TraceContext.current().isBlank()) fields.put("_traceId", TraceContext.current());
+            json = objectMapper.writeValueAsString(fields);
         } catch (Exception e) {
             throw new IllegalStateException("Outbox event serialization failed", e);
         }
@@ -110,6 +149,15 @@ public class DomainEventPublisher {
         if (redis == null) {
             return false;
         }
+        String previous = TraceContext.current();
+        String trace = null;
+        try {
+            var payload = objectMapper.readTree(payloadJson == null ? "{}" : payloadJson);
+            if (payload != null) trace = TraceContext.normalize(payload.path("_traceId").asText(null));
+        } catch (Exception ignored) {
+            // Legacy events without valid metadata remain deliverable.
+        }
+        TraceContext.bind(trace == null ? "event-" + eventId : trace);
         try {
             if (erpDelivery != null && !erpDelivery.deliver(eventId,eventType,orderId,payloadJson)) return false;
             Map<String, String> fields = Map.of(
@@ -117,21 +165,27 @@ public class DomainEventPublisher {
                     "eventType", eventType,
                     "orderId", String.valueOf(orderId),
                     "payload", payloadJson == null ? "{}" : payloadJson,
-                    "occurredAt", LocalDateTime.now().format(FMT));
+                    "occurredAt", LocalDateTime.now().format(FMT),
+                    "traceId", TraceContext.current());
             MapRecord<String, String, String> record = StreamRecords.mapBacked(fields).withStreamKey(STREAM_KEY);
             redis.opsForStream().add(record);
-            // 近似裁剪：控制 Stream 长度，避免无限增长（不阻塞主流程）
+            // Retention is a target: pending/unread messages are never sacrificed to a length cap.
+            // Redis noeviction supplies the hard memory boundary; failed XADD stays in the durable Outbox.
             if (streamMaxLen > 0) {
                 try {
-                    redis.opsForStream().trim(STREAM_KEY, streamMaxLen, true);
+                    redis.execute(TRIM_ACKNOWLEDGED, java.util.List.of(STREAM_KEY), String.valueOf(streamMaxLen));
                 } catch (Exception ignored) {
                     // 裁剪失败不影响投递结果
                 }
             }
+            log.info("[事件] 投递完成 eventId={} type={}", eventId, eventType);
             return true;
         } catch (Exception e) {
             log.warn("[事件] ERP/Stream 下游投递失败 eventId={} type={}（等待 Outbox 退避重试）", eventId, eventType, e);
             return false;
+        } finally {
+            TraceContext.clear();
+            TraceContext.bind(previous);
         }
     }
 

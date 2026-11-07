@@ -1,3 +1,4 @@
+import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /** 管理端-员工账号管理：员工增删改中的新增、资料编辑和启停用。 */
 import { AppMotion } from '../common/theme/AppMotion'
@@ -187,21 +188,30 @@ export struct AdminEmployeePage {
           Column({ space: SPACING.SM }) {
             Text(this.editingId === 0 ? '新增员工' : '编辑员工')
               .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
-            Text('员工姓名（必填）').fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY)
-            TextInput({ placeholder: '请输入员工姓名，如：黄焖鸡老板', text: this.formUsername })
-              .attributeModifier(new AppInputStyle())
-              .width('100%').onChange((value: string) => { this.formUsername = value })
-            Text('手机号（必填）').fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY)
-            TextInput({ placeholder: '请输入 11 位手机号，如：13600136000', text: this.formPhone })
-              .attributeModifier(new AppInputStyle())
-              .width('100%').type(InputType.PhoneNumber)
-              .onChange((value: string) => { this.formPhone = value })
+
+            FormInput({ label: '员工姓名',
+              value: this.formUsername,
+              placeholder: '请输入员工姓名，如：黄焖鸡老板',
+              onChange: (value: string) => { this.formUsername = value },
+              fieldId: 'AdminEmployeePage-formUsername',
+              required: true }).width('100%')
+
+            FormInput({ label: '手机号',
+              value: this.formPhone,
+              placeholder: '请输入 11 位手机号，如：13600136000',
+              inputType: InputType.PhoneNumber,
+              onChange: (value: string) => { this.formPhone = value },
+              fieldId: 'AdminEmployeePage-formPhone',
+              required: true }).width('100%')
             if (this.editingId === 0) {
-              Text('初始密码（必填）').fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY)
-              TextInput({ placeholder: '请输入至少 6 位初始密码', text: this.formPassword })
-                .attributeModifier(new AppInputStyle())
-                .width('100%').type(InputType.Password)
-                .onChange((value: string) => { this.formPassword = value })
+
+              FormInput({ label: '初始密码',
+                value: this.formPassword,
+                placeholder: '请输入至少 6 位初始密码',
+                inputType: InputType.Password,
+                onChange: (value: string) => { this.formPassword = value },
+                fieldId: 'AdminEmployeePage-formPassword',
+                required: true }).width('100%')
             }
             Row({ space: SPACING.SM }) {
               Button('取消')

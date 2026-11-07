@@ -69,6 +69,7 @@ class OrderServiceRiderFlowTest {
     @org.junit.jupiter.api.BeforeEach
     void lockingReadUsesCurrentOrder() {
         when(orderDao.findByIdForUpdate(org.mockito.ArgumentMatchers.anyLong())).thenAnswer(invocation -> orderDao.findById(invocation.getArgument(0)));
+        when(orderDao.findByIdForGrab(org.mockito.ArgumentMatchers.anyLong())).thenAnswer(invocation -> orderDao.findById(invocation.getArgument(0)));
     }
 
     /** 服务层独立校验骑手未被停用：走 riderGrab/riderPickup/riderDeliver 的用例必须先桩一个启用中的骑手档案。 */
@@ -110,16 +111,72 @@ class OrderServiceRiderFlowTest {
                         "南宁市", 23.7177, 108.3665, 1, "[1]", OWNER_ID, 1, 0, "", 0)));
     }
 
+    private void stubPool(int count) {
+        when(orderDao.countRiderPool(22.8177, 108.3665, 25000)).thenReturn(count);
+        when(orderDao.listRiderPool(22.8177, 108.3665, 25000, 30, 0L)).thenReturn(
+                java.util.stream.IntStream.range(0, count)
+                    .mapToObj(n -> new OrderDao.RiderPoolRow(storedOrder(2), "2026-09-15 10:05:00")).toList());
+    }
+
+    @Test
+    void poolClampsPageSizeAndUsesLongOffset() {
+        stubActiveRider();
+        var page = service.riderPool(RIDER_ID, Integer.MAX_VALUE, 999);
+        assertEquals(100, page.pageSize());
+        verify(orderDao).listRiderPool(22.8177, 108.3665, 25000, 100, 214748364600L);
+        assertTrue(!page.hasMore());
+    }
+
+    @Test
+    void poolCapabilitiesUseJoinedSnapshotWithoutPerOrderQueries() {
+        stubActiveRider();
+        stubPool(30);
+        var jdbc = mock(org.springframework.jdbc.core.JdbcTemplate.class);
+        service.configureBusinessRules(null, new OrderOperationsService(jdbc, orderDao, storeDao, riderDao,
+                mock(org.springframework.beans.factory.ObjectProvider.class),
+                mock(org.springframework.beans.factory.ObjectProvider.class)));
+
+        var page = service.riderPool(RIDER_ID, 1, 30);
+
+        assertEquals(30, page.list().size());
+        assertTrue(page.list().getFirst().capabilities().allowedActions().contains("RIDER_GRAB"));
+        org.mockito.Mockito.verifyNoInteractions(jdbc, storeDao);
+        verify(orderDao, never()).findReadyTime(anyLong());
+        verify(orderDao, never()).findRiderId(anyLong());
+    }
+
+    @Test
+    void poolCursorUsesOneExtraRowWithoutCountAndValidatesInput() {
+        stubActiveRider();
+        var rows = java.util.stream.IntStream.range(0, 31)
+                .mapToObj(n -> new OrderDao.RiderPoolRow(storedOrder(2), "2026-09-15 10:05:00")).toList();
+        when(orderDao.listRiderPoolAfter(22.8177, 108.3665, 25000, 31, 400L)).thenReturn(rows);
+
+        var slice = service.riderPoolAfter(RIDER_ID, 400L, 30);
+
+        assertEquals(30, slice.list().size());
+        assertTrue(slice.hasMore());
+        assertEquals(ORDER_ID, slice.nextAfterId());
+        verify(orderDao, never()).countRiderPool(anyDouble(), anyDouble(), org.mockito.ArgumentMatchers.anyInt());
+        verify(orderDao, never()).findReadyTime(anyLong());
+        org.mockito.Mockito.verifyNoInteractions(storeDao);
+        assertThrows(BizException.class, () -> service.riderPoolAfter(RIDER_ID, -1, 30));
+        var empty = service.riderPoolAfter(RIDER_ID, 999, 999);
+        assertTrue(!empty.hasMore());
+        assertEquals(0, empty.nextAfterId());
+        verify(orderDao).listRiderPoolAfter(22.8177, 108.3665, 25000, 101, 999L);
+    }
+
     /**
      * 平台配单：只在「商家半径 ∩ 骑手半径」内。
      * 商家半径一侧在下单时已按收货地址校验（超距直接拒绝下单），池子侧只需再按骑手半径过滤。
      */
     @Test
-    void poolOnlyContainsOrdersWithinRiderRadius() {
+    void poolReturnsFilteredPageWithRedaction() {
         stubActiveRider();
         stubStore();
         stubFarStore();
-        when(orderDao.listRiderPool()).thenReturn(List.of(storedOrder(2), farStoredOrder(2)));
+        stubPool(1);
 
         List<Order.OrderView> pool = service.riderPool(RIDER_ID);
 
@@ -134,14 +191,15 @@ class OrderServiceRiderFlowTest {
     }
 
     @Test
-    void poolChecksEachStoreRangeOncePerRequest() {
+    void poolDoesNotQueryIndividualOrdersOrStores() {
         stubActiveRider();
         stubStore();
-        when(orderDao.listRiderPool()).thenReturn(List.of(storedOrder(2), storedOrder(2), storedOrder(2)));
+        stubPool(3);
         assertEquals(3, service.riderPool(RIDER_ID).size());
-        org.mockito.Mockito.verify(storeDao, org.mockito.Mockito.times(1)).findForDispatch(STORE_ID);
+        verify(orderDao, never()).findReadyTime(anyLong());
+        verify(storeDao, never()).findForDispatch(anyLong());
         service.riderPool(RIDER_ID);
-        org.mockito.Mockito.verify(storeDao, org.mockito.Mockito.times(2)).findForDispatch(STORE_ID);
+        verify(orderDao, org.mockito.Mockito.times(2)).listRiderPool(22.8177, 108.3665, 25000, 30, 0L);
     }
 
     /** 抢单前的响应只提供接单决策所需信息，序列化输出也不能夹带顾客或商品隐私。 */
@@ -149,7 +207,7 @@ class OrderServiceRiderFlowTest {
     void riderPoolRedactsCustomerDataButKeepsDispatchDecisionFields() throws Exception {
         stubActiveRider();
         stubStore();
-        when(orderDao.listRiderPool()).thenReturn(List.of(storedOrder(2)));
+        stubPool(1);
 
         Order.OrderView order = service.riderPool(RIDER_ID).get(0);
 
@@ -187,7 +245,7 @@ class OrderServiceRiderFlowTest {
         when(riderDao.findById(RIDER_ID)).thenReturn(Optional.of(
                 new Rider(RIDER_ID, 5L, "骑手小张", "13300133000", 1, 0, 0.0, 1, 25000,
                         null, null, "", "")));
-        when(orderDao.listRiderPool()).thenReturn(List.of(storedOrder(2)));
+        stubPool(1);
 
         assertEquals(0, service.riderPool(RIDER_ID).size());
     }
@@ -202,6 +260,33 @@ class OrderServiceRiderFlowTest {
         BizException error = assertThrows(BizException.class, () -> service.riderGrab(RIDER_ID, ORDER_ID));
 
         assertTrue(error.getMessage().contains("不在您的配送范围内"), error.getMessage());
+        verify(orderDao, never()).findByIdForGrab(anyLong());
+    }
+
+    @Test
+    void busyOrderRejectsGrabWithoutAttemptingAssignment() {
+        stubActiveRider();
+        stubStore();
+        when(orderDao.findById(ORDER_ID)).thenReturn(Optional.of(storedOrder(2)));
+        org.mockito.Mockito.doReturn(Optional.empty()).when(orderDao).findByIdForGrab(ORDER_ID);
+
+        BizException error = assertThrows(BizException.class, () -> service.riderGrab(RIDER_ID, ORDER_ID));
+
+        assertEquals(409, error.getCode());
+        verify(orderDao, never()).tryAssignRider(anyLong(), anyLong());
+        verify(orderDao, never()).findByIdForUpdate(anyLong());
+    }
+
+    @Test
+    void retryAfterSuccessfulGrabReturnsOwnAssignment() {
+        stubActiveRider();
+        stubStore();
+        when(orderDao.findById(ORDER_ID)).thenReturn(Optional.of(storedOrder(2)));
+        when(orderDao.findRiderId(ORDER_ID)).thenReturn(RIDER_ID);
+
+        assertEquals(ORDER_ID, service.riderGrab(RIDER_ID, ORDER_ID).id());
+
+        verify(orderDao, never()).tryAssignRider(anyLong(), anyLong());
     }
 
     @Test
@@ -234,7 +319,7 @@ class OrderServiceRiderFlowTest {
     void deliveredOrderWithReadyTimeShowsUpInPool() {
         stubActiveRider();
         stubStore();
-        when(orderDao.listRiderPool()).thenReturn(List.of(storedOrder(2)));
+        stubPool(1);
 
         // 池子按骑手半径过滤：门店必须在骑手接单位置的配送半径内
         List<Order.OrderView> pool = service.riderPool(RIDER_ID);

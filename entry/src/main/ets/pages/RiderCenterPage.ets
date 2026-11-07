@@ -1,3 +1,4 @@
+import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /**
  * 骑手中心（四端改造）：上线/下线、配送统计、入口
@@ -279,11 +280,13 @@ export struct RiderCenterPage {
                 .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
                 .fontColor(MODULE_COLOR.RIDER).width('100%')
               Row({ space: SPACING.MD }) {
-                TextInput({ placeholder: `配送半径（公里），如：${RIDER_RADIUS_DEFAULT_KM}`, text: this.radiusInput })
-                  .attributeModifier(new AppInputStyle())
-                  .layoutWeight(1).type(InputType.Number)
-                  .id('rider-radius-input')
-                  .onChange((v: string) => { this.radiusInput = v })
+                FormInput({ label: '配送半径（公里）',
+                  value: this.radiusInput,
+                  placeholder: `配送半径（公里），如：${RIDER_RADIUS_DEFAULT_KM}`,
+                  inputType: InputType.Number,
+                  fieldId: 'rider-radius-input',
+                  onChange: (v: string) => { this.radiusInput = v },
+                  required: true }).layoutWeight(1)
                 Button(this.savingRadius ? '保存中...' : '保存半径')
                   .attributeModifier(new AppButtonStyle())
                   .height(44).fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.RIDER)

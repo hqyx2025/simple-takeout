@@ -54,6 +54,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(status).body(ApiResponse.error(e.getCode(), e.getMessage()));
     }
 
+    @ExceptionHandler({org.springframework.dao.DataAccessException.class, org.springframework.transaction.TransactionException.class})
+    public ResponseEntity<ApiResponse<Void>> handleDatabase(Exception e,
+                                                            jakarta.servlet.http.HttpServletRequest request) {
+        if (!DatabaseAvailability.unavailable(e)) return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(handleOther(e));
+        request.setAttribute(DatabaseAvailability.FAILURE_ATTRIBUTE, Boolean.TRUE);
+        log.warn("数据库暂时不可用 exception={}", e.getClass().getSimpleName());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).header("Retry-After", "1")
+                .body(ApiResponse.error(503, "服务暂时不可用，请稍后查询操作结果或重试"));
+    }
+
     /**
      * 纯客户端输入错误：路径/查询参数类型不符（/api/orders/abc）、缺少必填参数、
      * 请求体不是合法 JSON、缺少 multipart 部件 —— 都应回 400 而不是 500。

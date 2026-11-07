@@ -24,7 +24,7 @@ class ErpPermissionTest {
                 "reverse-receipt","payment-correct","reverse-payment","supplier-refund"}) {
             var service=mock(ErpService.class);
             var db=mock(JdbcTemplate.class);
-            var builder=RestClient.builder().baseUrl("http://authority.test");
+            var builder=com.example.takeout.common.JsonRestClients.builder().baseUrl("http://authority.test");
             var server=MockRestServiceServer.bindTo(builder).build();
             var controller=new ErpController(service,db,"http://authority.test","test-integration-secret-32-characters");
             ReflectionTestUtils.setField(controller,"app",builder.build());
@@ -40,7 +40,7 @@ class ErpPermissionTest {
     @Test void createOnlyAccountCanWriteWithoutRequiringReadPermission() {
         var service=mock(ErpService.class);
         var db=mock(JdbcTemplate.class);
-        var builder=RestClient.builder().baseUrl("http://authority.test");
+        var builder=com.example.takeout.common.JsonRestClients.builder().baseUrl("http://authority.test");
         var server=MockRestServiceServer.bindTo(builder).build();
         var controller=new ErpController(service,db,"http://authority.test","test-integration-secret-32-characters");
         ReflectionTestUtils.setField(controller,"app",builder.build());

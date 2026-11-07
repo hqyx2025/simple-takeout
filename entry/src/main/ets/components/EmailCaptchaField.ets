@@ -1,3 +1,4 @@
+import { FormInput } from './FormInput'
 import { AppTheme, AppInputStyle } from '../common/theme/AppTheme'
 import { fetchCaptchaApi } from '../service/api/AuthApi'
 import { CaptchaResult } from '../model/server/Contracts'
@@ -37,20 +38,24 @@ export struct EmailCaptchaField {
 
   build() {
     Column({ space: 6 }) {
-      Text('图片校对码').fontSize(13).fontWeight(FontWeight.Medium).fontColor(AppTheme.TEXT).width('100%')
       Row({ space: 8 }) {
-        TextInput({ text: this.captchaCode, placeholder: '输入右图 5 位字符' })
-          .attributeModifier(new AppInputStyle()).maxLength(5).layoutWeight(1).height(44)
-          .enabled(!this.disabled)
-          .id('email-captcha-input').onChange((value: string) => { this.captchaCode = value })
+        FormInput({ label: '图片校对码',
+          value: this.captchaCode,
+          placeholder: '输入右图 5 位字符',
+          maxLength: 5,
+          isEnabled: !this.disabled,
+          fieldId: 'email-captcha-input', errorMessage: this.errorMessage,
+          validator: (value: string): string => /^[A-Za-z0-9]{5}$/.test(value) ? '' : '请输入右图的 5 位字符',
+          onChange: (value: string) => { this.captchaCode = value },
+          required: true }).layoutWeight(1)
         Button({ type: ButtonType.Normal }).width(120).height(44).padding(2)
           .backgroundColor(AppTheme.INPUT).border({ width: 1, color: AppTheme.BORDER }).borderRadius(AppTheme.CONTROL_RADIUS)
           .enabled(!this.loading && !this.disabled).id('email-captcha-refresh').accessibilityText('更换图片校对码')
           .onClick(() => { this.reload() })
           .overlay(this.captchaImage())
-      }.width('100%').height(44).flexShrink(0)
-      if (this.errorMessage || this.error) {
-        Text(this.errorMessage || this.error).fontSize(13).fontColor(AppTheme.ERROR).width('100%').id('email-captcha-input-error')
+      }.width('100%').alignItems(VerticalAlign.Top).flexShrink(0)
+      if (this.error) {
+        Text(this.error).fontSize(13).fontColor(AppTheme.ERROR).width('100%').id('email-captcha-load-error')
       }
     }.width('100%').flexShrink(0)
   }

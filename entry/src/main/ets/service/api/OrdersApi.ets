@@ -7,9 +7,10 @@ import { ServerCartItem, ServerOrder, ServerOrderPage, ServerReview, OrderItemRe
 import { toCartItem, toOrder, toOrderPageData } from '../../model/server/Converters'
 
 /** 图文评价图片上传：返回相对地址（需拼接 API_CONFIG.BASE_URL 展示）。 */
-export async function uploadImageApi(fileUri: string, showErrorToast: boolean = true): Promise<UploadResult | null> {
+export async function uploadImageApi(fileUri: string, showErrorToast: boolean = true,
+  onProgress: (percent: number) => void = () => {}): Promise<UploadResult | null> {
   const url: string = getApiBaseUrl() + API_CONFIG.ENDPOINTS['upload']
-  const result: UploadResult | null = await uploadFile(url, fileUri, showErrorToast)
+  const result: UploadResult | null = await uploadFile(url, fileUri, showErrorToast, onProgress)
   return result
 }
 

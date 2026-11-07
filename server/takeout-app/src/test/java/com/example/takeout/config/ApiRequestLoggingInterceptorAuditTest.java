@@ -77,4 +77,15 @@ class ApiRequestLoggingInterceptorAuditTest {
 
     public void adminMutation() {
     }
+
+    @Test void databaseFailureDoesNotTriggerAnotherAuditDatabaseAttempt() {
+        var request = new MockHttpServletRequest("POST", "/api/rider/orders/900/grab");
+        request.setAttribute(AuthInterceptor.ATTR_USER_ID, 7L);
+        request.setAttribute(AuthInterceptor.ATTR_ROLE, 3);
+        request.setAttribute(com.example.takeout.common.DatabaseAvailability.FAILURE_ATTRIBUTE, Boolean.TRUE);
+        var response = new MockHttpServletResponse(); response.setStatus(503);
+        interceptor.preHandle(request, response, new Object());
+        interceptor.afterCompletion(request, response, new Object(), null);
+        org.mockito.Mockito.verifyNoInteractions(logs);
+    }
 }

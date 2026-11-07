@@ -1,3 +1,5 @@
+import { LocationSearchField } from '../components/LocationSearchField'
+import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppInputStyle } from '../common/theme/AppTheme'
 /**
  * 选择位置页面
@@ -812,12 +814,13 @@ export struct LocationPage {
           // 搜索区域
           Column({ space: SPACING.SM }) {
             Row({ space: SPACING.SM }) {
-              TextInput({ placeholder: '搜索地点，如：中关村', text: this.keyword })
-          .attributeModifier(new AppInputStyle())
-                .id('location-keyword')
-                .layoutWeight(1)
-                .onChange((value: string) => { this.keyword = value })
-                .onSubmit(() => { this.doSearch() })
+              LocationSearchField({ value: this.keyword, fieldId: 'location-keyword',
+                onChange: (value: string) => { this.keyword = value },
+                onSelect: (place: AddressSearchResult) => {
+                  this.keyword = place.name
+                  const selected: SearchPlace = SearchPlace.create(place.name, place.district, place.address, place.latitude, place.longitude)
+                  this.searchResults = [selected]; this.searched = true; this.selectPlace(selected)
+                } }).layoutWeight(1)
               Button(this.isSearching ? '搜索中…' : '搜索')
           .attributeModifier(new AppButtonStyle())
                 .height(40)

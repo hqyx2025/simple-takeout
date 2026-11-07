@@ -53,10 +53,10 @@ public class CouponDao {
         return jdbc.update("UPDATE coupons SET status = 1 WHERE id = ? AND status = 0", id) == 1;
     }
 
-    /** 过期券清理：把已过期的未使用券标记为已失效（status=2）。 */
-    public int expireOutdated(String now) {
-        return jdbc.update("UPDATE coupons SET status = 2 WHERE status = 0 AND " +
-                JdbcDateTimes.value("expire_time") + " < " + JdbcDateTimes.PARAMETER, now);
+    /** 用户查券只更新本人过期券，避免每次查列表都扫描、锁定其他账号的券。 */
+    public int expireOutdated(long userId, String now) {
+        return jdbc.update("UPDATE coupons SET status = 2 WHERE user_id = ? AND status = 0 AND " +
+                JdbcDateTimes.value("expire_time") + " < " + JdbcDateTimes.PARAMETER, userId, now);
     }
 
     /**

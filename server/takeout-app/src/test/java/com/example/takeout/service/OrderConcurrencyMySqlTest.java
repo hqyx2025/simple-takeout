@@ -1,7 +1,7 @@
 package com.example.takeout.service;
 
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
-import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
+import com.baomidou.mybatisplus.spring.MybatisSqlSessionFactoryBean;
 import com.example.takeout.common.BizException;
 import com.example.takeout.dao.*;
 import com.example.takeout.mapper.CartItemMapper;
@@ -61,8 +61,18 @@ class OrderConcurrencyMySqlTest {
         var connection = new org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory(
                 "127.0.0.1", Integer.parseInt(System.getenv("TAKEOUT_TEST_REDIS_PORT")));
         connection.afterPropertiesSet(); connection.start();
+        var redis = new org.springframework.data.redis.core.StringRedisTemplate(connection);
+        String scope = "test:" + database + ":";
+        var strings = org.springframework.data.redis.serializer.RedisSerializer.string();
+        // Scope physical keys, not the limiter logic: retain the real budgets while making repeats independent.
+        redis.setKeySerializer(new org.springframework.data.redis.serializer.RedisSerializer<String>() {
+            @Override public byte[] serialize(String key) { return key == null ? null : strings.serialize(scope + key); }
+            @Override public String deserialize(byte[] bytes) {
+                String key = strings.deserialize(bytes);
+                return key != null && key.startsWith(scope) ? key.substring(scope.length()) : key;
+            }
+        });
         try {
-            var redis = new org.springframework.data.redis.core.StringRedisTemplate(connection);
             ObjectProvider<org.springframework.data.redis.core.StringRedisTemplate> provider = mock(ObjectProvider.class);
             when(provider.getIfAvailable()).thenReturn(redis);
             var limiter = new com.example.takeout.security.LoginRateLimiter(provider);
@@ -101,7 +111,12 @@ class OrderConcurrencyMySqlTest {
                     + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'phone'", String.class));
             for (char ignored : new char[]{0x200b, 0xad, 0x200c, 0x200d, 0x2060, 0xfeff, 0})
                 assertTrue(users.findByPhone(victim + ignored).isEmpty());
-        } finally { connection.destroy(); }
+        } finally {
+            try {
+                java.util.Set<String> keys = redis.keys("*");
+                if (keys != null && !keys.isEmpty()) redis.delete(keys);
+            } finally { connection.destroy(); }
+        }
     }
 
     private JdbcTemplate admin;
@@ -870,6 +885,163 @@ class OrderConcurrencyMySqlTest {
 
     private int count(String sql) {
         return jdbc.queryForObject(sql, Integer.class);
+    }
+
+    private UserCenterService couponCenter(CouponDao coupons) {
+        var stock = new CouponStockDao(jdbc);
+        var target = new UserCenterService(coupons, null, null, null, new StoreDao(jdbc), null, null,
+                new ObjectMapper(), new UserCouponDao(jdbc), null, null, stock);
+        new TransactionTemplate(new DataSourceTransactionManager(jdbc.getDataSource())).executeWithoutResult(status -> {
+            for (var campaign : target.listCouponActivities()) {
+                stock.initialize(campaign.name(), campaign.threshold(), campaign.amount());
+            }
+        });
+        var proxy = new ProxyFactory(target);
+        proxy.addAdvice(new TransactionInterceptor(new DataSourceTransactionManager(jdbc.getDataSource()),
+                new AnnotationTransactionAttributeSource()));
+        return (UserCenterService) proxy.getProxy();
+    }
+
+    @Test
+    void simultaneousCouponClaimsAcrossServiceInstancesIssueOnlyOneCoupon() throws Exception {
+        var first = couponCenter(new CouponDao(jdbc));
+        var second = couponCenter(new CouponDao(jdbc));
+        AtomicInteger won = new AtomicInteger();
+        runTogether(32, index -> {
+            try {
+                (index % 2 == 0 ? first : second).claimCoupon(1, 0, "", 10, 2);
+                won.incrementAndGet();
+            } catch (BizException e) {
+                assertTrue(e.getMessage().contains("限领一次"), e.getMessage());
+            }
+        });
+        assertEquals(1, won.get());
+        assertEquals(1, count("SELECT COUNT(*) FROM user_coupons WHERE user_id=1"));
+        assertEquals(1, count("SELECT COUNT(*) FROM coupons WHERE user_id=1 AND source='claim'"));
+    }
+
+    @Test
+    void failedCouponInsertRollsBackClaimAndAllowsRetry() {
+        var failing = spy(new CouponDao(jdbc));
+        doThrow(new DataAccessResourceFailureException("injected"))
+                .when(failing).insert(anyLong(), anyLong(), anyString(), anyDouble(), anyDouble(), anyString(), anyString(), anyString());
+        assertThrows(DataAccessResourceFailureException.class, () -> couponCenter(failing).claimCoupon(1, 0, "", 10, 2));
+        assertEquals(0, count("SELECT COUNT(*) FROM user_coupons"));
+        assertEquals(5, count("SELECT COUNT(*) FROM coupon_campaign_stock WHERE campaign_name='满10减2' AND claimed_user_id IS NULL"));
+        assertTrue(couponCenter(new CouponDao(jdbc)).claimCoupon(1, 0, "", 10, 2).id() > 0);
+    }
+
+    @Test
+    void differentUsersAndStoresShareOnlyFiveCampaignSlotsAcrossInstances() throws Exception {
+        var first = couponCenter(new CouponDao(jdbc));
+        var second = couponCenter(new CouponDao(jdbc));
+        for (int id = 9; id <= 32; id++) jdbc.update("INSERT INTO users(id,username,phone,password,create_time) VALUES(?,?,?,'test',NOW())",
+                id, "user" + id, Long.toString(13800000000L + id));
+        AtomicInteger won = new AtomicInteger();
+        runTogether(32, index -> {
+            try {
+                (index % 2 == 0 ? first : second).claimCoupon(index + 1L, index % 2 == 0 ? 0 : 10, "", 10, 2);
+                won.incrementAndGet();
+            } catch (BizException e) { assertEquals(409, e.getCode()); }
+        });
+        assertEquals(5, won.get());
+        assertEquals(5, count("SELECT COUNT(*) FROM coupons WHERE source='claim'"));
+        assertEquals(5, count("SELECT COUNT(*) FROM user_coupons"));
+        assertEquals(5, count("SELECT COUNT(*) FROM coupon_campaign_stock WHERE campaign_name='满10减2' AND claimed_user_id IS NOT NULL"));
+        // 重新初始化不回补已发名额；换 storeId 不能绕过同种活动总量。
+        var restarted = couponCenter(new CouponDao(jdbc));
+        assertEquals(409, assertThrows(BizException.class, () -> restarted.claimCoupon(99, 10, "", 10, 2)).getCode());
+        assertEquals(5, count("SELECT COUNT(*) FROM user_coupons"), "售罄失败必须回滚本次领取台账");
+        assertTrue(restarted.claimCoupon(99, 0, "", 14, 3).id() > 0);
+    }
+
+    @Test
+    void historicalIssuedCouponsCountTowardFiveAndInitializationNeverResetsStock() {
+        for (int i = 1; i <= 3; i++) jdbc.update("INSERT INTO coupons(user_id,name,threshold,amount,source,expire_time,create_time) " +
+                "VALUES(?,'legacy name',10,2,'claim','2099-01-01',NOW())", i);
+        var center = couponCenter(new CouponDao(jdbc));
+        assertEquals(2, count("SELECT COUNT(*) FROM coupon_campaign_stock WHERE campaign_name='满10减2' AND claimed_user_id IS NULL"));
+        center.claimCoupon(4, 0, "", 10, 2);
+        center.claimCoupon(5, 0, "", 10, 2);
+        var restarted = couponCenter(new CouponDao(jdbc));
+        assertEquals(409, assertThrows(BizException.class, () -> restarted.claimCoupon(6, 0, "", 10, 2)).getCode());
+        assertEquals(5, count("SELECT COUNT(*) FROM coupons WHERE source='claim'"));
+    }
+
+    @Test
+    void busyCouponSlotsRejectWithoutWaitingAndRollbackReleasesThem() throws Exception {
+        var center = couponCenter(new CouponDao(jdbc));
+        try (var connection = jdbc.getDataSource().getConnection()) {
+            connection.setAutoCommit(false);
+            connection.createStatement().execute("SELECT slot_no FROM coupon_campaign_stock WHERE campaign_name='满10减2' FOR UPDATE");
+            try (var pool = Executors.newFixedThreadPool(2)) {
+                var busy = pool.submit(() -> assertThrows(BizException.class, () -> center.claimCoupon(1, 0, "", 10, 2)));
+                var free = pool.submit(() -> center.claimCoupon(2, 0, "", 14, 3));
+                try {
+                    assertEquals(409, busy.get(2, TimeUnit.SECONDS).getCode());
+                    assertTrue(free.get(2, TimeUnit.SECONDS).id() > 0);
+                } finally { connection.rollback(); }
+            }
+        }
+        assertTrue(center.claimCoupon(1, 0, "", 10, 2).id() > 0);
+    }
+
+    @Test
+    void viewingCouponsDoesNotWaitForAnotherAccountsLockedCoupon() {
+        try (var connection = jdbc.getDataSource().getConnection()) {
+            connection.setAutoCommit(false);
+            connection.createStatement().execute("SELECT id FROM coupons WHERE id=2 FOR UPDATE");
+            try (var pool = Executors.newSingleThreadExecutor()) {
+                var pending = pool.submit(() -> couponCenter(new CouponDao(jdbc)).listCoupons(1));
+                try { assertEquals(1, pending.get(2, TimeUnit.SECONDS).size()); }
+                finally { connection.rollback(); }
+            }
+        } catch (Exception e) { throw new AssertionError(e); }
+    }
+
+    private void insertGrabbableOrdersAndRiders() {
+        jdbc.update("INSERT INTO orders(id,order_no,user_id,store_id,store_name,status,items,address," +
+                "create_time,ready_time) VALUES(900,'GRAB900',1,10,'test',2,'[]','{}',NOW(),NOW())," +
+                "(901,'GRAB901',1,10,'test',2,'[]','{}',NOW(),NOW())");
+        for (int i = 1; i <= 32; i++) jdbc.update("INSERT INTO riders(id,user_id,online,latitude,longitude,create_time) " +
+                "VALUES(?,?,1,30.5,114.3,NOW())", i, i);
+    }
+
+    @Test
+    void thirtyTwoRidersOnlyAssignOrderOnceAndWinnerCanRetry() throws Exception {
+        insertGrabbableOrdersAndRiders();
+        AtomicInteger won = new AtomicInteger();
+        runTogether(32, index -> {
+            try {
+                service.riderGrab(index + 1L, 900);
+                won.incrementAndGet();
+            } catch (BizException e) { assertEquals(409, e.getCode()); }
+        });
+        assertEquals(1, won.get());
+        int winner = count("SELECT rider_id FROM orders WHERE id=900");
+        assertTrue(winner > 0);
+        assertEquals(900L, service.riderGrab(winner, 900).id());
+        assertEquals(2, count("SELECT status FROM orders WHERE id=900"));
+        assertEquals(0, count("SELECT SUM(total_orders) FROM riders"));
+    }
+
+    @Test
+    void lockedOrderRejectsImmediatelyWhileAnotherOrderCanStillBeGrabbed() throws Exception {
+        insertGrabbableOrdersAndRiders();
+        try (var connection = jdbc.getDataSource().getConnection()) {
+            connection.setAutoCommit(false);
+            connection.createStatement().execute("SELECT id FROM orders WHERE id=900 FOR UPDATE");
+            try (var pool = Executors.newFixedThreadPool(2)) {
+                var busy = pool.submit(() -> assertThrows(BizException.class, () -> service.riderGrab(1, 900)));
+                var free = pool.submit(() -> service.riderGrab(2, 901));
+                try {
+                    assertEquals(409, busy.get(2, TimeUnit.SECONDS).getCode());
+                    assertEquals(901L, free.get(2, TimeUnit.SECONDS).id());
+                } finally { connection.rollback(); }
+            }
+        }
+        assertEquals(0, count("SELECT rider_id FROM orders WHERE id=900"));
+        assertEquals(2, count("SELECT rider_id FROM orders WHERE id=901"));
     }
 
     private void runTogether(int workers, Work work) throws Exception {

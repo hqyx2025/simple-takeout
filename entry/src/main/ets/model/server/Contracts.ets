@@ -183,6 +183,12 @@ export interface ServerOrderPage {
   hasMore: boolean
 }
 
+export interface ServerRiderPoolSlice {
+  list: ServerOrder[]
+  hasMore: boolean
+  nextAfterId: number
+}
+
 export interface ServerMerchantStats {
   todayCount: number
   todayIncome: number

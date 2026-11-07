@@ -1,3 +1,21 @@
+management:
+  server:
+    port: ${TAKEOUT_MANAGEMENT_PORT:9101}
+    address: ${TAKEOUT_MANAGEMENT_ADDRESS:127.0.0.1}
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+  endpoint:
+    health:
+      show-details: never
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+
 server:
   # 应用默认监听 8087；可通过 TAKEOUT_APP_PORT 覆盖。
   # 与网关同机同跑时把应用挪开（如 TAKEOUT_APP_PORT=9100），由网关占住对外的 8087。
@@ -20,6 +38,14 @@ server:
       internal-proxies: '${TAKEOUT_INTERNAL_PROXY_REGEX:127\.0\.0\.1|::1|0:0:0:0:0:0:0:1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+}'
 
 spring:
+  http:
+    converters:
+      preferred-json-mapper: jackson2
+  flyway:
+    locations: classpath:db/migration/app
+    baseline-on-migrate: true
+    baseline-version: 0
+    clean-disabled: true
   application:
     name: simple-takeout-server
   datasource:
@@ -49,7 +75,7 @@ spring:
       # 图文评价图片上传上限（单张 5MB）
       max-file-size: 5MB
       max-request-size: 6MB
-  jackson:
+  jackson2:
     date-format: yyyy-MM-dd HH:mm:ssz
     time-zone: GMT+8
   data:
@@ -79,6 +105,19 @@ springdoc:
 
 # 自定义配置
 takeout:
+  personal-data:
+    encryption-secret: ${TAKEOUT_PERSONAL_DATA_ENCRYPTION_SECRET}
+    index-secret: ${TAKEOUT_PERSONAL_DATA_INDEX_SECRET}
+    previous-encryption-secrets: ${TAKEOUT_PERSONAL_DATA_PREVIOUS_ENCRYPTION_SECRETS:}
+  # 两个竞争写入口在认证查库前准入；Redis 正常时每秒预算跨实例共享，故障时保留本机预算。
+  claim-traffic:
+    max-concurrent-per-instance: ${TAKEOUT_CLAIM_MAX_CONCURRENT:4}
+    coupon-per-second: ${TAKEOUT_COUPON_CLAIM_RPS:20}
+    rider-per-second: ${TAKEOUT_RIDER_GRAB_RPS:30}
+    database-failure-threshold: ${TAKEOUT_CLAIM_DB_FAILURE_THRESHOLD:3}
+    database-cooldown: ${TAKEOUT_CLAIM_DB_COOLDOWN:5s}
+    redis-cooldown: ${TAKEOUT_CLAIM_REDIS_COOLDOWN:5s}
+    order-lease: ${TAKEOUT_RIDER_GRAB_LEASE:30s}
   erp:
     enabled: ${TAKEOUT_ERP_ENABLED:false}
     uri: ${TAKEOUT_ERP_URI:http://127.0.0.1:9200}

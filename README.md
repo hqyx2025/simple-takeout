@@ -1,5 +1,17 @@
 # 简单外卖 · simple-takeout
 
+HarmonyOS NEXT 原生客户端与 Spring Boot 交易系统，覆盖用户、商户、骑手和平台四端。订单、库存、优惠券与资金事实保留本地事务，ERP 使用独立数据库，Gateway 提供统一入口。
+
+[![Backend](https://github.com/hqyx2025/simple-takeout/actions/workflows/backend.yml/badge.svg)](https://github.com/hqyx2025/simple-takeout/actions/workflows/backend.yml)
+[![Frontend](https://github.com/hqyx2025/simple-takeout/actions/workflows/frontend.yml/badge.svg)](https://github.com/hqyx2025/simple-takeout/actions/workflows/frontend.yml)
+
+| 快速了解 | 入口 |
+| --- | --- |
+| 架构与事务边界 | [系统架构](#系统架构) |
+| 真实业务回归、性能数据与原测条件 | [验收证据](md/acceptance/2026-11-03/README.md)；历史数据均保留日期和边界 |
+| 本轮工程增强、运行方法与验证进度 | [2026-11-07 开发草稿](md/开发草稿-2026-11-07.md) |
+| 可复现命令与设备验证 | [脚本说明](scripts/README.md)、[设备实测指南](md/设备实测指南.md) |
+
 > HarmonyOS NEXT 外卖点餐 App（毕业设计 / 学习项目，业务对标美团外卖）。
 >
 > 前端为单 HAP 工程（ArkTS + ArkUI，API 26），后端为 Spring Boot 服务端（Java 25），
@@ -19,13 +31,21 @@
 
 **2026-10-25 安全复测基线**：截至当日 23:01，十轮攻防结束，基线版本为 `defense-20261025-225329`，包含第三至第十轮累计修复。该轮后端完整 reactor 实测 594 项全部通过；线上 28 项检查通过，30 路正确登录均返回 200，540 家店目录缓存为 451986 字节，第二次请求未回源。当时 demo 为单 app 副本，登录验密 2 许可 / 等待 10000 ms；源码默认等待为 5000 ms。该轮未执行线上下单、支付或退款，也未安装新的手机 HAP。这些结果属于当时的安全基线；完整证据与保留的 RT-16/22/31/32 风险见 [最终结论](md/audit/最终结论.md) 和 [第十轮回复](md/audit/round10/第十轮防御-回复.md)。
 
-## 当前技术与验证状态（2026-10-28）
+## 当前技术与验证状态（2026-11-07）
+
+本轮已完成 Spring Boot **4.0.9 / Spring 7.0.10 / Java 25** 升级，保留四端业务、JSON/SDK 契约与交易保护；新增手机号和私人地址等结构化资料加密及兼容回填、Flyway 增量版本、跨服务请求追踪、可靠事件保留、Actuator/Micrometer 与默认关闭的 Prometheus/Grafana。仓库名保持 `simple-takeout`。
+
+本机完整回归为后端 **802 项通过、0 失败/错误/跳过**，聚合行覆盖率 **72.63%**；Node/真实无头浏览器 **226 项通过**，API 26 debug HAP **BUILD SUCCESSFUL**，六项关键保护已完成反向验证。最终应用镜像 Trivy 扫描的**可修复 HIGH/CRITICAL 为 0**，使用 `--ignore-unfixed`，不代表所有级别或所有基础设施镜像无漏洞。
+
+用户已授权更新文档、推送 GitHub 和部署线上；**当前正在准备发布，尚未把本轮写为已上线**。验收方法、源码/镜像身份和真实边界见 [11/07 工程验收](md/acceptance/2026-11-07/README.md)，完整原始证据位置见 [开发草稿](md/开发草稿-2026-11-07.md)。本轮 HAP 未签名且无可用设备，真实第三方支付/退款、物理 GPS、长期容量及独立 CI 尚未验收；历史设备与 CI 结果不移用为本轮结果。
+
+### 历史：业务闭环与边界补验（2026-10-28 至 11-03）
 
 **2026-11-03 边界补验与发布**：商户出餐后改显“待骑手接单”，退款拒绝按服务端托管状态区分待确认与已完成；论文 ERP 架构图和部分退款状态图同步更新。后端 **736 项零跳过**、Node **217 项**、三项边界 UiTest 及完整同单回归通过。200 笔可抢订单的骑手池在五分钟负载下暴露重复销量聚合，轻量查询与请求内同店复用后 P95 从 **7,043.17 ms 降至 85.67 ms**，2,400 次请求零失败。最新后端已按用户要求发布为 `boundary-20261103-r3`；正式域名配置 HAP 和论文已上传服务器，三服务健康、线上首页及 540 店目录复核通过。结果、截图、论文与产物身份见[边界补验证据](md/acceptance/2026-11-03/boundary/README.md)。
 
 本轮业务源码 `e0f6bd3` 已同步 GitHub／Gitee，源码包也已上传服务器；[后端 CI](https://github.com/hqyx2025/simple-takeout/actions/runs/41664307467) 与 [前端 CI](https://github.com/hqyx2025/simple-takeout/actions/runs/41664307714) 均通过。发布与上传摘要保留远端文件哈希，后续文档提交不改变运行代码。
 
-**2026-11-03 整改更新**：店铺审核、驳回重提、审核历史与独立平台停用已落地。独立 MySQL／Redis 下后端 **734 项全部执行通过、零跳过**；Node **214 项通过**。API 26 模拟器完成同一订单的下单、错误密码拒付、余额支付、商户出餐、骑手配送、确认评价与结算后部分退款，并通过登录、管理端和店铺审核回归；实测发现的商户订单按钮旧回调已修复。500 店／14,971 商品／10,000 笔合成订单下，39 组 1,170 次本机接口测量零失败，最大 P95 **174.31 ms**。正式域名配置 debug HAP 构建成功；Code Linter 为 0 error、48 warning、2 suggestion。论文整改副本已完成 36 页核验，正文保守计数 11,706 个汉字。网页及后端已部署，线上域名与 540 店目录复核正常。详见[最终补验与边界](md/任务书与开题报告实现核对分析-2026-11-03.md#14-2026-11-03-最终补验与材料整改)及[脱敏验收证据](md/acceptance/2026-11-03/README.md)。下文注明日期的结果属于各自历史基线；本机性能不代表校园无线网或全校高峰。
+**2026-11-03 整改更新**：店铺审核、驳回重提、审核历史与独立平台停用已落地。独立 MySQL／Redis 下后端 **734 项全部执行通过、零跳过**；Node **214 项通过**。API 26 模拟器完成同一订单的下单、错误密码拒付、余额支付、商户出餐、骑手配送、确认评价与结算后部分退款，并通过登录、管理端和店铺审核回归；实测发现的商户订单按钮旧回调已修复。500 店／14,971 商品／10,000 笔合成订单下，39 组 1,170 次本机接口测量零失败，最大 P95 **174.31 ms**。正式域名配置 debug HAP 构建成功；Code Linter 为 0 error、48 warning、2 suggestion。论文整改副本已完成 36 页核验，正文保守计数 11,706 个汉字。网页及后端已部署，线上域名与 540 店目录复核正常。详见[最终补验与边界](md/acceptance/2026-11-03/任务书与开题报告实现核对分析-2026-11-03.md#14-2026-11-03-最终补验与材料整改)及[脱敏验收证据](md/acceptance/2026-11-03/README.md)。下文注明日期的结果属于各自历史基线；本机性能不代表校园无线网或全校高峰。
 
 当前架构为交易主服务 `takeout-app`、独立采购耗材服务 `takeout-erp` 与统一 Gateway。ERP 独立拥有数据库，通过内部接口校验门店权限和读取经营对账；商品目录、订单、库存扣减和资金事实保留在主服务的本地事务中。common 不再持有 DAO 或各服务业务实现，仍共享部分模型。
 
@@ -53,7 +73,7 @@
 
 ## 历史：六批业务与交互改造（2026-10-26）
 
-六批业务 / 交互改造当时随 `ux-20261026-1950-sync-r2` 于 **2026-10-26 20:30:14 +0800** 发布到体验站，运行源码提交为 `fc37a1471bf55f52c21b915c73afd65e73e9529a`。问题依据、逐批实施与验证证据见 [人性化改造诊断与实施方案](md/人性化改造诊断与实施方案.md)。GitHub Backend CI（`40322568519`）已通过；Frontend CI（`40327383209`，`4777346`）已由本机 `windows-deveco` 自托管 runner 完成依赖安装、HAP 构建、全部 15 个脚本检查及产物上传。
+六批业务 / 交互改造当时随 `ux-20261026-1950-sync-r2` 于 **2026-10-26 20:30:14 +0800** 发布到体验站，运行源码提交为 `fc37a1471bf55f52c21b915c73afd65e73e9529a`。问题依据、逐批实施与验证证据见 [人性化改造诊断与实施方案](md/archive/人性化改造诊断与实施方案.md)。GitHub Backend CI（`40322568519`）已通过；Frontend CI（`40327383209`，`4777346`）已由本机 `windows-deveco` 自托管 runner 完成依赖安装、HAP 构建、全部 15 个脚本检查及产物上传。
 
 | 范围 | App / Web 已实现能力 |
 | --- | --- |
@@ -135,14 +155,14 @@
 | --- | --- | --- |
 | 前端 | HarmonyOS NEXT · ArkTS（严格模式）+ ArkUI | `targetSdkVersion` / `compatibleSdkVersion` **26.0.0**，单 HAP；仅依赖 `@ohos/axios`，无第三方 UI 库 |
 | 前端存储 | AppStorage + Preferences | 登录态、购物车展示等本地持久化 |
-| 后端 | Spring Boot 3.5.16 · Java 25 | 分层 Controller / Service / DAO；JWT 认证（jjwt 0.12.6）+ 自定义拦截器（**未引入 Spring Security**） |
+| 后端 | Spring Boot 4.0.9 / Spring 7.0.10 · Java 25 | 分层 Controller / Service / DAO；JWT 认证（jjwt 0.12.6）+ 自定义拦截器（**未引入 Spring Security**）；原 JSON 契约通过官方 Jackson 2 兼容模块保留 |
 | 后端数据访问 | JdbcTemplate + 既有 MyBatis-Plus 映射 | 主服务 DAO 位于 `server/takeout-app`；ERP 数据访问位于 `server/takeout-erp`；购物车使用既有实体 / Mapper |
 | 数据库 | MySQL 8.4 | 主库 `takeout` 和独立 ERP 库 `takeout_erp`；自动建表、兼容旧库增量迁移；默认禁用数据播种 |
 | 缓存 | Redis 7（Lettuce 连接池） | 热点浏览数据缓存；故障快速降级（500ms 超时 + 短连接超时） |
 | 消息 | Redis Stream + 事务性 Outbox | 领域事件异步投递，**未引入 RabbitMQ/RocketMQ 等外部 MQ** |
 | 容器化 | Docker · Docker Compose | 后端镜像基于 JDK 25 多阶段构建；MySQL 8.4 + Redis 7 |
 | 地图 | 高德 Web 端 JS API v2.0 | 通过 ArkUI `Web` 组件内嵌运行，模拟器/真机均可用，无 native 依赖 |
-| 测试 | JUnit 5、Hypium、Node.js 原生测试 | `server/*/src/test`、`entry/src/test`、`entry/src/ohosTest`、`scripts/*.test.cjs`；2026-10-25 的 594 项为安全基线，六批 UX 与后续发布验证以 [实施记录](md/人性化改造诊断与实施方案.md) 为准；设备 HAP 编译通过不等于 UiTest 已运行 |
+| 测试 | JUnit 5、Hypium、Node.js 原生测试 | `server/*/src/test`、`entry/src/test`、`entry/src/ohosTest`、`scripts/*.test.cjs`；2026-10-25 的 594 项为安全基线，六批 UX 与后续发布验证以 [实施记录](md/archive/人性化改造诊断与实施方案.md) 为准；设备 HAP 编译通过不等于 UiTest 已运行 |
 
 ## 系统架构
 
@@ -303,6 +323,9 @@ Release 构建需要签名与证书：参考 `signing/release-signing.template.j
 | `TAKEOUT_REDIS_MAXMEMORY` | `256mb` | 主/demo Redis 的数据内存上限；Redis 容器限制为 768 MiB，调大此值须同步核算容器与宿主余量 |
 | `TAKEOUT_REDIS_MAXMEMORY_POLICY` | `noeviction` | 共享 Redis 满时拒绝新增写入，保留已有安全/验证码/事件状态；不使用 `allkeys-lru` 淘汰它们 |
 | `TAKEOUT_JWT_SECRET` / `TAKEOUT_VERIFICATION_HMAC_SECRET` / `TAKEOUT_ASSISTANT_ENCRYPTION_SECRET` / `TAKEOUT_WALLET_ENCRYPTION_SECRET` | 必填 | 四份分别生成的 32 字节随机材料的标准 Base64 编码，禁止复用；旧库存在银行卡密文时须先迁移，不能直接替换密钥 |
+| `TAKEOUT_PERSONAL_DATA_ENCRYPTION_SECRET` / `TAKEOUT_PERSONAL_DATA_INDEX_SECRET` | 必填 | 另外两份独立的 32 字节随机材料；保护用户手机号、收货地址/坐标、订单地址快照与骑手私人资料。可用 `scripts/initialize-personal-data.ps1` 只初始化本机 `.env` 中空缺的这两项，不覆盖旧值 |
+| `TAKEOUT_PERSONAL_DATA_PREVIOUS_ENCRYPTION_SECRETS` | 空 | 个人资料旧解密密钥，逗号分隔；控制轮换时保持可读并回填新密文。检索密钥不能直接更换，数据库指纹不匹配将拒绝启动 |
+| `TAKEOUT_MANAGEMENT_ADDRESS` / `TAKEOUT_MANAGEMENT_PORT` | `127.0.0.1` / 各服务独立端口 | Actuator 与业务入口隔离；可选监控使用 `docker-compose.monitoring.yml`，管理端口不映射到宿主，Grafana 另需独立密码 |
 | `SPRING_PROFILES_ACTIVE` | 必填（`develop`/`production`） | Compose 必须显式选择运行环境 |
 | `TAKEOUT_LOGIN_FAILURE_LIMIT` | `10` | 来源 IP 的登录格式/凭据失败次数；成功与角色不符 403 不计入 |
 | `TAKEOUT_LOGIN_FAILURE_WINDOW_SECONDS` | `60` | 来源失败窗口，秒 |
@@ -490,12 +513,15 @@ ERP 独立数据库的供应商、耗材、采购单 / 明细、收货、调整�
 
 ## 文档索引
 
-`md/` 保留开发参考、设备实测指南与当前业务 / 交互诊断实施记录；旧设计、历史实施及会话记录统一保存在 `md/archive/`，按需查阅。
+`md/` 根目录仅保留开发参考与设备实测指南。已完成的计划、实施及会话记录放在 `md/archive/`；评审材料放在 `md/audit/`，验收材料按日期放在 `md/acceptance/`，介绍与答辩材料放在 `md/presentation/`，结构图放在 `md/design/`。历史记录保留原验证范围及未完成边界，不作为新的执行任务。
 
 | 文档 | 说明 |
 | --- | --- |
 | [简单外卖功能介绍.docx](简单外卖功能介绍.docx) | 2026-10-26 四端功能介绍；新增 ERP 与最新部署结果以本 README 和本次会话归档为准 |
-| [人性化改造诊断与实施方案](md/人性化改造诊断与实施方案.md) | 四端业务 / 交互诊断、六批真实实施、验证证据与未完成边界 |
+| [人性化改造诊断与实施归档](md/archive/人性化改造诊断与实施方案.md) | 四端业务 / 交互诊断、已完成的六批实施、验证证据与当时未完成边界 |
+| [任务书与开题报告实现核对](md/acceptance/2026-11-03/任务书与开题报告实现核对分析-2026-11-03.md) | 2026-11-03 核对、整改、补验及材料结果，保留真实验收边界 |
+| [项目介绍稿](md/presentation/项目介绍稿.md) · [答辩全流程演示方案](md/presentation/答辩全流程演示方案.md) | 项目介绍及现场演示材料；现场彩排仍须核对实际安装版本 |
+| [数据库 E-R 关系图](md/design/数据库E-R关系图.html) | 可离线查看的主库与 ERP 库结构图、字段字典及逻辑关联 |
 | [近期会话归档（2026-10-25 至 26）](md/archive/会话记录-2026-10-25至26-安全复测业务改造发布与CI.md) | 最近三个项目会话：安全复测、介绍稿、六批改造、发布同步及 Windows runner；保留历史边界与证据入口 |
 | [本次会话归档（2026-10-28）](md/archive/会话记录-2026-10-28-业务闭环与发布.md) | 营销售后、外部退款恢复、真实统计、配送与 ERP 闭环；711 / 703 / 8、Node 170、未签名 HAP 与发布待核验 |
 | [历史会话归档（2026-10-27）](md/archive/会话记录-2026-10-27-微服务ERP并发JVM与部署.md) | 独立 ERP、并发与 JVM 治理、Docker / HAP 验证、GitHub 与服务器同步及本机镜像更新 |
@@ -510,14 +536,14 @@ ERP 独立数据库的供应商、耗材、采购单 / 明细、收货、调整�
 | [设备实测记录](md/archive/设备实测进展与待办.md) · [UI 优化记录](md/archive/UI与图标优化说明.md) · [评审整改记录](md/archive/代码评审与整改交接.md) | 已有实施和验证记录，按需追溯 |
 | [md/audit/README.md](md/audit/README.md) | 十轮攻防、终轮部署与验证证据索引 |
 | [md/audit/最终结论.md](md/audit/最终结论.md) | 2026-10-25 安全复测基线：当时部署版本、594 项回归、线上实验与四项接受风险 |
-| [代码评审与整改现状](md/代码评审与整改交接.md) | 当前状态摘要，以及 2026-10-18 P1/P2/P3 评审历史快照 |
+| [评审整改归档（2026-10-25）](md/audit/代码评审与整改交接.md) | 当日安全复测摘要，以及 2026-10-18 P1/P2/P3 评审历史快照 |
 | [md/archive/](md/archive) | 历史设计、实施记录、会话与验收资料；不作为执行门禁 |
 | [AGENTS.md](AGENTS.md) | AI 编码助手直接执行约定及必要工程约束 |
 | [md/archive/specs](md/archive/specs) | 历史功能规格与验收记录（非执行门禁） |
 
 ## 已知未完成项
 
-本轮部署状态待本次发布核验。送达售后、部分退款证据、持久配送异常及 ERP 纠错已补齐；六批实施当时的边界见 [诊断文档后续状态及第六批遗留边界](md/人性化改造诊断与实施方案.md)；来自 [md/archive/未完成.txt](md/archive/未完成.txt) 的真机 UI 自动化、AppAnalyzer 和 Release 签名仍待完成，手机端 HTTPS 尚未进行物理真机验证。源码 / 服务器同步不等于 AppGallery 发布或正式支付验收。
+本轮部署状态待本次发布核验。送达售后、部分退款证据、持久配送异常及 ERP 纠错已补齐；六批实施当时的边界见 [诊断文档后续状态及第六批遗留边界](md/archive/人性化改造诊断与实施方案.md)；来自 [md/archive/未完成.txt](md/archive/未完成.txt) 的真机 UI 自动化、AppAnalyzer 和 Release 签名仍待完成，手机端 HTTPS 尚未进行物理真机验证。源码 / 服务器同步不等于 AppGallery 发布或正式支付验收。
 
 ## 说明
 

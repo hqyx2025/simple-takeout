@@ -7,6 +7,7 @@ import { AppButtonStyle, AppCardStyle, AppFilterStyle, AppRefreshStyle } from '.
  */
 import { AppMotion } from '../common/theme/AppMotion'
 import { CartItem, Order, OrderPageData, createEmptyUser, User, UserRole } from '../model/Models'
+import { OrderDataSource } from '../model/OrderDataSource'
 import { getAuthSessionEpoch } from '../service/HttpClient'
 import { fetchUserOrdersPageApi } from '../service/ApiService'
 import { confirmOrderRemote, cancelOrderRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
@@ -28,33 +29,6 @@ class OrderTabItem {
     item.title = title
     item.status = status
     return item
-  }
-}
-
-/** 订单列表懒加载数据源（实现 IDataSource）。 */
-class OrderDataSource implements IDataSource {
-  private list: Order[] = []
-  private listeners: DataChangeListener[] = []
-
-  totalCount(): number {
-    return this.list.length
-  }
-
-  getData(index: number): Order {
-    return this.list[index]
-  }
-
-  registerDataChangeListener(listener: DataChangeListener): void {
-    this.listeners.push(listener)
-  }
-
-  unregisterDataChangeListener(listener: DataChangeListener): void {
-    this.listeners = this.listeners.filter((l: DataChangeListener) => l !== listener)
-  }
-
-  setData(data: Order[]): void {
-    this.list = data
-    this.listeners.forEach((l: DataChangeListener) => l.onDataReloaded())
   }
 }
 
