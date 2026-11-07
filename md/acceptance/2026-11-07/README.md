@@ -6,12 +6,14 @@
 
 - [Backend CI](https://github.com/hqyx2025/simple-takeout/actions/runs/42358171295)：802通过，0失败/错误/跳过，覆盖率门禁通过，原始日志已留存。
 - [Frontend CI](https://github.com/hqyx2025/simple-takeout/actions/runs/42358171300)：HAP构建与脚本检查通过；8项浏览器用例因缺Playwright跳过。本机相应用例已真实执行通过，不能把两种环境的结果混写。
-- [Security CI](https://github.com/hqyx2025/simple-takeout/actions/runs/42358171303)：独立构建扫描仍在运行；下文本机实际被部署镜像的扫描结果不替代这一CI状态。
+- [Security CI](https://github.com/hqyx2025/simple-takeout/actions/runs/42359502871)：独立构建与镜像扫描已通过，使用CI配置修复提交 `d5c9700`，应用源码与被部署版本一致；下文本机实际被部署镜像的扫描记录另行保留。
 - App、ERP、Gateway同镜像健康；3个JAR哈希匹配本机被测产物，8个HTTPS静态资源哈希匹配；14项授权只读检查通过，未登录ERP401，公网指标/内部接口/OpenAPI404。
 - 540店目录正常；升级前后订单/账号/地址/商品等行数、库存及余额汇总一致，ERP业务汇总一致。私人资料回填完成、主库Flyway三条成功记录（含基线）、ERP版本V1；旧密钥、MySQL/Redis/上传/备份数据卷与博客实例保留。
 - 切换前主库与ERP库备份完成，gzip完整性检查通过；原私有配置和实际旧容器配置已备份。新加密和索引密钥仅补缺，不公开。未在生产运行下单、支付、退款或破坏性测试。
 
 本机原始发布证据：`TemporaryCacheStorage/deepseek-context/online-rollout.log`、`online-deployment-summary.json`、`online-public-checks.json`、`online-ci-evidence.json`、`online-*-logs.zip`、`online-home-verified.png`。服务器备份位于 `/srv/takeout-data/backups/engineering-boot4-20261107-r1-*-before.sql.gz` 和 `/etc/portfolio/backups/engineering-boot4-20261107-r1/`，这些私有文件不进入GitHub。部署摘要见[脱敏发布证据](release-summary.json)。
+
+安全CI首轮 [42358171303](https://github.com/hqyx2025/simple-takeout/actions/runs/42358171303) 在镜像构建阶段失败：区域Maven镜像缺少 `micrometer-registry-prometheus:1.16.8`，当时未执行扫描。已在 `d5c9700` 将云端构建切到项目现有Maven Central配置，重跑完成真实构建与扫描；没有忽略漏洞、删除依赖或改变线上应用。首轮与通过轮日志均保留于本机证据目录。升级前后私有配置及双库恢复备份另已下载到访问受限且Git忽略的本机目录，哈希一致，未做恢复演练。
 
 ## 实现范围
 
@@ -48,4 +50,4 @@ Windows本轮执行入口和JDK域套接字TCP回退见本机 `TemporaryCacheSto
 
 首次上线须备份主库、ERP库与原密钥，旧应用退出后再完成迁移，健康探针在回填完成前返回503。只补齐缺失的新加密/索引密钥，不替换已有钱包、AI、JWT、数据库或其他凭证；检索密钥需稳定保存。加密回填后不能直接让旧二进制读写新数据，回退须结合备份与新增业务核对。保留数据库、Redis、上传与备份卷，不导入本机演示数据。
 
-无可用设备（hdc Empty），未运行本轮设备Hypium/UiTest；HAP未签名。真实外部支付/退款、邮件、物理GPS、长时间容量尚未验收；GitHub Backend/Frontend结果及跳过项见上方，Security仍在运行。告警未设置外部接收人，监控默认关闭；看板中的重启窗口和小负载不能作为容量成绩。上线验证只读，不在线上创建交易或进行破坏性反向测试。
+无可用设备（hdc Empty），未运行本轮设备Hypium/UiTest；HAP未签名。真实外部支付/退款、邮件、物理GPS、长时间容量尚未验收；GitHub Backend/Frontend结果及跳过项见上方，Security已通过。告警未设置外部接收人，监控默认关闭；看板中的重启窗口和小负载不能作为容量成绩。上线验证只读，不在线上创建交易或进行破坏性反向测试。

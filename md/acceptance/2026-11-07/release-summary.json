@@ -59,11 +59,6 @@
     }
   ],
   "ci": {
-    "Security": {
-      "status": "in_progress",
-      "conclusion": null,
-      "url": "https://github.com/hqyx2025/simple-takeout/actions/runs/42358171303"
-    },
     "Frontend": {
       "status": "completed",
       "conclusion": "success",
@@ -73,6 +68,11 @@
       "status": "completed",
       "conclusion": "success",
       "url": "https://github.com/hqyx2025/simple-takeout/actions/runs/42358171295"
+    },
+    "Security": {
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/hqyx2025/simple-takeout/actions/runs/42359502871"
     }
   },
   "frontend_ci_browser_skips": 8,
