@@ -243,6 +243,7 @@ class DomainEventInboxMySqlTest {
         producer.setVipChannelEnabled(false);
         producer.setInstanceName(UUID.randomUUID().toString());
         var brokerConsumer = configuration.newConsumer();
+        brokerConsumer.setInstanceName("dlq-" + UUID.randomUUID());
         brokerConsumer.setMaxReconsumeTimes(0); // Exercise a real broker DLQ without waiting through 16 backoffs.
         var registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
         var operations = new RocketMqOperations(configuration, producer, new ObjectMapper(), registry, inbox);
@@ -256,6 +257,8 @@ class DomainEventInboxMySqlTest {
                 subscription.setGroupName(name);
                 bootstrap.createAndUpdateSubscriptionGroupConfig(broker, subscription);
             }
+            bootstrap.updateConsumeOffset(broker, group,
+                    new org.apache.rocketmq.common.message.MessageQueue(topic, "takeout-broker", 0), 0);
             producer.start();
             ObjectProvider<DefaultMQProducer> producers = mock(ObjectProvider.class);
             when(producers.getIfAvailable()).thenReturn(producer);
@@ -272,8 +275,12 @@ class DomainEventInboxMySqlTest {
             assertEquals(0, operations.snapshot().deadLetters());
 
             var notifications = mock(PushNotificationService.class);
+            var firstFailure = new CountDownLatch(1);
             doAnswer(call -> {
-                if (pushOffline.get()) throw new IllegalStateException("injected push outage");
+                if (pushOffline.get()) {
+                    firstFailure.countDown();
+                    throw new IllegalStateException("injected push outage");
+                }
                 jdbc.update("UPDATE mq_test_effects SET amount=amount+100 WHERE id=1");
                 return null;
             }).when(notifications).notifyOrderEvent(anyString(), anyLong());
@@ -282,7 +289,8 @@ class DomainEventInboxMySqlTest {
             var handler = new DomainEventConsumer(configuration, inbox, new ObjectMapper(), pushes);
             brokerConsumer.registerMessageListener(handler);
             brokerConsumer.start();
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+            assertTrue(firstFailure.await(45, TimeUnit.SECONDS), "the message must first be assigned to this new client");
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(45);
             do {
                 operations.refresh();
                 if (operations.snapshot().deadLetters() == 1) break;
@@ -349,7 +357,7 @@ class DomainEventInboxMySqlTest {
                     org.apache.rocketmq.common.message.MessageConst.PROPERTY_RETRY_TOPIC, broker.topic);
             broker.producer.send(message);
             broker.consumer.start();
-            assertTrue(failed.await(15, TimeUnit.SECONDS));
+            assertTrue(failed.await(45, TimeUnit.SECONDS), "the seeded attempt must first be assigned to this new client");
             assertEquals(12, attempt.get());
             jdbc.update("UPDATE mq_consumer_failures SET first_failed_at=CURRENT_TIMESTAMP(6)-INTERVAL 6 MINUTE");
             var restartedInbox = new DomainEventInbox(jdbc, transactions);
@@ -499,6 +507,7 @@ class DomainEventInboxMySqlTest {
             var handler = new DomainEventConsumer(broker.configuration("poison"), inbox,
                     new ObjectMapper(), mock(ObjectProvider.class));
             var attempts = new CountDownLatch(2);
+            var firstAttempt = new CountDownLatch(1);
             var identity = new java.util.concurrent.atomic.AtomicReference<String>();
             broker.consumer = broker.configuration("poison-consumer").newConsumer();
             broker.consumer.registerMessageListener((MessageListenerConcurrently) (messages, context) -> {
@@ -507,11 +516,13 @@ class DomainEventInboxMySqlTest {
                 var result = handler.consumeMessage(messages, context);
                 context.setDelayLevelWhenNextConsume(1); // Test-only acceleration; production retains Broker retry defaults.
                 attempts.countDown();
+                firstAttempt.countDown();
                 return result;
             });
             broker.producer.send(new org.apache.rocketmq.common.message.Message(broker.topic, "ORDER_PAID",
                     "invalid JSON".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
             broker.consumer.start();
+            assertTrue(firstAttempt.await(45, TimeUnit.SECONDS), "the message must first be assigned to this new client");
             assertTrue(attempts.await(15, TimeUnit.SECONDS));
             assertNotNull(identity.get());
             assertEquals(1, inbox.failures(broker.group).count());
@@ -548,6 +559,10 @@ class DomainEventInboxMySqlTest {
 
         RocketMqConfiguration configuration(String tag) {
             var config = new RocketMqConfiguration() {
+                @Override public org.apache.rocketmq.client.consumer.DefaultMQPushConsumer newConsumer()
+                        throws org.apache.rocketmq.client.exception.MQClientException {
+                    var client = super.newConsumer(); client.setInstanceName(tag + UUID.randomUUID()); return client;
+                }
                 @Override public org.apache.rocketmq.tools.admin.DefaultMQAdminExt newAdmin() {
                     var client = super.newAdmin(); client.setInstanceName(tag + UUID.randomUUID()); return client;
                 }

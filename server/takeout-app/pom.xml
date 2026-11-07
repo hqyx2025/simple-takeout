@@ -29,6 +29,9 @@
       <groupId>org.apache.rocketmq</groupId>
       <artifactId>rocketmq-client</artifactId>
       <version>5.5.1</version>
+      <exclusions>
+        <exclusion><groupId>io.github.aliyunmq</groupId><artifactId>rocketmq-logback-classic</artifactId></exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.rocketmq</groupId>
@@ -37,6 +40,7 @@
       <!-- Broker-side plugins are not used by the administrative client. -->
       <exclusions>
         <exclusion><groupId>org.apache.rocketmq</groupId><artifactId>rocketmq-broker</artifactId></exclusion>
+        <exclusion><groupId>io.github.aliyunmq</groupId><artifactId>rocketmq-logback-classic</artifactId></exclusion>
       </exclusions>
     </dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-actuator</artifactId></dependency>
