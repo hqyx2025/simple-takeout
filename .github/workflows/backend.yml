@@ -66,7 +66,7 @@ jobs:
         run: |
           python3 scripts/backend-evidence.test.py
           python3 scripts/backend-evidence.py --since "$(cat test-started.txt)" --minimum-line-coverage 0.70 --output TemporaryCacheStorage/backend-summary.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: backend-test-evidence
