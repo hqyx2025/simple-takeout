@@ -27,7 +27,7 @@ jobs:
         # Hosted runners use Central; the regional mirror may lag new releases.
         run: docker build --build-arg MAVEN_SETTINGS=docker/settings-central.xml -f server/Dockerfile -t takeout-security:ci server
       - name: Scan runtime image
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: takeout-security:ci
           format: table
