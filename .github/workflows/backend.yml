@@ -42,7 +42,7 @@ jobs:
           --health-cmd="redis-cli ping"
           --health-interval=5s --health-timeout=3s --health-retries=20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
