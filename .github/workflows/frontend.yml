@@ -2,23 +2,13 @@ name: Frontend
 
 on:
   workflow_dispatch:
-  push:
-    branches: [master]
-    paths:
-      - 'entry/**'
-      - 'AppScope/**'
-      - '*.json5'
-      - '*.ts'
-      - 'oh-package.json5'
-      - 'scripts/**'
-      - '.github/workflows/frontend.yml'
 
 permissions:
   contents: read
 
 jobs:
   build:
-    # The runner is a personal Windows machine: only trusted master pushes or manual runs.
+    # Full builds use the personal Windows runner only when manually requested.
     runs-on: [self-hosted, Windows, DevEco]
     timeout-minutes: 30
     defaults:

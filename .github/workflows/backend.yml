@@ -2,18 +2,6 @@ name: Backend
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'server/**'
-      - 'docker-compose.rocketmq-local.yml'
-      - '.github/workflows/backend.yml'
-      - 'scripts/backend-evidence.py'
-  pull_request:
-    paths:
-      - 'server/**'
-      - 'docker-compose.rocketmq-local.yml'
-      - '.github/workflows/backend.yml'
-      - 'scripts/backend-evidence.py'
 
 permissions:
   contents: read

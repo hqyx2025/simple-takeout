@@ -5,7 +5,7 @@
 - 用户给出需求后，读取相关代码，直接实现、验证并交付结果。常规实现选择自行决定。
 - 默认不生成计划、spec、tasks、checklist、ADR、会话记录或交接文档，不逐步等待确认。用户明确要求文档时再写。
 - 仅在缺失信息阻止实现，或涉及当前授权外的不可逆操作时提问；其余工作继续完成。
-- 远程服务端网页改动验证通过后直接部署，并检查线上域名页面，方便用户查看效果。不自动提交、推送；其他发布或部署由用户明确要求时执行。保留用户已有的工作区改动。
+- 每次小更新都在 `CHANGELOG.md` 记录日期、改动及实际验证；日常更新收尾或重大更新完成后，提交本次任务改动并推送 GitHub，再部署受影响的服务，检查线上域名。保留用户已有改动，不夹带无关变更、私有配置及临时产物。
 - 优先复用项目组件与平台能力，不引入无关依赖或架构迁移。简洁汇报结果、验证及真实限制。
 - 每次修改都要兼顾用户体验、开发体验和 AI Agent 的使用体验；三者都要变好，并且不能破坏现有功能。
 - 公开链接统一使用域名；网页站内跳转、接口及上传资源使用相对路径，兼容 `/takeout/` 部署前缀。禁止在源码、文档或公开业务数据中写入真实公网 IP；手机端统一从 `API_CONFIG` 获取域名基址。
@@ -13,16 +13,24 @@
 ## 工程与验证
 
 - HarmonyOS NEXT ArkTS 严格模式，API 26；前端 `entry/`，Spring Boot / Java 25 后端 `server/`。
-- 前端改动运行 debug HAP 构建，确认日志 `BUILD SUCCESSFUL` 和产物；后端改动运行相关 Maven 测试。
+- 日常提交、推送与部署只做增量验证：覆盖本次改动及直接受影响的调用链；前端改动运行增量 debug HAP 构建，确认日志 `BUILD SUCCESSFUL` 和产物，后端按模块/用例筛选相关 Maven 测试。全量回归、压测及完整安全扫描按明确需求执行，不因上传 GitHub 重复跑全量测试。
 - DevEco 位于 `C:\Program Files\Huawei\DevEco Studio`。前端构建：
   ```powershell
   $env:DEVECO_SDK_HOME="C:\Program Files\Huawei\DevEco Studio\sdk"
   & "C:\Program Files\Huawei\DevEco Studio\tools\node\node.exe" "C:\Program Files\Huawei\DevEco Studio\tools\hvigor\bin\hvigorw.js" --mode module -p module=entry@default -p product=default -p requiredDeviceType=phone assembleHap --analyze=normal --parallel --incremental --daemon
   ```
-- 后端设置 `JAVA_HOME` 为 JDK 25，再运行 `mvn -f server/pom.xml test`；应用运行模块为 `takeout-app`，对外端口 8087，本机 MySQL / Redis 连接端口为 3310 / 6387。
+- 后端设置 `JAVA_HOME` 为 JDK 25；增量验证使用 `mvn -f server/pom.xml -pl <受影响模块> -am -Dtest=<相关测试> -Dsurefire.failIfNoSpecifiedTests=false test`，确认目标用例实际执行；应用运行模块为 `takeout-app`，对外端口 8087，本机 MySQL / Redis 连接端口为 3310 / 6387。
 - 设备可用时验证受影响页面；设备不可用如实说明。Code Linter / AppAnalyzer / Release 签名仅在相关任务中执行。
 - 编写测试、汇报验证或发布前，执行[测试验收要求](md/开发参考.md#测试验收要求)：交付可复现命令与原始证据，关键保护须有反向验证，明确真实依赖、模拟与未验证边界。
 - 临时脚本、截图、日志放 `TemporaryCacheStorage/`；UTF-8 文件使用编辑工具或显式 UTF-8 读写，禁止 PowerShell 默认编码读写源码。`.ps1` 带 UTF-8 BOM。
+
+## 空间与部署
+
+- 本机和远端每类备份只保留最近一份校验成功的完整恢复集；新备份生成并校验成功后再替换旧备份，失败时保留旧副本。数据库快照、对应密钥与恢复所需 binlog 按一套管理，本机异机副本与远端副本各保留一套。
+- 发布产物保留当前版本和一份可用回滚版本；清理前核对运行容器、Compose 配置、挂载及软链接引用。数据库、上传文件、私有配置及仍被引用的目录保持可用。
+- 网页发布复用 `python scripts/deploy-web.py`；后端只构建/上传受影响产物，复用线上 Compose 与私有配置，使用 `up -d --no-deps` 更新受影响服务，完成健康和相关域名接口检查后交付，失败回滚。
+- 后端运行镜像从固定的受维护 Java 基础镜像构建，复用构建缓存；避免用上一次业务镜像作基础逐次叠加 JAR。纯文档更新仅同步 GitHub，纯网页更新使用独立静态发布。
+- 临时源码副本、旧构建包和测试数据优先作为空间清理候选；先确认任务已结束及关键证据已保留，再按明确项目路径清理。共享 Docker 缓存和其他项目文件分别统计、按需处理。
 
 ## UI 基准
 
