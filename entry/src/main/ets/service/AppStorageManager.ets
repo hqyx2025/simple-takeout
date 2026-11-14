@@ -704,11 +704,11 @@ export async function syncMerchantOrdersFromServer(): Promise<void> {
  * 远程下单：成功返回服务端订单；失败返回 null
  * idempotencyKey：防重复提交 token，服务端 Redis SET NX 拦截连点/网络重放
  */
-export async function createOrderRemote(storeId: number, cartItems: CartItem[], addressId: number, couponId: number, remark: string, checkoutGoodsIds: number[], expectTime: string, idempotencyKey: string, deliveryType: string = 'DELIVERY', setmeals: SetmealOrder[] = [], feedback: OrderCreateFeedback | undefined = undefined): Promise<Order | null> {
+export async function createOrderRemote(storeId: number, cartItems: CartItem[], addressId: number, couponId: number, remark: string, checkoutGoodsIds: number[], expectTime: string, idempotencyKey: string, deliveryType: string = 'DELIVERY', setmeals: SetmealOrder[] = [], feedback: OrderCreateFeedback | undefined = undefined, distanceConfirmed: boolean = false): Promise<Order | null> {
   const epoch: number = getAuthSessionEpoch()
   const ownerId: number = AppStorage.get<User>('user')?.id ?? 0
   if (ownerId <= 0 || AppStorage.get<boolean>('isLoggedIn') !== true) { return null }
-  const order: Order | null = await createOrderApi(storeId, cartItems, addressId, couponId, remark, checkoutGoodsIds, expectTime, idempotencyKey, deliveryType, setmeals, feedback)
+  const order: Order | null = await createOrderApi(storeId, cartItems, addressId, couponId, remark, checkoutGoodsIds, expectTime, idempotencyKey, deliveryType, setmeals, feedback, distanceConfirmed)
   if (epoch !== getAuthSessionEpoch() || ownerId !== (AppStorage.get<User>('user')?.id ?? 0)
     || AppStorage.get<boolean>('isLoggedIn') !== true) { return null }
   if (order !== null) {

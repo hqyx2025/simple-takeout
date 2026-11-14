@@ -51,7 +51,7 @@ public class OrderController {
         orderRateLimiter.recordAttempt("order", "u" + userId);
         return ApiResponse.ok(orderService.createOrder(userId, req.storeId(), req.items(),
                 req.addressId(), req.couponId(), req.remark(), req.checkoutGoodsIds(), req.expectTime(),
-                req.idempotencyKey(), req.setmeals(), req.deliveryType()));
+                req.idempotencyKey(), req.setmeals(), req.deliveryType(), req.distanceConfirmed()));
     }
 
     @GetMapping("/orders")
@@ -209,7 +209,7 @@ public class OrderController {
     public record CreateOrderRequest(long storeId, List<Order.OrderItem> items, long addressId,
                                      long couponId, String remark, List<Long> checkoutGoodsIds,
                                      String expectTime, String idempotencyKey,
-                                     List<SetmealOrder> setmeals, String deliveryType) {
+                                     List<SetmealOrder> setmeals, String deliveryType, boolean distanceConfirmed) {
     }
 
     public record ReviewRequest(long goodsId, int rating, String content, List<String> tags,

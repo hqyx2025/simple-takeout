@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 商户配送半径契约：商户填了按商户的（米），没填（0）按默认 2 公里；缺坐标时无法判断不拦截。
+ * 下单统一限制为 500 公里；历史商户半径不再提前阻止下单，缺坐标仍允许浏览。
  */
 class StoreDeliveryRadiusTest {
 
@@ -16,9 +16,9 @@ class StoreDeliveryRadiusTest {
     }
 
     @Test
-    void blocksAddressBeyondRadius() {
+    void historicalMerchantRadiusDoesNotBlockCheckout() {
         Store s = store(39.90, 116.40, 1000);
-        assertFalse(s.canDeliver(39.95, 116.40), "距离约 5.5km 超出 1km 半径应拒绝");
+        assertTrue(s.canDeliver(39.95, 116.40), "不再按历史商户半径提前拒绝下单");
     }
 
     @Test
@@ -28,11 +28,12 @@ class StoreDeliveryRadiusTest {
     }
 
     @Test
-    void blankRadiusFallsBackToDefaultThirtyKilometers() {
-        // 商户没填半径（0）时按默认 30 公里（约一个小城市范围），不再表示"不限"
+    void orderLimitIsFiveHundredKilometers() {
         assertTrue(store(39.90, 116.40, 0).canDeliver(39.95, 116.40), "约 5.5km 在默认 30 公里内");
         assertTrue(store(39.90, 116.40, 0).canDeliver(40.15, 116.40), "约 27.8km 在默认 30 公里内");
-        assertFalse(store(39.90, 116.40, 0).canDeliver(40.25, 116.40), "约 38.9km 超出默认 30 公里");
+        assertTrue(store(39.90, 116.40, 0).canDeliver(40.25, 116.40));
+        assertTrue(store(0.0, 108.0, 1000).canDeliver(Math.toDegrees(500.0 / 6371), 108.0));
+        assertFalse(store(0.0, 108.0, 1000000).canDeliver(Math.toDegrees(500.001 / 6371), 108.0));
     }
 
     @Test

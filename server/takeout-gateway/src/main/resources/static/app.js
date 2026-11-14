@@ -132,6 +132,7 @@
     }
     if (!response.ok || body.code !== 200) {
       const error = new Error(body.message || `请求失败 (${response.status})`);
+      error.code = body.code;
       error.responseReceived = (response.ok || (response.status >= 400 && response.status < 500))
         && response.status !== 429 && body.code >= 400 && body.code < 500 && body.code !== 429
         && !/订单正在提交中|订单可能已提交/.test(String(body.message||''));
@@ -1026,7 +1027,7 @@
       ${message?`<div class="notice-line section" role="status">${esc(message)}</div>`:''}
       <form id="checkoutForm" class="grid two"><section class="page-panel"><h2 class="section-title">收货方式</h2><p>外卖配送</p><h2 class="section-title">配送时间</h2><p>立即配送</p><p class="help-text">当前仅支持立即配送</p>
       <h2 class="section-title">收货地址</h2>${data.addresses.map(a=>`<label class="address-option ${Number(a.id)===draft.addressId?'selected':''}" style="display:block;margin:8px 0"><input type="radio" name="addressId" value="${a.id}" ${Number(a.id)===draft.addressId?'checked':''} ${disabled} required> <strong>${esc(a.name)} ${esc(a.phone)}</strong><div class="subtle" style="margin-left:23px">${esc(addressText(a))}</div></label>`).join('') || empty('请在“地址与钱包”添加收货地址')}
-      <p class="help-text">下单前请为收货地址定位，配送距离按收货地址计算；超出商家配送范围无法下单。</p><button class="btn" type="button" data-action="go" data-id="account" ${disabled}>管理地址</button></section>
+      <p class="help-text">下单前请为收货地址定位，配送距离按收货地址计算；超过200公里需确认，超过500公里无法下单。</p><button class="btn" type="button" data-action="go" data-id="account" ${disabled}>管理地址</button></section>
       <section class="page-panel"><h2 class="section-title">商品清单</h2>${items.map(x=>`<div class="row-between" style="padding:8px 0"><span>${esc(x.goods?.name)} ${x.specName?`· ${esc(x.specName)}`:''} × ${x.quantity}</span><strong>¥${cash(moneyCents(x.price)*Number(x.quantity)/100)}</strong></div>`).join('')}
       <div class="muted-sep"></div><label class="field">优惠券<select class="select" id="checkoutCoupon" ${disabled}><option value="0" ${!draft.couponId?'selected':''}>不使用</option>${available.map(c=>`<option value="${c.id}" ${Number(c.id)===draft.couponId?'selected':''}>${esc(c.name)} · 满${cash(c.threshold)}减${cash(c.amount)}</option>`).join('')}</select></label>
       <p class="help-text">${draft.couponManual&&!draft.couponId?'已保留“不使用优惠券”的选择，可随时改选。':available.length?'默认推荐本单可用券中预计实付最低的一张，可改选或不使用。':'本单暂无可用优惠券。'}</p>${unavailable.length?`<details><summary>${unavailable.length} 张券本单不可用</summary>${unavailable.map(c=>`<p class="help-text">${esc(c.name)}：${esc(couponUnavailableReason(c,storeId,subtotal,deliveryFee))}</p>`).join('')}</details>`:''}
@@ -1466,7 +1467,15 @@
             draft.viewData=state.checkoutView;
             draft.submittedPayload={storeId,items:fresh.items.map(x=>({goodsId:x.goodsId,goodsName:x.goods?.name||'',price:x.price,quantity:x.quantity,image:x.goods?.image||'',specId:x.specId||0,specName:x.specName||''})),addressId:draft.addressId,couponId:draft.couponId,remark:draft.remark,checkoutGoodsIds:fresh.items.map(x=>x.goodsId),expectTime:'',idempotencyKey:intentKey,setmeals:[],deliveryType:'DELIVERY'};
           }
-          const order=await actionSend('/api/orders','POST',draft.submittedPayload);
+          let order;
+          try { order=await actionSend('/api/orders','POST',draft.submittedPayload); }
+          catch(error) {
+            if(error.code!==428)throw error;
+            if(!window.confirm(error.message)){draft.submittedPayload=null;return;}
+            if(!isCurrentContext(context)||!connected())return;
+            draft.submittedPayload.distanceConfirmed=true;
+            order=await actionSend('/api/orders','POST',draft.submittedPayload);
+          }
           if(!order||!Number.isInteger(Number(order.id))||Number(order.id)<=0)throw new Error('订单结果尚未完整返回，请按原信息重试核对');
           delete state.checkoutDrafts[`${Number(state.user?.id||0)}:${storeId}`];state.checkoutReturnStoreId=0;
           resetCheckoutIntent();

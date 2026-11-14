@@ -24,6 +24,7 @@ interface UnavailableCheckoutCoupon {
 }
 
 interface PendingCheckoutSubmission {
+  distanceConfirmed?: boolean
   storeId: number
   items: CartItem[]
   addressId: number
@@ -433,6 +434,26 @@ export struct CheckoutPage {
     this.doSubmitOrder(this.requestVersion)
   }
 
+  private async submitStoreOrder(snapshot: PendingCheckoutSubmission, requestVersion: number,
+    feedback: OrderCreateFeedback): Promise<Order | null> {
+    let order: Order | null = await createOrderRemote(snapshot.storeId, snapshot.items,
+      snapshot.addressId, snapshot.couponId, snapshot.remark, snapshot.checkoutGoodsIds, '', snapshot.key,
+      'DELIVERY', [], feedback, snapshot.distanceConfirmed ?? false)
+    if (!this.isCheckoutCurrent(requestVersion) || !feedback.distanceConfirmationRequired) { return order }
+    try {
+      const choice = await this.getUIContext().getPromptAction().showDialog({
+        title: '距离过远', message: feedback.message,
+        buttons: [{ text: '取消', color: COLORS.TEXT_SECONDARY }, { text: '确认下单', color: COLORS.PRIMARY }]
+      })
+      if (!this.isCheckoutCurrent(requestVersion) || choice.index !== 1) { return null }
+    } catch (_) { return null }
+    snapshot.distanceConfirmed = true
+    order = await createOrderRemote(snapshot.storeId, snapshot.items, snapshot.addressId,
+      snapshot.couponId, snapshot.remark, snapshot.checkoutGoodsIds, '', snapshot.key,
+      'DELIVERY', [], feedback, true)
+    return order
+  }
+
   // 调后端创建订单并跳转
   private async doSubmitOrder(requestVersion: number): Promise<void> {
     const addressId: number = this.currentAddress?.id ?? 0
@@ -478,11 +499,14 @@ export struct CheckoutPage {
         if (snapshot.storeId !== storeId) { throw new Error('待核对订单与当前店铺不一致') }
         this.pendingSubmission = snapshot
         const feedback: OrderCreateFeedback = { failureConfirmed: false, message: '' }
-        const serverOrder: Order | null = await createOrderRemote(snapshot.storeId, snapshot.items,
-          snapshot.addressId, snapshot.couponId, snapshot.remark, snapshot.checkoutGoodsIds, '', snapshot.key,
-          'DELIVERY', [], feedback)
+        const serverOrder: Order | null = await this.submitStoreOrder(snapshot, requestVersion, feedback)
         if (!this.isCheckoutCurrent(requestVersion)) { return }
         if (serverOrder === null) {
+          if (feedback.distanceConfirmationRequired) {
+            this.pendingSubmission = null
+            this.submissionUncertain = false
+            return
+          }
           const errorMessage: string = feedback.message || getLastRemoteErrorMessage()
           if (!feedback.failureConfirmed) {
             this.submissionUncertain = true

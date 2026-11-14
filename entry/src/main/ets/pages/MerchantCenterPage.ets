@@ -635,7 +635,7 @@ export struct MerchantCenterPage {
                   .layoutWeight(1)
                 }
                 Column({ space: SPACING.XS }) {
-                  Text(`最远配送半径（公里，默认 ${MERCHANT_RADIUS_DEFAULT_KM}；超出半径的用户下单会提示超距)`)
+                  Text(`配送参考半径（公里，默认 ${MERCHANT_RADIUS_DEFAULT_KM}；下单上限为500公里)`)
                     .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
                   FormInput({ label: '配送半径（公里）',
                     value: this.newStoreRadius,
@@ -778,7 +778,7 @@ export struct MerchantCenterPage {
                   .layoutWeight(1)
                 }
                 Column({ space: SPACING.XS }) {
-                  Text(`最远配送半径（公里，默认 ${MERCHANT_RADIUS_DEFAULT_KM}；超出半径的用户下单会提示超距)`)
+                  Text(`配送参考半径（公里，默认 ${MERCHANT_RADIUS_DEFAULT_KM}；下单上限为500公里)`)
                     .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_SECONDARY).width('100%')
                   FormInput({ label: '配送半径（公里）',
                     value: this.editStoreRadius,

@@ -205,6 +205,16 @@ public class OrderService {
                                        List<Long> checkoutGoodsIds, String expectTime,
                                        String idempotencyKey, List<SetmealOrder> setmeals,
                                        String deliveryType) {
+        return createOrder(userId, storeId, items, addressId, couponId, remark, checkoutGoodsIds,
+                expectTime, idempotencyKey, setmeals, deliveryType, false);
+    }
+
+    @Transactional
+    public Order.OrderView createOrder(long userId, long storeId, List<Order.OrderItem> items,
+                                       long addressId, long couponId, String remark,
+                                       List<Long> checkoutGoodsIds, String expectTime,
+                                       String idempotencyKey, List<SetmealOrder> setmeals,
+                                       String deliveryType, boolean distanceConfirmed) {
         String normalizedExpect = normalizeExpectTime(expectTime);
         String requestKey = idempotencyKey == null ? "" : idempotencyKey.trim();
         if (requestKey.length() > 128) {
@@ -246,7 +256,7 @@ public class OrderService {
                 }
             }
             Order.OrderView created = doCreateOrder(userId, storeId, items, addressId, couponId, remark,
-                    checkoutGoodsIds, normalizedExpect, setmeals, deliveryType);
+                    checkoutGoodsIds, normalizedExpect, setmeals, deliveryType, distanceConfirmed);
             if (!requestKey.isEmpty()) {
                 orderDao.bindCreateRequest(userId, requestKey, created.id());
             }
@@ -279,7 +289,7 @@ public class OrderService {
     private Order.OrderView doCreateOrder(long userId, long storeId, List<Order.OrderItem> items,
                                           long addressId, long couponId, String remark,
                                           List<Long> checkoutGoodsIds, String normalizedExpect,
-                                          List<SetmealOrder> setmeals, String deliveryType) {
+                                          List<SetmealOrder> setmeals, String deliveryType, boolean distanceConfirmed) {
         List<Order.OrderItem> orderItems = items == null ? List.of() : items;
         List<SetmealOrder> setmealOrders = setmeals == null ? List.of() : setmeals;
         String normalizedDeliveryType = normalizeDeliveryType(deliveryType);
@@ -308,7 +318,12 @@ public class OrderService {
             throw new BizException("店铺尚未设置有效位置，暂时无法配送下单");
         }
         if (!store.canDeliver(address.latitude(), address.longitude())) {
-            throw new BizException("超距，请重新选择地点");
+            throw new BizException("距离超过500公里，请重新选择收货地址");
+        }
+
+        if (!distanceConfirmed && store.distanceKmTo(address.latitude(), address.longitude())
+                > Store.ORDER_DISTANCE_CONFIRM_KM + 1e-9) {
+            throw new BizException(428, "距离过远（超过200公里），请确认是否在此位置下单");
         }
 
         // 金额计算：商品总价 + 配送费 - 优惠（多规格取规格价，生效中的秒杀自动套用秒杀价）

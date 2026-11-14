@@ -199,7 +199,7 @@ class OrderServiceFlowTest {
         stubCommon(10, 0, 3);
         when(addressDao.listByUser(USER_ID)).thenReturn(List.of(new Address(
                 ADDRESS_ID, USER_ID, "张三", "13800138000", "远方地址", 1, "", 39.9, 116.4)));
-        assertEquals("超距，请重新选择地点", assertThrows(BizException.class,
+        assertEquals("距离超过500公里，请重新选择收货地址", assertThrows(BizException.class,
                 () -> service.createOrder(USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "")).getMessage());
         verify(goodsDao, never()).lockStockRows(any());
         verify(orderDao, never()).insert(any(Order.class));
@@ -223,6 +223,39 @@ class OrderServiceFlowTest {
         verify(storeDao, never()).updateMonthlySales(anyLong(), anyInt());
         verify(orderDao).insert(org.mockito.ArgumentMatchers.argThat(o ->
                 o.status() == 0 && o.payTime().isEmpty() && o.payAmount() == 13.0));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+            "199.999,false,200", "200,false,200", "200.001,false,428",
+            "300,false,428", "300,true,200", "500,true,200",
+            "500.001,false,400", "500.001,true,400"
+    })
+    void checkoutDistanceBoundaries(double kilometers, boolean confirmed, int expectedCode) {
+        stubCommon(10, 0, 3);
+        when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(new Store(STORE_ID, "测试店", "", 4.5,
+                0, 3, 0, "30分钟", "未知距离", "[]", "", "店铺位置", 0.0, 108.0,
+                1, "[1]", 99, 1, 0, "", 1000)));
+        when(addressDao.listByUser(USER_ID)).thenReturn(List.of(new Address(
+                ADDRESS_ID, USER_ID, "张三", "13800138000", "收货位置", 1, "",
+                Math.toDegrees(kilometers / 6371), 108.0)));
+        when(orderDao.insert(any(Order.class))).thenReturn(13L);
+        when(orderDao.findById(13)).thenReturn(Optional.of(storedOrder(13, 0, ITEMS, "")));
+        if (expectedCode == 200) {
+            var order = service.createOrder(USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "",
+                    List.of(), "", "", List.of(), "DELIVERY", confirmed);
+            assertEquals(0, order.status());
+            verify(goodsDao).deductStock(GOODS_ID, 1);
+            verify(orderDao).insert(any(Order.class));
+        } else {
+            BizException error = assertThrows(BizException.class, () -> service.createOrder(
+                    USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "", List.of(), "", "",
+                    List.of(), "DELIVERY", confirmed));
+            assertEquals(expectedCode, error.getCode());
+            verify(goodsDao, never()).lockStockRows(any());
+            verify(orderDao, never()).insert(any(Order.class));
+        }
+        verify(userDao, never()).deductBalance(anyLong(), anyDouble());
     }
 
     @Test

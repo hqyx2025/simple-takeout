@@ -77,11 +77,12 @@ export async function clearCartApi(): Promise<CartItem[] | null> {
  * 创建订单：items 为购物车项，返回服务端订单（已转换）
  */
 export interface OrderCreateFeedback {
+  distanceConfirmationRequired?: boolean
   failureConfirmed: boolean
   message: string
 }
 
-export async function createOrderApi(storeId: number, cartItems: CartItem[], addressId: number, couponId: number, remark: string, checkoutGoodsIds: number[], expectTime: string, idempotencyKey: string, deliveryType: string = 'DELIVERY', setmeals: SetmealOrder[] = [], feedback: OrderCreateFeedback | undefined = undefined): Promise<Order | null> {
+export async function createOrderApi(storeId: number, cartItems: CartItem[], addressId: number, couponId: number, remark: string, checkoutGoodsIds: number[], expectTime: string, idempotencyKey: string, deliveryType: string = 'DELIVERY', setmeals: SetmealOrder[] = [], feedback: OrderCreateFeedback | undefined = undefined, distanceConfirmed: boolean = false): Promise<Order | null> {
   const items: OrderItemRequest[] = cartItems.map((c: CartItem) => {
     const item: OrderItemRequest = {
       goodsId: c.goods.id,
@@ -95,6 +96,7 @@ export async function createOrderApi(storeId: number, cartItems: CartItem[], add
     return item
   })
   const req: CreateOrderRequest = {
+    distanceConfirmed: distanceConfirmed,
     storeId: storeId,
     items: items,
     addressId: addressId,
@@ -109,6 +111,7 @@ export async function createOrderApi(storeId: number, cartItems: CartItem[], add
   // 下单失败由结算页统一提示，避免 HttpClient 与结算页连续弹出两个 Toast 互相覆盖。
   const resp: ApiResponse<ServerOrder> = await post<ServerOrder>(API_CONFIG.ENDPOINTS['orders'], req, false)
   if (feedback !== undefined) {
+    feedback.distanceConfirmationRequired = resp.code === 428
     feedback.message = resp.message ?? ''
     feedback.failureConfirmed = resp.code >= 400 && resp.code < 500 && resp.code !== 408
       && resp.code !== 409 && resp.code !== 429 && feedback.message.indexOf('订单正在提交中') < 0

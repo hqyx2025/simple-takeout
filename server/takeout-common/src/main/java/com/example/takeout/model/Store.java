@@ -89,17 +89,16 @@ public record Store(
     public static final int MIN_DELIVERY_RADIUS_METERS = 1000;
     public static final int MAX_DELIVERY_RADIUS_METERS = 200000;
 
-    /**
-     * 能否配送到用户当前位置。
-     * 半径取商户填写的值；商户没填（0）按默认 30 公里，不表示"不限"。
-     * 缺坐标时返回 true 以允许浏览；下单入口必须先校验双方坐标。
-     */
+    public static final double ORDER_DISTANCE_LIMIT_KM = 500;
+    public static final double ORDER_DISTANCE_CONFIRM_KM = 200;
+
+    /** 统一下单距离上限；缺坐标允许浏览，下单入口另行校验双方坐标。 */
     public boolean canDeliver(Double userLatitude, Double userLongitude) {
         if (!validCoordinates(userLatitude, userLongitude) || !validCoordinates(latitude, longitude)) {
             return true;
         }
-        int effectiveRadius = deliveryRadius > 0 ? deliveryRadius : DEFAULT_DELIVERY_RADIUS_METERS;
-        return haversine(userLatitude, userLongitude, latitude, longitude) * 1000 <= effectiveRadius;
+        // 容纳三角函数在阈值上的浮点误差（小于一微米）。
+        return distanceKmTo(userLatitude, userLongitude) <= ORDER_DISTANCE_LIMIT_KM + 1e-9;
     }
 
     /** 到指定坐标的直线距离（公里）；任一侧缺坐标返回 -1（表示无法判定）。 */

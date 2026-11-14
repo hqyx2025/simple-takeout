@@ -483,6 +483,7 @@ export interface OrderItemRequest {
 }
 
 export interface CreateOrderRequest {
+  distanceConfirmed?: boolean
   storeId: number
   items: OrderItemRequest[]
   addressId: number
