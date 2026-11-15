@@ -45,7 +45,9 @@ setPageResolver((): string => readRouterPageName())
 export interface RouterParamsCompat {
   orderId?: number
   storeId?: number
-  canReport?: boolean
+  goodsId?: number
+  resetMode?: 'login' | 'payment'
+  phoneHint?: string
 }
 
 export interface RouterOptionsCompat {

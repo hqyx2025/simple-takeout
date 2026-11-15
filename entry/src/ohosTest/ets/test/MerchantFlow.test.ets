@@ -102,9 +102,7 @@ export default function merchantFlowTest() {
       console.info('[MerchantFlow] fixture orderId=' + orderId)
 
       // ---------- 3. 我的 → 订单管理（商户入口在「我的」页底部，需要滚动）----------
-      expect(await clickByIdOrText(driver, 'tab-3', '我的')).assertTrue()
-      await driver.delayMs(2500)
-      expect(await scrollAndClick(driver, 'profile-merchant-orders', '订单管理')).assertTrue()
+      expect(await clickByIdOrText(driver, 'merchant-tab-1', '订单')).assertTrue()
       await driver.delayMs(3500)
 
       const statusId: string = 'merchant-order-status-' + orderId
@@ -138,9 +136,7 @@ export default function merchantFlowTest() {
       expect(await isFound(await scrollUntilVisible(driver, actionId))).assertFalse()
 
       // ---------- 7. 收入统计页（数字打进 hilog，host 侧与 /api/merchant/stats 交叉核对）----------
-      expect(await clickByIdOrText(driver, 'merchant-orders-back', '‹ 返回')).assertTrue()
-      await driver.delayMs(2500)
-      expect(await clickByIdOrText(driver, 'tab-3', '我的')).assertTrue()
+      expect(await clickByIdOrText(driver, 'merchant-tab-0', '工作台')).assertTrue()
       await driver.delayMs(2000)
       expect(await scrollAndClick(driver, 'profile-merchant-stats', '收入统计')).assertTrue()
       await driver.delayMs(4000)

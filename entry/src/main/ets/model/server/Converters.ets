@@ -96,6 +96,7 @@ export function toStoreItem(s: ServerStore): StoreItem {
     id: s.id,
     name: s.name,
     image: s.image,
+    images: s.images ?? (s.image ? [s.image] : []),
     rating: s.rating,
     monthlySales: s.monthlySales,
     deliveryFee: s.deliveryFee,
@@ -133,6 +134,7 @@ export function toGoodsItem(g: ServerGoods): GoodsItem {
     categoryId: g.categoryId,
     merchantCategoryId: g.merchantCategoryId,
     stock: g.stock,
+    version: g.version,
     sales: g.sales,
     rating: g.rating,
     tag: g.tag,
@@ -145,6 +147,7 @@ export function toGoodsItem(g: ServerGoods): GoodsItem {
         name: s.name,
         price: s.price,
         stock: s.stock,
+        version: s.version,
         sort: s.sort,
         status: s.status
       }

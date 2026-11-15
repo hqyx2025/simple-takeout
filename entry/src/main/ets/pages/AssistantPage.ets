@@ -173,9 +173,7 @@ export struct AssistantPage {
         const value: string = action.value ?? ''
         const storeId: number = Number(value)
         if (!/^\d+$/.test(value) || !Number.isSafeInteger(storeId) || storeId <= 0) { return }
-        AppStorage.setOrCreate<number>('selectedStoreId', storeId)
-        AppStorage.setOrCreate<string>('selectedStoreName', action.label)
-        router.pushUrl({ url: 'pages/StoreDetailPage' })
+        router.pushUrl({ url: 'pages/StoreDetailPage', params: { storeId: storeId } })
         break
       }
       default: promptAction.showToast({ message: '暂不支持这个页面入口', duration: 1500 })

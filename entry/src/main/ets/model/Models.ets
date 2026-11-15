@@ -42,6 +42,7 @@ export interface GoodsSpec {
   name: string
   price: number
   stock: number
+  version?: number
   sort?: number
   status?: number
 }
@@ -60,6 +61,7 @@ export interface GoodsItem {
   categoryId: number
   merchantCategoryId?: number
   stock?: number
+  version?: number
   sales: number
   rating: number
   tag?: string
@@ -77,6 +79,7 @@ export interface SpecialGoodsItem {
 
 // 店铺模型
 export interface StoreItem {
+  images?: string[]
   id: number
   name: string
   image: string

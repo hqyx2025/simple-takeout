@@ -1,3 +1,5 @@
+import { RemoteState } from '../RemoteState'
+import { getAuthSessionEpoch } from '../../service/HttpClient'
 import { AppButtonStyle, AppCardStyle, AppFilterStyle, AppTheme } from '../../common/theme/AppTheme'
 /**
  * 主页面 - 简单外卖App
@@ -41,6 +43,7 @@ export struct StoreDetailContent {
   // 确保切换店铺时重新加载商品、评分和店铺信息，避免标题与内容错位。
   @Prop @Watch('onStoreIdChange') storeId: number = 0
   @State goodsList: GoodsItem[] = []
+  onStoreName: (name: string) => void = () => {}
   @State storeName: string = ''
   @State storeRating: number = 0
   @State storeMonthlySales: number = 0
@@ -63,6 +66,10 @@ export struct StoreDetailContent {
   @State cartPulse: number = 1
   private cartOperationQueue: Promise<void> = Promise.resolve()
   @State isFav: boolean = false
+  @State goodsFailed: boolean = false
+  @State storeFailed: boolean = false
+  private goodsVersion: number = 0
+  private storeVersion: number = 0
   @State goodsLoading: boolean = false
   @StorageLink('reviewList') storeReviews: Review[] = []
   @State currentCat: string = '全部'
@@ -92,6 +99,7 @@ export struct StoreDetailContent {
   }
 
   onPageVisibilityChange(): void {
+    if (!this.pageVisible) { this.goodsVersion += 1; this.storeVersion += 1; this.goodsLoading = false }
     this.active = this.pageVisible
     if (!this.pageVisible) {
       this.cartAnimator.cancel()
@@ -125,6 +133,7 @@ export struct StoreDetailContent {
     }
     if (store) {
       this.storeName = store.name
+      this.onStoreName(store.name)
       this.storeRating = store.rating
       this.storeMonthlySales = store.monthlySales
       this.storeDeliveryFee = store.deliveryFee
@@ -204,9 +213,15 @@ export struct StoreDetailContent {
     if (!this.loggedIn || this.storeId <= 0) {
       return
     }
-    const store: StoreItem | null = await fetchStoreDetailApi(this.storeId)
+    const epoch: number = getAuthSessionEpoch()
+    const storeId: number = this.storeId
+    const version: number = ++this.storeVersion
+    const store: StoreItem | null = await fetchStoreDetailApi(storeId)
+    if (!this.active || !this.pageVisible || epoch !== getAuthSessionEpoch() || storeId !== this.storeId || version !== this.storeVersion) { return }
+    this.storeFailed = store === null
     if (store !== null && store !== undefined) {
       this.storeName = store.name
+      this.onStoreName(store.name)
       this.storeRating = store.rating
       this.storeMonthlySales = store.monthlySales
       this.storeDeliveryFee = store.deliveryFee
@@ -225,10 +240,18 @@ export struct StoreDetailContent {
     if (!this.loggedIn) {
       return
     }
+    const epoch: number = getAuthSessionEpoch()
+    const storeId: number = this.storeId
+    const version: number = ++this.goodsVersion
     this.goodsLoading = true
+    this.goodsFailed = false
     try {
-      await syncGoodsFromServer(this.storeId)
-      this.storeMerchantCats = await fetchStoreMerchantCategoriesApi(this.storeId)
+      const ok: boolean = await syncGoodsFromServer(storeId)
+      if (!this.active || !this.pageVisible || epoch !== getAuthSessionEpoch() || storeId !== this.storeId || version !== this.goodsVersion) { return }
+      if (!ok) { this.goodsFailed = true; return }
+      const categories: Category[] = await fetchStoreMerchantCategoriesApi(this.storeId)
+      if (!this.active || epoch !== getAuthSessionEpoch() || storeId !== this.storeId || version !== this.goodsVersion) { return }
+      this.storeMerchantCats = categories
       const goods: GoodsItem[] = getGoodsForStore(this.storeId)
       this.goodsList = goods
       const cats: string[] = this.getGoodsCategoryNames(goods)
@@ -236,7 +259,7 @@ export struct StoreDetailContent {
       this.currentCat = '全部'
       this.updateFilteredGoods()
     } finally {
-      this.goodsLoading = false
+      if (version === this.goodsVersion) { this.goodsLoading = false }
     }
   }
 
@@ -557,20 +580,23 @@ export struct StoreDetailContent {
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
     Column() {
+      if (this.goodsFailed || this.storeFailed) {
+        RemoteState({ failed: true, hasData: this.goodsList.length > 0, onRetry: () => { this.refreshGoods(); this.refreshStoreInfo() } })
+      }
       // 店铺介绍与活动跟随列表滚动；原生分组表头吸顶，底部操作区独立。
       List() {
         ListItem() {
           this.StoreIntro()
         }
         ListItemGroup({ header: this.CategoryBar() }) {
-          if (this.goodsLoading) {
+          if (this.goodsLoading && this.goodsList.length === 0) {
             ListItem() {
               Text('正在加载商品…')
                 .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
                 .width('100%').textAlign(TextAlign.Center)
                 .padding({ top: SPACING.XXL, bottom: SPACING.XXL })
             }
-          } else if (this.filteredGoodsList.length === 0) {
+          } else if (this.filteredGoodsList.length === 0 && !this.goodsFailed && !this.goodsLoading) {
             ListItem() {
               Column({ space: SPACING.SM }) {
                 Text('暂无商品')
@@ -751,7 +777,6 @@ export struct StoreDetailContent {
       promptAction.showToast({ message: '完成订单后才能评价该商品', duration: 1600 })
       return
     }
-    AppStorage.setOrCreate<number>('currentOrderId', order.id)
     AppStorage.setOrCreate<number>('currentReviewGoodsId', goodsId)
     router.pushUrl({ url: 'pages/ReviewPage' })
   }

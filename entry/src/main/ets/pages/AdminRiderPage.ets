@@ -1,3 +1,6 @@
+import { fetchAdminRidersResultApi } from '../service/ApiService'
+import { PageSession } from '../service/PageSession'
+import { RemoteState } from '../components/RemoteState'
 import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 /**
  * 管理端骑手管理（四端改造）：骑手列表与启用/停用
@@ -14,6 +17,11 @@ import { logInfo } from '../service/AppLogger'
 @Entry
 @Component
 export struct AdminRiderPage {
+  @State remoteFailed: boolean = false
+  @State remoteLoading: boolean = false
+  private remoteSession: PageSession = new PageSession()
+  private remoteVisible: boolean = true
+
   pageTransition() {
     PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
       .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
@@ -34,8 +42,8 @@ export struct AdminRiderPage {
   @State statusFilter: number = -1
   @State displayRiders: Rider[] = []
   @State loading: boolean = false
-  @StorageLink('isLoggedIn') loggedIn: boolean = false
-  @StorageLink('user') user: User = { id: 0, username: '', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER, balance: 0, coupons: [], orders: [], storeIds: [] }
+  @StorageLink('isLoggedIn') @Watch('onRemoteIdentityChange') loggedIn: boolean = false
+  @StorageLink('user') @Watch('onRemoteIdentityChange') user: User = { id: 0, username: '', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER, balance: 0, coupons: [], orders: [], storeIds: [] }
 
   async aboutToAppear(): Promise<void> {
     logInfo('Page', '进入管理端骑手管理 AdminRiderPage')
@@ -48,10 +56,21 @@ export struct AdminRiderPage {
   }
 
   private async loadRiders(): Promise<void> {
-    this.loading = true
-    this.riders = await syncAdminRidersRemote()
-    this.applyFilter()
-    this.loading = false
+    if (this.remoteLoading) { return }
+    if (!this.remoteVisible || !this.remoteSession.start(UserRole.ADMIN)) { return }
+    const remoteVersion: number = this.remoteSession.request()
+    this.remoteLoading = true
+    this.remoteFailed = false
+    try {
+      this.loading = true
+      const result: Rider[] | null = await fetchAdminRidersResultApi()
+      if (!this.remoteSession.current(remoteVersion)) { return }
+      if (result === null) { this.remoteFailed = true; return }
+      this.riders = result
+      this.applyFilter()
+      this.loading = false
+    } catch (_) { if (this.remoteSession.current(remoteVersion)) { this.remoteFailed = true } }
+    finally { if (this.remoteSession.current(remoteVersion)) { this.remoteLoading = false; this.loading = false } }
   }
 
   /** 按启用状态筛选（显式计算，避免渲染期 getter 求值）。 */
@@ -76,6 +95,21 @@ export struct AdminRiderPage {
     }
   }
 
+  onRemoteIdentityChange(): void {
+    if (!this.remoteSession.matchesIdentity()) {
+      this.remoteSession.pause()
+      this.remoteVisible = false
+      this.remoteLoading = false
+      this.remoteFailed = false
+      this.loading = false
+      this.riders = []
+      router.replaceUrl({ url: 'pages/Index' })
+    }
+  }
+  onPageHide(): void { this.remoteVisible = false; this.remoteSession.pause(); this.loading = false; this.remoteLoading = false }
+  onPageShow(): void { this.remoteVisible = true; if (!this.loading) { this.loadRiders() } }
+  aboutToDisappear(): void { this.onPageHide() }
+
   build() {
     Column() {
       PageHeader({
@@ -87,6 +121,10 @@ export struct AdminRiderPage {
         onBack: () => { router.back() },
         onAction: () => { this.loadRiders() }
       })
+      if (this.remoteFailed || (this.remoteLoading && !(this.riders.length > 0))) {
+        RemoteState({ loading: this.remoteLoading, failed: this.remoteFailed, hasData: this.riders.length > 0,
+          retryId: 'AdminRiderPage-retry', onRetry: () => { this.loadRiders() } })
+      }
 
       Row({ space: SPACING.MD }) {
         Text('状态').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)

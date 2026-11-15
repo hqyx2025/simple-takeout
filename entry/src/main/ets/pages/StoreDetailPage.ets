@@ -307,8 +307,8 @@ export struct StoreDetailPage {
       .opacity(0)
   }
 
-  @StorageLink('selectedStoreId') storeId: number = 0
-  @StorageLink('selectedStoreName') storeName: string = ''
+  @State storeId: number = 0
+  @State storeName: string = ''
   @StorageLink('isLoggedIn') loggedIn: boolean = false
   @State showLogin: boolean = false
   @State detailVisible: boolean = true
@@ -329,6 +329,7 @@ export struct StoreDetailPage {
   }
 
   aboutToAppear(): void {
+    this.storeId = router.getParams()?.storeId ?? 0
     if (this.storeId <= 0) {
       promptAction.showToast({ message: '店铺信息不存在' })
       router.back()
@@ -349,8 +350,6 @@ export struct StoreDetailPage {
   }
 
   private goBack(): void {
-    AppStorage.setOrCreate<number>('selectedStoreId', 0)
-    AppStorage.setOrCreate<string>('selectedStoreName', '')
     router.back()
   }
 
@@ -362,6 +361,7 @@ export struct StoreDetailPage {
         if (this.storeId > 0) {
           StoreDetailContent({
             storeId: this.storeId,
+            onStoreName: (name: string) => { this.storeName = name },
             pageVisible: this.detailVisible,
             onNavigateLogin: () => { this.showLogin = true },
             onSelectSpecGoods: (goods: GoodsItem) => { this.openSpecDialog(goods) }

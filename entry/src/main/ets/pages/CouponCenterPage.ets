@@ -1,3 +1,5 @@
+import { RemoteState } from '../components/RemoteState'
+import { getAuthSessionEpoch } from '../service/HttpClient'
 import { AppButtonStyle, AppCardStyle, AppTheme } from '../common/theme/AppTheme'
 import { SegmentButton, SegmentButtonOptions } from '@ohos.arkui.advanced.SegmentButton'
 /**
@@ -48,14 +50,28 @@ export struct CouponCenterPage {
   onBack: () => void = () => { router.back() }
   onSelectCoupon: (coupon: Coupon) => void = () => {}  // 选择优惠券回调（结算页用）
 
+  @State loading: boolean = false
+  @State loadFailed: boolean = false
+  private loadVersion: number = 0
+
   aboutToAppear() {
     logInfo('Page', '进入优惠券中心页 CouponCenterPage')
     this.applyCouponFilter()
     // 从后端拉取最新优惠券（真实后端模式）
     if (this.loggedIn) {
-      syncCouponsRemote()
+      this.loadCoupons()
     }
   }
+
+  private async loadCoupons(): Promise<void> {
+    const version: number = ++this.loadVersion
+    const epoch: number = getAuthSessionEpoch()
+    this.loading = true; this.loadFailed = false
+    const ok: boolean = await syncCouponsRemote(false)
+    if (version !== this.loadVersion || epoch !== getAuthSessionEpoch() || !this.loggedIn) { return }
+    this.loading = false; this.loadFailed = !ok
+  }
+  onPageHide(): void { this.loadVersion += 1; this.loading = false }
 
   /** 按使用状态拆分列表（显式计算，渲染路径不调用 getter）。 */
   private applyCouponFilter(): void {
@@ -73,6 +89,10 @@ export struct CouponCenterPage {
       // 导航栏
       PageHeader({ title: '优惠券中心', onBack: () => { this.onBack() } })
 
+      if (this.loadFailed || (this.loading && this.couponList.length === 0)) {
+        RemoteState({ loading: this.loading, failed: this.loadFailed, hasData: this.couponList.length > 0,
+          onRetry: () => { this.loadCoupons() } })
+      }
       SegmentButton({ options: this.tabOptions, selectedIndexes: $selectedTabs })
         .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.SM, bottom: SPACING.SM })
 
@@ -84,7 +104,7 @@ export struct CouponCenterPage {
           }
         } else if (this.currentTab === 0) {
           // 可领取优惠券
-          if (this.claimableCoupons.length === 0) {
+          if (this.claimableCoupons.length === 0 && !this.loading && !this.loadFailed) {
             ListItem() {
               this.EmptyView($r('app.media.ui_gift'), '暂无可领取的优惠券', '')
             }
@@ -96,7 +116,7 @@ export struct CouponCenterPage {
           }, (coupon: Coupon) => coupon.id.toString())
         } else if (this.currentTab === 1) {
           // 我的优惠券（未使用的）
-          if (this.unusedCoupons.length === 0) {
+          if (this.unusedCoupons.length === 0 && !this.loading && !this.loadFailed) {
             ListItem() {
               this.EmptyView($r('app.media.home_coupon'), '暂无可用优惠券', '去"可领取"领取优惠券吧~')
             }
@@ -108,7 +128,7 @@ export struct CouponCenterPage {
           }, (coupon: Coupon) => coupon.id.toString())
         } else {
           // 已使用
-          if (this.usedCoupons.length === 0) {
+          if (this.usedCoupons.length === 0 && !this.loading && !this.loadFailed) {
             ListItem() {
               this.EmptyView($r('app.media.profile_order'), '暂无已使用优惠券', '')
             }

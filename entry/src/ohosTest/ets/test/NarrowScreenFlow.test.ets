@@ -27,10 +27,9 @@ async function controlNetwork(fixture: NarrowFixtures, command: string): Promise
 }
 
 async function openOrder(context: UIContext, driver: Driver, id: number): Promise<void> {
-  AppStorage.setOrCreate<number>('currentOrderId', id)
   await new Promise<void>((resolve, reject) => {
     context.runScopedTask((): void => {
-      context.getRouter().replaceUrl({ url: 'pages/OrderDetailPage' }).then(() => { resolve() })
+      context.getRouter().replaceUrl({ url: 'pages/OrderDetailPage', params: { orderId: id } }).then(() => { resolve() })
         .catch(() => { reject(new Error('Order route failed')) })
     })
   })

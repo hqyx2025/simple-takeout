@@ -1,3 +1,6 @@
+import { fetchAdminOrderTrendResultApi } from '../service/ApiService'
+import { PageSession } from '../service/PageSession'
+import { RemoteState } from '../components/RemoteState'
 import { AppCardStyle } from '../common/theme/AppTheme'
 /** 平台经营统计：订单、GMV、托管资金与热销商品。 */
 import { AppMotion } from '../common/theme/AppMotion'
@@ -11,6 +14,11 @@ import { PageHeader } from '../components/PageHeader'
 @Entry
 @Component
 export struct AdminStatisticsPage {
+  @State remoteFailed: boolean = false
+  @State remoteLoading: boolean = false
+  private remoteSession: PageSession = new PageSession()
+  private remoteVisible: boolean = true
+
   pageTransition() {
     PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
       .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
@@ -26,8 +34,8 @@ export struct AdminStatisticsPage {
       .opacity(0)
   }
 
-  @StorageLink('isLoggedIn') loggedIn: boolean = false
-  @StorageLink('user') user: User = {
+  @StorageLink('isLoggedIn') @Watch('onRemoteIdentityChange') loggedIn: boolean = false
+  @StorageLink('user') @Watch('onRemoteIdentityChange') user: User = {
     id: 0, username: '未登录', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER,
     balance: 0, coupons: [], orders: [], storeIds: []
   }
@@ -50,34 +58,63 @@ export struct AdminStatisticsPage {
   }
 
   private async refresh(): Promise<void> {
-    if (this.loading) {
-      promptAction.showToast({ message: '统计数据正在刷新，请稍候', duration: 1200 })
-      return
-    }
-    this.loading = true
-    this.stats = await fetchAdminStatisticsApi(10)
-    this.trend = await fetchAdminOrderTrendApi(7)
-    const dashboard = await fetchAdminDashboardApi()
-    if (dashboard !== null) {
-      this.orderStatuses = dashboard.orderStatuses
-      this.topStores = dashboard.topStores
-      let statusMax: number = 1
-      for (const item of this.orderStatuses) {
-        statusMax = Math.max(statusMax, item.count)
+    if (!this.remoteVisible || !this.remoteSession.start(UserRole.ADMIN)) { return }
+    const remoteVersion: number = this.remoteSession.request()
+    this.remoteLoading = true
+    this.remoteFailed = false
+    try {
+      if (this.loading) {
+        promptAction.showToast({ message: '统计数据正在刷新，请稍候', duration: 1200 })
+        return
       }
-      this.maxStatusCount = statusMax
-      let storeMax: number = 0
-      for (const store of this.topStores.slice(0, 5)) {
-        storeMax = Math.max(storeMax, store.gmv)
+      this.loading = true
+      const stats: AdminStatisticsData | null = await fetchAdminStatisticsApi(10)
+      if (!this.remoteSession.current(remoteVersion)) { return }
+      if (stats === null) { this.remoteFailed = true; return }
+      this.stats = stats
+      const trend: AdminTrendPoint[] | null = await fetchAdminOrderTrendResultApi(7)
+      if (!this.remoteSession.current(remoteVersion)) { return }
+      if (trend === null) { this.remoteFailed = true } else { this.trend = trend }
+      const dashboard = await fetchAdminDashboardApi()
+      if (!this.remoteSession.current(remoteVersion)) { return }
+      if (dashboard === null) { this.remoteFailed = true }
+      if (dashboard !== null) {
+        this.orderStatuses = dashboard.orderStatuses
+        this.topStores = dashboard.topStores
+        let statusMax: number = 1
+        for (const item of this.orderStatuses) {
+          statusMax = Math.max(statusMax, item.count)
+        }
+        this.maxStatusCount = statusMax
+        let storeMax: number = 0
+        for (const store of this.topStores.slice(0, 5)) {
+          storeMax = Math.max(storeMax, store.gmv)
+        }
+        this.maxStoreGmv = storeMax
       }
-      this.maxStoreGmv = storeMax
-    }
-    this.loading = false
+      this.loading = false
+    } catch (_) { if (this.remoteSession.current(remoteVersion)) { this.remoteFailed = true } }
+    finally { if (this.remoteSession.current(remoteVersion)) { this.remoteLoading = false; this.loading = false } }
   }
 
   private valueOrZero(value: number | undefined): string {
     return (value ?? 0).toFixed(2)
   }
+
+  onRemoteIdentityChange(): void {
+    if (!this.remoteSession.matchesIdentity()) {
+      this.remoteSession.pause()
+      this.remoteVisible = false
+      this.remoteLoading = false
+      this.remoteFailed = false
+      this.loading = false
+      this.trend = []
+      router.replaceUrl({ url: 'pages/Index' })
+    }
+  }
+  onPageHide(): void { this.remoteVisible = false; this.remoteSession.pause(); this.loading = false; this.remoteLoading = false }
+  onPageShow(): void { this.remoteVisible = true; if (!this.loading) { this.refresh() } }
+  aboutToDisappear(): void { this.onPageHide() }
 
   build() {
     Column() {
@@ -90,6 +127,10 @@ export struct AdminStatisticsPage {
         onBack: () => { router.back() },
         onAction: () => { this.refresh() }
       })
+      if (this.remoteFailed || (this.remoteLoading && !(this.trend.length > 0))) {
+        RemoteState({ loading: this.remoteLoading, failed: this.remoteFailed, hasData: this.trend.length > 0,
+          retryId: 'AdminStatisticsPage-retry', onRetry: () => { this.refresh() } })
+      }
 
       // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一块内容不在顶部
       List({ space: SPACING.MD }) {
@@ -147,7 +188,7 @@ export struct AdminStatisticsPage {
           }
           ListItem() {
             Column() {
-              if (this.trend.length === 0) {
+              if (this.trend.length === 0 && !this.remoteFailed && !this.remoteLoading) {
                 this.ChartEmpty('近 7 日暂无订单数据', 190)
               } else {
                 Canvas(this.trendChartContext)
@@ -351,7 +392,7 @@ export struct AdminStatisticsPage {
     const chartH: number = height - paddingTop - paddingBottom
 
     ctx.clearRect(0, 0, width, height)
-    if (this.trend.length === 0) {
+    if (this.trend.length === 0 && !this.remoteFailed && !this.remoteLoading) {
       return
     }
     let maxCount: number = 0

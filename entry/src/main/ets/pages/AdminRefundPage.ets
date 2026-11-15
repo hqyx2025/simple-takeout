@@ -1,3 +1,4 @@
+import { refundDisplayText } from '../service/OrderStatus'
 import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppTextAreaStyle } from '../common/theme/AppTheme'
 /**
@@ -227,17 +228,7 @@ export struct AdminRefundPage {
   }
 
   private getRefundStatusText(status: string): string {
-    if (status === 'PENDING') {
-      return '待审批'
-    }
-    if (status === 'REFUNDED') {
-      return '已退款'
-    }
-    if (status === 'REJECTED') {
-      return '已拒绝'
-    }
-    if (status === 'APPROVED') { return '退款处理中' }
-    return '状态待确认'
+    return refundDisplayText(status)
   }
 
   @Builder

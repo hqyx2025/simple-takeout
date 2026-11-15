@@ -49,9 +49,7 @@ export struct SearchPage {
       promptAction.showToast({ message: '店铺信息不完整，无法打开详情', duration: 2200 })
       return
     }
-    AppStorage.setOrCreate<number>('selectedStoreId', store.id)
-    AppStorage.setOrCreate<string>('selectedStoreName', store.name !== '' ? store.name : '店铺详情')
-    router.pushUrl({ url: 'pages/StoreDetailPage' })
+    router.pushUrl({ url: 'pages/StoreDetailPage', params: { storeId: store.id } })
   }
   onBack: () => void = () => { router.back() }
 

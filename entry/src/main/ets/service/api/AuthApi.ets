@@ -199,3 +199,10 @@ export async function setPaymentPasswordApi(loginPassword: string, paymentPasswo
   const response: ApiResponse<Object> = await post<Object>('/api/auth/payment-password', request, false)
   return { success: response.code === 200, message: response.message || '' }
 }
+
+interface CloseAccountRequest { currentPassword: string; confirmed: boolean }
+
+export async function closeAccountApi(currentPassword: string): Promise<ApiResponse<string>> {
+  const request: CloseAccountRequest = { currentPassword: currentPassword, confirmed: true }
+  return post<string>('/api/auth/me/close', request, false)
+}

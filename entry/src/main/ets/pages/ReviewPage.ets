@@ -1,3 +1,6 @@
+import { fetchOrderDetailApi } from '../service/api/OrdersApi'
+import { getAuthSessionEpoch } from '../service/HttpClient'
+import { RemoteState } from '../components/RemoteState'
 import { ImageUpload } from '../components/ImageUpload'
 import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppTextAreaStyle } from '../common/theme/AppTheme'
@@ -52,6 +55,9 @@ export struct ReviewPage {
   @State imageUploading: boolean = false
   // 页面是否存活：图片上传是异步流程，离开页面后不再回写 @State 或弹 Toast
   private pageAlive: boolean = true
+  @State loading: boolean = true
+  @State loadFailed: boolean = false
+  private reviewEpoch: number = -1
   orderId: number = 0
 
   // 评价标签列表（来自 Constants.REVIEW_TAGS）
@@ -69,17 +75,23 @@ export struct ReviewPage {
   // 星级可点击值列表
   private starList: number[] = [1, 2, 3, 4, 5]
 
-  aboutToAppear() {
+  async aboutToAppear(): Promise<void> {
+    this.reviewEpoch = getAuthSessionEpoch()
+    this.loading = true
+    this.loadFailed = false
     this.pageAlive = true
     logInfo('Page', '进入评价页 ReviewPage')
     if (!this.loggedIn) {
       return
     }
-    this.orderId = AppStorage.get<number>('currentOrderId') || 0
-    const orders: Order[] = AppStorage.get<Order[]>('orderList') || []
-    this.order = orders.find((o: Order) => o.id === this.orderId) || null
+    this.orderId = router.getParams()?.orderId ?? 0
+    const remote: Order | null = this.orderId > 0 ? await fetchOrderDetailApi(this.orderId, false) : null
+    if (!this.pageAlive || !this.loggedIn || this.reviewEpoch !== getAuthSessionEpoch()) { return }
+    this.loading = false
+    this.loadFailed = remote === null
+    if (remote !== null) { this.order = remote }
     if (this.order !== null && this.order.items.length > 0) {
-      const requestedGoodsId: number = AppStorage.get<number>('currentReviewGoodsId') || 0
+      const requestedGoodsId: number = router.getParams()?.goodsId ?? 0
       const exists: boolean = this.order.items.some((item: CartItem) => item.goods.id === requestedGoodsId)
       this.selectedGoodsId = exists ? requestedGoodsId : this.order.items[0].goods.id
     }
@@ -89,6 +101,8 @@ export struct ReviewPage {
   onPageShow(): void {
     this.pageAlive = true
   }
+
+  onPageHide(): void { this.pageAlive = false }
 
   aboutToDisappear(): void {
     // 图片上传是异步流程：离开页面后不再回写 @State、不再弹 Toast，清空中间状态避免内存泄漏
@@ -224,6 +238,9 @@ export struct ReviewPage {
         .layoutWeight(1)
         .justifyContent(FlexAlign.Center)
         .alignItems(HorizontalAlign.Center)
+      } else if (this.loading || this.loadFailed) {
+        RemoteState({ loading: this.loading, failed: this.loadFailed, hasData: this.order !== null,
+          errorText: '订单不存在、无权访问或读取失败', onRetry: () => { this.aboutToAppear() } })
       } else if (this.order === null) {
         Column() {
           Image($r('app.media.ui_gift')).width(60).height(60).objectFit(ImageFit.Contain).margin({ top: 100 })

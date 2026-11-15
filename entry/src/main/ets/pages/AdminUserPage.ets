@@ -1,3 +1,6 @@
+import { fetchAdminUsersPageResultApi } from '../service/ApiService'
+import { PageSession } from '../service/PageSession'
+import { RemoteState } from '../components/RemoteState'
 import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /** 平台用户和商户账号管理：查看账号并启用/停用，不修改余额和业务数据。 */
@@ -12,6 +15,11 @@ import { promptCompat as promptAction, routerCompat as router } from '../common/
 @Entry
 @Component
 export struct AdminUserPage {
+  @State remoteFailed: boolean = false
+  @State remoteLoading: boolean = false
+  private remoteSession: PageSession = new PageSession()
+  private remoteVisible: boolean = true
+
   pageTransition() {
     PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
       .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
@@ -27,8 +35,8 @@ export struct AdminUserPage {
       .opacity(0)
   }
 
-  @StorageLink('isLoggedIn') loggedIn: boolean = false
-  @StorageLink('user') user: User = {
+  @StorageLink('isLoggedIn') @Watch('onRemoteIdentityChange') loggedIn: boolean = false
+  @StorageLink('user') @Watch('onRemoteIdentityChange') user: User = {
     id: 0, username: '未登录', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER,
     balance: 0, coupons: [], orders: [], storeIds: []
   }
@@ -54,35 +62,57 @@ export struct AdminUserPage {
   }
 
   private async refresh(): Promise<void> {
-    if (this.loading) {
-      promptAction.showToast({ message: '账号数据正在刷新，请稍候', duration: 1200 })
-      return
-    }
-    this.loading = true
-    this.page = 1
-    const role: number | undefined = this.roleFilter < 0 ? undefined : this.roleFilter
-    const status: number | undefined = this.statusFilter < 0 ? undefined : this.statusFilter
-    const result = await fetchAdminUsersPageApi(role, status, this.keyword, this.page)
-    this.users = result.list
-    this.total = result.total
-    this.hasMore = result.hasMore
-    this.loading = false
+    if (this.remoteLoading) { return }
+    if (!this.remoteVisible || !this.remoteSession.start(UserRole.ADMIN)) { return }
+    const remoteVersion: number = this.remoteSession.request()
+    this.remoteLoading = true
+    this.remoteFailed = false
+    try {
+      if (this.loading) {
+        promptAction.showToast({ message: '账号数据正在刷新，请稍候', duration: 1200 })
+        return
+      }
+      this.loading = true
+      const role: number | undefined = this.roleFilter < 0 ? undefined : this.roleFilter
+      const status: number | undefined = this.statusFilter < 0 ? undefined : this.statusFilter
+      const result = await fetchAdminUsersPageResultApi(role, status, this.keyword, 1)
+      if (!this.remoteSession.current(remoteVersion)) { return }
+      if (result === null) { this.remoteFailed = true; return }
+
+      this.users = result.list
+      this.page = result.page
+      this.total = result.total
+      this.hasMore = result.hasMore
+      this.loading = false
+    } catch (_) { if (this.remoteSession.current(remoteVersion)) { this.remoteFailed = true } }
+    finally { if (this.remoteSession.current(remoteVersion)) { this.remoteLoading = false; this.loading = false } }
   }
 
   private async loadMore(): Promise<void> {
-    if (this.loading || !this.hasMore) {
-      return
-    }
-    this.loading = true
-    const role: number | undefined = this.roleFilter < 0 ? undefined : this.roleFilter
-    const status: number | undefined = this.statusFilter < 0 ? undefined : this.statusFilter
-    const nextPage: number = this.page + 1
-    const result = await fetchAdminUsersPageApi(role, status, this.keyword, nextPage)
-    this.users = this.users.concat(result.list)
-    this.page = result.page
-    this.total = result.total
-    this.hasMore = result.hasMore
-    this.loading = false
+    if (this.remoteLoading) { return }
+    if (!this.remoteVisible || !this.remoteSession.start(UserRole.ADMIN)) { return }
+    const remoteVersion: number = this.remoteSession.request()
+    this.remoteLoading = true
+    this.remoteFailed = false
+    try {
+      if (this.loading || !this.hasMore) {
+        return
+      }
+      this.loading = true
+      const role: number | undefined = this.roleFilter < 0 ? undefined : this.roleFilter
+      const status: number | undefined = this.statusFilter < 0 ? undefined : this.statusFilter
+      const nextPage: number = this.page + 1
+      const result = await fetchAdminUsersPageResultApi(role, status, this.keyword, nextPage)
+      if (!this.remoteSession.current(remoteVersion)) { return }
+      if (result === null) { this.remoteFailed = true; return }
+
+      this.users = this.users.concat(result.list)
+      this.page = result.page
+      this.total = result.total
+      this.hasMore = result.hasMore
+      this.loading = false
+    } catch (_) { if (this.remoteSession.current(remoteVersion)) { this.remoteFailed = true } }
+    finally { if (this.remoteSession.current(remoteVersion)) { this.remoteLoading = false; this.loading = false } }
   }
 
   private selectRoleFilter(role: number): void {
@@ -112,6 +142,21 @@ export struct AdminUserPage {
     }
   }
 
+  onRemoteIdentityChange(): void {
+    if (!this.remoteSession.matchesIdentity()) {
+      this.remoteSession.pause()
+      this.remoteVisible = false
+      this.remoteLoading = false
+      this.remoteFailed = false
+      this.loading = false
+      this.users = []
+      router.replaceUrl({ url: 'pages/Index' })
+    }
+  }
+  onPageHide(): void { this.remoteVisible = false; this.remoteSession.pause(); this.loading = false; this.remoteLoading = false }
+  onPageShow(): void { this.remoteVisible = true; if (!this.loading) { this.refresh() } }
+  aboutToDisappear(): void { this.onPageHide() }
+
   build() {
     Column() {
       PageHeader({
@@ -123,6 +168,10 @@ export struct AdminUserPage {
         onBack: () => { router.back() },
         onAction: () => { this.refresh() }
       })
+      if (this.remoteFailed || (this.remoteLoading && !(this.users.length > 0))) {
+        RemoteState({ loading: this.remoteLoading, failed: this.remoteFailed, hasData: this.users.length > 0,
+          retryId: 'AdminUserPage-retry', onRetry: () => { this.refresh() } })
+      }
 
       Row({ space: SPACING.SM }) {
         FormInput({ label: '搜索关键词',
@@ -171,7 +220,7 @@ export struct AdminUserPage {
 
       // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在筛选行下方
       List({ space: SPACING.MD }) {
-        if (this.users.length === 0) {
+        if (this.users.length === 0 && !this.remoteFailed && !this.remoteLoading) {
           ListItem() {
             Text(this.statusFilter === -1 && this.roleFilter === -1 ? '暂无账号数据' : '当前筛选条件下暂无账号')
               .width('100%').padding(SPACING.LG).fontColor(COLORS.TEXT_HINT)

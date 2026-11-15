@@ -1,3 +1,6 @@
+import { fetchAdminProductsResultApi } from '../service/ApiService'
+import { PageSession } from '../service/PageSession'
+import { RemoteState } from '../components/RemoteState'
 import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /** 平台商品监管：搜索全部店铺商品、强制上下架和删除违规商品。 */
@@ -13,6 +16,11 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 @Entry
 @Component
 export struct AdminProductPage {
+  @State remoteFailed: boolean = false
+  @State remoteLoading: boolean = false
+  private remoteSession: PageSession = new PageSession()
+  private remoteVisible: boolean = true
+
   pageTransition() {
     PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
       .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
@@ -28,8 +36,8 @@ export struct AdminProductPage {
       .opacity(0)
   }
 
-  @StorageLink('isLoggedIn') loggedIn: boolean = false
-  @StorageLink('user') user: User = {
+  @StorageLink('isLoggedIn') @Watch('onRemoteIdentityChange') loggedIn: boolean = false
+  @StorageLink('user') @Watch('onRemoteIdentityChange') user: User = {
     id: 0, username: '未登录', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER,
     balance: 0, coupons: [], orders: [], storeIds: []
   }
@@ -55,32 +63,54 @@ export struct AdminProductPage {
   }
 
   private async refresh(): Promise<void> {
-    if (this.loading) {
-      promptAction.showToast({ message: '商品数据正在刷新，请稍候', duration: 1200 })
-      return
-    }
-    this.loading = true
-    const status: number | undefined = this.statusFilter < 0 ? undefined : this.statusFilter
-    const result = await fetchAdminProductsApi(this.keyword, status, 1, 50)
-    this.products = result.list
-    this.page = result.page
-    this.total = result.total
-    this.hasMore = result.hasMore
-    this.loading = false
+    if (this.remoteLoading) { return }
+    if (!this.remoteVisible || !this.remoteSession.start(UserRole.ADMIN)) { return }
+    const remoteVersion: number = this.remoteSession.request()
+    this.remoteLoading = true
+    this.remoteFailed = false
+    try {
+      if (this.loading) {
+        promptAction.showToast({ message: '商品数据正在刷新，请稍候', duration: 1200 })
+        return
+      }
+      this.loading = true
+      const status: number | undefined = this.statusFilter < 0 ? undefined : this.statusFilter
+      const result = await fetchAdminProductsResultApi(this.keyword, status, 1, 50)
+      if (!this.remoteSession.current(remoteVersion)) { return }
+      if (result === null) { this.remoteFailed = true; return }
+
+      this.products = result.list
+      this.page = result.page
+      this.total = result.total
+      this.hasMore = result.hasMore
+      this.loading = false
+    } catch (_) { if (this.remoteSession.current(remoteVersion)) { this.remoteFailed = true } }
+    finally { if (this.remoteSession.current(remoteVersion)) { this.remoteLoading = false; this.loading = false } }
   }
 
   private async loadMore(): Promise<void> {
-    if (this.loading || !this.hasMore) {
-      return
-    }
-    this.loading = true
-    const status: number | undefined = this.statusFilter < 0 ? undefined : this.statusFilter
-    const result = await fetchAdminProductsApi(this.keyword, status, this.page + 1, 50)
-    this.products = this.products.concat(result.list)
-    this.page = result.page
-    this.total = result.total
-    this.hasMore = result.hasMore
-    this.loading = false
+    if (this.remoteLoading) { return }
+    if (!this.remoteVisible || !this.remoteSession.start(UserRole.ADMIN)) { return }
+    const remoteVersion: number = this.remoteSession.request()
+    this.remoteLoading = true
+    this.remoteFailed = false
+    try {
+      if (this.loading || !this.hasMore) {
+        return
+      }
+      this.loading = true
+      const status: number | undefined = this.statusFilter < 0 ? undefined : this.statusFilter
+      const result = await fetchAdminProductsResultApi(this.keyword, status, this.page + 1, 50)
+      if (!this.remoteSession.current(remoteVersion)) { return }
+      if (result === null) { this.remoteFailed = true; return }
+
+      this.products = this.products.concat(result.list)
+      this.page = result.page
+      this.total = result.total
+      this.hasMore = result.hasMore
+      this.loading = false
+    } catch (_) { if (this.remoteSession.current(remoteVersion)) { this.remoteFailed = true } }
+    finally { if (this.remoteSession.current(remoteVersion)) { this.remoteLoading = false; this.loading = false } }
   }
 
   private async toggleStatus(product: AdminProduct): Promise<void> {
@@ -106,6 +136,21 @@ export struct AdminProductPage {
     }
   }
 
+  onRemoteIdentityChange(): void {
+    if (!this.remoteSession.matchesIdentity()) {
+      this.remoteSession.pause()
+      this.remoteVisible = false
+      this.remoteLoading = false
+      this.remoteFailed = false
+      this.loading = false
+      this.products = []
+      router.replaceUrl({ url: 'pages/Index' })
+    }
+  }
+  onPageHide(): void { this.remoteVisible = false; this.remoteSession.pause(); this.loading = false; this.remoteLoading = false }
+  onPageShow(): void { this.remoteVisible = true; if (!this.loading) { this.refresh() } }
+  aboutToDisappear(): void { this.onPageHide() }
+
   build() {
     Column() {
       PageHeader({
@@ -117,6 +162,10 @@ export struct AdminProductPage {
         onBack: () => { router.back() },
         onAction: () => { this.refresh() }
       })
+      if (this.remoteFailed || (this.remoteLoading && !(this.products.length > 0))) {
+        RemoteState({ loading: this.remoteLoading, failed: this.remoteFailed, hasData: this.products.length > 0,
+          retryId: 'AdminProductPage-retry', onRetry: () => { this.refresh() } })
+      }
 
       Row({ space: SPACING.SM }) {
         FormInput({ label: '搜索关键词',
@@ -145,7 +194,7 @@ export struct AdminProductPage {
 
       // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在筛选行下方
       List({ space: SPACING.MD }) {
-        if (this.products.length === 0) {
+        if (this.products.length === 0 && !this.remoteFailed && !this.remoteLoading) {
           ListItem() {
             Text(this.statusFilter === -1 && this.keyword.trim() === '' ? '暂无商品数据' : '当前筛选条件下暂无商品')
               .width('100%').padding(SPACING.LG).fontColor(COLORS.TEXT_HINT)

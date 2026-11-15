@@ -1,3 +1,8 @@
+import { fetchAdminMarketingStoresResultApi } from '../service/ApiService'
+import { fetchAdminMarketingSeckillsResultApi } from '../service/ApiService'
+import { fetchAdminMarketingActivitiesResultApi } from '../service/ApiService'
+import { PageSession } from '../service/PageSession'
+import { RemoteState } from '../components/RemoteState'
 import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 import { AppMotion } from '../common/theme/AppMotion'
 import { AdminSeckill, MarketingActivity, StoreItem, User, UserRole } from '../model/Models'
@@ -24,6 +29,11 @@ class AdminMarketingOption {
 @Entry
 @Component
 export struct AdminMarketingPage {
+  @State remoteFailed: boolean = false
+  @State remoteLoading: boolean = false
+  private remoteSession: PageSession = new PageSession()
+  private remoteVisible: boolean = true
+
   pageTransition() {
     PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
       .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) }).opacity(0)
@@ -35,8 +45,8 @@ export struct AdminMarketingPage {
       .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) }).opacity(0)
   }
 
-  @StorageLink('isLoggedIn') loggedIn: boolean = false
-  @StorageLink('user') user: User = {
+  @StorageLink('isLoggedIn') @Watch('onRemoteIdentityChange') loggedIn: boolean = false
+  @StorageLink('user') @Watch('onRemoteIdentityChange') user: User = {
     id: 0, username: '未登录', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER,
     balance: 0, coupons: [], orders: [], storeIds: []
   }
@@ -62,19 +72,38 @@ export struct AdminMarketingPage {
   }
 
   private async loadStoresAndData(): Promise<void> {
-    this.stores = await fetchAdminMarketingStoresApi()
+    if (!this.remoteSession.start(UserRole.ADMIN)) { return }
+    const version: number = this.remoteSession.request()
+    const stores: StoreItem[] | null = await fetchAdminMarketingStoresResultApi()
+    if (!this.remoteSession.current(version)) { return }
+    if (stores === null) { this.remoteFailed = true; return }
+    this.stores = stores
     await this.refresh()
   }
 
   private async refresh(): Promise<void> {
-    if (this.loading) return
-    this.loading = true
-    if (this.activeTab === 0) {
-      this.activities = await fetchAdminMarketingActivitiesApi(this.selectedStoreId, this.selectedStatus)
-    } else {
-      this.seckills = await fetchAdminMarketingSeckillsApi(this.selectedStoreId, this.selectedStatus)
-    }
-    this.loading = false
+    if (this.remoteLoading) { return }
+    if (!this.remoteVisible || !this.remoteSession.start(UserRole.ADMIN)) { return }
+    const remoteVersion: number = this.remoteSession.request()
+    this.remoteLoading = true
+    this.remoteFailed = false
+    try {
+      if (this.loading) return
+      this.loading = true
+      if (this.activeTab === 0) {
+        const result: MarketingActivity[] | null = await fetchAdminMarketingActivitiesResultApi(this.selectedStoreId, this.selectedStatus)
+        if (!this.remoteSession.current(remoteVersion)) { return }
+        if (result === null) { this.remoteFailed = true; return }
+        this.activities = result
+      } else {
+        const result: AdminSeckill[] | null = await fetchAdminMarketingSeckillsResultApi(this.selectedStoreId, this.selectedStatus)
+        if (!this.remoteSession.current(remoteVersion)) { return }
+        if (result === null) { this.remoteFailed = true; return }
+        this.seckills = result
+      }
+      this.loading = false
+    } catch (_) { if (this.remoteSession.current(remoteVersion)) { this.remoteFailed = true } }
+    finally { if (this.remoteSession.current(remoteVersion)) { this.remoteLoading = false; this.loading = false } }
   }
 
   private storeOptions(): AdminMarketingOption[] {
@@ -157,6 +186,22 @@ export struct AdminMarketingPage {
     }
   }
 
+  onRemoteIdentityChange(): void {
+    if (!this.remoteSession.matchesIdentity()) {
+      this.remoteSession.pause()
+      this.remoteVisible = false
+      this.remoteLoading = false
+      this.remoteFailed = false
+      this.loading = false
+      this.activities = []
+      this.seckills = []
+      router.replaceUrl({ url: 'pages/Index' })
+    }
+  }
+  onPageHide(): void { this.remoteVisible = false; this.remoteSession.pause(); this.loading = false; this.remoteLoading = false }
+  onPageShow(): void { this.remoteVisible = true; if (!this.loading) { this.refresh() } }
+  aboutToDisappear(): void { this.onPageHide() }
+
   build() {
     Stack() {
     Column() {
@@ -165,6 +210,11 @@ export struct AdminMarketingPage {
         actionColor: MODULE_COLOR.ADMIN, actionLabel: this.loading ? '加载中' : '刷新',
         onBack: () => { router.back() }, onAction: () => { this.refresh() }
       })
+      if (this.remoteFailed || (this.remoteLoading && !(this.activities.length > 0 || this.seckills.length > 0))) {
+        RemoteState({ loading: this.remoteLoading, failed: this.remoteFailed, hasData: this.activities.length > 0 || this.seckills.length > 0,
+          retryId: 'AdminMarketingPage-retry', onRetry: () => { this.refresh() } })
+      }
+
       Column({ space: SPACING.SM }) {
         Row({ space: SPACING.SM }) {
           Button('营销活动').attributeModifier(new AppButtonStyle()).layoutWeight(1).height(40)
@@ -190,7 +240,7 @@ export struct AdminMarketingPage {
           if (this.activeTab === 0) {
             Text(`营销活动 · ${this.activities.length} 条`).fontSize(FONT_SIZE.SM)
               .fontColor(COLORS.TEXT_HINT).width('100%')
-            if (this.activities.length === 0 && !this.loading) {
+            if (this.activities.length === 0 && !this.remoteFailed && !this.remoteLoading && !this.loading) {
               Text('暂无营销活动').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
                 .width('100%').padding(SPACING.LG)
             }
@@ -221,7 +271,7 @@ export struct AdminMarketingPage {
           } else {
             Text(`限时秒杀 · ${this.seckills.length} 条`).fontSize(FONT_SIZE.SM)
               .fontColor(COLORS.TEXT_HINT).width('100%')
-            if (this.seckills.length === 0 && !this.loading) {
+            if (this.seckills.length === 0 && !this.remoteFailed && !this.remoteLoading && !this.loading) {
               Text('暂无秒杀活动').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
                 .width('100%').padding(SPACING.LG)
             }

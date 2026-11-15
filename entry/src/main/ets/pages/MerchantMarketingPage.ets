@@ -1,3 +1,4 @@
+import { fetchMerchantStoresResultApi, fetchMerchantActivitiesResultApi, fetchMerchantSeckillsResultApi, fetchMerchantGoodsResultApi } from '../service/ApiService'
 import { FormSelect } from '../components/FormSelect'
 import { AppButtonStyle, AppCardStyle, AppTheme } from '../common/theme/AppTheme'
 import { SPACING, getMarketingTypeText } from '../common/Constants'
@@ -55,11 +56,18 @@ export struct MerchantMarketingPage {
   async aboutToAppear(): Promise<void> {
     if (!this.loggedIn || this.user.role !== UserRole.MERCHANT) { router.back(); return }
     this.loading = true
-    this.stores = await fetchMerchantStoresApi()
+    const epoch: number = getAuthSessionEpoch()
+    const stores: StoreItem[] | null = await fetchMerchantStoresResultApi()
+    if (!this.active || epoch !== getAuthSessionEpoch()) { return }
+    if (stores === null) { this.errorText = '门店加载失败，请重试'; this.loading = false; return }
+    this.stores = stores
     if (!this.active) { return }
     if (this.stores.length > 0) { this.selectedStoreId = this.stores[0].id; await this.loadStoreData() }
     else { this.loading = false }
   }
+
+  onPageHide(): void { this.active = false; this.version += 1; this.loading = false }
+  onPageShow(): void { this.active = true }
 
   aboutToDisappear(): void { this.active = false; this.version += 1 }
 
@@ -69,10 +77,14 @@ export struct MerchantMarketingPage {
     const storeId: number = this.selectedStoreId
     const epoch: number = getAuthSessionEpoch()
     this.loading = true
-    const activities: MarketingActivity[] = await fetchMerchantActivitiesApi(storeId)
-    const seckills: MerchantSeckill[] = await fetchMerchantSeckillsApi(storeId)
-    const goods: GoodsItem[] = await fetchMerchantGoodsApi(storeId)
+    const activities: MarketingActivity[] | null = await fetchMerchantActivitiesResultApi(storeId)
+    const seckills: MerchantSeckill[] | null = await fetchMerchantSeckillsResultApi(storeId)
+    const goods: GoodsItem[] | null = await fetchMerchantGoodsResultApi(storeId)
     if (!this.active || version !== this.version || storeId !== this.selectedStoreId || epoch !== getAuthSessionEpoch()) { return }
+    if (activities === null || seckills === null || goods === null) {
+      this.loading = false; this.errorText = '刷新失败，已保留原有内容，请重试'; return
+    }
+    this.errorText = ''
     this.activities = activities; this.seckills = seckills
     this.goods = goods.filter((item: GoodsItem): boolean => (item.specs?.length ?? 0) === 0)
     this.goodsOptions = this.goods.map((item: GoodsItem): MarketingSelectOption => new MarketingSelectOption(item.name))
@@ -286,6 +298,7 @@ export struct MerchantMarketingPage {
         }
         if (this.form !== '') {
           if (this.errorText !== '') { Text(this.errorText).fontColor(AppTheme.ERROR).id('marketing-error').width('90%') }
+        Button('重试加载').attributeModifier(new AppButtonStyle()).height(44).enabled(!this.loading).onClick(() => { if (this.stores.length === 0) { this.aboutToAppear() } else { this.loadStoreData() } })
           Row({ space: SPACING.MD }) {
             Button('取消').attributeModifier(new AppButtonStyle()).layoutWeight(1).id('marketing-cancel').fontColor(AppTheme.TEXT).backgroundColor(AppTheme.INPUT)
               .enabled(!this.saving).onClick(() => { this.form = ''; this.errorText = '' })

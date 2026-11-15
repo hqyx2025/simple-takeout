@@ -595,7 +595,6 @@ export struct CheckoutPage {
       }
 
       // 存入 currentOrder 供订单详情页读取
-      AppStorage.setOrCreate<number>('currentOrderId', firstOrder.id)
       AppStorage.setOrCreate<Order>('currentOrder', firstOrder)
       // 重置已选优惠券
       AppStorage.setOrCreate<Coupon | null>('selectedCoupon', null)
@@ -625,7 +624,7 @@ export struct CheckoutPage {
         AppStorage.setOrCreate<number>('orderFilterStatus', this.reconciledOrderStatus === '' ? 0 : -1)
         router.replaceUrl({ url: 'pages/OrderListPage' })
       } else {
-        router.replaceUrl({ url: 'pages/OrderDetailPage' })
+        router.replaceUrl({ url: 'pages/OrderDetailPage', params: { orderId: firstOrder.id } })
       }
     } catch (_) {
       if (!this.isCheckoutCurrent(requestVersion)) { return }

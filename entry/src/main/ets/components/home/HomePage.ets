@@ -1,3 +1,6 @@
+import { RemoteState } from '../RemoteState'
+import { getAuthSessionEpoch } from '../../service/HttpClient'
+import { fetchRecommendedStoresResultApi, fetchSpecialGoodsResultApi, fetchSeckillsResultApi, fetchBannersResultApi, fetchAnnouncementsResultApi } from '../../service/api/CatalogApi'
 import { AppButtonStyle, AppRefreshStyle, AppTheme } from '../../common/theme/AppTheme'
 /**
  * 主页面 - 简单外卖App
@@ -54,6 +57,8 @@ export struct HomePage {
   // 秒杀倒计时秒表：每秒 +1，与实际剩余时间相减得到实时剩余（避免每个卡片各自起定时器）
   @State seckillTick: number = 0
   private seckillTimer: number = -1
+  private seckillPausedAt: number = 0
+  @Prop @Watch('onPageVisibilityChange') pageVisible: boolean = true
   @State searchText: string = ''
   @State currentCategory: number = 0
   @State isRefreshing: boolean = false
@@ -75,6 +80,9 @@ export struct HomePage {
       this.refreshHomeData()
       this.refreshRecommended()
     } else {
+      this.homeVersion += 1; this.recommendedVersion += 1
+      this.homeFailed = false; this.recommendedFailed = false
+      this.isRefreshing = false; this.recommendedLoading = false
       this.specialGoods = []
       this.recommendedStores = []
     }
@@ -85,20 +93,29 @@ export struct HomePage {
     this.refreshRecommended()
   }
 
+  onPageVisibilityChange(): void {
+    if (!this.pageVisible) {
+      this.homeVersion += 1; this.recommendedVersion += 1
+      this.isRefreshing = false; this.recommendedLoading = false
+    }
+    if (this.pageVisible) {
+      this.startSeckillTicker()
+    } else {
+      this.stopSeckillTicker()
+    }
+  }
+
   /** 拉取附近推荐店铺（2 公里内、平台推荐位）。 */
   private async refreshRecommended(): Promise<void> {
-    if (!this.loggedIn) {
-      return
-    }
-    if (this.recommendedLoading) {
-      promptAction.showToast({ message: '推荐店铺正在刷新，请稍候', duration: 1200 })
-      return
-    }
+    if (!this.loggedIn || !this.pageVisible) { return }
+    const epoch: number = getAuthSessionEpoch()
+    const version: number = ++this.recommendedVersion
     this.recommendedLoading = true
-    const latitude: number | undefined = this.currentAddress !== null ? this.currentAddress.latitude : undefined
-    const longitude: number | undefined = this.currentAddress !== null ? this.currentAddress.longitude : undefined
-    this.recommendedStores = await fetchRecommendedStoresApi(2, 10, latitude, longitude)
+    this.recommendedFailed = false
+    const stores: StoreItem[] | null = await fetchRecommendedStoresResultApi(2, 10, this.currentAddress?.latitude, this.currentAddress?.longitude)
+    if (!this.pageVisible || epoch !== getAuthSessionEpoch() || version !== this.recommendedVersion) { return }
     this.recommendedLoading = false
+    if (stores === null) { this.recommendedFailed = true } else { this.recommendedStores = stores }
   }
 
   /** 推荐区需要定位：没有经纬度时提示去定位，而不是显示空列表。 */
@@ -160,7 +177,7 @@ export struct HomePage {
     const initialCategories: Category[] = AppStorage.get<Category[]>('categoryList') || []
     this.categories = initialCategories.slice()
     // 秒杀倒计时：单个 1 秒定时器驱动全页秒杀卡片，避免每张卡片各起一个定时器
-    this.startSeckillTicker()
+    if (this.pageVisible) { this.startSeckillTicker() }
     // 隐私同意前不发起网络请求（未同意时 Index 会先跳转 ConsentPage，正常不会走到这里）
     if (AppStorage.get<boolean>('privacyConsent') || false) {
       this.refreshHomeData()
@@ -176,40 +193,50 @@ export struct HomePage {
   }
 
   // 首页特价团购直接读取后端商品接口，避免使用本地模拟商品。
+  @State homeFailed: boolean = false
+  @State recommendedFailed: boolean = false
+  private homeVersion: number = 0
+  private recommendedVersion: number = 0
+
   private async refreshHomeData(): Promise<void> {
     if (!(AppStorage.get<boolean>('privacyConsent') || false)) {
       logInfo('Home', '未同意隐私政策，跳过首页数据加载')
       return
     }
+    if (!this.loggedIn || !this.pageVisible) { return }
+    const epoch: number = getAuthSessionEpoch()
+    const version: number = ++this.homeVersion
     this.isRefreshing = true
-    // 首页数据依赖多个接口，任一失败都不能中断后续步骤（否则秒杀/特价会整块消失），
-    // 因此逐步打点并整体捕获异常，异常时保留已有数据并明确记录原因。
+    this.homeFailed = false
     try {
-      logInfo('Home', '首页数据加载[1/5] 分类')
       await syncCategoriesFromServer()
-      const latestCategories: Category[] = AppStorage.get<Category[]>('categoryList') || []
+      if (!this.pageVisible || epoch !== getAuthSessionEpoch() || version !== this.homeVersion) { return }
+      const latestCategories: Category[] = AppStorage.get<Category[]>('categoryList') ?? []
       this.categories = latestCategories.slice()
-      logInfo('Home', '首页数据加载[2/5] 店铺')
-      await syncStoresFromServer()
-      logInfo('Home', '首页数据加载[3/5] 轮播')
-      this.banners = await syncBannersRemote()
-      logInfo('Home', '首页数据加载[4/5] 公告')
-      this.announcements = await syncAnnouncementsRemote()
-      logInfo('Home', '首页数据加载[5/5] 特价与秒杀')
-      if (this.loggedIn) {
-        const latitude: number | undefined = this.currentAddress !== null ? this.currentAddress.latitude : undefined
-        const longitude: number | undefined = this.currentAddress !== null ? this.currentAddress.longitude : undefined
-        this.specialGoods = await fetchSpecialGoodsApi(10, latitude, longitude)
-        this.seckills = await fetchSeckillsRemote(6)
-      } else {
-        this.specialGoods = []
-        this.seckills = []
-      }
-      logInfo('Home', `首页数据加载完成：轮播=${this.banners.length} 公告=${this.announcements.length} 特价=${this.specialGoods.length} 秒杀=${this.seckills.length}`)
+      const storesOk: boolean = await syncStoresFromServer()
+      if (!this.pageVisible || epoch !== getAuthSessionEpoch() || version !== this.homeVersion) { return }
+      if (!storesOk) { this.homeFailed = true }
+      const banners: Banner[] | null = await fetchBannersResultApi()
+      if (!this.pageVisible || epoch !== getAuthSessionEpoch() || version !== this.homeVersion) { return }
+      if (banners === null) { this.homeFailed = true } else { this.banners = banners }
+      const announcements: Announcement[] | null = await fetchAnnouncementsResultApi()
+      if (!this.pageVisible || epoch !== getAuthSessionEpoch() || version !== this.homeVersion) { return }
+      if (announcements === null) { this.homeFailed = true } else { this.announcements = announcements }
+      const latitude: number | undefined = this.currentAddress?.latitude
+      const longitude: number | undefined = this.currentAddress?.longitude
+      const special: SpecialGoodsItem[] | null = await fetchSpecialGoodsResultApi(10, latitude, longitude)
+      if (!this.pageVisible || epoch !== getAuthSessionEpoch() || version !== this.homeVersion) { return }
+      if (special === null) { this.homeFailed = true } else { this.specialGoods = special }
+      const seckills: SeckillItem[] | null = await fetchSeckillsResultApi(6, latitude, longitude)
+      if (!this.pageVisible || epoch !== getAuthSessionEpoch() || version !== this.homeVersion) { return }
+      if (seckills === null) { this.homeFailed = true } else { this.seckills = seckills }
+      this.seckillTick = 0
+      this.seckillPausedAt = this.pageVisible ? 0 : Date.now()
     } catch (err) {
-      logError('Home', '首页数据加载失败（已保留部分数据）', err as Object)
+      if (version === this.homeVersion && epoch === getAuthSessionEpoch()) { this.homeFailed = true }
+      logError('Home', '首页数据加载失败（已保留已有内容）', err as Object)
     } finally {
-      this.isRefreshing = false
+      if (version === this.homeVersion) { this.isRefreshing = false }
     }
   }
 
@@ -219,7 +246,10 @@ export struct HomePage {
     if (this.seckillTimer >= 0) {
       return
     }
-    this.seckillTick = 0
+    if (this.seckillPausedAt > 0) {
+      this.seckillTick += Math.floor((Date.now() - this.seckillPausedAt) / 1000)
+      this.seckillPausedAt = 0
+    }
     this.seckillTimer = setInterval(() => {
       this.seckillTick += 1
     }, 1000)
@@ -229,6 +259,7 @@ export struct HomePage {
     if (this.seckillTimer >= 0) {
       clearInterval(this.seckillTimer)
       this.seckillTimer = -1
+      this.seckillPausedAt = Date.now()
     }
   }
 
@@ -263,9 +294,7 @@ export struct HomePage {
       promptAction.showToast({ message: '秒杀商品所属店铺信息缺失', duration: 2500 })
       return
     }
-    AppStorage.setOrCreate<number>('selectedStoreId', item.storeId)
-    AppStorage.setOrCreate<string>('selectedStoreName', item.storeName)
-    router.pushUrl({ url: 'pages/StoreDetailPage' })
+    router.pushUrl({ url: 'pages/StoreDetailPage', params: { storeId: item.storeId } })
   }
 
   private hasCurrentLocation(): boolean {
@@ -338,6 +367,10 @@ export struct HomePage {
     // 弹窗若作为 Column 中 layoutWeight(1) 滚动区的兄弟节点，会被分配 0 高度而整块不渲染（历史 bug）。
     Stack() {
     Column() {
+      if (this.homeFailed || this.recommendedFailed) {
+        RemoteState({ failed: true, hasData: this.recommendedStores.length > 0 || this.specialGoods.length > 0,
+          onRetry: () => { this.refreshHomeData(); this.refreshRecommended() } })
+      }
       // 地址与搜索分行，窄屏时仍保留完整的触控区域。
       Column({ space: SPACING.SM }) {
         Button({ type: ButtonType.Normal }) {
@@ -749,9 +782,7 @@ export struct HomePage {
       promptAction.showToast({ message: '店铺信息暂不可用，请刷新后重试', duration: 1800 })
       return
     }
-    AppStorage.setOrCreate<number>('selectedStoreId', storeId)
-    AppStorage.setOrCreate<string>('selectedStoreName', item.storeName)
-    router.pushUrl({ url: 'pages/StoreDetailPage' })
+    router.pushUrl({ url: 'pages/StoreDetailPage', params: { storeId: storeId } })
   }
 
   @Builder

@@ -12,7 +12,10 @@ const rules = {};
 vm.runInNewContext(compile(fs.readFileSync(path.join(root, 'entry/src/main/ets/service/CheckoutCouponRules.ets'), 'utf8')), { exports: rules });
 const statusRules = {};
 const constantsSource = fs.readFileSync(path.join(root, 'entry/src/main/ets/common/Constants.ets'), 'utf8');
-vm.runInNewContext(compile(constantsSource.slice(constantsSource.indexOf('export function getOrderStatusText('), constantsSource.indexOf('// 订单状态颜色'))), { exports: statusRules });
+const displayRules = {};
+vm.runInNewContext(compile(fs.readFileSync(path.join(root, 'entry/src/main/ets/service/OrderStatus.ets'), 'utf8').replace(/^import .*$/gm, '')),
+  { exports: displayRules, UserRole: { CUSTOMER: 0, MERCHANT: 1, ADMIN: 2, RIDER: 3 } });
+vm.runInNewContext(compile(constantsSource.slice(constantsSource.indexOf('export function getOrderStatusText('), constantsSource.indexOf('// 订单状态颜色'))), { exports: statusRules, orderDisplayState: displayRules.orderDisplayState });
 const now = Date.parse('2026/10/26 12:00:00');
 const base = { id: 1, amount: 10, minOrder: 10, storeId: 0, startTime: '2026-01-01 00:00:00', endTime: '2026-12-31 23:59:59', used: false };
 

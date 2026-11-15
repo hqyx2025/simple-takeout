@@ -222,8 +222,7 @@ struct OrderListPage {
     const current: Order | undefined = this.activeCustomerOrder(order.id, 'PAY')
     if (current === undefined) { return }
     AppStorage.setOrCreate<Order>('currentOrder', current)
-    AppStorage.setOrCreate<number>('currentOrderId', order.id)
-    router.pushUrl({ url: 'pages/OrderDetailPage' })
+    router.pushUrl({ url: 'pages/OrderDetailPage', params: { orderId: order.id } })
   }
 
   /** 取消待付款订单：平台尚未扣款，仅释放库存与优惠券。 */
@@ -274,8 +273,11 @@ struct OrderListPage {
               OrderTabItem.create('全部', -1),
               OrderTabItem.create('待付款', 0),
               OrderTabItem.create('待接单', 1),
+              OrderTabItem.create('制作中', 2),
               OrderTabItem.create('配送中', 3),
-              OrderTabItem.create('已完成', 4),
+              OrderTabItem.create('已送达', 4),
+              OrderTabItem.create('售后', 6),
+              OrderTabItem.create('已取消', 5),
             ], (item: OrderTabItem) => {
               this.FilterTab(item)
             }, (item: OrderTabItem) => item.title)
@@ -452,8 +454,7 @@ struct OrderListPage {
     .id(`order-card-${order.id}`)
     .onClick(() => {
       AppStorage.setOrCreate<Order>('currentOrder', order)
-      AppStorage.setOrCreate<number>('currentOrderId', order.id)
-      router.pushUrl({ url: 'pages/OrderDetailPage' })
+      router.pushUrl({ url: 'pages/OrderDetailPage', params: { orderId: order.id } })
     })
   }
 }

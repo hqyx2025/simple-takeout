@@ -1,3 +1,6 @@
+import { fetchAdminOperationLogsResultApi } from '../service/ApiService'
+import { PageSession } from '../service/PageSession'
+import { RemoteState } from '../components/RemoteState'
 import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 import { AppMotion } from '../common/theme/AppMotion'
 import { AdminOperationLog, User, UserRole } from '../model/Models'
@@ -11,6 +14,11 @@ import { logInfo } from '../service/AppLogger'
 @Entry
 @Component
 export struct AdminAuditPage {
+  @State remoteFailed: boolean = false
+  @State remoteLoading: boolean = false
+  private remoteSession: PageSession = new PageSession()
+  private remoteVisible: boolean = true
+
   pageTransition() {
     PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
       .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) }).opacity(0)
@@ -22,8 +30,8 @@ export struct AdminAuditPage {
       .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) }).opacity(0)
   }
 
-  @StorageLink('isLoggedIn') loggedIn: boolean = false
-  @StorageLink('user') user: User = {
+  @StorageLink('isLoggedIn') @Watch('onRemoteIdentityChange') loggedIn: boolean = false
+  @StorageLink('user') @Watch('onRemoteIdentityChange') user: User = {
     id: 0, username: '未登录', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER,
     balance: 0, coupons: [], orders: [], storeIds: []
   }
@@ -44,29 +52,51 @@ export struct AdminAuditPage {
   }
 
   private async refresh(): Promise<void> {
-    if (this.loading) {
-      return
-    }
-    this.loading = true
-    this.page = 1
-    const result = await fetchAdminOperationLogsApi(1)
-    this.logs = result.list
-    this.total = result.total
-    this.hasMore = result.hasMore
-    this.loading = false
+    if (this.remoteLoading) { return }
+    if (!this.remoteVisible || !this.remoteSession.start(UserRole.ADMIN)) { return }
+    const remoteVersion: number = this.remoteSession.request()
+    this.remoteLoading = true
+    this.remoteFailed = false
+    try {
+      if (this.loading) {
+        return
+      }
+      this.loading = true
+      const result = await fetchAdminOperationLogsResultApi(1)
+      if (!this.remoteSession.current(remoteVersion)) { return }
+      if (result === null) { this.remoteFailed = true; return }
+
+      this.logs = result.list
+      this.page = result.page
+      this.total = result.total
+      this.hasMore = result.hasMore
+      this.loading = false
+    } catch (_) { if (this.remoteSession.current(remoteVersion)) { this.remoteFailed = true } }
+    finally { if (this.remoteSession.current(remoteVersion)) { this.remoteLoading = false; this.loading = false } }
   }
 
   private async loadMore(): Promise<void> {
-    if (this.loading || !this.hasMore) {
-      return
-    }
-    this.loading = true
-    const result = await fetchAdminOperationLogsApi(this.page + 1)
-    this.logs = this.logs.concat(result.list)
-    this.page = result.page
-    this.total = result.total
-    this.hasMore = result.hasMore
-    this.loading = false
+    if (this.remoteLoading) { return }
+    if (!this.remoteVisible || !this.remoteSession.start(UserRole.ADMIN)) { return }
+    const remoteVersion: number = this.remoteSession.request()
+    this.remoteLoading = true
+    this.remoteFailed = false
+    try {
+      if (this.loading || !this.hasMore) {
+        return
+      }
+      this.loading = true
+      const result = await fetchAdminOperationLogsResultApi(this.page + 1)
+      if (!this.remoteSession.current(remoteVersion)) { return }
+      if (result === null) { this.remoteFailed = true; return }
+
+      this.logs = this.logs.concat(result.list)
+      this.page = result.page
+      this.total = result.total
+      this.hasMore = result.hasMore
+      this.loading = false
+    } catch (_) { if (this.remoteSession.current(remoteVersion)) { this.remoteFailed = true } }
+    finally { if (this.remoteSession.current(remoteVersion)) { this.remoteLoading = false; this.loading = false } }
   }
 
   private formatTime(timestamp: number): string {
@@ -86,6 +116,21 @@ export struct AdminAuditPage {
     }
   }
 
+  onRemoteIdentityChange(): void {
+    if (!this.remoteSession.matchesIdentity()) {
+      this.remoteSession.pause()
+      this.remoteVisible = false
+      this.remoteLoading = false
+      this.remoteFailed = false
+      this.loading = false
+      this.logs = []
+      router.replaceUrl({ url: 'pages/Index' })
+    }
+  }
+  onPageHide(): void { this.remoteVisible = false; this.remoteSession.pause(); this.loading = false; this.remoteLoading = false }
+  onPageShow(): void { this.remoteVisible = true; if (!this.loading) { this.refresh() } }
+  aboutToDisappear(): void { this.onPageHide() }
+
   build() {
     Column() {
       PageHeader({
@@ -97,9 +142,13 @@ export struct AdminAuditPage {
         onBack: () => { router.back() },
         onAction: () => { this.refresh() }
       })
+      if (this.remoteFailed || (this.remoteLoading && !(this.logs.length > 0))) {
+        RemoteState({ loading: this.remoteLoading, failed: this.remoteFailed, hasData: this.logs.length > 0,
+          retryId: 'AdminAuditPage-retry', onRetry: () => { this.refresh() } })
+      }
 
       List({ space: SPACING.SM }) {
-        if (this.logs.length === 0 && !this.loading) {
+        if (this.logs.length === 0 && !this.remoteFailed && !this.remoteLoading && !this.loading) {
           ListItem() {
             Text('暂无操作记录').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
               .width('100%').padding(SPACING.LG)

@@ -13,6 +13,8 @@ import { clearCartApi, addCartItemApi, fetchUserOrdersApi, fetchOrderDetailApi, 
 import { saveAppearanceSettings } from '../../../main/ets/service/AppearanceSettings'
 import { Address, CartItem, Order, RefundRecord, UserRole } from '../../../main/ets/model/Models'
 
+interface OrderRouteParameters { orderId?: number }
+
 interface BoundaryFixtures {
   storeId: number; storeName: string; goodsId: number; controlBaseUrl: string
   labelPreparingId: number; labelReadyId: number; labelAssignedId: number
@@ -31,10 +33,10 @@ async function control(fixture: BoundaryFixtures, command: string): Promise<void
   } finally { request.destroy() }
 }
 
-async function navigate(context: UIContext, driver: Driver, page: string): Promise<void> {
+async function navigate(context: UIContext, driver: Driver, page: string, storeId: number = 0): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     context.runScopedTask((): void => {
-      context.getRouter().pushUrl({ url: 'pages/' + page }).then(() => { resolve() })
+      context.getRouter().pushUrl({ url: 'pages/' + page, params: { storeId } }).then(() => { resolve() })
         .catch(() => { reject(new Error('Route failed: ' + page)) })
     })
   })
@@ -176,9 +178,7 @@ export default function boundaryFlowTest(): void {
         await clearCartApi(); await syncCartRemote(); await syncAddressesRemote()
         const before: Order[] = await fetchUserOrdersApi() ?? []
         const balance: ApiResponse<BoundaryBalance> = await get<BoundaryBalance>('/api/auth/me')
-        AppStorage.setOrCreate<number>('selectedStoreId', fixture.storeId)
-        AppStorage.setOrCreate<string>('selectedStoreName', fixture.storeName)
-        await navigate(context, driver, 'StoreDetailPage')
+        await navigate(context, driver, 'StoreDetailPage', fixture.storeId)
         await click(driver, 'goods-plus-' + fixture.goodsId); await click(driver, 'store-checkout')
         requireComponent(await driver.waitForComponent(ON.id('checkout-submit'), 8000), 'checkout')
         await control(fixture, 'lose-order-response'); await click(driver, 'checkout-submit')
@@ -188,7 +188,7 @@ export default function boundaryFlowTest(): void {
           await requireComponent(reconcile, 'reconcile original intent').click()
         }
         requireComponent(await driver.waitForComponent(ON.id('order-detail-status'), 15000), 'reconciled order')
-        const created: number = AppStorage.get<number>('currentOrderId') ?? 0
+        const created: number = (context.getRouter().getParams() as OrderRouteParameters)?.orderId ?? 0
         const after: Order[] = await fetchUserOrdersApi() ?? []
         const current: ApiResponse<BoundaryBalance> = await get<BoundaryBalance>('/api/auth/me')
         expect(after.length).assertEqual(before.length + 1)

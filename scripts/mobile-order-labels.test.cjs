@@ -16,10 +16,12 @@ function load(code, context = {}) {
   return exports;
 }
 const constants = source('common/Constants.ets');
-const { getOrderStatusText } = load(constants.slice(constants.indexOf('export function getOrderStatusText('), constants.indexOf('// 订单状态颜色')));
+const UserRole = { CUSTOMER: 0, MERCHANT: 1, ADMIN: 2, RIDER: 3 };
+const { orderDisplayState } = load(source('service/OrderStatus.ets').replace(/^import .*$/gm, ''), { UserRole });
+const { getOrderStatusText } = load(constants.slice(constants.indexOf('export function getOrderStatusText('), constants.indexOf('// 订单状态颜色')), { orderDisplayState });
 
 test('merchant progress distinguishes preparation, dispatch modes and assigned riders without hiding refund state', () => {
-  const { Page } = load('export class Page {' + method(source('pages/MerchantOrdersPage.ets'), 'orderStatusText') + '}', { getOrderStatusText });
+  const { Page } = load('export class Page {' + method(source('pages/MerchantOrdersPage.ets'), 'orderStatusText') + '}', { getOrderStatusText, orderDisplayState, UserRole });
   const page = new Page();
   const order = { status: 2, escrowStatus: 0 };
   assert.equal(page.orderStatusText(order), '制作中');

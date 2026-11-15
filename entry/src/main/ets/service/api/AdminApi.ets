@@ -8,27 +8,15 @@ import { toStoreItem, toRider, toBanner, toAnnouncement } from '../../model/serv
 // ==================== 管理端：骑手管理 / 内容管理 ====================
 
 export async function fetchAdminRidersApi(): Promise<Rider[]> {
-  const resp: ApiResponse<ServerRider[]> = await get<ServerRider[]>('/api/admin/riders')
-  if (resp.code !== 200 || resp.data === null) {
-    return []
-  }
-  return resp.data.map((r: ServerRider) => toRider(r))
+  return (await fetchAdminRidersResultApi()) ?? []
 }
 
 export async function fetchAdminBannersApi(): Promise<Banner[]> {
-  const resp: ApiResponse<ServerBanner[]> = await get<ServerBanner[]>('/api/admin/banners')
-  if (resp.code !== 200 || resp.data === null) {
-    return []
-  }
-  return resp.data.map((b: ServerBanner) => toBanner(b))
+  return (await fetchAdminBannersResultApi()) ?? []
 }
 
 export async function fetchAdminAnnouncementsApi(): Promise<Announcement[]> {
-  const resp: ApiResponse<ServerAnnouncement[]> = await get<ServerAnnouncement[]>('/api/admin/announcements')
-  if (resp.code !== 200 || resp.data === null) {
-    return []
-  }
-  return resp.data.map((a: ServerAnnouncement) => toAnnouncement(a))
+  return (await fetchAdminAnnouncementsResultApi()) ?? []
 }
 
 /** 管理端：退款申请列表（status 为空返回全部）。 */
@@ -78,22 +66,7 @@ export async function adminOrderActionApi(orderId: number, action: string): Prom
 }
 
 export async function fetchAdminEmployeesApi(): Promise<AdminEmployee[]> {
-  const resp: ApiResponse<ServerAdminEmployee[]> = await get<ServerAdminEmployee[]>('/api/admin/employees')
-  if (resp.code !== 200 || resp.data === null) {
-    return []
-  }
-  return resp.data.map((employee: ServerAdminEmployee) => {
-    const result: AdminEmployee = {
-      id: employee.id,
-      username: employee.username,
-      phone: employee.phone,
-      role: employee.role,
-      status: employee.status,
-      storeCount: employee.storeCount,
-      createTime: employee.createTime
-    }
-    return result
-  })
+  return (await fetchAdminEmployeesResultApi()) ?? []
 }
 
 export async function createAdminEmployeeApi(username: string, phone: string, password: string): Promise<boolean> {
@@ -147,36 +120,11 @@ export async function fetchAdminUsersApi(role?: number, status?: number, keyword
 
 export async function fetchAdminUsersPageApi(role?: number, status?: number, keyword?: string,
   page: number = 1, pageSize: number = 50): Promise<AdminUserPageData> {
-  const params: string[] = [`page=${page}`, `pageSize=${pageSize}`]
-  if (role !== undefined) {
-    params.push(`userRole=${role}`)
-  }
-  if (status !== undefined) {
-    params.push(`status=${status}`)
-  }
-  if (keyword !== undefined && keyword.trim() !== '') {
-    params.push(`keyword=${encodeURIComponent(keyword.trim())}`)
-  }
-  const resp: ApiResponse<ServerAdminUserPage> = await get<ServerAdminUserPage>(`/api/admin/users/page?${params.join('&')}`)
-  if (resp.code !== 200 || resp.data === null) {
-    return { list: [], total: 0, page: page, pageSize: pageSize, hasMore: false }
-  }
-  const list: AdminUser[] = resp.data.list.map((item: ServerAdminUser): AdminUser => ({
-    id: item.id, username: item.username, phone: item.phone, role: item.role,
-    status: item.status, balance: item.balance, storeCount: item.storeCount, createTime: item.createTime
-  }))
-  return { list: list, total: resp.data.total, page: resp.data.page,
-    pageSize: resp.data.pageSize, hasMore: resp.data.hasMore }
+  return (await fetchAdminUsersPageResultApi(role, status, keyword, page, pageSize)) ?? { list: [], total: 0, page: page, pageSize: pageSize, hasMore: false }
 }
 
 export async function fetchAdminOperationLogsApi(page: number = 1, pageSize: number = 50): Promise<AdminOperationLogPageData> {
-  const resp: ApiResponse<ServerAdminOperationLogPage> = await get<ServerAdminOperationLogPage>(
-    `/api/admin/audit-logs?page=${page}&pageSize=${pageSize}`)
-  if (resp.code !== 200 || resp.data === null) {
-    return { list: [], total: 0, page: page, pageSize: pageSize, hasMore: false }
-  }
-  return { list: resp.data.list, total: resp.data.total, page: resp.data.page,
-    pageSize: resp.data.pageSize, hasMore: resp.data.hasMore }
+  return (await fetchAdminOperationLogsResultApi(page, pageSize)) ?? { list: [], total: 0, page: page, pageSize: pageSize, hasMore: false }
 }
 
 export async function updateAdminUserStatusApi(id: number, status: number): Promise<boolean> {
@@ -186,31 +134,7 @@ export async function updateAdminUserStatusApi(id: number, status: number): Prom
 }
 
 export async function fetchAdminProductsApi(keyword?: string, status?: number, page: number = 1, pageSize: number = 50): Promise<AdminProductPage> {
-  const params: string[] = []
-  if (keyword !== undefined && keyword.trim() !== '') {
-    params.push(`keyword=${encodeURIComponent(keyword.trim())}`)
-  }
-  if (status !== undefined) {
-    params.push(`status=${status}`)
-  }
-  params.push(`page=${page}`)
-  params.push(`pageSize=${pageSize}`)
-  const url: string = params.length > 0 ? `/api/admin/products?${params.join('&')}` : '/api/admin/products'
-  const resp: ApiResponse<ServerAdminProductPage> = await get<ServerAdminProductPage>(url)
-  if (resp.code !== 200 || resp.data === null) {
-    return { list: [], total: 0, page: page, pageSize: pageSize, hasMore: false }
-  }
-  const list: AdminProduct[] = resp.data.list.map((item: ServerAdminProduct) => {
-    const product: AdminProduct = {
-      id: item.id, storeId: item.storeId, storeName: item.storeName, name: item.name,
-      description: item.description, price: item.price, originalPrice: item.originalPrice,
-      image: item.image, categoryId: item.categoryId, merchantCategoryId: item.merchantCategoryId,
-      stock: item.stock, sales: item.sales, rating: item.rating, tag: item.tag,
-      status: item.status, createTime: item.createTime
-    }
-    return product
-  })
-  return { list: list, total: resp.data.total, page: resp.data.page, pageSize: resp.data.pageSize, hasMore: resp.data.hasMore }
+  return (await fetchAdminProductsResultApi(keyword, status, page, pageSize)) ?? { list: [], total: 0, page: page, pageSize: pageSize, hasMore: false }
 }
 
 export async function updateAdminProductStatusApi(id: number, status: number): Promise<boolean> {
@@ -225,17 +149,11 @@ export async function deleteAdminProductApi(id: number): Promise<boolean> {
 }
 
 export async function fetchAdminMarketingStoresApi(): Promise<StoreItem[]> {
-  const resp: ApiResponse<ServerStore[]> = await get<ServerStore[]>('/api/admin/stores')
-  return resp.code === 200 && resp.data !== null ? resp.data.map((store: ServerStore) => toStoreItem(store)) : []
+  return (await fetchAdminMarketingStoresResultApi()) ?? []
 }
 
 export async function fetchAdminMarketingActivitiesApi(storeId: number = 0, status: number = -1): Promise<MarketingActivity[]> {
-  const params: string[] = []
-  if (storeId > 0) params.push(`storeId=${storeId}`)
-  if (status >= 0) params.push(`status=${status}`)
-  const query: string = params.length > 0 ? `?${params.join('&')}` : ''
-  const resp: ApiResponse<MarketingActivity[]> = await get<MarketingActivity[]>(`/api/admin/marketing/activities${query}`)
-  return resp.code === 200 && resp.data !== null ? resp.data : []
+  return (await fetchAdminMarketingActivitiesResultApi(storeId, status)) ?? []
 }
 
 export async function updateAdminMarketingActivityStatusApi(id: number, status: number): Promise<boolean> {
@@ -250,12 +168,7 @@ export async function deleteAdminMarketingActivityApi(id: number): Promise<boole
 }
 
 export async function fetchAdminMarketingSeckillsApi(storeId: number = 0, status: number = -1): Promise<AdminSeckill[]> {
-  const params: string[] = []
-  if (storeId > 0) params.push(`storeId=${storeId}`)
-  if (status >= 0) params.push(`status=${status}`)
-  const query: string = params.length > 0 ? `?${params.join('&')}` : ''
-  const resp: ApiResponse<AdminSeckill[]> = await get<AdminSeckill[]>(`/api/admin/marketing/seckills${query}`)
-  return resp.code === 200 && resp.data !== null ? resp.data : []
+  return (await fetchAdminMarketingSeckillsResultApi(storeId, status)) ?? []
 }
 
 export async function updateAdminMarketingSeckillStatusApi(id: number, status: number): Promise<boolean> {
@@ -292,14 +205,7 @@ export async function fetchAdminStatisticsApi(hotLimit: number = 10): Promise<Ad
 }
 
 export async function fetchAdminOrderTrendApi(days: number): Promise<AdminTrendPoint[]> {
-  const resp: ApiResponse<ServerAdminTrendPoint[]> = await get<ServerAdminTrendPoint[]>(`/api/admin/statistics/order-trend?days=${days}`)
-  if (resp.code !== 200 || resp.data === null) {
-    return []
-  }
-  return resp.data.map((item: ServerAdminTrendPoint) => {
-    const point: AdminTrendPoint = { date: item.date, orderCount: item.orderCount, gmv: item.gmv }
-    return point
-  })
+  return (await fetchAdminOrderTrendResultApi(days)) ?? []
 }
 
 /** 数据大屏：一次性返回 指标 + 趋势 + 状态分布 + 店铺排行。 */
@@ -309,4 +215,144 @@ export async function fetchAdminDashboardApi(): Promise<AdminDashboard | null> {
     return null
   }
   return resp.data
+}
+
+// Nullable reads distinguish an empty successful response from a failed request.
+export async function fetchAdminRidersResultApi(): Promise<Rider[] | null> {
+  const resp: ApiResponse<ServerRider[]> = await get<ServerRider[]>('/api/admin/riders', false)
+  if (resp.code !== 200 || resp.data === null) {
+    return null
+  }
+  return resp.data.map((r: ServerRider) => toRider(r))
+}
+
+export async function fetchAdminBannersResultApi(): Promise<Banner[] | null> {
+  const resp: ApiResponse<ServerBanner[]> = await get<ServerBanner[]>('/api/admin/banners', false)
+  if (resp.code !== 200 || resp.data === null) {
+    return null
+  }
+  return resp.data.map((b: ServerBanner) => toBanner(b))
+}
+
+export async function fetchAdminAnnouncementsResultApi(): Promise<Announcement[] | null> {
+  const resp: ApiResponse<ServerAnnouncement[]> = await get<ServerAnnouncement[]>('/api/admin/announcements', false)
+  if (resp.code !== 200 || resp.data === null) {
+    return null
+  }
+  return resp.data.map((a: ServerAnnouncement) => toAnnouncement(a))
+}
+
+export async function fetchAdminEmployeesResultApi(): Promise<AdminEmployee[] | null> {
+  const resp: ApiResponse<ServerAdminEmployee[]> = await get<ServerAdminEmployee[]>('/api/admin/employees', false)
+  if (resp.code !== 200 || resp.data === null) {
+    return null
+  }
+  return resp.data.map((employee: ServerAdminEmployee) => {
+    const result: AdminEmployee = {
+      id: employee.id,
+      username: employee.username,
+      phone: employee.phone,
+      role: employee.role,
+      status: employee.status,
+      storeCount: employee.storeCount,
+      createTime: employee.createTime
+    }
+    return result
+  })
+}
+
+export async function fetchAdminUsersPageResultApi(role?: number, status?: number, keyword?: string,
+  page: number = 1, pageSize: number = 50): Promise<AdminUserPageData | null> {
+  const params: string[] = [`page=${page}`, `pageSize=${pageSize}`]
+  if (role !== undefined) {
+    params.push(`userRole=${role}`)
+  }
+  if (status !== undefined) {
+    params.push(`status=${status}`)
+  }
+  if (keyword !== undefined && keyword.trim() !== '') {
+    params.push(`keyword=${encodeURIComponent(keyword.trim())}`)
+  }
+  const resp: ApiResponse<ServerAdminUserPage> = await get<ServerAdminUserPage>(`/api/admin/users/page?${params.join('&')}`, false)
+  if (resp.code !== 200 || resp.data === null) {
+    return null
+  }
+  const list: AdminUser[] = resp.data.list.map((item: ServerAdminUser): AdminUser => ({
+    id: item.id, username: item.username, phone: item.phone, role: item.role,
+    status: item.status, balance: item.balance, storeCount: item.storeCount, createTime: item.createTime
+  }))
+  return { list: list, total: resp.data.total, page: resp.data.page,
+    pageSize: resp.data.pageSize, hasMore: resp.data.hasMore }
+}
+
+export async function fetchAdminProductsResultApi(keyword?: string, status?: number, page: number = 1, pageSize: number = 50): Promise<AdminProductPage | null> {
+  const params: string[] = []
+  if (keyword !== undefined && keyword.trim() !== '') {
+    params.push(`keyword=${encodeURIComponent(keyword.trim())}`)
+  }
+  if (status !== undefined) {
+    params.push(`status=${status}`)
+  }
+  params.push(`page=${page}`)
+  params.push(`pageSize=${pageSize}`)
+  const url: string = params.length > 0 ? `/api/admin/products?${params.join('&')}` : '/api/admin/products'
+  const resp: ApiResponse<ServerAdminProductPage> = await get<ServerAdminProductPage>(url, false)
+  if (resp.code !== 200 || resp.data === null) {
+    return null
+  }
+  const list: AdminProduct[] = resp.data.list.map((item: ServerAdminProduct) => {
+    const product: AdminProduct = {
+      id: item.id, storeId: item.storeId, storeName: item.storeName, name: item.name,
+      description: item.description, price: item.price, originalPrice: item.originalPrice,
+      image: item.image, categoryId: item.categoryId, merchantCategoryId: item.merchantCategoryId,
+      stock: item.stock, sales: item.sales, rating: item.rating, tag: item.tag,
+      status: item.status, createTime: item.createTime
+    }
+    return product
+  })
+  return { list: list, total: resp.data.total, page: resp.data.page, pageSize: resp.data.pageSize, hasMore: resp.data.hasMore }
+}
+
+export async function fetchAdminOperationLogsResultApi(page: number = 1, pageSize: number = 50): Promise<AdminOperationLogPageData | null> {
+  const resp: ApiResponse<ServerAdminOperationLogPage> = await get<ServerAdminOperationLogPage>(
+    `/api/admin/audit-logs?page=${page}&pageSize=${pageSize}`, false)
+  if (resp.code !== 200 || resp.data === null) {
+    return null
+  }
+  return { list: resp.data.list, total: resp.data.total, page: resp.data.page,
+    pageSize: resp.data.pageSize, hasMore: resp.data.hasMore }
+}
+
+export async function fetchAdminMarketingStoresResultApi(): Promise<StoreItem[] | null> {
+  const resp: ApiResponse<ServerStore[]> = await get<ServerStore[]>('/api/admin/stores', false)
+  return resp.code === 200 && resp.data !== null ? resp.data.map((store: ServerStore) => toStoreItem(store)) : null
+}
+
+export async function fetchAdminMarketingActivitiesResultApi(storeId: number = 0, status: number = -1): Promise<MarketingActivity[] | null> {
+  const params: string[] = []
+  if (storeId > 0) params.push(`storeId=${storeId}`)
+  if (status >= 0) params.push(`status=${status}`)
+  const query: string = params.length > 0 ? `?${params.join('&')}` : ''
+  const resp: ApiResponse<MarketingActivity[]> = await get<MarketingActivity[]>(`/api/admin/marketing/activities${query}`, false)
+  return resp.code === 200 && resp.data !== null ? resp.data : null
+}
+
+export async function fetchAdminMarketingSeckillsResultApi(storeId: number = 0, status: number = -1): Promise<AdminSeckill[] | null> {
+  const params: string[] = []
+  if (storeId > 0) params.push(`storeId=${storeId}`)
+  if (status >= 0) params.push(`status=${status}`)
+  const query: string = params.length > 0 ? `?${params.join('&')}` : ''
+  const resp: ApiResponse<AdminSeckill[]> = await get<AdminSeckill[]>(`/api/admin/marketing/seckills${query}`, false)
+  return resp.code === 200 && resp.data !== null ? resp.data : null
+}
+
+export async function fetchAdminOrderTrendResultApi(days: number): Promise<AdminTrendPoint[] | null> {
+  const resp: ApiResponse<ServerAdminTrendPoint[]> = await get<ServerAdminTrendPoint[]>(`/api/admin/statistics/order-trend?days=${days}`, false)
+  if (resp.code !== 200 || resp.data === null) {
+    return null
+  }
+  return resp.data.map((item: ServerAdminTrendPoint) => {
+    const point: AdminTrendPoint = { date: item.date, orderCount: item.orderCount, gmv: item.gmv }
+    return point
+  })
 }

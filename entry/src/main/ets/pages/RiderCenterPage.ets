@@ -1,3 +1,5 @@
+import { PageSession } from '../service/PageSession'
+import { RemoteState } from '../components/RemoteState'
 import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /**
@@ -23,6 +25,8 @@ const RIDER_RADIUS_MAX_KM: number = 50
 @Entry
 @Component
 export struct RiderCenterPage {
+  private profileSession: PageSession = new PageSession()
+  @State profileFailed: boolean = false
   pageTransition() {
     PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
       .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
@@ -63,7 +67,11 @@ export struct RiderCenterPage {
     }
   }
 
+  onPageHide(): void { this.profileSession.pause(); this.loading = false }
+  aboutToDisappear(): void { this.onPageHide() }
+
   async onPageShow(): Promise<void> {
+    if (!this.loading) { this.loadProfile() }
     // 从地图选点返回：把选好的接单位置写回服务端
     const picked: Address | null = AppStorage.get<Address>('pickedRiderLocation') ?? null
     if (picked !== null) {
@@ -75,7 +83,12 @@ export struct RiderCenterPage {
 
   private async loadProfile(): Promise<void> {
     this.loading = true
-    this.rider = await fetchRiderProfileRemote()
+    if (!this.profileSession.start(UserRole.RIDER)) { this.loading = false; return }
+    const version: number = this.profileSession.request()
+    const rider: Rider | null = await fetchRiderProfileRemote()
+    if (!this.profileSession.current(version)) { return }
+    this.profileFailed = rider === null
+    if (rider !== null) { this.rider = rider }
     this.loading = false
     if (this.rider !== null) {
       const radiusMeters: number = this.rider.deliveryRadius ?? 0
@@ -199,6 +212,9 @@ export struct RiderCenterPage {
     Stack() {
     Column() {
       PageHeader({ title: '骑手中心', showBack: false, headerBgColor: COLORS.BG_PRIMARY, titleColor: COLORS.TEXT_PRIMARY })
+      if (this.profileFailed) {
+        RemoteState({ failed: true, hasData: this.rider !== null, onRetry: () => { this.loadProfile() } })
+      }
 
       if (!this.loggedIn) {
         Column() {
@@ -206,7 +222,7 @@ export struct RiderCenterPage {
           Text('请使用骑手账号登录').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_HINT).margin({ top: SPACING.MD })
         }
         .layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
-      } else if (this.loading) {
+      } else if (this.loading && this.rider === null) {
         Column() {
           Text('正在加载…').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
         }

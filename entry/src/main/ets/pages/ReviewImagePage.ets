@@ -2,7 +2,7 @@ import { PageHeader } from '../components/PageHeader'
 /**
  * 评价图片全屏预览页。
  * 评价列表缩略图点击后进入本页查看大图；点击任意位置返回。
- * 图片地址通过 AppStorage('reviewPreviewUrl') 传递（与项目内 currentOrderId 等跨页传参方式一致）。
+ * 图片地址通过 AppStorage('reviewPreviewUrl') 传递（图片预览缓存）。
  */
 import { AppMotion } from '../common/theme/AppMotion'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'

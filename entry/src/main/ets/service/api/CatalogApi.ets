@@ -40,13 +40,7 @@ export async function fetchStoresResultApi(categoryId?: number, latitude?: numbe
 
 export async function fetchRecommendedStoresApi(maxDistanceKm: number = 2, limit: number = 10,
   latitude?: number, longitude?: number): Promise<StoreItem[]> {
-  const baseUrl: string = `/api/stores/recommended?maxDistanceKm=${maxDistanceKm}&limit=${limit}`
-  const resp: ApiResponse<ServerStore[]> = await get<ServerStore[]>(
-    appendCoordinates(baseUrl, latitude, longitude))
-  if (resp.code !== 200 || resp.data === null) {
-    return []
-  }
-  return resp.data.map((s: ServerStore) => toStoreItem(s))
+  return (await fetchRecommendedStoresResultApi(maxDistanceKm, limit, latitude, longitude)) ?? []
 }
 
 export async function fetchStoreGoods(storeId: number): Promise<GoodsItem[]> {
@@ -71,28 +65,11 @@ export async function fetchStoreDetailApi(storeId: number): Promise<StoreItem | 
 }
 
 export async function fetchSpecialGoodsApi(limit: number = 10, latitude?: number, longitude?: number): Promise<SpecialGoodsItem[]> {
-  const baseUrl: string = `/api/goods/special?limit=${limit}`
-  const resp: ApiResponse<ServerSpecialGoods[]> = await get<ServerSpecialGoods[]>(
-    appendCoordinates(baseUrl, latitude, longitude))
-  if (resp.code !== 200 || resp.data === null) {
-    return []
-  }
-  return resp.data.map((item: ServerSpecialGoods): SpecialGoodsItem => {
-    const result: SpecialGoodsItem = {
-      goods: toGoodsItem(item.goods),
-      storeName: item.storeName,
-      storeDistance: item.storeDistance
-    }
-    return result
-  })
+  return (await fetchSpecialGoodsResultApi(limit, latitude, longitude)) ?? []
 }
 
 export async function fetchStoreReviews(storeId: number): Promise<Review[]> {
-  const resp: ApiResponse<ServerReview[]> = await get<ServerReview[]>(`/api/stores/${storeId}/reviews`)
-  if (resp.code !== 200 || resp.data === null) {
-    return []
-  }
-  return resp.data.map((r: ServerReview) => toReview(r))
+  return (await fetchStoreReviewsResultApi(storeId)) ?? []
 }
 
 // ==================== 营销：榜单 / 限时秒杀 / 凑单 ====================
@@ -126,30 +103,7 @@ export async function fetchRankGoodsApi(limit: number = 10, latitude?: number, l
 
 /** 首页限时秒杀（时间窗口内且仍有名额）。 */
 export async function fetchSeckillsApi(limit: number = 6, latitude?: number, longitude?: number): Promise<SeckillItem[]> {
-  const resp: ApiResponse<ServerSeckill[]> = await get<ServerSeckill[]>(
-    appendCoordinates(`/api/seckills?limit=${limit}`, latitude, longitude))
-  if (resp.code !== 200 || resp.data === null) {
-    return []
-  }
-  return resp.data.map((s: ServerSeckill): SeckillItem => {
-    const item: SeckillItem = {
-      id: s.id,
-      goodsId: s.goodsId,
-      goodsName: s.goodsName,
-      image: s.image,
-      originalPrice: s.originalPrice,
-      price: s.price,
-      quota: s.quota,
-      sold: s.sold,
-      startTime: s.startTime,
-      endTime: s.endTime,
-      storeId: s.storeId,
-      storeName: s.storeName,
-      storeDistance: s.storeDistance,
-      remainSeconds: s.remainSeconds
-    }
-    return item
-  })
+  return (await fetchSeckillsResultApi(limit, latitude, longitude)) ?? []
 }
 
 export async function fetchBundleApi(storeId: number, amount: number,
@@ -188,19 +142,11 @@ export async function replyReviewApi(reviewId: number, reply: string): Promise<b
 // ==================== 内容管理（Banner / 公告） ====================
 
 export async function fetchBannersApi(): Promise<Banner[]> {
-  const resp: ApiResponse<ServerBanner[]> = await get<ServerBanner[]>('/api/banners')
-  if (resp.code !== 200 || resp.data === null) {
-    return []
-  }
-  return resp.data.map((b: ServerBanner) => toBanner(b))
+  return (await fetchBannersResultApi()) ?? []
 }
 
 export async function fetchAnnouncementsApi(): Promise<Announcement[]> {
-  const resp: ApiResponse<ServerAnnouncement[]> = await get<ServerAnnouncement[]>('/api/announcements')
-  if (resp.code !== 200 || resp.data === null) {
-    return []
-  }
-  return resp.data.map((a: ServerAnnouncement) => toAnnouncement(a))
+  return (await fetchAnnouncementsResultApi()) ?? []
 }
 
 export async function createBannerApi(title: string, subtitle: string, image: string, color: string,
@@ -296,21 +242,7 @@ export async function claimCouponApi(storeId: number, name: string, threshold: n
 }
 
 export async function fetchFavoritesApi(): Promise<Favorite[]> {
-  const resp: ApiResponse<ServerStore[]> = await get<ServerStore[]>(API_CONFIG.ENDPOINTS['favorites'])
-  if (resp.code !== 200 || resp.data === null) {
-    return []
-  }
-  return resp.data.map((s: ServerStore) => {
-    const fav: Favorite = {
-      id: s.id,
-      userId: 0,
-      storeId: s.id,
-      storeName: s.name,
-      storeImage: s.image,
-      createTime: ''
-    }
-    return fav
-  })
+  return (await fetchFavoritesResultApi()) ?? []
 }
 
 export async function toggleFavoriteApi(storeId: number): Promise<boolean> {
@@ -370,4 +302,100 @@ export async function updateAddressApi(addressId: number, name: string, phone: s
 export async function setDefaultAddressApi(addressId: number): Promise<boolean> {
   const resp: ApiResponse<Object> = await put<Object>(`/api/addresses/${addressId}/default`, undefined)
   return resp.code === 200
+}
+
+// Nullable reads distinguish an empty successful response from a failed request.
+export async function fetchFavoritesResultApi(): Promise<Favorite[] | null> {
+  const resp: ApiResponse<ServerStore[]> = await get<ServerStore[]>(API_CONFIG.ENDPOINTS['favorites'], false)
+  if (resp.code !== 200 || resp.data === null) {
+    return null
+  }
+  return resp.data.map((s: ServerStore) => {
+    const fav: Favorite = {
+      id: s.id,
+      userId: 0,
+      storeId: s.id,
+      storeName: s.name,
+      storeImage: s.image,
+      createTime: ''
+    }
+    return fav
+  })
+}
+
+export async function fetchStoreReviewsResultApi(storeId: number): Promise<Review[] | null> {
+  const resp: ApiResponse<ServerReview[]> = await get<ServerReview[]>(`/api/stores/${storeId}/reviews`, false)
+  if (resp.code !== 200 || !Array.isArray(resp.data)) { return null }
+  return resp.data.map((review: ServerReview) => toReview(review))
+}
+
+export async function fetchRecommendedStoresResultApi(maxDistanceKm: number = 2, limit: number = 10,
+  latitude?: number, longitude?: number): Promise<StoreItem[] | null> {
+  const baseUrl: string = `/api/stores/recommended?maxDistanceKm=${maxDistanceKm}&limit=${limit}`
+  const resp: ApiResponse<ServerStore[]> = await get<ServerStore[]>(
+    appendCoordinates(baseUrl, latitude, longitude), false)
+  if (resp.code !== 200 || resp.data === null) {
+    return null
+  }
+  return resp.data.map((s: ServerStore) => toStoreItem(s))
+}
+
+export async function fetchSpecialGoodsResultApi(limit: number = 10, latitude?: number, longitude?: number): Promise<SpecialGoodsItem[] | null> {
+  const baseUrl: string = `/api/goods/special?limit=${limit}`
+  const resp: ApiResponse<ServerSpecialGoods[]> = await get<ServerSpecialGoods[]>(
+    appendCoordinates(baseUrl, latitude, longitude), false)
+  if (resp.code !== 200 || resp.data === null) {
+    return null
+  }
+  return resp.data.map((item: ServerSpecialGoods): SpecialGoodsItem => {
+    const result: SpecialGoodsItem = {
+      goods: toGoodsItem(item.goods),
+      storeName: item.storeName,
+      storeDistance: item.storeDistance
+    }
+    return result
+  })
+}
+
+export async function fetchSeckillsResultApi(limit: number = 6, latitude?: number, longitude?: number): Promise<SeckillItem[] | null> {
+  const resp: ApiResponse<ServerSeckill[]> = await get<ServerSeckill[]>(
+    appendCoordinates(`/api/seckills?limit=${limit}`, latitude, longitude), false)
+  if (resp.code !== 200 || resp.data === null) {
+    return null
+  }
+  return resp.data.map((s: ServerSeckill): SeckillItem => {
+    const item: SeckillItem = {
+      id: s.id,
+      goodsId: s.goodsId,
+      goodsName: s.goodsName,
+      image: s.image,
+      originalPrice: s.originalPrice,
+      price: s.price,
+      quota: s.quota,
+      sold: s.sold,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      storeId: s.storeId,
+      storeName: s.storeName,
+      storeDistance: s.storeDistance,
+      remainSeconds: s.remainSeconds
+    }
+    return item
+  })
+}
+
+export async function fetchBannersResultApi(): Promise<Banner[] | null> {
+  const resp: ApiResponse<ServerBanner[]> = await get<ServerBanner[]>('/api/banners', false)
+  if (resp.code !== 200 || resp.data === null) {
+    return null
+  }
+  return resp.data.map((b: ServerBanner) => toBanner(b))
+}
+
+export async function fetchAnnouncementsResultApi(): Promise<Announcement[] | null> {
+  const resp: ApiResponse<ServerAnnouncement[]> = await get<ServerAnnouncement[]>('/api/announcements', false)
+  if (resp.code !== 200 || resp.data === null) {
+    return null
+  }
+  return resp.data.map((a: ServerAnnouncement) => toAnnouncement(a))
 }

@@ -98,9 +98,7 @@ export struct LoginPage {
                 .height(36).width('100%').id('login-forgot-password')
                 .enabled(!this.submitting && !this.sendingCode)
                 .onClick(() => {
-                  AppStorage.setOrCreate<string>('passwordResetMode', 'login')
-                  AppStorage.setOrCreate<string>('passwordResetPhone', this.phone.trim())
-                  router.pushUrl({ url: 'pages/PasswordResetPage' })
+                  router.pushUrl({ url: 'pages/PasswordResetPage', params: { resetMode: 'login', phoneHint: this.phone.trim() } })
                 })
             }
 

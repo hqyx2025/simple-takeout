@@ -1,3 +1,4 @@
+import { RemoteState } from '../components/RemoteState'
 import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppTextAreaStyle } from '../common/theme/AppTheme'
 /**
@@ -234,22 +235,29 @@ export struct OrderDetailPage {
     }
   }
 
+  @State detailLoading: boolean = true
+  @State detailLoadFailed: boolean = false
+
   async aboutToAppear(): Promise<void> {
+    this.detailLoading = true
+    this.detailLoadFailed = false
     this.pageActive = true
     this.detailOwner = this.sessionUser.id
     this.detailRole = this.sessionUser.role
-    const routerOrderId: number = AppStorage.get<number>('currentOrderId') || 0
+    const routerOrderId: number = router.getParams()?.orderId ?? 0
     if (routerOrderId !== this.orderId) {
       this.resetReorderState()
       this.clearRefundSession()
       this.orderId = routerOrderId
     }
     if (!this.loggedIn) {
+      this.detailLoading = false
       this.order = null
       logInfo('Page', '进入订单详情页：当前未登录，不读取订单数据')
       return
     }
     if (this.orderId <= 0) {
+      this.detailLoading = false
       this.order = null
       logInfo('Page', '进入订单详情页：缺少有效订单 ID')
       return
@@ -260,7 +268,9 @@ export struct OrderDetailPage {
     const remoteOrder: Order | null = await fetchOrderDetailRemote(requestedOrderId)
     if (!this.pageActive || !this.loggedIn || sessionEpoch !== getAuthSessionEpoch() ||
       requestedOrderId !== this.orderId || requestVersion !== this.refundOrderVersion) { return }
-    this.order = remoteOrder
+    this.detailLoading = false
+    this.detailLoadFailed = remoteOrder === null
+    if (remoteOrder !== null) { this.order = remoteOrder }
     this.refundOrderError = ''
     if (remoteOrder !== null) { this.loadRefundHistory() }
     this.syncServerClock(remoteOrder)
@@ -630,9 +640,8 @@ export struct OrderDetailPage {
   private advanceAfterPayment(latest: Order): void {
     if (latest.status < 1 || latest.status > 4 || this.paymentAdvanced || !this.pageActive || !this.appForeground) { return }
     this.paymentAdvanced = true
-    AppStorage.setOrCreate<number>('currentOrderId', latest.id)
     // 重新进入服务端确认后的订单阶段，重建时间轴并移除待付款操作。
-    this.getUIContext().runScopedTask(() => { router.replaceUrl({ url: 'pages/OrderDetailPage' }) })
+    this.getUIContext().runScopedTask(() => { router.replaceUrl({ url: 'pages/OrderDetailPage', params: { orderId: latest.id } }) })
   }
 
   private payChannelName(): string {
@@ -722,7 +731,11 @@ export struct OrderDetailPage {
         // 导航栏
         PageHeader({ title: '订单详情', backText: '‹', backId: 'order-detail-back', onBack: () => { router.back() } })
 
-        if (this.order === null) {
+        if (this.loggedIn && (this.detailLoadFailed || (this.detailLoading && this.order === null))) {
+          RemoteState({ loading: this.detailLoading, failed: this.detailLoadFailed, hasData: this.order !== null,
+            errorText: '订单不存在、无权访问或读取失败', onRetry: () => { this.aboutToAppear() } })
+        }
+        if (this.order === null && !this.detailLoading && !this.detailLoadFailed) {
           Column({ space: SPACING.SM }) {
             Image(this.loggedIn ? $r('app.media.ui_gift') : $r('app.media.login_lock')).width(60).height(60).objectFit(ImageFit.Contain).margin({ top: 100 })
             Text(this.loggedIn ? '订单不存在' : '暂无登录')
@@ -739,7 +752,7 @@ export struct OrderDetailPage {
           .layoutWeight(1)
           .justifyContent(FlexAlign.Center)
           .alignItems(HorizontalAlign.Center)
-        } else {
+        } else if (this.order !== null) {
           Scroll(this.paymentScroller) {
             Column({ space: SPACING.SM }) {
               if (this.order!.status === 0 && this.payChannel === 'ALIPAY' && this.paymentAttempted) {
@@ -773,7 +786,7 @@ export struct OrderDetailPage {
 
               Button('配送异常与处理记录').attributeModifier(new AppButtonStyle()).height(44).width('100%')
                 .id('customer-order-support')
-                .onClick(() => { router.pushUrl({ url: 'pages/OrderSupportPage', params: { orderId: this.orderId, canReport: canOrderAction(this.order!, 'REPORT_ISSUE', this.order!.status === 2 || this.order!.status === 3) } }) })
+                .onClick(() => { router.pushUrl({ url: 'pages/OrderIssuePage', params: { orderId: this.orderId } }) })
 
               // 配送信息卡片
               this.DeliveryInfoCard()
@@ -1683,9 +1696,7 @@ export struct OrderDetailPage {
               .onClick(() => {
                 if (!this.canDispatchOrder('REVIEW', this.order?.status === 4 && (this.order?.escrowStatus ?? 0) === 1 && this.order?.reviewed === 0)) { return }
                 if (this.order !== null && this.order.items.length > 0) {
-                  AppStorage.setOrCreate<number>('currentOrderId', this.order.id)
-                  AppStorage.setOrCreate<number>('currentReviewGoodsId', this.order.items[0].goods.id)
-                  router.pushUrl({ url: 'pages/ReviewPage' })
+                  router.pushUrl({ url: 'pages/ReviewPage', params: { orderId: this.order.id, goodsId: this.order.items[0].goods.id } })
                 } else {
                   promptAction.showToast({ message: '订单中没有可评价的商品' })
                 }

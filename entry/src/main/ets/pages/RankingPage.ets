@@ -122,20 +122,14 @@ export struct RankingPage {
     return COLORS.TEXT_SECONDARY
   }
 
-  /**
-   * 打开店铺详情页。
-   * StoreDetailPage 通过 @StorageLink('selectedStoreId'/'selectedStoreName') 取参（不读路由 params），
-   * 因此必须先写入 AppStorage 再 pushUrl，与首页 showStoreDetail 的做法保持一致。
-   */
+  /** 通过显式 storeId 打开店铺，接收页读取服务端数据。 */
   private openStoreDetail(storeId: number, storeName: string): void {
     if (storeId <= 0) {
       promptAction.showToast({ message: '店铺信息不完整，无法打开详情', duration: 2200 })
       return
     }
-    AppStorage.setOrCreate<number>('selectedStoreId', storeId)
-    AppStorage.setOrCreate<string>('selectedStoreName', storeName !== '' ? storeName : '店铺详情')
     logInfo('Navigation', `榜单跳转店铺详情 storeId=${storeId} storeName=${storeName}`)
-    router.pushUrl({ url: 'pages/StoreDetailPage' })
+    router.pushUrl({ url: 'pages/StoreDetailPage', params: { storeId: storeId } })
   }
 
   @Builder

@@ -1,3 +1,6 @@
+import { RemoteState } from '../components/RemoteState'
+import { FormDraftStore, StoredFormDraft, askToRestoreDraft, discardUnreadableDraft } from '../service/FormDraftStore'
+import { fetchMerchantStoresResultApi, fetchMerchantCategoriesResultApi, fetchMerchantGoodsResultApi } from '../service/api/MerchantApi'
 import { FormSelect } from '../components/FormSelect'
 import { TagInput } from '../components/TagInput'
 import { ImageUpload } from '../components/ImageUpload'
@@ -5,13 +8,14 @@ import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /** 商户编辑商品页：打开和保存均以数据库返回数据为准。 */
 import { AppMotion } from '../common/theme/AppMotion'
-import { Category, GoodsItem, GoodsSpec, User, UserRole } from '../model/Models'
+import { Category, GoodsItem, GoodsSpec, StoreItem, User, UserRole } from '../model/Models'
 import { fetchMerchantCategoriesApi, fetchMerchantGoodsApi, updateMerchantGoodsApi, uploadImageApi } from '../service/ApiService'
 import { getLastRemoteErrorMessage, updateGoodsSpecsRemote } from '../service/AppStorageManager'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, merchantImageSource, DEFAULT_MERCHANT_IMAGE, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
 import { photoAccessHelper } from '@kit.MediaLibraryKit'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { PageHeader } from '../components/PageHeader'
+import { getAuthSessionEpoch } from '../service/HttpClient'
 
 /** 多规格最多行数（超出时提示，不静默丢弃） */
 const MAX_SPEC_ROWS: number = 5
@@ -33,6 +37,8 @@ class SpecRow {
   }
 }
 
+interface GoodsDraftSpec { id: number; name: string; price: string }
+
 @Entry
 @Component
 export struct MerchantEditGoodsPage {
@@ -51,44 +57,153 @@ export struct MerchantEditGoodsPage {
       .opacity(0)
   }
 
-  @StorageLink('isLoggedIn') loggedIn: boolean = false
-  @StorageLink('user') user: User = {
+  @StorageLink('isLoggedIn') @Watch('onFormIdentityChange') loggedIn: boolean = false
+  @StorageLink('user') @Watch('onFormIdentityChange') user: User = {
     id: 0, username: '未登录', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER,
     balance: 0, coupons: [], orders: [], storeIds: []
   }
   @State storeId: number = 0
   @State goodsId: number = 0
   @State categories: Category[] = []
-  @State goodsName: string = ''
-  @State goodsDescription: string = ''
-  @State price: string = ''
-  @State originalPrice: string = ''
+  @State @Watch('onDraftChange') goodsName: string = ''
+  @State @Watch('onDraftChange') goodsDescription: string = ''
+  @State @Watch('onDraftChange') price: string = ''
+  @State @Watch('onDraftChange') originalPrice: string = ''
   @State stock: string = '99'
-  @State categoryId: number = 0
-  @State isSpecial: boolean = false
-  @State isOnShelf: boolean = true
-  @State image: string = ''
+  @State @Watch('onDraftChange') categoryId: number = 0
+  @State @Watch('onDraftChange') isSpecial: boolean = false
+  @State @Watch('onDraftChange') isOnShelf: boolean = true
+  @State @Watch('onDraftChange') image: string = ''
   @State platformCategoryId: number = 1
   @State sales: number = 0
   @State rating: number = 4.5
-  @State originalTag: string = ''
+  @State @Watch('onDraftChange') originalTag: string = ''
   @State originalSpecCount: number = 0
-  @State multiSpecEnabled: boolean = false
+  @State @Watch('onDraftChange') multiSpecEnabled: boolean = false
   @State specRows: SpecRow[] = []
   @State specStockTotal: number = 0
   @State loading: boolean = true
   @State submitting: boolean = false
   @State imageUploading: boolean = false
+  private pageActive: boolean = true
   private nextSpecKey: number = 1
 
+  @State loadFailed: boolean = false
+  @State storeName: string = ''
+  @State draftError: string = ''
+  private draft: FormDraftStore = new FormDraftStore()
+  private draftInitialized: boolean = false
+  private draftTimer: number = -1
+  private formEpoch: number = -1
+  private formOwner: number = 0
+
+  onFormIdentityChange(): void {
+    if (this.formOwner <= 0 || this.formOwner === undefined) { return }
+    const user: User | undefined = AppStorage.get<User>('user')
+    if (this.loggedIn && this.formOwner === user?.id && user?.role === UserRole.MERCHANT && this.formEpoch === getAuthSessionEpoch()) { return }
+    this.pageActive = false
+    clearTimeout(this.draftTimer)
+    this.goodsName = ''; this.goodsDescription = ''; this.image = ''; this.specRows = []
+    router.replaceUrl({ url: 'pages/Index' })
+  }
+
+  onBackPress(): boolean { return this.submitting || this.imageUploading }
+
+  private formCurrent(): boolean {
+    const user: User | undefined = AppStorage.get<User>('user')
+    return this.pageActive && this.loggedIn && this.formEpoch === getAuthSessionEpoch()
+      && user?.id === this.formOwner && user?.role === UserRole.MERCHANT
+  }
+  private draftFields(): Record<string, string> {
+    const fields: Record<string, string> = {}
+    fields['name'] = this.goodsName
+    fields['description'] = this.goodsDescription
+    fields['price'] = this.price
+    fields['originalPrice'] = this.originalPrice
+    fields['category'] = this.categoryId.toString()
+    fields['special'] = this.isSpecial.toString()
+    fields['image'] = this.image
+    fields['tag'] = this.originalTag
+    fields['multiSpec'] = this.multiSpecEnabled.toString()
+    fields['onShelf'] = this.isOnShelf.toString()
+    const specs: GoodsDraftSpec[] = this.specRows.map((row: SpecRow): GoodsDraftSpec => ({ id: row.id, name: row.name, price: row.price }))
+    fields['specs'] = JSON.stringify(specs)
+    return fields
+  }
+  private async initializeDraft(): Promise<void> {
+    if (this.draftInitialized || !this.formCurrent()) { return }
+    try {
+      const saved: StoredFormDraft | null = await this.draft.open(`goods:${this.storeId}:edit:${this.goodsId}`, this.draftFields())
+      if (!this.formCurrent()) { return }
+      if (saved !== null) {
+        const restore: boolean = await askToRestoreDraft(this.getUIContext(), saved)
+        if (!this.formCurrent()) { return }
+        if (restore) { this.applyDraft(saved.fields) }
+        else if (!(await this.draft.clear())) { this.draftError = '草稿清理失败'; return }
+      }
+      this.draft.resume(this.draftFields())
+      this.draftInitialized = true
+    } catch (_) {
+      if (!this.formCurrent()) { return }
+      const discarded: boolean = await discardUnreadableDraft(this.getUIContext(), this.draft)
+      if (!this.formCurrent()) { return }
+      if (!discarded) { router.back(); return }
+      this.draft.resume(this.draftFields())
+      this.draftInitialized = true
+    }
+  }
+  private applyDraft(fields: Record<string, string>): void {
+    this.goodsName = fields['name'] ?? this.goodsName
+    this.goodsDescription = fields['description'] ?? this.goodsDescription
+    this.price = fields['price'] ?? this.price
+    this.originalPrice = fields['originalPrice'] ?? this.originalPrice
+    const category: number = Number(fields['category'] ?? '0')
+    this.categoryId = this.categories.some((item: Category) => item.id === category) ? category : 0
+    this.isSpecial = fields['special'] === 'true'
+    const image: string = fields['image'] ?? ''
+    if (image.startsWith('/uploads/')) { this.image = image }
+    this.originalTag = fields['tag'] ?? this.originalTag
+    this.multiSpecEnabled = fields['multiSpec'] === 'true'
+    this.isOnShelf = fields['onShelf'] !== 'false'
+    try {
+      const saved: GoodsDraftSpec[] = JSON.parse(fields['specs'] ?? '[]') as GoodsDraftSpec[]
+      if (Array.isArray(saved)) {
+        const rows: SpecRow[] = []
+        saved.slice(0, MAX_SPEC_ROWS).forEach((row: GoodsDraftSpec) => {
+          if (typeof row.name !== 'string' || typeof row.price !== 'string' || !Number.isInteger(row.id) || row.id < 0) { return }
+          const existing: SpecRow | undefined = this.specRows.find((item: SpecRow) => item.id === row.id && row.id > 0)
+          if (row.id > 0 && existing === undefined) { return }
+          rows.push(new SpecRow(`spec-${this.nextSpecKey++}`, row.id, row.name, row.price, existing?.stock ?? '0'))
+        })
+        this.specRows = rows
+        this.refreshSpecStockTotal()
+      }
+    } catch (_) { this.draftError = '规格草稿无效，已保留服务端规格' }
+  }
+  onDraftChange(): void {
+    if (!this.draftInitialized || !this.formCurrent()) { return }
+    clearTimeout(this.draftTimer)
+    this.draftTimer = setTimeout(() => { this.saveDraft() }, 400)
+  }
+  private async saveDraft(): Promise<void> {
+    if (!(await this.draft.save(this.draftFields()))) { this.draftError = '草稿保存失败，请勿关闭页面'; promptAction.showToast({ message: this.draftError }) }
+  }
+  private async clearDraft(): Promise<void> {
+    clearTimeout(this.draftTimer)
+    if (!(await this.draft.clear())) { promptAction.showToast({ message: '商品已保存，旧草稿清理失败' }) }
+  }
+
   async aboutToAppear(): Promise<void> {
+    this.pageActive = true
+    this.formEpoch = getAuthSessionEpoch()
+    this.formOwner = this.user.id
     if (!this.loggedIn || this.user.role !== UserRole.MERCHANT) {
       promptAction.showToast({ message: '请使用商户账号登录后编辑商品', duration: 1800 })
       router.back()
       return
     }
-    this.storeId = AppStorage.get<number>('merchantGoodsStoreId') || 0
-    this.goodsId = AppStorage.get<number>('merchantEditGoodsId') || 0
+    this.storeId = router.getParams()?.storeId ?? 0
+    this.goodsId = router.getParams()?.goodsId ?? 0
     if (this.storeId <= 0 || this.goodsId <= 0) {
       promptAction.showToast({ message: '商品信息暂不可用，请返回后重试', duration: 1800 })
       router.back()
@@ -98,9 +213,21 @@ export struct MerchantEditGoodsPage {
   }
 
   private async loadGoods(): Promise<void> {
+    const epoch: number = getAuthSessionEpoch()
+    const owner: number = this.user.id
     this.loading = true
-    const categories: Category[] = await fetchMerchantCategoriesApi()
-    const goodsList: GoodsItem[] = await fetchMerchantGoodsApi(this.storeId)
+    this.loadFailed = false
+    const stores: StoreItem[] | null = await fetchMerchantStoresResultApi()
+    if (!this.formCurrent()) { return }
+    const store: StoreItem | undefined = stores?.find((item: StoreItem) => item.id === this.storeId)
+    if (store === undefined) { this.loading = false; this.loadFailed = true; return }
+    this.storeName = store.name
+    const categories: Category[] | null = await fetchMerchantCategoriesResultApi()
+    if (!this.canApplyInventory(epoch, owner)) { return }
+    if (categories === null) { this.loading = false; this.loadFailed = true; return }
+    const goodsList: GoodsItem[] | null = await fetchMerchantGoodsResultApi(this.storeId)
+    if (!this.canApplyInventory(epoch, owner)) { return }
+    if (goodsList === null) { this.loading = false; this.loadFailed = true; return }
     const goods: GoodsItem | undefined = goodsList.find((item: GoodsItem) => item.id === this.goodsId)
     if (goods === undefined) {
       this.loading = false
@@ -124,6 +251,31 @@ export struct MerchantEditGoodsPage {
     this.originalTag = goods.tag ?? ''
     this.initSpecRows(goods)
     this.loading = false
+    await this.initializeDraft()
+  }
+
+  onPageHide(): void { clearTimeout(this.draftTimer); this.saveDraft(); this.pageActive = false }
+
+  aboutToDisappear(): void { this.onPageHide() }
+
+  onPageShow(): void { this.pageActive = true; if (this.draftInitialized) { this.refreshStock() } }
+  private async refreshStock(): Promise<void> {
+    const list: GoodsItem[] | null = await fetchMerchantGoodsResultApi(this.storeId)
+    if (!this.formCurrent() || list === null) { return }
+    const goods: GoodsItem | undefined = list.find((item: GoodsItem) => item.id === this.goodsId)
+    if (goods === undefined) { this.loadFailed = true; return }
+    this.stock = (goods.stock ?? 0).toString()
+    const rows: SpecRow[] = this.specRows.slice()
+    rows.forEach((row: SpecRow) => { const spec: GoodsSpec | undefined = goods.specs?.find((item: GoodsSpec) => item.id === row.id); if (spec !== undefined) { row.stock = spec.stock.toString() } })
+    this.specRows = rows
+    this.refreshSpecStockTotal()
+    this.onDraftChange()
+  }
+
+  private canApplyInventory(epoch: number, owner: number): boolean {
+    const current: User | undefined = AppStorage.get<User>('user')
+    return this.pageActive && this.loggedIn && epoch === getAuthSessionEpoch()
+      && current?.id === owner && current?.role === UserRole.MERCHANT
   }
 
   /** 用商品已有规格初始化规格行（specs 可能为 undefined） */
@@ -144,6 +296,7 @@ export struct MerchantEditGoodsPage {
     this.multiSpecEnabled = rows.length > 0
     this.specRows = rows
     this.refreshSpecStockTotal()
+    this.onDraftChange()
   }
 
   private selectCategory(id: number): void {
@@ -198,6 +351,7 @@ export struct MerchantEditGoodsPage {
     this.nextSpecKey += 1
     this.specRows = rows
     this.refreshSpecStockTotal()
+    this.onDraftChange()
   }
 
   private removeSpecRow(index: number): void {
@@ -208,6 +362,7 @@ export struct MerchantEditGoodsPage {
     const rows: SpecRow[] = this.specRows.filter((row: SpecRow) => row.key !== target.key)
     this.specRows = rows
     this.refreshSpecStockTotal()
+    this.onDraftChange()
     if (rows.length === 0) {
       promptAction.showToast({
         message: this.originalSpecCount > 0
@@ -238,6 +393,7 @@ export struct MerchantEditGoodsPage {
     const row: SpecRow | undefined = this.specRows[index]
     if (row !== undefined) {
       row.name = value
+      this.onDraftChange()
     }
   }
 
@@ -245,6 +401,7 @@ export struct MerchantEditGoodsPage {
     const row: SpecRow | undefined = this.specRows[index]
     if (row !== undefined) {
       row.price = value
+      this.onDraftChange()
     }
   }
 
@@ -278,7 +435,7 @@ export struct MerchantEditGoodsPage {
         return `第 ${i + 1} 行「${name}」的价格必须为 0.01-9999.99 元`
       }
       const stock: number = this.parseStock(row.stock)
-      if (row.stock.trim() === '' || stock < 0 || stock > 9999) {
+      if (row.id === 0 && (row.stock.trim() === '' || stock < 0 || stock > 9999)) {
         return `第 ${i + 1} 行「${name}」的库存必须是 0-9999 的整数（0 表示售罄）`
       }
       for (let j = 0; j < i; j++) {
@@ -307,7 +464,7 @@ export struct MerchantEditGoodsPage {
   }
 
   private async confirmEdit(): Promise<void> {
-    if (this.submitting || this.imageUploading) {
+    if (!this.formCurrent() || this.loadFailed || this.submitting || this.imageUploading) {
       promptAction.showToast({ message: '提交中，请稍候', duration: 1400 })
       return
     }
@@ -321,10 +478,6 @@ export struct MerchantEditGoodsPage {
     }
     if (price <= 0 || price > 9999.99) {
       promptAction.showToast({ message: '价格必须在 0.01 到 9999.99 元之间' })
-      return
-    }
-    if (stock < 0 || stock > 9999) {
-      promptAction.showToast({ message: '库存必须是 0 到 9999 的整数' })
       return
     }
     if (this.isSpecial && originalPrice <= price) {
@@ -363,6 +516,7 @@ export struct MerchantEditGoodsPage {
     const needSpecSave: boolean = specs.length > 0 || this.originalSpecCount > 0
     if (needSpecSave) {
       const specSaved: GoodsItem | null = await updateGoodsSpecsRemote(this.goodsId, specs)
+      if (!this.formCurrent()) { return }
       if (specSaved === null) {
         this.submitting = false
         promptAction.showToast({ message: `规格保存失败：${this.failureReason('请检查网络后重试')}`, duration: 2800 })
@@ -370,6 +524,7 @@ export struct MerchantEditGoodsPage {
       }
     }
     const updated: GoodsItem | null = await updateMerchantGoodsApi(updatedGoods, this.isOnShelf)
+    if (!this.formCurrent()) { return }
     if (updated === null) {
       this.submitting = false
       promptAction.showToast({
@@ -381,12 +536,14 @@ export struct MerchantEditGoodsPage {
       return
     }
     const latestGoods: GoodsItem[] = await fetchMerchantGoodsApi(this.storeId)
+    if (!this.formCurrent()) { return }
     this.submitting = false
     if (latestGoods.find((item: GoodsItem) => item.id === this.goodsId) === undefined) {
       promptAction.showToast({ message: '商品已保存，但刷新数据失败，请返回后重试', duration: 2600 })
       return
     }
     promptAction.showToast({ message: '商品保存成功，列表已刷新', duration: 1800 })
+    await this.clearDraft()
     router.back()
   }
 
@@ -461,6 +618,7 @@ export struct MerchantEditGoodsPage {
       FormInput({ label: '库存',
         value: row.stock,
         placeholder: '库存',
+        isEnabled: row.id === 0,
         inputType: InputType.Number,
         onChange: (value: string) => { this.setSpecStock(index, value) },
         fieldId: 'MerchantEditGoodsPage-row-stock' + '-' + index,
@@ -527,7 +685,6 @@ export struct MerchantEditGoodsPage {
     .width('100%')
   }
 
-
   @Builder
   FormContent() {
     Scroll() {
@@ -563,7 +720,8 @@ Row() {
           }
           Row({ space: SPACING.MD }) {
             this.NumberField('售价', '如：25.00', this.price, '', (value: string) => { this.price = value })
-            this.NumberField('库存', '0-9999', this.stock, this.specStockHint(), (value: string) => { this.stock = value })
+            FormInput({ label: '当前库存', value: this.stock, isEnabled: false,
+              fieldId: 'MerchantEditGoodsPage-value-库存' }).layoutWeight(1)
           }
           Column({ space: SPACING.XS }) {
 
@@ -596,6 +754,11 @@ Row() {
           .attributeModifier(new AppCardStyle())
         .width('100%').padding(SPACING.LG)
 
+        Button('库存管理').attributeModifier(new AppButtonStyle()).width('100%').height(44)
+          .id('merchant-inventory-entry').onClick(() => {
+            router.pushUrl({ url: 'pages/MerchantInventoryPage', params: { storeId: this.storeId, goodsId: this.goodsId } })
+          })
+
         Column() {
           this.SpecSection()
         }
@@ -610,9 +773,12 @@ Row() {
 
   build() {
     Column() {
-      PageHeader({ title: '编辑商品', backText: '‹ 返回', backId: 'merchant-edit-goods-back', titleColor: COLORS.TEXT_PRIMARY, headerBgColor: COLORS.BG_PRIMARY, onBack: () => { router.back() } })
+      PageHeader({ title: this.storeName === '' ? '编辑商品' : this.storeName + ' · 编辑商品', backText: '‹ 返回', backId: 'merchant-edit-goods-back', titleColor: COLORS.TEXT_PRIMARY, headerBgColor: COLORS.BG_PRIMARY, onBack: () => { if (!this.submitting && !this.imageUploading) { router.back() } } })
 
-      if (this.loading) {
+      if (this.draftError !== '') { Text(this.draftError).fontColor(COLORS.ERROR).fontSize(FONT_SIZE.SM) }
+      if (this.loadFailed) {
+        RemoteState({ failed: true, onRetry: () => { this.loadGoods() } })
+      } else if (this.loading) {
         Column() {
           Text('正在读取商品数据...')
             .fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
@@ -627,7 +793,7 @@ Row() {
             .layoutWeight(1).height(46).fontSize(FONT_SIZE.MD)
             .fontColor(COLORS.TEXT_SECONDARY).backgroundColor(COLORS.BG_PRIMARY)
             .borderRadius(BORDER_RADIUS.ROUND)
-            .onClick(() => { router.back() })
+            .enabled(!this.submitting && !this.imageUploading).onClick(() => { router.back() })
           Button(this.submitting ? '提交中...' : '确认保存').id('merchant-goods-submit')
             .attributeModifier(new AppButtonStyle())
             .layoutWeight(1).height(46).fontSize(FONT_SIZE.MD).fontColor(COLORS.ON_PRIMARY).backgroundColor(MODULE_COLOR.MERCHANT)

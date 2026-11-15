@@ -1,3 +1,6 @@
+import { fetchMerchantReviewsResultApi } from '../service/ApiService'
+import { PageSession } from '../service/PageSession'
+import { RemoteState } from '../components/RemoteState'
 import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppTextAreaStyle } from '../common/theme/AppTheme'
 /**
@@ -16,6 +19,11 @@ import { PageHeader } from '../components/PageHeader'
 @Entry
 @Component
 export struct MerchantReviewsPage {
+  @State remoteFailed: boolean = false
+  @State remoteLoading: boolean = false
+  private remoteSession: PageSession = new PageSession()
+  private remoteVisible: boolean = true
+
   pageTransition() {
     PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
       .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
@@ -31,13 +39,13 @@ export struct MerchantReviewsPage {
       .opacity(0)
   }
 
-  @StorageLink('isLoggedIn') loggedIn: boolean = false
+  @StorageLink('isLoggedIn') @Watch('onRemoteIdentityChange') loggedIn: boolean = false
   @State reviews: Review[] = []
   @State loading: boolean = false
   @State replyTarget: Review | null = null
   @State replyText: string = ''
   @State submitting: boolean = false
-  @StorageLink('user') user: User = { id: 0, username: '', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER, balance: 0, coupons: [], orders: [], storeIds: [] }
+  @StorageLink('user') @Watch('onRemoteIdentityChange') user: User = { id: 0, username: '', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER, balance: 0, coupons: [], orders: [], storeIds: [] }
 
   async aboutToAppear(): Promise<void> {
     logInfo('Page', '进入商户评价管理页 MerchantReviewsPage')
@@ -50,9 +58,20 @@ export struct MerchantReviewsPage {
   }
 
   private async loadReviews(): Promise<void> {
-    this.loading = true
-    this.reviews = await syncMerchantReviewsRemote()
-    this.loading = false
+    if (this.remoteLoading) { return }
+    if (!this.remoteVisible || !this.remoteSession.start(UserRole.MERCHANT)) { return }
+    const remoteVersion: number = this.remoteSession.request()
+    this.remoteLoading = true
+    this.remoteFailed = false
+    try {
+      this.loading = true
+      const result: Review[] | null = await fetchMerchantReviewsResultApi()
+      if (!this.remoteSession.current(remoteVersion)) { return }
+      if (result === null) { this.remoteFailed = true; return }
+      this.reviews = result
+      this.loading = false
+    } catch (_) { if (this.remoteSession.current(remoteVersion)) { this.remoteFailed = true } }
+    finally { if (this.remoteSession.current(remoteVersion)) { this.remoteLoading = false; this.loading = false } }
   }
 
   private openReply(review: Review): void {
@@ -84,20 +103,39 @@ export struct MerchantReviewsPage {
     }
   }
 
+  onRemoteIdentityChange(): void {
+    if (!this.remoteSession.matchesIdentity()) {
+      this.remoteSession.pause()
+      this.remoteVisible = false
+      this.remoteLoading = false
+      this.remoteFailed = false
+      this.loading = false
+      this.reviews = []
+      router.replaceUrl({ url: 'pages/Index' })
+    }
+  }
+  onPageHide(): void { this.remoteVisible = false; this.remoteSession.pause(); this.loading = false; this.remoteLoading = false }
+  onPageShow(): void { this.remoteVisible = true; if (!this.loading) { this.loadReviews() } }
+  aboutToDisappear(): void { this.onPageHide() }
+
   build() {
     Stack() {
       Column() {
         // 导航栏
         PageHeader({ title: '评价管理', backText: '‹ 返回', backId: 'merchant-reviews-back', titleColor: COLORS.TEXT_PRIMARY, headerBgColor: COLORS.BG_PRIMARY, onBack: () => { router.back() } })
+      if (this.remoteFailed || (this.remoteLoading && !(this.reviews.length > 0))) {
+        RemoteState({ loading: this.remoteLoading, failed: this.remoteFailed, hasData: this.reviews.length > 0,
+          retryId: 'MerchantReviewsPage-retry', onRetry: () => { this.loadReviews() } })
+      }
 
-        if (this.loading) {
+        if (this.loading && !(this.reviews.length > 0)) {
           Column() {
             Text('正在加载评价…').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
           }
           .layoutWeight(1)
           .justifyContent(FlexAlign.Center)
           .alignItems(HorizontalAlign.Center)
-        } else if (this.reviews.length === 0) {
+        } else if (this.reviews.length === 0 && !this.remoteFailed && !this.remoteLoading) {
           Column() {
             Image($r('app.media.ui_document')).width(60).height(60).objectFit(ImageFit.Contain).margin({ top: 40 })
             Text('暂无评价')
@@ -217,7 +255,6 @@ export struct MerchantReviewsPage {
   ReplyDialog() {
     Column() {
       Column({ space: SPACING.MD }) {
-
 
         FormInput({ label: '回复内容',
           value: this.replyText,

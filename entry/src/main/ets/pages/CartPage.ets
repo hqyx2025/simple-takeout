@@ -1,3 +1,4 @@
+import { RemoteState } from '../components/RemoteState'
 import { AppMotion } from '../common/theme/AppMotion'
 import { FloatingTabBarTheme } from '../common/theme/FloatingTabBarTheme'
 import { PageHeader } from '../components/PageHeader'
@@ -81,6 +82,9 @@ export struct CartPage {
   private bundleFetching: boolean = false
   private bundleRefreshPending: boolean = false
 
+  @State cartLoadFailed: boolean = false
+  @State cartLoading: boolean = false
+
   async aboutToAppear(): Promise<void> {
     logInfo('Page', `进入购物车页面 CartPage，商品种类=${this.cartItems.length}`)
     await this.refreshFromDatabase()
@@ -103,7 +107,10 @@ export struct CartPage {
   }
 
   private async refreshFromDatabase(showErrorToast: boolean = true): Promise<boolean> {
+    this.cartLoading = true
     const remoteCart: CartItem[] | null = await refreshCartFromServer(showErrorToast)
+    this.cartLoading = false
+    this.cartLoadFailed = remoteCart === null
     if (remoteCart === null) {
       return false
     }
@@ -198,10 +205,8 @@ export struct CartPage {
 
   /** 去凑单：打开该店铺详情页继续加购。 */
   private goBundle(hint: BundleHint): void {
-    AppStorage.setOrCreate<number>('selectedStoreId', hint.storeId)
-    AppStorage.setOrCreate<string>('selectedStoreName', hint.storeName)
     logInfo('Cart', `凑单跳转店铺 storeId=${hint.storeId} 还差=${hint.gap}`)
-    router.pushUrl({ url: 'pages/StoreDetailPage' })
+    router.pushUrl({ url: 'pages/StoreDetailPage', params: { storeId: hint.storeId } })
   }
 
   private getStoreIds(): number[] {
@@ -682,6 +687,10 @@ export struct CartPage {
           .borderRadius(BORDER_RADIUS.MD)
         }
 
+        if (this.loggedIn && (this.cartLoadFailed || (this.cartLoading && this.cartItems.length === 0))) {
+          RemoteState({ failed: this.cartLoadFailed, loading: this.cartLoading, hasData: this.cartItems.length > 0,
+            onRetry: () => { this.refreshFromDatabase(false) } })
+        }
         if (!this.loggedIn) {
           EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', actionLabel: '去登录', actionUrl: 'pages/Index' })
         } else if (this.getCurrentCartItems().length === 0) {

@@ -1,3 +1,6 @@
+import { fetchAdminEmployeesResultApi } from '../service/ApiService'
+import { PageSession } from '../service/PageSession'
+import { RemoteState } from '../components/RemoteState'
 import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /** 管理端-员工账号管理：员工增删改中的新增、资料编辑和启停用。 */
@@ -14,6 +17,11 @@ import { KeyboardAvoidMode } from '@kit.ArkUI'
 @Entry
 @Component
 export struct AdminEmployeePage {
+  @State remoteFailed: boolean = false
+  @State remoteLoading: boolean = false
+  private remoteSession: PageSession = new PageSession()
+  private remoteVisible: boolean = true
+
   pageTransition() {
     PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
       .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
@@ -29,8 +37,8 @@ export struct AdminEmployeePage {
       .opacity(0)
   }
 
-  @StorageLink('isLoggedIn') loggedIn: boolean = false
-  @StorageLink('user') user: User = {
+  @StorageLink('isLoggedIn') @Watch('onRemoteIdentityChange') loggedIn: boolean = false
+  @StorageLink('user') @Watch('onRemoteIdentityChange') user: User = {
     id: 0, username: '未登录', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER,
     balance: 0, coupons: [], orders: [], storeIds: []
   }
@@ -47,12 +55,12 @@ export struct AdminEmployeePage {
   @State formPassword: string = ''
   private previousKeyboardAvoidMode: KeyboardAvoidMode = KeyboardAvoidMode.OFFSET
 
-  onPageShow(): void {
+  onPageShow(): void { this.remoteVisible = true;
     this.previousKeyboardAvoidMode = this.getUIContext().getKeyboardAvoidMode()
     this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE)
   }
 
-  onPageHide(): void {
+  onPageHide(): void { this.remoteVisible = false; this.remoteSession.pause(); this.loading = false; this.remoteLoading = false;
     this.getUIContext().setKeyboardAvoidMode(this.previousKeyboardAvoidMode)
   }
 
@@ -67,10 +75,21 @@ export struct AdminEmployeePage {
   }
 
   async refresh(): Promise<void> {
-    this.loading = true
-    this.employees = await fetchAdminEmployeesApi()
-    this.applyFilter()
-    this.loading = false
+    if (this.remoteLoading) { return }
+    if (!this.remoteVisible || !this.remoteSession.start(UserRole.ADMIN)) { return }
+    const remoteVersion: number = this.remoteSession.request()
+    this.remoteLoading = true
+    this.remoteFailed = false
+    try {
+      this.loading = true
+      const result: AdminEmployee[] | null = await fetchAdminEmployeesResultApi()
+      if (!this.remoteSession.current(remoteVersion)) { return }
+      if (result === null) { this.remoteFailed = true; return }
+      this.employees = result
+      this.applyFilter()
+      this.loading = false
+    } catch (_) { if (this.remoteSession.current(remoteVersion)) { this.remoteFailed = true } }
+    finally { if (this.remoteSession.current(remoteVersion)) { this.remoteLoading = false; this.loading = false } }
   }
 
   /** 按启用状态筛选（显式计算，避免渲染期 getter 求值）。 */
@@ -141,6 +160,19 @@ export struct AdminEmployeePage {
     }
   }
 
+  onRemoteIdentityChange(): void {
+    if (!this.remoteSession.matchesIdentity()) {
+      this.remoteSession.pause()
+      this.remoteVisible = false
+      this.remoteLoading = false
+      this.remoteFailed = false
+      this.loading = false
+      this.employees = []
+      router.replaceUrl({ url: 'pages/Index' })
+    }
+  }
+  aboutToDisappear(): void { this.onPageHide() }
+
   build() {
     Stack() {
     Column() {
@@ -153,6 +185,10 @@ export struct AdminEmployeePage {
         onBack: () => { router.back() },
         onAction: () => { this.openCreate() }
       })
+      if (this.remoteFailed || (this.remoteLoading && !(this.employees.length > 0))) {
+        RemoteState({ loading: this.remoteLoading, failed: this.remoteFailed, hasData: this.employees.length > 0,
+          retryId: 'AdminEmployeePage-retry', onRetry: () => { this.refresh() } })
+      }
 
       Row({ space: SPACING.MD }) {
         Text('状态').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)

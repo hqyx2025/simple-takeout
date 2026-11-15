@@ -38,14 +38,14 @@ function targets(role: UserRole, fixture: ReviewFixtures): ReviewTarget[] {
   let definitions: string[] = []
   if (role === UserRole.CUSTOMER) {
     definitions = ['SearchPage|搜索','LocationPage|选择位置','AddressListPage|收货地址','CheckoutPage|确认订单',
-      'OrderDetailPage|订单详情','OrderSupportPage|订单配送与售后','OrderListPage|我的订单','CouponCenterPage|优惠券中心',
+      'OrderDetailPage|订单详情','OrderIssuePage|订单异常与记录','OrderListPage|我的订单','CouponCenterPage|优惠券中心',
       'FavoriteListPage|我的收藏','ReviewPage|订单评价','ProfileEditPage|编辑个人信息','BalancePage|我的钱包',
       'AddBankCardPage|添加银行卡','SettingsPage|设置','AccountSecurityPage|账号安全','PasswordResetPage|找回登录密码',
       'AppSettingsPage|应用设置','PrivacyPolicyPage|隐私政策','ContactCustomerServicePage|售后帮助',
       'ProductListPage|附近全部商品','StoreDetailPage|' + fixture.storeName,'RankingPage|榜单','ReviewImagePage|评价图片','ConsentPage|']
   } else if (role === UserRole.MERCHANT) {
     definitions = ['MerchantOrdersPage|订单管理','MerchantStatsPage|收入统计','MerchantMarketingPage|营销活动',
-      'MerchantCenterPage|商户中心','MerchantAddGoodsPage|添加商品','MerchantEditGoodsPage|编辑商品','MerchantReviewsPage|评价管理']
+      'MerchantCenterPage|经营工作台','MerchantAddGoodsPage|' + fixture.storeName + ' · 添加商品','MerchantEditGoodsPage|' + fixture.storeName + ' · 编辑商品','MerchantReviewsPage|评价管理']
   } else if (role === UserRole.ADMIN) {
     definitions = ['AdminCenterPage|平台管理','AdminCategoryPage|分类管理','AdminStorePage|店铺管理','AdminEmployeePage|员工管理',
       'AdminProductPage|商品监管','AdminUserPage|用户管理','AdminStatisticsPage|平台统计','AdminOrderPage|订单管理',
@@ -61,7 +61,7 @@ function targets(role: UserRole, fixture: ReviewFixtures): ReviewTarget[] {
 async function navigate(context: UIContext, page: string, fixture: ReviewFixtures): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     context.runScopedTask((): void => {
-      context.getRouter().pushUrl({ url: 'pages/' + page, params: { orderId: fixture.partialOrderId } }).then(() => { resolve() }).catch(() => { reject(new Error('Route failed: ' + page)) })
+      context.getRouter().pushUrl({ url: 'pages/' + page, params: { orderId: page === 'ReviewPage' ? fixture.reviewOrderId : fixture.partialOrderId, storeId: fixture.storeId, goodsId: fixture.goodsId } }).then(() => { resolve() }).catch(() => { reject(new Error('Route failed: ' + page)) })
     })
   })
 }
@@ -146,11 +146,6 @@ async function roleReview(role: UserRole): Promise<void> {
     context.runScopedTask((): void => { context.getRouter().clear() })
     await driver.delayMs(1000)
   }
-  AppStorage.setOrCreate<number>('selectedStoreId', fixture.storeId)
-  AppStorage.setOrCreate<string>('selectedStoreName', fixture.storeName)
-  AppStorage.setOrCreate<number>('merchantGoodsStoreId', fixture.storeId)
-  AppStorage.setOrCreate<number>('merchantEditGoodsId', fixture.goodsId)
-  AppStorage.setOrCreate<number>('currentOrderId', fixture.reviewOrderId)
   AppStorage.setOrCreate<number>('checkoutStoreId', fixture.storeId)
   AppStorage.setOrCreate<string>('passwordResetMode', 'login')
   AppStorage.setOrCreate<string>('productListTitle', '附近全部商品')
@@ -162,12 +157,7 @@ async function roleReview(role: UserRole): Promise<void> {
     for (const variant of ['light','dark','light-large','dark-large']) {
       await saveAppearanceSettings(host, variant.startsWith('dark') ? 'dark' : 'light', variant.endsWith('large') ? 1.3 : 1, 'center')
       for (const target of targets(role, fixture)) {
-        AppStorage.setOrCreate<number>('currentOrderId', fixture.reviewOrderId)
-        AppStorage.setOrCreate<number>('selectedStoreId', fixture.storeId)
-        AppStorage.setOrCreate<string>('selectedStoreName', fixture.storeName)
         AppStorage.setOrCreate<number>('checkoutStoreId', fixture.storeId)
-        AppStorage.setOrCreate<number>('merchantGoodsStoreId', fixture.storeId)
-        AppStorage.setOrCreate<number>('merchantEditGoodsId', fixture.goodsId)
         await navigate(context, target.page, fixture)
         await verifyScreen(driver, context, target, role.toString() + '-' + variant + '-' + target.page)
         if (target.page === 'BalancePage') { expect(isFound(await driver.findComponent(ON.text('立即充值')))).assertFalse() }
@@ -249,12 +239,14 @@ async function roleReview(role: UserRole): Promise<void> {
       expect(await requireComponent(await driver.findComponent(ON.id('page-title')), 'marketing list').getText()).assertEqual('营销活动')
       console.info('[AllPagesReview] PASS gift-native-edit-save')
       await navigate(context, 'MerchantCenterPage', fixture)
-      await waitTitle(driver, '商户中心')
+      await waitTitle(driver, '经营工作台')
       const manageGoods = requireComponent(await scrollUntilVisible(driver, 'merchant-store-goods-' + fixture.storeId.toString()), 'goods management entry')
       await manageGoods.click()
-      await waitTitle(driver, '商品管理')
+      await waitTitle(driver, fixture.storeName)
+      expect(await clickByIdOrText(driver, 'merchant-store-products', '商品管理')).assertTrue()
+      await waitTitle(driver, fixture.storeName + ' · 商品管理')
       expect(await clickByIdOrText(driver, 'page-header-action', '添加商品')).assertTrue()
-      await waitTitle(driver, '添加商品')
+      await waitTitle(driver, fixture.storeName + ' · 添加商品')
       requireComponent(await driver.findComponent(ON.id('merchant-goods-name')), 'stable goods form field')
       console.info('[AllPagesReview] PASS shared-goods-header-and-add-entry')
     }

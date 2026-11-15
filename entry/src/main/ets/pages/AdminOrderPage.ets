@@ -276,7 +276,7 @@ export struct AdminOrderPage {
       })
 
       Button('配送异常处理').attributeModifier(new AppButtonStyle()).height(44).width('100%')
-        .id('admin-delivery-issues').onClick(() => { router.pushUrl({ url: 'pages/OrderSupportPage' }) })
+        .id('admin-delivery-issues').onClick(() => { router.pushUrl({ url: 'pages/AdminDeliveryIssuesPage' }) })
 
       // 状态筛选 Tab
       Scroll() {

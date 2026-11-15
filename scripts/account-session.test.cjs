@@ -24,7 +24,7 @@ function runtime() {
   vm.runInNewContext(code, {
     exports: result, AppStorage: { get: key => storage.get(key), setOrCreate: (key, value) => { storage.set(key, value); writes.push(key); } },
     getAuthSessionEpoch: () => state.epoch, getAuthToken: () => state.token, isLoggedIn: () => storage.get('isLoggedIn') === true,
-    updateUserProfileApi: request, fetchCurrentUserApi: request, fetchFavoritesApi: request, fetchAddressesApi: request, fetchOrderDetailApi: request,
+    updateUserProfileApi: request, fetchCurrentUserApi: request, fetchFavoritesResultApi: request, fetchAddressesApi: request, fetchOrderDetailApi: request,
     setStoredUser: user => { storage.set('user', user); writes.push('user'); }, saveAllData: async () => { state.saves++; },
     deduplicateAddresses: addresses => addresses, deliveryCustomerId: () => storage.get('user').id, deliveryRevision: () => state.epoch,
     syncDeliveryForms: () => {}, logInfo: () => {}, logWarn: () => {}

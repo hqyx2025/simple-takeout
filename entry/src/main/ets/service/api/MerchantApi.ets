@@ -24,11 +24,7 @@ export async function fetchStoreSetmealsApi(storeId: number): Promise<Setmeal[]>
 }
 
 export async function fetchMerchantReviewsApi(): Promise<Review[]> {
-  const resp: ApiResponse<ServerReview[]> = await get<ServerReview[]>('/api/merchant/reviews')
-  if (resp.code !== 200 || resp.data === null) {
-    return []
-  }
-  return resp.data.map((r: ServerReview) => toReview(r))
+  return (await fetchMerchantReviewsResultApi()) ?? []
 }
 
 // ==================== 商户端（需商户登录） ====================
@@ -83,8 +79,7 @@ export async function fetchMerchantStatsApi(storeId: number = 0): Promise<Mercha
 }
 
 export async function fetchMerchantActivitiesApi(storeId: number): Promise<MarketingActivity[]> {
-  const resp: ApiResponse<MarketingActivity[]> = await get<MarketingActivity[]>(`/api/merchant/activities?storeId=${storeId}`)
-  return resp.code === 200 && resp.data !== null ? resp.data : []
+  return (await fetchMerchantActivitiesResultApi(storeId)) ?? []
 }
 
 export async function saveMerchantActivityApi(storeId: number, input: MerchantMarketingInput,
@@ -111,8 +106,7 @@ export async function deleteMerchantActivityApi(storeId: number, activityId: num
 }
 
 export async function fetchMerchantSeckillsApi(storeId: number): Promise<MerchantSeckill[]> {
-  const resp: ApiResponse<MerchantSeckill[]> = await get<MerchantSeckill[]>(`/api/merchant/seckills?storeId=${storeId}`)
-  return resp.code === 200 && resp.data !== null ? resp.data : []
+  return (await fetchMerchantSeckillsResultApi(storeId)) ?? []
 }
 
 export async function saveMerchantSeckillApi(storeId: number, input: MerchantSeckillInput,
@@ -189,9 +183,13 @@ export async function fetchMerchantStoresResultApi(): Promise<StoreItem[] | null
 }
 
 export async function fetchMerchantGoodsApi(storeId: number): Promise<GoodsItem[]> {
+  return (await fetchMerchantGoodsResultApi(storeId)) ?? []
+}
+
+export async function fetchMerchantGoodsResultApi(storeId: number): Promise<GoodsItem[] | null> {
   const resp: ApiResponse<ServerGoods[]> = await get<ServerGoods[]>(`/api/merchant/stores/${storeId}/goods`)
-  if (resp.code !== 200 || resp.data === null) {
-    return []
+  if (resp.code !== 200 || !Array.isArray(resp.data)) {
+    return null
   }
   return resp.data.map((g: ServerGoods) => toGoodsItem(g))
 }
@@ -199,11 +197,11 @@ export async function fetchMerchantGoodsApi(storeId: number): Promise<GoodsItem[
 export async function createMerchantStoreApi(name: string, categoryId: number, deliveryFee: number,
   minOrder: number, deliveryTime: string, notice: string, address: string,
   latitude: number, longitude: number, image: string,
-  deliveryRadius: number = 0): Promise<StoreItem | null> {
+  deliveryRadius: number = 0, images?: string[]): Promise<StoreItem | null> {
   const req: MerchantStoreRequest = {
     name: name, categoryId: categoryId, deliveryFee: deliveryFee, minOrder: minOrder,
     deliveryTime: deliveryTime, notice: notice, address: address, latitude: latitude, longitude: longitude,
-    image: image, deliveryRadius: deliveryRadius
+    image: image, deliveryRadius: deliveryRadius, images: images
   }
   const resp: ApiResponse<ServerStore> = await post<ServerStore>(API_CONFIG.ENDPOINTS['merchantStores'], req)
   return resp.code === 200 && resp.data !== null ? toStoreItem(resp.data) : null
@@ -212,11 +210,11 @@ export async function createMerchantStoreApi(name: string, categoryId: number, d
 export async function updateMerchantStoreApi(storeId: number, name: string, deliveryFee: number,
   minOrder: number, deliveryTime: string, notice: string, address: string,
   latitude: number, longitude: number, image: string,
-  deliveryRadius: number = -1): Promise<StoreItem | null> {
+  deliveryRadius: number = -1, images?: string[]): Promise<StoreItem | null> {
   const req: MerchantStorePatch = {
     name: name, deliveryFee: deliveryFee, minOrder: minOrder,
     deliveryTime: deliveryTime, notice: notice, address: address,
-    latitude: latitude, longitude: longitude, status: -1, image: image, deliveryRadius: deliveryRadius
+    latitude: latitude, longitude: longitude, status: -1, image: image, deliveryRadius: deliveryRadius, images: images
   }
   const resp: ApiResponse<ServerStore> = await put<ServerStore>(`/api/merchant/stores/${storeId}`, req)
   return resp.code === 200 && resp.data !== null ? toStoreItem(resp.data) : null
@@ -241,6 +239,28 @@ export async function updateMerchantGoodsApi(goods: GoodsItem, onShelf: boolean)
   return resp.code === 200 && resp.data !== null ? toGoodsItem(resp.data) : null
 }
 
+interface MerchantStockRequest {
+  stock?: number
+  quantity?: number
+  expectedVersion: number
+  specId: number
+}
+
+/** 补货与盘点独立于资料保存，服务端在库存变化时拒绝旧版本。 */
+export async function changeMerchantStockApi(goodsId: number, specId: number, amount: number,
+  expectedVersion: number, replenish: boolean): Promise<GoodsItem | null> {
+  const req: MerchantStockRequest = { expectedVersion: expectedVersion, specId: specId }
+  let resp: ApiResponse<ServerGoods>
+  if (replenish) {
+    req.quantity = amount
+    resp = await post<ServerGoods>(`/api/merchant/goods/${goodsId}/stock/replenish`, req)
+  } else {
+    req.stock = amount
+    resp = await put<ServerGoods>(`/api/merchant/goods/${goodsId}/stock`, req)
+  }
+  return resp.code === 200 && resp.data !== null ? toGoodsItem(resp.data) : null
+}
+
 export async function deleteMerchantGoodsApi(goodsId: number): Promise<boolean> {
   const resp: ApiResponse<Object> = await del<Object>(`/api/merchant/goods/${goodsId}`)
   return resp.code === 200
@@ -255,8 +275,12 @@ export async function fetchStoreMerchantCategoriesApi(storeId: number): Promise<
 }
 
 export async function fetchMerchantCategoriesApi(): Promise<Category[]> {
+  return (await fetchMerchantCategoriesResultApi()) ?? []
+}
+
+export async function fetchMerchantCategoriesResultApi(): Promise<Category[] | null> {
   const resp: ApiResponse<Category[]> = await get<Category[]>('/api/merchant/categories')
-  return resp.code === 200 && resp.data !== null ? resp.data : []
+  return resp.code === 200 && Array.isArray(resp.data) ? resp.data : null
 }
 
 export async function createMerchantCategoryApi(name: string, sort: number): Promise<Category | null> {
@@ -274,4 +298,23 @@ export async function updateMerchantCategoryApi(categoryId: number, name: string
 export async function deleteMerchantCategoryApi(categoryId: number): Promise<boolean> {
   const resp: ApiResponse<Object> = await del<Object>(`/api/merchant/categories/${categoryId}`)
   return resp.code === 200
+}
+
+// Nullable reads distinguish an empty successful response from a failed request.
+export async function fetchMerchantReviewsResultApi(): Promise<Review[] | null> {
+  const resp: ApiResponse<ServerReview[]> = await get<ServerReview[]>('/api/merchant/reviews', false)
+  if (resp.code !== 200 || resp.data === null) {
+    return null
+  }
+  return resp.data.map((r: ServerReview) => toReview(r))
+}
+
+export async function fetchMerchantActivitiesResultApi(storeId: number): Promise<MarketingActivity[] | null> {
+  const resp: ApiResponse<MarketingActivity[]> = await get<MarketingActivity[]>(`/api/merchant/activities?storeId=${storeId}`, false)
+  return resp.code === 200 && resp.data !== null ? resp.data : null
+}
+
+export async function fetchMerchantSeckillsResultApi(storeId: number): Promise<MerchantSeckill[] | null> {
+  const resp: ApiResponse<MerchantSeckill[]> = await get<MerchantSeckill[]>(`/api/merchant/seckills?storeId=${storeId}`, false)
+  return resp.code === 200 && resp.data !== null ? resp.data : null
 }

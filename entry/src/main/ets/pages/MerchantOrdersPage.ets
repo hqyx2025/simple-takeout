@@ -13,7 +13,7 @@ import { getCurrentUser, merchantActionRemote } from '../service/AppStorageManag
 import { getAuthSessionEpoch } from '../service/HttpClient'
 import { logInfo } from '../service/AppLogger'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
-import { canOrderAction } from '../service/OrderStatus'
+import { canOrderAction, orderDisplayState } from '../service/OrderStatus'
 import { PageHeader } from '../components/PageHeader'
 
 // 状态Tab项（使用 class + static create 避免 arkts-no-untyped-obj-literals）
@@ -45,6 +45,7 @@ class MerchantRejectReasonOption {
 @Entry
 @Component
 export struct MerchantOrdersPage {
+  embedded: boolean = false
   pageTransition() {
     PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
       .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
@@ -83,7 +84,7 @@ export struct MerchantOrdersPage {
     OrderStatusTab.create(1, '待接单'),
     OrderStatusTab.create(2, '制作中'),
     OrderStatusTab.create(3, '配送中'),
-    OrderStatusTab.create(4, '已完成')
+    OrderStatusTab.create(4, '已送达')
   ]
 
   aboutToAppear() {
@@ -291,6 +292,7 @@ export struct MerchantOrdersPage {
       // 顶部导航栏：标题 + 返回按钮
       PageHeader({
         title: '订单管理',
+        showBack: !this.embedded,
         backId: 'merchant-orders-back',
         headerBgColor: COLORS.BG_PRIMARY,
         actionColor: MODULE_COLOR.MERCHANT,
@@ -384,7 +386,7 @@ export struct MerchantOrdersPage {
         return order.capabilities?.fulfillmentMode === 'MERCHANT' ? '待商家配送' : '待骑手接单'
       }
     }
-    return getOrderStatusText(order.status, order.escrowStatus ?? 0)
+    return orderDisplayState(order.status, order.escrowStatus ?? 0, UserRole.MERCHANT).label
   }
 
   @Builder
@@ -478,7 +480,7 @@ export struct MerchantOrdersPage {
 
       Button('配送异常与售后记录').attributeModifier(new AppButtonStyle()).height(44).width('100%')
         .id(`merchant-order-support-${order.id}`)
-        .onClick(() => { router.pushUrl({ url: 'pages/OrderSupportPage', params: { orderId: order.id, canReport: canOrderAction(order, 'REPORT_ISSUE', order.status === 2 || order.status === 3) } }) })
+        .onClick(() => { router.pushUrl({ url: 'pages/OrderIssuePage', params: { orderId: order.id } }) })
 
       // 实付金额 + 操作按钮
       Row() {
@@ -567,7 +569,7 @@ export struct MerchantOrdersPage {
       }
     } else if (order.status === 4) {
       // 已送达待确认收货 / 已结算完成（与大纲 6.4 口径一致）
-      Text(getOrderStatusText(order.status, order.escrowStatus ?? 0))
+      Text(orderDisplayState(order.status, order.escrowStatus ?? 0, UserRole.MERCHANT).label)
         .fontSize(FONT_SIZE.SM)
         .fontColor(order.escrowStatus === 1 ? COLORS.TEXT_HINT : COLORS.WARNING)
     } else if (order.status === 5) {

@@ -1,3 +1,5 @@
+import { RemoteState } from '../components/RemoteState'
+import { getAuthSessionEpoch } from '../service/HttpClient'
 import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 /**
  * 商品列表页：承接主页分类、附近商品和附近全部商品入口。
@@ -86,6 +88,10 @@ export struct ProductListPage {
   @State mode: string = ProductListMode.ALL
   @State title: string = '附近全部商品'
   @State categoryId: number = 0
+  @State loading: boolean = false
+  @State loadFailed: boolean = false
+  private active: boolean = true
+  private loadVersion: number = 0
   @State products: ProductListItem[] = []
   @State categoryStores: StoreItem[] = []
   private dataSource: ProductDataSource = new ProductDataSource()
@@ -98,7 +104,11 @@ export struct ProductListPage {
     this.loadProducts()
   }
 
+  onPageHide(): void { this.active = false; this.loadVersion += 1; this.loading = false }
+  aboutToDisappear(): void { this.onPageHide() }
+
   onPageShow(): void {
+    this.active = true
     // 从定位页返回后重新按最新定位筛选商品。
     if (this.loggedIn) {
       this.loadProducts()
@@ -150,21 +160,28 @@ export struct ProductListPage {
   }
 
   private async loadProducts(): Promise<void> {
-    await syncStoresFromServer()
+    const version: number = ++this.loadVersion
+    const epoch: number = getAuthSessionEpoch()
+    this.loading = true; this.loadFailed = false
+    const storesOk: boolean = await syncStoresFromServer()
+    if (!this.active || epoch !== getAuthSessionEpoch() || version !== this.loadVersion) { return }
+    if (!storesOk) { this.loading = false; this.loadFailed = true; return }
     const candidates: StoreItem[] = this.getCandidateStores()
     if (this.mode === ProductListMode.CATEGORY) {
       this.categoryStores = candidates.filter((store: StoreItem) => this.matchesCategory(store))
       this.products = []
       this.dataSource.setData([])
+      this.loading = false
       return
     }
-    this.categoryStores = []
     const result: ProductListItem[] = []
     const currentMode: string = this.mode
     const currentCategoryId: number = this.categoryId
     for (let i = 0; i < candidates.length; i++) {
       const store: StoreItem = candidates[i]
-      await syncGoodsFromServer(store.id)
+      const goodsOk: boolean = await syncGoodsFromServer(store.id)
+      if (!this.active || epoch !== getAuthSessionEpoch() || version !== this.loadVersion) { return }
+      if (!goodsOk) { this.loading = false; this.loadFailed = true; return }
       const goods: GoodsItem[] = getGoodsForStore(store.id)
       goods.forEach((item: GoodsItem) => {
         const productCategoryId: number = this.getProductCategoryId(store, item)
@@ -183,6 +200,8 @@ export struct ProductListPage {
     if (this.mode === ProductListMode.RANKING || this.mode === ProductListMode.SPECIAL) {
       result.sort((left: ProductListItem, right: ProductListItem) => right.goods.sales - left.goods.sales)
     }
+    this.loading = false
+    this.categoryStores = []
     this.products = result
     this.dataSource.setData(result)
   }
@@ -243,10 +262,8 @@ export struct ProductListPage {
       promptAction.showToast({ message: '店铺信息不完整，无法打开详情', duration: 2200 })
       return
     }
-    AppStorage.setOrCreate<number>('selectedStoreId', store.id)
-    AppStorage.setOrCreate<string>('selectedStoreName', store.name !== '' ? store.name : '店铺详情')
     logInfo('Navigation', `ProductListPage 打开店铺详情 storeId=${store.id} name=${store.name}`)
-    router.pushUrl({ url: 'pages/StoreDetailPage' })
+    router.pushUrl({ url: 'pages/StoreDetailPage', params: { storeId: store.id } })
   }
 
   @Builder
@@ -300,11 +317,15 @@ export struct ProductListPage {
         subtitle: this.getLocationText(),
         onBack: () => { router.back() }
       })
+      if (this.loadFailed || (this.loading && this.products.length === 0 && this.categoryStores.length === 0)) {
+        RemoteState({ failed: this.loadFailed, loading: this.loading,
+          hasData: this.products.length > 0 || this.categoryStores.length > 0, onRetry: () => { this.loadProducts() } })
+      }
 
       if (!this.loggedIn) {
 EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', actionLabel: '去登录', actionUrl: 'pages/Index' })
        } else if (this.mode === ProductListMode.CATEGORY) {
-         if (this.categoryStores.length === 0) {
+         if (this.categoryStores.length === 0 && !this.loadFailed && !this.loading) {
            EmptyState({ icon: $r('app.media.login_store'), title: '暂无该分类店铺', description: '当前分类暂时没有可展示的店铺' })
         } else {
           List({ space: SPACING.SM }) {
@@ -336,7 +357,7 @@ EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', actionLabe
         .layoutWeight(1)
         .justifyContent(FlexAlign.Center)
         .alignItems(HorizontalAlign.Center)
-      } else if (this.products.length === 0) {
+      } else if (this.products.length === 0 && !this.loadFailed && !this.loading) {
         EmptyState({ icon: $r('app.media.home_bowl'), title: '暂无符合条件的商品', description: '可以换个分类或查看附近全部商品' })
       } else {
         List({ space: SPACING.SM }) {

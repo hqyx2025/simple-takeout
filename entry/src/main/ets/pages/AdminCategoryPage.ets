@@ -1,3 +1,5 @@
+import { PageSession } from '../service/PageSession'
+import { RemoteState } from '../components/RemoteState'
 import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/AppTheme'
 /**
@@ -22,6 +24,12 @@ interface AdminCategoryRequest {
 @Entry
 @Component
 export struct AdminCategoryPage {
+  @State loading: boolean = false
+  @State remoteFailed: boolean = false
+  @State remoteLoading: boolean = false
+  private remoteSession: PageSession = new PageSession()
+  private remoteVisible: boolean = true
+
   pageTransition() {
     PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
       .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
@@ -37,8 +45,8 @@ export struct AdminCategoryPage {
       .opacity(0)
   }
 
-  @StorageLink('isLoggedIn') loggedIn: boolean = false
-  @StorageLink('user') user: User = {
+  @StorageLink('isLoggedIn') @Watch('onRemoteIdentityChange') loggedIn: boolean = false
+  @StorageLink('user') @Watch('onRemoteIdentityChange') user: User = {
     id: 0, username: '未登录', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER,
     balance: 0, coupons: [], orders: [], storeIds: []
   }
@@ -61,8 +69,18 @@ export struct AdminCategoryPage {
   }
 
   async refresh(): Promise<void> {
-    const resp: ApiResponse<Category[]> = await get<Category[]>('/api/admin/categories')
-    this.categories = resp.code === 200 && resp.data !== null ? resp.data : []
+    if (this.remoteLoading) { return }
+    if (!this.remoteVisible || !this.remoteSession.start(UserRole.ADMIN)) { return }
+    const remoteVersion: number = this.remoteSession.request()
+    this.remoteLoading = true
+    this.remoteFailed = false
+    try {
+      const resp: ApiResponse<Category[]> = await get<Category[]>('/api/admin/categories')
+      if (!this.remoteSession.current(remoteVersion)) { return }
+      if (resp.code !== 200 || !Array.isArray(resp.data)) { this.remoteFailed = true; return }
+      this.categories = resp.data
+    } catch (_) { if (this.remoteSession.current(remoteVersion)) { this.remoteFailed = true } }
+    finally { if (this.remoteSession.current(remoteVersion)) { this.remoteLoading = false; this.loading = false } }
   }
 
   async createCategory(): Promise<void> {
@@ -111,6 +129,21 @@ export struct AdminCategoryPage {
     }
   }
 
+  onRemoteIdentityChange(): void {
+    if (!this.remoteSession.matchesIdentity()) {
+      this.remoteSession.pause()
+      this.remoteVisible = false
+      this.remoteLoading = false
+      this.remoteFailed = false
+      this.loading = false
+      this.categories = []
+      router.replaceUrl({ url: 'pages/Index' })
+    }
+  }
+  onPageHide(): void { this.remoteVisible = false; this.remoteSession.pause(); this.loading = false; this.remoteLoading = false }
+  onPageShow(): void { this.remoteVisible = true; if (!this.loading) { this.refresh() } }
+  aboutToDisappear(): void { this.onPageHide() }
+
   build() {
     Stack() {
       Column() {
@@ -124,6 +157,10 @@ export struct AdminCategoryPage {
           onBack: () => { router.back() },
           onAction: () => { this.refresh() }
         })
+      if (this.remoteFailed || (this.remoteLoading && !(this.categories.length > 0))) {
+        RemoteState({ loading: this.remoteLoading, failed: this.remoteFailed, hasData: this.categories.length > 0,
+          retryId: 'AdminCategoryPage-retry', onRetry: () => { this.refresh() } })
+      }
 
         // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一条数据不在顶部
         List({ space: SPACING.MD }) {
@@ -148,7 +185,7 @@ export struct AdminCategoryPage {
           }
 
           // 分类列表（含行内编辑与删除）
-          if (this.categories.length === 0) {
+          if (this.categories.length === 0 && !this.remoteFailed && !this.remoteLoading) {
             ListItem() {
               Text('暂无分类').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%').padding(SPACING.MD)
             }

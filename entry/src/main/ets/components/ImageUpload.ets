@@ -17,6 +17,7 @@ class PendingImage {
 export struct ImageUpload {
   @Prop images: string[] = []
   @Prop maxFiles: number = 3
+  @Prop recommendedFiles: number = 0
   @Prop disabled: boolean = false
   @Prop fieldId: string = 'image-upload'
   @Prop imageIdPrefix: string = ''
@@ -132,6 +133,9 @@ export struct ImageUpload {
           Text('点击或拖拽上传图片').fontSize(16).fontColor(AppTheme.TEXT)
           Text('JPG、PNG、WebP、GIF · 每张不超过 5MB · 最多 ' + this.maxFiles + ' 张')
             .fontSize(12).fontColor(AppTheme.MUTED).id(this.helpId || this.fieldId + '-help')
+          if (this.recommendedFiles > 0) {
+            Text('建议上传 ' + this.recommendedFiles + ' 张，首张用作封面').fontSize(12).fontColor(AppTheme.MUTED)
+          }
         }.width('100%').padding(16)
       }.width('100%').backgroundColor(AppTheme.INPUT).border({ width: 1, color: AppTheme.BORDER, style: BorderStyle.Dashed })
         .borderRadius(AppTheme.CONTROL_RADIUS).enabled(!this.disabled && this.images.length + this.pending.length < this.maxFiles)

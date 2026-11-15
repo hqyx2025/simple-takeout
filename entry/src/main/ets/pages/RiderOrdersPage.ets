@@ -12,7 +12,7 @@ import { Order, OrderPageData, StoreItem, User, UserRole } from '../model/Models
 import { fetchRiderOrdersPageResultApi } from '../service/api/RiderApi'
 import { fetchStoreDetailApi } from '../service/api/CatalogApi'
 import { getAuthSessionEpoch, getAuthToken } from '../service/HttpClient'
-import { canOrderAction } from '../service/OrderStatus'
+import { canOrderAction, orderDisplayState } from '../service/OrderStatus'
 import { pickupOrderRemote, deliverOrderRemote, getLastRemoteErrorMessage, startRiderLocationTimer, stopRiderLocationTimer } from '../service/AppStorageManager'
 import { logInfo } from '../service/AppLogger'
 import { PageHeader } from '../components/PageHeader'
@@ -560,7 +560,7 @@ export struct RiderOrdersPage {
           .fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold).fontColor(COLORS.TEXT_PRIMARY)
           .layoutWeight(1)
         Text(this.deliveredOrderIds.includes(order.id) && order.status === 3 ? '已送达，待刷新' :
-          order.status === 2 ? '待取餐' : getOrderStatusText(order.status, order.escrowStatus ?? 0))
+          order.status === 2 ? '待取餐' : orderDisplayState(order.status, order.escrowStatus ?? 0, UserRole.RIDER).label)
           .fontSize(FONT_SIZE.SM).fontColor(MODULE_COLOR.RIDER).fontWeight(FontWeight.Bold)
           .id(`rider-order-status-${order.id}`)
       }.width('100%')
@@ -615,7 +615,7 @@ export struct RiderOrdersPage {
 
       Button('配送异常与处理记录').attributeModifier(new AppButtonStyle()).height(44).width('100%')
         .enabled(!this.acting).id(`rider-order-support-${order.id}`)
-        .onClick(() => { router.pushUrl({ url: 'pages/OrderSupportPage', params: { orderId: order.id, canReport: canOrderAction(order, 'REPORT_ISSUE', order.status === 2 || order.status === 3) } }) })
+        .onClick(() => { router.pushUrl({ url: 'pages/OrderIssuePage', params: { orderId: order.id } }) })
       Row() {
         Text(`¥${order.payAmount.toFixed(2)} · ${order.createTime}`)
           .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).layoutWeight(1)

@@ -93,6 +93,10 @@ struct Index {
       this.adminRedirecting = true
       router.replaceUrl({ url: 'pages/RiderCenterPage' })
     }
+    if (currentUser !== undefined && currentUser.role === UserRole.MERCHANT) {
+      this.adminRedirecting = true
+      router.replaceUrl({ url: 'pages/MerchantCenterPage' })
+    }
   }
 
   onLoginStateChange(): void {
@@ -118,6 +122,11 @@ struct Index {
       if (currentUser !== undefined && currentUser.role === UserRole.RIDER) {
         this.adminRedirecting = true
         router.replaceUrl({ url: 'pages/RiderCenterPage' })
+        return
+      }
+      if (currentUser !== undefined && currentUser.role === UserRole.MERCHANT) {
+        this.adminRedirecting = true
+        router.replaceUrl({ url: 'pages/MerchantCenterPage' })
         return
       }
       // 后端业务接口统一要求 JWT，登录成功后再拉取首页真实数据。
@@ -176,6 +185,11 @@ struct Index {
       router.replaceUrl({ url: 'pages/RiderCenterPage' })
       return
     }
+    if (this.loggedIn && pageUser !== undefined && pageUser.role === UserRole.MERCHANT) {
+      this.adminRedirecting = true
+      router.replaceUrl({ url: 'pages/MerchantCenterPage' })
+      return
+    }
     if (AppStorage.get<boolean>('pendingLocationAfterLogin') || false) {
       this.showLogin = true
     }
@@ -206,26 +220,7 @@ struct Index {
   onPageHide(): void { this.pageVisible = false }
 
   private async showStoreDetail(storeId: number, storeName: string = ''): Promise<void> {
-    AppStorage.setOrCreate<number>('selectedStoreId', storeId)
-    if (storeName !== '') {
-      AppStorage.setOrCreate<string>('selectedStoreName', storeName)
-    } else {
-      const store: StoreItem | undefined = getAllStoresList().find(s => s.id === storeId)
-      if (store !== undefined) {
-        AppStorage.setOrCreate<string>('selectedStoreName', store.name)
-      }
-    }
-    if (getAllStoresList().find(s => s.id === storeId) === undefined && isLoggedIn()) {
-      await syncStoresFromServer()
-    }
-    if (storeName === '' && getAllStoresList().find(s => s.id === storeId) !== undefined) {
-      const syncedStore: StoreItem = getAllStoresList().find(s => s.id === storeId) as StoreItem
-      AppStorage.setOrCreate<string>('selectedStoreName', syncedStore.name)
-    }
-    if ((AppStorage.get<string>('selectedStoreName') || '') === '') {
-      AppStorage.setOrCreate<string>('selectedStoreName', '店铺详情')
-    }
-    router.pushUrl({ url: 'pages/StoreDetailPage' })
+    if (storeId > 0) { router.pushUrl({ url: 'pages/StoreDetailPage', params: { storeId } }) }
   }
 
   build() {
@@ -262,6 +257,10 @@ struct Index {
             }
             if (currentUser !== undefined && currentUser.role === UserRole.RIDER) {
               router.replaceUrl({ url: 'pages/RiderCenterPage' })
+              return
+            }
+            if (currentUser !== undefined && currentUser.role === UserRole.MERCHANT) {
+              router.replaceUrl({ url: 'pages/MerchantCenterPage' })
               return
             }
             const shouldLocate: boolean = AppStorage.get<boolean>('pendingLocationAfterLogin') || false

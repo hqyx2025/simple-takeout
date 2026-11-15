@@ -40,12 +40,10 @@ export struct PasswordResetPage {
 
   aboutToAppear(): void {
     this.pageActive = true
-    this.phone = this.loggedIn ? this.user.phone : AppStorage.get<string>('passwordResetPhone') ?? ''
-    AppStorage.setOrCreate<string>('passwordResetPhone', '')
+    this.phone = this.loggedIn ? this.user.phone : router.getParams()?.phoneHint ?? ''
     this.email = this.user.email ?? ''
     this.sessionToken = getAuthToken()
-    this.mode = AppStorage.get<string>('passwordResetMode') === 'payment' ? 'payment' : 'login'
-    AppStorage.setOrCreate<string>('passwordResetMode', 'login')
+    this.mode = router.getParams()?.resetMode === 'payment' ? 'payment' : 'login'
   }
 
   onPageShow(): void {

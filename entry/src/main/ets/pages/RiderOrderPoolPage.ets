@@ -1,3 +1,4 @@
+import { RemoteState } from '../components/RemoteState'
 import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 /**
  * 抢单大厅（四端改造）：展示待取餐池订单，骑手在线即可抢单
@@ -228,19 +229,15 @@ export struct RiderOrderPoolPage {
           .id('rider-pool-range-hint')
       }
 
-      if (this.loading) {
+      if (this.loadFailed && this.orders.length > 0) {
+        RemoteState({ failed: true, hasData: true, retryId: 'rider-pool-retry', onRetry: () => { this.loadPool() } })
+      }
+      if (this.loading && this.orders.length === 0) {
         Column() {
           Text('正在加载可抢订单…').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
         }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
-      } else if (this.loadFailed) {
-        Column({ space: SPACING.MD }) {
-          Text('抢单信息暂时无法加载').fontSize(FONT_SIZE.LG).fontColor(COLORS.TEXT_PRIMARY)
-          Text('请检查网络后重试').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
-          Button('重新加载')
-            .attributeModifier(new AppButtonStyle()).height(44)
-            .id('rider-pool-retry')
-            .onClick(() => { this.loadPool() })
-        }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+      } else if (this.loadFailed && this.orders.length === 0) {
+        RemoteState({ failed: true, retryId: 'rider-pool-retry', onRetry: () => { this.loadPool() } })
       } else if (this.orders.length === 0) {
         Column({ space: SPACING.SM }) {
           Image($r('app.media.login_rider')).width(60).height(60).objectFit(ImageFit.Contain).margin({ top: 40 })

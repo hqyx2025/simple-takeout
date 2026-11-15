@@ -50,6 +50,17 @@
     "pages/AdminAssistantPage",
     "pages/RankingPage",
     "pages/ReviewImagePage",
-    "pages/ConsentPage"
+    "pages/ConsentPage",
+    "pages/ChangeLoginPasswordPage",
+    "pages/PaymentPasswordPage",
+    "pages/CloseAccountPage",
+    "pages/MerchantStoreDetailPage",
+    "pages/MerchantStoreEditPage",
+    "pages/MerchantGoodsPage",
+    "pages/MerchantCategoryPage",
+    "pages/MerchantFulfillmentPage",
+    "pages/MerchantInventoryPage",
+    "pages/OrderIssuePage",
+    "pages/AdminDeliveryIssuesPage"
   ]
 }

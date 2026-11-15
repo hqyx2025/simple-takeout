@@ -1,3 +1,7 @@
+import { UserRole } from '../model/Models'
+import { fetchFavoritesResultApi } from '../service/ApiService'
+import { PageSession } from '../service/PageSession'
+import { RemoteState } from '../components/RemoteState'
 import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 /**
  * 收藏列表页
@@ -47,6 +51,12 @@ class FavoriteDataSource implements IDataSource {
 @Entry
 @Component
 export struct FavoriteListPage {
+  @State loading: boolean = false
+  @State remoteFailed: boolean = false
+  @State remoteLoading: boolean = false
+  private remoteSession: PageSession = new PageSession()
+  private remoteVisible: boolean = true
+
   pageTransition() {
     PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
       .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
@@ -62,7 +72,7 @@ export struct FavoriteListPage {
       .opacity(0)
   }
 
-  @StorageLink('isLoggedIn') loggedIn: boolean = false
+  @StorageLink('isLoggedIn') @Watch('onRemoteIdentityChange') loggedIn: boolean = false
   @State favoriteList: Favorite[] = []
   private dataSource: FavoriteDataSource = new FavoriteDataSource()
 
@@ -75,21 +85,50 @@ export struct FavoriteListPage {
   }
 
   private async loadFavorites(): Promise<void> {
-    // 从后端拉取最新收藏（真实后端模式）
-    await syncFavoritesRemote()
-    this.favoriteList = getFavorites()
-    this.dataSource.setData(this.favoriteList)
+    if (!this.remoteVisible || !this.remoteSession.start(UserRole.CUSTOMER)) { return }
+    const remoteVersion: number = this.remoteSession.request()
+    this.remoteLoading = true
+    this.remoteFailed = false
+    try {
+      // 从后端拉取最新收藏（真实后端模式）
+      const result: Favorite[] | null = await fetchFavoritesResultApi()
+      if (!this.remoteSession.current(remoteVersion)) { return }
+      if (result === null) { this.remoteFailed = true; return }
+      AppStorage.setOrCreate<Favorite[]>('favoriteList', result)
+      this.favoriteList = result
+      this.dataSource.setData(this.favoriteList)
+    } catch (_) { if (this.remoteSession.current(remoteVersion)) { this.remoteFailed = true } }
+    finally { if (this.remoteSession.current(remoteVersion)) { this.remoteLoading = false; this.loading = false } }
   }
+
+  onRemoteIdentityChange(): void {
+    if (!this.remoteSession.matchesIdentity()) {
+      this.remoteSession.pause()
+      this.remoteVisible = false
+      this.remoteLoading = false
+      this.remoteFailed = false
+      this.loading = false
+      this.favoriteList = []
+      router.replaceUrl({ url: 'pages/Index' })
+    }
+  }
+  onPageHide(): void { this.remoteVisible = false; this.remoteSession.pause(); this.loading = false; this.remoteLoading = false }
+  onPageShow(): void { this.remoteVisible = true; if (!this.loading) { this.loadFavorites() } }
+  aboutToDisappear(): void { this.onPageHide() }
 
   build() {
     Column() {
       // 顶部导航栏
       PageHeader({ title: '我的收藏', onBack: () => { router.back() } })
+      if (this.remoteFailed || (this.remoteLoading && !(this.favoriteList.length > 0))) {
+        RemoteState({ loading: this.remoteLoading, failed: this.remoteFailed, hasData: this.favoriteList.length > 0,
+          retryId: 'FavoriteListPage-retry', onRetry: () => { this.loadFavorites() } })
+      }
 
       // 内容区
       if (!this.loggedIn) {
         EmptyState({ icon: $r('app.media.login_lock'), title: '暂无登录', actionLabel: '去登录', actionUrl: 'pages/Index' })
-      } else if (this.favoriteList.length === 0) {
+      } else if (this.favoriteList.length === 0 && !this.remoteFailed && !this.remoteLoading) {
         EmptyState({ icon: $r('app.media.home_heart'), title: '暂无收藏店铺', actionLabel: '去逛店铺', actionUrl: 'pages/Index' })
       } else {
         List({ space: SPACING.MD }) {
@@ -194,9 +233,7 @@ export struct FavoriteListPage {
       promptAction.showToast({ message: '店铺信息不完整，无法打开详情', duration: 2200 })
       return
     }
-    AppStorage.setOrCreate<number>('selectedStoreId', storeId)
-    AppStorage.setOrCreate<string>('selectedStoreName', storeName !== '' ? storeName : '店铺详情')
     logInfo('Navigation', `收藏页打开店铺详情 storeId=${storeId}`)
-    router.pushUrl({ url: 'pages/StoreDetailPage' })
+    router.pushUrl({ url: 'pages/StoreDetailPage', params: { storeId: storeId } })
   }
 }

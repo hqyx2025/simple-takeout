@@ -1,3 +1,7 @@
+import { fetchAdminAnnouncementsResultApi } from '../service/ApiService'
+import { fetchAdminBannersResultApi } from '../service/ApiService'
+import { PageSession } from '../service/PageSession'
+import { RemoteState } from '../components/RemoteState'
 import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle, AppInputStyle, AppTextAreaStyle } from '../common/theme/AppTheme'
 /**
@@ -18,6 +22,11 @@ import { logInfo } from '../service/AppLogger'
 @Entry
 @Component
 export struct AdminContentPage {
+  @State remoteFailed: boolean = false
+  @State remoteLoading: boolean = false
+  private remoteSession: PageSession = new PageSession()
+  private remoteVisible: boolean = true
+
   pageTransition() {
     PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
       .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
@@ -42,8 +51,8 @@ export struct AdminContentPage {
   @State showAnnouncementDialog: boolean = false
   @State announcementTitle: string = ''
   @State announcementContent: string = ''
-  @StorageLink('isLoggedIn') loggedIn: boolean = false
-  @StorageLink('user') user: User = { id: 0, username: '', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER, balance: 0, coupons: [], orders: [], storeIds: [] }
+  @StorageLink('isLoggedIn') @Watch('onRemoteIdentityChange') loggedIn: boolean = false
+  @StorageLink('user') @Watch('onRemoteIdentityChange') user: User = { id: 0, username: '', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER, balance: 0, coupons: [], orders: [], storeIds: [] }
 
   async aboutToAppear(): Promise<void> {
     logInfo('Page', '进入管理端内容管理 AdminContentPage')
@@ -56,10 +65,22 @@ export struct AdminContentPage {
   }
 
   private async loadAll(): Promise<void> {
-    this.loading = true
-    this.banners = await syncAdminBannersRemote()
-    this.announcements = await syncAdminAnnouncementsRemote()
-    this.loading = false
+    if (this.remoteLoading) { return }
+    if (!this.remoteVisible || !this.remoteSession.start(UserRole.ADMIN)) { return }
+    const remoteVersion: number = this.remoteSession.request()
+    this.remoteLoading = true
+    this.remoteFailed = false
+    try {
+      this.loading = true
+      const banners: Banner[] | null = await fetchAdminBannersResultApi()
+      if (!this.remoteSession.current(remoteVersion)) { return }
+      if (banners === null) { this.remoteFailed = true } else { this.banners = banners }
+      const announcements: Announcement[] | null = await fetchAdminAnnouncementsResultApi()
+      if (!this.remoteSession.current(remoteVersion)) { return }
+      if (announcements === null) { this.remoteFailed = true } else { this.announcements = announcements }
+      this.loading = false
+    } catch (_) { if (this.remoteSession.current(remoteVersion)) { this.remoteFailed = true } }
+    finally { if (this.remoteSession.current(remoteVersion)) { this.remoteLoading = false; this.loading = false } }
   }
 
   private async toggleBanner(banner: Banner): Promise<void> {
@@ -123,6 +144,22 @@ export struct AdminContentPage {
     }
   }
 
+  onRemoteIdentityChange(): void {
+    if (!this.remoteSession.matchesIdentity()) {
+      this.remoteSession.pause()
+      this.remoteVisible = false
+      this.remoteLoading = false
+      this.remoteFailed = false
+      this.loading = false
+      this.banners = []
+      this.announcements = []
+      router.replaceUrl({ url: 'pages/Index' })
+    }
+  }
+  onPageHide(): void { this.remoteVisible = false; this.remoteSession.pause(); this.loading = false; this.remoteLoading = false }
+  onPageShow(): void { this.remoteVisible = true; if (!this.loading) { this.loadAll() } }
+  aboutToDisappear(): void { this.onPageHide() }
+
   build() {
     Stack() {
       Column() {
@@ -135,8 +172,12 @@ export struct AdminContentPage {
           onBack: () => { router.back() },
           onAction: () => { this.loadAll() }
         })
+      if (this.remoteFailed || (this.remoteLoading && !(this.banners.length > 0 || this.announcements.length > 0))) {
+        RemoteState({ loading: this.remoteLoading, failed: this.remoteFailed, hasData: this.banners.length > 0 || this.announcements.length > 0,
+          retryId: 'AdminContentPage-retry', onRetry: () => { this.loadAll() } })
+      }
 
-        if (this.loading) {
+        if (this.loading && !(this.banners.length > 0 || this.announcements.length > 0)) {
           Column() {
             Text('正在加载…').fontSize(FONT_SIZE.MD).fontColor(COLORS.TEXT_HINT)
           }.layoutWeight(1).justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
@@ -156,7 +197,7 @@ export struct AdminContentPage {
                   .onClick(() => { this.showBannerDialog = true })
               }.width('100%')
             }
-            if (this.banners.length === 0) {
+            if (this.banners.length === 0 && !this.remoteFailed && !this.remoteLoading) {
               ListItem() {
                 Text('暂无 Banner').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%')
               }
@@ -181,7 +222,7 @@ export struct AdminContentPage {
                   .onClick(() => { this.showAnnouncementDialog = true })
               }.width('100%')
             }
-            if (this.announcements.length === 0) {
+            if (this.announcements.length === 0 && !this.remoteFailed && !this.remoteLoading) {
               ListItem() {
                 Text('暂无公告').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT).width('100%')
               }

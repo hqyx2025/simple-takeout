@@ -7,6 +7,7 @@ import { AssistantReply } from '../../service/api/AssistantApi'
 // ==================== 后端响应结构（与 server 端 record 对齐） ====================
 
 export interface ServerStore {
+  images?: string[]
   id: number
   name: string
   image: string
@@ -41,6 +42,7 @@ export interface ServerGoodsSpec {
   name: string
   price: number
   stock: number
+  version?: number
   sort: number
   status: number
 }
@@ -56,6 +58,7 @@ export interface ServerGoods {
   categoryId: number
   merchantCategoryId: number
   stock: number
+  version?: number
   sales: number
   rating: number
   tag: string
@@ -558,6 +561,7 @@ export interface CouponClaimRequest {
 }
 
 export interface MerchantStoreRequest {
+  images?: string[]
   name: string
   categoryId: number
   deliveryFee: number
@@ -574,6 +578,7 @@ export interface MerchantStoreRequest {
 }
 
 export interface MerchantStorePatch {
+  images?: string[]
   name: string
   deliveryFee: number
   minOrder: number

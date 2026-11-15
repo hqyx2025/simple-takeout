@@ -1,3 +1,5 @@
+import { PageSession } from '../service/PageSession'
+import { RemoteState } from '../components/RemoteState'
 import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 /**
  * 管理端-平台管理入口页
@@ -60,6 +62,11 @@ class AdminEntryItem {
 @Entry
 @Component
 export struct AdminCenterPage {
+  @State remoteFailed: boolean = false
+  @State remoteLoading: boolean = false
+  private remoteSession: PageSession = new PageSession()
+  private remoteVisible: boolean = true
+
   pageTransition() {
     PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
       .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
@@ -75,8 +82,8 @@ export struct AdminCenterPage {
       .opacity(0)
   }
 
-  @StorageLink('isLoggedIn') loggedIn: boolean = false
-  @StorageLink('user') user: User = {
+  @StorageLink('isLoggedIn') @Watch('onRemoteIdentityChange') loggedIn: boolean = false
+  @StorageLink('user') @Watch('onRemoteIdentityChange') user: User = {
     id: 0, username: '未登录', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER,
     balance: 0, coupons: [], orders: [], storeIds: []
   }
@@ -98,32 +105,46 @@ export struct AdminCenterPage {
   }
 
   // 从子管理页返回时刷新概览数据（分类/店铺/订单/退款数量保持最新）
-  onPageShow(): void {
+  onPageShow(): void { this.remoteVisible = true;
     if (this.loggedIn && this.user.role === UserRole.ADMIN) {
       this.refresh()
     }
   }
 
   async refresh(): Promise<void> {
-    if (this.loading) {
-      promptAction.showToast({ message: '平台数据正在刷新，请稍候', duration: 1200 })
-      return
-    }
-    this.loading = true
-    const categoryResp: ApiResponse<Category[]> = await get<Category[]>('/api/admin/categories')
-    const storeResp: ApiResponse<AdminStore[]> = await get<AdminStore[]>('/api/admin/stores')
-    const orderResp: ApiResponse<AdminOrderPageResponse> = await get<AdminOrderPageResponse>(
-      '/api/admin/orders/page?page=1&pageSize=1')
-    const employeeResp: ApiResponse<Object[]> = await get<Object[]>('/api/admin/employees')
-    this.categories = categoryResp.code === 200 && categoryResp.data !== null ? categoryResp.data : []
-    this.stores = storeResp.code === 200 && storeResp.data !== null ? storeResp.data : []
-    this.orderCount = orderResp.code === 200 && orderResp.data !== null ? orderResp.data.total : 0
-    this.employees = employeeResp.code === 200 && employeeResp.data !== null ? employeeResp.data.length : 0
-    const refunds: RefundPageData | null = await fetchAdminRefundsPageApi('PENDING', 1, 1)
-    if (refunds !== null) {
-      this.pendingRefundCount = refunds.total
-    }
-    this.loading = false
+    if (!this.remoteVisible || !this.remoteSession.start(UserRole.ADMIN)) { return }
+    const remoteVersion: number = this.remoteSession.request()
+    this.remoteLoading = true
+    this.remoteFailed = false
+    try {
+      if (this.loading) {
+        promptAction.showToast({ message: '平台数据正在刷新，请稍候', duration: 1200 })
+        return
+      }
+      this.loading = true
+      const categoryResp: ApiResponse<Category[]> = await get<Category[]>('/api/admin/categories')
+      const storeResp: ApiResponse<AdminStore[]> = await get<AdminStore[]>('/api/admin/stores')
+      const orderResp: ApiResponse<AdminOrderPageResponse> = await get<AdminOrderPageResponse>(
+        '/api/admin/orders/page?page=1&pageSize=1')
+      const employeeResp: ApiResponse<Object[]> = await get<Object[]>('/api/admin/employees')
+      if (!this.remoteSession.current(remoteVersion)) { return }
+      if (categoryResp.code !== 200 || !Array.isArray(categoryResp.data)
+        || storeResp.code !== 200 || !Array.isArray(storeResp.data)
+        || orderResp.code !== 200 || orderResp.data === null
+        || employeeResp.code !== 200 || !Array.isArray(employeeResp.data)) { this.remoteFailed = true; return }
+      this.categories = categoryResp.data
+      this.stores = storeResp.data
+      this.orderCount = orderResp.data.total
+      this.employees = employeeResp.data.length
+      const refunds: RefundPageData | null = await fetchAdminRefundsPageApi('PENDING', 1, 1)
+      if (!this.remoteSession.current(remoteVersion)) { return }
+      if (refunds === null) { this.remoteFailed = true }
+      if (refunds !== null) {
+        this.pendingRefundCount = refunds.total
+      }
+      this.loading = false
+    } catch (_) { if (this.remoteSession.current(remoteVersion)) { this.remoteFailed = true } }
+    finally { if (this.remoteSession.current(remoteVersion)) { this.remoteLoading = false; this.loading = false } }
   }
 
   /** 待审批退款数量（入口卡片徽标）。 */
@@ -167,6 +188,21 @@ export struct AdminCenterPage {
     return MODULE_COLOR.ADMIN
   }
 
+  onRemoteIdentityChange(): void {
+    if (!this.remoteSession.matchesIdentity()) {
+      this.remoteSession.pause()
+      this.remoteVisible = false
+      this.remoteLoading = false
+      this.remoteFailed = false
+      this.loading = false
+      this.categories = []
+      this.stores = []
+      router.replaceUrl({ url: 'pages/Index' })
+    }
+  }
+  onPageHide(): void { this.remoteVisible = false; this.remoteSession.pause(); this.loading = false; this.remoteLoading = false }
+  aboutToDisappear(): void { this.onPageHide() }
+
   build() {
     Stack() {
     Column() {
@@ -178,6 +214,10 @@ export struct AdminCenterPage {
         actionLabel: this.loading ? '加载中…' : '刷新',
         onAction: () => { this.refresh() }
       })
+      if (this.remoteFailed || (this.remoteLoading && !(this.categories.length > 0 || this.stores.length > 0))) {
+        RemoteState({ loading: this.remoteLoading, failed: this.remoteFailed, hasData: this.categories.length > 0 || this.stores.length > 0,
+          retryId: 'AdminCenterPage-retry', onRetry: () => { this.refresh() } })
+      }
 
       // 用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中，导致第一块内容不在顶部
       List({ space: SPACING.MD }) {

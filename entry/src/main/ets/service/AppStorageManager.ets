@@ -1,3 +1,4 @@
+import { fetchFavoritesResultApi, fetchStoreReviewsResultApi } from './ApiService'
 /**
  * 全局状态管理 - 使用AppStorage管理应用级状态
  */
@@ -44,7 +45,6 @@ function setStoredUser(user: User): void {
     AppStorage.setOrCreate<Record<string, GoodsItem[]>>('allGoodsMap', {})
     AppStorage.setOrCreate<Order[]>('orderList', [])
     AppStorage.setOrCreate<Order | null>('currentOrder', null)
-    AppStorage.setOrCreate<number>('currentOrderId', 0)
     AppStorage.setOrCreate<CartItem[]>('cartItems', [])
     AppStorage.setOrCreate<Favorite[]>('favoriteList', [])
     AppStorage.setOrCreate<Coupon[]>('couponList', [])
@@ -155,9 +155,6 @@ async function clearLocalSessionState(): Promise<void> {
   AppStorage.setOrCreate<StoreItem[]>('allStores', [])
   AppStorage.setOrCreate<Record<string, GoodsItem[]>>('allGoodsMap', {})
   AppStorage.setOrCreate<Category[]>('categoryList', createDefaultCategories())
-  AppStorage.setOrCreate<number>('selectedStoreId', 0)
-  AppStorage.setOrCreate<string>('selectedStoreName', '')
-  AppStorage.setOrCreate<number>('currentOrderId', 0)
   AppStorage.setOrCreate<number>('currentReviewGoodsId', 0)
   AppStorage.setOrCreate<number>('checkoutStoreId', 0)
   AppStorage.setOrCreate<boolean>('pendingLocationAfterLogin', false)
@@ -591,9 +588,9 @@ export async function syncCategoriesFromServer(): Promise<void> {
 /**
  * 从后端拉取店铺列表并写入 allStores（首页 onShow 调用）
  */
-export async function syncStoresFromServer(): Promise<void> {
+export async function syncStoresFromServer(): Promise<boolean> {
   const user: User | undefined = AppStorage.get<User>('user')
-  if (user?.role === UserRole.MERCHANT) { await syncMerchantStoresRemote(); return }
+  if (user?.role === UserRole.MERCHANT) { await syncMerchantStoresRemote(); return true }
   const epoch: number = getAuthSessionEpoch()
   const owner: number = user?.id ?? 0
   const loggedIn: boolean = isLoggedIn()
@@ -602,15 +599,16 @@ export async function syncStoresFromServer(): Promise<void> {
   const longitude: number | undefined = getCurrentLongitude()
   const stores: StoreItem[] | null = await fetchStoresResultApi(undefined, latitude, longitude)
   if (epoch !== getAuthSessionEpoch() || owner !== (AppStorage.get<User>('user')?.id ?? 0)
-    || loggedIn !== isLoggedIn() || version !== storesSyncVersion || latitude !== getCurrentLatitude() || longitude !== getCurrentLongitude()) { return }
-  if (stores === null) { return }
+    || loggedIn !== isLoggedIn() || version !== storesSyncVersion || latitude !== getCurrentLatitude() || longitude !== getCurrentLongitude()) { return false }
+  if (stores === null) { return false }
   AppStorage.setOrCreate<StoreItem[]>('allStores', stores)
+  return true
 }
 
 /**
  * 从后端拉取指定店铺商品并写入 allGoodsMap
  */
-export async function syncGoodsFromServer(storeId: number): Promise<void> {
+export async function syncGoodsFromServer(storeId: number): Promise<boolean> {
   const epoch: number = getAuthSessionEpoch()
   const owner: number = AppStorage.get<User>('user')?.id ?? 0
   const loggedIn: boolean = isLoggedIn()
@@ -619,10 +617,11 @@ export async function syncGoodsFromServer(storeId: number): Promise<void> {
   goodsSyncVersions[key] = version
   const goods: GoodsItem[] | null = await fetchStoreGoodsResultApi(storeId)
   if (goods === null || epoch !== getAuthSessionEpoch() || owner !== (AppStorage.get<User>('user')?.id ?? 0)
-    || loggedIn !== isLoggedIn() || version !== goodsSyncVersions[key]) { return }
+    || loggedIn !== isLoggedIn() || version !== goodsSyncVersions[key]) { return false }
   const goodsMap: Record<string, GoodsItem[]> = AppStorage.get<Record<string, GoodsItem[]>>('allGoodsMap') ?? {}
   goodsMap[key] = goods
   AppStorage.setOrCreate('allGoodsMap', goodsMap)
+  return true
 }
 
 /**
@@ -928,7 +927,8 @@ export async function syncFavoritesRemote(): Promise<void> {
   const ownerId: number = AppStorage.get<User>('user')?.id ?? 0
   if (ownerId <= 0 || !isLoggedIn()) { return }
   const requestVersion: number = ++favoriteSyncVersion
-  const remoteFavorites: Favorite[] = await fetchFavoritesApi()
+  const remoteFavorites: Favorite[] | null = await fetchFavoritesResultApi()
+  if (remoteFavorites === null) { return }
   if (sessionEpoch !== getAuthSessionEpoch() || ownerId !== (AppStorage.get<User>('user')?.id ?? 0)
     || requestVersion !== favoriteSyncVersion || !isLoggedIn()) { return }
   // 用发起请求的账号归属补齐店铺视图，旧会话响应不得污染当前账号。
@@ -1014,7 +1014,10 @@ export async function submitReviewRemote(orderId: number, goodsId: number, ratin
  * 从后端拉取店铺评价
  */
 export async function syncStoreReviewsRemote(storeId: number): Promise<void> {
-  const reviews: Review[] = await fetchStoreReviews(storeId)
+  const epoch: number = getAuthSessionEpoch()
+  const owner: number = AppStorage.get<User>('user')?.id ?? 0
+  const reviews: Review[] | null = await fetchStoreReviewsResultApi(storeId)
+  if (reviews === null || epoch !== getAuthSessionEpoch() || owner !== (AppStorage.get<User>('user')?.id ?? 0)) { return }
   AppStorage.setOrCreate<Review[]>('reviewList', reviews)
   logInfo('Api', `同步店铺评价 storeId=${storeId} ${reviews.length} 条`)
 }

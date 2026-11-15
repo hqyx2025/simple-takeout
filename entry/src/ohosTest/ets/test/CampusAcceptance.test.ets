@@ -11,15 +11,17 @@ import { getApiBaseUrl, get, ApiResponse } from '../../../main/ets/service/HttpC
 import { clearCartApi, fetchOrderDetailApi, fetchUserOrdersApi } from '../../../main/ets/service/ApiService'
 import { Order, UserRole, RefundRecord } from '../../../main/ets/model/Models'
 
+interface CampusOrderRoute { orderId?: number }
+
 interface CampusFixture { storeId: number; storeName: string; goodsId: number; paymentPassword: string }
 interface CampusConfiguration { fixtures: CampusFixture }
 interface AccountBalance { balance: number }
 interface RiderTotals { totalOrders: number; totalIncome: number }
 
-async function navigateCampus(context: UIContext, driver: Driver, page: string): Promise<void> {
+async function navigateCampus(context: UIContext, driver: Driver, page: string, orderId: number = 0, storeId: number = 0): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     context.runScopedTask((): void => {
-      context.getRouter().pushUrl({ url: 'pages/' + page }).then(() => { resolve() })
+      context.getRouter().pushUrl({ url: 'pages/' + page, params: { orderId, storeId } }).then(() => { resolve() })
         .catch(() => { reject(new Error('Route failed: ' + page)) })
     })
   })
@@ -64,16 +66,14 @@ async function campusCreate(context: UIContext, driver: Driver, fixture: CampusF
   expect(await clearCartApi() !== null).assertTrue()
   await syncCartRemote()
   await syncAddressesRemote()
-  AppStorage.setOrCreate<number>('selectedStoreId', fixture.storeId)
-  AppStorage.setOrCreate<string>('selectedStoreName', fixture.storeName)
-  await navigateCampus(context, driver, 'StoreDetailPage')
+  await navigateCampus(context, driver, 'StoreDetailPage', 0, fixture.storeId)
   await campusClick(driver, 'goods-plus-' + fixture.goodsId)
   expect(await requireComponent(await driver.findComponent(ON.id('goods-qty-' + fixture.goodsId)), 'cart quantity').getText()).assertEqual('1')
   await campusClick(driver, 'store-checkout')
   requireComponent(await driver.waitForComponent(ON.id('checkout-submit'), 8000), 'checkout submit')
   await campusClick(driver, 'checkout-submit')
   requireComponent(await driver.waitForComponent(ON.id('order-detail-status'), 12000), 'created order')
-  const id: number = AppStorage.get<number>('currentOrderId') ?? 0
+  const id: number = (context.getRouter().getParams() as CampusOrderRoute)?.orderId ?? 0
   expect(id > 0).assertTrue()
   await campusOrder(id, 0, 0)
   console.info('[CampusAcceptance] created order=' + id)
@@ -141,14 +141,12 @@ export default function campusAcceptanceTest(): void {
 
         await campusLogin(context, driver, UserRole.CUSTOMER, 'OrderListPage')
         await campusOrder(orderId, 4, 0)
-        AppStorage.setOrCreate<number>('currentOrderId', orderId)
-        await navigateCampus(context, driver, 'OrderDetailPage')
+        await navigateCampus(context, driver, 'OrderDetailPage', orderId)
         await campusText(driver, '确认收到')
         await campusText(driver, '确认收到')
         await campusOrder(orderId, 4, 1)
         await syncUserOrdersFromServer()
-        AppStorage.setOrCreate<number>('currentOrderId', orderId)
-        await navigateCampus(context, driver, 'OrderDetailPage')
+        await navigateCampus(context, driver, 'OrderDetailPage', orderId)
         await campusClick(driver, 'order-review-entry')
         await campusClick(driver, 'review-star-5')
         await requireComponent(await scrollUntilVisible(driver, 'review-content'), 'review content').inputText('校园配送准时，餐品完好')
@@ -158,8 +156,7 @@ export default function campusAcceptanceTest(): void {
         expect(reviewed.reviewed).assertEqual(1)
         console.info('[CampusAcceptance] PASS UI confirm and review')
 
-        AppStorage.setOrCreate<number>('currentOrderId', orderId)
-        await navigateCampus(context, driver, 'OrderDetailPage')
+        await navigateCampus(context, driver, 'OrderDetailPage', orderId)
         await campusClick(driver, 'order-refund-entry')
         await requireComponent(await driver.waitForComponent(ON.id('order-refund-amount'), 5000), 'partial refund').inputText('1')
         await driver.pressBack()

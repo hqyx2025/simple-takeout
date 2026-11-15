@@ -1,3 +1,5 @@
+import { PageSession } from '../service/PageSession'
+import { RemoteState } from '../components/RemoteState'
 import { FormInput } from '../components/FormInput'
 import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
 /**
@@ -50,6 +52,11 @@ interface AdminStoreRecommendRequest {
 @Entry
 @Component
 export struct AdminStorePage {
+  @State remoteFailed: boolean = false
+  @State remoteLoading: boolean = false
+  private remoteSession: PageSession = new PageSession()
+  private remoteVisible: boolean = true
+
   pageTransition() {
     PageTransitionEnter(AppMotion.pageEnter(RouteType.Push))
       .translate({ x: AppMotion.distance(AppMotion.PAGE_OFFSET) })
@@ -65,8 +72,8 @@ export struct AdminStorePage {
       .opacity(0)
   }
 
-  @StorageLink('isLoggedIn') loggedIn: boolean = false
-  @StorageLink('user') user: User = {
+  @StorageLink('isLoggedIn') @Watch('onRemoteIdentityChange') loggedIn: boolean = false
+  @StorageLink('user') @Watch('onRemoteIdentityChange') user: User = {
     id: 0, username: '未登录', avatar: '', phone: '', password: '', role: UserRole.CUSTOMER,
     balance: 0, coupons: [], orders: [], storeIds: []
   }
@@ -94,13 +101,21 @@ export struct AdminStorePage {
   }
 
   async refresh(): Promise<void> {
-    this.loading = true
-    const resp: ApiResponse<AdminStore[]> = await get<AdminStore[]>('/api/admin/stores')
-    this.loading = false
-    this.loadFailed = resp.code !== 200 || !Array.isArray(resp.data)
-    if (this.loadFailed) { return }
-    this.stores = resp.data ?? []
-    this.applyFilter()
+    if (!this.remoteVisible || !this.remoteSession.start(UserRole.ADMIN)) { return }
+    const remoteVersion: number = this.remoteSession.request()
+    this.remoteLoading = true
+    this.remoteFailed = false
+    try {
+      this.loading = true
+      const resp: ApiResponse<AdminStore[]> = await get<AdminStore[]>('/api/admin/stores')
+      if (!this.remoteSession.current(remoteVersion)) { return }
+      this.loading = false
+      this.loadFailed = resp.code !== 200 || !Array.isArray(resp.data)
+      if (this.loadFailed) { this.remoteFailed = true; return }
+      this.stores = resp.data ?? []
+      this.applyFilter()
+    } catch (_) { if (this.remoteSession.current(remoteVersion)) { this.remoteFailed = true } }
+    finally { if (this.remoteSession.current(remoteVersion)) { this.remoteLoading = false; this.loading = false } }
   }
 
   /** 按营业状态筛选（显式计算，避免渲染期 getter 求值）。 */
@@ -169,6 +184,21 @@ export struct AdminStorePage {
     }
   }
 
+  onRemoteIdentityChange(): void {
+    if (!this.remoteSession.matchesIdentity()) {
+      this.remoteSession.pause()
+      this.remoteVisible = false
+      this.remoteLoading = false
+      this.remoteFailed = false
+      this.loading = false
+      this.stores = []
+      router.replaceUrl({ url: 'pages/Index' })
+    }
+  }
+  onPageHide(): void { this.remoteVisible = false; this.remoteSession.pause(); this.loading = false; this.remoteLoading = false }
+  onPageShow(): void { this.remoteVisible = true; if (!this.loading) { this.refresh() } }
+  aboutToDisappear(): void { this.onPageHide() }
+
   build() {
     Column() {
       // 顶部导航栏
@@ -181,6 +211,10 @@ export struct AdminStorePage {
         onBack: () => { router.back() },
         onAction: () => { this.refresh() }
       })
+      if (this.remoteFailed || (this.remoteLoading && !(this.stores.length > 0))) {
+        RemoteState({ loading: this.remoteLoading, failed: this.remoteFailed, hasData: this.stores.length > 0,
+          retryId: 'AdminStorePage-retry', onRetry: () => { this.refresh() } })
+      }
 
       Row({ space: SPACING.MD }) {
         Text('状态').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_HINT)
