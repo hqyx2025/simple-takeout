@@ -7,6 +7,7 @@
 - 网页详情、结算加入收货地址配送预览，切换地址即时更新；同时兼容旧 API 的 200/500 公里规则与同城版的门店半径。旧接口保留原有评分展示，不将缺少人数当成零评价。独立静态源码随本次提交同步，网关内嵌资源暂不移除。
 - 鸿蒙搜索使用 `LazyForEach`，保留服务端排序、卡片测试 ID 和原结果；过期响应不能覆盖新结果。未捆绑其他页面、交易后端或演示数据变更。
 - 隔离暂存树验证：`node --test scripts/web-browse.test.cjs scripts/mobile-business.test.cjs` 85 项通过，无跳过。分别移除搜索卡片版本、旧请求防护或网页旧版规则分支，预期断言失败。API 26 debug HAP `BUILD SUCCESSFUL`。验证证据在 `TemporaryCacheStorage/release-20261119/`。
+- `09ba9db` 已推送并独立发布网页。域名验证 11 个静态资源哈希及 5 条健康、公开 API 与权限路由，共 16 项；交易服务、网关和 ERP 容器未重启。API 26 模拟器连接隔离后端，`SearchFlow` 1 项通过，随后恢复普通 debug HAP。线上后端与数据库未更新；同城半径、评分聚合和南宁学院演示数据仍未上线。发布证据：`TemporaryCacheStorage/web-20261119T130713118163Z/deployment.json`。
 
 ### 文档整理
 
