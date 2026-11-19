@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#C74B1B">
+  <title>简单外卖</title>
+  <link rel="stylesheet" href="theme.css?v=20261109">
+  <link rel="stylesheet" href="app.css?v=20261109">
+</head>
+<body>
+  <header class="topbar" id="siteHeader"><div class="topinner">
+    <a class="brand" href="#"><span class="mark" aria-hidden="true"><svg><use href="auth-icons.svg?v=20261109-theme#brand"></use></svg></span>简单外卖</a>
+    <div class="top-actions"><span class="user-meta" id="userMeta"></span><button class="btn" id="topCart" hidden>购物车 <b id="cartCount">0</b></button><button class="btn" id="topLogin">登录</button></div>
+  </div></header>
+  <div class="layout" id="appLayout"><aside class="sidebar" id="sidebar" aria-label="主导航"><div class="sidebar-head"><div class="nav-caption" id="navCaption">浏览</div><button class="btn icon sidebar-toggle" id="sidebarToggle" type="button" data-action="sidebar-toggle" aria-expanded="true" aria-controls="nav" aria-label="收起侧边栏" title="收起侧边栏"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg></button></div><nav class="nav-list" id="nav"></nav><label class="field theme-control" id="themeControl" hidden><span>外观</span><select class="select" id="themeSelect" aria-label="外观模式"><option value="light">浅色</option><option value="dark">深色</option><option value="system">跟随系统</option></select></label><div class="sidebar-session"><button class="btn" id="topLogout" hidden>退出</button></div></aside><main class="main" id="app"><div class="empty">正在载入…</div></main></div>
+  <div class="notice" id="notice" role="status" aria-live="polite" hidden></div>
+  <main class="auth-page" id="authPage" aria-labelledby="authTitle" hidden>
+    <nav class="auth-nav" aria-label="账户导航"><button class="btn" type="button" id="authBack" data-action="auth-close">返回浏览</button><a href="#" class="auth-brand"><svg aria-hidden="true"><use href="auth-icons.svg?v=20261109-theme#brand"></use></svg>简单外卖</a></nav>
+    <section class="auth-panel"><h1 id="authTitle">登录</h1><p id="authError" class="auth-error" role="alert" hidden></p><p id="authSuccess" class="auth-success" role="status" hidden></p><form id="authForm"></form></section>
+  </main>
+  <script src="urls.js?v=20261020-relative" defer></script>
+  <script src="location.js?v=20261020-manual" defer></script>
+  <link rel="stylesheet" href="erp.css?v=20261109-theme">
+  <script src="erp.js?v=20261103-snowflake" defer></script>
+  <link rel="stylesheet" href="forms.css?v=20261109-theme">
+  <script src="forms.js?v=20261109-theme" defer></script>
+  <script src="app.js?v=20261111-refresh-fix" defer></script>
+</body>
+</html>

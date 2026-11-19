@@ -1,0 +1,56 @@
+/* Same semantic colors and dimensions as AppTheme.ets and app.color resources. */
+:root {
+  color-scheme: light;
+  --paper: #FFFCF8;
+  --surface: #FFFFFF;
+  --input: #F7F3ED;
+  --ink: #302B27;
+  --muted: #75695F;
+  --line: #E6DDD3;
+  --accent: #C74B1B;
+  --accent-dark: #B94419;
+  --accent-soft: #FFF0E6;
+  --on-accent: #FFFFFF;
+  --green: #286542;
+  --green-soft: #EDF6EE;
+  --warning: #8B5D19;
+  --warning-soft: #FFF5E2;
+  --red: #AD302B;
+  --red-soft: #FFF0ED;
+  --control-border: #998575;
+  --radius-control: 14px;
+  --radius-card: 18px;
+  --radius-sheet: 24px;
+  --control-height: 52px;
+  --touch-size: 44px;
+  --icon-size: 20px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --motion-press: 100ms;
+  --motion-enter: 240ms;
+  --shadow: 0 8px 24px rgb(48 43 39 / 7%);
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #191917;
+  --surface: #262623;
+  --input: #30302B;
+  --ink: #F7EFE7;
+  --muted: #B9ADA1;
+  --line: #4B463E;
+  --accent: #FFAD84;
+  --accent-dark: #FFAC83;
+  --accent-soft: #443125;
+  --on-accent: #372012;
+  --green: #AAD5B5;
+  --green-soft: #24382A;
+  --warning: #E9C183;
+  --warning-soft: #3C3223;
+  --red: #FFB4A9;
+  --red-soft: #422925;
+  --control-border: #8A7F72;
+  --shadow: 0 8px 24px rgb(0 0 0 / 20%);
+}

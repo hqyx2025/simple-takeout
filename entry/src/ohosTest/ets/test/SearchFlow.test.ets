@@ -61,7 +61,7 @@ export default function searchFlowTest() {
       expect(await clickByIdOrText(driver, 'search-submit', '搜索')).assertTrue()
       await driver.delayMs(3500)
 
-      // SearchPage 结果列表是 ForEach 渲染的 StoreCard（id=search-store-<id>），没有 search-result-list 容器 id
+      // 只查可见结果卡片，不假定列表已创建屏外的店铺组件。
       const resultList = await driver.findComponent(ON.id('search-store-1'))
       const emptyState = await driver.findComponent(ON.id('search-empty'))
       console.info('[SearchFlow] resultList=' + isFound(resultList) + ' emptyState=' + isFound(emptyState))

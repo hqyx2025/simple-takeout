@@ -117,7 +117,7 @@ function browser(sidebarCollapsed='0',options={}){
       return {ok:true,status:200,json:async()=>({code:200,data})};
     }
   });
-  const source=fs.readFileSync('server/takeout-gateway/src/main/resources/static/app.js','utf8');
+  const source=fs.readFileSync('web/app.js','utf8');
   vm.runInContext(source.replace('  boot();','  globalThis.browseTest = {state,renderBrowse,renderCheckout,renderPage,renderShell,orderCard,handleAction,bindForms,couponEligible,couponUnavailableReason,checkoutAmounts,checkoutDraft,merchantRejectPayload,addressForm,addressPayload,addressText,resetAccountState,loginWith,openAuth,closeAuth,applyAuthRoute,boot,logout};'),context);
   Object.assign(context.browseTest.state,{user:{role:0},token:'test',location:{latitude:22.74967,longitude:108.452009},page:'discover'});
   return {...context.browseTest,element,requests,calls,dialogs,observers,confirmMessages,promptMessages,stores,coupons,storage,session,media,location,history,context};
@@ -200,7 +200,7 @@ test('home appends stores in batches and disconnects its observer on navigation'
   assert.equal(b.element('storeLoadMore').hidden,true);
   assert.equal(new Set([...b.element('storeGrid').innerHTML.matchAll(/data-id="(\d+)"/g)].map(m=>m[1])).size,55);
   await b.renderPage();assert.equal(observer.disconnected,true);
-  assert.equal(cardCount(b.element('storeGrid').innerHTML),24);
+  assert.equal(cardCount(b.element('storeGrid').innerHTML),55,'returning preserves the expanded list');
 });
 
 test('category filtering and keyword search combine without distance filtering',async()=>{
@@ -430,6 +430,44 @@ test('checkout keeps the selected store and only offers delivery',async()=>{
   await b.handleAction('go','cart');
   assert.equal(b.state.checkoutStoreId,0);
   assert.equal(b.state.checkoutIntentKey,'');
+});
+
+test('store ratings distinguish no reviews and checkout preview follows selected address without submitting',async()=>{
+  const address = (id, latitude) => ({id,name:'顾客',phone:'13800138000',detail:'测试位置',isDefault:id===1,latitude,longitude:108});
+  const stores = [{id:1,name:'无评价店',rating:4.9,ratingCount:0},
+    {id:2,name:'已评价店',rating:4.6,ratingCount:23,latitude:22,longitude:108,deliveryRadius:8000}];
+  const b=browser('0',{stores,addresses:[address(1,22.03),address(2,22.06),address(3,22.09),address(4,undefined)]});
+  b.state.page='home';await b.renderPage();
+  const listing=b.element('storeGrid').innerHTML;
+  assert.match(listing,/暂无评分/);
+  assert.match(listing,/4\.6 分 · 23 人评分/);
+  b.state.page='store';b.state.storeId=2;await b.renderPage();
+  assert.match(b.element('app').innerHTML,/4\.6 分 · 23 人评分/);
+  assert.match(b.element('app').innerHTML,/直线 3\.3 公里 · 可配送/);
+  await b.handleAction('checkout',2);
+  assert.match(b.element('app').innerHTML,/直线 3\.3 公里 · 可配送/);
+  for (const [id, expected] of [[2,'可配送，下单需确认'],[3,'超出配送范围'],[4,'收货地址未定位']]) {
+    b.element('selectedAddress').value=String(id);
+    b.element('checkoutForm').onchange({target:{name:'addressId'}});
+    assert.match(b.element('checkoutDeliveryPreview').textContent,new RegExp(expected));
+  }
+  assert.ok(!b.calls.some(call=>call.path==='/api/orders'&&call.init.method==='POST'));
+});
+
+test('checkout on the legacy API retains the public score and the server distance rules',async()=>{
+  const store={id:2,name:'旧版门店',rating:4.5,latitude:22,longitude:108,deliveryRadius:5000};
+  const address=(id,km)=>({id,name:'顾客',detail:'测试位置',isDefault:id===1,latitude:22+km/6371*180/Math.PI,longitude:108});
+  const b=browser('0',{stores:[store],addresses:[address(1,8),address(2,205),address(3,501)]});
+  b.state.page='store';b.state.storeId=2;await b.renderPage();
+  assert.match(b.element('app').innerHTML,/★ 4\.5/);
+  assert.doesNotMatch(b.element('app').innerHTML,/暂无评分|人评分/);
+  await b.handleAction('checkout',2);
+  assert.match(b.element('app').innerHTML,/直线 8\.0 公里 · 可配送<\/p>/);
+  for (const [id,expected] of [[2,'可配送，下单需确认'],[3,'超出配送范围']]) {
+    b.element('selectedAddress').value=String(id);
+    b.element('checkoutForm').onchange({target:{name:'addressId'}});
+    assert.match(b.element('checkoutDeliveryPreview').textContent,new RegExp(expected));
+  }
 });
 
 test('checkout locks duplicate submits and keeps one idempotency key for retries',async()=>{

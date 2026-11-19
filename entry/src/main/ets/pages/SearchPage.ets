@@ -6,9 +6,11 @@ import { LoadingIndicator } from '../components/LoadingIndicator'
  * 搜索页 - 热门搜索、历史搜索、店铺搜索结果
  */
 import { AppMotion } from '../common/theme/AppMotion'
-import { Address, StoreItem } from '../model/Models'
+import { Address, StoreItem, User, createEmptyUser } from '../model/Models'
+import { SearchStoreDataSource } from '../model/SearchStoreDataSource'
 import { formatSales } from '../common/Constants'
 import { searchStoresResultApi, StoreSearchResult } from '../service/api/CatalogApi'
+import { getAuthSessionEpoch } from '../service/HttpClient'
 import { getSearchHistory, addSearchHistory, clearSearchHistory } from '../service/PreferencesHelper'
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, accentFg, accentIndexFromText, merchantImageSource, DEFAULT_MERCHANT_IMAGE } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
@@ -33,14 +35,18 @@ export struct SearchPage {
   }
 
   @StorageLink('isLoggedIn') @Watch('resetSearch') loggedIn: boolean = false
+  @StorageProp('user') @Watch('onSearchOwnerChange') searchOwner: User = createEmptyUser()
   @State searchText: string = ''
   @State hotWords: string[] = []
   @State historyWords: string[] = []
-  @State searchResults: StoreItem[] = []
+  @State resultCount: number = 0
   @State hasSearched: boolean = false
   @State searching: boolean = false
   @State searchFailed: boolean = false
   private lastSearchKeyword: string = ''
+  private ownerId: number = 0
+  private readonly results: SearchStoreDataSource = new SearchStoreDataSource()
+  private readonly resultScroller: Scroller = new Scroller()
   private searchRequest: number = 0
   private suggestTimer: number = -1
   // 直接压栈独立 StoreDetailPage，返回时回到搜索页（不再 back 给首页代跳）
@@ -55,6 +61,7 @@ export struct SearchPage {
 
   aboutToAppear() {
     logInfo('Page', '进入搜索页 SearchPage')
+    this.ownerId = this.searchOwner.id
     this.hotWords = []
     this.loadHistory()
   }
@@ -65,6 +72,7 @@ export struct SearchPage {
   }
 
   async doSearch() {
+    clearTimeout(this.suggestTimer)
     if (!this.loggedIn) {
       promptAction.showToast({ message: '请先登录后搜索店铺', duration: 1800 })
       return
@@ -74,6 +82,9 @@ export struct SearchPage {
       return
     }
     const request: number = ++this.searchRequest
+    const epoch: number = getAuthSessionEpoch()
+    const ownerId: number = this.searchOwner.id
+    this.resultScroller.scrollEdge(Edge.Top)
     this.searching = true
     this.hasSearched = true
     this.searchFailed = false
@@ -84,11 +95,13 @@ export struct SearchPage {
       const latitude: number | undefined = currentAddress !== null ? currentAddress.latitude : undefined
       const longitude: number | undefined = currentAddress !== null ? currentAddress.longitude : undefined
       const remote: StoreSearchResult = await searchStoresResultApi(keyword, latitude, longitude)
-      if (request !== this.searchRequest || !this.loggedIn) {
+      if (request !== this.searchRequest || !this.loggedIn || ownerId !== this.searchOwner.id ||
+        epoch !== getAuthSessionEpoch()) {
         return
       }
       this.searchFailed = !remote.success
-      this.searchResults = remote.stores
+      this.results.setData(remote.stores)
+      this.resultCount = this.results.totalCount()
       if (!remote.success) {
         logInfo('Search', `搜索请求失败 keyword=${keyword}`)
         return
@@ -104,17 +117,30 @@ export struct SearchPage {
   }
 
   resetSearch(): void {
+    clearTimeout(this.suggestTimer)
     this.searchRequest += 1
     this.searching = false
     this.hasSearched = false
     this.searchFailed = false
-    this.searchResults = []
+    this.lastSearchKeyword = ''
+    this.results.setData([])
+    this.resultCount = 0
   }
 
-  aboutToDisappear(): void {
-    clearTimeout(this.suggestTimer)
+  onSearchOwnerChange(): void {
+    if (this.ownerId === this.searchOwner.id) { return }
+    this.ownerId = this.searchOwner.id
     this.resetSearch()
   }
+
+  onPageHide(): void {
+    clearTimeout(this.suggestTimer)
+    // 页面压栈隐藏时只作废在途请求；组件销毁会自然释放结果，退出账号仍由 Watch 清理。
+    this.searchRequest += 1
+    this.searching = false
+  }
+
+  aboutToDisappear(): void { this.onPageHide() }
 
   searchByKeyword(keyword: string) {
     this.searchText = keyword
@@ -146,7 +172,6 @@ export struct SearchPage {
           .onChange((value: string) => {
             this.searchText = value
             this.resetSearch()
-            clearTimeout(this.suggestTimer)
             if (value.trim()) { this.suggestTimer = setTimeout(() => { this.doSearch() }, 300) }
           })
           .onSubmit(() => { this.doSearch() })
@@ -164,7 +189,7 @@ export struct SearchPage {
       .backgroundColor(COLORS.BG_PRIMARY)
 
       // 内容区（用 List 承载：Scroll 在内容不足一屏时会把内容垂直居中）
-      List({ space: SPACING.SM }) {
+      List({ space: SPACING.SM, scroller: this.resultScroller }) {
         if (!this.loggedIn) {
           ListItem() {
             this.EmptyLoginResult()
@@ -189,20 +214,21 @@ export struct SearchPage {
             ListItem() {
               this.FailedResult()
             }
-          } else if (this.searchResults.length === 0) {
+          } else if (this.resultCount === 0) {
             ListItem() {
               this.EmptyResult()
             }
           } else {
-            ForEach(this.searchResults, (store: StoreItem) => {
+            LazyForEach(this.results, (store: StoreItem) => {
               ListItem() {
                 this.StoreCard(store)
               }
-            }, (item: StoreItem) => item.id.toString())
+            }, (item: StoreItem) => this.results.keyFor(item))
           }
         }
       }
       .id('search-page-list')
+      .cachedCount(3)
       .width('100%')
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.Spring, { alwaysEnabled: true })

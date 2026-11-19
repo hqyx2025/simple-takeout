@@ -54,6 +54,74 @@ for (const [name, role] of configs) {
     }
   });
 }
+function searchRuntime() {
+  let text=source('pages/SearchPage.ets');
+  let dataSource=source('model/SearchStoreDataSource.ets').split('\n').slice(1).join('\n');
+  if(process.env.SEARCH_MUTATION==='key') dataSource=dataSource.replace(" + ':' + this.revision.toString()",'');
+  if(process.env.SEARCH_MUTATION==='request') text=text.replace('request !== this.searchRequest || !this.loggedIn || ownerId !== this.searchOwner.id ||','!this.loggedIn || ownerId !== this.searchOwner.id ||');
+  const exports={},pending=[],state={epoch:1,tops:0}, history=[];
+  const names=['doSearch','resetSearch','onSearchOwnerChange','onPageHide','aboutToDisappear','retrySearch'];
+  const code=dataSource+'\nexport class Page {'+names.map(name=>method(text,name)).join('\n')+'}';
+  vm.runInNewContext(ts.transpileModule(code,{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{
+    exports,clearTimeout,Edge:{Top:0},getAuthSessionEpoch:()=>state.epoch,
+    searchStoresResultApi:(keyword)=>new Promise(resolve=>pending.push({keyword,resolve})),
+    AppStorage:{get:()=>null},addSearchHistory:async keyword=>history.push(keyword),logInfo(){},promptAction:{showToast(){}}
+  });
+  const page=Object.assign(new exports.Page(),{loggedIn:true,ownerId:1,searchOwner:{id:1},searchText:'first',searchRequest:0,
+    suggestTimer:-1,results:new exports.SearchStoreDataSource(),resultCount:0,loadHistory:async()=>{},
+    resultScroller:{scrollEdge:()=>{state.tops++;}}});
+  return {page,pending,state,history};
+}
+const searchReply=(stores)=>({success:true,stores});
+
+test('search replaces same-store rows with a new key, notifies the list and starts new results at the top',async()=>{
+  const {page,pending,state}=searchRuntime();let reloads=0;
+  const listener={onDataReloaded(){reloads++;}};
+  page.results.registerDataChangeListener(listener);page.results.registerDataChangeListener(listener);
+  const a=page.doSearch();pending[0].resolve(searchReply([{id:4,distance:'2km',monthlySales:1}]));await a;
+  const key=page.results.keyFor(page.results.getData(0));
+  const b=page.doSearch();pending[1].resolve(searchReply([{id:4,distance:'8km',monthlySales:8}]));await b;
+  assert.notEqual(page.results.keyFor(page.results.getData(0)),key,'same store must get a fresh row identity');
+  assert.equal(page.results.getData(0).distance,'8km');assert.equal(page.results.getData(0).monthlySales,8);
+  assert.equal(page.resultCount,1);assert.equal(reloads,2);assert.equal(state.tops,2);
+  page.results.unregisterDataChangeListener(listener);page.resetSearch();assert.equal(reloads,2);
+});
+
+test('late search response cannot overwrite newer results',async()=>{
+  const {page,pending,history}=searchRuntime();
+  const a=page.doSearch();page.searchText='second';const b=page.doSearch();
+  pending[1].resolve(searchReply([{id:2}]));await b;
+  pending[0].resolve(searchReply([{id:1}]));await a;
+  assert.equal(page.results.getData(0).id,2,'latest request must own the list');assert.deepEqual(history,['second']);
+});
+
+test('search cancels on hide and preserves rows and row identities; clearing or replacing the account clears them',async()=>{
+  const {page,pending,state}=searchRuntime();
+  const a=page.doSearch();pending[0].resolve(searchReply([{id:8}]));await a;
+  const key=page.results.keyFor(page.results.getData(0));
+  const b=page.doSearch();page.onPageHide();const tops=state.tops;
+  pending[1].resolve(searchReply([{id:1}]));await b;
+  assert.equal(page.searching,false);assert.equal(page.results.getData(0).id,8);
+  assert.equal(page.results.keyFor(page.results.getData(0)),key);assert.equal(state.tops,tops);
+  for(const end of ['clear','logout','account','epoch']) {
+    page.loggedIn=true; const next=page.doSearch();
+    if(end==='logout') { page.loggedIn=false;page.resetSearch(); }
+    else if(end==='account') { page.searchOwner={id:2};page.onSearchOwnerChange(); }
+    else if(end==='epoch') { state.epoch++; }
+    else { page.resetSearch(); }
+    pending.at(-1).resolve(searchReply([{id:99}]));await next;
+    assert.equal(page.resultCount,0,end);assert.equal(page.results.totalCount(),0,end);
+  }
+});
+
+test('search retry keeps the failed keyword and distinguishes an empty successful response',async()=>{
+  const {page,pending}=searchRuntime();
+  const a=page.doSearch();pending[0].resolve({success:false,stores:[]});await a;
+  assert.equal(page.searchFailed,true);page.retrySearch();assert.equal(pending[1].keyword,'first');
+  pending[1].resolve(searchReply([]));await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(page.searchFailed,false);assert.equal(page.hasSearched,true);assert.equal(page.resultCount,0);
+});
+
 function exportedFunction(text, name) {
   const start = text.indexOf('export async function ' + name + '(');
   assert.ok(start >= 0, name);
