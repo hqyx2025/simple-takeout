@@ -127,6 +127,10 @@ public class SmsVerificationService implements SmsCodeVerifier {
     public record CaptchaResult(String id, String image) { }
 
     public IssueResult issue(String identity, String destination) {
+        return issue(identity, destination, sender);
+    }
+
+    IssueResult issue(String identity, String destination, SmsSender transport) {
         String identityHash = digest(identity);
         String codeKey = "takeout:verification:code:" + identityHash;
         String cooldownKey = "takeout:verification:cooldown:" + digest(recipientBudgetIdentity(destination));
@@ -141,13 +145,13 @@ public class SmsVerificationService implements SmsCodeVerifier {
             String code = "%06d".formatted(RANDOM.nextInt(1_000_000));
             redis.opsForValue().set(codeKey, digest(identity + ":" + code), ttl);
             try {
-                sender.sendVerificationCode(destination, code, identity);
+                transport.sendVerificationCode(destination, code, identity);
             } catch (RuntimeException e) {
                 redis.delete(List.of(codeKey, cooldownKey));
                 throw new BizException(503, "验证码发送失败，请稍后重试");
             }
-            return new IssueResult(sender.exposesCodeForDevelopment() ? code : "",
-                    sender.exposesCodeForDevelopment());
+            return new IssueResult(transport.exposesCodeForDevelopment() ? code : "",
+                    transport.exposesCodeForDevelopment());
         } catch (BizException e) {
             throw e;
         } catch (RuntimeException e) {
@@ -254,6 +258,7 @@ public class SmsVerificationService implements SmsCodeVerifier {
     }
 
     private boolean validIdentity(String value) {
+        if (value != null && value.matches("contact:[1-9][0-9]*:(PHONE|EMAIL):[A-Za-z0-9_-]+:[^\\s:]+:[A-Za-z0-9_-]+")) return true;
         return value != null && (value.matches("registration:1[0-9]{10}:[^\\s:]+@[^\\s:]+") || value.matches("recovery:[1-9][0-9]*:(login|payment|signin):1[0-9]{10}:[^\\s:]+@[^\\s:]+") || value.matches("1\\d{10}") || value.matches(
                 "1\\d{10}:[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+") || value.matches(
                 "^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"));

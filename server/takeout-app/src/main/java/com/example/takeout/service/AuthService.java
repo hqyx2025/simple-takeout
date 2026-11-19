@@ -27,6 +27,8 @@ public class AuthService implements org.springframework.beans.factory.Initializi
     private final JwtUtil jwtUtil;
     private final SmsCodeVerifier smsCodeVerifier;
     private final Clock clock;
+    @Autowired(required = false)
+    private ContactVerificationService contactVerification;
 
     @Value("${takeout.security.rate-limit.login-verify-max-concurrent:2}")
     private int loginVerifyMaxConcurrent = 2;
@@ -100,6 +102,7 @@ public class AuthService implements org.springframework.beans.factory.Initializi
                     0, 0.0, now);
             // Spend the code only after the write succeeds; expiry/replay rolls back this account transaction.
             smsCodeVerifier.consume(identity, code);
+            if (contactVerification != null) contactVerification.markVerified(registered.id(), "EMAIL", normalizedEmail);
             return registered;
         } catch (org.springframework.dao.DuplicateKeyException e) {
             throw new BizException("账号名或手机号已被使用，请更换账号名或返回登录");
@@ -350,6 +353,13 @@ public class AuthService implements org.springframework.beans.factory.Initializi
     }
 
     @Transactional
+    public User updateAvatar(long userId, String avatar) {
+        String image = ImageUploadValidator.validateUrl(avatar);
+        if (!userDao.updateAvatar(userId, image)) throw new BizException("用户不存在");
+        return profile(userId);
+    }
+
+    @Transactional
     public User updateProfile(long userId, String username, String phone) {
         return updateProfileInternal(userId, username, phone, null, null, false);
     }
@@ -366,8 +376,19 @@ public class AuthService implements org.springframework.beans.factory.Initializi
         return updateProfileInternal(userId, username, phone, email, currentPassword, true);
     }
 
+    @Transactional
+    public User updateProfile(long userId, String username, String phone, String email,
+                              String currentPassword, String phoneCode, String emailCode) {
+        return updateProfileInternal(userId, username, phone, email, currentPassword, true, phoneCode, emailCode);
+    }
+
     private User updateProfileInternal(long userId, String username, String phone, String email,
                                        String currentPassword, boolean updateEmail) {
+        return updateProfileInternal(userId, username, phone, email, currentPassword, updateEmail, null, null);
+    }
+
+    private User updateProfileInternal(long userId, String username, String phone, String email,
+                                       String currentPassword, boolean updateEmail, String phoneCode, String emailCode) {
         if (username == null || username.isBlank()) {
             throw new BizException("用户名不能为空");
         }
@@ -383,11 +404,21 @@ public class AuthService implements org.springframework.beans.factory.Initializi
         }
         // 与改密、找回密码共用账号行锁，禁止资料更新回写并发改密前的旧哈希。
         User current = userDao.findByIdForUpdate(userId).orElseThrow(() -> new BizException("用户不存在"));
-        String normalizedEmail = updateEmail ? requireEmail(email) : normalizeEmail(current.email());
+        if (current.status() != 1) throw new BizException(401, "账号已停用，请重新登录");
+        String normalizedEmail = updateEmail
+                ? ((email == null || email.isBlank()) && normalizeEmail(current.email()).isEmpty() ? "" : requireEmail(email))
+                : normalizeEmail(current.email());
         boolean contactChanged = !phone.equals(current.phone())
                 || (updateEmail && !normalizedEmail.equals(normalizeEmail(current.email())));
         if (contactChanged && (currentPassword == null || !PasswordUtil.matches(currentPassword, current.password()))) {
             throw new BizException("修改手机号或邮箱需要验证当前密码");
+        }
+        if (contactChanged) {
+            if (contactVerification == null) throw new BizException(503, "联系方式验证暂不可用");
+            if (!phone.equals(current.phone())) contactVerification.verify(current, "PHONE", phone, phoneCode);
+            if (updateEmail && !normalizedEmail.equals(normalizeEmail(current.email()))) {
+                contactVerification.verify(current, "EMAIL", normalizedEmail, emailCode);
+            }
         }
         if (!updateEmail) {
             userDao.updateProfile(userId, username.trim(), phone);
@@ -395,6 +426,10 @@ public class AuthService implements org.springframework.beans.factory.Initializi
             userDao.updateProfile(userId, username.trim(), phone, normalizedEmail);
         }
         if (contactChanged) {
+            if (!phone.equals(current.phone())) contactVerification.consume(current, "PHONE", phone, phoneCode);
+            if (updateEmail && !normalizedEmail.equals(normalizeEmail(current.email()))) {
+                contactVerification.consume(current, "EMAIL", normalizedEmail, emailCode);
+            }
             userDao.updatePassword(userId, current.password(), nextPasswordChangedAt(current.passwordChangedAt()));
         }
         return profile(userId);

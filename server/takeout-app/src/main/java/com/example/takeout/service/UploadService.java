@@ -19,7 +19,7 @@ public class UploadService {
     private final long totalQuota;
 
     public UploadService(JdbcTemplate jdbc, ObjectStorage storage, LoginRateLimiter limiter,
-                         @Value("${takeout.upload.user-quota-bytes:104857600}") long userQuota,
+                         @Value("${takeout.upload.user-quota-bytes:1073741824}") long userQuota,
                          @Value("${takeout.upload.total-quota-bytes:21474836480}") long totalQuota) {
         if (userQuota < 1 || totalQuota < userQuota) throw new IllegalStateException("上传容量配置无效");
         this.jdbc = jdbc;

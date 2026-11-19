@@ -84,6 +84,19 @@ public class QQEmailSender implements SmsSender {
         if (!validEmail(email) || code == null || !code.matches("\\d{6}")) {
             throw new BizException("验证码发送失败，请稍后重试");
         }
+        if (identity != null && identity.startsWith("contact:")) {
+            var contact = Pattern.compile("contact:([1-9][0-9]*):EMAIL:[A-Za-z0-9_-]+:([^\\s:]+):[A-Za-z0-9_-]+").matcher(identity);
+            if (!contact.matches() || !email.equalsIgnoreCase(contact.group(2))) throw new BizException("验证码发送失败，请稍后重试");
+            MimeMessage message = new MimeMessage(session);
+            message.setFrom(new InternetAddress(username, fromName, StandardCharsets.UTF_8.name()));
+            message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(email, true));
+            message.setSubject("【简单外卖】绑定邮箱验证码", StandardCharsets.UTF_8.name());
+            message.setText("您正在验证简单外卖账号 " + contact.group(1) + " 的绑定邮箱。\n验证码：" + code
+                    + "\n有效期：" + ttlMinutes + " 分钟，仅可使用一次。\n请返回个人资料页面完成验证。仅收到邮件不会修改账号。非本人操作请忽略。",
+                    StandardCharsets.UTF_8.name());
+            message.saveChanges();
+            return message;
+        }
         Matcher verification = VERIFICATION_IDENTITY.matcher(identity == null ? "" : identity);
         if (!verification.matches() || !email.equalsIgnoreCase(verification.group(4))) {
             throw new BizException("验证码发送失败，请稍后重试");

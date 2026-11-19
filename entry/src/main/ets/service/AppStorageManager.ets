@@ -4,9 +4,13 @@ import { fetchFavoritesResultApi, fetchStoreReviewsResultApi } from './ApiServic
  */
 import { CartItem, Order, Address, Coupon, User, UserRole, StoreItem, GoodsItem, Favorite, Review, Rider, Banner, Announcement, MerchantStatsAggregateData, Category, RefundRecord, GoodsSpec, SeckillItem, SpecialGoodsItem, BundleInfo, UploadResult, SetmealOrder, createEmptyUser, createDefaultCategories } from '../model/Models'
 import { saveAllData, clearAllData } from './DataPersistence'
-import { apiLogin, apiRegister, updateUserProfileApi, fetchCurrentUserApi, rechargeBalanceApi, fetchCategories, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, fetchMerchantStatsApi, createOrderApi, cancelOrderApi, payOrderApi, queryPaymentApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi, fetchMerchantReviewsApi, replyReviewApi, fetchRiderProfileApi, setRiderStatusApi, fetchRiderPoolApi, fetchRiderOrdersApi, grabOrderApi, pickupOrderApi, deliverOrderApi, fetchBannersApi, fetchAnnouncementsApi, fetchAdminRidersApi, updateRiderStatusApi, fetchAdminBannersApi, createBannerApi, updateBannerStatusApi, deleteBannerApi, fetchAdminAnnouncementsApi, createAnnouncementApi, updateAnnouncementStatusApi, deleteAnnouncementApi, applyRefundApi, fetchCartApi, addCartItemApi, updateCartItemQuantityApi, deleteCartItemApi, deleteCartItemsApi, clearCartApi, uploadImageApi, fetchSeckillsApi, fetchRankStoresApi, fetchRankGoodsApi, fetchBundleApi, updateMerchantGoodsSpecsApi, apiLogout, changePasswordApi, updateRiderLocationApi } from './ApiService'
+import { apiLogin, apiRegister, updateUserProfileApi, fetchCurrentUserApi, rechargeBalanceApi, fetchStores, fetchStoreGoods, fetchUserOrdersApi, fetchOrderDetailApi, fetchMerchantOrdersApi, fetchMerchantStatsApi, createOrderApi, cancelOrderApi, payOrderApi, queryPaymentApi, confirmOrderApi, merchantActionApi, toggleFavoriteApi, fetchFavoritesApi, fetchCouponsApi, fetchAddressesApi, addAddressAndFetchApi, deleteAddressApi, updateAddressApi, setDefaultAddressApi, claimCouponApi, fetchMerchantStoresApi, searchStoresApi, fetchStoreReviews, submitReviewApi, fetchMerchantReviewsApi, replyReviewApi, fetchRiderProfileApi, setRiderStatusApi, fetchRiderPoolApi, fetchRiderOrdersApi, grabOrderApi, pickupOrderApi, deliverOrderApi, fetchBannersApi, fetchAnnouncementsApi, fetchAdminRidersApi, updateRiderStatusApi, fetchAdminBannersApi, createBannerApi, updateBannerStatusApi, deleteBannerApi, fetchAdminAnnouncementsApi, createAnnouncementApi, updateAnnouncementStatusApi, deleteAnnouncementApi, applyRefundApi, fetchCartApi, addCartItemApi, updateCartItemQuantityApi, deleteCartItemApi, deleteCartItemsApi, clearCartApi, uploadImageApi, fetchSeckillsApi, fetchRankStoresApi, fetchRankGoodsApi, fetchBundleApi, updateMerchantGoodsSpecsApi, apiLogout, changePasswordApi, updateRiderLocationApi } from './ApiService'
 import { fetchStoresResultApi, fetchStoreGoodsResultApi, fetchMerchantStoresResultApi } from './ApiService'
+import { fetchCategoriesResultApi } from './api/CatalogApi'
 import { apiLoginByEmail } from './ApiService'
+import { LoginSession } from './api/AuthApi'
+import { saveAuthTokens } from './TokenStorage'
+import { updateUserAvatarApi } from './ApiService'
 import { getApiBaseUrl, getAuthToken, setAuthTokens, getLastApiErrorMessage, registerSessionExpiredHandler,
   getAuthSessionEpoch } from './HttpClient'
 import { logInfo, logWarn, logError } from './AppLogger'
@@ -17,7 +21,6 @@ import { common } from '@kit.AbilityKit'
 import { API_CONFIG } from '../common/Constants'
 import { clearPushIdentity, registerPushForCurrentSession } from './PushKitService'
 
-let categoriesSyncInFlight: Promise<void> | null = null
 let storesSyncVersion: number = 0
 let merchantStoresSyncVersion: number = 0
 let goodsSyncVersions: Record<string, number> = {}
@@ -31,6 +34,7 @@ let addressSyncVersion: number = 0
 let orderSyncVersion: number = 0
 let orderDetailSyncVersions: Record<string, number> = {}
 let favoriteSyncVersion: number = 0
+let loginRequestVersion: number = 0
 
 // 用户对象用于资料展示，余额单独维护为可观察字段，避免页面只保留登录时的余额副本。
 function setStoredUser(user: User): void {
@@ -129,6 +133,7 @@ export function logout(): void {
 }
 
 async function clearLocalSessionState(): Promise<void> {
+  loginRequestVersion += 1
   clearPushIdentity()
   currentUserSyncVersion += 1
   orderSyncVersion += 1
@@ -422,12 +427,12 @@ export async function fetchMerchantStatsRemote(storeId: number = 0): Promise<Mer
 }
 
 export async function updateUserProfileRemote(username: string, phone: string, email: string,
-  currentPassword: string = ''): Promise<User | undefined> {
+  currentPassword: string = '', phoneCode: string = '', emailCode: string = ''): Promise<User | undefined> {
   const sessionEpoch: number = getAuthSessionEpoch()
   const ownerId: number = AppStorage.get<User>('user')?.id ?? 0
   if (ownerId <= 0 || !isLoggedIn()) { return undefined }
   currentUserSyncVersion += 1
-  const user: User | undefined = await updateUserProfileApi(username, phone, email, currentPassword)
+  const user: User | undefined = await updateUserProfileApi(username, phone, email, currentPassword, phoneCode, emailCode)
   if (sessionEpoch !== getAuthSessionEpoch() || ownerId !== (AppStorage.get<User>('user')?.id ?? 0)
     || !isLoggedIn() || (user !== undefined && user.id !== ownerId)) { return undefined }
   currentUserSyncVersion += 1
@@ -438,6 +443,21 @@ export async function updateUserProfileRemote(username: string, phone: string, e
   setStoredUser(user)
   await saveAllData()
   logInfo('Api', `远程更新个人资料成功 userId=${user.id}`)
+  return user
+}
+
+export async function updateUserAvatarRemote(avatar: string): Promise<User | undefined> {
+  const sessionEpoch: number = getAuthSessionEpoch()
+  const ownerId: number = AppStorage.get<User>('user')?.id ?? 0
+  if (ownerId <= 0 || !isLoggedIn()) { return undefined }
+  currentUserSyncVersion += 1
+  const user: User | undefined = await updateUserAvatarApi(avatar)
+  if (sessionEpoch !== getAuthSessionEpoch() || ownerId !== (AppStorage.get<User>('user')?.id ?? 0)
+    || !isLoggedIn() || (user !== undefined && user.id !== ownerId)) { return undefined }
+  currentUserSyncVersion += 1
+  if (user === undefined) { return undefined }
+  setStoredUser(user)
+  await saveAllData()
   return user
 }
 
@@ -489,30 +509,51 @@ export async function syncCurrentUserFromServer(): Promise<User | undefined> {
 /**
  * 远程登录：成功返回用户并写入 AppStorage；失败返回 undefined
  */
-export async function loginRemote(phone: string, password: string, loginType?: string): Promise<User | undefined> {
-  const user: User | null = await apiLogin(phone, password, loginType)
-  return completeRemoteLogin(user)
+export async function loginRemote(phone: string, password: string, loginType?: string,
+  isCurrent: () => boolean = (): boolean => true): Promise<User | undefined> {
+  const requestVersion: number = ++loginRequestVersion
+  const sessionEpoch: number = getAuthSessionEpoch()
+  const session: LoginSession | null = await apiLogin(phone, password, loginType)
+  return completeRemoteLogin(session, requestVersion, sessionEpoch, isCurrent)
 }
 
-export async function loginByEmailRemote(phone: string, email: string, code: string, loginType: string): Promise<User | undefined> {
-  const user: User | null = await apiLoginByEmail(phone, email, code, loginType)
-  return completeRemoteLogin(user)
+export async function loginByEmailRemote(phone: string, email: string, code: string, loginType: string,
+  isCurrent: () => boolean = (): boolean => true): Promise<User | undefined> {
+  const requestVersion: number = ++loginRequestVersion
+  const sessionEpoch: number = getAuthSessionEpoch()
+  const session: LoginSession | null = await apiLoginByEmail(phone, email, code, loginType)
+  return completeRemoteLogin(session, requestVersion, sessionEpoch, isCurrent)
 }
 
-async function completeRemoteLogin(user: User | null): Promise<User | undefined> {
-  if (user !== null) {
-    const token: string = getAuthToken()
-    AppStorage.setOrCreate<string>('authToken', token)
+async function completeRemoteLogin(session: LoginSession | null, requestVersion: number, sessionEpoch: number,
+  isCurrent: () => boolean): Promise<User | undefined> {
+  if (requestVersion !== loginRequestVersion || sessionEpoch !== getAuthSessionEpoch() || !isCurrent()) {
+    return undefined
+  }
+  if (session !== null) {
+    const user: User = session.user
+    // 内存身份与凭证在同一同步段提交，任何 await 之后都只操作这一会话。
+    setAuthTokens(session.token, session.refreshToken)
+    const committedEpoch: number = getAuthSessionEpoch()
+    AppStorage.setOrCreate<string>('authToken', session.token)
     setStoredUser(user)
     AppStorage.setOrCreate<boolean>('isLoggedIn', true)
+    try {
+      await saveAuthTokens(session.token, session.refreshToken)
+    } catch (_) {
+      logWarn('Auth', '安全凭证无法写入设备密钥存储；本次运行可继续，重启后需要重新登录')
+    }
+    if (committedEpoch !== getAuthSessionEpoch()) { return undefined }
     registerPushForCurrentSession()
     // 登录成功后立即按当前账号同步地址，恢复默认配送地址；不能继续沿用上一个账号的定位缓存。
     if (user.role === UserRole.CUSTOMER) {
       await syncAddressesRemote()
+      if (committedEpoch !== getAuthSessionEpoch()) { return undefined }
       await syncCartRemote()
     }
-    // 登录态和 Token 必须在登录成功后立即落盘，避免应用重启后回到未登录状态。
+    if (committedEpoch !== getAuthSessionEpoch()) { return undefined }
     await saveAllData()
+    if (committedEpoch !== getAuthSessionEpoch()) { return undefined }
     const roleName: string = user.role === UserRole.ADMIN
       ? '管理端'
       : user.role === UserRole.MERCHANT ? '商户'
@@ -552,43 +593,32 @@ export async function changePasswordRemote(oldPassword: string, newPassword: str
 // ==================== 数据拉取 ====================
 
 /** 从后端拉取首页分类；服务端暂时无数据时保留默认导航，避免首页出现空白区域。 */
-export async function syncCategoriesFromServer(): Promise<void> {
-  if (categoriesSyncInFlight !== null) {
-    await categoriesSyncInFlight
-    return
+export async function syncCategoriesFromServer(canApply: () => boolean): Promise<boolean> {
+  const remoteCategories: Category[] | null = await fetchCategoriesResultApi()
+  if (remoteCategories === null || !canApply()) { return false }
+  const defaults: Category[] = createDefaultCategories()
+  if (remoteCategories.length === 0) {
+    AppStorage.setOrCreate<Category[]>('categoryList', defaults)
+    return true
   }
-  categoriesSyncInFlight = (async (): Promise<void> => {
-    const remoteCategories: Category[] = await fetchCategories()
-    const defaults: Category[] = createDefaultCategories()
-    if (remoteCategories.length === 0) {
-      AppStorage.setOrCreate<Category[]>('categoryList', defaults)
-      logWarn('Api', '同步分类数据为空，使用默认分类图标')
-      return
+  const categories: Category[] = remoteCategories.map((remote: Category) => {
+    const fallback: Category | undefined = defaults.find((item: Category) => item.id === remote.id)
+    const category: Category = {
+      id: remote.id,
+      name: (remote.name ?? '').trim() === '' && fallback !== undefined ? fallback.name : (remote.name ?? ''),
+      icon: (remote.icon ?? '').trim() === '' && fallback !== undefined ? fallback.icon : (remote.icon ?? ''),
+      color: (remote.color ?? '').trim() === '' && fallback !== undefined ? fallback.color : (remote.color ?? '')
     }
-    const categories: Category[] = remoteCategories.map((remote: Category) => {
-      const fallback: Category | undefined = defaults.find((item: Category) => item.id === remote.id)
-      const category: Category = {
-        id: remote.id,
-        name: (remote.name ?? '').trim() === '' && fallback !== undefined ? fallback.name : (remote.name ?? ''),
-        icon: (remote.icon ?? '').trim() === '' && fallback !== undefined ? fallback.icon : (remote.icon ?? ''),
-        color: (remote.color ?? '').trim() === '' && fallback !== undefined ? fallback.color : (remote.color ?? '')
-      }
-      return category
-    })
-    AppStorage.setOrCreate<Category[]>('categoryList', categories)
-    logInfo('Api', `同步分类数据 ${categories.length} 个`)
-  })()
-  try {
-    await categoriesSyncInFlight
-  } finally {
-    categoriesSyncInFlight = null
-  }
+    return category
+  })
+  AppStorage.setOrCreate<Category[]>('categoryList', categories)
+  return true
 }
 
 /**
  * 从后端拉取店铺列表并写入 allStores（首页 onShow 调用）
  */
-export async function syncStoresFromServer(): Promise<boolean> {
+export async function syncStoresFromServer(canApply: () => boolean = (): boolean => true): Promise<boolean> {
   const user: User | undefined = AppStorage.get<User>('user')
   if (user?.role === UserRole.MERCHANT) { await syncMerchantStoresRemote(); return true }
   const epoch: number = getAuthSessionEpoch()
@@ -598,8 +628,9 @@ export async function syncStoresFromServer(): Promise<boolean> {
   const latitude: number | undefined = getCurrentLatitude()
   const longitude: number | undefined = getCurrentLongitude()
   const stores: StoreItem[] | null = await fetchStoresResultApi(undefined, latitude, longitude)
-  if (epoch !== getAuthSessionEpoch() || owner !== (AppStorage.get<User>('user')?.id ?? 0)
-    || loggedIn !== isLoggedIn() || version !== storesSyncVersion || latitude !== getCurrentLatitude() || longitude !== getCurrentLongitude()) { return false }
+  if (!canApply() || epoch !== getAuthSessionEpoch() || owner !== (AppStorage.get<User>('user')?.id ?? 0)
+    || loggedIn !== isLoggedIn() || version !== storesSyncVersion || latitude !== getCurrentLatitude()
+    || longitude !== getCurrentLongitude()) { return false }
   if (stores === null) { return false }
   AppStorage.setOrCreate<StoreItem[]>('allStores', stores)
   return true
@@ -846,13 +877,12 @@ export async function updateGoodsSpecsRemote(goodsId: number, specs: GoodsSpec[]
 
 /** 当前收货地址的经纬度（未定位时返回 undefined，由后端按店铺自带距离展示） */
 function getCurrentLatitude(): number | undefined {
-  const currentAddress: Address | null = AppStorage.get<Address>('currentAddress') || null
-  return currentAddress !== null && currentAddress.latitude !== undefined ? currentAddress.latitude : undefined
+  const address: Address | undefined = AppStorage.get<Address>('currentAddress')
+  return Number.isFinite(address?.latitude) && Number.isFinite(address?.longitude) ? address?.latitude : undefined
 }
 
 function getCurrentLongitude(): number | undefined {
-  const currentAddress: Address | null = AppStorage.get<Address>('currentAddress') || null
-  return currentAddress !== null && currentAddress.longitude !== undefined ? currentAddress.longitude : undefined
+  return getCurrentLatitude() !== undefined ? AppStorage.get<Address>('currentAddress')?.longitude : undefined
 }
 
 /**

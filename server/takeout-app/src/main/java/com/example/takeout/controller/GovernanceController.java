@@ -13,6 +13,8 @@ import javax.sql.DataSource;
 
 @RestController
 public class GovernanceController {
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private io.micrometer.core.instrument.MeterRegistry registry;
     private final JdbcTemplate db;private final String secret;private final DataSource source;
     private final ResourceBoundaryFilter admission;
     public GovernanceController(JdbcTemplate db,DataSource source,ResourceBoundaryFilter admission,
@@ -33,6 +35,16 @@ public class GovernanceController {
         result.put("cpuLoad",os.getProcessCpuLoad());result.put("cpuTimeNanos",os.getProcessCpuTime());result.put("availableProcessors",os.getAvailableProcessors());
         result.put("processCommittedVirtualBytes",os.getCommittedVirtualMemorySize());result.put("admissionRejected",admission.rejected.sum());
         if(source instanceof HikariDataSource h && h.getHikariPoolMXBean()!=null){var p=h.getHikariPoolMXBean();result.put("connections",Map.of("active",p.getActiveConnections(),"idle",p.getIdleConnections(),"waiting",p.getThreadsAwaitingConnection(),"total",p.getTotalConnections()));}
+        if(registry!=null){
+            var business=new LinkedHashMap<String,Object>();
+            for(String name:List.of("takeout.outbox.pending","takeout.outbox.oldest.age.seconds","takeout.outbox.collector.available",
+                    "takeout.mq.consumer.pending","takeout.mq.consumer.failed","takeout.mq.dead.letters",
+                    "takeout.reconciliation.open","takeout.financial.collector.available")){
+                var gauge=registry.find(name).gauge();double value=gauge==null?Double.NaN:gauge.value();
+                business.put(name,Double.isFinite(value)?value:null);
+            }
+            result.put("business",business);
+        }
         return result;
     }
     @GetMapping("/api/admin/outbox")

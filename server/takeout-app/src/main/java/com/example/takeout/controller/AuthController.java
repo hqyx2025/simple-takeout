@@ -35,6 +35,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.example.takeout.service.ContactVerificationService contacts;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.example.takeout.service.AccountClosureService accountClosure;
 
     private final AuthService authService;
     private final LoginRateLimiter loginRateLimiter;
@@ -277,8 +281,63 @@ public class AuthController {
     public ApiResponse<User> updateMe(@RequestAttribute("userId") long userId,
                                       @RequestBody ProfileUpdateRequest req) {
         return ApiResponse.ok(authService.updateProfile(userId, req.username(), req.phone(), req.email(),
-                req.currentPassword()));
+                req.currentPassword(), req.phoneCode(), req.emailCode()));
     }
+
+    @GetMapping("/me/contacts")
+    public ApiResponse<com.example.takeout.service.ContactVerificationService.Status> contactStatus(@RequestAttribute("userId") long userId) {
+        return ApiResponse.ok(contacts.status(userId));
+    }
+
+    @RequireCrud({CrudOperation.UPDATE})
+    @PostMapping("/me/contact-code")
+    public ApiResponse<Void> contactCode(@RequestAttribute("userId") long userId,
+                                        @RequestBody ContactRequest req, HttpServletRequest http) {
+        limitSessionEndpoint("contact-code", http);
+        loginRateLimiter.recordAttempt("contact-code", "u" + userId);
+        contacts.send(userId, req.kind(), req.value(), req.currentPassword());
+        return ApiResponse.ok();
+    }
+
+    @RequireCrud({CrudOperation.UPDATE})
+    @PostMapping("/me/verify-contact")
+    public ApiResponse<Void> verifyContact(@RequestAttribute("userId") long userId,
+                                          @RequestBody ContactRequest req, HttpServletRequest http) {
+        limitSessionEndpoint("contact-verify", http);
+        loginRateLimiter.recordAttempt("contact-verify", "u" + userId);
+        contacts.verifyCurrent(userId, req.kind(), req.value(), req.currentPassword(), req.code());
+        return ApiResponse.ok();
+    }
+
+    public record ContactRequest(String kind, String value,
+            @JsonProperty(access = JsonProperty.Access.WRITE_ONLY) String currentPassword,
+            @JsonProperty(access = JsonProperty.Access.WRITE_ONLY) String code) {
+        @Override public String toString() { return "ContactRequest[credentials=[redacted]]"; }
+    }
+
+    @RequireCrud({CrudOperation.DELETE})
+    @PostMapping("/me/close")
+    public ApiResponse<Void> closeAccount(@RequestAttribute("userId") long userId,
+                                         @RequestBody CloseAccountRequest req, HttpServletRequest http) {
+        limitSessionEndpoint("account-close", http);
+        loginRateLimiter.recordAttempt("account-close", "u" + userId);
+        if (req == null || !req.confirmed()) throw new BizException(400, "请确认注销后无法恢复账号");
+        accountClosure.close(userId, req.currentPassword());
+        return ApiResponse.ok();
+    }
+
+    public record CloseAccountRequest(@JsonProperty(access = JsonProperty.Access.WRITE_ONLY) String currentPassword,
+                                      boolean confirmed) {
+        @Override public String toString() { return "CloseAccountRequest[password=[redacted]]"; }
+    }
+
+    @PutMapping("/me/avatar")
+    public ApiResponse<User> updateAvatar(@RequestAttribute("userId") long userId,
+                                           @RequestBody AvatarRequest req) {
+        return ApiResponse.ok(authService.updateAvatar(userId, req.avatar()));
+    }
+
+    public record AvatarRequest(String avatar) { }
 
     @RequireCrud({CrudOperation.UPDATE})
     @PostMapping("/recharge")
@@ -311,7 +370,13 @@ public class AuthController {
     public record PushRegistrationResult(String profileId) { }
 
     public record ProfileUpdateRequest(String username, String phone, String email,
-                                       @JsonProperty(access = JsonProperty.Access.WRITE_ONLY) String currentPassword) {
+                                       @JsonProperty(access = JsonProperty.Access.WRITE_ONLY) String currentPassword,
+                                       @JsonProperty(access = JsonProperty.Access.WRITE_ONLY) String phoneCode,
+                                       @JsonProperty(access = JsonProperty.Access.WRITE_ONLY) String emailCode) {
+        public ProfileUpdateRequest(String username, String phone, String email, String currentPassword) {
+            this(username, phone, email, currentPassword, null, null);
+        }
+        @Override public String toString() { return "ProfileUpdateRequest[personalData=[redacted]]"; }
     }
 
     public record RechargeRequest(double amount) {

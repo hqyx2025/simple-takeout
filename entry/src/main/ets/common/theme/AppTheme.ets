@@ -7,6 +7,7 @@ export class AppTheme {
   static readonly TEXT: Resource = $r('app.color.text_primary')
   static readonly MUTED: Resource = $r('app.color.text_secondary')
   static readonly BORDER: Resource = $r('app.color.divider')
+  static readonly CONTROL_BORDER: Resource = $r('app.color.control_border')
   static readonly INPUT: Resource = $r('app.color.input')
   static readonly ACCENT: Resource = $r('app.color.tag_text')
   static readonly ACCENT_SOFT: Resource = $r('app.color.tag_bg')
@@ -38,7 +39,7 @@ export class AppSearchStyle implements AttributeModifier<SearchAttribute> {
       .searchIcon({ src: $r('app.media.home_search'), size: 20 })
       .cancelButton({ style: CancelButtonStyle.INPUT,
         icon: { src: $r('app.media.ui_close'), size: 18 } })
-      .border({ width: 1, color: AppTheme.BORDER }).borderRadius(AppTheme.CONTROL_RADIUS)
+      .border({ width: 1, color: AppTheme.CONTROL_BORDER }).borderRadius(AppTheme.CONTROL_RADIUS)
   }
   applyFocusedAttribute(search: SearchAttribute): void {
     search.border({ width: 1.5, color: AppTheme.ACCENT })
@@ -56,12 +57,13 @@ export class AppFilterStyle extends SoftPressModifier {
 
   applyNormalAttribute(button: ButtonAttribute): void {
     super.applyNormalAttribute(button)
-    button.type(ButtonType.Capsule).height(AppTheme.FILTER_HEIGHT).fontSize(14)
+    button.type(ButtonType.Normal).height(AppTheme.FILTER_HEIGHT).fontSize(14)
+      .borderRadius(AppTheme.CONTROL_RADIUS)
       .fontWeight(this.selected ? FontWeight.Bold : FontWeight.Medium)
       .fontColor(this.selected ? AppTheme.PRIMARY_TEXT : AppTheme.MUTED)
       .backgroundColor(this.selected ? AppTheme.PRIMARY : AppTheme.INPUT)
       .padding({ left: 16, right: 16 })
-      .border({ width: 1, color: this.selected ? AppTheme.PRIMARY : AppTheme.BORDER })
+      .border({ width: 1, color: this.selected ? AppTheme.PRIMARY : AppTheme.CONTROL_BORDER })
   }
 }
 
@@ -78,7 +80,7 @@ export class AppInputStyle implements AttributeModifier<TextInputAttribute> {
     input.height(AppTheme.CONTROL_HEIGHT).fontSize(16)
       .fontColor(AppTheme.TEXT).placeholderColor(AppTheme.MUTED)
       .caretColor(AppTheme.ACCENT).backgroundColor(AppTheme.INPUT)
-      .border({ width: 1, color: AppTheme.BORDER }).borderRadius(AppTheme.CONTROL_RADIUS)
+      .border({ width: 1, color: AppTheme.CONTROL_BORDER }).borderRadius(AppTheme.CONTROL_RADIUS)
       .padding({ left: 14, right: 14 })
   }
   applyFocusedAttribute(input: TextInputAttribute): void {
@@ -90,7 +92,7 @@ export class AppTextAreaStyle implements AttributeModifier<TextAreaAttribute> {
   applyNormalAttribute(input: TextAreaAttribute): void {
     input.fontSize(16).fontColor(AppTheme.TEXT).placeholderColor(AppTheme.MUTED)
       .caretColor(AppTheme.ACCENT).backgroundColor(AppTheme.INPUT)
-      .border({ width: 1, color: AppTheme.BORDER }).borderRadius(AppTheme.CONTROL_RADIUS)
+      .border({ width: 1, color: AppTheme.CONTROL_BORDER }).borderRadius(AppTheme.CONTROL_RADIUS)
       .padding(14)
   }
   applyFocusedAttribute(input: TextAreaAttribute): void {

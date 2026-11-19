@@ -15,6 +15,8 @@ import { clearAuthTokens, saveAuthTokens } from './TokenStorage'
 
 // 云端优先；云端连接失败时只在本次运行切换到本机 IDEA/Docker。
 let activeBaseUrl: string = API_CONFIG.BASE_URLS[0]
+let apiBasePending: Promise<string> | null = null
+let apiBaseReady: boolean = false
 
 export function getApiBaseUrl(): string {
   return activeBaseUrl
@@ -31,7 +33,7 @@ function selectBaseUrl(baseUrl: string): void {
 }
 
 /** Probe providers once at cold start so a business mutation can never be replayed to another database. */
-export async function initializeApiBaseUrl(): Promise<string> {
+async function probeApiBaseUrl(): Promise<string> {
   const candidates: string[] = [API_CONFIG.BASE_URLS[0], API_CONFIG.BASE_URLS[1]]
   for (let i: number = 0; i < candidates.length; i++) {
     let session: rcp.Session | null = null
@@ -59,11 +61,33 @@ export async function initializeApiBaseUrl(): Promise<string> {
   return activeBaseUrl
 }
 
+export function initializeApiBaseUrl(persist: (url: string) => Promise<void>): Promise<string> {
+  if (apiBasePending !== null) { return apiBasePending }
+  if (apiBaseReady) { return Promise.resolve(activeBaseUrl) }
+  const pending: Promise<string> = probeApiBaseUrl().then(async (url: string): Promise<string> => {
+    await persist(url)
+    apiBaseReady = true
+    apiBasePending = null
+    return url
+  })
+  apiBasePending = pending
+  // Guests render without awaiting this promise; keep failed persistence blocking requests.
+  pending.catch(() => { logWarn('Network', '启动数据源未能保存') })
+  return pending
+}
+
+export async function waitForStartupBackend(): Promise<boolean> {
+  const epoch: number = authSessionEpoch
+  if (apiBasePending !== null) { await apiBasePending }
+  return epoch === authSessionEpoch
+}
+
 // JWT Token（登录成功后由 ApiService 设置，请求时自动注入）
 let authToken: string = ''
 let refreshToken: string = ''
 let authSessionEpoch: number = 0
 let refreshInFlight: Promise<number> | null = null
+let refreshInFlightEpoch: number = -1
 let sessionExpiredHandler: (() => Promise<void>) | null = null
 let lastApiErrorMessage: string = ''
 let lastToastMessage: string = ''
@@ -133,6 +157,10 @@ let coldConnectionStarted: boolean = false
 
 export function warmColdStartConnection(): void {
   if (coldConnectionStarted || !(AppStorage.get<boolean>('privacyConsent') ?? false)) {
+    return
+  }
+  if (apiBasePending !== null) {
+    apiBasePending.then(() => { warmColdStartConnection() }).catch(() => {})
     return
   }
   coldConnectionStarted = true
@@ -245,8 +273,15 @@ async function request<T>(method: string, url: string, data?: Object, showErrorT
   lastApiErrorMessage = ''
   logInfo('Http', `前端请求后端：${operation}（${method} ${url}）`)
   try {
+    if (apiBasePending !== null) {
+      await apiBasePending
+      if (requestEpoch !== authSessionEpoch) {
+        return { code: 401, message: '', data: undefined as T }
+      }
+    }
     let attempt: ApiResponse<T> = await performRequest<T>(method, url, data, timeoutMs, requestToken, activeBaseUrl)
-    if (attempt.code === 401 && url !== '/api/auth/refresh' && url !== '/api/auth/logout') {
+    if (attempt.code === 401 && url !== '/api/auth/refresh' && url !== '/api/auth/logout'
+      && !url.startsWith('/api/auth/login')) {
       const refreshResult: number = await refreshAfterUnauthorized(requestToken, requestRefreshToken, requestEpoch)
       if (refreshResult === 1 && authSessionEpoch === requestEpoch) {
         attempt = await performRequest<T>(method, url, data, timeoutMs, authToken, activeBaseUrl)
@@ -306,7 +341,8 @@ async function refreshAfterUnauthorized(staleAccessToken: string, staleRefreshTo
     return authToken !== '' ? 1 : -1
   }
   if (refreshToken === '') { return -1 }
-  if (refreshInFlight !== null) { return await refreshInFlight }
+  if (refreshInFlight !== null && refreshInFlightEpoch === epoch) { return await refreshInFlight }
+  refreshInFlightEpoch = epoch
   refreshInFlight = (async (): Promise<number> => {
     try {
       const nativeRequest: rcp.Request = new rcp.Request(activeBaseUrl + '/api/auth/refresh',
@@ -328,11 +364,11 @@ async function refreshAfterUnauthorized(staleAccessToken: string, staleRefreshTo
       } catch (_) {
         logWarn('Auth', '安全存储不可用，本次运行保持登录；下次启动需要重新登录')
       }
-      return 1
+      return authSessionEpoch === epoch ? 1 : 2
     } catch (_) {
       return 0
     } finally {
-      refreshInFlight = null
+      if (refreshInFlightEpoch === epoch) { refreshInFlight = null }
     }
   })()
   return await refreshInFlight

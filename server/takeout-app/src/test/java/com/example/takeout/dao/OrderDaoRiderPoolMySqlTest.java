@@ -21,6 +21,7 @@ class OrderDaoRiderPoolMySqlTest {
 
     private JdbcTemplate admin;
     private JdbcTemplate jdbc;
+    private com.zaxxer.hikari.HikariDataSource pool;
     private String database;
 
     @BeforeEach
@@ -34,7 +35,9 @@ class OrderDaoRiderPoolMySqlTest {
         admin = new JdbcTemplate(new DriverManagerDataSource(base + options, username, password));
         database = "takeout_rider_pool_" + UUID.randomUUID().toString().replace("-", "");
         admin.execute("CREATE DATABASE `" + database + "`");
-        var source = new DriverManagerDataSource(base + database + options, username, password);
+        var source = new com.zaxxer.hikari.HikariDataSource(); pool = source;
+        source.setJdbcUrl(base + database + options); source.setUsername(username); source.setPassword(password);
+        source.setMaximumPoolSize(2); source.setMinimumIdle(0); source.setConnectionTimeout(10000);
         new ResourceDatabasePopulator(new ClassPathResource("schema.sql")).execute(source);
         jdbc = new JdbcTemplate(source);
         jdbc.update("INSERT INTO stores(id,name,owner_id,create_time,latitude,longitude) VALUES(1,'near',1,NOW(),22.8,108.3),(2,'far',1,NOW(),23.8,108.3),(3,'unknown',1,NOW(),NULL,NULL)");
@@ -44,6 +47,7 @@ class OrderDaoRiderPoolMySqlTest {
 
     @AfterEach
     void cleanUp() {
+        if (pool != null) pool.close();
         if (admin != null && database != null) {
             admin.execute("DROP DATABASE IF EXISTS `" + database + "`");
         }

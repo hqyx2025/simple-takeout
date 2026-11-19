@@ -45,6 +45,8 @@ public class GoodsDao {
     }
 
     private static final String SELECT_GOODS = "SELECT g.*, COALESCE(sold.sales, 0) AS real_sales FROM goods g" + MONTHLY_SALES_JOIN;
+    private static final String SELECT_STORE_GOODS = "SELECT g.*, COALESCE(sold.sales,0) AS real_sales FROM goods g"
+            + MONTHLY_SALES_JOIN.replace(" GROUP BY oi.goods_id", " AND o.store_id=? GROUP BY oi.goods_id");
 
     private static final RowMapper<Goods> MAPPER = (rs, i) -> mapGoods(rs);
 
@@ -113,12 +115,12 @@ public class GoodsDao {
     }
 
     public List<Goods> listByStore(long storeId) {
-        return attachSpecs(jdbc.query(SELECT_GOODS + "WHERE g.store_id = ? AND g.status = 1 AND g.deleted = 0 ORDER BY real_sales DESC, g.id DESC",
-                MAPPER, monthlySalesArgs(storeId)));
+        return attachSpecs(jdbc.query(SELECT_STORE_GOODS + "WHERE g.store_id = ? AND g.status = 1 AND g.deleted = 0 ORDER BY real_sales DESC, g.id DESC",
+                MAPPER, monthlySalesArgs(storeId, storeId)));
     }
 
     public List<Goods> listByStoreAll(long storeId) {
-        return attachSpecs(jdbc.query(SELECT_GOODS + "WHERE g.store_id = ? AND g.deleted = 0 ORDER BY g.id", MAPPER, monthlySalesArgs(storeId)));
+        return attachSpecs(jdbc.query(SELECT_STORE_GOODS + "WHERE g.store_id = ? AND g.deleted = 0 ORDER BY g.id", MAPPER, monthlySalesArgs(storeId, storeId)));
     }
 
     /**
@@ -221,6 +223,27 @@ public class GoodsDao {
         return attachSpecs(jdbc.query(SELECT_GOODS + "WHERE g.id = ? AND g.deleted = 0", MAPPER, monthlySalesArgs(id))).stream().findFirst();
     }
 
+    /** Transactional checkout facts only. Monthly sales are display analytics, never part of pricing or stock. */
+    public Optional<Goods> findForOrder(long id) {
+        return jdbc.query("SELECT g.*,0 AS real_sales FROM goods g WHERE g.id=? AND g.deleted=0 FOR UPDATE", MAPPER, id)
+                .stream().findFirst().map(goods -> goods.withSpecs(specDao.listByGoodsForOrder(id)));
+    }
+
+    /** Cart rows display prices/SKUs, never sales analytics; browsing the cart must not acquire stock locks. */
+    public Optional<Goods> findForCart(long id) {
+        return jdbc.query("SELECT g.*,0 AS real_sales FROM goods g WHERE g.id=? AND g.deleted=0", MAPPER, id)
+                .stream().findFirst().map(goods -> goods.withSpecs(specDao.listByGoods(id)));
+    }
+
+    /** Batch cart facts without sales aggregation or inventory locks. */
+    public List<Goods> findForCartByIds(Collection<Long> goodsIds) {
+        if (goodsIds == null || goodsIds.isEmpty()) return List.of();
+        List<Long> ids = goodsIds.stream().distinct().toList();
+        String slots = String.join(",", java.util.Collections.nCopies(ids.size(), "?"));
+        return attachSpecs(jdbc.query("SELECT g.*,0 AS real_sales FROM goods g WHERE g.deleted=0 AND g.id IN (" + slots + ")",
+                MAPPER, ids.toArray()));
+    }
+
     /**
      * 在业务事务内按主键升序锁定商品，再修改规格、秒杀或优惠券。
      * 逐主键查询固定实际加锁顺序，不依赖 IN + ORDER BY 的执行计划。
@@ -241,19 +264,26 @@ public class GoodsDao {
     }
 
     public void update(Goods g) {
-        jdbc.update("UPDATE goods SET name=?, description=?, price=?, original_price=?, image=?, category_id=?, merchant_category_id=?, tag=?, is_special=?, status=?, stock=? WHERE id=?",
+        jdbc.update("UPDATE goods SET name=?, description=?, price=?, original_price=?, image=?, category_id=?, merchant_category_id=?, tag=?, is_special=?, status=? WHERE id=?",
                 g.name(), g.description(), g.price(), g.originalPrice(), g.image(),
-                g.categoryId(), g.merchantCategoryId(), g.tag(), g.special(), g.status(), g.stock(), g.id());
+                g.categoryId(), g.merchantCategoryId(), g.tag(), g.special(), g.status(), g.id());
     }
 
-    /** 快速补货/清库存：直接设置库存（不经过乐观锁）。 */
-    public void updateStock(long id, int stock) {
-        jdbc.update("UPDATE goods SET stock = ? WHERE id = ?", stock, id);
+    /** 盘点只接受读取时的版本，避免覆盖期间已售出的库存。 */
+    public boolean countStock(long id, int stock, int expectedVersion) {
+        return jdbc.update("UPDATE goods SET stock = ?, version = version + 1 WHERE id = ? AND version = ? AND deleted = 0",
+                stock, id, expectedVersion) == 1;
+    }
+
+    public boolean replenishStock(long id, int quantity, int expectedVersion) {
+        return jdbc.update("UPDATE goods SET stock = stock + ?, version = version + 1 " +
+                        "WHERE id = ? AND version = ? AND deleted = 0 AND stock <= ?",
+                quantity, id, expectedVersion, Integer.MAX_VALUE - quantity) == 1;
     }
 
     /** 多规格菜品：价格/库存由规格聚合回写，保证列表、起送价与库存口径一致。 */
     public void syncFromSpecs(long goodsId, double price, int stock) {
-        jdbc.update("UPDATE goods SET price = ?, stock = ? WHERE id = ?", price, stock, goodsId);
+        jdbc.update("UPDATE goods SET price = ?, stock = ?, version = version + 1 WHERE id = ?", price, stock, goodsId);
     }
 
     public void updateStatus(long id, int status) {
@@ -281,7 +311,7 @@ public class GoodsDao {
 
     /** 回滚库存（取消订单/退款时恢复；仅在 escrow 条件更新成功后的同一事务内调用）。 */
     public void restoreStock(long id, int quantity) {
-        jdbc.update("UPDATE goods SET stock = stock + ? WHERE id = ?", quantity, id);
+        jdbc.update("UPDATE goods SET stock = stock + ?, version = version + 1 WHERE id = ?", quantity, id);
     }
 
     public void delete(long id) {

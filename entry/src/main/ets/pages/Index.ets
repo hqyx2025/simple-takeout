@@ -4,7 +4,7 @@
  * 包含：搜索栏、分类导航、店铺列表、店铺详情、购物车、订单列表、个人中心、底部Tab导航
  */
 import { StoreItem, CartItem, Order, User, UserRole, Address, Coupon, Favorite, createEmptyUser } from '../model/Models'
-import { initAppStorage, isLoggedIn, logout, getAllStoresList, syncAddressesRemote, syncCartRemote, syncCategoriesFromServer, syncStoresFromServer } from '../service/AppStorageManager'
+import { initAppStorage, isLoggedIn, logout, syncAddressesRemote, syncCartRemote } from '../service/AppStorageManager'
 
 import { LoginPage } from './LoginPage'
 
@@ -129,9 +129,6 @@ struct Index {
         router.replaceUrl({ url: 'pages/MerchantCenterPage' })
         return
       }
-      // 后端业务接口统一要求 JWT，登录成功后再拉取首页真实数据。
-      syncCategoriesFromServer()
-      syncStoresFromServer()
     }
   }
 
@@ -211,8 +208,6 @@ struct Index {
       // 未登录时不发送受保护请求，避免启动阶段出现无意义的 401。
       syncAddressesRemote()
       syncCartRemote()
-      syncCategoriesFromServer()
-      syncStoresFromServer()
     }
   }
 
@@ -302,16 +297,16 @@ struct Index {
     Stack({ alignContent: Alignment.Bottom }) {
     Tabs({ controller: this.tabsController, barPosition: BarPosition.End, index: $$this.currentTab }) {
       TabContent() {
-        if (this.selectedTab === 0) {
+        // 保留首页组件的列表、筛选和滚动状态，由 Tabs 管理可见性。
         HomePage({
           bottomInset: this.systemBottomInset,
+          pageVisible: this.selectedTab === 0 && this.pageVisible,
           onStoreClick: (store: StoreItem) => {
             this.showStoreDetail(store.id, store.name)
           },
           onNavigateLogin: () => { this.showLogin = true },
           onNavigateLocationLogin: () => { this.showLocationLoginConfirm = true }
         })
-      }
       }
 
       TabContent() {

@@ -50,6 +50,7 @@ class Round9CacheEfficiencyTest {
             when(stores.listAll()).thenAnswer(c -> { storeLoads.incrementAndGet(); return rows; });
             when(stores.listRecommended()).thenReturn(rows);
             when(stores.findById(anyLong())).thenAnswer(c -> rows.stream().filter(row -> row.id() == (long)c.getArgument(0)).findFirst());
+            when(stores.findForDispatch(anyLong())).thenAnswer(c -> rows.stream().filter(row -> row.id() == (long)c.getArgument(0)).findFirst());
             service = new StoreService(stores, goods, mock(GoodsSpecDao.class), seckills,
                     new ObjectMapper(), cache, mock(EmployeeDao.class));
         }
@@ -120,6 +121,17 @@ class Round9CacheEfficiencyTest {
         verify(f.seckills,times(1)).listActiveViews(eq(50),anyString());
         verify(f.stores,times(1)).findById(1);
         System.out.println("[RT-36/projection] radius-and-limit-applied-per-request=true current-distance=true source-loads=1-per-family store-lookup=1");
+    }
+
+    @Test void goodsCacheHitStillChecksStoreAvailabilityWithoutAggregatingSales() {
+        var f = new Fixture();
+        assertTrue(f.service.listGoods(1).isEmpty());
+        assertTrue(f.service.listGoods(1).isEmpty());
+        verify(f.goods,times(1)).listByStore(1);
+        verify(f.stores,times(2)).findForDispatch(1);
+        verify(f.stores,never()).findById(anyLong());
+        when(f.stores.findForDispatch(1)).thenReturn(java.util.Optional.empty());
+        assertEquals(404,assertThrows(com.example.takeout.common.BizException.class,()->f.service.listGoods(1)).getCode());
     }
 
     @Test void foreignSlotOwnerDoesNotMakeAnUnrelatedQueryWaitForRebuild() throws Exception {

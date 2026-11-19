@@ -314,7 +314,7 @@ public class StoreController {
         requireMerchant(role);
         return ApiResponse.ok(storeService.createStore(userId, req.name(), req.categoryId(),
                 req.deliveryFee(), req.minOrder(), req.deliveryTime(), req.notice(),
-                req.address(), req.latitude(), req.longitude(), req.deliveryRadius(), req.image()));
+                req.address(), req.latitude(), req.longitude(), req.deliveryRadius(), req.image(), req.images()));
     }
 
     @PutMapping("/merchant/stores/{storeId}")
@@ -376,7 +376,16 @@ public class StoreController {
                                           @PathVariable long goodsId,
                                           @RequestBody StockRequest req) {
         requireMerchant(role);
-        return ApiResponse.ok(storeService.updateStock(userId, goodsId, req.stock()));
+        return ApiResponse.ok(storeService.updateStock(userId, goodsId, req.specId(), req.stock(), req.expectedVersion()));
+    }
+
+    @PostMapping("/merchant/goods/{goodsId}/stock/replenish")
+    public ApiResponse<Goods> replenishStock(@RequestAttribute("userId") long userId,
+                                             @RequestAttribute("role") int role,
+                                             @PathVariable long goodsId,
+                                             @RequestBody ReplenishStockRequest req) {
+        requireMerchant(role);
+        return ApiResponse.ok(storeService.replenishStock(userId, goodsId, req.specId(), req.quantity(), req.expectedVersion()));
     }
 
     // ============ 多规格 SKU ============
@@ -437,10 +446,13 @@ public class StoreController {
     public record CreateStoreRequest(String name, int categoryId, double deliveryFee,
                                      double minOrder, String deliveryTime, String notice,
                                      String address, Double latitude, Double longitude,
-                                     int deliveryRadius, String image) {
+                                     int deliveryRadius, String image, List<String> images) {
     }
 
-    public record StockRequest(int stock) {
+    public record StockRequest(int stock, Integer expectedVersion, long specId) {
+    }
+
+    public record ReplenishStockRequest(int quantity, Integer expectedVersion, long specId) {
     }
 
     public record StatusRequest(int status) {

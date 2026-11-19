@@ -37,12 +37,16 @@ export struct ConsentPage {
       return
     }
     this.submitting = true
-    // 顺序很重要：先把同意状态落盘，再 loadAllData。
-    // loadAllData 依据该标记决定是否恢复用户/令牌；若先 load 后 save，
-    // 会读到空的持久化标记并把刚设置的 true 覆盖回 false，导致首页数据永远被门禁挡住。
+    // 先确认持久化成功，再允许内存同意、日志初始化与会话恢复。
+    try {
+      await savePrivacyConsent(true)
+    } catch (_) {
+      this.submitting = false
+      promptAction.showToast({ message: '隐私设置未能保存，请重试', duration: 2500 })
+      return
+    }
     setPrivacyConsent(true)
     AppStorage.setOrCreate<boolean>('privacyConsent', true)
-    await savePrivacyConsent(true)
     initLogger()
     await loadAllData()
     warmColdStartConnection()

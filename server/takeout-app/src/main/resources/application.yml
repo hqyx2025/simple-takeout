@@ -105,6 +105,8 @@ springdoc:
 
 # 自定义配置
 takeout:
+  contacts:
+    phone-enabled: ${TAKEOUT_CONTACT_PHONE_ENABLED:false}
   personal-data:
     encryption-secret: ${TAKEOUT_PERSONAL_DATA_ENCRYPTION_SECRET}
     index-secret: ${TAKEOUT_PERSONAL_DATA_INDEX_SECRET}
@@ -112,6 +114,10 @@ takeout:
   # 两个竞争写入口在认证查库前准入；Redis 正常时每秒预算跨实例共享，故障时保留本机预算。
   claim-traffic:
     max-concurrent-per-instance: ${TAKEOUT_CLAIM_MAX_CONCURRENT:4}
+    order-per-second: ${TAKEOUT_ORDER_RPS:250}
+    payment-per-second: ${TAKEOUT_PAYMENT_RPS:250}
+    order-concurrent-per-instance: ${TAKEOUT_ORDER_CONCURRENT:6}
+    payment-concurrent-per-instance: ${TAKEOUT_PAYMENT_CONCURRENT:4}
     coupon-per-second: ${TAKEOUT_COUPON_CLAIM_RPS:20}
     rider-per-second: ${TAKEOUT_RIDER_GRAB_RPS:30}
     database-failure-threshold: ${TAKEOUT_CLAIM_DB_FAILURE_THRESHOLD:3}
@@ -211,9 +217,10 @@ takeout:
     topic: ${TAKEOUT_ROCKETMQ_TOPIC:takeout-domain-events}
     consumer-group: ${TAKEOUT_ROCKETMQ_CONSUMER_GROUP:takeout-notifications}
     # Outbox 中继扫描间隔（毫秒）与首次延迟
-    relay-scan-ms: ${TAKEOUT_MQ_RELAY_SCAN_MS:2000}
+    relay-scan-ms: ${TAKEOUT_MQ_RELAY_SCAN_MS:100}
     relay-initial-ms: 10000
-    outbox-batch-size: ${TAKEOUT_MQ_BATCH_SIZE:100}
+    outbox-batch-size: ${TAKEOUT_MQ_BATCH_SIZE:500}
+    relay-budget-ms: ${TAKEOUT_MQ_RELAY_BUDGET_MS:1000}
     # 多实例行级认领的租约时长（毫秒）：认领后实例崩溃，该行要等租约过期才被其他实例接手
     claim-lease-ms: ${TAKEOUT_MQ_CLAIM_LEASE_MS:30000}
     # 重试告警阈值；指数退避至最多60秒，超过阈值仍保留并继续重试。

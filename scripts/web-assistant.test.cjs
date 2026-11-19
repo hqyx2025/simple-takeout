@@ -15,7 +15,7 @@ function chat(options={}){
 }
 test('preset questions use the form submission path and cannot submit twice while waiting',async()=>{
   let finish;const b=chat({onRequest(path){if(path==='/api/assistant/chat')return new Promise(resolve=>{finish=()=>resolve({ok:true,status:200,json:async()=>({code:200,data:{answer:'请在订单页查看进度'}})});});}});
-  b.renderShell();assert.match(b.element('nav').innerHTML,/auth-icons\.svg\?v=20261102-headset#headset/);
+  b.renderShell();assert.match(b.element('nav').innerHTML,/auth-icons\.svg\?v=20261109-theme#headset/);
   await b.renderPage();assert.equal(b.element('app').classes.has('assistant-page'),true);
   assert.equal((b.element('app').innerHTML.match(/data-action="assistant-question"/g)||[]).length,6);
   let pending;b.form.requestSubmit=()=>{pending=b.send();};

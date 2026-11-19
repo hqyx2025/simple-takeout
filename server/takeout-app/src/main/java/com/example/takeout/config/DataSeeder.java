@@ -7,7 +7,9 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.support.JdbcTransactionManager;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -81,6 +83,7 @@ public class DataSeeder implements ApplicationRunner {
             ensureBankCards();
             ensureStoresAndGoods();
             ensureAdditionalStores();
+            ensureCampusDemoStores();
             ensureStoreCoordinates();
             ensureStoreMerchantCategories();
             ensureMarketingData();
@@ -93,10 +96,11 @@ public class DataSeeder implements ApplicationRunner {
         ensureRiderDeliveryRange();
         ensureBankCards();
         ensureAdditionalStores();
+        ensureCampusDemoStores();
         ensureStoreCoordinates();
         ensureStoreMerchantCategories();
         ensureMarketingData();
-        log.info("种子数据初始化完成：8 分类 / 40 店铺 / 1200 商品 / 6 账号（含骑手）");
+        log.info("种子数据初始化完成（含南宁学院周边演示店铺）");
     }
 
     private void ensureOrderEscrowColumn() {
@@ -426,6 +430,7 @@ public class DataSeeder implements ApplicationRunner {
                     "[\"附近推荐\",\"满减\"]", "平台推荐附近好店，欢迎光临" + names[i],
                     categoryId, "[" + categoryId + "]", merchantIds[i % merchantIds.length], 1, 1, now());
             long storeId = jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+            placeNewDemoStore(storeId, i + 30);
             seedGoods(storeId, categoryId, 6);
         }
     }
@@ -433,6 +438,69 @@ public class DataSeeder implements ApplicationRunner {
     /** 种子门店基准点（南宁市中心）+ 环状偏移，让附近推荐有真实可算的距离。 */
     private static final double SEED_BASE_LATITUDE = 22.8177;
     private static final double SEED_BASE_LONGITUDE = 108.3665;
+
+    private record CampusShop(String name, int category, String[] menu) {}
+
+    /** 仅在演示模式补充；点位和菜单均为示例，已有同名门店不改写。 */
+    private void ensureCampusDemoStores() {
+        long[] owners = ensureMerchantUsers();
+        List<CampusShop> shops = List.of(
+                new CampusShop("老友粉", 7, new String[]{"经典老友粉", "酸辣牛肉粉", "炸蛋"}),
+                new CampusShop("桂味快餐", 2, new String[]{"柠檬鸭饭", "酸笋牛肉饭", "时蔬"}),
+                new CampusShop("茶饮站", 3, new String[]{"手打柠檬茶", "茉莉奶茶", "百香果茶"}),
+                new CampusShop("烧烤小铺", 6, new String[]{"烤鸡翅", "烤玉米", "肉串拼盘"}),
+                new CampusShop("螺蛳粉", 7, new String[]{"经典螺蛳粉", "酸笋拌粉", "炸腐竹"}),
+                new CampusShop("盖饭食堂", 2, new String[]{"黑椒鸡腿饭", "番茄牛腩饭", "番茄蛋汤"}),
+                new CampusShop("咖啡烘焙", 3, new String[]{"冰美式", "拿铁", "黄油可颂"}),
+                new CampusShop("糖水铺", 4, new String[]{"芋圆糖水", "红豆双皮奶", "龟苓膏"}),
+                new CampusShop("手作饺子", 7, new String[]{"玉米鲜肉饺", "韭菜鸡蛋饺", "凉拌黄瓜"}),
+                new CampusShop("轻食饭团", 2, new String[]{"照烧鸡肉饭团", "牛油果饭团", "玉米沙拉"}),
+                new CampusShop("鸡排小食", 6, new String[]{"椒盐鸡排", "炸红薯条", "鸡米花"}),
+                new CampusShop("砂锅小馆", 2, new String[]{"砂锅牛肉饭", "香菇滑鸡饭", "海带汤"}));
+        String[] areas = {"北门周边", "校区东侧", "校区南侧"};
+        // 公开校区点位约为 GCJ-02 22.74947, 108.45182；这里只生成校外演示点。
+        double[][] points = {{22.7568, 108.4540}, {22.7490, 108.4620}, {22.7390, 108.4510}};
+        TransactionTemplate tx = new TransactionTemplate(new JdbcTransactionManager(jdbc.getDataSource()));
+        for (int i = 0; i < shops.size(); i++) {
+            CampusShop shop = shops.get(i);
+            String name = "【演示】南院" + shop.name();
+            int area = i / 4;
+            double latitude = points[area][0] + (i % 2) * 0.001;
+            double longitude = points[area][1] + (i % 4 / 2) * 0.0013;
+            long owner = owners[i % owners.length];
+            tx.executeWithoutResult(ignored -> {
+                if (jdbc.queryForObject("SELECT COUNT(*) FROM stores WHERE name = ?", Integer.class, name) > 0) { return; }
+                jdbc.update("""
+                        INSERT INTO stores(name, owner_id, category_id, category_ids, status, review_status,
+                          address, latitude, longitude, delivery_fee, min_order, delivery_time, notice, create_time)
+                        VALUES(?,?,?,?,1,1,?,?,?,2,10,'25分钟',?,?)
+                        """, name, owner, shop.category(), "[1," + shop.category() + "]",
+                        "南宁市邕宁区南宁学院" + areas[area] + "（演示点位）", latitude, longitude,
+                        "演示店铺，店名、菜单及坐标仅供测试。", now());
+                long storeId = jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+                for (int item = 0; item < shop.menu().length; item++) {
+                    jdbc.update("""
+                            INSERT INTO goods(store_id,name,description,price,category_id,stock,rating,create_time)
+                            VALUES(?,?,'演示菜单',?,?,50,0,?)
+                            """, storeId, shop.menu()[item], item == 0 ? 15 : item == 1 ? 18 : 8, shop.category(), now());
+                }
+            });
+        }
+    }
+
+    // 演示商圈的南北／东西偏移，不代表真实门店地址。
+    private static final double[][] DEMO_STORE_OFFSETS = {
+            {0, 0}, {0.037, -0.052}, {0.005, -0.089}, {-0.049, -0.062},
+            {-0.078, -0.008}, {-0.038, 0.065}, {0.008, 0.074}, {0.065, 0.018}
+    };
+
+    private void placeNewDemoStore(long storeId, int index) {
+        double[] offset = DEMO_STORE_OFFSETS[index % DEMO_STORE_OFFSETS.length];
+        double angle = index * 1.7;
+        jdbc.update("UPDATE stores SET latitude = ?, longitude = ? WHERE id = ?",
+                SEED_BASE_LATITUDE + offset[0] + 0.004 * Math.cos(angle),
+                SEED_BASE_LONGITUDE + offset[1] + 0.004 * Math.sin(angle), storeId);
+    }
 
     /**
      * 幂等给种子店铺落坐标（南宁基准点 + 确定性环状偏移，约 0.2~1.2 公里）。
@@ -572,6 +640,7 @@ public class DataSeeder implements ApplicationRunner {
                     "[\"满减\",\"新客立减\"]", "本店菜品现做现卖，保证新鲜",
                     baseCategory[i], "[" + baseCategory[i] + "]", owner, 1, now);
             long persistedStoreId = jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+            placeNewDemoStore(persistedStoreId, (int) (storeSequence - 1));
             seedGoods(persistedStoreId, baseCategory[i], 8);
             storeSequence++;
         }
@@ -587,6 +656,7 @@ public class DataSeeder implements ApplicationRunner {
                     "[\"满减\"]", "欢迎光临" + name,
                     cat, "[" + cat + "]", owner, 1, now);
             long persistedStoreId = jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+            placeNewDemoStore(persistedStoreId, (int) (storeSequence - 1));
             seedGoods(persistedStoreId, cat, 6);
             storeSequence++;
         }
@@ -644,6 +714,7 @@ public class DataSeeder implements ApplicationRunner {
                 jdbc.update("INSERT INTO reviews(store_id, goods_id, user_id, user_name, rating, content, tags, create_time) VALUES(?,?,?,?,?,?,?,?)",
                         sid, goodsId == null ? 0 : goodsId, user1Id, "美食家小张", 5 - i, contents[i], "[\"味道好\",\"配送快\"]", now);
             }
+            new com.example.takeout.dao.StoreDao(jdbc).updateRatingFromReviews(sid);
         }
     }
 

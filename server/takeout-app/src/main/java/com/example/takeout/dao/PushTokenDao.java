@@ -13,7 +13,11 @@ public class PushTokenDao {
         this.jdbc = jdbc;
     }
 
+    @org.springframework.transaction.annotation.Transactional
     public void register(long userId, String tokenHash, String encryptedToken, long updatedAt) {
+        if (jdbc.queryForList("SELECT id FROM users WHERE id=? AND status=1 FOR UPDATE", Long.class, userId).isEmpty()) {
+            throw new com.example.takeout.common.BizException(401, "账号已停用");
+        }
         jdbc.update("INSERT INTO push_tokens (user_id, token_hash, token_encrypted, updated_at) VALUES (?, ?, ?, ?) "
                         + "ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), "
                         + "token_encrypted = VALUES(token_encrypted), updated_at = VALUES(updated_at)",

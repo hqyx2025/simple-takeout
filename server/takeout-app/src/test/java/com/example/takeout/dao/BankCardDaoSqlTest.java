@@ -23,7 +23,7 @@ class BankCardDaoSqlTest {
         when(jdbc.query(anyString(), any(RowMapper.class), eq(7L))).thenReturn(List.of());
 
         assertFalse(new BankCardDao(jdbc).lockUser(7));
-        verify(jdbc).query(eq("SELECT id FROM users WHERE id = ? FOR UPDATE"), any(RowMapper.class), eq(7L));
+        verify(jdbc).query(eq("SELECT id FROM users WHERE id = ? AND status=1 FOR UPDATE"), any(RowMapper.class), eq(7L));
     }
 
     @Test

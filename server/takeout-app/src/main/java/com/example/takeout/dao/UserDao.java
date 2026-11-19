@@ -174,8 +174,12 @@ public class UserDao {
         ), args.toArray());
     }
 
+    @Transactional
     public void updateStatus(long id, int status) {
-        jdbc.update("UPDATE users SET status = ? WHERE id = ? AND role <> 2", status, id);
+        lockAccountLifecycle(id);
+        if (jdbc.update("UPDATE users SET status = ? WHERE id = ? AND role <> 2", status, id) == 1 && status == 0) {
+            revokeSessions(id);
+        }
     }
 
     public void updateCrudPermissions(long id, CrudPermissions permissions) {
@@ -207,8 +211,42 @@ public class UserDao {
         jdbc.update("UPDATE users SET username = ?, phone = ? WHERE id = ? AND role = 1", username, phone, id);
     }
 
+    @Transactional
     public void updateEmployeeStatus(long id, int status) {
-        jdbc.update("UPDATE users SET status = ? WHERE id = ? AND role = 1", status, id);
+        lockAccountLifecycle(id);
+        if (jdbc.update("UPDATE users SET status = ? WHERE id = ? AND role = 1", status, id) == 1 && status == 0) {
+            revokeSessions(id);
+        }
+    }
+
+    /** Must precede wallet/order/product locks. Closed identities can never be re-enabled. */
+    public void lockAccountLifecycle(long id) {
+        jdbc.update("INSERT INTO account_lifecycle_guards(user_id) VALUES(?) " +
+                "ON DUPLICATE KEY UPDATE user_id=VALUES(user_id)", id);
+        if (Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT closed_at IS NOT NULL FROM account_lifecycle_guards WHERE user_id=? FOR UPDATE", Boolean.class, id))) {
+            throw new com.example.takeout.common.BizException(401, "账号已注销，请重新注册");
+        }
+    }
+
+    public void lockActiveCustomerLifecycle(long id) {
+        lockAccountLifecycle(id);
+        User user = findById(id).orElseThrow(() -> new com.example.takeout.common.BizException(401, "用户不存在"));
+        if (user.status() != 1) throw new com.example.takeout.common.BizException(401, "账号已停用");
+        if (user.role() != 0) throw new com.example.takeout.common.BizException(403, "请使用用户账号");
+    }
+
+    /** Also revoke refresh families; re-enabling an account must never revive its old credentials. */
+    @Transactional
+    public void revokeSessions(long id) {
+        User user = findByIdForUpdate(id).orElseThrow();
+        var format = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        var next = java.time.LocalDateTime.now().withNano(0);
+        try {
+            var previous = java.time.LocalDateTime.parse(user.passwordChangedAt() == null ? "" : user.passwordChangedAt(), format);
+            if (!next.isAfter(previous)) next = previous.plusSeconds(1);
+        } catch (java.time.format.DateTimeParseException ignored) { }
+        updatePassword(id, user.password(), next.format(format));
     }
 
     @Transactional
@@ -275,9 +313,11 @@ public class UserDao {
                 username, phone, email, userId);
     }
 
-    /**
-     * 改密：同时写入 password_changed_at，使签发时间早于改密时刻的 token 全部失效。
-     */
+    public boolean updateAvatar(long userId, String avatar) {
+        return jdbc.update("UPDATE users SET avatar = ? WHERE id = ? AND status=1", avatar, userId) == 1;
+    }
+
+    /** 改密时写入 password_changed_at，使旧 token 失效。 */
     public void updatePassword(long userId, String passwordHash, String changedAt) {
         jdbc.update("UPDATE users SET password = ?, password_changed_at = ? WHERE id = ?",
                 passwordHash, changedAt, userId);

@@ -24,7 +24,7 @@ export class FloatingTabBarTheme {
   static readonly BOTTOM_MARGIN: number = 8;
   static readonly CONTENT_INSET: number = 78;
   static readonly ICON_SIZE: number = 20;
-  static readonly LABEL_SIZE: number = 11;
+  static readonly LABEL_SIZE: number = 12;
 
   public static material(): uiMaterial.ImmersiveMaterial | undefined {
     if (deviceInfo.sdkApiVersion < 26) { return undefined; }

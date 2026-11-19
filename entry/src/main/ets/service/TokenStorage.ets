@@ -17,6 +17,14 @@ const NONCE_PREFIX_BYTES: number = NONCE_BYTES
 const AAD: Uint8Array = new Uint8Array([116, 97, 107, 101, 111, 117, 116, 45, 97, 117, 116, 104, 45, 118, 49])
 
 let prefsInstance: preferences.Preferences | null = null
+let tokenStorageVersion: number = 0
+let tokenOperations: Promise<void> = Promise.resolve()
+
+function queueTokenOperation<T>(operation: () => Promise<T>): Promise<T> {
+  const running: Promise<T> = tokenOperations.then(operation)
+  tokenOperations = running.then(() => {}, () => {})
+  return running
+}
 
 async function getPrefs(): Promise<preferences.Preferences> {
   if (prefsInstance !== null) { return prefsInstance }
@@ -131,31 +139,46 @@ async function cryptTokenBytes(purpose: huks.HuksKeyPurpose, nonce: Uint8Array, 
 
 export async function saveAuthTokens(accessToken: string, refreshToken: string): Promise<void> {
   if (accessToken === '') { await clearAuthTokens(); return }
-  const prefs: preferences.Preferences = await getPrefs()
-  const value: string = JSON.stringify({ accessToken: accessToken, refreshToken: refreshToken })
-  await prefs.put(TOKEN_KEY, await encrypt(value))
-  await prefs.flush()
+  const version: number = ++tokenStorageVersion
+  return queueTokenOperation<void>(async (): Promise<void> => {
+    if (version !== tokenStorageVersion) { return }
+    const prefs: preferences.Preferences = await getPrefs()
+    const value: string = await encrypt(JSON.stringify({ accessToken: accessToken, refreshToken: refreshToken }))
+    // 清理或新登录一旦开始，旧加密结果便不能重新写回设备。
+    if (version !== tokenStorageVersion) { return }
+    await prefs.put(TOKEN_KEY, value)
+    await prefs.flush()
+  })
 }
 
 export async function loadAuthTokens(): Promise<StoredAuthTokens | null> {
-  const prefs: preferences.Preferences = await getPrefs()
-  const value: string = await prefs.get(TOKEN_KEY, '') as string
-  if (value === '') { return null }
-  try {
-    const tokens: StoredAuthTokens = JSON.parse(await decrypt(value)) as StoredAuthTokens
-    if (typeof tokens.accessToken !== 'string' || typeof tokens.refreshToken !== 'string') {
-      throw new Error('Invalid stored token payload')
+  const version: number = tokenStorageVersion
+  return queueTokenOperation<StoredAuthTokens | null>(async (): Promise<StoredAuthTokens | null> => {
+    if (version !== tokenStorageVersion) { return null }
+    const prefs: preferences.Preferences = await getPrefs()
+    const value: string = await prefs.get(TOKEN_KEY, '') as string
+    if (value === '') { return null }
+    try {
+      const tokens: StoredAuthTokens = JSON.parse(await decrypt(value)) as StoredAuthTokens
+      if (typeof tokens.accessToken !== 'string' || typeof tokens.refreshToken !== 'string') {
+        throw new Error('Invalid stored token payload')
+      }
+      return version === tokenStorageVersion ? tokens : null
+    } catch (_) {
+      if (version === tokenStorageVersion) {
+        await prefs.delete(TOKEN_KEY)
+        await prefs.flush()
+      }
+      return null
     }
-    return tokens
-  } catch (_) {
-    await prefs.delete(TOKEN_KEY)
-    await prefs.flush()
-    return null
-  }
+  })
 }
 
 export async function clearAuthTokens(): Promise<void> {
-  const prefs: preferences.Preferences = await getPrefs()
-  await prefs.delete(TOKEN_KEY)
-  await prefs.flush()
+  tokenStorageVersion += 1
+  return queueTokenOperation<void>(async (): Promise<void> => {
+    const prefs: preferences.Preferences = await getPrefs()
+    await prefs.delete(TOKEN_KEY)
+    await prefs.flush()
+  })
 }

@@ -73,6 +73,20 @@ public class OrderDao {
         jdbc.update("INSERT INTO order_create_requests(user_id, request_key) VALUES(?,?)", userId, requestKey);
     }
 
+    public void fingerprintCreateRequest(long userId, String requestKey, String fingerprint) {
+        jdbc.update("UPDATE order_create_requests SET request_hash=? WHERE user_id=? AND request_key=?",
+                fingerprint, userId, requestKey);
+    }
+
+    /** Historical null hashes retain their original replay contract and are never guessed/backfilled. */
+    public void requireMatchingCreateRequest(long userId, String requestKey, String fingerprint) {
+        List<String> hashes = jdbc.query("SELECT request_hash FROM order_create_requests WHERE user_id=? AND request_key=? FOR SHARE",
+                (rs, row) -> rs.getString(1), userId, requestKey);
+        if (!hashes.isEmpty() && hashes.getFirst() != null && !hashes.getFirst().equals(fingerprint)) {
+            throw new com.example.takeout.common.BizException(409, "下单请求号已用于不同内容，请核对原订单后重新下单");
+        }
+    }
+
     /** 已完成请求映射到原订单；FOR SHARE 等待首个事务提交且避免重复插入后的锁升级死锁。 */
     public Optional<Long> findCompletedCreateRequest(long userId, String requestKey) {
         List<Long> rows = jdbc.query(
@@ -294,7 +308,8 @@ public class OrderDao {
      */
     public List<Order> listExpiredPending(String deadline) {
         return jdbc.query("SELECT * FROM orders WHERE status = 0 AND " + dateTimeExpression("create_time") +
-                        " < " + DATE_PARAMETER + " ORDER BY id LIMIT 500",
+                        " < " + DATE_PARAMETER + " AND NOT EXISTS (SELECT 1 FROM order_background_retries r WHERE r.order_id=orders.id " +
+                        "AND r.task='TIMEOUT' AND r.next_attempt_at>NOW()) ORDER BY id LIMIT 500",
                 MAPPER, deadline);
     }
 
@@ -342,13 +357,26 @@ public class OrderDao {
 
     public List<Long> listAutoConfirmCandidates(int hours) {
         return jdbc.query("SELECT id FROM orders WHERE status = 4 AND escrow_status = 0 " +
-                        "AND complete_time_dt <= DATE_SUB(NOW(), INTERVAL ? HOUR) ORDER BY id LIMIT 200",
+                        "AND complete_time_dt <= DATE_SUB(NOW(), INTERVAL ? HOUR) " +
+                        "AND NOT EXISTS (SELECT 1 FROM order_background_retries r WHERE r.order_id=orders.id " +
+                        "AND r.task='CONFIRM' AND r.next_attempt_at>NOW()) ORDER BY id LIMIT 200",
                 (rs, rowNum) -> rs.getLong(1), hours);
     }
 
     public List<Order> listSettledByStore(long storeId) {
         return jdbc.query("SELECT * FROM orders WHERE store_id = ? AND status = 4 AND escrow_status = 1 ORDER BY id DESC",
                 MAPPER, storeId);
+    }
+
+    public void deferBackgroundOrder(long orderId, String task) {
+        jdbc.update("INSERT INTO order_background_retries(order_id,task,failure_count,next_attempt_at) " +
+                "VALUES(?,?,1,DATE_ADD(NOW(),INTERVAL 30 SECOND)) ON DUPLICATE KEY UPDATE " +
+                "next_attempt_at=DATE_ADD(NOW(),INTERVAL LEAST(900,30*POW(2,LEAST(failure_count,5))) SECOND)," +
+                "failure_count=LEAST(failure_count+1,1000)", orderId, task);
+    }
+
+    public void clearBackgroundRetry(long orderId, String task) {
+        jdbc.update("DELETE FROM order_background_retries WHERE order_id=? AND task=?", orderId, task);
     }
 
     /** 成功退款先按订单聚合，避免多个退款/商品行把结算额重复计算。 */

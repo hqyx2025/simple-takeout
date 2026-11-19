@@ -141,8 +141,36 @@ public class OrderOperationsService {
         int count=total==null?0:total;
         return new IssuePage(list,count,current,size,(long)current*size<count);
     }
-    @Transactional
     public DeliveryIssue resolve(long admin,long issueId,String action,String note) {
+        if (!"CANCEL".equals(action) && org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive())
+            return resolveInTransaction(admin, issueId, action, note);
+        if ("CANCEL".equals(action)) {
+            if (note == null || note.trim().isBlank() || note.trim().length() > 500) throw new BizException("请填写500字以内处理说明");
+            DeliveryIssue claimed = orderService.getObject().inTransaction(() -> {
+                var rows = db.query("SELECT * FROM delivery_issues WHERE id=? FOR UPDATE", (rs,n)->map(rs), issueId);
+                if (rows.isEmpty()) throw new BizException(404,"异常记录不存在");
+                DeliveryIssue issue = rows.getFirst();
+                if ("RESOLVED".equals(issue.status())) return issue;
+                db.update("UPDATE delivery_issues SET resolution='CANCEL',resolve_note=?,resolver_id=? WHERE id=? AND status='OPEN'",
+                        note.trim(), admin, issueId);
+                return issue;
+            });
+            if ("RESOLVED".equals(claimed.status())) return claimed;
+            Order order = orders.findById(claimed.orderId()).orElseThrow(() -> new BizException(404,"订单不存在"));
+            if (order.status() != 5) {
+                try { orderService.getObject().cancelOrderByAdmin(claimed.orderId()); }
+                catch (RuntimeException failure) {
+                    Order latest = orders.findById(claimed.orderId()).orElse(null);
+                    if (latest != null && latest.status() >= 4 && latest.status() != 5)
+                        db.update("UPDATE delivery_issues SET resolution='' WHERE id=? AND status='OPEN' AND resolution='CANCEL'", issueId);
+                    throw failure;
+                }
+            }
+        }
+        return orderService.getObject().inTransaction(() -> resolveInTransaction(admin, issueId, action, note));
+    }
+
+    private DeliveryIssue resolveInTransaction(long admin,long issueId,String action,String note) {
         String safe=note==null?"":note.trim();
         if(safe.isBlank() || safe.length()>500) throw new BizException("请填写500字以内处理说明");
         if(!Set.of("REASSIGN","RESUME","CANCEL").contains(action==null?"":action)) throw new BizException("处理动作无效");
@@ -152,12 +180,12 @@ public class OrderOperationsService {
         Order order=orders.findByIdForUpdate(orderId).orElseThrow(()->new BizException(404,"订单不存在"));
         DeliveryIssue issue=db.query("SELECT * FROM delivery_issues WHERE id=? FOR UPDATE",(rs,n)->map(rs),issueId).getFirst();
         if("RESOLVED".equals(issue.status())) return issue;
+        String pendingAction = db.queryForObject("SELECT resolution FROM delivery_issues WHERE id=?", String.class, issueId);
+        if ("CANCEL".equals(pendingAction) && !"CANCEL".equals(action)) throw new BizException(409,"该异常正在取消订单，请等待处理完成");
         if("REASSIGN".equals(action)) {
             requireMode(orderId,"RIDER");
             if(order.status()!=2) throw new BizException("仅取餐前允许改派，取餐后请核实并选择继续或取消");
             db.update("UPDATE orders SET rider_id=0 WHERE id=? AND status=2",orderId);
-        } else if("CANCEL".equals(action)) {
-            orderService.getObject().cancelOrderByAdmin(orderId);
         }
         db.update("UPDATE delivery_issues SET status='RESOLVED',resolve_time=NOW(),resolve_note=?,resolver_id=?,resolution=? WHERE id=? AND status='OPEN'",safe,admin,action,issueId);
         return db.query("SELECT * FROM delivery_issues WHERE id=?",(rs,n)->map(rs),issueId).getFirst();

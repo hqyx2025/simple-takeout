@@ -29,7 +29,9 @@ CREATE TABLE IF NOT EXISTS stores (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(128) NOT NULL,
     image VARCHAR(255) DEFAULT '',
-    rating DECIMAL(3,1) NOT NULL DEFAULT 4.5,
+    images TEXT NULL,
+    rating DECIMAL(3,1) NOT NULL DEFAULT 0,
+    rating_count INT NOT NULL DEFAULT 0,
     monthly_sales INT NOT NULL DEFAULT 0,
     delivery_fee DECIMAL(10,2) NOT NULL DEFAULT 0,
     min_order DECIMAL(10,2) NOT NULL DEFAULT 0,
@@ -103,9 +105,19 @@ CREATE TABLE IF NOT EXISTS goods_specs (
 CREATE TABLE IF NOT EXISTS order_create_requests (
     user_id BIGINT NOT NULL,
     request_key VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+    request_hash CHAR(64) DEFAULT NULL,
     order_id BIGINT DEFAULT NULL,
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, request_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS order_background_retries (
+    order_id BIGINT NOT NULL,
+    task VARCHAR(16) NOT NULL,
+    failure_count INT NOT NULL DEFAULT 0,
+    next_attempt_at DATETIME NOT NULL,
+    PRIMARY KEY(order_id, task),
+    KEY idx_order_background_due(task, next_attempt_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS orders (
@@ -159,7 +171,8 @@ CREATE TABLE IF NOT EXISTS orders (
     KEY idx_orders_admin_status_page (status, id),
     KEY idx_orders_pending_timeout (status, create_time, id),
     KEY idx_orders_rider_pool (status, rider_id, ready_time, id),
-    KEY idx_orders_auto_confirm (status, escrow_status, complete_time_dt)
+    KEY idx_orders_auto_confirm (status, escrow_status, complete_time_dt),
+    KEY idx_orders_store_sales (store_id, status, escrow_status, pay_time_dt, pay_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 结构化订单商品快照；orders.items 保留用于旧客户端与存量订单兼容。
@@ -177,7 +190,8 @@ CREATE TABLE IF NOT EXISTS order_items (
     seckill_id BIGINT NOT NULL DEFAULT 0,
     UNIQUE KEY uk_order_items_line (order_id, line_no),
     KEY idx_order_items_goods (goods_id, order_id),
-    KEY idx_order_items_spec (spec_id, order_id)
+    KEY idx_order_items_spec (spec_id, order_id),
+    KEY idx_order_items_sales (order_id, goods_id, quantity)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 每种领券活动总计 5 个独立名额；NULL=可领，0=已计入的历史领取，正数=领取账号。
@@ -251,7 +265,8 @@ CREATE TABLE IF NOT EXISTS payment_transactions (
     UNIQUE KEY uk_payment_transactions_out_trade_no (out_trade_no),
     UNIQUE KEY uk_payment_transactions_provider_id (channel, provider_transaction_id),
     UNIQUE KEY uk_payment_transactions_active_order (active_order_id),
-    KEY idx_payment_transactions_order (order_id, id)
+    KEY idx_payment_transactions_order (order_id, id),
+    KEY idx_payment_transactions_pending (status, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 优惠券领取台账：按活动唯一(user_id,store_id,name)终身限领一次，唯一键兜底并发
@@ -442,8 +457,8 @@ CREATE TABLE IF NOT EXISTS riders (
     total_orders INT NOT NULL DEFAULT 0,
     total_income DECIMAL(10,2) NOT NULL DEFAULT 0,
     status INT NOT NULL DEFAULT 1,
-    -- 骑手配送半径（米）：默认 25 公里；接单圆心=下方 latitude/longitude
-    delivery_radius INT NOT NULL DEFAULT 25000,
+    -- 骑手接单半径（米）；圆心为下方 latitude/longitude。
+    delivery_radius INT NOT NULL DEFAULT 3000,
     latitude DOUBLE DEFAULT NULL,
     longitude DOUBLE DEFAULT NULL,
     location_address VARCHAR(255) NOT NULL DEFAULT '',
@@ -667,7 +682,55 @@ CREATE TABLE IF NOT EXISTS external_refund_attempts (
  provider_transaction_id VARCHAR(128) NOT NULL DEFAULT '',
  amount DECIMAL(10,2) NOT NULL, original_amount DECIMAL(10,2) NOT NULL,
  metadata_json TEXT NOT NULL, status VARCHAR(16) NOT NULL DEFAULT 'REQUESTED',
+ failure_count INT NOT NULL DEFAULT 0, next_attempt_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
  KEY idx_external_refund_recovery(status,updated_at), KEY idx_external_refund_order(order_id,kind,status),
+ KEY idx_external_refund_due(status,next_attempt_at,refund_no),
  KEY idx_external_refund_record(refund_id,status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS user_contact_verifications (
+    user_id BIGINT NOT NULL,
+    kind VARCHAR(8) NOT NULL,
+    value_hash VARCHAR(64) NOT NULL,
+    verified_at DATETIME NOT NULL,
+    PRIMARY KEY(user_id, kind)
+);
+
+-- Separate from wallet locks; entry mutations and account closure acquire this row first.
+CREATE TABLE IF NOT EXISTS account_lifecycle_guards (
+    user_id BIGINT PRIMARY KEY,
+    closed_at DATETIME NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS wallet_movements (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    balance_before DECIMAL(10,2) NOT NULL,
+    balance_after DECIMAL(10,2) NOT NULL,
+    delta DECIMAL(10,2) NOT NULL,
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    KEY idx_wallet_movements_user(user_id, id)
+);
+-- Observed movements only: no invented opening balances or historical backfill.
+CREATE TRIGGER IF NOT EXISTS takeout_wallet_movement
+AFTER UPDATE ON users FOR EACH ROW
+INSERT INTO wallet_movements(user_id,balance_before,balance_after,delta)
+SELECT NEW.id,OLD.balance,NEW.balance,NEW.balance-OLD.balance WHERE NEW.balance<>OLD.balance;
+
+CREATE TABLE IF NOT EXISTS financial_reconciliation_issues (
+    check_type VARCHAR(32) NOT NULL,
+    entity_id BIGINT NOT NULL,
+    evidence TEXT NOT NULL,
+    first_seen DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_seen DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    resolved_at DATETIME NULL,
+    PRIMARY KEY(check_type,entity_id),
+    KEY idx_reconciliation_open(resolved_at,last_seen)
+);
+CREATE TABLE IF NOT EXISTS financial_reconciliation_progress (
+    task VARCHAR(16) PRIMARY KEY,
+    scan_date DATE NOT NULL,
+    last_id BIGINT NOT NULL DEFAULT 0,
+    complete TINYINT NOT NULL DEFAULT 0
+);

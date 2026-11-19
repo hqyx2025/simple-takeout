@@ -34,6 +34,14 @@ public class AfterSalesService {
     private final ObjectMapper json;
     @org.springframework.beans.factory.annotation.Autowired
     private ExternalRefundAttemptService refundAttempts;
+    private org.springframework.transaction.support.TransactionTemplate transactions;
+    private UserDao accountUsers;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void configureAccountLifecycle(UserDao users) { accountUsers = users; }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void configureTransactions(org.springframework.transaction.support.TransactionTemplate value) { transactions = value; }
 
     void configureRefundAttempts(ExternalRefundAttemptService attempts) { this.refundAttempts = attempts; }
 
@@ -87,6 +95,7 @@ public class AfterSalesService {
     @Transactional
     public RefundRecord apply(long userId, long orderId, String reasonType, String reason,
                               String key, BigDecimal amount, List<String> evidence) {
+        accountUsers.lockActiveCustomerLifecycle(userId);
         Order order = requireOrder(orderId, true);
         if (order.userId() != userId) throw new BizException(403, "无权操作该订单");
         String requestKey = key == null || key.isBlank() ? null : text(key, 128, "退款请求标识");
@@ -120,6 +129,7 @@ public class AfterSalesService {
 
     @Transactional
     public RefundRecord appeal(long userId, long orderId, long refundId, String reason, List<String> evidence) {
+        accountUsers.lockActiveCustomerLifecycle(userId);
         Order order = requireOrder(orderId, true);
         if (order.userId() != userId) throw new BizException(403, "无权操作该订单");
         RefundRecord record = refunds.findByIdForUpdate(refundId).orElseThrow(() -> new BizException("退款申请不存在"));
@@ -148,17 +158,29 @@ public class AfterSalesService {
         return requireRefund(refundId);
     }
 
-    @Transactional
     public RefundRecord approve(long refundId) {
+        if ("REFUNDED".equals(requireRefund(refundId).status())) throw new BizException("该退款申请已处理");
+        RefundRecord result = TransactionRetries.execute(transactions, status -> approveInTransaction(refundId));
+        var attempt = refundAttempts == null ? java.util.Optional.<ExternalRefundAttemptService.Attempt>empty() : refundAttempts.byRefund(refundId);
+        if (attempt.isEmpty() || "DONE".equals(attempt.get().status())) return result;
+        payments.executeRefund(attempt.get());
+        return TransactionRetries.execute(transactions, status -> approveInTransaction(refundId));
+    }
+
+    private RefundRecord approveInTransaction(long refundId) {
         RefundRecord initial = requireRefund(refundId);
         Order order = requireOrder(initial.orderId(), true);
-        RefundRecord record = lockPending(refundId);
+        RefundRecord current = refunds.findByIdForUpdate(refundId).orElseThrow(() -> new BizException("退款申请不存在"));
+        if ("REFUNDED".equals(current.status())) return current;
+        if (!"PENDING".equals(current.status())) throw new BizException("该退款申请已处理");
+        RefundRecord record = current;
         if (order.status() != 6 || order.escrowStatus() != record.originalEscrow()
                 || record.amount().compareTo(remainingRefund(order)) > 0) throw new BizException("订单资金状态已变化");
         BigDecimal net = money(order.payAmount()).subtract(money(order.deliveryFee())).max(BigDecimal.ZERO);
         BigDecimal merchant = record.amount().min(net.subtract(merchantRefunded(order)).max(BigDecimal.ZERO));
         BigDecimal platform = record.amount().subtract(merchant);
         boolean full = record.amount().compareTo(remainingRefund(order)) == 0;
+        if (!payments.prepareAfterSalesRefund(order, record.amount(), record.id())) return record;
         ledger.lockWallets(order.userId(), record.merchantId());
         BigDecimal deducted = record.originalEscrow() == 1 ? ledger.deductMerchant(record.merchantId(), merchant) : BigDecimal.ZERO.setScale(2);
         BigDecimal debt = record.originalEscrow() == 1 ? merchant.subtract(deducted) : BigDecimal.ZERO.setScale(2);
@@ -187,13 +209,15 @@ public class AfterSalesService {
         return requireRefund(refundId);
     }
 
-    @Transactional
     public void recoverRefund(ExternalRefundAttemptService.Attempt attempt) {
         if (!"AFTER_SALES".equals(attempt.kind())) throw new IllegalArgumentException("Not an after-sales intent");
-        requireOrder(attempt.orderId(), true);
-        RefundRecord record = refunds.findByIdForUpdate(attempt.refundId()).orElseThrow(() -> new BizException("退款申请不存在"));
-        if ("REFUNDED".equals(record.status())) refundAttempts.doneAfterCommit(attempt.refundNo());
-        else approve(attempt.refundId());
+        payments.executeRefund(attempt);
+        TransactionRetries.executeWithoutResult(transactions, status -> {
+            requireOrder(attempt.orderId(), true);
+            RefundRecord record = refunds.findByIdForUpdate(attempt.refundId()).orElseThrow(() -> new BizException("退款申请不存在"));
+            if ("REFUNDED".equals(record.status())) refundAttempts.completeInTransaction(attempt.refundNo());
+            else approveInTransaction(attempt.refundId());
+        });
     }
 
     /** 调用者持有订单锁并已通过条件更新取得唯一结算权；净货款先偿债，余款入钱包。 */
@@ -237,12 +261,7 @@ public class AfterSalesService {
     }
 
     private String images(List<String> values) {
-        List<String> images = values == null ? List.of() : values;
-        if (images.size() > 9) throw new BizException("证据图片最多9张");
-        for (String path : images) {
-            if (path == null || path.length() > 512 || !path.matches("/uploads/[A-Za-z0-9_./-]+") || path.contains(".."))
-                throw new BizException("证据图片必须使用已上传图片的相对地址");
-        }
+        List<String> images = ImageUploadValidator.validateUrls(values, 50, "证据图片");
         try { return json.writeValueAsString(images); }
         catch (JsonProcessingException error) { throw new BizException("证据图片格式无效"); }
     }

@@ -239,6 +239,7 @@ public class UserCenterService {
 
     @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public Coupon claimCoupon(long userId, long storeId, String name, double threshold, double amount) {
+        if (userDao != null) userDao.lockActiveCustomerLifecycle(userId);
         if (storeId < 0) throw new BizException("店铺参数无效");
         if (storeId > 0) {
             storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
@@ -324,6 +325,7 @@ public class UserCenterService {
     public boolean toggleFavorite(long userId, long storeId) {
         // 切换操作按当前状态分别要求新增或删除权限；账号行锁也串行化同账号的并发切换。
         User actor = userDao.findByIdForUpdate(userId).orElseThrow(() -> new BizException(401, "用户不存在"));
+        if (actor.status() != 1) throw new BizException(401, "账号已停用");
         boolean exists = favoriteDao.exists(userId, storeId);
         CrudPermissions.from(actor).require(exists ? CrudOperation.DELETE : CrudOperation.CREATE);
         Store store = storeDao.findById(storeId).orElseThrow(() -> new BizException("店铺不存在"));
@@ -528,7 +530,7 @@ public class UserCenterService {
     }
 
     private void lockAddressAccount(long userId) {
-        if (userDao == null || userDao.findByIdForUpdate(userId).isEmpty()) {
+        if (userDao == null || userDao.findByIdForUpdate(userId).filter(user -> user.status() == 1).isEmpty()) {
             throw new BizException(401, "用户不存在，请重新登录");
         }
     }

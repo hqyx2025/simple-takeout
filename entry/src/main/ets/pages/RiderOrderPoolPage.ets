@@ -5,7 +5,7 @@ import { AppButtonStyle, AppCardStyle } from '../common/theme/AppTheme'
  */
 import { AppMotion } from '../common/theme/AppMotion'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, getOrderStatusText, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText, riderPickupRadiusKm } from '../common/Constants'
 import { Order, OrderPageData, Rider, RiderPoolSlice, User, UserRole } from '../model/Models'
 import { OrderDataSource } from '../model/OrderDataSource'
 import { canOrderAction } from '../service/OrderStatus'
@@ -142,8 +142,7 @@ export struct RiderOrderPoolPage {
     if (this.rider === null) {
       return ''
     }
-    const radiusMeters: number = this.rider.deliveryRadius ?? 0
-    const radiusKm: number = radiusMeters > 0 ? radiusMeters / 1000 : 25
+    const radiusKm: number = riderPickupRadiusKm(this.rider.deliveryRadius ?? 0)
     const latitude: number | undefined = this.rider.latitude
     const longitude: number | undefined = this.rider.longitude
     const hasLocation: boolean = latitude !== undefined && longitude !== undefined
@@ -151,7 +150,7 @@ export struct RiderOrderPoolPage {
     if (!hasLocation) {
       return '未设置接单位置：请到骑手中心用地图选点或当前定位，否则抢不到单'
     }
-    return `接单范围 ${radiusKm} 公里；平台只把商家与骑手半径内的订单派给你`
+    return `取餐半径 ${radiusKm} 公里；只显示范围内门店的订单`
   }
 
   private needsLocation(): boolean {

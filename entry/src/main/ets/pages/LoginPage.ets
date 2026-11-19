@@ -9,7 +9,7 @@ import { logInfo, logWarn } from '../service/AppLogger'
 import { APP_CONFIG } from '../common/Constants'
 import BuildProfile from 'BuildProfile'
 import { getQuickLoginAccount, QuickLoginAccount } from '../common/QuickLoginConfig'
-import { getApiBaseUrl } from '../service/HttpClient'
+import { getApiBaseUrl, waitForStartupBackend } from '../service/HttpClient'
 import { AppTheme, AppInputStyle, AppButtonStyle } from '../common/theme/AppTheme'
 import { AppMotion } from '../common/theme/AppMotion'
 import { requestEmailCodeApi, EmailCodeResult } from '../service/ApiService'
@@ -31,6 +31,7 @@ export struct LoginPage {
   @State cooldownSeconds: number = 0
   private cooldownTimer: number = -1
   private pageActive: boolean = true
+  private loginAttemptVersion: number = 0
   private previousKeyboardAvoidMode: KeyboardAvoidMode = KeyboardAvoidMode.OFFSET
   private keyboardModeChanged: boolean = false
   @State password: string = ''
@@ -59,7 +60,7 @@ export struct LoginPage {
             Text(this.errorMsg || this.tipMsg).fontSize(14).fontWeight(FontWeight.Medium).textAlign(TextAlign.Center)
               .fontColor(this.errorMsg ? AppTheme.ERROR : AppTheme.SUCCESS).width('100%').padding(10)
               .border({ width: 1, color: this.errorMsg ? AppTheme.ERROR : AppTheme.SUCCESS })
-              .backgroundColor(this.errorMsg ? AppTheme.ERROR_BG : AppTheme.SUCCESS_BG).borderRadius(10)
+              .backgroundColor(this.errorMsg ? AppTheme.ERROR_BG : AppTheme.SUCCESS_BG).borderRadius(AppTheme.CONTROL_RADIUS)
               .id(this.errorMsg ? 'login-error' : 'login-success').margin({ bottom: 8 })
           }.width('100%').constraintSize({ maxWidth: AppTheme.FORM_MAX_WIDTH })
         }.width('100%').justifyContent(FlexAlign.Center).padding({ left: 24, right: 24, top: 8 })
@@ -131,7 +132,7 @@ export struct LoginPage {
         .backgroundColor(Color.Transparent)
         .height(44)
         .padding({ left: 24, right: 24 })
-        .borderRadius(12)
+        .borderRadius(AppTheme.CONTROL_RADIUS)
         .id('version-text')
         .margin({ bottom: 4 })
         .onClick(() => {
@@ -159,6 +160,7 @@ export struct LoginPage {
 
   aboutToDisappear(): void {
     this.pageActive = false
+    this.loginAttemptVersion += 1
     if (this.keyboardModeChanged) {
       try { this.getUIContext().setKeyboardAvoidMode(this.previousKeyboardAvoidMode) } catch (_) {}
       this.keyboardModeChanged = false
@@ -209,6 +211,7 @@ export struct LoginPage {
     const captchaId: string = this.captchaId
     this.captchaId = ''
     try {
+      if (!await waitForStartupBackend() || !this.pageActive) { return }
       const result: EmailCodeResult = await requestEmailCodeApi(this.phone.trim(), this.email.trim(),
         'signin', '', captchaId, this.captchaCode)
       if (!this.pageActive) { return }
@@ -386,9 +389,9 @@ export struct LoginPage {
       .justifyContent(FlexAlign.Center)
     }
     .width('100%')
-    .height(44)
+    .height(AppTheme.CONTROL_HEIGHT)
     .backgroundColor(AppTheme.PRIMARY)
-    .borderRadius(16)
+    .borderRadius(AppTheme.CONTROL_RADIUS)
     .id('login-submit')
     .enabled(!this.submitting && !this.sendingCode)
     .margin({ top: 0 })
@@ -430,10 +433,14 @@ export struct LoginPage {
       this.showError('请输入密码', 'login-password'); return
     }
     this.submitting = true
+    const attemptVersion: number = ++this.loginAttemptVersion
     try {
+      if (!await waitForStartupBackend() || !this.pageActive || attemptVersion !== this.loginAttemptVersion) { return }
       const user: User | undefined = this.useEmailLogin
-        ? await loginByEmailRemote(this.phone.trim(), this.email.trim(), this.emailCode.trim(), this.loginTypeName())
-        : await loginRemote(this.phone.trim(), this.password, this.loginTypeName())
+        ? await loginByEmailRemote(this.phone.trim(), this.email.trim(), this.emailCode.trim(), this.loginTypeName(),
+          (): boolean => this.pageActive && attemptVersion === this.loginAttemptVersion)
+        : await loginRemote(this.phone.trim(), this.password, this.loginTypeName(),
+          (): boolean => this.pageActive && attemptVersion === this.loginAttemptVersion)
       if (!this.pageActive) { return }
       if (user === undefined) {
         this.showError(getLastRemoteErrorMessage() || (this.useEmailLogin ? '验证码不正确或已过期' : '账号或密码错误'))
@@ -454,22 +461,26 @@ export struct LoginPage {
   }
 
   private async quickLogin(role: UserRole): Promise<void> {
-    if (this.submitting) {
+    if (this.submitting || this.sendingCode) {
       promptAction.showToast({ message: '正在处理，请稍候', duration: 1200 })
-      return
-    }
-    const account: QuickLoginAccount | undefined = getQuickLoginAccount(role, getApiBaseUrl())
-    if (account === undefined) {
-      this.errorMsg = '当前环境未配置该身份的快捷登录账号'
-      promptAction.showToast({ message: this.errorMsg, duration: 2200 })
       return
     }
     this.submitting = true
     this.errorMsg = ''
     this.tipMsg = ''
-    this.selectedRole = role
+    const attemptVersion: number = ++this.loginAttemptVersion
     try {
-      const user = await loginRemote(account.phone, account.password, this.loginTypeName())
+      if (!await waitForStartupBackend() || !this.pageActive || attemptVersion !== this.loginAttemptVersion) { return }
+      const account: QuickLoginAccount | undefined = getQuickLoginAccount(role, getApiBaseUrl())
+      if (account === undefined) {
+        this.errorMsg = '当前环境未配置该身份的快捷登录账号'
+        promptAction.showToast({ message: this.errorMsg, duration: 2200 })
+        return
+      }
+      this.selectedRole = role
+      const user = await loginRemote(account.phone, account.password, this.loginTypeName(),
+        (): boolean => this.pageActive && attemptVersion === this.loginAttemptVersion)
+      if (!this.pageActive || attemptVersion !== this.loginAttemptVersion) { return }
       if (user !== undefined && user.role === role) {
         this.phone = account.phone
         this.password = ''
@@ -485,7 +496,7 @@ export struct LoginPage {
           : role === UserRole.RIDER ? '骑手快捷登录失败，请确认账号可用' : '用户快捷登录失败，请确认账号可用'
       }
     } catch (_) {
-      this.errorMsg = '快捷登录失败，请稍后重试'
+      if (this.pageActive) { this.errorMsg = '快捷登录失败，请稍后重试' }
     } finally {
       this.submitting = false
     }
@@ -519,7 +530,7 @@ export struct QuickLoginDialog {
           .backgroundColor(Color.Transparent)
           .height(44)
           .padding({ left: 12, right: 12 })
-          .borderRadius(12)
+          .borderRadius(AppTheme.CONTROL_RADIUS)
           .onClick(() => {
             if (this.controller !== undefined) {
               this.controller.close()

@@ -5,7 +5,8 @@ import { AppButtonStyle, AppCardStyle, AppFilterStyle, AppTheme } from '../../co
  * 主页面 - 简单外卖App
  * 包含：搜索栏、分类导航、店铺列表、店铺详情、购物车、订单列表、个人中心、底部Tab导航
  */
-import { Category, StoreItem, GoodsItem, GoodsSpec, SeckillItem, CartItem, Order, Review, MarketingActivity, Setmeal, SetmealItem } from '../../model/Models'
+import { Address, Category, StoreItem, GoodsItem, GoodsSpec, SeckillItem, CartItem, Order, Review, MarketingActivity, Setmeal, SetmealItem } from '../../model/Models'
+import { storeDeliveryText, storeRatingText } from '../../common/StorePresentation'
 import { addCartItemRemote, updateCartItemQuantityRemote, refreshCartFromServer, isLoggedIn, getAllStoresList, getGoodsForStore, isFavorited, syncCartRemote, syncStoreReviewsRemote, syncGoodsFromServer, toggleFavoriteRemote, fetchSeckillsRemote, getLastRemoteErrorMessage } from '../../service/AppStorageManager'
 import { fetchStoreMerchantCategoriesApi, fetchStoreDetailApi, fetchStoreActivitiesApi, fetchStoreSetmealsApi } from '../../service/ApiService'
 
@@ -17,6 +18,7 @@ import { promptCompat as promptAction, routerCompat as router } from '../../comm
 import { logInfo } from '../../service/AppLogger'
 
 import { AppMotion } from '../../common/theme/AppMotion'
+import { getApiBaseUrl } from '../../service/HttpClient'
 
 class GoodsDataSource implements IDataSource {
   private items: GoodsItem[] = []
@@ -45,16 +47,17 @@ export struct StoreDetailContent {
   @State goodsList: GoodsItem[] = []
   onStoreName: (name: string) => void = () => {}
   @State storeName: string = ''
-  @State storeRating: number = 0
+  @State deliveryStore: StoreItem | null = null
+  @StorageLink('currentAddress') deliveryAddress: Address | null = null
   @State storeMonthlySales: number = 0
   @State storeDeliveryFee: number = 0
   @State storeDeliveryTime: string = ''
-  @State storeDistance: string = ''
   @State storeMinOrder: number = 0
   @State storeTags: string[] = []
   @State storeNotice: string = ''
   // 店铺照片（商户上传的相对地址），用户端详情页顶部展示
   @State storeImage: string = ''
+  @State storeImages: string[] = []
   @State cartCount: number = 0
   @State cartTotal: number = 0
   // 商品行的「- 数量 +」取值依赖购物车，而 ForEach 的 key 用的是稳定的 goods.id：
@@ -119,30 +122,29 @@ export struct StoreDetailContent {
     this.storeMerchantCats = []
     this.goodsLoading = false
     const store = getAllStoresList().find(s => s.id === this.storeId)
+    this.deliveryStore = store ?? null
     if (store === undefined) {
       this.storeName = ''
-      this.storeRating = 0
       this.storeMonthlySales = 0
       this.storeDeliveryFee = 0
       this.storeDeliveryTime = ''
-      this.storeDistance = ''
       this.storeMinOrder = 0
       this.storeTags = []
       this.storeNotice = ''
       this.storeImage = ''
+      this.storeImages = []
     }
     if (store) {
       this.storeName = store.name
       this.onStoreName(store.name)
-      this.storeRating = store.rating
       this.storeMonthlySales = store.monthlySales
       this.storeDeliveryFee = store.deliveryFee
       this.storeDeliveryTime = store.deliveryTime
-      this.storeDistance = store.distance
       this.storeMinOrder = store.minOrder
       this.storeTags = store.tags
       this.storeNotice = store.notice
       this.storeImage = store.image ?? ''
+      this.storeImages = store.images ?? (store.image ? [store.image] : [])
     }
     this.isFav = isFavorited(this.storeId)
     this.storeReviews = []
@@ -222,16 +224,15 @@ export struct StoreDetailContent {
     if (store !== null && store !== undefined) {
       this.storeName = store.name
       this.onStoreName(store.name)
-      this.storeRating = store.rating
+      this.deliveryStore = store
       this.storeMonthlySales = store.monthlySales
       this.storeDeliveryFee = store.deliveryFee
       this.storeDeliveryTime = store.deliveryTime
-      // 距离不在这里覆盖：详情接口不带用户坐标（算不出真实距离），
-      // 覆盖会把列表接口按定位算好的「距你 X km」变成「未知距离」
       this.storeMinOrder = store.minOrder
       this.storeTags = store.tags
       this.storeNotice = store.notice
       this.storeImage = store.image ?? ''
+      this.storeImages = store.images ?? (store.image ? [store.image] : [])
     }
   }
 
@@ -455,11 +456,22 @@ export struct StoreDetailContent {
       // 店铺信息
       Column({ space: 6 }) {
         Row({ space: SPACING.MD }) {
-          Image(merchantImageSource(this.storeImage))
-            .alt(DEFAULT_MERCHANT_IMAGE)
-            .width(84).height(84).objectFit(ImageFit.Contain)
-            .backgroundColor(AppTheme.INPUT).borderRadius(AppTheme.CONTROL_RADIUS)
-            .id('store-header-image')
+          Swiper() {
+            if (this.storeImages.length > 0) {
+              ForEach(this.storeImages, (url: string, index: number) => {
+                Image(merchantImageSource(url)).alt(DEFAULT_MERCHANT_IMAGE)
+                  .width(84).height(84).objectFit(ImageFit.Cover)
+                  .id(index === 0 ? 'store-header-image' : 'store-photo-' + index)
+                  .onClick(() => {
+                    AppStorage.setOrCreate<string>('reviewPreviewUrl', url.startsWith('/') ? getApiBaseUrl() + url : url)
+                    router.pushUrl({ url: 'pages/ReviewImagePage' })
+                  })
+              })
+            } else {
+              Image(DEFAULT_MERCHANT_IMAGE).width(84).height(84).objectFit(ImageFit.Contain).id('store-header-image')
+            }
+          }.width(84).height(84).loop(false).indicator(this.storeImages.length > 1)
+            .backgroundColor(AppTheme.INPUT).borderRadius(AppTheme.CONTROL_RADIUS).clip(true)
           Column({ space: 6 }) {
         Row() {
           Text(this.storeName)
@@ -490,17 +502,28 @@ export struct StoreDetailContent {
         }
         .width('100%')
         Row({ space: SPACING.SM }) {
-          Text(`${this.storeRating}分`).fontSize(FONT_SIZE.MD).fontColor(COLORS.PRIMARY).fontWeight(FontWeight.Bold)
+          Text(storeRatingText(this.deliveryStore?.rating ?? 0, this.deliveryStore?.ratingCount ?? 0))
+            .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY).fontWeight(FontWeight.Bold).id('store-rating-summary')
           Text(`月售${formatSales(this.storeMonthlySales)}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
           Text(`配送${this.storeDeliveryTime}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
         }
         Row({ space: SPACING.SM }) {
           Text(`配送费¥${this.storeDeliveryFee}`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
           Text(`${this.storeMinOrder}元起送`).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
-          Text(this.storeDistance).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
         }
           }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         }.width('100%').alignItems(VerticalAlign.Center)
+        Row({ space: SPACING.SM }) {
+          Text(storeDeliveryText(this.deliveryStore, this.deliveryAddress)).layoutWeight(1)
+            .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).id('store-delivery-preview')
+          if (this.loggedIn) {
+            Button('切换地址').attributeModifier(new AppButtonStyle()).height(44).id('store-change-delivery-address')
+              .onClick(() => {
+                AppStorage.setOrCreate<boolean>('addressSelectionMode', true)
+                router.pushUrl({ url: 'pages/AddressListPage' })
+              })
+          }
+        }.width('100%')
         Row({ space: 6 }) {
           ForEach(this.storeTags, (tag: string) => {
             Text(tag).fontSize(FONT_SIZE.XS).fontColor(COLORS.TAG_TEXT)

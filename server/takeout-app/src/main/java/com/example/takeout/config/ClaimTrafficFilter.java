@@ -24,6 +24,7 @@ import java.util.regex.Pattern;
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
 public class ClaimTrafficFilter extends OncePerRequestFilter {
     private static final Pattern RIDER_GRAB = Pattern.compile("/api/rider/orders/([^/]+)/grab");
+    private static final Pattern PAYMENT = Pattern.compile("/api/orders/[0-9]+/(pay|payment/query)");
     private final ClaimTrafficGuard guard;
     private final JwtUtil jwt;
     private final ObjectMapper json;
@@ -42,13 +43,17 @@ public class ClaimTrafficFilter extends OncePerRequestFilter {
     @Override protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = path(request);
         return !"POST".equalsIgnoreCase(request.getMethod())
-                || !("/api/coupons/claim".equals(path) || RIDER_GRAB.matcher(path).matches());
+                || !("/api/coupons/claim".equals(path) || RIDER_GRAB.matcher(path).matches()
+                || "/api/orders".equals(path) || PAYMENT.matcher(path).matches());
     }
 
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         boolean rider = RIDER_GRAB.matcher(path(request)).matches();
-        try (var lease = guard.enter(rider ? ClaimTrafficGuard.Action.RIDER : ClaimTrafficGuard.Action.COUPON)) {
+        ClaimTrafficGuard.Action action = rider ? ClaimTrafficGuard.Action.RIDER
+                : "/api/orders".equals(path(request)) ? ClaimTrafficGuard.Action.ORDER
+                : PAYMENT.matcher(path(request)).matches() ? ClaimTrafficGuard.Action.PAYMENT : ClaimTrafficGuard.Action.COUPON;
+        try (var lease = guard.enter(action)) {
             // 这里只做无数据库的签名/角色预检；原认证仍完整校验账号、吊销和四端权限。
             verifyToken(request, rider);
             String orderId = null;

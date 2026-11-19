@@ -12,6 +12,8 @@ export interface ServerStore {
   name: string
   image: string
   rating: number
+  ratingCount?: number
+  distanceKm?: number
   monthlySales: number
   deliveryFee: number
   minOrder: number
@@ -289,7 +291,7 @@ export interface ServerRider {
   totalOrders: number
   totalIncome: number
   status: number
-  /** 配送半径（米）：默认 25 公里 */
+  /** 骑手到门店的取餐半径（米）。 */
   deliveryRadius?: number
   /** 接单位置（抢单圆心） */
   latitude?: number
@@ -469,6 +471,8 @@ export interface ProfileUpdateRequest {
   phone: string
   email: string
   currentPassword: string
+  phoneCode?: string
+  emailCode?: string
 }
 
 export interface RechargeRequest {

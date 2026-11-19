@@ -39,7 +39,9 @@ class UserCenterAddressBoundaryTest {
 
     @BeforeEach
     void stubAccountLock() {
-        when(userDao.findByIdForUpdate(1)).thenReturn(Optional.of(mock(User.class)));
+        User account = mock(User.class);
+        when(account.status()).thenReturn(1);
+        when(userDao.findByIdForUpdate(1)).thenReturn(Optional.of(account));
         when(addressDao.listByUser(1)).thenReturn(List.of());
     }
 

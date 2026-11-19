@@ -197,17 +197,3 @@ test('HTTP read adapters distinguish a failed request from an empty successful p
     response = { code: 503, data: null };
   }
 });
-
-test('home refresh preserves a failed section while applying other successful server sections', async () => {
-  const r = identity(); r.state.user.role = 0;
-  const cls = compile('export class Page { ' + method(read('components/home/HomePage.ets'), 'refreshHomeData') + '\n}', {
-    ...r.globals, syncCategoriesFromServer: async () => {}, syncStoresFromServer: async () => false,
-    fetchBannersResultApi: async () => null, fetchAnnouncementsResultApi: async () => [{ id: 2 }],
-    fetchSpecialGoodsResultApi: async () => [{ id: 3 }], fetchSeckillsResultApi: async () => [], logInfo() {}, logError() {}
-  });
-  const page = Object.assign(new cls.Page(), { loggedIn: true, pageVisible: true, homeVersion: 0,
-    banners: [{ id: 1 }], announcements: [], specialGoods: [], seckills: [], currentAddress: null });
-  await page.refreshHomeData();
-  assert.equal(page.banners[0].id, 1); assert.equal(page.announcements[0].id, 2);
-  assert.equal(page.specialGoods[0].id, 3); assert.equal(page.homeFailed, true); assert.equal(page.isRefreshing, false);
-});

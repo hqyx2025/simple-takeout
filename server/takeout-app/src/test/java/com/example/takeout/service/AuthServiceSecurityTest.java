@@ -145,12 +145,16 @@ class AuthServiceSecurityTest {
         when(userDao.findById(1)).thenReturn(java.util.Optional.of(current));
 
         AuthService service = new AuthService(userDao, mock(JwtUtil.class), mock(SmsCodeVerifier.class));
+        ContactVerificationService contacts = mock(ContactVerificationService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "contactVerification", contacts);
         BizException missing = assertThrows(BizException.class,
                 () -> service.updateProfile(1, "新昵称", "13900139000", "new@example.com", ""));
         assertEquals("修改手机号或邮箱需要验证当前密码", missing.getMessage());
 
         when(userDao.findById(1)).thenReturn(java.util.Optional.of(current));
-        service.updateProfile(1, "新昵称", "13900139000", "new@example.com", "oldpass");
+        service.updateProfile(1, "新昵称", "13900139000", "new@example.com", "oldpass", "123456", "654321");
+        verify(contacts).verify(current, "PHONE", "13900139000", "123456");
+        verify(contacts).consume(current, "EMAIL", "new@example.com", "654321");
         verify(userDao).updatePassword(eq(1L), eq(current.password()), anyString());
     }
     @Test
@@ -164,6 +168,9 @@ class AuthServiceSecurityTest {
         when(userDao.findByIdForUpdate(1)).thenReturn(java.util.Optional.of(latest));
         AuthService service = new AuthService(userDao, mock(JwtUtil.class));
 
+        ContactVerificationService contacts = mock(ContactVerificationService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "contactVerification", contacts);
+
         assertThrows(BizException.class, () -> service.updateProfile(
                 1, "用户", "13900139000", "new@example.com", "oldpass"));
         org.mockito.Mockito.verify(userDao, org.mockito.Mockito.never()).updatePassword(
@@ -171,7 +178,7 @@ class AuthServiceSecurityTest {
         org.mockito.Mockito.verify(userDao, org.mockito.Mockito.never()).updateProfile(
                 org.mockito.ArgumentMatchers.anyLong(), anyString(), anyString(), anyString());
 
-        service.updateProfile(1, "用户", "13900139000", "new@example.com", "newpass");
+        service.updateProfile(1, "用户", "13900139000", "new@example.com", "newpass", "123456", "654321");
         verify(userDao).updatePassword(eq(1L), eq(latest.password()), anyString());
     }
 

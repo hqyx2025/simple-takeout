@@ -126,7 +126,7 @@ export default function reviewFlowTest() {
         await scrollToIdOrText(driver, 'review-image-count', ''), 'review-image-count')
       const counterText: string = await counter.getText()
       console.info('[ReviewFlow] image counter = ' + counterText)
-      expect(counterText).assertEqual('0/3')
+      expect(counterText).assertEqual('0/20')
 
       // ---------- 2. 用应用自己的上传代码路径上传一张真实 PNG ----------
       const pngPath: string = writeTestPng()

@@ -78,11 +78,6 @@ public class ReviewDao {
         return count == null ? 0 : count;
     }
 
-    public double avgRating(long storeId) {
-        Double avg = jdbc.queryForObject("SELECT AVG(rating) FROM reviews WHERE store_id = ?", Double.class, storeId);
-        return avg == null ? 0 : avg;
-    }
-
     public double avgGoodsRating(long goodsId) {
         Double avg = jdbc.queryForObject("SELECT AVG(rating) FROM reviews WHERE goods_id = ?", Double.class, goodsId);
         return avg == null ? 0 : avg;

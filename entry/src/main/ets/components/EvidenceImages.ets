@@ -6,7 +6,7 @@ export struct EvidenceImages {
   @Prop disabled: boolean = false
   contextVersion: () => number = (): number => 0
   build() {
-    ImageUpload({ images: this.images, maxFiles: 3, disabled: this.disabled, contextVersion: this.contextVersion,
+    ImageUpload({ images: this.images, maxFiles: 50, disabled: this.disabled, contextVersion: this.contextVersion,
       onChange: (images: string[]) => { this.images = images },
       onBusy: (busy: boolean) => { this.uploading = busy } })
   }

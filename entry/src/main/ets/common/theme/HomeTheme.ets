@@ -15,10 +15,10 @@ export class HomeTheme {
   static readonly EMPTY_ICON: number = 40
   static readonly CATEGORY_SIZE: number = 44
   static readonly ENTRY_SIZE: number = 48
-  static readonly TOUCH_HEIGHT: number = 44
-  static readonly SEARCH_HEIGHT: number = 48
+  static readonly TOUCH_HEIGHT: number = AppTheme.TOUCH_SIZE
+  static readonly SEARCH_HEIGHT: number = AppTheme.CONTROL_HEIGHT
   static readonly TAB_HEIGHT: number = 64
-  static readonly CONTROL_RADIUS: number = 16
+  static readonly CONTROL_RADIUS: number = AppTheme.CONTROL_RADIUS
   static readonly GRID_IMAGE_RATIO: number = 1.6
   static readonly STORE_PLACEHOLDER: Resource = $r('app.media.store_placeholder')
 }

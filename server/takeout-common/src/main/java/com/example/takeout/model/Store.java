@@ -30,8 +30,34 @@ public record Store(
         int deliveryRadius,
         int reviewStatus,
         int platformStatus,
-        String reviewReason
+        String reviewReason,
+        List<String> images,
+        int ratingCount
 ) {
+    public Store {
+        images = images == null ? (image == null || image.isBlank() ? List.of() : List.of(image)) : List.copyOf(images);
+    }
+
+    public Store(long id, String name, String image, double rating, int monthlySales, double deliveryFee,
+                 double minOrder, String deliveryTime, String distance, String tags, String notice,
+                 String address, Double latitude, Double longitude, int categoryId, String categoryIds,
+                 long ownerId, int status, int recommended, String createTime, int deliveryRadius,
+                 int reviewStatus, int platformStatus, String reviewReason, List<String> images) {
+        this(id, name, image, rating, monthlySales, deliveryFee, minOrder, deliveryTime, distance, tags, notice,
+                address, latitude, longitude, categoryId, categoryIds, ownerId, status, recommended, createTime,
+                deliveryRadius, reviewStatus, platformStatus, reviewReason, images, 0);
+    }
+
+    public Store(long id, String name, String image, double rating, int monthlySales, double deliveryFee,
+                 double minOrder, String deliveryTime, String distance, String tags, String notice,
+                 String address, Double latitude, Double longitude, int categoryId, String categoryIds,
+                 long ownerId, int status, int recommended, String createTime, int deliveryRadius,
+                 int reviewStatus, int platformStatus, String reviewReason) {
+        this(id, name, image, rating, monthlySales, deliveryFee, minOrder, deliveryTime, distance, tags, notice,
+                address, latitude, longitude, categoryId, categoryIds, ownerId, status, recommended, createTime,
+                deliveryRadius, reviewStatus, platformStatus, reviewReason,
+                image == null || image.isBlank() ? List.of() : List.of(image));
+    }
     /** 历史店铺兼容构造；新店必须显式使用待审核状态。 */
     public Store(long id, String name, String image, double rating, int monthlySales, double deliveryFee,
                  double minOrder, String deliveryTime, String distance, String tags, String notice,
@@ -74,31 +100,33 @@ public record Store(
         if (!validCoordinates(userLatitude, userLongitude) || !validCoordinates(latitude, longitude)) {
             return new Store(id, name, image, rating, monthlySales, deliveryFee, minOrder, deliveryTime,
                     UNKNOWN_DISTANCE, tags, notice, address, latitude, longitude, categoryId, categoryIds,
-                    ownerId, status, recommended, createTime, deliveryRadius, reviewStatus, platformStatus, reviewReason);
+                    ownerId, status, recommended, createTime, deliveryRadius, reviewStatus, platformStatus, reviewReason, images, ratingCount);
         }
         double distanceKm = haversine(userLatitude, userLongitude, latitude, longitude);
         return new Store(id, name, image, rating, monthlySales, deliveryFee, minOrder, deliveryTime,
                 formatDistance(distanceKm), tags, notice, address, latitude, longitude, categoryId, categoryIds,
-                ownerId, status, recommended, createTime, deliveryRadius, reviewStatus, platformStatus, reviewReason);
+                ownerId, status, recommended, createTime, deliveryRadius, reviewStatus, platformStatus, reviewReason, images, ratingCount);
     }
 
-    /** 商户未填最远配送半径时使用的默认值（米）：30 公里（约一个小城市范围）。 */
-    public static final int DEFAULT_DELIVERY_RADIUS_METERS = 30000;
+    public static final int DEFAULT_DELIVERY_RADIUS_METERS = 10000;
 
-    /** 商户可接受的半径下限/上限（米）：过小/过大由前端弹窗确认，服务端只挡明显非法值。 */
     public static final int MIN_DELIVERY_RADIUS_METERS = 1000;
-    public static final int MAX_DELIVERY_RADIUS_METERS = 200000;
+    public static final int MAX_DELIVERY_RADIUS_METERS = 15000;
 
-    public static final double ORDER_DISTANCE_LIMIT_KM = 500;
-    public static final double ORDER_DISTANCE_CONFIRM_KM = 200;
+    public static final double ORDER_DISTANCE_CONFIRM_KM = 5;
 
-    /** 统一下单距离上限；缺坐标允许浏览，下单入口另行校验双方坐标。 */
+    public int effectiveDeliveryRadiusMeters() {
+        return deliveryRadius <= 0 ? DEFAULT_DELIVERY_RADIUS_METERS
+                : Math.clamp(deliveryRadius, MIN_DELIVERY_RADIUS_METERS, MAX_DELIVERY_RADIUS_METERS);
+    }
+
+    /** 门店的配送范围；缺坐标允许浏览，下单入口另行校验双方坐标。 */
     public boolean canDeliver(Double userLatitude, Double userLongitude) {
         if (!validCoordinates(userLatitude, userLongitude) || !validCoordinates(latitude, longitude)) {
             return true;
         }
         // 容纳三角函数在阈值上的浮点误差（小于一微米）。
-        return distanceKmTo(userLatitude, userLongitude) <= ORDER_DISTANCE_LIMIT_KM + 1e-9;
+        return distanceKmTo(userLatitude, userLongitude) <= effectiveDeliveryRadiusMeters() / 1000.0 + 1e-9;
     }
 
     /** 到指定坐标的直线距离（公里）；任一侧缺坐标返回 -1（表示无法判定）。 */
@@ -173,8 +201,20 @@ public record Store(
             boolean deliverable,
             int reviewStatus,
             int platformStatus,
-            String reviewReason
+            String reviewReason,
+            List<String> images,
+            int ratingCount,
+            Double distanceKm
     ) {
+        public StoreView(long id, String name, String image, double rating, int monthlySales, double deliveryFee,
+                         double minOrder, String deliveryTime, String distance, List<String> tags, String notice,
+                         String address, Double latitude, Double longitude, int categoryId, List<Integer> categoryIds,
+                         long ownerId, int status, int recommended, int deliveryRadius, boolean deliverable,
+                         int reviewStatus, int platformStatus, String reviewReason, List<String> images) {
+            this(id, name, image, rating, monthlySales, deliveryFee, minOrder, deliveryTime, distance, tags, notice,
+                    address, latitude, longitude, categoryId, categoryIds, ownerId, status, recommended, deliveryRadius,
+                    deliverable, reviewStatus, platformStatus, reviewReason, images, 0, null);
+        }
     }
 
     public StoreView toView(List<String> tagsList, List<Integer> categoryIdsList) {
@@ -183,9 +223,11 @@ public record Store(
 
     public StoreView toView(List<String> tagsList, List<Integer> categoryIdsList,
                             Double userLatitude, Double userLongitude) {
-        return new StoreView(id, name, image, rating, monthlySales, deliveryFee, minOrder,
+        double rawDistance = distanceKmTo(userLatitude, userLongitude);
+        return new StoreView(id, name, image, ratingCount == 0 ? 0 : rating, monthlySales, deliveryFee, minOrder,
                 deliveryTime, distance, tagsList, notice, address, latitude, longitude,
                 categoryId, categoryIdsList, ownerId, status, recommended,
-                deliveryRadius, canDeliver(userLatitude, userLongitude), reviewStatus, platformStatus, reviewReason);
+                effectiveDeliveryRadiusMeters(), canDeliver(userLatitude, userLongitude), reviewStatus, platformStatus, reviewReason,
+                images, ratingCount, rawDistance < 0 ? null : rawDistance);
     }
 }

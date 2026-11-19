@@ -86,6 +86,7 @@ public final class PersonalDataCrypto {
     }
 
     public boolean isCurrent(String value) { return value != null && value.startsWith("pd1:" + currentId + ":"); }
+    public String currentKeyPrefix() { return "pd1:" + currentId + ":"; }
 
     public String hash(String purpose, String value) {
         try {

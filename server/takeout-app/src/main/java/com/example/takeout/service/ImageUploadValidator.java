@@ -7,6 +7,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Locale;
 import java.util.Set;
+import java.util.List;
+import java.net.URI;
 
 final class ImageUploadValidator {
 
@@ -15,6 +17,32 @@ final class ImageUploadValidator {
     private static final long MAX_BYTES = 5L * 1024 * 1024;
 
     private ImageUploadValidator() { }
+
+    static List<String> validateUrls(List<String> urls, int max, String label) {
+        List<String> values = urls == null ? List.of() : urls;
+        if (values.size() > max) throw new BizException(label + "最多" + max + "张");
+        for (String value : values) validateUrl(value);
+        return List.copyOf(values);
+    }
+
+    static String validateUrl(String value) {
+        if (value == null || value.length() > 255 || value.contains("..")) throw invalidUrl();
+        String path = value;
+        if (!value.startsWith("/uploads/")) {
+            try {
+                URI uri = URI.create(value);
+                if (!"https".equals(uri.getScheme()) || uri.getHost() == null || uri.getUserInfo() != null
+                        || uri.getQuery() != null || uri.getFragment() != null) throw invalidUrl();
+                path = uri.getPath();
+                if (path == null || path.contains("..") || !path.contains("/uploads/")) throw invalidUrl();
+                path = path.substring(path.indexOf("/uploads/"));
+            } catch (IllegalArgumentException e) { throw invalidUrl(); }
+        }
+        if (path == null || path.contains("..") || !path.matches("/uploads/[A-Za-z0-9_./-]+\\.(jpg|jpeg|png|webp|gif)")) throw invalidUrl();
+        return value;
+    }
+
+    private static BizException invalidUrl() { return new BizException("请使用已上传的图片地址"); }
 
     static String validate(MultipartFile file) {
         if (file == null || file.isEmpty()) throw new BizException("请选择要上传的图片");

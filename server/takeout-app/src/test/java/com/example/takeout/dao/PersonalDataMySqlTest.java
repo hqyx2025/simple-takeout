@@ -38,6 +38,20 @@ class PersonalDataMySqlTest {
     private String key(){byte[] bytes=new byte[32];new java.security.SecureRandom().nextBytes(bytes);return Base64.getEncoder().encodeToString(bytes);}
     private PersonalDataMigration migration(PersonalDataCrypto value){return new PersonalDataMigration(db,tx,value,new UserDao(db,value),new AddressDao(db,value),new RiderDao(db,value));}
 
+    @Test void restartSkipsAlreadyEncryptedRowsEvenWhenBusinessHoldsTheirLocks() throws Exception {
+        var user=tx.execute(status->users.insert("current","13800138999","unused",0,0,NOW));
+        migration(crypto).run(new DefaultApplicationArguments());
+        try(var connection=db.getDataSource().getConnection();var statement=connection.createStatement();
+            var executor=Executors.newSingleThreadExecutor()) {
+            connection.setAutoCommit(false);
+            statement.executeQuery("SELECT id FROM users WHERE id="+user.id()+" FOR UPDATE").close();
+            try {
+                executor.submit(()->migration(crypto).run(new DefaultApplicationArguments())).get(3,TimeUnit.SECONDS);
+            } finally { connection.rollback(); }
+        }
+        assertEquals(user.phone(),users.findById(user.id()).orElseThrow().phone());
+    }
+
     @Test void encryptedPhoneSearchMatchesMysqlLikeIncludingWildcardsCountsAndPagination() {
         var first=tx.execute(status->users.insert("alpha","13800138999","unused",0,25,NOW));
         var second=tx.execute(status->users.insert("beta","13900139001","unused",1,35,NOW));

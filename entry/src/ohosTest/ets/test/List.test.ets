@@ -1,4 +1,5 @@
 import abilityTest from './Ability.test';
+import avatarCropTest from './AvatarCrop.test';
 import storeReviewFlowTest from './StoreReviewFlow.test';
 import campusAcceptanceTest from './CampusAcceptance.test';
 import boundaryFlowTest from './BoundaryFlow.test';
@@ -26,6 +27,7 @@ import checkoutDeliveryTimeTest from './CheckoutDeliveryTime.test';
 import orderMobilePaymentTest from './OrderMobilePayment.test';
 
 export default function testsuite() {
+  avatarCropTest();
   allPagesReviewTest();
   abilityTest();
   loginFlowTest();

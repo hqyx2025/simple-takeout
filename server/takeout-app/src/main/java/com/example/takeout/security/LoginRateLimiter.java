@@ -48,7 +48,7 @@ public class LoginRateLimiter implements org.springframework.beans.factory.Initi
             Map.entry("refresh", new Policy(30, 60, 60)),
             Map.entry("logout", new Policy(30, 60, 60)),
             Map.entry("location", new Policy(30, 60, 60)),
-            Map.entry("upload", new Policy(30, 3600, 3600)));
+            Map.entry("upload", new Policy(120, 3600, 3600)));
 
     private static final String KEY_PREFIX = "takeout:rl:";
     private static final String BLOCK_SUFFIX = ":blocked";

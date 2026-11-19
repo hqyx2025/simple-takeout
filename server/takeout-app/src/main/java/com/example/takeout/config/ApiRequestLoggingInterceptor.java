@@ -76,7 +76,7 @@ public class ApiRequestLoggingInterceptor implements HandlerInterceptor {
             } else {
                 log.error("[接口请求异常] traceId={} {} method={} uri={} status={} durationMs={} error={}",
                         traceId, identity, request.getMethod(), request.getRequestURI(), response.getStatus(), durationMs,
-                        ex.getMessage(), ex);
+                        ex.getClass().getSimpleName());
             }
             recordOperation(request, response, handler, userId, role, traceId);
         } finally {
@@ -90,20 +90,24 @@ public class ApiRequestLoggingInterceptor implements HandlerInterceptor {
         if (operationLogDao == null || !(userId instanceof Number operatorId)
                 || !(role instanceof Number operatorRole)
                 || request.getAttribute(com.example.takeout.common.DatabaseAvailability.FAILURE_ATTRIBUTE) != null
-                || "GET".equalsIgnoreCase(request.getMethod())
                 || "OPTIONS".equalsIgnoreCase(request.getMethod())) {
             return;
         }
         String path = request.getRequestURI();
+        boolean sensitiveRead = "GET".equalsIgnoreCase(request.getMethod()) && (
+                path.matches(".*/api/(auth/me(?:/contacts)?|addresses(?:/.*)?|wallet/bank-cards(?:/.*)?|user/.*|orders(?:/.*)?|merchant/orders(?:/.*)?|rider/orders(?:/.*)?|admin/(users|employees|orders|refunds)(?:/.*)?)"))
+                || ("POST".equalsIgnoreCase(request.getMethod()) && path.matches(".*/api/wallet/bank-cards/[0-9]+/reveal"));
+        if ("GET".equalsIgnoreCase(request.getMethod()) && !sensitiveRead) return;
         long orderId = extractOrderId(path);
         boolean adminMutation = operatorRole.intValue() == 2 && path.startsWith("/api/admin/");
         boolean merchantMutation = operatorRole.intValue() == 1 && path.startsWith("/api/merchant/");
-        if (!adminMutation && !merchantMutation && orderId == 0) {
+        if (!sensitiveRead && !adminMutation && !merchantMutation && orderId == 0) {
             return;
         }
         String action = handler instanceof HandlerMethod method
                 ? method.getBeanType().getSimpleName() + "." + method.getMethod().getName()
                 : path;
+        if (sensitiveRead) action = "READ:" + action;
         if (path.length() > 255) {
             path = path.substring(0, 255);
         }

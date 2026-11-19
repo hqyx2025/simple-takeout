@@ -51,6 +51,8 @@ import static org.mockito.Mockito.when;
  * ② 万一仍撞上 {@code orders.order_no} 唯一键，要换号重试一次而不是直接把失败抛给用户。</p>
  */
 class OrderServiceOrderNoTest {
+    @org.junit.jupiter.api.BeforeEach
+    void admissionFixture() { OrderTestFixture.admission(storeDao); OrderTestFixture.goods(goodsDao); service.configureTransactions(OrderTestFixture.transactions()); }
 
     private final OrderDao orderDao = mock(OrderDao.class);
     private final StoreDao storeDao = mock(StoreDao.class);

@@ -9,6 +9,7 @@ import com.example.takeout.dao.PaymentTransactionDao;
 import com.example.takeout.model.Order;
 import com.example.takeout.model.PaymentTransaction;
 import com.example.takeout.service.mq.DomainEventPublisher;
+import com.example.takeout.service.TransactionRetries;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
@@ -41,13 +42,12 @@ public class ExternalPaymentService {
         this.refundAttempts = refundAttempts;
     }
     private com.example.takeout.service.PromotionService promotions;
-    private com.example.takeout.service.HotDataCacheService cache;
+    @Autowired
+    private com.example.takeout.dao.StoreDao stores;
 
     @Autowired
-    void configureBusinessRules(com.example.takeout.service.PromotionService promotions,
-                                com.example.takeout.service.HotDataCacheService cache) {
+    void configureBusinessRules(com.example.takeout.service.PromotionService promotions) {
         this.promotions = promotions;
-        this.cache = cache;
     }
 
     @Autowired
@@ -76,13 +76,18 @@ public class ExternalPaymentService {
     }
 
     public PaymentLaunch startPayment(String channel, Order order, String mode) {
+        requireOutsideTransaction();
         mode = normalizeMode(mode);
         if (!providerPaymentsEnabled()) {
             throw new BizException(503, "第三方支付尚未启用，请联系管理员");
         }
         PaymentGateway gateway = requireGateway(channel);
         String paymentMode = mode;
-        PaymentTransaction active = transactions.execute(status -> preparePayment(channel, paymentMode, order));
+        PaymentTransaction previous = transactionDao.findActiveByOrder(order.id()).orElse(null);
+        if (previous != null && channel.equals(previous.channel()) && !paymentMode.equals(previous.paymentMode())) {
+            closePendingPayment(order.id());
+        }
+        PaymentTransaction active = TransactionRetries.execute(transactions, status -> preparePayment(channel, paymentMode, order));
         if (!"PENDING".equals(active.status()) || !blank(active.paymentUrl())) return launch(active);
         return createPrepay(gateway, active, order.orderNo());
     }
@@ -102,39 +107,32 @@ public class ExternalPaymentService {
 
     /** SDK 校验查单响应签名；通知未及时到达时复用同一事务和幂等校验确认支付。 */
     public void refreshPayment(long orderId) {
-        transactions.executeWithoutResult(status -> {
-            Order order = orderDao.findByIdForUpdate(orderId).orElseThrow(() -> new BizException("订单不存在"));
-            if (order.status() != 0) return;
-            PaymentTransaction payment = transactionDao.findActiveByOrder(orderId).orElse(null);
-            if (payment == null) return;
-            if (!providerPaymentsEnabled()) throw new BizException(503, "第三方支付尚未启用，请联系管理员");
-            PaymentGateway.QueryResult result = requireGateway(payment.channel()).query(payment.outTradeNo());
-            if (result.paid()) applyVerifiedNotice(payment.channel(), result.notice());
-            // 未扫描的支付宝二维码可能尚无交易；只由取消流程关闭本地预支付，避免刷新清掉二维码。
-        });
+        requireOutsideTransaction();
+        Order order = orderDao.findById(orderId).orElseThrow(() -> new BizException("订单不存在"));
+        if (order.status() != 0) return;
+        PaymentTransaction payment = transactionDao.findActiveByOrder(orderId).orElse(null);
+        if (payment == null) return;
+        if (!providerPaymentsEnabled()) throw new BizException(503, "第三方支付尚未启用，请联系管理员");
+        PaymentGateway.QueryResult result = requireGateway(payment.channel()).query(payment.outTradeNo());
+        if (result.paid()) settleVerifiedNotice(payment.channel(), result.notice());
     }
 
     private PaymentTransaction preparePayment(String channel, String mode, Order original) {
         Order order = orderDao.findByIdForUpdate(original.id()).orElseThrow(() -> new BizException("订单不存在"));
+        if (order.userId() != original.userId()) throw new BizException(403, "无权操作该订单");
+        if (order.status() == 1) {
+            PaymentTransaction successful = transactionDao.findSuccessfulByOrder(order.id()).orElse(null);
+            if (successful != null && "SUCCESS".equals(successful.status())) return successful;
+        }
         if (order.status() != 0 || isExpired(order.createTime())) throw new BizException("订单已无法支付");
+        if (stores != null) stores.lockForOrderAdmission(order.storeId(), false);
         PaymentTransaction active = transactionDao.findActiveByOrder(order.id()).orElse(null);
         if (active != null) {
             if (!channel.equals(active.channel())) {
                 throw new BizException(409, "该订单已有其他支付渠道正在处理");
             }
             if (mode.equals(active.paymentMode())) return active;
-            // Changing SDK/QR entry points must first close the previous provider trade under the order row lock.
-            // If the old SDK payload is paid late, the existing CLOSED callback path refunds that charge.
-            try {
-                closePendingPayment(order.id());
-            } catch (IllegalStateException providerUnavailable) {
-                throw new BizException(503, "支付状态暂无法确认，请稍后重试扫码支付");
-            }
-            Order latest = orderDao.findByIdForUpdate(order.id()).orElseThrow(() -> new BizException("订单不存在"));
-            if (latest.status() != 0) {
-                return transactionDao.findSuccessfulByOrder(order.id())
-                        .orElseThrow(() -> new BizException(409, "订单状态已变化，请刷新后重试"));
-            }
+            throw new BizException(409, "支付入口正在切换，请刷新后重试");
         }
 
         BigDecimal amount = BigDecimal.valueOf(order.payAmount()).setScale(2);
@@ -156,12 +154,21 @@ public class ExternalPaymentService {
     }
 
     public NotificationResult acceptNotification(String channel, String rawBody, Map<String, String> metadata) {
+        requireOutsideTransaction();
         if (!providerPaymentsEnabled()) {
             throw new SecurityException("Payment notifications are disabled");
         }
         PaymentGateway gateway = requireGateway(channel);
         PaymentGateway.VerifiedNotice notice = gateway.verifyNotification(rawBody, metadata);
-        return transactions.execute(status -> applyVerifiedNotice(channel, notice));
+        return settleVerifiedNotice(channel, notice);
+    }
+
+    private NotificationResult settleVerifiedNotice(String channel, PaymentGateway.VerifiedNotice notice) {
+        NotificationResult result = TransactionRetries.execute(transactions, status -> applyVerifiedNotice(channel, notice));
+        if (result != NotificationResult.REFUND_PENDING) return result;
+        PaymentTransaction payment = transactionDao.findByOutTradeNo(notice.outTradeNo()).orElseThrow();
+        executeRefund(refundAttempts.find(refundNo(payment)).orElseThrow());
+        return TransactionRetries.execute(transactions, status -> applyVerifiedNotice(channel, notice));
     }
 
     private NotificationResult applyVerifiedNotice(String channel, PaymentGateway.VerifiedNotice notice) {
@@ -201,7 +208,10 @@ public class ExternalPaymentService {
         }
         if ("CLOSED".equals(payment.status()) || order.status() != 0 || isExpired(order.createTime())) {
             // A late success can race a timeout/other payment. Refund the verified charge with a stable idempotency key.
-            submitRefund("LATE", payment, 0, refundNo(payment), payment.amount(), notice.providerTransactionId(), null);
+            if (!prepareRefund("LATE", payment, 0, refundNo(payment), payment.amount(), notice.providerTransactionId(), null)) {
+                return NotificationResult.REFUND_PENDING;
+            }
+            refundAttempts.completeInTransaction(refundNo(payment));
             transactionDao.markLateRefunded(payment.id(), notice.providerTransactionId(), now());
             // The verified charge and its compensating refund are both financial facts.
             paymentRecordDao.insert(order.id(), order.userId(), order.payAmount(), "PAY", channel, "SUCCESS", now());
@@ -218,9 +228,6 @@ public class ExternalPaymentService {
         }
         paymentRecordDao.insert(order.id(), order.userId(), order.payAmount(), "PAY", channel, "SUCCESS", now);
         if (promotions != null) promotions.paid(order.id());
-        if (cache != null) DomainEventPublisher.afterCommit(() -> {
-            for (String pattern : com.example.takeout.service.HotDataCacheService.Keys.STOCK_DEPENDENT_PATTERNS) cache.evictByPattern(pattern);
-        });
         eventPublisher.publish(DomainEventPublisher.ORDER_PAID, order.id(),
                 Map.of("userId", order.userId(), "payAmount", order.payAmount()));
         return NotificationResult.PAID;
@@ -228,13 +235,14 @@ public class ExternalPaymentService {
 
     /** Close before cancellation; a success discovered by the query is settled and caller reloads the order. */
     public void closePendingPayment(long orderId) {
+        requireOutsideTransaction();
         PaymentTransaction payment = transactionDao.findActiveByOrder(orderId).orElse(null);
         if (payment == null) return;
         PaymentGateway gateway = requireGateway(payment.channel());
         PaymentGateway.QueryResult result = gateway.query(payment.outTradeNo());
         if (result.paid()) {
             PaymentGateway.VerifiedNotice paid = result.notice();
-            transactions.execute(status -> applyVerifiedNotice(payment.channel(), paid));
+            settleVerifiedNotice(payment.channel(), paid);
             return;
         }
         if (!result.closed()) {
@@ -242,12 +250,15 @@ public class ExternalPaymentService {
             result = gateway.query(payment.outTradeNo());
             if (result.paid()) {
                 PaymentGateway.VerifiedNotice paid = result.notice();
-                transactions.execute(status -> applyVerifiedNotice(payment.channel(), paid));
+                settleVerifiedNotice(payment.channel(), paid);
                 return;
             }
             if (!result.closed()) throw new BizException(503, "支付渠道关单尚未确认，请稍后重试");
         }
-        transactionDao.markClosed(payment.id());
+        TransactionRetries.executeWithoutResult(transactions, status -> {
+            orderDao.findByIdForUpdate(orderId).orElseThrow(() -> new BizException("订单不存在"));
+            transactionDao.markClosed(payment.id());
+        });
     }
 
     /** Direct compatibility callers still enter the durable cancellation refund protocol. */
@@ -260,7 +271,7 @@ public class ExternalPaymentService {
         PaymentTransaction payment = transactionDao.findSuccessfulByOrder(order.id()).orElse(null);
         if (payment == null) return PaymentChannels.BALANCE;
         if ("REFUNDED".equals(payment.status())) return payment.channel();
-        submitRefund("CANCEL", payment, 0, refundNo(payment), payment.amount(), payment.providerTransactionId(), cancellation);
+        requireConfirmedRefund(refundNo(payment));
         transactionDao.markRefunded(payment.id());
         return payment.channel();
     }
@@ -270,30 +281,55 @@ public class ExternalPaymentService {
         if (payment == null) return PaymentChannels.BALANCE;
         if ("REFUNDED".equals(payment.status())) throw new BizException("原支付已全额退款");
         if (amount.signum() <= 0 || amount.compareTo(payment.amount()) > 0) throw new BizException("退款金额无效");
-        submitRefund("AFTER_SALES", payment, refundId, "AS" + payment.id() + "R" + refundId,
-                amount, payment.providerTransactionId(), null);
+        requireConfirmedRefund("AS" + payment.id() + "R" + refundId);
         if (full) transactionDao.markRefunded(payment.id());
         return payment.channel();
     }
 
-    private void submitRefund(String kind, PaymentTransaction payment, long refundId, String number, BigDecimal amount,
+    public boolean prepareCancellationRefund(Order order, com.example.takeout.service.ExternalRefundAttemptService.Cancellation cancellation) {
+        PaymentTransaction payment = transactionDao.findSuccessfulByOrder(order.id()).orElse(null);
+        return payment == null || "REFUNDED".equals(payment.status()) || prepareRefund("CANCEL", payment, 0,
+                refundNo(payment), payment.amount(), payment.providerTransactionId(), cancellation);
+    }
+
+    public boolean prepareAfterSalesRefund(Order order, BigDecimal amount, long refundId) {
+        PaymentTransaction payment = transactionDao.findSuccessfulByOrder(order.id()).orElse(null);
+        if (payment == null) return true;
+        if ("REFUNDED".equals(payment.status()) || amount.signum() <= 0 || amount.compareTo(payment.amount()) > 0)
+            throw new BizException("原支付已退款或退款金额无效");
+        return prepareRefund("AFTER_SALES", payment, refundId, "AS" + payment.id() + "R" + refundId,
+                amount, payment.providerTransactionId(), null);
+    }
+
+    private boolean prepareRefund(String kind, PaymentTransaction payment, long refundId, String number, BigDecimal amount,
                               String providerId, com.example.takeout.service.ExternalRefundAttemptService.Cancellation cancellation) {
-        PaymentGateway gateway = requireGateway(payment.channel());
+        requireGateway(payment.channel());
         var attempt = refundAttempts.prepare(kind, payment, refundId, number, amount, providerId, cancellation);
-        if ("REQUESTED".equals(attempt.status())) {
-            gateway.refund(payment.outTradeNo(), number, amount, payment.amount());
-            refundAttempts.confirmed(number);
-        }
-        refundAttempts.doneAfterCommit(number);
+        return !"REQUESTED".equals(attempt.status());
+    }
+
+    public void executeRefund(com.example.takeout.service.ExternalRefundAttemptService.Attempt attempt) {
+        requireOutsideTransaction();
+        var current = refundAttempts.find(attempt.refundNo()).orElseThrow();
+        if (!"REQUESTED".equals(current.status())) return;
+        requireGateway(current.channel()).refund(current.outTradeNo(), current.refundNo(), current.amount(), current.originalAmount());
+        refundAttempts.confirmed(current.refundNo());
+    }
+
+    private void requireConfirmedRefund(String number) {
+        var attempt = refundAttempts.find(number).orElseThrow(() -> new BizException(409, "退款尚未登记"));
+        if ("REQUESTED".equals(attempt.status())) throw new BizException(409, "退款渠道正在处理中，请稍后重试");
+        refundAttempts.completeInTransaction(number);
     }
 
     /** Stored provider identity and amount were verified before the independent LATE intent was written. */
     public void recoverLateRefund(com.example.takeout.service.ExternalRefundAttemptService.Attempt attempt) {
         if (!"LATE".equals(attempt.kind())) throw new IllegalArgumentException("Not a late payment refund");
-        transactions.executeWithoutResult(status -> {
+        executeRefund(attempt);
+        TransactionRetries.executeWithoutResult(transactions, status -> {
             applyVerifiedNotice(attempt.channel(), new PaymentGateway.VerifiedNotice(attempt.outTradeNo(),
                     attempt.providerTransactionId(), amountFen(attempt.originalAmount()), "CNY", true));
-            refundAttempts.doneAfterCommit(attempt.refundNo());
+            refundAttempts.completeInTransaction(attempt.refundNo());
         });
     }
 
@@ -303,7 +339,15 @@ public class ExternalPaymentService {
 
     private PaymentLaunch createPrepay(PaymentGateway gateway, PaymentTransaction payment, String orderNo) {
         try {
-            return transactions.execute(status -> {
+            requireOutsideTransaction();
+            Order snapshot = orderDao.findById(payment.orderId()).orElseThrow(() -> new BizException("订单不存在"));
+            if (snapshot.status() != 0 || isExpired(snapshot.createTime())) throw new BizException("订单已无法支付");
+            LocalDateTime expiresAt = LocalDateTime.parse(snapshot.createTime(), TIME_FORMAT)
+                    .plusMinutes(Math.max(1, payTimeoutMinutes));
+            String url = "APP".equals(payment.paymentMode())
+                    ? gateway.createAppPayment(payment.outTradeNo(), "外卖订单 " + orderNo, payment.amount(), expiresAt)
+                    : gateway.createQrPayment(payment.outTradeNo(), "外卖订单 " + orderNo, payment.amount(), expiresAt);
+            return TransactionRetries.execute(transactions, status -> {
                 Order locked = orderDao.findByIdForUpdate(payment.orderId())
                         .orElseThrow(() -> new BizException("订单不存在"));
                 if (locked.status() != 0 || isExpired(locked.createTime())) throw new BizException("订单已无法支付");
@@ -312,11 +356,6 @@ public class ExternalPaymentService {
                     throw new BizException(409, "支付请求已更新，请刷新后重试");
                 }
                 if (!blank(current.paymentUrl())) return launch(current);
-                LocalDateTime expiresAt = LocalDateTime.parse(locked.createTime(), TIME_FORMAT)
-                        .plusMinutes(Math.max(1, payTimeoutMinutes));
-                String url = "APP".equals(payment.paymentMode())
-                        ? gateway.createAppPayment(payment.outTradeNo(), "外卖订单 " + orderNo, payment.amount(), expiresAt)
-                        : gateway.createQrPayment(payment.outTradeNo(), "外卖订单 " + orderNo, payment.amount(), expiresAt);
                 transactionDao.setPaymentUrl(payment.id(), url);
                 return launch(new PaymentTransaction(payment.id(), payment.orderId(), payment.userId(), payment.channel(),
                         payment.amount(), payment.outTradeNo(), null, "PENDING", url, payment.createTime(), null,
@@ -391,6 +430,11 @@ public class ExternalPaymentService {
         return LocalDateTime.now().format(TIME_FORMAT);
     }
 
+    private static void requireOutsideTransaction() {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("Payment channel I/O must run outside a database transaction");
+    }
+
     private static boolean blank(String value) {
         return value == null || value.isBlank();
     }
@@ -411,5 +455,5 @@ public class ExternalPaymentService {
         }
     }
 
-    public enum NotificationResult { PAID, DUPLICATE, REFUNDED }
+    public enum NotificationResult { PAID, DUPLICATE, REFUNDED, REFUND_PENDING }
 }

@@ -33,6 +33,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class OrderServiceSecurityTest {
+    @org.junit.jupiter.api.BeforeEach
+    void admissionFixture() { OrderTestFixture.admission(storeDao); OrderTestFixture.goods(goodsDao); service.configureTransactions(OrderTestFixture.transactions()); }
 
     private final OrderDao orderDao = mock(OrderDao.class);
     private final StoreDao storeDao = mock(StoreDao.class);

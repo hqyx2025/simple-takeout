@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const { randomUUID } = require('node:crypto');
-const source = fs.readFileSync(require('node:path').join(__dirname, '../server/takeout-gateway/src/main/resources/static/erp.js'), 'utf8');
+const source = fs.readFileSync(require('node:path').join(__dirname, '../web/erp.js'), 'utf8');
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
 async function runtime({ storage = new Map(), ownerId = 1, materialCount = 1, supplierCount = 0, purchaseCount = 2, documentNumber } = {}) {

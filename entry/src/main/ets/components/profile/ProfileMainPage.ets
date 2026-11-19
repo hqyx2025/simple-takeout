@@ -13,6 +13,7 @@ import { promptCompat as promptAction, routerCompat as router } from '../../comm
 import { HomeTheme } from '../../common/theme/HomeTheme'
 
 import { AppMotion } from '../../common/theme/AppMotion'
+import { getApiBaseUrl } from '../../service/HttpClient'
 
 @Component
 export struct ProfileMainPage {
@@ -28,6 +29,7 @@ export struct ProfileMainPage {
   // 余额显示只由当前页面的接口结果驱动，避免 StorageLink 旧快照回调覆盖新余额。
   @State balance: number = 0
   @State isRefreshing: boolean = false
+  @State avatarFailed: boolean = false
   @State refreshStatus: string = ''
   onNavigateLogin: () => void = () => {}
   private lastRefreshAt: number = 0
@@ -77,6 +79,7 @@ export struct ProfileMainPage {
 
   private applyUser(nextUser: User): void {
     const normalizedBalance: number = Number.isFinite(nextUser.balance) ? nextUser.balance : 0
+    if (nextUser.avatar !== this.user.avatar) { this.avatarFailed = false }
     this.user = nextUser
     // 直接使用接口返回值更新显示文本，避免 StorageLink 写入后的即时回读仍是旧快照。
     this.balanceDisplay = normalizedBalance.toFixed(2)
@@ -224,7 +227,11 @@ export struct ProfileMainPage {
       Button({ type: ButtonType.Normal }) {
         Row({ space: 14 }) {
           Column() {
-            if (this.loggedIn && this.user.username.length > 0) {
+            if (this.loggedIn && this.user.avatar && !this.avatarFailed) {
+              Image(this.user.avatar.startsWith('/') ? getApiBaseUrl() + this.user.avatar : this.user.avatar)
+                .width(64).height(64).objectFit(ImageFit.Cover).borderRadius(32)
+                .onError(() => { this.avatarFailed = true }).id('profile-main-avatar-image')
+            } else if (this.loggedIn && this.user.username.length > 0) {
               Text(this.user.username.charAt(0))
                 .fontSize(26).fontWeight(FontWeight.Bold).fontColor(HomeTheme.ACCENT)
             } else {
@@ -233,7 +240,7 @@ export struct ProfileMainPage {
             }
           }
           .width(64).height(64).justifyContent(FlexAlign.Center)
-          .backgroundColor(HomeTheme.SOFT).borderRadius(22)
+          .backgroundColor(HomeTheme.SOFT).borderRadius(32)
           Column({ space: 7 }) {
             Text(this.user.username)
               .fontSize(22).fontWeight(FontWeight.Bold).fontColor(HomeTheme.TEXT)

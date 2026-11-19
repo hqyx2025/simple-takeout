@@ -42,7 +42,8 @@ public class RocketMqConfiguration {
         consumer.setVipChannelEnabled(false);
         consumer.setConsumeFromWhere(ConsumeFromWhere.CONSUME_FROM_FIRST_OFFSET);
         consumer.setConsumeMessageBatchMaxSize(1);
-        consumer.setConsumeThreadMin(1);
+        // RocketMQ uses an unbounded executor queue: maximum alone does not grow past the core count.
+        consumer.setConsumeThreadMin(4);
         consumer.setConsumeThreadMax(4);
         consumer.setMaxReconsumeTimes(16);
         consumer.subscribe(topic, "*");

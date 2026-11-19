@@ -8,6 +8,7 @@ import com.example.takeout.model.Order;
 import com.example.takeout.service.mq.DomainEventPublisher;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 
 import java.util.List;
 import java.util.Optional;
@@ -41,6 +42,9 @@ class MerchantRejectServiceTest {
             mock(ReviewDao.class), users, mock(RefundDao.class), new ObjectMapper(), mock(CartItemMapper.class),
             mock(RiderDao.class), specs, mock(SeckillDao.class), mock(HotDataCacheService.class), events,
             mock(org.springframework.beans.factory.ObjectProvider.class), payments);
+
+    @BeforeEach
+    void configureShortTransaction() { service.configureTransactions(OrderTestFixture.transactions()); }
 
     @Test
     void itemUnavailableRejectsOnceRefundsAndDisablesOnlyTheOrderedSpec() throws Exception {

@@ -19,6 +19,20 @@ import java.util.Optional;
  */
 @Repository
 public class StoreDao {
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
+
+    private static List<String> readImages(String value, String cover) {
+        if (value != null && !value.isBlank()) {
+            try { return JSON.readValue(value, new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {}); }
+            catch (java.io.IOException e) { throw new IllegalStateException("店铺照片数据无效", e); }
+        }
+        return cover == null || cover.isBlank() ? List.of() : List.of(cover);
+    }
+
+    private static String writeImages(List<String> images) {
+        try { return JSON.writeValueAsString(images); }
+        catch (com.fasterxml.jackson.core.JsonProcessingException e) { throw new IllegalArgumentException(e); }
+    }
 
     private static final String SELECT_STORES = "SELECT s.*, COALESCE(sold.monthly_sales, 0) AS real_monthly_sales " +
             "FROM stores s LEFT JOIN (SELECT o.store_id, COUNT(*) AS monthly_sales FROM orders o WHERE " +
@@ -48,7 +62,9 @@ public class StoreDao {
             rs.getInt("delivery_radius"),
             rs.getInt("review_status"),
             rs.getInt("platform_status"),
-            rs.getString("review_reason")
+            rs.getString("review_reason"),
+            readImages(rs.getString("images"), rs.getString("image")),
+            rs.getInt("rating_count")
     );
 
     private static final RowMapper<MarketingActivity> MARKETING_MAPPER = (rs, i) -> new MarketingActivity(
@@ -222,7 +238,9 @@ public class StoreDao {
     }
 
     public Optional<Store> findById(long id) {
-        return jdbc.query(SELECT_STORES + "WHERE s.id = ?", MAPPER, GoodsDao.monthlySalesArgs(id)).stream().findFirst();
+        return jdbc.query("SELECT s.*,(SELECT COUNT(*) FROM orders o WHERE o.store_id=s.id AND "
+                + GoodsDao.recentPaidOrders("o") + ") AS real_monthly_sales FROM stores s WHERE s.id=?",
+                MAPPER, GoodsDao.monthlySalesArgs(id)).stream().findFirst();
     }
 
     /** 配送范围只读取门店本身，避免为每笔候选订单重复聚合全站近月销量。 */
@@ -231,17 +249,26 @@ public class StoreDao {
                 .stream().findFirst();
     }
 
+    public List<Store> findForDispatchByIds(java.util.Collection<Long> storeIds) {
+        if (storeIds == null || storeIds.isEmpty()) return List.of();
+        List<Long> ids = storeIds.stream().distinct().toList();
+        String slots = String.join(",", java.util.Collections.nCopies(ids.size(), "?"));
+        return jdbc.query("SELECT s.*,0 AS real_monthly_sales FROM stores s WHERE s.id IN (" + slots + ")", MAPPER, ids.toArray());
+    }
+
     public Optional<Store> findByIdForUpdate(long id) {
         return jdbc.query("SELECT s.*, s.monthly_sales AS real_monthly_sales FROM stores s WHERE s.id = ? FOR UPDATE",
                 MAPPER, id).stream().findFirst();
     }
 
     /** 与平台管控共用店铺行锁，防止校验后停用、仍创建新交易的竞态。 */
-    public void lockForOrderAdmission(long id, boolean requireOpen) {
-        Store store = findByIdForUpdate(id).orElseThrow(() -> new com.example.takeout.common.BizException("店铺不存在"));
+    public Store lockForOrderAdmission(long id, boolean requireOpen) {
+        Store store = jdbc.query("SELECT s.*, s.monthly_sales AS real_monthly_sales FROM stores s WHERE s.id = ? FOR SHARE",
+                MAPPER, id).stream().findFirst().orElseThrow(() -> new com.example.takeout.common.BizException("店铺不存在"));
         if (!store.available() || (requireOpen && store.status() != 1)) {
             throw new com.example.takeout.common.BizException("店铺未通过审核、已停用或休息中，暂不能受理新交易");
         }
+        return store;
     }
 
     public void updateReview(long storeId, int status, String reason) {
@@ -273,19 +300,19 @@ public class StoreDao {
     }
 
     public long insert(Store s) {
-        jdbc.update("INSERT INTO stores(name, image, rating, monthly_sales, delivery_fee, min_order, delivery_time, distance, tags, notice, address, latitude, longitude, delivery_radius, category_id, category_ids, owner_id, status, recommended, create_time, review_status, platform_status, review_reason) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        jdbc.update("INSERT INTO stores(name, image, rating, monthly_sales, delivery_fee, min_order, delivery_time, distance, tags, notice, address, latitude, longitude, delivery_radius, category_id, category_ids, owner_id, status, recommended, create_time, review_status, platform_status, review_reason, images) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 s.name(), s.image(), s.rating(), s.monthlySales(), s.deliveryFee(), s.minOrder(),
                 s.deliveryTime(), s.distance(), s.tags(), s.notice(), s.address(), s.latitude(), s.longitude(),
                 s.deliveryRadius(), s.categoryId(), s.categoryIds(), s.ownerId(), s.status(), s.recommended(), s.createTime(),
-                s.reviewStatus(), s.platformStatus(), s.reviewReason());
+                s.reviewStatus(), s.platformStatus(), s.reviewReason(), writeImages(s.images()));
         return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 
     public void update(Store s) {
-        jdbc.update("UPDATE stores SET name=?, image=?, delivery_fee=?, min_order=?, delivery_time=?, distance=?, tags=?, notice=?, address=?, latitude=?, longitude=?, delivery_radius=?, category_id=?, category_ids=? WHERE id=?",
+        jdbc.update("UPDATE stores SET name=?, image=?, delivery_fee=?, min_order=?, delivery_time=?, distance=?, tags=?, notice=?, address=?, latitude=?, longitude=?, delivery_radius=?, category_id=?, category_ids=?, images=? WHERE id=?",
                 s.name(), s.image(), s.deliveryFee(), s.minOrder(),
                 s.deliveryTime(), s.distance(), s.tags(), s.notice(), s.address(), s.latitude(), s.longitude(),
-                s.deliveryRadius(), s.categoryId(), s.categoryIds(), s.id());
+                s.deliveryRadius(), s.categoryId(), s.categoryIds(), writeImages(s.images()), s.id());
     }
 
     public void updateMonthlySales(long storeId, int sales) {
@@ -301,8 +328,14 @@ public class StoreDao {
     }
 
     /** 评价后重算店铺平均评分（保留一位小数）。 */
-    public void updateRating(long storeId, double rating) {
-        jdbc.update("UPDATE stores SET rating = ? WHERE id = ?", rating, storeId);
+    public void updateRatingFromReviews(long storeId) {
+        jdbc.update("""
+                UPDATE stores s JOIN (
+                  SELECT COALESCE(ROUND(AVG(person_rating), 1), 0) AS score, COUNT(*) AS voters
+                  FROM (SELECT AVG(rating) AS person_rating FROM reviews
+                        WHERE store_id = ? AND user_id > 0 AND rating BETWEEN 1 AND 5 GROUP BY user_id) per_person
+                ) r SET s.rating = r.score, s.rating_count = r.voters WHERE s.id = ?
+                """, storeId, storeId);
     }
 
     /** 评价与下单均先锁店铺再写商品，避免相反锁序形成死锁。 */

@@ -49,7 +49,7 @@ export struct EmailCaptchaField {
           onChange: (value: string) => { this.captchaCode = value },
           required: true }).layoutWeight(1)
         Button({ type: ButtonType.Normal }).width(120).height(52).padding(2).margin({ top: 24 })
-          .backgroundColor(AppTheme.INPUT).border({ width: 1, color: AppTheme.BORDER }).borderRadius(AppTheme.CONTROL_RADIUS)
+          .backgroundColor(AppTheme.INPUT).border({ width: 1, color: AppTheme.CONTROL_BORDER }).borderRadius(AppTheme.CONTROL_RADIUS)
           .enabled(!this.loading && !this.disabled).id('email-captcha-refresh').accessibilityText('更换图片校对码')
           .onClick(() => { this.reload() })
           .overlay(this.captchaImage())

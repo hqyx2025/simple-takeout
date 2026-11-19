@@ -3,15 +3,16 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
-const source = fs.readFileSync('server/takeout-gateway/src/main/resources/static/app.js', 'utf8');
+const source = fs.readFileSync('web/app.js', 'utf8');
 const begin = source.indexOf('  const api = async (');
-const code = source.slice(begin, source.indexOf('\n  };', begin) + 5) + '\nglobalThis.callApi = api;';
+const cache = source.slice(source.indexOf('  const pageData ='), source.indexOf('  let authRequestVersion'));
+const code = cache + source.slice(begin, source.indexOf('\n  };', begin) + 5) + '\nglobalThis.callApi = api;';
 
 test('offline reads and writes have actionable copy and retain uncertain write classification without replay', async () => {
   for (const method of ['GET', 'POST']) {
     const calls = [];
     const context = vm.createContext({
-      state: { token: 'isolated-test-token' }, FormData: class FormData {},
+      state: { token: 'isolated-test-token' }, FormData: class FormData {}, clearTimeout,
       TakeoutUrls: { localPath: path => '/takeout' + path }, document: { baseURI: 'https://example.test/takeout/' },
       fetch: async (...args) => { calls.push(args); throw new TypeError('Failed to fetch'); }
     });

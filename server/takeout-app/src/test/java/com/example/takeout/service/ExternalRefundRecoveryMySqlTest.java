@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.*;
 
-/** At most two pooled connections: one business transaction plus one independent intent transaction. */
+/** One pooled connection proves channel I/O never retains a business connection or nests REQUIRES_NEW. */
 @EnabledIfEnvironmentVariable(named="TAKEOUT_MYSQL_CONCURRENCY_TEST", matches="1")
 class ExternalRefundRecoveryMySqlTest {
     private HikariDataSource source;
@@ -49,9 +49,10 @@ class ExternalRefundRecoveryMySqlTest {
     private PaymentRecordDao records;
     private PaymentGateway gateway;
     private final RiderDao riders = mock(RiderDao.class);
-    private final Map<String, BigDecimal> remoteRefunds = new HashMap<>();
-    private final List<String> channelCalls = new ArrayList<>();
+    private final Map<String, BigDecimal> remoteRefunds = new java.util.concurrent.ConcurrentHashMap<>();
+    private final List<String> channelCalls = java.util.Collections.synchronizedList(new ArrayList<>());
     private final AtomicBoolean loseChannelResponse = new AtomicBoolean();
+    private java.util.concurrent.CountDownLatch channelEntered, releaseChannel;
 
     @BeforeEach
     void setUp() {
@@ -63,7 +64,7 @@ class ExternalRefundRecoveryMySqlTest {
         admin = new JdbcTemplate(new DriverManagerDataSource(base + options, username, password));
         admin.execute("CREATE DATABASE " + database);
         source = new HikariDataSource(); source.setJdbcUrl(base + database + options);
-        source.setUsername(username); source.setPassword(password); source.setMaximumPoolSize(2);
+        source.setUsername(username); source.setPassword(password); source.setMaximumPoolSize(1);
         source.setMinimumIdle(0); source.setConnectionTimeout(5000);
         new ResourceDatabasePopulator(new ClassPathResource("schema.sql")).execute(source);
         db = new JdbcTemplate(source); new AfterSalesSchemaMigration(db).run(null);
@@ -82,6 +83,13 @@ class ExternalRefundRecoveryMySqlTest {
         events = mock(DomainEventPublisher.class);
         gateway = mock(PaymentGateway.class); when(gateway.channel()).thenReturn("ALIPAY");
         doAnswer(invocation -> {
+            assertFalse(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive(),
+                    "Channel refund must not run within a JDBC transaction");
+            assertEquals(1, db.queryForObject("SELECT 1", Integer.class), "The only connection remains available during channel I/O");
+            if (channelEntered != null) {
+                channelEntered.countDown();
+                assertTrue(releaseChannel.await(5, java.util.concurrent.TimeUnit.SECONDS));
+            }
             String number = invocation.getArgument(1); BigDecimal amount = invocation.getArgument(2);
             BigDecimal previous = remoteRefunds.putIfAbsent(number, amount);
             if (previous != null) assertEquals(0, previous.compareTo(amount));
@@ -99,7 +107,8 @@ class ExternalRefundRecoveryMySqlTest {
         ReflectionTestUtils.invokeMethod(payments, "configureTransactions", new TransactionTemplate(manager));
         var salesTarget = new AfterSalesService(new OrderDao(db), new StoreDao(db), new RefundDao(db), new AfterSalesDao(db),
                 payments, records, events, new ObjectMapper());
-        salesTarget.configureRefundAttempts(attempts); sales = transactional(salesTarget);
+        salesTarget.configureRefundAttempts(attempts); salesTarget.configureTransactions(new TransactionTemplate(manager));
+        salesTarget.configureAccountLifecycle(new UserDao(db)); sales = transactional(salesTarget);
         var orderTarget = new OrderService(new OrderDao(db), new StoreDao(db), mock(GoodsDao.class), mock(AddressDao.class),
                 new CouponDao(db), mock(ReviewDao.class), new UserDao(db), new RefundDao(db), new ObjectMapper(),
                 mock(CartItemMapper.class), riders, mock(GoodsSpecDao.class), mock(SeckillDao.class),
@@ -137,6 +146,66 @@ class ExternalRefundRecoveryMySqlTest {
         assertEquals(3, value("SELECT debt_amount FROM after_sales_ledger"));
         assertEquals(5, value("SELECT SUM(amount) FROM payment_records WHERE type='REFUND'"));
         assertEquals(0, value("SELECT balance FROM users WHERE id=2"), "External refunds never credit the local wallet");
+    }
+
+    @Test
+    void concurrentRefundsProgressWithOneConnectionWhileBothChannelsWait() throws Exception {
+        db.update("INSERT INTO orders(id,order_no,user_id,store_id,store_name,status,items,address,delivery_fee,pay_amount," +
+                "escrow_status,create_time,pay_time,complete_time) VALUES(8,'NO8',2,3,'store',4,'[]','{}',3,13,1,NOW(),NOW(),NOW())");
+        db.update("INSERT INTO payment_transactions(id,order_id,user_id,channel,amount,out_trade_no,provider_transaction_id,status,create_time) " +
+                "VALUES(10,8,2,'ALIPAY',13,'ALI8','provider8','SUCCESS',NOW())");
+        long first = sales.apply(2,7,"OTHER","餐损","one",new BigDecimal("5.00"),List.of()).id();
+        long second = sales.apply(2,8,"OTHER","餐损","two",new BigDecimal("5.00"),List.of()).id();
+        channelEntered = new java.util.concurrent.CountDownLatch(2);
+        releaseChannel = new java.util.concurrent.CountDownLatch(1);
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var a = pool.submit(() -> sales.approve(first));
+            var b = pool.submit(() -> sales.approve(second));
+            try {
+                assertTrue(channelEntered.await(5, java.util.concurrent.TimeUnit.SECONDS), "Both network requests must progress with a one-connection pool");
+                assertEquals(2, value("SELECT COUNT(*) FROM external_refund_attempts WHERE status='REQUESTED'"));
+                assertEquals(0, source.getHikariPoolMXBean().getActiveConnections());
+            } finally { releaseChannel.countDown(); }
+            assertEquals("REFUNDED", a.get(5, java.util.concurrent.TimeUnit.SECONDS).status());
+            assertEquals("REFUNDED", b.get(5, java.util.concurrent.TimeUnit.SECONDS).status());
+        }
+        assertEquals(2, value("SELECT COUNT(*) FROM external_refund_attempts WHERE status='DONE'"));
+        assertEquals(10, value("SELECT SUM(amount) FROM payment_records WHERE type='REFUND'"));
+        System.out.println("[boundary/refund] actual-MySQL pool=1 threads=2 channel=controlled-stub money=10.00 intents=DONE");
+    }
+
+    @Test
+    void prepayAndStatusQueryReleaseTheDatabaseConnectionBeforeChannelIo() {
+        db.update("DELETE FROM payment_records");
+        db.update("DELETE FROM payment_transactions");
+        String createdAt = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        db.update("UPDATE orders SET status=0,escrow_status=0,create_time=?,create_time_dt=? WHERE id=7", createdAt, createdAt);
+        when(gateway.createQrPayment(anyString(), anyString(), any(), any())).thenAnswer(call -> {
+            assertFalse(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+            assertEquals(0, source.getHikariPoolMXBean().getActiveConnections());
+            return "https://qr.example/payment";
+        });
+        var launch = payments.startPayment("ALIPAY", new OrderDao(db).findById(7).orElseThrow(), "QR");
+        assertEquals("PENDING",launch.status());
+        assertEquals(0,value("SELECT status FROM orders WHERE id=7"));
+        when(gateway.query(launch.outTradeNo())).thenAnswer(call -> {
+            assertFalse(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+            assertEquals(0, source.getHikariPoolMXBean().getActiveConnections());
+            return new PaymentGateway.QueryResult(true,false,new PaymentGateway.VerifiedNotice(launch.outTradeNo(),"remote-7",1300,"CNY",true));
+        });
+        payments.refreshPayment(7);
+        assertEquals(1,value("SELECT status FROM orders WHERE id=7"));
+        assertEquals(1,value("SELECT COUNT(*) FROM payment_records WHERE type='PAY'"));
+        System.out.println("[boundary/payment] actual-MySQL pool=1 prepay/query transaction=false paid-ledger=1");
+    }
+
+    @Test
+    void refundChannelRunsOutsideTransactionsAndCommitsOneFinancialFact() {
+        long id = sales.apply(2,7,"OTHER","餐损","outside-transaction",new BigDecimal("5.00"),List.of()).id();
+        sales.approve(id);
+        assertEquals("DONE", text("SELECT status FROM external_refund_attempts"));
+        assertEquals(5,value("SELECT SUM(amount) FROM payment_records WHERE type='REFUND'"));
+        assertEquals(1,remoteRefunds.size());
     }
 
     @Test

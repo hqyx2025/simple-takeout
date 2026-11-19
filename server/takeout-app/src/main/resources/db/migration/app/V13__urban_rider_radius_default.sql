@@ -1,0 +1,1 @@
+ALTER TABLE riders ALTER COLUMN delivery_radius SET DEFAULT 3000;

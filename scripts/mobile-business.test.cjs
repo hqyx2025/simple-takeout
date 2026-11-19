@@ -17,7 +17,7 @@ function method(text, name) {
 function pageRuntime(name, role) {
   const text = source('pages/' + name + '.ets');
   const load = name === 'OrderListPage' ? 'refreshOrders' : 'loadOrders';
-  const names = ['canApplyOrders', load, 'onPageHide'];
+  const names = ['canApplyOrders', load, 'onPageHide', 'onPageShow'];
   const methods = names.map(n => method(text, n)).join('\n');
   const pending = [], storage = new Map([['user', { id: 1, role }]]), state = { epoch: 1 };
   const exports = {};
@@ -52,6 +52,20 @@ for (const [name, role] of configs) {
       r.pending[0](r.admin ? { code: 200, data: result(11) } : result(11)); await old;
       assert.equal(r.page[r.data][0].id, change === 'newer' ? 22 : 9, change);
     }
+  });
+}
+for (const [name, role] of configs.slice(0,2)) {
+  test(name + ': quick return retains data and pagination; expired return refreshes once', async () => {
+    const r=pageRuntime(name,role);
+    r.page.lastOrdersLoadedAt=Date.now();r.page.onPageHide();r.page.onPageShow();
+    assert.equal(r.pending.length,0);assert.equal(r.page.currentPage,2);assert.equal(r.page[r.data][0].id,9);
+    r.page.lastOrdersLoadedAt=Date.now()-16000;r.page.onPageShow();r.page.onPageShow();
+    assert.equal(r.pending.length,1,'lifecycle callbacks must not duplicate an in-flight refresh');
+    if(name==='OrderListPage')assert.equal(r.page.isRefreshing,false,'existing list refresh is silent');
+    r.pending[0](result(22));await new Promise(setImmediate);
+    assert.equal(r.page[r.data][0].id,22);
+    const forced=r.page[r.load]();assert.equal(r.pending.length,2,'explicit business refresh bypasses the return window');
+    r.pending[1](result(23));await forced;
   });
 }
 function searchRuntime() {
@@ -121,7 +135,16 @@ test('search retry keeps the failed keyword and distinguishes an empty successfu
   pending[1].resolve(searchReply([]));await new Promise(resolve=>setImmediate(resolve));
   assert.equal(page.searchFailed,false);assert.equal(page.hasSearched,true);assert.equal(page.resultCount,0);
 });
-
+test('retained home pauses its ticker offscreen and includes elapsed hidden time on return',()=>{
+  const text=source('components/home/HomePage.ets'),exports={};let now=1000,callback,stopped=0;
+  const code=['startSeckillTicker','stopSeckillTicker','seckillRemainSeconds'].map(name=>method(text,name)).join('\n');
+  vm.runInNewContext(ts.transpileModule('export class Page {'+code+'}',{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,
+    {exports,Date:{now:()=>now},Math,setInterval:fn=>{callback=fn;return 1;},clearInterval:()=>stopped++});
+  const page=new exports.Page();Object.assign(page,{seckillTimer:-1,seckillPausedAt:0,seckillTick:0});
+  page.startSeckillTicker();for(let i=0;i<5;i++)callback();
+  page.stopSeckillTicker();assert.equal(stopped,1);now+=60000;
+  page.startSeckillTicker();assert.equal(page.seckillRemainSeconds({remainSeconds:120}),55);
+});
 function exportedFunction(text, name) {
   const start = text.indexOf('export async function ' + name + '(');
   assert.ok(start >= 0, name);

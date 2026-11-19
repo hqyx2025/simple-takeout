@@ -21,6 +21,7 @@ function page(options={}){
   const code=ts.transpileModule('export class Page {'+methods+'}',{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS}}).outputText;
   vm.runInNewContext(code,{
     exports:result,newPasswordError:policy.newPasswordError,UserRole:{CUSTOMER:0,MERCHANT:1,ADMIN:2,RIDER:3},
+    waitForStartupBackend:options.backendReady??(async()=>true),
     loginRemote:async(...args)=>{calls.push({kind:'password',args});return options.login?options.login(...args):{id:1,role:0};},
     loginByEmailRemote:async(...args)=>{calls.push({kind:'email',args});return options.login?options.login(...args):{id:1,role:0};},
     registerRemote:async(...args)=>{calls.push({kind:'register',args});return options.register?options.register(...args):{id:1,role:0};},
@@ -32,7 +33,7 @@ function page(options={}){
     setTimeout:callback=>{callback();return 1;},clearTimeout(){},setInterval:()=>1,clearInterval(){},
   });
   const instance=new result.Page();
-  Object.assign(instance,{usernameCheckVersion:0,usernameCheckTimer:-1,usernameError:'',checkedUsername:'',usernameAvailable:null,useEmailLogin:false,selectedRole:0,phone:'13800138000',email:'test@example.com',emailCode:'123456',captchaId:'picture-id',captchaCode:'ABCDE',captchaRefreshVersion:0,password:'abcdef',confirmPassword:'abcdef',username:'测试用户',errorMsg:'',errorField:'',tipMsg:'',submitting:false,sendingCode:false,cooldownSeconds:0,cooldownTimer:-1,pageActive:true,onLoginSuccess(){state.success++;},getUIContext(){return {getFocusController(){return {requestFocus(id){state.focused=id;}};}};}});
+  Object.assign(instance,{loginAttemptVersion:0,usernameCheckVersion:0,usernameCheckTimer:-1,usernameError:'',checkedUsername:'',usernameAvailable:null,useEmailLogin:false,selectedRole:0,phone:'13800138000',email:'test@example.com',emailCode:'123456',captchaId:'picture-id',captchaCode:'ABCDE',captchaRefreshVersion:0,password:'abcdef',confirmPassword:'abcdef',username:'测试用户',errorMsg:'',errorField:'',tipMsg:'',submitting:false,sendingCode:false,cooldownSeconds:0,cooldownTimer:-1,pageActive:true,onLoginSuccess(){state.success++;},getUIContext(){return {getFocusController(){return {requestFocus(id){state.focused=id;}};}};}});
   return {instance,calls,state};
 }
 
@@ -40,7 +41,9 @@ test('native code login needs no password and enforces the selected role',async(
   const p=page();Object.assign(p.instance,{useEmailLogin:true,password:''});
   await p.instance.submitForm();
   assert.equal(p.calls[0].kind,'email');
-  assert.deepEqual(p.calls[0].args,['13800138000','test@example.com','123456','USER']);
+  assert.deepEqual(p.calls[0].args.slice(0,4),['13800138000','test@example.com','123456','USER']);
+  assert.equal(p.calls[0].args[4](),true);
+  p.instance.pageActive=false;assert.equal(p.calls[0].args[4](),false);
   assert.equal(p.state.success,1);assert.equal(p.instance.submitting,false);
   const wrong=page({login:async()=>({id:1,role:2})});wrong.instance.useEmailLogin=true;
   await wrong.instance.submitForm();assert.equal(wrong.state.success,0);assert.equal(wrong.state.logout,1);
@@ -85,6 +88,7 @@ test('native username checks report duplicates before email and preserve other r
 test('a late native username response cannot flag the newly entered name',async()=>{
   let release;const p=page({registration:true,checkUsername:name=>name==='taken'?new Promise(resolve=>{release=resolve;}):Promise.resolve(true)});
   p.instance.username='taken';const old=p.instance.checkUsername();
+  await new Promise(resolve=>setImmediate(resolve));
   p.instance.usernameChanged('available');await p.instance.checkUsername();release(false);await old;
   assert.equal(p.instance.usernameError,'');assert.equal(p.instance.checkedUsername,'available');
 });
@@ -129,33 +133,37 @@ test('pending authentication rejects duplicate submit and releases busy state af
   assert.equal(failed.instance.submitting,false);assert.ok(failed.instance.errorMsg);
 });
 
-test('both native login APIs persist the same secure session and leave failures to the form',async()=>{
+test('both native login APIs return credentials without committing them before the session boundary',async()=>{
   const apiSource=fs.readFileSync('entry/src/main/ets/service/api/AuthApi.ets','utf8');
   const start=apiSource.indexOf('export async function apiLogin('),end=apiSource.indexOf('\n/**',start);
   const code=ts.transpileModule(apiSource.slice(start,end),{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS}}).outputText;
   const result={},calls=[],saved=[];let response={code:200,data:{token:'access',refreshToken:'refresh',user:{id:1,role:0}}};
   vm.runInNewContext(code,{exports:result,API_CONFIG:{ENDPOINTS:{login:'/api/auth/login'}},
     post:async(...args)=>{calls.push(args);return response;},setAuthTokens:(...args)=>saved.push(args),saveAuthTokens:async(...args)=>saved.push(args),toUser:user=>user,logInfo(){},logWarn(){}});
-  await result.apiLogin('13800138000','password','USER');await result.apiLoginByEmail('13800138000','test@example.com','123456','USER');
+  const password=await result.apiLogin('13800138000','password','USER');
+  const email=await result.apiLoginByEmail('13800138000','test@example.com','123456','USER');
   assert.equal(calls[0][0],'/api/auth/login');assert.equal(calls[1][0],'/api/auth/login/email');
   assert.equal(calls[0][2],false);assert.equal(calls[1][2],false);
-  assert.deepEqual(saved,[['access','refresh'],['access','refresh'],['access','refresh'],['access','refresh']]);
+  assert.equal(password.token,'access');assert.equal(email.user.id,1);assert.equal(email.refreshToken,'refresh');
+  assert.deepEqual(saved,[]);
   response={code:400,data:null,message:'验证码不正确'};
   assert.equal(await result.apiLoginByEmail('13800138000','test@example.com','000000','USER'),null);
-  assert.equal(saved.length,4);
+  assert.equal(saved.length,0);
 });
 
 test('native email login restores server cart and addresses and persists login through the shared completion',async()=>{
   const manager=fs.readFileSync('entry/src/main/ets/service/AppStorageManager.ets','utf8');
   const start=manager.indexOf('async function completeRemoteLogin('),end=manager.indexOf('\n}',start)+2;
-  const code=ts.transpileModule(manager.slice(start,end)+'\nexport { completeRemoteLogin };',{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS}}).outputText;
+  const code=ts.transpileModule('let loginRequestVersion = 1;\n'+manager.slice(start,end)+'\nexport { completeRemoteLogin };',{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS}}).outputText;
   const result={},writes=new Map(),synced=[];
+  let epoch=0;
   vm.runInNewContext(code,{exports:result,UserRole:{CUSTOMER:0,MERCHANT:1,ADMIN:2,RIDER:3},getAuthToken:()=> 'access',
+    getAuthSessionEpoch:()=>epoch,setAuthTokens:()=>{epoch++;},saveAuthTokens:async()=>synced.push('secure'),
     AppStorage:{setOrCreate:(k,v)=>writes.set(k,v)},setStoredUser:user=>writes.set('user',user),registerPushForCurrentSession(){},
     syncAddressesRemote:async()=>synced.push('addresses'),syncCartRemote:async()=>synced.push('cart'),saveAllData:async()=>synced.push('persist'),logInfo(){},logWarn(){}});
-  await result.completeRemoteLogin({id:1,role:0});
+  await result.completeRemoteLogin({token:'access',refreshToken:'refresh',user:{id:1,role:0}},1,0,()=>true);
   assert.equal(writes.get('isLoggedIn'),true);assert.equal(writes.get('authToken'),'access');
-  assert.deepEqual(synced,['addresses','cart','persist']);
+  assert.deepEqual(synced,['secure','addresses','cart','persist']);
 });
 
 function resetPage(options={}){
@@ -165,6 +173,7 @@ function resetPage(options={}){
   const result={},calls=[];
   const code=ts.transpileModule('export class Page {'+methods+'}',{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS}}).outputText;
   vm.runInNewContext(code,{exports:result,newPasswordError:policy.newPasswordError,
+    waitForStartupBackend:options.backendReady??(async()=>true),
     requestEmailCodeApi:async(...args)=>{calls.push(args);return options.response||{success:false,message:'校对码不正确或已过期'};},
     resetLoginPasswordApi:async(...args)=>{calls.push(args);return options.response||{success:false,message:'验证码不正确或已过期'};},
     resetPaymentPasswordApi:async(...args)=>{calls.push(args);return {success:true};},
@@ -179,6 +188,22 @@ test('password recovery preserves completed inputs on server rejection and block
   assert.equal(p.instance.newPassword,'abcdef');assert.equal(p.instance.code,'123456');assert.equal(p.instance.busy,false);
   p.instance.confirmPassword='different';await p.instance.submit();
   assert.equal(p.calls.length,1);assert.equal(p.instance.errorField,'password-reset-confirm');
+});
+
+test('closing login, registration or password reset while backend is pending prevents submission', async () => {
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  const options = { backendReady: () => pending };
+  const cases = [[page(options), 'submitForm'], [page({ ...options, registration: true }), 'submitForm'],
+    [resetPage(options), 'submit']];
+  const actions = cases.map(([p, method]) => p.instance[method]());
+  for (const [p] of cases) {
+    assert.equal(p.calls.length, 0);
+    p.instance.pageActive = false;
+  }
+  release(true);
+  await Promise.all(actions);
+  for (const [p] of cases) assert.equal(p.calls.length, 0);
 });
 
 test('password recovery clears secrets and returns only after successful reset',async()=>{

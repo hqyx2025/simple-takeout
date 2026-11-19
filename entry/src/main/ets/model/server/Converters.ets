@@ -98,6 +98,8 @@ export function toStoreItem(s: ServerStore): StoreItem {
     image: s.image,
     images: s.images ?? (s.image ? [s.image] : []),
     rating: s.rating,
+    ratingCount: s.ratingCount ?? 0,
+    distanceKm: s.distanceKm ?? -1,
     monthlySales: s.monthlySales,
     deliveryFee: s.deliveryFee,
     minOrder: s.minOrder,

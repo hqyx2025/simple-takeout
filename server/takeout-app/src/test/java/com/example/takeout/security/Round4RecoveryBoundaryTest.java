@@ -11,7 +11,7 @@ import static org.mockito.Mockito.*;
 
 /** Accepted restart side effects; these assertions deliberately do not claim a targeted local reset. */
 class Round4RecoveryBoundaryTest {
-    private final Map<String, Integer> actions = Map.of("upload", 30, "order", 10, "payment-password", 5, "register", 5, "email-code", 5);
+    private final Map<String, Integer> actions = Map.of("upload", 120, "order", 10, "payment-password", 5, "register", 5, "email-code", 5);
     private LoginRateLimiter limiter(StringRedisTemplate redis) {
         ObjectProvider<StringRedisTemplate> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(redis); return new LoginRateLimiter(provider);

@@ -10,7 +10,12 @@ class PendingImage {
   uri: string
   percent: number = 0
   error: string = ''
-  constructor(id: number, uri: string) { this.id = id; this.uri = uri }
+  started: boolean = false
+  epoch: number
+  context: number
+  constructor(id: number, uri: string, epoch: number, context: number) {
+    this.id = id; this.uri = uri; this.epoch = epoch; this.context = context
+  }
 }
 
 @Component
@@ -26,6 +31,7 @@ export struct ImageUpload {
   @State error: string = ''
   private alive: boolean = true
   private sequence: number = 0
+  private inFlight: number = 0
   contextVersion: () => number = (): number => 0
   onChange: (images: string[]) => void = () => {}
   onBusy: (busy: boolean) => void = () => {}
@@ -73,30 +79,55 @@ export struct ImageUpload {
     if (uris.length > free) { this.error = '最多上传 ' + this.maxFiles + ' 张，请删除后再添加' }
     else { this.error = '' }
     for (const uri of uris.slice(0, Math.max(0, free))) {
-      const item: PendingImage = new PendingImage(++this.sequence, uri)
-      this.pending = this.pending.concat([item]); this.busy(); this.upload(item)
+      const item: PendingImage = new PendingImage(++this.sequence, uri, getAuthSessionEpoch(), this.contextVersion())
+      this.pending = this.pending.concat([item])
+    }
+    this.busy()
+    this.startQueued()
+  }
+
+  private startQueued(): void {
+    if (!this.alive) { return }
+    this.pending = this.pending.filter((item: PendingImage) => item.epoch === getAuthSessionEpoch() && item.context === this.contextVersion())
+    this.busy()
+    for (const item of this.pending) {
+      if (this.inFlight >= 3) { break }
+      if (!item.started && !item.error) { item.started = true; this.inFlight += 1; this.runUpload(item) }
+    }
+  }
+
+  private async runUpload(item: PendingImage): Promise<void> {
+    try { await this.upload(item) }
+    catch (_) {
+      if (this.current(item.epoch, item.context, item.id)) {
+        item.error = '上传失败，请删除后重试'; this.pending = this.pending.slice()
+      }
+    } finally {
+      this.inFlight -= 1
+      if (this.alive) { this.busy(); this.startQueued() }
     }
   }
 
   private async upload(item: PendingImage): Promise<void> {
-    const epoch: number = getAuthSessionEpoch()
-    const context: number = this.contextVersion()
+    const epoch: number = item.epoch
+    const context: number = item.context
     const active = (): boolean => this.current(epoch, context, item.id)
     const result: UploadResult | null = await uploadImageApi(item.uri, false, (percent: number) => {
       if (active()) { item.percent = percent; this.pending = this.pending.slice() }
     })
     if (!active()) {
-      if (this.alive) { this.pending = this.pending.filter((row: PendingImage) => row.id !== item.id); this.busy() }
+      if (this.alive) { this.pending = this.pending.filter((row: PendingImage) => row.id !== item.id); this.busy(); this.startQueued() }
       return
     }
     if (result === null) { item.error = getLastApiErrorMessage() || '上传失败，请删除后重试'; this.pending = this.pending.slice() }
     else {
       const base: string = getApiBaseUrl()
       const url: string = result.url.startsWith(base + '/') ? result.url.substring(base.length) : result.url
-      if (!url.startsWith('/uploads/') || url.includes('..')) { item.error = '图片地址无效，请重试'; this.pending = this.pending.slice() }
+      if ((!url.startsWith('/uploads/') && !url.startsWith('https://')) || url.includes('..')) { item.error = '图片地址无效，请重试'; this.pending = this.pending.slice() }
       else { this.images = this.images.concat([url]); this.pending = this.pending.filter((row: PendingImage) => row.id !== item.id); this.publish() }
     }
     this.busy()
+    this.startQueued()
   }
 
   @Builder
@@ -117,12 +148,12 @@ export struct ImageUpload {
     Row({ space: 8 }) {
       Image(item.uri).width(52).height(52).objectFit(ImageFit.Cover)
       Column({ space: 4 }) {
-        Text(item.error || (item.percent >= 99 ? '正在确认上传…' : '上传中 ' + item.percent + '%'))
+        Text(item.error || (!item.started ? '等待上传…' : item.percent >= 99 ? '正在确认上传…' : '上传中 ' + item.percent + '%'))
           .fontSize(13).fontColor(item.error ? AppTheme.ERROR : AppTheme.TEXT)
         Progress({ value: item.percent, total: 100, type: ProgressType.Linear }).width('100%').color(AppTheme.ACCENT)
       }.layoutWeight(1)
       Button('删除').attributeModifier(new AppButtonStyle()).height(44).enabled(!this.disabled)
-        .onClick(() => { this.pending = this.pending.filter((row: PendingImage) => row.id !== item.id); this.busy() })
+        .onClick(() => { this.pending = this.pending.filter((row: PendingImage) => row.id !== item.id); this.busy(); this.startQueued() })
     }.width('100%')
   }
 

@@ -47,6 +47,141 @@ import static org.mockito.ArgumentMatchers.*;
  */
 @EnabledIfEnvironmentVariable(named = "TAKEOUT_MYSQL_CONCURRENCY_TEST", matches = "1")
 class OrderConcurrencyMySqlTest {
+    @Test
+    void growingCartLoadsGoodsSpecsAndStoreNamesInBatchesWithoutChangingViews() {
+        for (int id=200;id<230;id++) {
+            jdbc.update("INSERT INTO goods(id,store_id,name,price,stock,create_time) VALUES(?,10,?,?,?,NOW())",
+                    id,"batch-"+id,id-190,id);
+            jdbc.update("INSERT INTO cart_items(user_id,goods_id,spec_id,quantity,create_time,update_time) VALUES(1,?,0,1,NOW(),NOW())",id);
+        }
+        jdbc.update("UPDATE goods SET deleted=1 WHERE id=101");
+        jdbc.update("INSERT INTO cart_items(user_id,goods_id,spec_id,quantity,create_time,update_time) VALUES(1,101,0,1,NOW(),NOW()),(1,102,999,1,NOW(),NOW())");
+        var specs=new GoodsSpecDao(jdbc);var goods=spy(new GoodsDao(jdbc,specs));var stores=spy(new StoreDao(jdbc));
+        var cart=new CartService(cartItems,goods,stores,specs,new UserDao(jdbc));
+        var rows=cart.list(1);
+        assertEquals(30,rows.size());assertEquals(229,rows.getFirst().goodsId());
+        assertEquals(39.0,rows.getFirst().price());assertEquals(229,rows.getFirst().stock());
+        assertEquals("test",rows.getFirst().storeName());
+        verify(goods).findForCartByIds(any());verify(stores).findForDispatchByIds(any());
+        verify(goods,never()).findForCart(anyLong());verify(stores,never()).findForDispatch(anyLong());
+    }
+
+    @Test
+    void concurrentFirstCartAddsForOneAccountKeepEveryIncrementWithoutReservingStock() throws Exception {
+        CartService cart = cartService(cartItems);
+        runTogether(8,index -> cart.add(1,100,1));
+        assertEquals(1,count("SELECT COUNT(*) FROM cart_items WHERE user_id=1 AND goods_id=100"));
+        assertEquals(8,count("SELECT quantity FROM cart_items WHERE user_id=1 AND goods_id=100"));
+        assertEquals(1000,count("SELECT stock FROM goods WHERE id=100"));
+        assertEquals(0,count("SELECT version FROM goods WHERE id=100"));
+    }
+
+    @Test
+    void pausedCartWriteDoesNotLockGoodsAndResponseUsesCurrentPrice() throws Exception {
+        var written = new CountDownLatch(1); var release = new CountDownLatch(1);
+        var real = cartItems;var mapper = mock(CartItemMapper.class,delegatesTo(real));
+        doAnswer(call -> {
+            int result = real.insert(call.getArgument(0,com.example.takeout.model.CartItemEntity.class));
+            written.countDown();assertTrue(release.await(10,TimeUnit.SECONDS));return result;
+        }).when(mapper).insert(any(com.example.takeout.model.CartItemEntity.class));
+        CartService cart = cartService(mapper);
+        try (var workers=Executors.newFixedThreadPool(2)) {
+            var added=workers.submit(() -> cart.add(1,100,1));
+            try {
+                assertTrue(written.await(5,TimeUnit.SECONDS));
+                var edit=workers.submit(() -> jdbc.update("UPDATE goods SET price=12 WHERE id=100"));
+                assertDoesNotThrow(() -> edit.get(2,TimeUnit.SECONDS),"Cart changes must not hold a stock row lock");
+            } finally {release.countDown();}
+            assertEquals(12.0,added.get(5,TimeUnit.SECONDS).getFirst().price());
+        } finally {release.countDown();}
+        assertEquals(1,count("SELECT quantity FROM cart_items WHERE user_id=1 AND goods_id=100"));
+        assertEquals(1000,count("SELECT stock FROM goods WHERE id=100"));
+    }
+
+    private CartService cartService(CartItemMapper mapper) {
+        var specs=new GoodsSpecDao(jdbc);
+        var target=new CartService(mapper,new GoodsDao(jdbc,specs),new StoreDao(jdbc),specs,new UserDao(jdbc));
+        var proxy=new ProxyFactory(target);
+        proxy.addAdvice(new TransactionInterceptor(new DataSourceTransactionManager(jdbc.getDataSource()),
+                new AnnotationTransactionAttributeSource()));
+        return (CartService)proxy.getProxy();
+    }
+
+    @Test
+    void ordinaryOrderDefersStockLockAndRejectsChangedPriceWithFullRollback() throws Exception {
+        assertDeferredEditRejected(() -> jdbc.update("UPDATE goods SET price=12 WHERE id=100"));
+    }
+
+    @Test
+    void ordinaryOrderSeesNewActivityEvenAfterEarlierRepeatableReadSnapshot() throws Exception {
+        assertDeferredEditRejected(() -> {
+            var tx = new TransactionTemplate(new DataSourceTransactionManager(jdbc.getDataSource()));
+            var format = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            tx.executeWithoutResult(status -> new SeckillDao(jdbc).insert(100,10,5,100,
+                    java.time.LocalDateTime.now().minusHours(1).format(format),
+                    java.time.LocalDateTime.now().plusHours(1).format(format),1));
+        });
+    }
+
+    private void assertDeferredEditRejected(Runnable edit) throws Exception {
+        jdbc.update("DELETE FROM seckills WHERE goods_id=100");
+        var written = new CountDownLatch(1); var release = new CountDownLatch(1);
+        doAnswer(call -> {
+            Object result = call.callRealMethod(); written.countDown();
+            assertTrue(release.await(10,TimeUnit.SECONDS)); return result;
+        }).when(outbox).insert(eq(DomainEventPublisher.ORDER_CREATED),anyLong(),anyString(),anyString());
+        try (var workers = Executors.newFixedThreadPool(2)) {
+            Future<?> checkout = workers.submit(() -> service.createOrder(1,10,List.of(item(100,0)),1,0,"",
+                    List.of(),"","deferred-"+UUID.randomUUID(),List.of(),"DELIVERY"));
+            try {
+                assertTrue(written.await(5,TimeUnit.SECONDS));
+                Future<?> changed = workers.submit(edit);
+                assertDoesNotThrow(() -> changed.get(2,TimeUnit.SECONDS),
+                        "Private order writes must not already hold the hot goods lock");
+            } finally { release.countDown(); }
+            var error = assertThrows(java.util.concurrent.ExecutionException.class,
+                    () -> checkout.get(5,TimeUnit.SECONDS), "Changed checkout facts must roll back the order");
+            assertInstanceOf(BizException.class,error.getCause());
+            assertEquals(409,((BizException)error.getCause()).getCode());
+        } finally { release.countDown(); }
+        assertEquals(0,count("SELECT COUNT(*) FROM orders"));
+        assertEquals(0,count("SELECT COUNT(*) FROM order_items"));
+        assertEquals(0,count("SELECT COUNT(*) FROM order_create_requests"));
+        assertEquals(0,count("SELECT COUNT(*) FROM outbox_events"));
+        assertEquals(1000,count("SELECT stock FROM goods WHERE id=100"));
+    }
+
+    @Test
+    void ordinaryLastStockIsReservedOnceWithEightConcurrentDeferredCheckouts() throws Exception {
+        jdbc.update("DELETE FROM seckills WHERE goods_id=100");
+        jdbc.update("UPDATE goods SET stock=1 WHERE id=100");
+        runTogether(8,index -> {
+            long user=index+1;
+            try { service.createOrder(user,10,List.of(item(100,0)),user,0,""); }
+            catch (BizException insufficient) { assertTrue(insufficient.getMessage().contains("库存不足")); }
+        });
+        assertEquals(1,count("SELECT COUNT(*) FROM orders"));
+        assertEquals(1,count("SELECT COUNT(*) FROM order_items"));
+        assertEquals(1,count("SELECT COUNT(*) FROM outbox_events"));
+        assertEquals(0,count("SELECT stock FROM goods WHERE id=100"));
+    }
+
+    @Test
+    void ordinaryDeferredCartMismatchRollsBackAndFreshRetryClearsOnlyPurchasedRows() {
+        jdbc.update("DELETE FROM seckills WHERE goods_id=100");
+        jdbc.update("INSERT INTO cart_items(user_id,goods_id,spec_id,quantity,create_time,update_time) VALUES(1,100,0,2,NOW(),NOW())");
+        assertThrows(BizException.class, () -> service.createOrder(1,10,List.of(item(100,0)),1,0,"",List.of(100L)));
+        assertEquals(0,count("SELECT COUNT(*) FROM orders"));
+        assertEquals(0,count("SELECT COUNT(*) FROM outbox_events"));
+        assertEquals(1000,count("SELECT stock FROM goods WHERE id=100"));
+        assertEquals(2,count("SELECT quantity FROM cart_items WHERE user_id=1 AND goods_id=100"));
+        jdbc.update("UPDATE cart_items SET quantity=1 WHERE user_id=1 AND goods_id=100");
+        service.createOrder(1,10,List.of(item(100,0)),1,0,"",List.of(100L));
+        assertEquals(1,count("SELECT COUNT(*) FROM orders"));
+        assertEquals(999,count("SELECT stock FROM goods WHERE id=100"));
+        assertEquals(0,count("SELECT COUNT(*) FROM cart_items WHERE user_id=1"));
+    }
+
     @Test @EnabledIfEnvironmentVariable(named = "TAKEOUT_TEST_REDIS_PORT", matches = "\\d+")
     void loginCollationVariantsAndOwnAccountCannotBypassRealSqlAndRedisBudgets() {
         jdbc.execute("ALTER TABLE users MODIFY phone VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL");
@@ -163,11 +298,14 @@ class OrderConcurrencyMySqlTest {
                 mock(ObjectProvider.class), paymentRecords);
         target.configureTransactions(transactions);
         var externalPayments = mock(com.example.takeout.service.thirdparty.ExternalPaymentService.class);
+        when(externalPayments.prepareAfterSalesRefund(any(), any(), anyLong())).thenReturn(true);
         when(externalPayments.refundOriginalPayment(any(), any(), anyLong(), anyBoolean())).thenReturn("BALANCE");
         var afterSales = new AfterSalesService(new OrderDao(jdbc), new StoreDao(jdbc), new RefundDao(jdbc),
                 new com.example.takeout.dao.AfterSalesDao(jdbc), externalPayments, paymentRecords,
                 new DomainEventPublisher(outbox, mock(ObjectProvider.class), new ObjectMapper()), new ObjectMapper());
         target.configureAfterSales(afterSales);
+        afterSales.configureTransactions(transactions);
+        afterSales.configureAccountLifecycle(new UserDao(jdbc));
         var proxy = new ProxyFactory(target);
         proxy.addAdvice(new TransactionInterceptor(new DataSourceTransactionManager(source),
                 new AnnotationTransactionAttributeSource()));
@@ -326,6 +464,130 @@ class OrderConcurrencyMySqlTest {
     }
 
     @Test
+    void requestFingerprintRejectsChangedIntentAndKeepsLegacyReplay() {
+        var created = service.createOrder(1,10,List.of(item(102,300)),1,0,"original",List.of(),"","fingerprinted",List.of(),"");
+        BizException conflict = assertThrows(BizException.class, () -> service.createOrder(1,10,List.of(item(102,300)),
+                1,0,"changed",List.of(),"","fingerprinted",List.of(),""));
+        assertEquals(409, conflict.getCode());
+        assertEquals(1,count("SELECT COUNT(*) FROM orders"));
+        assertEquals(999,count("SELECT stock FROM goods WHERE id=102"));
+        jdbc.update("UPDATE order_create_requests SET request_hash=NULL WHERE request_key='fingerprinted'");
+        assertEquals(created.id(),service.createOrder(1,10,List.of(item(102,300)),1,0,"legacy-replay",
+                List.of(),"","fingerprinted",List.of(),"").id());
+        assertEquals(1,count("SELECT COUNT(*) FROM orders"));
+    }
+
+    @Test
+    void deadlockedCreateRollsBackAndRetriesTheOriginalRequestOnlyOnce() {
+        var deadlock = new org.springframework.dao.CannotAcquireLockException("injected deadlock",
+                new java.sql.SQLException("transaction victim", "40001", 1213));
+        doThrow(deadlock).doCallRealMethod().when(outbox).insert(eq(DomainEventPublisher.ORDER_CREATED),anyLong(),anyString(),anyString());
+        var order = service.createOrder(1,10,List.of(item(102,300)),1,0,"",List.of(),"","deadlock-original-key",List.of(),"");
+        assertEquals(0,order.status());
+        assertEquals(1,count("SELECT COUNT(*) FROM orders"));
+        assertEquals(1,count("SELECT COUNT(*) FROM order_create_requests"));
+        assertEquals(999,count("SELECT stock FROM goods WHERE id=102"));
+        assertEquals(999,count("SELECT stock FROM goods_specs WHERE id=300"));
+        assertEquals(1,count("SELECT COUNT(*) FROM outbox_events"));
+        verify(outbox,times(2)).insert(eq(DomainEventPublisher.ORDER_CREATED),anyLong(),anyString(),anyString());
+        System.out.println("[boundary/retry] actual-MySQL rollback injected-SQL-deadlock attempts=2 orders=1 stock-decrement=1");
+    }
+
+    @Test
+    void persistentDeadlockStopsAfterThreeAttemptsAndLeavesNoReservations() {
+        doThrow(new org.springframework.dao.CannotAcquireLockException("injected deadlock",
+                new java.sql.SQLException("transaction victim", "40001", 1213))).when(outbox)
+                .insert(eq(DomainEventPublisher.ORDER_CREATED),anyLong(),anyString(),anyString());
+        assertThrows(org.springframework.dao.CannotAcquireLockException.class,()->service.createOrder(1,10,List.of(item(102,300)),
+                1,0,"",List.of(),"","bounded-deadlock",List.of(),""));
+        verify(outbox,times(3)).insert(eq(DomainEventPublisher.ORDER_CREATED),anyLong(),anyString(),anyString());
+        assertEquals(0,count("SELECT COUNT(*) FROM orders"));
+        assertEquals(0,count("SELECT COUNT(*) FROM order_create_requests"));
+        assertEquals(1000,count("SELECT stock FROM goods WHERE id=102"));
+        assertEquals(1000,count("SELECT stock FROM goods_specs WHERE id=300"));
+    }
+
+    @Test
+    void balancePasswordHashingRunsBeforeTheTransactionAndCurrentCredentialsAreRechecked() {
+        var order = service.createOrder(1,10,List.of(item(102,300)),1,0,"");
+        try (var password = mockStatic(com.example.takeout.security.PaymentPasswordUtil.class, CALLS_REAL_METHODS)) {
+            password.when(() -> com.example.takeout.security.PaymentPasswordUtil.matches(anyString(),anyString())).thenAnswer(call -> {
+                assertFalse(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive(),
+                        "Password hashing must not retain the order transaction or a JDBC connection");
+                return call.callRealMethod();
+            });
+            service.payOrder(1,order.id(),"BALANCE","QR","135790");
+        }
+        assertEquals(1,count("SELECT status FROM orders WHERE id="+order.id()));
+        assertEquals(1,count("SELECT COUNT(*) FROM payment_records WHERE type='PAY'"));
+    }
+
+    @Test
+    void paymentPasswordChangedAfterVerificationCannotDebitTheWallet() {
+        var order = service.createOrder(1,10,List.of(item(102,300)),1,0,"");
+        String changed = com.example.takeout.security.PaymentPasswordUtil.hash("654321");
+        try (var password = mockStatic(com.example.takeout.security.PaymentPasswordUtil.class, CALLS_REAL_METHODS)) {
+            password.when(() -> com.example.takeout.security.PaymentPasswordUtil.matches(anyString(),anyString())).thenAnswer(call -> {
+                boolean matched = (Boolean)call.callRealMethod();
+                jdbc.update("UPDATE users SET payment_password_hash=? WHERE id=1",changed);
+                return matched;
+            });
+            assertEquals(403,assertThrows(BizException.class,()->service.payOrder(1,order.id(),"BALANCE","QR","135790")).getCode());
+        }
+        assertEquals(0,count("SELECT status FROM orders WHERE id="+order.id()));
+        assertEquals(1000,count("SELECT balance FROM users WHERE id=1"));
+        assertEquals(0,count("SELECT COUNT(*) FROM payment_records"));
+    }
+
+    @Test
+    void deferredHeadOfFiveHundredOrdersDoesNotStarveTheNextExpiredOrder() {
+        jdbc.update("INSERT INTO orders(id,order_no,user_id,store_id,store_name,status,items,address,pay_amount,create_time,create_time_dt) " +
+                "WITH RECURSIVE seq AS (SELECT 1 n UNION ALL SELECT n+1 FROM seq WHERE n<501) " +
+                "SELECT 10000+n,CONCAT('QUEUE',n),1,10,'store',0,'[]','{}',10,DATE_SUB(NOW(),INTERVAL 30 MINUTE)," +
+                "DATE_SUB(NOW(),INTERVAL 30 MINUTE) FROM seq");
+        jdbc.update("INSERT INTO order_background_retries(order_id,task,failure_count,next_attempt_at) " +
+                "SELECT id,'TIMEOUT',1,DATE_ADD(NOW(),INTERVAL 15 MINUTE) FROM orders WHERE id BETWEEN 10001 AND 10500");
+        assertEquals(1,service.cancelExpiredPendingOrders());
+        assertEquals(5,count("SELECT status FROM orders WHERE id=10501"));
+        assertEquals(500,count("SELECT COUNT(*) FROM orders WHERE status=0"));
+        jdbc.update("UPDATE order_background_retries SET next_attempt_at=DATE_SUB(NOW(),INTERVAL 1 SECOND) WHERE order_id=10001");
+        assertEquals(1,service.cancelExpiredPendingOrders());
+        assertEquals(0,count("SELECT COUNT(*) FROM order_background_retries WHERE order_id=10001"));
+        assertEquals(499,count("SELECT COUNT(*) FROM orders WHERE status=0"));
+        System.out.println("[boundary/recovery] actual-MySQL deferred-head=500 healthy-tail=cancelled due-retry=cancelled");
+    }
+
+    @Test
+    void sameStoreAdmissionsShareLocksButBlockStoreShutdownUntilCommit() throws Exception {
+        var admitted = new java.util.concurrent.CountDownLatch(2);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var tx = new TransactionTemplate(new DataSourceTransactionManager(jdbc.getDataSource()));
+        var stores = new StoreDao(jdbc);
+        try (var pool = Executors.newFixedThreadPool(3)) {
+            java.util.concurrent.Callable<Void> admission = () -> {
+                tx.executeWithoutResult(status -> {
+                    assertEquals(10,stores.lockForOrderAdmission(10,true).id());
+                    admitted.countDown();
+                    try { assertTrue(release.await(5,TimeUnit.SECONDS)); }
+                    catch (InterruptedException error) { Thread.currentThread().interrupt(); throw new IllegalStateException(error); }
+                });
+                return null;
+            };
+            var first=pool.submit(admission); var second=pool.submit(admission);
+            try {
+                assertTrue(admitted.await(3,TimeUnit.SECONDS),"Unrelated orders in one store must share admission locks");
+                var shutdown=pool.submit(() -> stores.updatePlatformStatus(10,0));
+                assertThrows(java.util.concurrent.TimeoutException.class,()->shutdown.get(150,TimeUnit.MILLISECONDS));
+                release.countDown();
+                shutdown.get(3,TimeUnit.SECONDS);
+            } finally { release.countDown(); }
+            first.get(3,TimeUnit.SECONDS);second.get(3,TimeUnit.SECONDS);
+        }
+        assertThrows(BizException.class,()->tx.execute(status->stores.lockForOrderAdmission(10,true)));
+        System.out.println("[boundary/admission] actual-MySQL same-store readers=2 concurrent shutdown=blocked new-order=denied");
+    }
+
+    @Test
     void failedRequestRollsBackReservationAndKeysAreIsolatedByAccount() {
         assertThrows(BizException.class, () -> service.createOrder(1, 10, List.of(), 1, 0, "",
                 List.of(), "", "retry-key", List.of(), ""));
@@ -395,7 +657,7 @@ class OrderConcurrencyMySqlTest {
     }
 
     @Test
-    void differentGoodsCanBeAddedToEmptyCartConcurrentlyThroughAllQuantityEntrypoints() throws Exception {
+    void concurrentCartEntrypointsSerializeAtLifecycleGateWithoutLosingDifferentGoods() throws Exception {
         var source = jdbc.getDataSource();
         var factory = new MybatisSqlSessionFactoryBean();
         factory.setDataSource(source);
@@ -407,18 +669,21 @@ class OrderConcurrencyMySqlTest {
 
         for (int entrypoint = 0; entrypoint < 4; entrypoint++) {
             jdbc.update("DELETE FROM cart_items");
-            var bothRowsRead = new CountDownLatch(2);
+            var bothRequestsStarted = new CountDownLatch(2);
             var mapper = mock(CartItemMapper.class, delegatesTo(realMapper));
             doAnswer(invocation -> {
                 var row = realMapper.selectOne(invocation.getArgument(0));
                 assertNull(row);
-                // Force both transactions to finish the missing-row SELECT before either INSERT.
-                // REPEATABLE_READ acquires overlapping gap locks here and then deadlocks.
-                bothRowsRead.countDown();
-                assertTrue(bothRowsRead.await(10, TimeUnit.SECONDS));
                 return row;
             }).when(mapper).selectOne(any());
-            var target = new CartService(mapper, new GoodsDao(jdbc, specs), new StoreDao(jdbc), specs, new UserDao(jdbc));
+            var users = spy(new UserDao(jdbc));
+            doAnswer(invocation -> {
+                // Both requests overlap before the account lifecycle lock serializes writes with account closure.
+                bothRequestsStarted.countDown();
+                assertTrue(bothRequestsStarted.await(10, TimeUnit.SECONDS));
+                return invocation.callRealMethod();
+            }).when(users).lockActiveCustomerLifecycle(1);
+            var target = new CartService(mapper, new GoodsDao(jdbc, specs), new StoreDao(jdbc), specs, users);
             var proxy = new ProxyFactory(target);
             proxy.addAdvice(new TransactionInterceptor(new DataSourceTransactionManager(source),
                     new AnnotationTransactionAttributeSource()));
@@ -540,8 +805,9 @@ class OrderConcurrencyMySqlTest {
 
     @Test
     void unresolvedCreateRequestDistinguishesRecentAndHistoricalPlaceholders() {
+        String createdAt = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
         jdbc.update("INSERT INTO order_create_requests(user_id,request_key,order_id,create_time) " +
-                "VALUES(1,'historical',NULL,'2020-01-01 00:00:00'),(2,'recent',NULL,NOW())");
+                "VALUES(1,'historical',NULL,'2020-01-01 00:00:00'),(2,'recent',NULL,?)", createdAt);
 
         BizException historical = assertThrows(BizException.class, () -> service.createOrder(
                 1, 10, List.of(item(102, 300)), 1, 0, "", List.of(), "", "historical", List.of(), ""));

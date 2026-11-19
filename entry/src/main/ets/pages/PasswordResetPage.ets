@@ -4,7 +4,7 @@ import { EmailCaptchaField } from '../components/EmailCaptchaField'
 import { FormInput } from '../components/FormInput'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { requestEmailCodeApi, resetLoginPasswordApi, resetPaymentPasswordApi, PaymentPasswordResult, EmailCodeResult } from '../service/ApiService'
-import { getAuthToken } from '../service/HttpClient'
+import { getAuthToken, waitForStartupBackend } from '../service/HttpClient'
 import { User } from '../model/Models'
 import { logout } from '../service/AppStorageManager'
 import { KeyboardAvoidMode } from '@kit.ArkUI'
@@ -100,6 +100,7 @@ export struct PasswordResetPage {
     const captchaId: string = this.captchaId
     this.captchaId = ''
     try {
+      if (!await waitForStartupBackend() || !this.pageActive) { return }
       const result: EmailCodeResult = await requestEmailCodeApi(this.phone.trim(), email, this.mode, '', captchaId, this.captchaCode)
       if (!this.pageActive) { return }
       if (!result.success) {
@@ -152,6 +153,7 @@ export struct PasswordResetPage {
     }
     this.busy = true
     try {
+      if (!await waitForStartupBackend() || !this.pageActive) { return }
       const result: PaymentPasswordResult = this.mode === 'login'
         ? await resetLoginPasswordApi(this.phone.trim(), email, this.code.trim(), this.newPassword)
         : await resetPaymentPasswordApi(this.phone.trim(), email, this.code.trim(), this.newPassword)

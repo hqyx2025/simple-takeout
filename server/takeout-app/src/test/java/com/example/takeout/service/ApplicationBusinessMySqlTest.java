@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class ApplicationBusinessMySqlTest {
     private final String requestScope=UUID.randomUUID().toString();
     private String key() { byte[] bytes=new byte[32];new SecureRandom().nextBytes(bytes);return Base64.getEncoder().encodeToString(bytes); }
-    @Test void firstOrderSelfDeliveryPartialRefundConfirmationAndSettledRefundRemainConsistentOverHttp() {
+    @Test void firstOrderSelfDeliveryPartialRefundConfirmationAndSettledRefundRemainConsistentOverHttp() throws Exception {
         String base="jdbc:mysql://"+System.getenv().getOrDefault("TAKEOUT_DB_HOST","127.0.0.1")+":"+System.getenv().getOrDefault("TAKEOUT_DB_PORT","3310")+"/";
         String opts="?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai";
         String user=System.getenv().getOrDefault("TAKEOUT_DB_USERNAME","root"),password=System.getenv().getOrDefault("TAKEOUT_DB_PASSWORD","");
@@ -68,6 +68,7 @@ class ApplicationBusinessMySqlTest {
             int port=((WebServerApplicationContext)context).getWebServer().getPort();
             RestClient http=com.example.takeout.common.JsonRestClients.builder().baseUrl("http://127.0.0.1:"+port).build();
             ObjectMapper json=context.getBean(ObjectMapper.class);
+            List<String> photos = verifyPhotoUploads(http, json, db, customer, merchant);
             assertEquals("MERCHANT",call(http,json,"PUT","/api/merchant/stores/10/fulfillment",merchant,Map.of("mode","MERCHANT")).path("mode").asText());
             Map<String,Object> request=Map.of("storeId",10,"addressId",20,"items",List.of(Map.of("goodsId",100,"quantity",1,"price",1)),
                     "idempotencyKey","http-first-order-"+schema,"deliveryType","DELIVERY");
@@ -78,9 +79,17 @@ class ApplicationBusinessMySqlTest {
             assertEquals(id,call(http,json,"POST","/api/orders",customer,request).path("id").asLong());
             call(http,json,"POST","/api/orders/"+id+"/pay?channel=BALANCE",customer,Map.of("paymentPassword","135790"));
             for(String action:List.of("accept","ready","deliver","complete")) call(http,json,"PUT","/api/merchant/orders/"+id+"/"+action,merchant,Map.of());
-            JsonNode first=call(http,json,"POST","/api/orders/"+id+"/refund",customer,Map.of("reasonType","OTHER","reason","少送餐品","amount",10,"idempotencyKey","http-first-refund-"+requestScope));
+            assertEquals(400,status(http,"POST","/api/orders/"+id+"/refund",customer,Map.of("reasonType","OTHER","reason","过多图片","amount",10,"evidenceImages",java.util.Collections.nCopies(51,photos.getFirst()),"idempotencyKey","too-many-"+requestScope),null));
+            assertEquals(0,db.queryForObject("SELECT COUNT(*) FROM refund_records WHERE order_id=?",Integer.class,id));
+            JsonNode first=call(http,json,"POST","/api/orders/"+id+"/refund",customer,Map.of("reasonType","OTHER","reason","少送餐品","amount",10,"evidenceImages",photos,"idempotencyKey","http-first-refund-"+requestScope));
+            assertEquals(50,json.readTree(db.queryForObject("SELECT evidence_images FROM refund_records WHERE id=?",String.class,first.path("id").asLong())).size());
             call(http,json,"POST","/api/admin/refunds/"+first.path("id").asLong()+"/approve",operator,Map.of());
             call(http,json,"PUT","/api/orders/"+id+"/confirm",customer,Map.of());
+            String reviewPath="/api/orders/"+id+"/review";
+            assertEquals(400,status(http,"POST",reviewPath,customer,Map.of("goodsId",100,"rating",5,"content","评价","images",photos.subList(0,21)),null));
+            assertEquals(0,db.queryForObject("SELECT COUNT(*) FROM reviews WHERE order_id=?",Integer.class,id));
+            call(http,json,"POST",reviewPath,customer,Map.of("goodsId",100,"rating",5,"content","评价","images",photos.subList(0,20)));
+            assertEquals(20,json.readTree(db.queryForObject("SELECT images FROM reviews WHERE order_id=?",String.class,id)).size());
             assertEquals(67.0,db.queryForObject("SELECT balance FROM users WHERE id=99",Double.class),0.001);
             JsonNode second=call(http,json,"POST","/api/orders/"+id+"/refund",customer,Map.of("reasonType","OTHER","reason","补充核实","amount",10,"idempotencyKey","http-second-refund-"+requestScope));
             call(http,json,"POST","/api/admin/refunds/"+second.path("id").asLong()+"/approve",operator,Map.of());
@@ -262,6 +271,52 @@ class ApplicationBusinessMySqlTest {
         db.update("UPDATE users SET can_create=0 WHERE id=99");
         assertEquals(403,status(http,"GET","/api/internal/erp/context?storeId=10&operation=CREATE",merchant,null,integrationSecret));
         assertEquals(403,status(http,"GET","/api/internal/erp/context?storeId=10&operation=CREATE",merchant,null,null));
+    }
+
+    private List<String> verifyPhotoUploads(RestClient http, ObjectMapper json, JdbcTemplate db,
+                                            String customer, String merchant) throws Exception {
+        var photos = new ArrayList<String>();
+        byte[] png = Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a5uQAAAAASUVORK5CYII=");
+        for (int i = 0; i < 50; i++) {
+            var file = new org.springframework.core.io.ByteArrayResource(png) {
+                @Override public String getFilename() { return "photo.png"; }
+            };
+            var headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.IMAGE_PNG);
+            var form = new org.springframework.util.LinkedMultiValueMap<String, Object>();
+            form.add("file", new org.springframework.http.HttpEntity<>(file, headers));
+            JsonNode response = http.post().uri("/api/upload").header("Authorization", "Bearer " + customer)
+                    .contentType(org.springframework.http.MediaType.MULTIPART_FORM_DATA).body(form)
+                    .retrieve().body(JsonNode.class);
+            assertNotNull(response); assertEquals(200, response.path("code").asInt());
+            photos.add(response.path("data").path("url").asText());
+        }
+        assertEquals(50, new HashSet<>(photos).size());
+        assertEquals(png.length * 50, db.queryForObject("SELECT used_bytes FROM upload_usage WHERE user_id=1",Long.class));
+        String avatar = photos.getFirst();
+        assertEquals(401,status(http,"PUT","/api/auth/me/avatar","",Map.of("avatar",avatar),null));
+        call(http,json,"PUT","/api/auth/me/avatar",customer,Map.of("avatar",avatar));
+        assertEquals(avatar,db.queryForObject("SELECT avatar FROM users WHERE id=1",String.class));
+        assertEquals("",db.queryForObject("SELECT avatar FROM users WHERE id=99",String.class));
+        assertEquals("unused",db.queryForObject("SELECT password FROM users WHERE id=1",String.class));
+        assertEquals(avatar,call(http,json,"GET","/api/auth/me",customer,null).path("avatar").asText());
+        assertEquals(400,status(http,"PUT","/api/auth/me/avatar",customer,Map.of("avatar","javascript:bad"),null));
+        assertEquals(avatar,db.queryForObject("SELECT avatar FROM users WHERE id=1",String.class));
+        var gallery = new HashMap<String,Object>();
+        gallery.put("images",photos.subList(0,20)); gallery.put("deliveryFee",-1); gallery.put("minOrder",-1);
+        gallery.put("status",-1); gallery.put("deliveryRadius",-1);
+        assertEquals(403,status(http,"PUT","/api/merchant/stores/10",customer,gallery,null));
+        call(http,json,"PUT","/api/merchant/stores/10",merchant,gallery);
+        assertEquals(20,json.readTree(db.queryForObject("SELECT images FROM stores WHERE id=10",String.class)).size());
+        assertEquals(avatar,db.queryForObject("SELECT image FROM stores WHERE id=10",String.class));
+        assertEquals(20,call(http,json,"GET","/api/stores/10",customer,null).path("images").size());
+        gallery.put("images",photos.subList(0,21));
+        assertEquals(400,status(http,"PUT","/api/merchant/stores/10",merchant,gallery,null));
+        assertEquals(20,json.readTree(db.queryForObject("SELECT images FROM stores WHERE id=10",String.class)).size());
+        gallery.remove("images"); gallery.put("notice","保留相册");
+        call(http,json,"PUT","/api/merchant/stores/10",merchant,gallery);
+        assertEquals(20,call(http,json,"GET","/api/stores/10",customer,null).path("images").size());
+        return photos;
     }
 
     private int status(RestClient http,String method,String path,String token,Object body,String integrationSecret) {

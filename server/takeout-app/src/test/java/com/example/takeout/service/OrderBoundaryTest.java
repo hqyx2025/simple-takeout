@@ -96,6 +96,14 @@ class OrderBoundaryTest {
 
     @BeforeEach
     void lockedOrderReadsCurrentStoredOrder() {
+        OrderTestFixture.admission(storeDao);
+        OrderTestFixture.goods(goodsDao);
+        when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore(0,0)));
+        service.configureTransactions(OrderTestFixture.transactions());
+        afterSales.configureTransactions(OrderTestFixture.transactions());
+        afterSales.configureAccountLifecycle(userDao);
+        var payments = (com.example.takeout.service.thirdparty.ExternalPaymentService) org.springframework.test.util.ReflectionTestUtils.getField(afterSales, "payments");
+        when(payments.prepareAfterSalesRefund(any(), any(), anyLong())).thenReturn(true);
         service.configureAfterSales(afterSales);
         adminService.configureAfterSales(afterSales);
         when(refundDao.refundedAmount(anyLong())).thenReturn(new java.math.BigDecimal("0.00"));

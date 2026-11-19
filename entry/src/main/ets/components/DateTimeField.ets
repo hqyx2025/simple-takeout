@@ -35,7 +35,7 @@ export struct DateTimeField {
         .attributeModifier(new AppButtonStyle()).width('100%')
         .constraintSize({ minHeight: AppTheme.CONTROL_HEIGHT }).padding(14)
         .fontSize(16).fontColor(this.value === '' ? AppTheme.MUTED : AppTheme.TEXT)
-        .backgroundColor(AppTheme.INPUT).border({ width: 1, color: AppTheme.BORDER })
+        .backgroundColor(AppTheme.INPUT).border({ width: 1, color: AppTheme.CONTROL_BORDER })
         .borderRadius(AppTheme.CONTROL_RADIUS).id(this.fieldId).enabled(this.isEnabled)
         .accessibilityText(this.label + '，' + (this.value === '' ? '未选择' : this.value))
         .onClick(() => { this.chooseDate() })

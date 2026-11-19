@@ -390,7 +390,7 @@ public class StoreService {
     }
 
     private Store requirePublicStore(long id) {
-        Store store = storeDao.findById(id).orElseThrow(() -> new BizException(404, "店铺不存在"));
+        Store store = storeDao.findForDispatch(id).orElseThrow(() -> new BizException(404, "店铺不存在"));
         if (!store.available()) throw new BizException(404, "店铺暂不可用");
         return store;
     }
@@ -539,16 +539,25 @@ public class StoreService {
                                        double minOrder, String deliveryTime, String notice,
                                        String address, Double latitude, Double longitude, int deliveryRadius,
                                        String image) {
+        return createStore(ownerId, name, categoryId, deliveryFee, minOrder, deliveryTime, notice,
+                address, latitude, longitude, deliveryRadius, image, null);
+    }
+
+    @Transactional
+    public Store.StoreView createStore(long ownerId, String name, int categoryId, double deliveryFee,
+                                       double minOrder, String deliveryTime, String notice,
+                                       String address, Double latitude, Double longitude, int deliveryRadius,
+                                       String image, List<String> images) {
         String safeName = requireMaxLength(normalizeRequired(name, "店铺名称不能为空"), 128, "店铺名称");
         // 店铺照片：商户上传后返回的相对地址（/uploads/...），未上传为空串
-        String safeImage = requireMaxLength(image == null ? "" : image, 255, "店铺图片地址");
+        List<String> photos = images == null ? (image == null || image.isBlank() ? List.of() : List.of(
+                requireMaxLength(image, 255, "店铺图片地址"))) : ImageUploadValidator.validateUrls(images, 20, "店铺照片");
+        String safeImage = photos.isEmpty() ? "" : photos.getFirst();
         validateCategory(categoryId);
         if (!Double.isFinite(deliveryFee) || deliveryFee < 0 || !Double.isFinite(minOrder) || minOrder < 0) {
             throw new BizException("配送费和起送价必须为非负数字");
         }
-        if (deliveryRadius < 0) {
-            throw new BizException("配送半径必须为非负整数（0 表示不限）");
-        }
+        validateDeliveryRadius(deliveryRadius);
         String normalizedAddress = requireMaxLength(normalizeRequired(address, "店铺地址不能为空"), 512, "店铺地址");
         if (!validCoordinates(latitude, longitude)) {
             throw new BizException("店铺地址定位失败，请重新选择地址");
@@ -559,7 +568,7 @@ public class StoreService {
                         : requireMaxLength(deliveryTime, 32, "配送时间"),
                 "0.0km", "[\"新店特惠\"]", requireMaxLength(notice, 512, "店铺公告"),
                 normalizedAddress, latitude, longitude, categoryId, "[" + categoryId + "]", ownerId, 1, 0, now,
-                deliveryRadius, 0, 1, "");
+                deliveryRadius, 0, 1, "", photos);
         long id = storeDao.insert(store);
         storeDao.insertReview(id, 0, ownerId, "", now);
         invalidateStoreAndGoodsCache();
@@ -584,9 +593,15 @@ public class StoreService {
                 patch.deliveryTime() == null ? store.deliveryTime() : patch.deliveryTime(), 32, "配送时间");
         Double nextLatitude = patch.address() == null ? store.latitude() : patch.latitude();
         Double nextLongitude = patch.address() == null ? store.longitude() : patch.longitude();
-        int nextRadius = patch.deliveryRadius() < 0 ? store.deliveryRadius() : patch.deliveryRadius();
+        if (patch.deliveryRadius() != -1) { validateDeliveryRadius(patch.deliveryRadius()); }
+        int nextRadius = patch.deliveryRadius() == -1 ? store.deliveryRadius() : patch.deliveryRadius();
         String nextImage = patch.image() == null ? store.image()
                 : requireMaxLength(patch.image(), 255, "店铺图片地址");
+        List<String> photos = patch.images() == null
+                ? (patch.image() == null || nextImage.equals(store.image()) ? store.images()
+                    : nextImage.isBlank() ? List.of() : List.of(nextImage))
+                : ImageUploadValidator.validateUrls(patch.images(), 20, "店铺照片");
+        nextImage = photos.isEmpty() ? "" : photos.getFirst();
         if (!nextAddress.isBlank() && !validCoordinates(nextLatitude, nextLongitude)) {
             throw new BizException("店铺地址定位失败，请重新选择地址");
         }
@@ -598,7 +613,8 @@ public class StoreService {
                 store.distance(), store.tags(), nextNotice,
                 nextAddress, nextLatitude, nextLongitude,
                 store.categoryId(), store.categoryIds(), store.ownerId(),
-                patch.status() < 0 ? store.status() : patch.status(), store.recommended(), store.createTime(), nextRadius);
+                patch.status() < 0 ? store.status() : patch.status(), store.recommended(), store.createTime(), nextRadius,
+                store.reviewStatus(), store.platformStatus(), store.reviewReason(), photos);
         storeDao.update(updated);
         if (patch.status() >= 0) {
             if (patch.status() != 0 && patch.status() != 1) throw new BizException("营业状态无效");
@@ -643,6 +659,7 @@ public class StoreService {
 
     @Transactional
     public Goods updateGoods(long ownerId, long goodsId, GoodsInput input) {
+        goodsDao.lockStockRows(List.of(goodsId));
         Goods goods = goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品不存在"));
         requireOwned(ownerId, goods.storeId());
         // 有规格时价格/库存由规格聚合，允许传入的 price/stock 缺省
@@ -656,7 +673,7 @@ public class StoreService {
         Goods updated = new Goods(goods.id(), goods.storeId(), input.name(), input.description(),
                 specs.isEmpty() ? input.price() : minSpecPrice(specs),
                 input.originalPrice(), input.image(), input.categoryId(),
-                input.merchantCategoryId(), specs.isEmpty() ? input.stock() : sumSpecStock(specs),
+                input.merchantCategoryId(), specs.isEmpty() ? goods.stock() : sumSpecStock(specs),
                 goods.version(), goods.sales(), goods.rating(), input.tag() == null ? "" : input.tag(),
                 input.special(), input.status() < 0 ? goods.status() : input.status(), goods.createTime());
         goodsDao.update(updated);
@@ -676,6 +693,7 @@ public class StoreService {
     /** 整体覆盖菜品规格（保留已有规格 id，新增的插入，未提交的删除）。 */
     @Transactional
     public Goods updateSpecs(long ownerId, long goodsId, List<SpecInput> specs) {
+        goodsDao.lockStockRows(List.of(goodsId));
         Goods goods = goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品不存在"));
         requireOwned(ownerId, goods.storeId());
         applySpecs(goodsId, specs == null ? List.of() : specs);
@@ -707,9 +725,10 @@ public class StoreService {
             String name = input.name().trim();
             boolean isExisting = input.id() > 0 && existing.stream().anyMatch(spec -> spec.id() == input.id());
             if (isExisting) {
-                specDao.update(input.id(), name, input.price(), input.stock(), i);
-                kept.add(input.id());
+                if (!kept.add(input.id())) throw new BizException("不能重复提交同一规格");
+                specDao.update(input.id(), name, input.price(), i);
             } else {
+                if (input.id() != 0) throw new BizException(409, "规格已变化，请刷新后重试");
                 kept.add(specDao.insert(goodsId, name, input.price(), input.stock(), i));
             }
         }
@@ -731,20 +750,45 @@ public class StoreService {
     }
 
     private int sumSpecStock(List<GoodsSpec> specs) {
-        return specs.stream().mapToInt(GoodsSpec::stock).sum();
+        long total = specs.stream().mapToLong(GoodsSpec::stock).sum();
+        if (total > Integer.MAX_VALUE) throw new BizException("库存合计超出上限");
+        return (int) total;
     }
 
-    /** 快速补货/清库存（演进项，见大纲 8.4）。多规格菜品库存由规格聚合，须在规格里调整。 */
-    public Goods updateStock(long ownerId, long goodsId, int stock) {
-        if (stock < 0) {
-            throw new BizException("库存不能为负数");
-        }
+    /** 独立盘点操作；普通商品/规格编辑永远不覆盖已有库存。 */
+    @Transactional
+    public Goods updateStock(long ownerId, long goodsId, long specId, int stock, Integer expectedVersion) {
+        return changeStock(ownerId, goodsId, specId, stock, expectedVersion, false);
+    }
+
+    /** 增量补货也携带读取版本，网络重试不能重复增加同一批库存。 */
+    @Transactional
+    public Goods replenishStock(long ownerId, long goodsId, long specId, int quantity, Integer expectedVersion) {
+        return changeStock(ownerId, goodsId, specId, quantity, expectedVersion, true);
+    }
+
+    private Goods changeStock(long ownerId, long goodsId, long specId, int amount,
+                              Integer expectedVersion, boolean replenish) {
+        if (amount < 0 || (replenish && amount == 0)) throw new BizException("请输入有效的库存数量");
+        if (expectedVersion == null || expectedVersion < 0) throw new BizException(409, "请刷新库存后重试");
+        if (specId < 0) throw new BizException("规格不合法");
+        goodsDao.lockStockRows(List.of(goodsId));
         Goods goods = goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品不存在"));
         requireOwned(ownerId, goods.storeId());
-        if (goods.multiSpec()) {
-            throw new BizException("多规格菜品请分别调整各规格库存");
+        boolean changed;
+        if (specId > 0) {
+            if (goods.specs().stream().noneMatch(spec -> spec.id() == specId)) {
+                throw new BizException(409, "规格已变化，请刷新后重试");
+            }
+            changed = replenish ? specDao.replenishStock(goodsId, specId, amount, expectedVersion)
+                    : specDao.countStock(goodsId, specId, amount, expectedVersion);
+        } else {
+            if (goods.multiSpec()) throw new BizException("多规格菜品请分别调整各规格库存");
+            changed = replenish ? goodsDao.replenishStock(goodsId, amount, expectedVersion)
+                    : goodsDao.countStock(goodsId, amount, expectedVersion);
         }
-        goodsDao.updateStock(goodsId, stock);
+        if (!changed) throw new BizException(409, "库存已变化，请刷新后核对再提交");
+        if (specId > 0) syncGoodsFromSpecs(goodsId);
         invalidateStoreAndGoodsCache();
         return goodsDao.findById(goodsId).orElseThrow(() -> new BizException("商品更新失败"));
     }
@@ -893,6 +937,12 @@ public class StoreService {
         }
     }
 
+    private static void validateDeliveryRadius(int meters) {
+        if (meters != 0 && (meters < Store.MIN_DELIVERY_RADIUS_METERS || meters > Store.MAX_DELIVERY_RADIUS_METERS)) {
+            throw new BizException("门店配送半径需在1–15公里之间（0使用默认10公里）");
+        }
+    }
+
     private void validateCategory(int categoryId) {
         if (categoryId <= 0 || !storeDao.categoryExists(categoryId)) {
             throw new BizException("店铺或商品分类不存在");
@@ -961,7 +1011,13 @@ public class StoreService {
      */
     public record StorePatch(String name, double deliveryFee, double minOrder, String deliveryTime,
                              String notice, String address, Double latitude, Double longitude, int status,
-                             int deliveryRadius, String image) {
+                             int deliveryRadius, String image, List<String> images) {
+        public StorePatch(String name, double deliveryFee, double minOrder, String deliveryTime,
+                          String notice, String address, Double latitude, Double longitude, int status,
+                          int deliveryRadius, String image) {
+            this(name, deliveryFee, minOrder, deliveryTime, notice, address, latitude, longitude, status,
+                    deliveryRadius, image, null);
+        }
     }
 
     /**

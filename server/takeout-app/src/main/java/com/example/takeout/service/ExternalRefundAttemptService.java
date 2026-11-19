@@ -6,15 +6,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
-/** REQUIRES_NEW touches only this independent table, never order/payment/refund rows. */
+/** Intent commits before channel I/O; final bookkeeping and DONE share the business transaction. */
 @Service
 public class ExternalRefundAttemptService {
     public record Cancellation(String source, String reasonCode, String reason, long operatorId,
@@ -23,13 +21,12 @@ public class ExternalRefundAttemptService {
                           String channel, String outTradeNo, String providerTransactionId,
                           BigDecimal amount, BigDecimal originalAmount, String metadataJson, String status) {}
     private final JdbcTemplate db;
-    private final TransactionTemplate independent;
+    private final TransactionTemplate transactions;
     private final ObjectMapper json;
 
     public ExternalRefundAttemptService(JdbcTemplate db, PlatformTransactionManager manager, ObjectMapper json) {
         this.db = db; this.json = json;
-        independent = new TransactionTemplate(manager);
-        independent.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        transactions = new TransactionTemplate(manager);
     }
 
     public Attempt prepare(String kind, PaymentTransaction payment, long refundId, String refundNo,
@@ -37,7 +34,7 @@ public class ExternalRefundAttemptService {
         String metadata;
         try { metadata = json.writeValueAsString(cancellation); }
         catch (com.fasterxml.jackson.core.JsonProcessingException error) { throw new IllegalStateException(error); }
-        return independent.execute(status -> {
+        return TransactionRetries.execute(transactions, status -> {
             db.update("INSERT INTO external_refund_attempts(refund_no,kind,order_id,payment_id,refund_id,channel," +
                     "out_trade_no,provider_transaction_id,amount,original_amount,metadata_json) VALUES(?,?,?,?,?,?,?,?,?,?,?) " +
                     "ON DUPLICATE KEY UPDATE refund_no=refund_no", refundNo, kind, payment.orderId(), payment.id(), refundId,
@@ -55,31 +52,23 @@ public class ExternalRefundAttemptService {
     }
 
     public void confirmed(String refundNo) {
-        independent.executeWithoutResult(status -> db.update("UPDATE external_refund_attempts SET status='CONFIRMED',updated_at=NOW() " +
+        TransactionRetries.executeWithoutResult(transactions, status -> db.update("UPDATE external_refund_attempts SET status='CONFIRMED',updated_at=NOW() " +
                 "WHERE refund_no=? AND status='REQUESTED'", refundNo));
     }
 
-    public void doneAfterCommit(String refundNo) {
+    public void completeInTransaction(String refundNo) {
         if (!TransactionSynchronizationManager.isActualTransactionActive()) throw new IllegalStateException("Refund requires a business transaction");
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override public void afterCommit() {
-                try { markDone(refundNo); }
-                catch (RuntimeException error) {
-                    org.slf4j.LoggerFactory.getLogger(ExternalRefundAttemptService.class)
-                            .warn("Refund committed; intent completion will be recovered refundNo={}", refundNo, error);
-                }
-            }
-        });
+        markDone(refundNo);
     }
 
     public void markDone(String refundNo) {
-        independent.executeWithoutResult(status -> db.update("UPDATE external_refund_attempts SET status='DONE',updated_at=NOW() " +
+        TransactionRetries.executeWithoutResult(transactions, status -> db.update("UPDATE external_refund_attempts SET status='DONE',updated_at=NOW() " +
                 "WHERE refund_no=? AND status<>'DONE'", refundNo));
     }
 
-    /** Caller holds order lock; independent locking read sees current intent despite caller's RR snapshot. */
+    /** Locking current read sees committed intents without borrowing a second connection. */
     public Optional<Attempt> pendingCancellation(long orderId) {
-        return independent.execute(status -> db.query("SELECT * FROM external_refund_attempts WHERE order_id=? " +
+        return TransactionRetries.execute(transactions, status -> db.query("SELECT * FROM external_refund_attempts WHERE order_id=? " +
                 "AND kind='CANCEL' AND status<>'DONE' ORDER BY created_at LIMIT 1 FOR UPDATE", this::map, orderId).stream().findFirst());
     }
 
@@ -88,18 +77,29 @@ public class ExternalRefundAttemptService {
     }
 
     public void requireRejectable(long refundId) {
-        Boolean started = independent.execute(status -> !db.query("SELECT refund_no FROM external_refund_attempts " +
+        Boolean started = TransactionRetries.execute(transactions, status -> !db.query("SELECT refund_no FROM external_refund_attempts " +
                 "WHERE refund_id=? AND kind='AFTER_SALES' LIMIT 1 FOR UPDATE", (rs, row) -> rs.getString(1), refundId).isEmpty());
         if (Boolean.TRUE.equals(started)) throw new BizException(409, "该申请已提交支付渠道退款，请重试审批或等待自动恢复，不能驳回");
     }
 
     public List<Attempt> pending(int limit) {
-        return db.query("SELECT * FROM external_refund_attempts WHERE status<>'DONE' ORDER BY updated_at,refund_no LIMIT ?",
-                this::map, Math.clamp(limit, 1, 20));
+        return db.query("SELECT * FROM external_refund_attempts WHERE status IN ('REQUESTED','CONFIRMED') AND next_attempt_at<=NOW() " +
+                "ORDER BY next_attempt_at,refund_no LIMIT ?", this::map, Math.clamp(limit, 1, 100));
+    }
+
+    public Optional<Attempt> byRefund(long refundId) {
+        return db.query("SELECT * FROM external_refund_attempts WHERE refund_id=? AND kind='AFTER_SALES' LIMIT 1",
+                this::map, refundId).stream().findFirst();
+    }
+
+    public Optional<Attempt> find(String number) {
+        return db.query("SELECT * FROM external_refund_attempts WHERE refund_no=? FOR UPDATE", this::map, number).stream().findFirst();
     }
 
     public void defer(String refundNo) {
-        independent.executeWithoutResult(status -> db.update("UPDATE external_refund_attempts SET updated_at=NOW() " +
+        TransactionRetries.executeWithoutResult(transactions, status -> db.update("UPDATE external_refund_attempts SET updated_at=NOW()," +
+                "next_attempt_at=DATE_ADD(NOW(),INTERVAL LEAST(900,30*POW(2,LEAST(failure_count,5))) SECOND)," +
+                "failure_count=LEAST(failure_count+1,1000) " +
                 "WHERE refund_no=? AND status<>'DONE'", refundNo));
     }
 

@@ -7,7 +7,7 @@ import { AppButtonStyle, AppCardStyle, AppInputStyle } from '../common/theme/App
  */
 import { AppMotion } from '../common/theme/AppMotion'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText } from '../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, MODULE_BG, accentBg, accentFg, accentIndexFromText, DELIVERY_RANGE, riderPickupRadiusKm } from '../common/Constants'
 import { Rider, Address, User, UserRole } from '../model/Models'
 import { fetchRiderProfileRemote, logout, setRiderStatusRemote, reportRiderLocationRemote } from '../service/AppStorageManager'
 import { updateRiderRadiusApi, updateRiderLocationApi } from '../service/ApiService'
@@ -17,10 +17,7 @@ import { ChangePasswordDialog } from '../components/ChangePasswordDialog'
 import { logInfo } from '../service/AppLogger'
 import { PageHeader } from '../components/PageHeader'
 
-/** 骑手配送半径的软阈值（公里）：低于/高于会先弹确认框，服务端仍接受 */
-const RIDER_RADIUS_DEFAULT_KM: number = 25
-const RIDER_RADIUS_MIN_KM: number = 5
-const RIDER_RADIUS_MAX_KM: number = 50
+const RIDER_RADIUS_DEFAULT_KM: number = DELIVERY_RANGE.RIDER_DEFAULT_KM
 
 @Entry
 @Component
@@ -51,11 +48,8 @@ export struct RiderCenterPage {
   @State radiusInput: string = `${RIDER_RADIUS_DEFAULT_KM}`
   @State savingRadius: boolean = false
   @State updatingLocation: boolean = false
-  @State showRadiusConfirm: boolean = false
   @State showLogoutConfirm: boolean = false
   @State showChangePwd: boolean = false
-  @State radiusConfirmText: string = ''
-  @State pendingRadiusMeters: number = 0
 
   async aboutToAppear(): Promise<void> {
     logInfo('Page', '进入骑手中心 RiderCenterPage')
@@ -91,16 +85,13 @@ export struct RiderCenterPage {
     if (rider !== null) { this.rider = rider }
     this.loading = false
     if (this.rider !== null) {
-      const radiusMeters: number = this.rider.deliveryRadius ?? 0
-      const km: number = radiusMeters > 0 ? radiusMeters / 1000 : RIDER_RADIUS_DEFAULT_KM
-      this.radiusInput = `${km}`
+      this.radiusInput = `${this.effectiveRadiusKm()}`
     }
   }
 
-  /** 当前生效半径（公里）：未设置时用默认 25 公里。 */
   private effectiveRadiusKm(): number {
     const radiusMeters: number = this.rider === null ? 0 : (this.rider.deliveryRadius ?? 0)
-    return radiusMeters > 0 ? radiusMeters / 1000 : RIDER_RADIUS_DEFAULT_KM
+    return riderPickupRadiusKm(radiusMeters)
   }
 
   private hasRiderLocation(): boolean {
@@ -113,27 +104,15 @@ export struct RiderCenterPage {
       && Number.isFinite(latitude) && Number.isFinite(longitude) && !(latitude === 0 && longitude === 0)
   }
 
-  /** 保存半径：<5 公里 / >50 公里先弹确认（"不推荐太小哦，可能会无单可抢"）。 */
   private onSaveRadius(): void {
     const km: number = Number(this.radiusInput.trim())
-    if (!Number.isFinite(km) || km <= 0) {
-      promptAction.showToast({ message: '请输入有效的配送半径（公里）', duration: 2000 })
+    if (!Number.isFinite(km) || km < DELIVERY_RANGE.RIDER_MIN_KM || km > DELIVERY_RANGE.RIDER_MAX_KM) {
+      promptAction.showToast({
+        message: `取餐半径须为 ${DELIVERY_RANGE.RIDER_MIN_KM}–${DELIVERY_RANGE.RIDER_MAX_KM} 公里`, duration: 2000
+      })
       return
     }
-    const meters: number = Math.round(km * 1000)
-    if (km < RIDER_RADIUS_MIN_KM) {
-      this.radiusConfirmText = `不推荐太小哦，可能会无单可抢，您真的要选择吗？（当前 ${km} 公里）`
-      this.pendingRadiusMeters = meters
-      this.showRadiusConfirm = true
-      return
-    }
-    if (km > RIDER_RADIUS_MAX_KM) {
-      this.radiusConfirmText = `半径超过 ${RIDER_RADIUS_MAX_KM} 公里，可能会接到很远的单，确定要设置吗？（当前 ${km} 公里）`
-      this.pendingRadiusMeters = meters
-      this.showRadiusConfirm = true
-      return
-    }
-    this.saveRadius(meters)
+    this.saveRadius(Math.round(km * 1000))
   }
 
   private async saveRadius(radiusMeters: number): Promise<void> {
@@ -144,11 +123,11 @@ export struct RiderCenterPage {
     const updated: Rider | null = await updateRiderRadiusApi(radiusMeters)
     this.savingRadius = false
     if (updated === null) {
-      promptAction.showToast({ message: '配送半径保存失败，请重试', duration: 2200 })
+      promptAction.showToast({ message: '取餐半径保存失败，请重试', duration: 2200 })
       return
     }
     this.rider = updated
-    promptAction.showToast({ message: `配送半径已设为 ${radiusMeters / 1000} 公里`, duration: 1800 })
+    promptAction.showToast({ message: `取餐半径已设为 ${radiusMeters / 1000} 公里`, duration: 1800 })
   }
 
   /** 地图选点设置接单位置（抢单圆心）。 */
@@ -300,7 +279,7 @@ export struct RiderCenterPage {
               Column({ space: SPACING.SM }) {
                 FormInput({ label: '配送半径（公里）',
                   value: this.radiusInput,
-                  placeholder: `配送半径（公里），如：${RIDER_RADIUS_DEFAULT_KM}`,
+                  placeholder: `取餐半径（公里），如：${RIDER_RADIUS_DEFAULT_KM}`,
                   inputType: InputType.Number,
                   fieldId: 'rider-radius-input',
                   onChange: (v: string) => { this.radiusInput = v },
@@ -419,19 +398,6 @@ export struct RiderCenterPage {
         })
       }
 
-      if (this.showRadiusConfirm) {
-        ConfirmDialog({
-          title: '确认配送半径',
-          content: this.radiusConfirmText,
-          confirmText: '仍要选择',
-          cancelText: '改一下',
-          onConfirm: () => {
-            this.showRadiusConfirm = false
-            this.saveRadius(this.pendingRadiusMeters)
-          },
-          onCancel: () => { this.showRadiusConfirm = false }
-        })
-      }
     }
     .width('100%').height('100%')
   }

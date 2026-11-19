@@ -70,16 +70,16 @@ const pageSource = fs.readFileSync(path.join(root, 'entry/src/main/ets/pages/Log
 const methodStart = pageSource.indexOf('  private async quickLogin(');
 const methodEnd = pageSource.indexOf('\n  private loginTypeName(', methodStart);
 const method = pageSource.slice(methodStart, methodEnd);
-function page(getAccount, remote) {
+function page(getAccount, remote, waitForStartupBackend = async () => true) {
   const result = {}, calls = [], state = { success: 0, logout: 0 };
   vm.runInNewContext(transpile(`export class Page { ${method} }`), {
     exports: result, UserRole: { CUSTOMER: 0, MERCHANT: 1, ADMIN: 2, RIDER: 3 },
-    getQuickLoginAccount: getAccount, getApiBaseUrl: () => baseUrl,
+    getQuickLoginAccount: getAccount, getApiBaseUrl: () => baseUrl, waitForStartupBackend,
     loginRemote: async (...args) => { calls.push(args); return remote(...args); },
     promptAction: { showToast: () => {} }, logout: () => { state.logout++; }, getLastRemoteErrorMessage: () => ''
   });
   const instance = new result.Page();
-  Object.assign(instance, { submitting: false, password: '', loginTypeName: () => ['USER', 'MERCHANT', 'ADMIN', 'RIDER'][instance.selectedRole], onLoginSuccess: () => { state.success++; } });
+  Object.assign(instance, { pageActive: true, loginAttemptVersion: 0, submitting: false, password: '', loginTypeName: () => ['USER', 'MERCHANT', 'ADMIN', 'RIDER'][instance.selectedRole], onLoginSuccess: () => { state.success++; } });
   return { instance, calls, state };
 }
 
@@ -112,4 +112,35 @@ test('unconfigured and repeated clicks send no request; errors release the submi
   failed.instance.submitting = true;
   await failed.instance.quickLogin(0);
   assert.equal(failed.calls.length, 1);
+});
+
+test('a quick login finishing after the page leaves cannot report success or log out a newer account', async () => {
+  let finish;
+  const p = page(() => accounts[0], () => new Promise(resolve => { finish = resolve; }));
+  const pending = p.instance.quickLogin(0);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(p.calls[0][3](), true);
+  p.instance.pageActive = false; p.instance.loginAttemptVersion++;
+  assert.equal(p.calls[0][3](), false);
+  finish({ role: 2 }); await pending;
+  assert.equal(p.state.success, 0); assert.equal(p.state.logout, 0);
+  assert.equal(p.instance.submitting, false);
+});
+
+test('quick login waits to look up server-specific credentials and does not send after leaving', async () => {
+  for (const leave of [false, true]) {
+    let ready;
+    const waiting = new Promise(resolve => { ready = resolve; });
+    let lookups = 0;
+    const r = page((role, url) => { lookups++; assert.equal(url, baseUrl); return accounts[0]; },
+      async () => ({ role: 0 }), () => waiting);
+    const login = r.instance.quickLogin(0);
+    assert.equal(r.instance.submitting, true);
+    assert.equal(lookups, 0);
+    if (leave) { r.instance.pageActive = false; r.instance.loginAttemptVersion++; }
+    ready(true);
+    await login;
+    assert.equal(lookups, leave ? 0 : 1);
+    assert.equal(r.calls.length, leave ? 0 : 1);
+  }
 });

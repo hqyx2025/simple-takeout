@@ -5,6 +5,7 @@ import { EmailCaptchaField } from '../components/EmailCaptchaField'
 import { AppTheme, AppInputStyle, AppButtonStyle } from '../common/theme/AppTheme'
 import { newPasswordError } from '../common/PasswordPolicy'
 import { registerRemote, getLastRemoteErrorMessage } from '../service/AppStorageManager'
+import { waitForStartupBackend } from '../service/HttpClient'
 import { requestEmailCodeApi, EmailCodeResult, checkUsernameAvailableApi } from '../service/ApiService'
 import { routerCompat as router } from '../common/UiNavigation'
 import { KeyboardAvoidMode } from '@kit.ArkUI'
@@ -58,7 +59,7 @@ struct RegisterPage {
       Scroll() {
         Column({ space: 8 }) {
           if ((this.errorMsg && !this.errorField) || this.tipMsg) {
-            Text(this.errorMsg || this.tipMsg).fontSize(14).width('100%').padding(10).borderRadius(10)
+            Text(this.errorMsg || this.tipMsg).fontSize(14).width('100%').padding(10).borderRadius(AppTheme.CONTROL_RADIUS)
               .fontColor(this.errorMsg ? AppTheme.ERROR : AppTheme.SUCCESS)
               .backgroundColor(this.errorMsg ? AppTheme.ERROR_BG : AppTheme.SUCCESS_BG)
               .id(this.errorMsg ? 'register-error' : 'register-success')
@@ -90,7 +91,7 @@ struct RegisterPage {
       }.align(Alignment.Top).width('100%').layoutWeight(1).padding({ left: 24, right: 24 }).scrollBar(BarState.Off)
       Row() {
         Button(this.submitting ? '注册中…' : '注册', { type: ButtonType.Normal })
-          .attributeModifier(new AppButtonStyle()).height(44).width('100%')
+          .attributeModifier(new AppButtonStyle()).height(AppTheme.CONTROL_HEIGHT).width('100%')
           .constraintSize({ maxWidth: AppTheme.FORM_MAX_WIDTH }).id('register-submit')
           .enabled(!this.submitting && !this.sendingCode).onClick(() => { this.submitForm() })
       }.width('100%').justifyContent(FlexAlign.Center).padding({ left: 24, right: 24, top: 8, bottom: 20 })
@@ -114,7 +115,10 @@ struct RegisterPage {
     if (name === this.checkedUsername && this.usernameAvailable !== null) { return this.usernameAvailable }
     const version: number = ++this.usernameCheckVersion
     let available: boolean | null = null
-    try { available = await checkUsernameAvailableApi(name) } catch (_) {}
+    try {
+      if (!await waitForStartupBackend() || !this.pageActive || version !== this.usernameCheckVersion) { return false }
+      available = await checkUsernameAvailableApi(name)
+    } catch (_) {}
     if (!this.pageActive || version !== this.usernameCheckVersion || name !== this.username.trim()) { return false }
     this.usernameAvailable = available
     this.checkedUsername = available === null ? '' : name
@@ -163,7 +167,9 @@ struct RegisterPage {
     }
     this.sendingCode = true
     try {
+      if (!await waitForStartupBackend() || !this.pageActive) { return }
       if (!await this.checkUsername()) { this.showError(this.usernameError || '请检查用户名', 'login-username'); return }
+      if (!this.pageActive) { return }
       const captchaId: string = this.captchaId
       this.captchaId = ''
       const result: EmailCodeResult = await requestEmailCodeApi(this.phone.trim(), this.email.trim(),
@@ -213,7 +219,9 @@ struct RegisterPage {
     }
     this.submitting = true
     try {
+      if (!await waitForStartupBackend() || !this.pageActive) { return }
       if (!await this.checkUsername()) { this.showError(this.usernameError || '请检查用户名', 'login-username'); return }
+      if (!this.pageActive) { return }
       const user: User | undefined = await registerRemote(this.username.trim(), this.phone.trim(), this.email.trim(),
         this.emailCode.trim(), this.password, UserRole.CUSTOMER)
       if (!this.pageActive) { return }

@@ -1,5 +1,4 @@
-import { get, post, put, del, ApiResponse, setAuthTokens, getRefreshToken } from '../HttpClient'
-import { saveAuthTokens } from '../TokenStorage'
+import { get, post, put, del, ApiResponse, getRefreshToken } from '../HttpClient'
 import { currentPushToken } from '../PushKitService'
 import { API_CONFIG } from '../../common/Constants'
 import { User, UserRole, BankCard } from '../../model/Models'
@@ -10,37 +9,35 @@ import { CaptchaResult, EmailLoginRequest } from '../../model/server/Contracts'
 
 // ==================== 认证 ====================
 
+export interface LoginSession {
+  token: string
+  refreshToken: string
+  user: User
+}
+
 /**
- * 登录：成功设置 token 并返回用户，失败返回 null
+ * 只返回认证结果；共享会话层确认请求仍有效后再一起提交身份和凭证。
  */
-export async function apiLogin(phone: string, password: string, loginType?: string): Promise<User | null> {
+export async function apiLogin(phone: string, password: string, loginType?: string): Promise<LoginSession | null> {
   const req: LoginRequest = loginType === undefined
     ? { phone: phone, password: password }
     : { phone: phone, password: password, loginType: loginType }
   const resp: ApiResponse<LoginResult> = await post<LoginResult>(API_CONFIG.ENDPOINTS['login'], req, false)
-  return storeLoginSession(resp)
+  return loginSession(resp)
 }
 
-export async function apiLoginByEmail(phone: string, email: string, code: string, loginType: string): Promise<User | null> {
+export async function apiLoginByEmail(phone: string, email: string, code: string, loginType: string): Promise<LoginSession | null> {
   const req: EmailLoginRequest = { phone: phone, email: email, code: code, loginType: loginType }
   const resp: ApiResponse<LoginResult> = await post<LoginResult>('/api/auth/login/email', req, false)
-  return storeLoginSession(resp)
+  return loginSession(resp)
 }
 
-async function storeLoginSession(resp: ApiResponse<LoginResult>): Promise<User | null> {
+function loginSession(resp: ApiResponse<LoginResult>): LoginSession | null {
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     logWarn('Api', `登录失败：${resp.message}`)
     return null
   }
-  const refresh: string = resp.data.refreshToken ?? ''
-  setAuthTokens(resp.data.token, refresh)
-  try {
-    await saveAuthTokens(resp.data.token, refresh)
-  } catch (_) {
-    logWarn('Auth', '安全凭证无法写入设备密钥存储；本次运行可继续，重启后需要重新登录')
-  }
-  logInfo('Api', `登录成功 userId=${resp.data.user.id}`)
-  return toUser(resp.data.user)
+  return { token: resp.data.token, refreshToken: resp.data.refreshToken ?? '', user: toUser(resp.data.user) }
 }
 
 /**
@@ -123,9 +120,10 @@ export async function resetPaymentPasswordApi(phone: string, email: string, code
 }
 
 export async function updateUserProfileApi(username: string, phone: string, email: string,
-  currentPassword: string = ''): Promise<User | undefined> {
-  const req: ProfileUpdateRequest = { username: username, phone: phone, email: email, currentPassword: currentPassword }
-  const resp: ApiResponse<ServerUser> = await put<ServerUser>('/api/auth/me', req)
+  currentPassword: string = '', phoneCode: string = '', emailCode: string = ''): Promise<User | undefined> {
+  const req: ProfileUpdateRequest = { username: username, phone: phone, email: email, currentPassword: currentPassword,
+    phoneCode: phoneCode, emailCode: emailCode }
+  const resp: ApiResponse<ServerUser> = await put<ServerUser>('/api/auth/me', req, false)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     logWarn('Api', `更新个人资料失败：${resp.message}`)
     return undefined
@@ -133,14 +131,58 @@ export async function updateUserProfileApi(username: string, phone: string, emai
   return toUser(resp.data)
 }
 
-export async function fetchCurrentUserApi(): Promise<User | undefined> {
+export interface ContactVerificationStatus {
+  phoneVerified: boolean
+  emailVerified: boolean
+  phoneAvailable: boolean
+}
+
+interface ContactVerificationRequest {
+  kind: string
+  value: string
+  currentPassword: string
+  code?: string
+}
+
+export async function fetchContactVerificationApi(): Promise<ContactVerificationStatus | null> {
+  const response: ApiResponse<ContactVerificationStatus> = await get<ContactVerificationStatus>('/api/auth/me/contacts', false)
+  return response.code === 200 ? response.data ?? null : null
+}
+
+export async function sendContactCodeApi(kind: string, value: string, currentPassword: string): Promise<ApiResponse<string>> {
+  const request: ContactVerificationRequest = { kind: kind, value: value, currentPassword: currentPassword }
+  return post<string>('/api/auth/me/contact-code', request, false)
+}
+
+export async function verifyCurrentContactApi(kind: string, value: string, currentPassword: string,
+  code: string): Promise<ApiResponse<string>> {
+  const request: ContactVerificationRequest = { kind: kind, value: value, currentPassword: currentPassword, code: code }
+  return post<string>('/api/auth/me/verify-contact', request, false)
+}
+
+interface CloseAccountRequest { currentPassword: string; confirmed: boolean }
+
+export async function closeAccountApi(currentPassword: string): Promise<ApiResponse<string>> {
+  const request: CloseAccountRequest = { currentPassword: currentPassword, confirmed: true }
+  return post<string>('/api/auth/me/close', request, false)
+}
+
+export async function fetchCurrentUserApi(showErrorToast: boolean = true): Promise<User | undefined> {
   // /auth/me 是账户余额的权威来源，增加时间戳避免 GET 缓存返回旧余额。
-  const resp: ApiResponse<ServerUser> = await get<ServerUser>(`/api/auth/me?refreshAt=${Date.now()}`)
+  const resp: ApiResponse<ServerUser> = await get<ServerUser>(`/api/auth/me?refreshAt=${Date.now()}`, showErrorToast)
   if (resp.code !== 200 || resp.data === null || resp.data === undefined) {
     logWarn('Api', `获取当前用户失败：${resp.message}`)
     return undefined
   }
   return toUser(resp.data)
+}
+
+interface AvatarUpdateRequest { avatar: string }
+
+export async function updateUserAvatarApi(avatar: string): Promise<User | undefined> {
+  const req: AvatarUpdateRequest = { avatar: avatar }
+  const resp: ApiResponse<ServerUser> = await put<ServerUser>('/api/auth/me/avatar', req, false)
+  return resp.code === 200 && resp.data !== null && resp.data !== undefined ? toUser(resp.data) : undefined
 }
 
 export async function rechargeBalanceApi(amount: number): Promise<User | undefined> {
@@ -198,11 +240,4 @@ export async function setPaymentPasswordApi(loginPassword: string, paymentPasswo
   const request: SetPaymentPasswordRequest = { loginPassword: loginPassword, paymentPassword: paymentPassword }
   const response: ApiResponse<Object> = await post<Object>('/api/auth/payment-password', request, false)
   return { success: response.code === 200, message: response.message || '' }
-}
-
-interface CloseAccountRequest { currentPassword: string; confirmed: boolean }
-
-export async function closeAccountApi(currentPassword: string): Promise<ApiResponse<string>> {
-  const request: CloseAccountRequest = { currentPassword: currentPassword, confirmed: true }
-  return post<string>('/api/auth/me/close', request, false)
 }

@@ -46,9 +46,8 @@ class StoreRecommendedDistanceTest {
         assertTrue(views.get(0).distance().endsWith("km"), views.get(0).distance());
     }
 
-    /** 旧商户半径不再挡住统一 500 公里内的店铺。 */
     @Test
-    void recommendedStoresUseUnifiedOrderDistanceLimit() {
+    void recommendationsRespectMerchantDeliveryRadius() {
         Store narrow = new Store(31L, "光谷牛肉粉", "", 4.7, 800, 3, 20, "20分钟", "0.2km", "[]", "",
                 "南宁市青秀区", 22.8177, 108.3665, 1, "[1]", 99L, 1, 1, "", 5000);
         when(storeDao.listRecommended()).thenReturn(List.of(narrow));
@@ -56,7 +55,7 @@ class StoreRecommendedDistanceTest {
                 .thenAnswer(invocation -> ((Supplier<?>) invocation.getArgument(2)).get());
 
         // 用户纬度 +0.072 度 ≈ 8 公里
-        assertEquals(1, storeService.recommendedStores(20, 10, 22.8897, 108.3665).size());
+        assertEquals(0, storeService.recommendedStores(20, 10, 22.8897, 108.3665).size());
 
         Store blank = new Store(31L, "光谷牛肉粉", "", 4.7, 800, 3, 20, "20分钟", "0.2km", "[]", "",
                 "南宁市青秀区", 22.8177, 108.3665, 1, "[1]", 99L, 1, 1, "", 0);

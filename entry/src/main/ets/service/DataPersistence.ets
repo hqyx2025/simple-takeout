@@ -1,20 +1,21 @@
 /**
  * 数据持久化服务
- * 基于 @ohos.data.preferences 实现 AppStorage 关键数据的持久化
- * 确保 App 重启后用户数据不丢失
+ * 普通 Preferences 只保存非敏感设置；账号资料和订单从服务端恢复。
  */
 import preferences from '@ohos.data.preferences'
 import common from '@ohos.app.ability.common'
 import { User, Order, Address, createEmptyUser } from '../model/Models'
 import { logInfo, logWarn, logError } from './AppLogger'
-import { initializeApiBaseUrl, setAuthTokens } from './HttpClient'
-import { clearAuthTokens, loadAuthTokens, saveAuthTokens, StoredAuthTokens } from './TokenStorage'
+import { initializeApiBaseUrl, setAuthTokens, getAuthSessionEpoch } from './HttpClient'
+import { fetchCurrentUserApi } from './api/AuthApi'
+import { clearAuthTokens, loadAuthTokens, StoredAuthTokens } from './TokenStorage'
 
 const PERSISTENCE_NAME: string = 'takeout_app_data'
 
-// 需要持久化的 AppStorage 键列表
-const PERSISTENCE_KEYS: string[] = [
-  'privacyConsent',
+// 清理旧版本写入的账号数据，后续不再将这些值保存到普通 Preferences。
+const LEGACY_ACCOUNT_KEYS: string[] = [
+  'authToken',
+  'cartItems',
   'isLoggedIn',
   'user',
   'orderList',
@@ -26,6 +27,7 @@ const PERSISTENCE_KEYS: string[] = [
 ]
 
 let prefsInstance: preferences.Preferences | null = null
+let legacyAccountDataCleared: boolean = false
 
 /**
  * 获取或初始化 preferences 实例
@@ -165,187 +167,112 @@ export function normalizeData(key: string, value: Object): Object {
   return value
 }
 
-/**
- * 从持久化存储中加载所有数据到 AppStorage
- * 通常在 App 启动时调用
- */
+/** 隐私同意落盘后，仅从安全凭证和当前服务端资料恢复账号。 */
 export async function loadAllData(): Promise<void> {
+  const startingEpoch: number = getAuthSessionEpoch()
   try {
     const prefs: preferences.Preferences = await getPrefs()
-    const consentJson: string = await prefs.get('privacyConsent', '') as string
-    // 同意状态只允许单向升级：本次运行中已同意（内存为 true）时，绝不能被持久化里的空值/旧值覆盖回 false
-    const consented: boolean = consentJson === 'true' || AppStorage.get<boolean>('privacyConsent') === true
+    const consented: boolean = await prefs.get('privacyConsent', '') === 'true'
     AppStorage.setOrCreate<boolean>('privacyConsent', consented)
-    // 未同意隐私政策前不恢复用户、订单、地址和 Token 等敏感数据。
     if (!consented) {
       AppStorage.setOrCreate<boolean>('_persistenceReady', true)
       return
     }
-    const previousApiBaseUrl: string = await prefs.get('apiBaseUrl', '') as string
-    const apiBaseUrl: string = await initializeApiBaseUrl()
-    if (previousApiBaseUrl !== '' && previousApiBaseUrl !== apiBaseUrl) {
-      logWarn('Persistence', '后端数据源已切换，清除旧服务器的本地登录与账号缓存')
-      await clearAllData()
-      AppStorage.setOrCreate<boolean>('isLoggedIn', false)
-      AppStorage.setOrCreate<User>('user', createEmptyUser())
-      AppStorage.setOrCreate<Order[]>('orderList', [])
-      AppStorage.setOrCreate<Address[]>('addressList', [])
-      AppStorage.setOrCreate<Address | null>('currentAddress', null)
-      AppStorage.setOrCreate<Object[]>('cartItems', [])
-      AppStorage.setOrCreate<Object[]>('favoriteList', [])
-      AppStorage.setOrCreate<Object[]>('couponList', [])
-      AppStorage.setOrCreate<string>('authToken', '')
-    }
-    await prefs.put('apiBaseUrl', apiBaseUrl)
-    await prefs.flush()
     let storedTokens: StoredAuthTokens | null = null
+    let credentialsRead: boolean = false
     try {
       storedTokens = await loadAuthTokens()
+      credentialsRead = true
     } catch (_) {
       logWarn('Persistence', '安全凭证不可用，需要重新登录')
     }
-    let restoredAccessToken: string = storedTokens?.accessToken ?? ''
-    let restoredRefreshToken: string = storedTokens?.refreshToken ?? ''
-    const legacyTokenJson: string = await prefs.get('authToken', '') as string
-    if (legacyTokenJson !== '') {
-      if (restoredAccessToken === '') {
-        try {
-          const legacyToken: string = JSON.parse(legacyTokenJson) as string
-          if (legacyToken !== '') {
-            restoredAccessToken = legacyToken
-            await saveAuthTokens(legacyToken, '')
-          }
-        } catch (_) {
-          logWarn('Persistence', '旧版登录凭证迁移失败，需要重新登录')
-        }
+    if (startingEpoch !== getAuthSessionEpoch()) { return }
+    const guest: boolean = credentialsRead && (storedTokens?.accessToken ?? '') === '' &&
+      (storedTokens?.refreshToken ?? '') === ''
+    const backendReady: Promise<string> = initializeApiBaseUrl(async (url: string): Promise<void> => {
+      const previousApiBaseUrl: string = await prefs.get('apiBaseUrl', '') as string
+      if (startingEpoch !== getAuthSessionEpoch() && !guest) { throw new Error('Startup session changed') }
+      if (previousApiBaseUrl !== '' && previousApiBaseUrl !== url && !guest) {
+        logWarn('Persistence', '后端数据源已切换，清除旧服务器的安全凭证')
+        await clearAuthTokens()
+        storedTokens = null
       }
-      await prefs.delete('authToken')
-      await prefs.flush()
+      await removeLegacyAccountData(prefs)
+      if (previousApiBaseUrl !== url) {
+        await prefs.put('apiBaseUrl', url)
+        await prefs.flush()
+      }
+    })
+    if (!guest) {
+      await backendReady
+      if (startingEpoch !== getAuthSessionEpoch()) { return }
     }
-    AppStorage.setOrCreate<string>('authToken', restoredAccessToken)
-    setAuthTokens(restoredAccessToken, restoredRefreshToken)
-    for (let i = 0; i < PERSISTENCE_KEYS.length; i++) {
-      const key: string = PERSISTENCE_KEYS[i]
-      if (key === 'privacyConsent') {
-        continue
+    // 未经本次服务端确认，不恢复旧昵称、余额、订单、收货地址或定位。
+    AppStorage.setOrCreate<User>('user', createEmptyUser())
+    AppStorage.setOrCreate<boolean>('isLoggedIn', false)
+    AppStorage.setOrCreate<number>('userBalance', 0)
+    AppStorage.setOrCreate<Order[]>('orderList', [])
+    AppStorage.setOrCreate<Address[]>('addressList', [])
+    AppStorage.setOrCreate<Address | null>('currentAddress', null)
+    AppStorage.setOrCreate<number>('pendingAddressId', 0)
+    AppStorage.setOrCreate<string>('addressSyncState', 'idle')
+    AppStorage.setOrCreate<Object | null>('lastLocationPosition', null)
+    AppStorage.setOrCreate<Object[]>('cartItems', [])
+    AppStorage.setOrCreate<Object[]>('favoriteList', [])
+    AppStorage.setOrCreate<Object[]>('couponList', [])
+    const accessToken: string = storedTokens?.accessToken ?? ''
+    setAuthTokens(accessToken, storedTokens?.refreshToken ?? '')
+    AppStorage.setOrCreate<string>('authToken', accessToken)
+    const restoredEpoch: number = getAuthSessionEpoch()
+    if (accessToken !== '') {
+      const user: User | undefined = await fetchCurrentUserApi(false)
+      if (restoredEpoch !== getAuthSessionEpoch()) { return }
+      if (user !== undefined) {
+        AppStorage.setOrCreate<User>('user', user)
+        AppStorage.setOrCreate<number>('userBalance', Number.isFinite(user.balance) ? user.balance : 0)
+        AppStorage.setOrCreate<boolean>('isLoggedIn', true)
       }
-      // 配送地址须由本次登录的服务端响应确认；旧 GPS 坐标不代表当前设备位置。
-      if (key === 'addressList' || key === 'lastLocationPosition') {
-        if (key === 'addressList') {
-          AppStorage.setOrCreate<Address[]>('addressList', [])
-        } else {
-          AppStorage.setOrCreate<Object | null>('lastLocationPosition', null)
-        }
-        continue
-      }
-      if (key === 'currentAddress') {
-        AppStorage.setOrCreate<Address | null>('currentAddress', null)
-        AppStorage.setOrCreate<string>('addressSyncState', 'idle')
-      }
-      const json: string = await prefs.get(key, '') as string
-      if (json !== '') {
-        try {
-          const value: Object = JSON.parse(json)
-          // 归一化：确保数据格式与模型一致，兼容旧版本数据
-          const normalized: Object = normalizeData(key, value)
-          if (key === 'currentAddress') {
-            const previous: Address | null = normalized as Address | null
-            AppStorage.setOrCreate<number>('pendingAddressId', previous !== null && Number.isFinite(previous.id) ? previous.id : 0)
-            continue
-          }
-          AppStorage.setOrCreate(key, normalized)
-          logInfo('Persistence', `恢复数据 key=${key} 成功`)
-        } catch (parseErr) {
-          logWarn('Persistence', `恢复数据 key=${key} 解析失败，使用默认值`)
-          console.error(`DataPersistence: Failed to parse ${key}`, JSON.stringify(parseErr))
-        }
-      } else {
-        logInfo('Persistence', `恢复数据 key=${key} 无持久化记录，使用默认值`)
-      }
-    }
-    const restoredUser: User | undefined = AppStorage.get<User>('user')
-    const restoredBalance: number = restoredUser !== undefined && restoredUser !== null
-      && Number.isFinite(restoredUser.balance) ? restoredUser.balance : 0
-    AppStorage.setOrCreate<number>('userBalance', restoredBalance)
-    const restoredToken: string = restoredAccessToken
-    const restoredLoggedIn: boolean = AppStorage.get<boolean>('isLoggedIn') || false
-    if (restoredLoggedIn && restoredToken === '') {
-      AppStorage.setOrCreate<boolean>('isLoggedIn', false)
-      AppStorage.setOrCreate<User>('user', createEmptyUser())
-      AppStorage.setOrCreate<number>('userBalance', 0)
-      AppStorage.setOrCreate<Object[]>('cartItems', [])
-      AppStorage.setOrCreate<Order[]>('orderList', [])
-      AppStorage.setOrCreate<Object[]>('favoriteList', [])
-      AppStorage.setOrCreate<Object[]>('couponList', [])
-      AppStorage.setOrCreate<Address[]>('addressList', [])
-      AppStorage.setOrCreate<Address | null>('currentAddress', null)
-      await clearAllData()
     }
     AppStorage.setOrCreate<boolean>('_persistenceReady', true)
-    logInfo('Persistence', '持久化数据全部加载完成')
+    logInfo('Persistence', '已按服务端身份恢复会话，业务数据未从本地恢复')
   } catch (err) {
-    logError('Persistence', '加载持久化数据失败', err)
+    logError('Persistence', '加载安全凭证或服务端身份失败', err)
   }
 }
 
-/**
- * 将 AppStorage 中所有关键数据保存到持久化存储
- * 在每次数据变更后调用
- */
+async function removeLegacyAccountData(prefs: preferences.Preferences): Promise<void> {
+  if (legacyAccountDataCleared) { return }
+  for (let i: number = 0; i < LEGACY_ACCOUNT_KEYS.length; i++) {
+    await prefs.delete(LEGACY_ACCOUNT_KEYS[i])
+  }
+  await prefs.flush()
+  legacyAccountDataCleared = true
+}
+
+/** 保留既有调用入口；业务同步只清理历史缓存，不再将个人资料落盘。 */
 export async function saveAllData(): Promise<void> {
   try {
-    const prefs: preferences.Preferences = await getPrefs()
-    for (let i = 0; i < PERSISTENCE_KEYS.length; i++) {
-      const key: string = PERSISTENCE_KEYS[i]
-      if (AppStorage.has(key)) {
-        const value: Object = AppStorage.get<Object>(key) as Object
-        if (value !== undefined) {
-          await prefs.put(key, JSON.stringify(value))
-        }
-      }
-    }
-    await prefs.flush()
-    logInfo('Persistence', '数据保存完成（全部 key）')
+    await removeLegacyAccountData(await getPrefs())
   } catch (err) {
-    logError('Persistence', '保存持久化数据失败', err)
+    logError('Persistence', '清理历史账号缓存失败', err)
   }
 }
 
-/**
- * 单独持久化隐私政策同意状态。
- * 必须在 loadAllData() 之前调用：loadAllData 会依据该标记决定是否恢复用户/令牌等敏感数据。
- */
+/** 写盘失败必须交还调用方；同意状态未保存前不得恢复凭证或请求业务数据。 */
 export async function savePrivacyConsent(granted: boolean): Promise<void> {
-  try {
-    const prefs: preferences.Preferences = await getPrefs()
-    await prefs.put('privacyConsent', granted ? 'true' : 'false')
-    await prefs.flush()
-    logInfo('Persistence', `隐私政策同意状态已保存：${granted}`)
-  } catch (err) {
-    logError('Persistence', '保存隐私政策同意状态失败', err)
-  }
+  const prefs: preferences.Preferences = await getPrefs()
+  await prefs.put('privacyConsent', granted ? 'true' : 'false')
+  await prefs.flush()
 }
 
-/**
- * 清除所有持久化数据（用于登出或重置）
- */
+/** 清理在同步调用时即使旧凭证操作失效，避免 await 期间新登录被旧退出清掉。 */
 export async function clearAllData(): Promise<void> {
+  const clearingTokens: Promise<void> = clearAuthTokens()
   try {
-    const prefs: preferences.Preferences = await getPrefs()
-    await clearAuthTokens()
-    await prefs.delete('authToken')
-    for (let i = 0; i < PERSISTENCE_KEYS.length; i++) {
-      // 隐私同意状态单一权威且单向升级：登出不得清除已同意状态，
-      // 否则退出登录后冷启动会重新被判为未同意、又被赶回同意页
-      if (PERSISTENCE_KEYS[i] === 'privacyConsent') {
-        continue
-      }
-      await prefs.delete(PERSISTENCE_KEYS[i])
-    }
-    await prefs.flush()
-    AppStorage.setOrCreate<boolean>('_persistenceReady', false)
-    logInfo('Persistence', '持久化数据已全部清除')
+    await clearingTokens
+    await removeLegacyAccountData(await getPrefs())
+    logInfo('Persistence', '安全凭证与历史账号缓存已清除')
   } catch (err) {
-    logError('Persistence', '清除持久化数据失败', err)
+    logError('Persistence', '清除本地账号数据失败', err)
   }
 }

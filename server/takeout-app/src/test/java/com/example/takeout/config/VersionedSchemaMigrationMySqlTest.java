@@ -31,12 +31,19 @@ class VersionedSchemaMigrationMySqlTest {
             // A pre-upgrade fixture, exclusively in this disposable database.
             db.execute("ALTER TABLE orders DROP COLUMN reject_spec_id");
             db.execute("ALTER TABLE order_create_requests DROP COLUMN order_id");
+            db.execute("ALTER TABLE stores DROP COLUMN rating_count");
+            db.update("INSERT INTO stores(id,name,owner_id,rating,create_time) VALUES"
+                    + "(1,'rated',1,4.9,'2026-01-01'),(2,'unrated',1,4.9,'2026-01-01')");
+            db.update("INSERT INTO reviews(store_id,order_id,goods_id,user_id,user_name,rating,create_time) VALUES"
+                    + "(1,1,1,1,'A',5,'2026-01-01'),(1,1,2,1,'A',5,'2026-01-01'),"
+                    + "(1,1,3,1,'A',5,'2026-01-01'),(1,2,1,2,'B',1,'2026-01-01'),"
+                    + "(1,3,1,3,'Invalid',0,'2026-01-01')");
             db.update("INSERT INTO users(id,username,phone,password,balance,create_time) "
                     + "VALUES(123,'migration-sentinel','13800000999','unused',123.45,'2026-01-01 00:00:00')");
             String personalKey=key(), indexKey=key();
             for (int start = 0; start < 2; start++) {
                 try (var context = new SpringApplicationBuilder(TakeoutApplication.class).run(
-                        "--server.port=0", "--server.address=127.0.0.1", "--management.server.port=0", "--spring.profiles.active=test",
+                        "--spring.main.web-application-type=none", "--spring.profiles.active=test",
                         "--spring.datasource.url=" + base + schema + options, "--spring.datasource.username=" + user,
                         "--spring.datasource.password=" + password, "--spring.datasource.hikari.maximum-pool-size=2",
                         "--spring.datasource.hikari.minimum-idle=0", "--takeout.jwt.secret=" + key(),
@@ -51,6 +58,13 @@ class VersionedSchemaMigrationMySqlTest {
                     assertEquals(123.45, db.queryForObject("SELECT balance FROM users WHERE id=123", Double.class), 0.001);
                     assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE version='1' AND success=1", Integer.class));
                     assertEquals(0, db.queryForList("SELECT reject_spec_id FROM orders").size());
+                    assertEquals(3.0, db.queryForObject("SELECT rating FROM stores WHERE id=1", Double.class));
+                    assertEquals(2, db.queryForObject("SELECT rating_count FROM stores WHERE id=1", Integer.class));
+                    assertEquals(0, db.queryForObject("SELECT rating_count FROM stores WHERE id=2", Integer.class));
+                    assertEquals(0.0, db.queryForObject("SELECT rating FROM stores WHERE id=2", Double.class));
+                    context.getBean(com.example.takeout.dao.StoreDao.class).updateRatingFromReviews(1);
+                    assertEquals(3.0, db.queryForObject("SELECT rating FROM stores WHERE id=1", Double.class));
+                    assertEquals(2, db.queryForObject("SELECT rating_count FROM stores WHERE id=1", Integer.class));
                     context.getBean(Flyway.class).validate();
                     if (start == 1) {
                         db.update("UPDATE flyway_schema_history SET checksum=checksum+1 WHERE version='1'");

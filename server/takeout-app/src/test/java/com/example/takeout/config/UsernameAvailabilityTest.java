@@ -20,6 +20,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class UsernameAvailabilityTest {
     @Configuration @EnableWebMvc static class Config {
         @Bean UserDao users() { return mock(UserDao.class); }
+        @Bean ContactVerificationService contacts() { return mock(ContactVerificationService.class); }
+        @Bean AccountClosureService accountClosure() { return mock(AccountClosureService.class); }
         @Bean LoginRateLimiter limiter() { return new LoginRateLimiter(mock(ObjectProvider.class)); }
         @Bean AuthInterceptor auth(UserDao users) {
             return new AuthInterceptor(mock(JwtUtil.class), users, mock(TokenRevocationService.class));

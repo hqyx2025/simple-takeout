@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const context=vm.createContext({});
-vm.runInContext(fs.readFileSync('server/takeout-gateway/src/main/resources/static/location.js','utf8'),context);
+vm.runInContext(fs.readFileSync('web/location.js','utf8'),context);
 const {devicePosition,coordinates,place}=context.TakeoutLocation;
 test('HTTP never requests precise device location',async()=>{
   let called=false;

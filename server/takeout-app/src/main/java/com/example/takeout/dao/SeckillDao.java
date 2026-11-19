@@ -82,6 +82,12 @@ public class SeckillDao {
                         " ORDER BY price LIMIT 1", MAPPER, goodsId, now).stream().findFirst();
     }
 
+    /** Current read under the parent goods lock, including the empty range against a concurrent new activity. */
+    public Optional<Seckill> findActiveByGoodsForOrder(long goodsId, String now) {
+        return jdbc.query("SELECT * FROM seckills WHERE goods_id = ? AND status = 1 AND sold < quota " + IN_WINDOW +
+                        " ORDER BY price LIMIT 1 FOR SHARE", MAPPER, goodsId, now).stream().findFirst();
+    }
+
     public List<Seckill> listAll() {
         return jdbc.query("SELECT * FROM seckills ORDER BY id DESC", MAPPER);
     }

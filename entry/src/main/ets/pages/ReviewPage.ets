@@ -19,7 +19,7 @@ import { canOrderAction } from '../service/OrderStatus'
 import { PageHeader } from '../components/PageHeader'
 
 /** 图文评价最多上传的图片数量 */
-const MAX_REVIEW_IMAGES: number = 3
+const MAX_REVIEW_IMAGES: number = 20
 /** 图片格子宽度：一行 3 个，加上右边距后仍不超过卡片内容宽度 */
 const IMAGE_TILE_WIDTH: string = '30%'
 

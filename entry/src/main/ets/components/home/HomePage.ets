@@ -1,23 +1,23 @@
+import { SearchStoreDataSource } from '../../model/SearchStoreDataSource'
 import { RemoteState } from '../RemoteState'
 import { getAuthSessionEpoch } from '../../service/HttpClient'
-import { fetchRecommendedStoresResultApi, fetchSpecialGoodsResultApi, fetchSeckillsResultApi, fetchBannersResultApi, fetchAnnouncementsResultApi } from '../../service/api/CatalogApi'
+import { fetchSpecialGoodsResultApi, fetchSeckillsResultApi, fetchBannersResultApi, fetchAnnouncementsResultApi } from '../../service/api/CatalogApi'
 import { AppButtonStyle, AppRefreshStyle, AppTheme } from '../../common/theme/AppTheme'
 /**
  * 主页面 - 简单外卖App
  * 包含：搜索栏、分类导航、店铺列表、店铺详情、购物车、订单列表、个人中心、底部Tab导航
  */
-import { Category, StoreItem, SpecialGoodsItem, SeckillItem, Address, Banner, Announcement } from '../../model/Models'
-import { isLoggedIn, getAllStoresList, syncCategoriesFromServer, syncBannersRemote, syncAnnouncementsRemote, syncStoresFromServer, fetchSeckillsRemote } from '../../service/AppStorageManager'
-import { fetchRecommendedStoresApi, fetchSpecialGoodsApi } from '../../service/ApiService'
+import { Category, StoreItem, SpecialGoodsItem, SeckillItem, Address, Banner, Announcement, User, UserRole } from '../../model/Models'
+import { syncCategoriesFromServer, syncStoresFromServer } from '../../service/AppStorageManager'
 
 import { FloatingTabBarTheme } from '../../common/theme/FloatingTabBarTheme'
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, formatSales, merchantImageSource, DEFAULT_MERCHANT_IMAGE, MODULE_COLOR, MODULE_BG, accentFg, accentIndexFromText, categoryIcon } from '../../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, formatSales, merchantImageSource, DEFAULT_MERCHANT_IMAGE, MODULE_COLOR, MODULE_BG, accentFg, accentIndexFromText, categoryIcon, DELIVERY_RANGE } from '../../common/Constants'
 
 import { RatingStars } from '../../components/RatingStars'
 
 import { PageHeader } from '../../components/PageHeader'
 import { promptCompat as promptAction, routerCompat as router } from '../../common/UiNavigation'
-import { logInfo, logError } from '../../service/AppLogger'
+import { logError } from '../../service/AppLogger'
 
 import { HomeTheme } from '../../common/theme/HomeTheme'
 import { BreakpointSystem } from '../../common/utils/BreakpointSystem'
@@ -26,6 +26,16 @@ import { AppMotion } from '../../common/theme/AppMotion'
 import { common } from '@kit.AbilityKit'
 import { display } from '@kit.ArkUI'
 import { RecommendedStoreCardHost } from './RecommendedStoreCardHost'
+
+const HOME_REFRESH_WINDOW_MS: number = 5000
+// Leave one of the backend's four cold-cache loader slots available for other traffic.
+const HOME_PARALLEL_REQUESTS: number = 3
+
+class HomeRefreshSection {
+  pending: Promise<void> | null = null
+  successAt: number = -1
+  failed: boolean = false
+}
 
 // 定义快捷入口和订单Tab的数据类型，解决 arkts-no-untyped-obj-literals 错误
 class QuickEntryItem {
@@ -62,14 +72,30 @@ export struct HomePage {
   @State searchText: string = ''
   @State currentCategory: number = 0
   @State isRefreshing: boolean = false
+  @State specialLoading: boolean = false
   @StorageLink('currentAddress') @Watch('onCurrentAddressChange') currentAddress: Address | null = null
   @StorageLink('addressSyncState') addressSyncState: string = 'idle'
   @State isHeaderVisible: boolean = false
-  // 附近推荐（原「发现」Tab 的能力，现并入首页）：进入首页与定位变化时刷新
-  @State recommendedStores: StoreItem[] = []
-  @State recommendedLoading: boolean = false
+  @State catalogMode: number = 0
+  @State catalogCount: number = 0
+  @State catalogLoading: boolean = false
+  private catalog: StoreItem[] = []
+  private storeRows: SearchStoreDataSource = new SearchStoreDataSource()
+  private catalogScroller: Scroller = new Scroller()
   @State homeGridColumns: number = 2
   private homeBreakpoint: BreakpointSystem = new BreakpointSystem()
+  private homeActive: boolean = false
+  private homeEpoch: number = -1
+  private activeRequests: number = 0
+  private waitingRequests: (() => void)[] = []
+  private locationKey: string = ''
+  private locationVersion: number = 0
+  private categoriesRequest: HomeRefreshSection = new HomeRefreshSection()
+  private bannersRequest: HomeRefreshSection = new HomeRefreshSection()
+  private announcementsRequest: HomeRefreshSection = new HomeRefreshSection()
+  private storesRequest: HomeRefreshSection = new HomeRefreshSection()
+  private specialRequest: HomeRefreshSection = new HomeRefreshSection()
+  private seckillsRequest: HomeRefreshSection = new HomeRefreshSection()
   // 隐私政策同意改由独立页面 pages/ConsentPage 承载（见该文件注释），首页不再内嵌同意弹窗
   onStoreClick: (store: StoreItem) => void = () => {}
   onNavigateLogin: () => void = () => {}
@@ -78,54 +104,51 @@ export struct HomePage {
   onLoginStateChange(): void {
     if (this.loggedIn) {
       this.refreshHomeData()
-      this.refreshRecommended()
     } else {
-      this.homeVersion += 1; this.recommendedVersion += 1
-      this.homeFailed = false; this.recommendedFailed = false
-      this.isRefreshing = false; this.recommendedLoading = false
-      this.specialGoods = []
-      this.recommendedStores = []
+      this.homeEpoch = -1
+      this.resetHomeSections()
+      this.resetLocationSections()
+      this.updateRefreshState()
     }
   }
 
   onCurrentAddressChange(): void {
-    this.refreshHomeData()
-    this.refreshRecommended()
+    this.refreshHomeData(false, true)
   }
 
   onPageVisibilityChange(): void {
-    if (!this.pageVisible) {
-      this.homeVersion += 1; this.recommendedVersion += 1
-      this.isRefreshing = false; this.recommendedLoading = false
-    }
     if (this.pageVisible) {
       this.startSeckillTicker()
+      this.refreshHomeData()
     } else {
       this.stopSeckillTicker()
+      this.updateRefreshState()
     }
   }
 
-  /** 拉取附近推荐店铺（2 公里内、平台推荐位）。 */
-  private async refreshRecommended(): Promise<void> {
-    if (!this.loggedIn || !this.pageVisible) { return }
-    const epoch: number = getAuthSessionEpoch()
-    const version: number = ++this.recommendedVersion
-    this.recommendedLoading = true
-    this.recommendedFailed = false
-    const stores: StoreItem[] | null = await fetchRecommendedStoresResultApi(2, 10, this.currentAddress?.latitude, this.currentAddress?.longitude)
-    if (!this.pageVisible || epoch !== getAuthSessionEpoch() || version !== this.recommendedVersion) { return }
-    this.recommendedLoading = false
-    if (stores === null) { this.recommendedFailed = true } else { this.recommendedStores = stores }
+  private refreshStores(force: boolean): void {
+    this.refreshSection<boolean>(this.storesRequest, force, true,
+      async (canApply: () => boolean): Promise<boolean | null> => await syncStoresFromServer(canApply) ? true : null,
+      (_result: boolean) => {
+        this.catalog = AppStorage.get<StoreItem[]>('allStores') ?? []
+        this.updateCatalog()
+      })
   }
 
-  /** 推荐区需要定位：没有经纬度时提示去定位，而不是显示空列表。 */
-  private hasRecommendLocation(): boolean {
-    if (this.currentAddress === null) {
-      return false
+  private updateCatalog(): void {
+    let visible: StoreItem[] = this.catalog
+    if (this.catalogMode === 0) {
+      visible = this.catalog.filter((store: StoreItem): boolean => {
+        const distance: number = store.distanceKm ?? -1
+        return distance >= 0 && distance <= DELIVERY_RANGE.NEARBY_KM
+      }).sort((a: StoreItem, b: StoreItem): number => (a.distanceKm ?? 0) - (b.distanceKm ?? 0))
+    } else if (this.catalogMode === 1) {
+      visible = this.catalog.filter((store: StoreItem): boolean => (store.ratingCount ?? 0) > 0 && store.rating >= 4)
+        .sort((a: StoreItem, b: StoreItem): number => b.rating - a.rating ||
+          (b.ratingCount ?? 0) - (a.ratingCount ?? 0) || a.id - b.id)
     }
-    const address: Address = this.currentAddress as Address
-    return address.latitude !== undefined && address.longitude !== undefined
-      && Number.isFinite(address.latitude) && Number.isFinite(address.longitude)
+    this.storeRows.setData(visible)
+    this.catalogCount = visible.length
   }
 
   // 首页定位栏只展示“市 + 区/县/旗”，完整地址仍保留在 currentAddress 中供结算和配送使用
@@ -169,6 +192,7 @@ export struct HomePage {
   }
 
   aboutToAppear() {
+    this.homeActive = true
     this.isHeaderVisible = true
     this.homeBreakpoint.register(this.getUIContext().getHostContext() as common.UIAbilityContext,
       (_breakpoint: string) => {
@@ -178,66 +202,159 @@ export struct HomePage {
     this.categories = initialCategories.slice()
     // 秒杀倒计时：单个 1 秒定时器驱动全页秒杀卡片，避免每张卡片各起一个定时器
     if (this.pageVisible) { this.startSeckillTicker() }
-    // 隐私同意前不发起网络请求（未同意时 Index 会先跳转 ConsentPage，正常不会走到这里）
-    if (AppStorage.get<boolean>('privacyConsent') || false) {
-      this.refreshHomeData()
-      this.refreshRecommended()
-    } else {
-      logInfo('Home', '隐私政策未同意，等待用户确认后再加载首页数据')
-    }
+    this.refreshHomeData()
   }
 
   aboutToDisappear() {
+    this.homeActive = false
+    this.homeEpoch = -1
+    this.updateRefreshState()
     this.stopSeckillTicker()
     this.homeBreakpoint.unregister()
   }
 
-  // 首页特价团购直接读取后端商品接口，避免使用本地模拟商品。
   @State homeFailed: boolean = false
-  @State recommendedFailed: boolean = false
-  private homeVersion: number = 0
-  private recommendedVersion: number = 0
 
-  private async refreshHomeData(): Promise<void> {
-    if (!(AppStorage.get<boolean>('privacyConsent') || false)) {
-      logInfo('Home', '未同意隐私政策，跳过首页数据加载')
-      return
-    }
-    if (!this.loggedIn || !this.pageVisible) { return }
+  private resetHomeSections(): void {
+    this.categoriesRequest = new HomeRefreshSection()
+    this.bannersRequest = new HomeRefreshSection()
+    this.announcementsRequest = new HomeRefreshSection()
+    this.banners = []
+    this.announcements = []
+    this.selectedAnnouncement = null
+    this.showAnnouncementSheet = false
+  }
+
+  private resetLocationSections(): void {
+    this.locationVersion += 1
+    this.storesRequest = new HomeRefreshSection()
+    this.specialRequest = new HomeRefreshSection()
+    this.seckillsRequest = new HomeRefreshSection()
+    this.specialGoods = []
+    this.seckills = []
+    this.catalog = []
+    this.updateCatalog()
+  }
+
+  private coordinatesKey(): string {
+    return this.hasCurrentLocation() ? String(this.currentAddress?.latitude) + ',' +
+      String(this.currentAddress?.longitude) : ''
+  }
+
+  private updateHomeScope(): boolean {
     const epoch: number = getAuthSessionEpoch()
-    const version: number = ++this.homeVersion
-    this.isRefreshing = true
-    this.homeFailed = false
-    try {
-      await syncCategoriesFromServer()
-      if (!this.pageVisible || epoch !== getAuthSessionEpoch() || version !== this.homeVersion) { return }
-      const latestCategories: Category[] = AppStorage.get<Category[]>('categoryList') ?? []
-      this.categories = latestCategories.slice()
-      const storesOk: boolean = await syncStoresFromServer()
-      if (!this.pageVisible || epoch !== getAuthSessionEpoch() || version !== this.homeVersion) { return }
-      if (!storesOk) { this.homeFailed = true }
-      const banners: Banner[] | null = await fetchBannersResultApi()
-      if (!this.pageVisible || epoch !== getAuthSessionEpoch() || version !== this.homeVersion) { return }
-      if (banners === null) { this.homeFailed = true } else { this.banners = banners }
-      const announcements: Announcement[] | null = await fetchAnnouncementsResultApi()
-      if (!this.pageVisible || epoch !== getAuthSessionEpoch() || version !== this.homeVersion) { return }
-      if (announcements === null) { this.homeFailed = true } else { this.announcements = announcements }
-      const latitude: number | undefined = this.currentAddress?.latitude
-      const longitude: number | undefined = this.currentAddress?.longitude
-      const special: SpecialGoodsItem[] | null = await fetchSpecialGoodsResultApi(10, latitude, longitude)
-      if (!this.pageVisible || epoch !== getAuthSessionEpoch() || version !== this.homeVersion) { return }
-      if (special === null) { this.homeFailed = true } else { this.specialGoods = special }
-      const seckills: SeckillItem[] | null = await fetchSeckillsResultApi(6, latitude, longitude)
-      if (!this.pageVisible || epoch !== getAuthSessionEpoch() || version !== this.homeVersion) { return }
-      if (seckills === null) { this.homeFailed = true } else { this.seckills = seckills }
-      this.seckillTick = 0
-      this.seckillPausedAt = this.pageVisible ? 0 : Date.now()
-    } catch (err) {
-      if (version === this.homeVersion && epoch === getAuthSessionEpoch()) { this.homeFailed = true }
-      logError('Home', '首页数据加载失败（已保留已有内容）', err as Object)
-    } finally {
-      if (version === this.homeVersion) { this.isRefreshing = false }
+    const key: string = this.coordinatesKey()
+    const changedSession: boolean = this.homeEpoch !== epoch
+    if (changedSession) {
+      this.homeEpoch = epoch
+      this.resetHomeSections()
     }
+    if (changedSession || key !== this.locationKey) {
+      this.locationKey = key
+      this.resetLocationSections()
+      return true
+    }
+    return false
+  }
+
+  private canRefreshHome(): boolean {
+    return this.pageVisible && this.hasHomeSession()
+  }
+
+  private hasHomeSession(): boolean {
+    return this.homeActive && this.loggedIn && AppStorage.get<boolean>('privacyConsent') === true &&
+      AppStorage.get<User>('user')?.role === UserRole.CUSTOMER
+  }
+
+  private updateRefreshState(): void {
+    const sections: HomeRefreshSection[] = [this.categoriesRequest, this.bannersRequest, this.announcementsRequest,
+      this.storesRequest, this.specialRequest, this.seckillsRequest]
+    const visible: boolean = this.homeActive && this.pageVisible
+    this.isRefreshing = visible && sections.some((section: HomeRefreshSection): boolean => section.pending !== null)
+    this.specialLoading = visible && this.specialRequest.pending !== null
+    this.catalogLoading = visible && this.storesRequest.pending !== null
+    this.homeFailed = sections.some((section: HomeRefreshSection): boolean => section.failed)
+  }
+
+  private refreshSection<T>(section: HomeRefreshSection, force: boolean, locationScoped: boolean,
+    fetch: (canApply: () => boolean) => Promise<T | null>, apply: (value: T) => void): void {
+    if (section.pending !== null || (!force && !section.failed && section.successAt >= 0 &&
+      Date.now() - section.successAt < HOME_REFRESH_WINDOW_MS)) { return }
+    const epoch: number = this.homeEpoch
+    const catalog: HomeRefreshSection = this.categoriesRequest
+    const place: number = this.locationVersion
+    const key: string = this.locationKey
+    const canApply = (): boolean => this.canRefreshHome() && this.categoriesRequest === catalog && getAuthSessionEpoch() === epoch &&
+      (!locationScoped || (place === this.locationVersion && key === this.coordinatesKey()))
+    section.failed = false
+    section.pending = this.loadSection<T>(section, canApply, fetch, apply)
+    this.updateRefreshState()
+  }
+
+  private async loadSection<T>(section: HomeRefreshSection, canApply: () => boolean,
+    fetch: (isCurrent: () => boolean) => Promise<T | null>, apply: (value: T) => void): Promise<void> {
+    try {
+      const result: T | null = await this.fetchSection<T>(canApply, fetch)
+      if (!canApply()) { return }
+      if (result === null) {
+        section.failed = true
+      } else {
+        apply(result)
+        section.successAt = Date.now()
+      }
+    } catch (err) {
+      if (canApply()) {
+        section.failed = true
+        logError('Home', '首页区块加载失败', err as Object)
+      }
+    } finally {
+      section.pending = null
+      if (canApply()) { this.updateRefreshState() }
+    }
+  }
+
+  private async fetchSection<T>(canApply: () => boolean,
+    fetch: (isCurrent: () => boolean) => Promise<T | null>): Promise<T | null> {
+    if (this.activeRequests >= HOME_PARALLEL_REQUESTS) {
+      await new Promise<void>((resolve: () => void) => { this.waitingRequests.push(resolve) })
+    } else {
+      this.activeRequests += 1
+    }
+    try {
+      return canApply() ? await fetch(canApply) : null
+    } finally {
+      const next: (() => void) | undefined = this.waitingRequests.shift()
+      if (next === undefined) { this.activeRequests -= 1 } else { next() }
+    }
+  }
+
+  private refreshHomeData(force: boolean = false, locationOnly: boolean = false): void {
+    if (!this.hasHomeSession()) { return }
+    const sameSession: boolean = this.homeEpoch === getAuthSessionEpoch()
+    const scopeChanged: boolean = this.updateHomeScope()
+    if (!this.pageVisible || (locationOnly && !scopeChanged)) { return }
+    if (!locationOnly || !sameSession) {
+      this.refreshSection<boolean>(this.categoriesRequest, force, false,
+        async (canApply: () => boolean): Promise<boolean | null> => await syncCategoriesFromServer(canApply) ? true : null,
+        (_result: boolean) => {})
+      this.refreshSection<Banner[]>(this.bannersRequest, force, false, () => fetchBannersResultApi(),
+        (banners: Banner[]) => { this.banners = banners })
+      this.refreshSection<Announcement[]>(this.announcementsRequest, force, false, () => fetchAnnouncementsResultApi(),
+        (announcements: Announcement[]) => { this.announcements = announcements })
+    }
+    const latitude: number | undefined = this.currentAddress?.latitude
+    const longitude: number | undefined = this.currentAddress?.longitude
+    this.refreshStores(force)
+    this.refreshSection<SpecialGoodsItem[]>(this.specialRequest, force, true,
+      () => fetchSpecialGoodsResultApi(10, latitude, longitude),
+      (goods: SpecialGoodsItem[]) => { this.specialGoods = goods })
+    this.refreshSection<SeckillItem[]>(this.seckillsRequest, force, true,
+      () => fetchSeckillsResultApi(6, latitude, longitude), (seckills: SeckillItem[]) => {
+        this.seckills = seckills
+        this.seckillTick = 0
+        this.seckillPausedAt = 0
+      })
+    this.updateRefreshState()
   }
 
   // ============ 限时秒杀 ============
@@ -306,18 +423,6 @@ export struct HomePage {
       && Number.isFinite(address.latitude) && Number.isFinite(address.longitude)
   }
 
-  private parseStoreDistance(distance: string): number {
-    const match: RegExpMatchArray | null = distance.match(/([0-9]+(?:\.[0-9]+)?)/)
-    return match === null ? Number.MAX_VALUE : Number.parseFloat(match[1])
-  }
-
-  private getNearbyStores(): StoreItem[] {
-    if (!this.hasCurrentLocation()) {
-      return []
-    }
-    return getAllStoresList().filter((store: StoreItem) => this.parseStoreDistance(store.distance) <= 2.0)
-  }
-
   private getCategoryRowsTemplate(): string {
     const rowCount: number = Math.max(1, Math.ceil(this.categories.length / 5))
     let template: string = ''
@@ -367,9 +472,9 @@ export struct HomePage {
     // 弹窗若作为 Column 中 layoutWeight(1) 滚动区的兄弟节点，会被分配 0 高度而整块不渲染（历史 bug）。
     Stack() {
     Column() {
-      if (this.homeFailed || this.recommendedFailed) {
-        RemoteState({ failed: true, hasData: this.recommendedStores.length > 0 || this.specialGoods.length > 0,
-          onRetry: () => { this.refreshHomeData(); this.refreshRecommended() } })
+      if (this.homeFailed) {
+        RemoteState({ failed: true, hasData: this.catalogCount > 0 || this.specialGoods.length > 0,
+          onRetry: () => { this.refreshHomeData(true) } })
       }
       // 地址与搜索分行，窄屏时仍保留完整的触控区域。
       Column({ space: SPACING.SM }) {
@@ -426,8 +531,15 @@ export struct HomePage {
       .translate({ y: this.isHeaderVisible || this.reduceMotion ? 0 : 8 })
       .animation({ duration: this.reduceMotion ? 0 : AppMotion.ENTER, curve: Curve.EaseOut })
 
+      Row({ space: SPACING.SM }) {
+        this.CatalogTab(`附近 ${DELIVERY_RANGE.NEARBY_KM} 公里`, 0, 'home-catalog-nearby')
+        this.CatalogTab('高分店铺', 1, 'home-catalog-top-rated')
+        this.CatalogTab('全部店铺', 2, 'home-catalog-all')
+      }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
+
       Refresh({ refreshing: $$this.isRefreshing }) {
-        Scroll() {
+        List({ scroller: this.catalogScroller }) {
+          ListItem() {
           Column() {
             // 分类导航
           Grid() {
@@ -589,68 +701,6 @@ export struct HomePage {
             .width('100%')
           }
 
-          // 附近推荐（原「发现」Tab 并入首页）：2 公里内、平台推荐位的店铺
-          Row({ space: SPACING.SM }) {
-            Image($r('app.media.home_location')).width(HomeTheme.ICON).height(HomeTheme.ICON)
-              .accessibilityLevel('no')
-            Text('附近推荐')
-              .fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(HomeTheme.TEXT)
-              .layoutWeight(1)
-            Text('刷新')
-              .fontSize(FONT_SIZE.MD).fontColor(HomeTheme.ACCENT)
-              .height(HomeTheme.TOUCH_HEIGHT).padding({ left: SPACING.MD, right: SPACING.MD })
-              .id('home-recommend-refresh')
-              .onClick(() => { this.refreshRecommended() })
-          }
-          .width('100%')
-          .padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.MD, bottom: SPACING.SM })
-          .backgroundColor(HomeTheme.SURFACE)
-
-          if (!this.loggedIn) {
-            Text('登录后查看平台推荐商户')
-              .fontSize(FONT_SIZE.SM).fontColor(HomeTheme.MUTED)
-              .width('100%').textAlign(TextAlign.Center)
-              .padding({ top: SPACING.SM, bottom: SPACING.SM })
-          } else if (!this.hasRecommendLocation()) {
-            Row({ space: SPACING.SM }) {
-              Text('定位后可看到附近推荐商户')
-                .fontSize(FONT_SIZE.SM).fontColor(HomeTheme.MUTED).layoutWeight(1)
-              Button('去定位')
-                .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM)
-                .id('home-recommend-location')
-                .onClick(() => { router.pushUrl({ url: 'pages/LocationPage' }) })
-            }
-            .width('100%')
-            .padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
-          } else if (this.recommendedLoading) {
-            Text('正在查询附近推荐商户…')
-              .fontSize(FONT_SIZE.SM).fontColor(HomeTheme.MUTED)
-              .width('100%').textAlign(TextAlign.Center)
-              .padding({ top: SPACING.SM, bottom: SPACING.SM })
-          } else if (this.recommendedStores.length === 0) {
-            Text('暂无附近推荐商户，平台会按距离和营业状态持续更新')
-              .fontSize(FONT_SIZE.SM).fontColor(HomeTheme.MUTED)
-              .width('100%').textAlign(TextAlign.Center)
-              .padding({ top: SPACING.SM, bottom: SPACING.SM })
-          } else {
-            GridRow({ columns: { xs: 2, sm: this.homeGridColumns },
-              breakpoints: { value: ['600vp'], reference: BreakpointsReference.ComponentSize },
-              gutter: { x: SPACING.SM, y: SPACING.SM } }) {
-              ForEach(this.recommendedStores, (store: StoreItem) => {
-                GridCol() {
-                  RecommendedStoreCardHost({
-                    store: store,
-                    onStoreClick: (target: StoreItem) => { this.onStoreClick(target) }
-                  })
-                }
-              }, (store: StoreItem) => `recommend-${store.id}`)
-            }
-            .id('home-recommend-list')
-            .width('100%')
-            .padding({ left: SPACING.LG, right: SPACING.LG })
-          }
-
-          // 特价团购标题
           Row({ space: SPACING.SM }) {
             Image($r('app.media.home_tag')).width(HomeTheme.ICON).height(HomeTheme.ICON)
               .accessibilityLevel('no')
@@ -670,7 +720,7 @@ export struct HomePage {
           // 特价商品列表由后端数据库返回
           if (!this.loggedIn) {
             this.homeEmpty($r('app.media.home_lock'), '登录后查看特价团购', '商家上新的特价商品会展示在这里')
-          } else if (this.isRefreshing && this.specialGoods.length === 0) {
+          } else if (this.specialLoading && this.specialGoods.length === 0) {
             this.homeEmpty($r('app.media.home_clock'), '正在加载特价商品', '请稍候，正在读取最新团购数据')
           } else if (this.specialGoods.length === 0) {
             this.homeEmpty($r('app.media.home_bag'), '暂无特价商品', '商家上新特价商品后会展示在这里')
@@ -688,16 +738,43 @@ export struct HomePage {
             .width('100%')
             .padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.LG })
           }
-          Blank().height(FloatingTabBarTheme.CONTENT_INSET + this.bottomInset)
           }
-        }.align(Alignment.Top)
+          }
+          ListItem() {
+            Column({ space: SPACING.SM }) {
+              Row() {
+                Text('店铺').fontSize(FONT_SIZE.XL).fontWeight(FontWeight.Bold).fontColor(HomeTheme.TEXT).layoutWeight(1)
+                Button('刷新', { type: ButtonType.Normal }).attributeModifier(new AppButtonStyle())
+                  .height(HomeTheme.TOUCH_HEIGHT).id('home-recommend-refresh')
+                  .enabled(this.loggedIn && !this.catalogLoading).onClick(() => { this.refreshStores(true) })
+              }.width('100%')
+              if (!this.loggedIn) {
+                Text('登录后查看店铺').fontColor(HomeTheme.MUTED).fontSize(FONT_SIZE.SM)
+              } else if (this.catalogMode === 0 && !this.hasCurrentLocation()) {
+                Button('定位查看附近店铺').attributeModifier(new AppButtonStyle()).height(HomeTheme.TOUCH_HEIGHT)
+                  .id('home-recommend-location').onClick(() => { router.pushUrl({ url: 'pages/LocationPage' }) })
+              } else if (this.catalogCount === 0) {
+                Text(this.catalogLoading ? '正在加载店铺…' : this.storesRequest.failed ? '店铺加载失败' :
+                  this.catalogMode === 0 ? `${DELIVERY_RANGE.NEARBY_KM} 公里内暂无店铺` :
+                    this.catalogMode === 1 ? '暂无 4 分及以上的店铺' : '暂无店铺')
+                  .fontColor(HomeTheme.MUTED).fontSize(FONT_SIZE.SM)
+              }
+            }.width('100%').padding({ left: SPACING.LG, right: SPACING.LG, top: SPACING.LG, bottom: SPACING.SM })
+          }
+          LazyForEach(this.storeRows, (store: StoreItem) => {
+            ListItem() { this.CatalogCard(store) }
+          }, (store: StoreItem) => this.storeRows.keyFor(store))
+          ListItem() {
+            Column().height(FloatingTabBarTheme.CONTENT_INSET + this.bottomInset)
+          }
+        }.cachedCount(3).id('home-recommend-list')
         .width('100%')
         .height('100%')
         .scrollBar(BarState.Off)
       }
       .layoutWeight(1)
       .attributeModifier(new AppRefreshStyle())
-      .onRefreshing(() => { this.refreshHomeData() })
+      .onRefreshing(() => { this.refreshHomeData(true) })
     }
     .width('100%')
     .height('100%')
@@ -714,6 +791,26 @@ export struct HomePage {
       backgroundColor: HomeTheme.CARD,
       radius: { topLeft: AppTheme.SHEET_RADIUS, topRight: AppTheme.SHEET_RADIUS }
     })
+  }
+
+  @Builder
+  CatalogTab(label: string, mode: number, testId: string) {
+    Button(label, { type: ButtonType.Normal }).layoutWeight(1).height(HomeTheme.TOUCH_HEIGHT)
+      .fontSize(FONT_SIZE.SM).fontColor(this.catalogMode === mode ? HomeTheme.ACCENT : HomeTheme.MUTED)
+      .backgroundColor(this.catalogMode === mode ? HomeTheme.SOFT : HomeTheme.SURFACE)
+      .id(testId).onClick(() => {
+        if (this.catalogMode !== mode) {
+          this.catalogMode = mode
+          this.updateCatalog()
+        }
+        this.catalogScroller.scrollToIndex(1, false, ScrollAlign.START)
+      })
+  }
+
+  @Builder
+  CatalogCard(store: StoreItem) {
+    RecommendedStoreCardHost({ store: store, onStoreClick: (item: StoreItem) => { this.onStoreClick(item) } })
+      .padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
   }
 
   @Builder

@@ -59,8 +59,8 @@ export class SPACING {
 
 // 字体大小
 export class FONT_SIZE {
-  static readonly XS: number = 11
-  static readonly SM: number = 13
+  static readonly XS: number = 12
+  static readonly SM: number = 14
   static readonly MD: number = 14
   static readonly LG: number = 16
   static readonly XL: number = 18
@@ -295,4 +295,30 @@ export function accentIndexFromText(text: string): number {
     sum += text.charCodeAt(i)
   }
   return sum
+}
+interface DeliveryRange {
+  STORE_DEFAULT_KM: number
+  STORE_MIN_KM: number
+  STORE_MAX_KM: number
+  RIDER_DEFAULT_KM: number
+  RIDER_MIN_KM: number
+  RIDER_MAX_KM: number
+  NEARBY_KM: number
+  ORDER_CONFIRM_KM: number
+}
+
+export const DELIVERY_RANGE: DeliveryRange = {
+  STORE_DEFAULT_KM: 10,
+  STORE_MIN_KM: 1,
+  STORE_MAX_KM: 15,
+  RIDER_DEFAULT_KM: 3,
+  RIDER_MIN_KM: 1,
+  RIDER_MAX_KM: 5,
+  NEARBY_KM: 5,
+  ORDER_CONFIRM_KM: 5
+}
+
+export function riderPickupRadiusKm(meters: number): number {
+  return meters > 0 ? Math.min(DELIVERY_RANGE.RIDER_MAX_KM, Math.max(DELIVERY_RANGE.RIDER_MIN_KM, meters / 1000))
+    : DELIVERY_RANGE.RIDER_DEFAULT_KM
 }

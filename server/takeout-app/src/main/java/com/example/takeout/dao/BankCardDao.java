@@ -47,7 +47,7 @@ public class BankCardDao {
 
     /** 锁账号行而非卡片行，保证没有卡片时并发添加首卡也会串行。 */
     public boolean lockUser(long userId) {
-        return !jdbc.query("SELECT id FROM users WHERE id = ? FOR UPDATE",
+        return !jdbc.query("SELECT id FROM users WHERE id = ? AND status=1 FOR UPDATE",
                 (rs, i) -> rs.getLong("id"), userId).isEmpty();
     }
 

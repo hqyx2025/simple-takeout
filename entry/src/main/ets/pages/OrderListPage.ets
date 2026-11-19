@@ -73,6 +73,7 @@ struct OrderListPage {
   @State showConfirmDialog: boolean = false
   private confirmingOrderId: number = 0
   private ordersLoading: boolean = false
+  private lastOrdersLoadedAt: number = 0
 
   aboutToAppear() {
     logInfo('Page', '进入我的订单页 OrderListPage')
@@ -91,6 +92,7 @@ struct OrderListPage {
   }
 
   onLoginStateChange(): void {
+    this.lastOrdersLoadedAt = 0
     this.ordersRequestVersion += 1
     this.ordersLoading = false
     this.isRefreshing = false
@@ -124,7 +126,9 @@ struct OrderListPage {
 
   onPageShow(): void {
     this.pageActive = true
-    this.refreshOrders()
+    if (!this.ordersLoading && (this.ordersError || this.lastOrdersLoadedAt === 0 || Date.now() - this.lastOrdersLoadedAt >= 15000)) {
+      this.refreshOrders(1, false, true)
+    }
   }
 
   onPageHide(): void {
@@ -137,6 +141,7 @@ struct OrderListPage {
   aboutToDisappear(): void { this.onPageHide() }
 
   onOrdersOwnerChange(): void {
+    this.lastOrdersLoadedAt = 0
     this.ordersRequestVersion += 1
     this.ordersLoading = false
     this.pageOrders = []
@@ -147,7 +152,7 @@ struct OrderListPage {
     if (this.pageActive) { this.refreshOrders() }
   }
 
-  private async refreshOrders(page: number = 1, append: boolean = false): Promise<void> {
+  private async refreshOrders(page: number = 1, append: boolean = false, quiet: boolean = false): Promise<void> {
     if (!this.pageActive || (this.ordersLoading && append)) { return }
     const user: User | undefined = AppStorage.get<User>('user')
     if (!this.loggedIn || user === undefined || user.id <= 0 || user.role !== UserRole.CUSTOMER) { return }
@@ -155,7 +160,7 @@ struct OrderListPage {
     const owner: number = user.id
     const version: number = ++this.ordersRequestVersion
     this.ordersLoading = true
-    this.isRefreshing = true
+    this.isRefreshing = !quiet || this.pageOrders.length === 0
     this.ordersError = false
     this.retryPage = page
     this.retryAppend = append
@@ -168,6 +173,7 @@ struct OrderListPage {
       this.currentPage = result.page
       this.totalOrders = result.total
       this.hasMoreOrders = result.hasMore
+      this.lastOrdersLoadedAt = Date.now()
       this.refreshDataSource()
     } catch (_) {
       if (this.canApplyOrders(epoch, owner, version)) { this.ordersError = true }
@@ -180,6 +186,7 @@ struct OrderListPage {
   }
 
   onOrderListChange(): void {
+    this.lastOrdersLoadedAt = 0
     // 防御：@StorageLink 首次绑定也可能触发本回调，数据源未就绪时直接返回
     if (this.orderDataSource === undefined || this.orderDataSource === null) {
       return
@@ -188,6 +195,7 @@ struct OrderListPage {
   }
 
   onFilterChange(): void {
+    this.lastOrdersLoadedAt = 0
     if (this.orderDataSource !== undefined && this.orderDataSource !== null && this.loggedIn) {
       this.refreshOrders()
     }
@@ -318,7 +326,7 @@ struct OrderListPage {
                     .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).layoutWeight(1)
                   if (this.hasMoreOrders) {
                     Button(this.ordersLoading ? '加载中' : '加载更多')
-                      .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
+                      .attributeModifier(new AppButtonStyle()).height(44).fontSize(FONT_SIZE.XS)
                       .enabled(!this.ordersLoading).id('customer-order-load-more')
                       .onClick(() => { this.loadMoreOrders() })
                   }
@@ -397,7 +405,7 @@ struct OrderListPage {
       }, (item: CartItem, index: number) => `${index}_${item.goods.id}_${item.specId ?? 0}`)
       if ((order.items ?? []).length > 2) {
         Button(this.expandedOrderIds.indexOf(order.id) >= 0 ? '收起商品 ∧' : `展开其余 ${(order.items ?? []).length - 2} 件商品 ∨`)
-          .attributeModifier(new AppButtonStyle()).height(40).width('100%')
+          .attributeModifier(new AppButtonStyle()).height(44).width('100%')
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY).backgroundColor(COLORS.BG_PRIMARY)
           .id(`order-expand-${order.id}`)
           .onClick(() => {
@@ -417,18 +425,18 @@ struct OrderListPage {
         if (order.status === 0) {
           // 待付款：可取消（释放库存与优惠券）或立即支付
           Button('取消订单')
-            .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+            .attributeModifier(new AppButtonStyle()).height(44).fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
             .backgroundColor(COLORS.BG_PRIMARY).borderRadius(BORDER_RADIUS.ROUND)
             .margin({ right: SPACING.SM }).enabled(canOrderAction(order, 'CANCEL', true))
             .onClick(() => { this.cancelPendingOrder(order) })
           Button('立即支付')
-            .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)
+            .attributeModifier(new AppButtonStyle()).height(44).fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)
             .backgroundColor(MODULE_COLOR.ORDER).borderRadius(BORDER_RADIUS.ROUND)
             .enabled(canOrderAction(order, 'PAY', true))
             .onClick(() => { this.payPendingOrder(order) })
         } else if (canOrderAction(order, 'CONFIRM', order.status === 4 && (order.escrowStatus ?? 0) === 0)) {
           Button('确认收到')
-            .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)
+            .attributeModifier(new AppButtonStyle()).height(44).fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)
             .backgroundColor(MODULE_COLOR.CART).borderRadius(BORDER_RADIUS.ROUND)
             .onClick(() => {
               this.confirmingOrderId = order.id

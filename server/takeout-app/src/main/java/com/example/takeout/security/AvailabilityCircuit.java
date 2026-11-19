@@ -5,9 +5,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongSupplier;
 
 /** 无等待的故障短路；每个恢复周期只允许一个探测，旧在途结果不能覆盖新一轮状态。 */
-final class AvailabilityCircuit {
+public final class AvailabilityCircuit {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AvailabilityCircuit.class);
-    record Ticket(long generation, boolean probe) {}
+    public record Ticket(long generation, boolean probe) {}
     private record State(long generation, int failures, long retryAt, boolean probing) {}
     private final AtomicReference<State> state = new AtomicReference<>(new State(0, 0, 0, false));
     private final int threshold;
@@ -15,14 +15,14 @@ final class AvailabilityCircuit {
     private final LongSupplier clock;
     private final String name;
 
-    AvailabilityCircuit(String name, int threshold, Duration cooldown, LongSupplier clock) {
+    public AvailabilityCircuit(String name, int threshold, Duration cooldown, LongSupplier clock) {
         this.name = name;
         this.threshold = threshold;
         this.cooldown = cooldown.toNanos();
         this.clock = clock;
     }
 
-    Ticket acquire() {
+    public Ticket acquire() {
         while (true) {
             State current = state.get();
             if (current.retryAt() == 0) return new Ticket(current.generation(), false);
@@ -32,9 +32,9 @@ final class AvailabilityCircuit {
         }
     }
 
-    void success(Ticket ticket) { complete(ticket, false, false); }
-    void failure(Ticket ticket) { complete(ticket, true, false); }
-    void abandon(Ticket ticket) { complete(ticket, false, true); }
+    public void success(Ticket ticket) { complete(ticket, false, false); }
+    public void failure(Ticket ticket) { complete(ticket, true, false); }
+    public void abandon(Ticket ticket) { complete(ticket, false, true); }
 
     private void complete(Ticket ticket, boolean failed, boolean abandoned) {
         while (true) {
@@ -54,9 +54,9 @@ final class AvailabilityCircuit {
             }
             if (state.compareAndSet(current, next)) {
                 if (failed && next.retryAt() != 0 && (!current.probing() || current.retryAt() == 0)) {
-                    log.warn("领券/抢单保护暂停访问 dependency={} cooldownMs={}", name, Duration.ofNanos(cooldown).toMillis());
+                    log.warn("依赖故障保护暂停访问 dependency={} cooldownMs={}", name, Duration.ofNanos(cooldown).toMillis());
                 } else if (!failed && !abandoned && ticket.probe()) {
-                    log.info("领券/抢单保护探测恢复 dependency={}", name);
+                    log.info("依赖故障保护探测恢复 dependency={}", name);
                 }
                 return;
             }

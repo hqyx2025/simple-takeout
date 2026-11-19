@@ -27,12 +27,13 @@ function loadModule(file, dependencies) {
 async function testAddressRestore() {
   const models = loadModule('entry/src/main/ets/model/Models.ets', {});
   const http = { setAuthTokens() {}, getAuthToken: () => memory.get('authToken'),
-    initializeApiBaseUrl: async () => 'https://example.test',
+    initializeApiBaseUrl: async persist => { await persist('https://example.test'); return 'https://example.test'; },
     getAuthSessionEpoch: () => 0, registerSessionExpiredHandler() {} };
   const persistence = loadModule('entry/src/main/ets/service/DataPersistence.ets', {
     '@ohos.data.preferences': { default: { getPreferences: async () => prefs } },
     '../model/Models': models, './AppLogger': logger, './HttpClient': http,
-    './TokenStorage': { loadAuthTokens: async () => null, saveAuthTokens: async () => {}, clearAuthTokens: async () => {} }
+    './TokenStorage': { loadAuthTokens: async () => ({accessToken:'test-session-a',refreshToken:'refresh-a'}), saveAuthTokens: async () => {}, clearAuthTokens: async () => {} },
+    './api/AuthApi': { fetchCurrentUserApi: async () => ({id:1,role:models.UserRole.CUSTOMER,balance:0}) }
   });
   const oldAddress = { id: 9, name: '测试收件人', phone: '', address: '旧地址', detail: '', isDefault: true };
   for (const [key, value] of Object.entries({ privacyConsent: true, authToken: 'test-session-a',
@@ -47,12 +48,12 @@ async function testAddressRestore() {
   let response = null;
   const manager = loadModule('entry/src/main/ets/service/AppStorageManager.ets', {
     '../model/Models': models, './DataPersistence': persistence, './AppLogger': logger,
-    './HttpClient': http, './ApiService': { fetchAddressesApi: async () => response },
+    './HttpClient': http, './ApiService': { fetchAddressesApi: async () => response }, './api/CatalogApi': {},
     '../common/Constants': { API_CONFIG: {} }, './LocationService': {},
     './DeliveryFormSync': { clearDeliveryForms() {}, syncDeliveryForms: async () => {},
       deliveryCustomerId: () => 0, deliveryRevision: () => '' },
     './PushKitService': { clearPushIdentity() {}, registerPushForCurrentSession() {} },
-    './api/OrdersApi': {}
+    './api/OrdersApi': {}, './TokenStorage': { saveAuthTokens: async () => {} }
   });
   assert.equal(await manager.syncAddressesRemote(), false, 'offline address sync must report failure');
   assert.equal(memory.get('currentAddress'), null);
@@ -69,7 +70,7 @@ async function testAddressRestore() {
   assert.equal(await manager.syncAddressesRemote(), true, 'empty list is a successful response');
   assert.equal(memory.get('currentAddress'), null);
   assert.equal(memory.get('addressSyncState'), 'ready', 'a confirmed empty response is different from a network failure');
-  assert.equal(disk.get('currentAddress'), 'null', 'clearing an address must clear persistent selection');
+  assert.equal(disk.has('currentAddress'), false, 'addresses must not be persisted in ordinary preferences');
   let finish;
   response = new Promise(resolve => { finish = resolve; });
   const pending = manager.syncAddressesRemote();

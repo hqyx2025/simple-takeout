@@ -112,8 +112,8 @@ class OrderServiceRiderFlowTest {
     }
 
     private void stubPool(int count) {
-        when(orderDao.countRiderPool(22.8177, 108.3665, 25000)).thenReturn(count);
-        when(orderDao.listRiderPool(22.8177, 108.3665, 25000, 30, 0L)).thenReturn(
+        when(orderDao.countRiderPool(22.8177, 108.3665, 5000)).thenReturn(count);
+        when(orderDao.listRiderPool(22.8177, 108.3665, 5000, 30, 0L)).thenReturn(
                 java.util.stream.IntStream.range(0, count)
                     .mapToObj(n -> new OrderDao.RiderPoolRow(storedOrder(2), "2026-09-15 10:05:00")).toList());
     }
@@ -123,7 +123,7 @@ class OrderServiceRiderFlowTest {
         stubActiveRider();
         var page = service.riderPool(RIDER_ID, Integer.MAX_VALUE, 999);
         assertEquals(100, page.pageSize());
-        verify(orderDao).listRiderPool(22.8177, 108.3665, 25000, 100, 214748364600L);
+        verify(orderDao).listRiderPool(22.8177, 108.3665, 5000, 100, 214748364600L);
         assertTrue(!page.hasMore());
     }
 
@@ -150,7 +150,7 @@ class OrderServiceRiderFlowTest {
         stubActiveRider();
         var rows = java.util.stream.IntStream.range(0, 31)
                 .mapToObj(n -> new OrderDao.RiderPoolRow(storedOrder(2), "2026-09-15 10:05:00")).toList();
-        when(orderDao.listRiderPoolAfter(22.8177, 108.3665, 25000, 31, 400L)).thenReturn(rows);
+        when(orderDao.listRiderPoolAfter(22.8177, 108.3665, 5000, 31, 400L)).thenReturn(rows);
 
         var slice = service.riderPoolAfter(RIDER_ID, 400L, 30);
 
@@ -164,7 +164,7 @@ class OrderServiceRiderFlowTest {
         var empty = service.riderPoolAfter(RIDER_ID, 999, 999);
         assertTrue(!empty.hasMore());
         assertEquals(0, empty.nextAfterId());
-        verify(orderDao).listRiderPoolAfter(22.8177, 108.3665, 25000, 101, 999L);
+        verify(orderDao).listRiderPoolAfter(22.8177, 108.3665, 5000, 101, 999L);
     }
 
     /**
@@ -199,7 +199,7 @@ class OrderServiceRiderFlowTest {
         verify(orderDao, never()).findReadyTime(anyLong());
         verify(storeDao, never()).findForDispatch(anyLong());
         service.riderPool(RIDER_ID);
-        verify(orderDao, org.mockito.Mockito.times(2)).listRiderPool(22.8177, 108.3665, 25000, 30, 0L);
+        verify(orderDao, org.mockito.Mockito.times(2)).listRiderPool(22.8177, 108.3665, 5000, 30, 0L);
     }
 
     /** 抢单前的响应只提供接单决策所需信息，序列化输出也不能夹带顾客或商品隐私。 */

@@ -36,21 +36,23 @@ public class PersonalDataMigration implements ApplicationRunner {
         if (!fingerprint.equals(jdbc.queryForObject("SELECT index_check FROM personal_data_key_state WHERE id=1", String.class))) {
             throw new IllegalStateException("个人资料检索密钥发生变化；须在维护窗口按旧密钥读取并重建索引，禁止直接替换");
         }
-        scan("users", users::reencryptPhone);
-        scan("addresses", addresses::reencrypt);
-        scan("riders", riders::reencrypt);
-        scan("orders", id -> {
+        scan("users", "phone_encrypted", " OR phone_lookup IS NULL", users::reencryptPhone);
+        scan("addresses", "private_data_encrypted", "", addresses::reencrypt);
+        scan("riders", "private_data_encrypted", "", riders::reencrypt);
+        scan("orders", "address", "", id -> {
             String stored = jdbc.queryForObject("SELECT address FROM orders WHERE id=? FOR UPDATE", String.class, id);
             if (!crypto.isCurrent(stored)) jdbc.update("UPDATE orders SET address=? WHERE id=?",
                     crypto.encrypt(crypto.readLegacy(stored, "orders.address"), "orders.address"), id);
         });
     }
 
-    private void scan(String table, LongConsumer migrate) {
+    private void scan(String table, String column, String extra, LongConsumer migrate) {
         long cursor = 0;
         while (true) {
             // Table names are fixed callers above, never request input.
-            List<Long> ids = jdbc.queryForList("SELECT id FROM " + table + " WHERE id>? ORDER BY id LIMIT 200", Long.class, cursor);
+            List<Long> ids = jdbc.queryForList("SELECT id FROM " + table + " WHERE id>? AND (" + column
+                    + " IS NULL OR BINARY " + column + " NOT LIKE ?" + extra + ") ORDER BY id LIMIT 200",
+                    Long.class, cursor, crypto.currentKeyPrefix() + "%");
             if (ids.isEmpty()) return;
             for (long id : ids) tx.executeWithoutResult(status -> migrate.accept(id));
             cursor = ids.getLast();

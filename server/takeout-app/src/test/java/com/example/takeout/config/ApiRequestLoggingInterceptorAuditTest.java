@@ -58,12 +58,16 @@ class ApiRequestLoggingInterceptorAuditTest {
     }
 
     @Test
-    void doesNotRecordReadsOrNonAdminMutations() throws Exception {
+    void recordsSensitiveReadsWithoutPersonalQueryValuesAndSkipsNonAdminMutations() throws Exception {
         MockHttpServletRequest read = new MockHttpServletRequest("GET", "/api/admin/users");
         read.setAttribute(AuthInterceptor.ATTR_USER_ID, 4L);
         read.setAttribute(AuthInterceptor.ATTR_ROLE, 2);
+        read.addParameter("phone", "13800138000");
         interceptor.preHandle(read, new MockHttpServletResponse(), new Object());
         interceptor.afterCompletion(read, new MockHttpServletResponse(), new Object(), null);
+        verify(logs).insert(eq(4L), eq(2), eq(0L), eq(-1), eq("READ:/api/admin/users"), eq("GET"),
+                eq("/api/admin/users"), eq("SUCCESS"), eq(200), anyString(), anyLong());
+        org.mockito.Mockito.clearInvocations(logs);
 
         MockHttpServletRequest nonAdmin = new MockHttpServletRequest("PUT", "/api/admin/users/17/status");
         nonAdmin.setAttribute(AuthInterceptor.ATTR_USER_ID, 7L);
@@ -76,6 +80,18 @@ class ApiRequestLoggingInterceptorAuditTest {
     }
 
     public void adminMutation() {
+    }
+
+    @Test void recordsFullCardRevealWithoutThePasswordOrCardNumber() {
+        var request=new MockHttpServletRequest("POST","/api/wallet/bank-cards/7/reveal");
+        request.setAttribute(AuthInterceptor.ATTR_USER_ID,4L);
+        request.setAttribute(AuthInterceptor.ATTR_ROLE,0);
+        request.setContent("{\"paymentPassword\":\"123456\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        var response=new MockHttpServletResponse();
+        interceptor.preHandle(request,response,new Object());
+        interceptor.afterCompletion(request,response,new Object(),null);
+        verify(logs).insert(eq(4L),eq(0),eq(0L),eq(-1),eq("READ:/api/wallet/bank-cards/7/reveal"),
+                eq("POST"),eq("/api/wallet/bank-cards/7/reveal"),eq("SUCCESS"),eq(200),anyString(),anyLong());
     }
 
     @Test void databaseFailureDoesNotTriggerAnotherAuditDatabaseAttempt() {

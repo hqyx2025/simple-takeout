@@ -55,6 +55,24 @@ class BusinessStatisticsMySqlTest {
     }
 
     @Test
+    void checkoutUsesCurrentSkuPriceEvenAfterAnEarlierRepeatableReadSnapshot() {
+        jdbc.update("UPDATE goods SET price=10,stock=5 WHERE id=1");
+        jdbc.update("INSERT INTO goods_specs(id,goods_id,name,price,stock,create_time) VALUES(7,1,'sku',10,5,NOW())");
+        var tx=new org.springframework.transaction.support.TransactionTemplate(
+                new org.springframework.jdbc.datasource.DataSourceTransactionManager(pool));
+        tx.executeWithoutResult(status -> {
+            assertEquals(10,jdbc.queryForObject("SELECT price FROM goods_specs WHERE id=7",Integer.class));
+            try(var connection=pool.getConnection();var statement=connection.createStatement()) {
+                statement.executeUpdate("UPDATE goods SET price=12,stock=4 WHERE id=1");
+                statement.executeUpdate("UPDATE goods_specs SET price=12,stock=4 WHERE id=7");
+            } catch(java.sql.SQLException error) { throw new RuntimeException(error); }
+            var actual=new GoodsDao(jdbc,new GoodsSpecDao(jdbc)).findForOrder(1).orElseThrow();
+            assertEquals(12,actual.price());assertEquals(4,actual.stock());
+            assertEquals(12,actual.specs().getFirst().price());assertEquals(4,actual.specs().getFirst().stock());
+        });
+    }
+
+    @Test
     void browsingAndAdminRanksUsePaidQuantitiesAndOrderCountsWithoutSeedSales() {
         LocalDateTime now = LocalDateTime.now().minusMinutes(1);
         order(1, 1, 0, 0, "", stamp(now), 100, 10, 100);

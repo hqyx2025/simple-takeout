@@ -25,7 +25,7 @@ public class OrderAutoConfirmJob {
         this.schedulerLock = schedulerLock;
     }
 
-    @Scheduled(fixedDelayString = "${takeout.order.auto-confirm-scan-ms:60000}",
+    @Scheduled(scheduler = "orderScheduler", fixedDelayString = "${takeout.order.auto-confirm-scan-ms:60000}",
             initialDelayString = "${takeout.order.auto-confirm-scan-initial-ms:45000}")
     public void settleDeliveredOrders() {
         try {

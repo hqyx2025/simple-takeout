@@ -4,6 +4,7 @@ import { AppCardStyle, AppTheme } from '../../common/theme/AppTheme'
  * 包含：搜索栏、分类导航、店铺列表、店铺详情、购物车、订单列表、个人中心、底部Tab导航
  */
 import { StoreItem } from '../../model/Models'
+import { storeRatingText } from '../../common/StorePresentation'
 
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, formatSales, merchantImageSource } from '../../common/Constants'
 
@@ -24,50 +25,33 @@ export struct RecommendedStoreCardHost {
    * 门店没坐标或未定位时是「未知距离」——不能沿用历史值假装很近。
    */
   private distanceText(): string {
-    const distance: string = this.store.distance ?? ''
-    if (distance === '' || distance === '未知距离') {
-      return '距离未知'
-    }
-    return `距你 ${distance}`
+    const distance: number = this.store.distanceKm ?? -1
+    if (distance < 0) { return '暂无法判断配送范围' }
+    return `直线 ${distance.toFixed(1)} 公里 · ${this.store.deliverable === false ? '超出配送范围' : '可配送'}`
   }
 
   build() {
-    Column({ space: SPACING.SM }) {
-      Stack({ alignContent: Alignment.TopEnd }) {
-        Image((this.store.image ?? '').trim() === '' ? HomeTheme.STORE_PLACEHOLDER : merchantImageSource(this.store.image))
-          .alt(HomeTheme.STORE_PLACEHOLDER)
-          .width('100%').aspectRatio(HomeTheme.GRID_IMAGE_RATIO).objectFit(ImageFit.Cover)
-          .borderRadius(BORDER_RADIUS.MD)
-        Text('平台推荐').fontSize(FONT_SIZE.XS).fontColor(COLORS.PRIMARY)
-          .backgroundColor(COLORS.TAG_BG).padding({ left: 5, right: 5, top: 2, bottom: 2 })
-          .borderRadius(BORDER_RADIUS.ROUND).margin(SPACING.SM)
-      }
-      .width('100%')
+    Row({ space: SPACING.MD }) {
+      Image((this.store.image ?? '').trim() === '' ? HomeTheme.STORE_PLACEHOLDER : merchantImageSource(this.store.image))
+        .alt(HomeTheme.STORE_PLACEHOLDER).width(82).height(82).objectFit(ImageFit.Cover)
+        .borderRadius(BORDER_RADIUS.MD)
       Column({ space: SPACING.XS }) {
         Text(this.store.name).fontSize(FONT_SIZE.LG).fontWeight(FontWeight.Bold)
-          .fontColor(COLORS.TEXT_PRIMARY).width('100%').maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .fontColor(COLORS.TEXT_PRIMARY).width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         Flex({ wrap: FlexWrap.Wrap, alignItems: ItemAlign.Center }) {
-          RatingStars({ rating: this.store.rating, fontSize: FONT_SIZE.SM, showNumber: true })
-          Text(`月售${formatSales(this.store.monthlySales)}`)
-            .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).margin({ left: SPACING.SM })
-        }
-        .width('100%')
-        Text(`${this.store.deliveryTime} · ${this.distanceText()}`)
-          .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
-          .width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(`配送¥${this.store.deliveryFee} · ${this.store.minOrder}元起送`)
-          .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
-          .width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(this.store.notice).fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT)
-          .width('100%').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-      }.width('100%').alignItems(HorizontalAlign.Start)
+          if ((this.store.ratingCount ?? 0) > 0) {
+            RatingStars({ rating: this.store.rating, fontSize: FONT_SIZE.SM, showNumber: false })
+          }
+          Text(storeRatingText(this.store.rating, this.store.ratingCount ?? 0)).fontSize(FONT_SIZE.SM)
+            .fontColor(COLORS.TEXT_SECONDARY).margin({ left: (this.store.ratingCount ?? 0) > 0 ? SPACING.XS : 0 })
+        }.width('100%')
+        Text(this.distanceText())
+          .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+      }.layoutWeight(1).alignItems(HorizontalAlign.Start)
     }
     .attributeModifier(new AppCardStyle())
     .border({ width: 1, color: AppTheme.BORDER })
-    .id(`home-recommend-card-${this.store.id}`)
+    .id('home-recommend-card-' + this.store.id.toString())
     .width('100%').padding(SPACING.MD).onClick(() => { this.onStoreClick(this.store) })
   }
 }
-
-// ===================== 店铺详情 =====================

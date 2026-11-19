@@ -20,10 +20,15 @@ public class ExternalRefundRecoveryJob {
         this.attempts = attempts; this.afterSales = afterSales; this.orders = orders; this.payments = payments;
     }
 
-    @Scheduled(fixedDelayString="${takeout.payment.refund-recovery-ms:30000}",
+    @Scheduled(scheduler = "paymentRecoveryScheduler", fixedDelayString="${takeout.payment.refund-recovery-ms:1000}",
             initialDelayString="${takeout.payment.refund-recovery-initial-ms:45000}")
     public void recover() {
-        for (var attempt : attempts.pending(20)) {
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(2);
+        for (int batch = 0; batch < 10 && System.nanoTime() < deadline; batch++) {
+        var pending = attempts.pending(20);
+        if (pending.isEmpty()) return;
+        for (var attempt : pending) {
+            if (System.nanoTime() >= deadline) return;
             try {
                 switch (attempt.kind()) {
                     case "AFTER_SALES" -> afterSales.getObject().recoverRefund(attempt);
@@ -37,6 +42,7 @@ public class ExternalRefundRecoveryJob {
                 org.slf4j.LoggerFactory.getLogger(ExternalRefundRecoveryJob.class)
                         .warn("External refund recovery pending refundNo={}", attempt.refundNo(), error);
             }
+        }
         }
     }
 }

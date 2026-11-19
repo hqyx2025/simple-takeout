@@ -419,8 +419,12 @@ public class AdminService {
     }
 
     /** 管理端订单推进：用于平台异常运营处理，状态规则与商户端一致。 */
-    @Transactional
     public Order.OrderView orderFlow(long orderId, String action) {
+        if ("cancel".equals(action)) return orderService.cancelOrderByAdmin(orderId);
+        return orderService.inTransaction(() -> orderFlowInTransaction(orderId, action));
+    }
+
+    private Order.OrderView orderFlowInTransaction(long orderId, String action) {
         Order order = orderDao.findByIdForUpdate(orderId).orElseThrow(() -> new BizException("订单不存在"));
         if (!"cancel".equals(action) && refundAttempts != null) refundAttempts.requireNoCancellation(orderId);
         String now = now();
@@ -469,7 +473,6 @@ public class AdminService {
         }
     }
 
-    @Transactional
     public Order.OrderView refundOrder(long orderId) {
         Order order = orderDao.findById(orderId).orElseThrow(() -> new BizException("订单不存在"));
         // 只有「已扣款且尚未送达」的订单才存在可退的托管资金：待付款(0)、待付款取消(5) 的
@@ -515,7 +518,6 @@ public class AdminService {
 
     void configureAfterSales(AfterSalesService service) { this.afterSalesService = service; }
 
-    @Transactional
     public RefundRecord approveRefund(long refundId) { return afterSalesService.approve(refundId); }
 
     @Transactional

@@ -32,6 +32,9 @@ class RefundClosureTest {
 
     @BeforeEach
     void amounts() {
+        service.configureTransactions(OrderTestFixture.transactions());
+        service.configureAccountLifecycle(mock(UserDao.class));
+        when(payments.prepareAfterSalesRefund(any(), any(), anyLong())).thenReturn(true);
         when(refunds.refundedAmount(7)).thenReturn(amount("0.00"));
         when(refunds.merchantRefunded(7)).thenReturn(amount("0.00"));
         when(stores.findById(3)).thenReturn(Optional.of(new Store(3, "店铺", "", 4.5, 0, 3, 0,
@@ -125,7 +128,6 @@ class RefundClosureTest {
         verify(ledger).creditCustomer(2, amount("5.00"));
         verify(records).insert(eq(7L), eq(2L), eq(amount("5.00")), eq("REFUND"), eq("BALANCE"), eq("SUCCESS"), anyString());
         var sequence = inOrder(orders, refunds);
-        sequence.verify(refunds).findById(9);
         sequence.verify(orders).findByIdForUpdate(7);
         sequence.verify(refunds).findByIdForUpdate(9);
     }

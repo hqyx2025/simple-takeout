@@ -82,6 +82,10 @@ class OrderServiceFlowTest {
 
     @BeforeEach
     void configureTransactions() {
+        OrderTestFixture.admission(storeDao);
+        OrderTestFixture.goods(goodsDao);
+        when(userDao.findByIdForUpdate(anyLong())).thenAnswer(call -> userDao.findById(call.getArgument(0)));
+        when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(openStore(0,0)));
         when(orderDao.findByIdForUpdate(anyLong())).thenAnswer(invocation -> orderDao.findById(invocation.getArgument(0)));
         when(transactionManager.getTransaction(any())).thenAnswer(invocation -> new SimpleTransactionStatus());
         service.configureTransactions(new TransactionTemplate(transactionManager));
@@ -199,7 +203,7 @@ class OrderServiceFlowTest {
         stubCommon(10, 0, 3);
         when(addressDao.listByUser(USER_ID)).thenReturn(List.of(new Address(
                 ADDRESS_ID, USER_ID, "张三", "13800138000", "远方地址", 1, "", 39.9, 116.4)));
-        assertEquals("距离超过500公里，请重新选择收货地址", assertThrows(BizException.class,
+        assertEquals("超出门店配送范围，请重新选择收货地址", assertThrows(BizException.class,
                 () -> service.createOrder(USER_ID, STORE_ID, List.of(item()), ADDRESS_ID, 0, "")).getMessage());
         verify(goodsDao, never()).lockStockRows(any());
         verify(orderDao, never()).insert(any(Order.class));
@@ -218,6 +222,9 @@ class OrderServiceFlowTest {
         assertEquals(13.0, view.payAmount(), 0.001);
         assertFalse(view.payDeadline().isEmpty(), "待付款订单返回支付截止时间");
         assertTrue(view.payDeadlineEpochMs() > view.serverNowEpochMs(), "支付截止时间晚于服务端当前时间");
+        var responseReads = inOrder(transactionManager, orderDao);
+        responseReads.verify(transactionManager).commit(any());
+        responseReads.verify(orderDao).findById(13);
         verify(userDao, never()).deductBalance(anyLong(), anyDouble());
         verify(goodsDao).deductStock(GOODS_ID, 1);
         verify(storeDao, never()).updateMonthlySales(anyLong(), anyInt());
@@ -227,15 +234,17 @@ class OrderServiceFlowTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource({
-            "199.999,false,200", "200,false,200", "200.001,false,428",
-            "300,false,428", "300,true,200", "500,true,200",
-            "500.001,false,400", "500.001,true,400"
+            "15000,4.999,false,200", "15000,5,false,200", "15000,5.001,false,428",
+            "15000,8,false,428", "15000,8,true,200", "15000,15,true,200",
+            "15000,15.001,false,400", "15000,15.001,true,400",
+            "4000,4,true,200", "4000,4.001,true,400", "4000,6,false,400",
+            "0,10,true,200", "0,10.001,true,400"
     })
-    void checkoutDistanceBoundaries(double kilometers, boolean confirmed, int expectedCode) {
+    void checkoutDistanceBoundaries(int radius, double kilometers, boolean confirmed, int expectedCode) {
         stubCommon(10, 0, 3);
         when(storeDao.findById(STORE_ID)).thenReturn(Optional.of(new Store(STORE_ID, "测试店", "", 4.5,
                 0, 3, 0, "30分钟", "未知距离", "[]", "", "店铺位置", 0.0, 108.0,
-                1, "[1]", 99, 1, 0, "", 1000)));
+                1, "[1]", 99, 1, 0, "", radius)));
         when(addressDao.listByUser(USER_ID)).thenReturn(List.of(new Address(
                 ADDRESS_ID, USER_ID, "张三", "13800138000", "收货位置", 1, "",
                 Math.toDegrees(kilometers / 6371), 108.0)));
@@ -253,6 +262,7 @@ class OrderServiceFlowTest {
                     List.of(), "DELIVERY", confirmed));
             assertEquals(expectedCode, error.getCode());
             verify(goodsDao, never()).lockStockRows(any());
+            verify(goodsDao, never()).deductStock(anyLong(), anyInt());
             verify(orderDao, never()).insert(any(Order.class));
         }
         verify(userDao, never()).deductBalance(anyLong(), anyDouble());
@@ -523,6 +533,7 @@ class OrderServiceFlowTest {
                 eq("用户取消订单"), eq(USER_ID))).thenReturn(true);
         ExternalPaymentService external = mock(ExternalPaymentService.class);
         when(external.refundOriginalPayment(eq(paid), any(ExternalRefundAttemptService.Cancellation.class))).thenReturn("ALIPAY");
+        when(external.prepareCancellationRefund(any(), any())).thenReturn(true);
         service.configureExternalPaymentService(external);
 
         service.cancelOrder(USER_ID, 13);
@@ -607,6 +618,7 @@ class OrderServiceFlowTest {
                 eq("平台取消订单"), eq(0L))).thenReturn(true);
         ExternalPaymentService external = mock(ExternalPaymentService.class);
         when(external.refundOriginalPayment(eq(paid), any(ExternalRefundAttemptService.Cancellation.class))).thenReturn("ALIPAY");
+        when(external.prepareCancellationRefund(any(), any())).thenReturn(true);
         service.configureExternalPaymentService(external);
 
         service.cancelOrderByAdmin(14);
@@ -964,6 +976,7 @@ class OrderServiceFlowTest {
                 couponDao, reviewDao, userDao, refundDao, new ObjectMapper(), mock(CartItemMapper.class),
                 mock(RiderDao.class), specDao, seckillDao, cache,
                 mock(com.example.takeout.service.mq.DomainEventPublisher.class), provider, mock(PaymentRecordDao.class));
+        svc.configureTransactions(OrderTestFixture.transactions());
 
         // 同一 token 第二次提交：SET NX 失败 → 拒绝，且不进任何业务校验
         when(ops.setIfAbsent(anyString(), anyString(), any(java.time.Duration.class))).thenReturn(false);

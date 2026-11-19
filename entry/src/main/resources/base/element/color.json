@@ -1,5 +1,6 @@
 {
   "color": [
+    {"name": "control_border", "value": "#998575"},
     {"name": "navigation_glass", "value": "#99FFFCF8"},
     {"name": "navigation_press_light", "value": "#FFFFFFFF"},
     {"name": "assistant_send", "value": "#C74B1B"},

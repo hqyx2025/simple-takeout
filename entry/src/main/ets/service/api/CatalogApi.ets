@@ -18,8 +18,12 @@ export function appendCoordinates(url: string, latitude?: number, longitude?: nu
 }
 
 export async function fetchCategories(): Promise<Category[]> {
-  const resp: ApiResponse<Category[]> = await get<Category[]>(API_CONFIG.ENDPOINTS['categories'])
-  return resp.code === 200 ? (resp.data || []) : []
+  return (await fetchCategoriesResultApi()) ?? []
+}
+
+export async function fetchCategoriesResultApi(): Promise<Category[] | null> {
+  const resp: ApiResponse<Category[]> = await get<Category[]>(API_CONFIG.ENDPOINTS['categories'], false)
+  return resp.code === 200 && Array.isArray(resp.data) ? resp.data : null
 }
 
 export async function fetchStores(categoryId?: number, latitude?: number, longitude?: number): Promise<StoreItem[]> {

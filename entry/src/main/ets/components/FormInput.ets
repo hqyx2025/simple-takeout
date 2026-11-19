@@ -77,7 +77,7 @@ export struct FormInput {
   build() {
     Column({ space: 6 }) {
       Text(this.label)
-        .fontSize(13).fontWeight(FontWeight.Medium)
+        .fontSize(14).fontWeight(FontWeight.Medium)
         .fontColor(this.focused ? AppTheme.ACCENT : AppTheme.TEXT)
         .width('100%').id(this.fieldId + '-label')
         .accessibilityLevel('no')
@@ -107,7 +107,7 @@ export struct FormInput {
       }.width('100%').backgroundColor(AppTheme.INPUT).borderRadius(AppTheme.CONTROL_RADIUS)
         .border({ width: this.focused ? 1.5 : 1,
           color: this.localError || this.errorMessage ? AppTheme.ERROR
-            : this.focused ? AppTheme.ACCENT : AppTheme.BORDER })
+            : this.focused ? AppTheme.ACCENT : AppTheme.CONTROL_BORDER })
       if (!(this.localError || this.errorMessage) && (this.helpText || this.passwordRules)
         && !this.hasCompleteValue(this.value)) {
         Text(this.passwordRules ? PASSWORD_HINT : this.helpText)

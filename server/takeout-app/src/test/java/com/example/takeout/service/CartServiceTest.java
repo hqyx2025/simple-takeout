@@ -52,7 +52,7 @@ class CartServiceTest {
         CartService service = new CartService(mapper, goodsDao, storeDao, mock(GoodsSpecDao.class), allowedUsers());
         Goods goods = new Goods(10L, 20L, "测试商品", "", 10.0, 10.0, "", 1,
                 0L, 10, 0, 0, 4.5, "", false, 0, "now");
-        when(goodsDao.findById(10L)).thenReturn(Optional.of(goods));
+        when(goodsDao.findForCart(10L)).thenReturn(Optional.of(goods));
 
         BizException exception = assertThrows(BizException.class, () -> service.add(1L, 10L, 1));
 
@@ -76,23 +76,26 @@ class CartServiceTest {
     }
 
     @Test
-    void addLocksGoodsBeforeReadingCartRow() {
+    void addSerializesAccountBeforeCartRowWithoutLockingStock() {
         CartItemMapper mapper = mock(CartItemMapper.class);
         GoodsDao goodsDao = mock(GoodsDao.class);
         StoreDao storeDao = mock(StoreDao.class);
-        CartService service = new CartService(mapper, goodsDao, storeDao, mock(GoodsSpecDao.class), allowedUsers());
+        var users = allowedUsers();
+        CartService service = new CartService(mapper, goodsDao, storeDao, mock(GoodsSpecDao.class), users);
         Goods goods = new Goods(10L, 20L, "测试商品", "", 10.0, 10.0, "", 1,
                 0L, 10, 0, 0, 4.5, "", false, 1, "now");
-        when(goodsDao.findById(10L)).thenReturn(Optional.of(goods));
+        when(goodsDao.findForCart(10L)).thenReturn(Optional.of(goods));
         when(mapper.selectOne(any())).thenReturn(null);
         when(mapper.selectList(any())).thenReturn(List.of());
 
         service.add(1L, 10L, 1);
 
-        InOrder order = inOrder(goodsDao, mapper);
-        order.verify(goodsDao).lockStockRows(List.of(10L));
-        order.verify(goodsDao).findById(10L);
+        InOrder order = inOrder(users, goodsDao, mapper);
+        order.verify(users).lockActiveCustomerLifecycle(1L);
+        order.verify(goodsDao).findForCart(10L);
         order.verify(mapper).selectOne(any());
+        verify(goodsDao, never()).lockStockRows(any());
+        verify(goodsDao, never()).findForOrder(org.mockito.ArgumentMatchers.anyLong());
         verify(mapper).insert(any(CartItemEntity.class));
     }
 }

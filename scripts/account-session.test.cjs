@@ -7,7 +7,7 @@ const ts = require(path.join(process.env.DEVECO_HOME || 'C:/Program Files/Huawei
 
 // Execute the production functions with controllable network completion.
 const source = fs.readFileSync(path.join(__dirname, '../entry/src/main/ets/service/AppStorageManager.ets'), 'utf8');
-const names = ['updateUserProfileRemote', 'syncCurrentUserFromServer', 'syncFavoritesRemote', 'syncAddressesRemote', 'updateStoredOrder'];
+const names = ['updateUserProfileRemote', 'updateUserAvatarRemote', 'syncCurrentUserFromServer', 'syncFavoritesRemote', 'syncAddressesRemote', 'updateStoredOrder'];
 const functions = names.map(name => {
   const start = source.indexOf(`${name === 'updateStoredOrder' ? '' : 'export '}async function ${name}(`);
   assert.ok(start >= 0, name);
@@ -24,7 +24,7 @@ function runtime() {
   vm.runInNewContext(code, {
     exports: result, AppStorage: { get: key => storage.get(key), setOrCreate: (key, value) => { storage.set(key, value); writes.push(key); } },
     getAuthSessionEpoch: () => state.epoch, getAuthToken: () => state.token, isLoggedIn: () => storage.get('isLoggedIn') === true,
-    updateUserProfileApi: request, fetchCurrentUserApi: request, fetchFavoritesResultApi: request, fetchAddressesApi: request, fetchOrderDetailApi: request,
+    updateUserProfileApi: request, updateUserAvatarApi: request, fetchCurrentUserApi: request, fetchFavoritesResultApi: request, fetchAddressesApi: request, fetchOrderDetailApi: request,
     setStoredUser: user => { storage.set('user', user); writes.push('user'); }, saveAllData: async () => { state.saves++; },
     deduplicateAddresses: addresses => addresses, deliveryCustomerId: () => storage.get('user').id, deliveryRevision: () => state.epoch,
     syncDeliveryForms: () => {}, logInfo: () => {}, logWarn: () => {}
@@ -33,7 +33,8 @@ function runtime() {
 }
 const response = name => name.includes('Favorites') ? [{ storeId: 99 }] : name.includes('Addresses')
   ? [{ id: 10, name: '收货人', isDefault: true }] : name === 'updateStoredOrder' ? { id: 20, status: 1 } : { id: 1, role: 0, username: '已更新' };
-const invoke = (r, name) => name === 'updateUserProfileRemote' ? r.result[name]('姓名', '13800138000', 'a@example.com') : r.result[name](20);
+const invoke = (r, name) => name === 'updateUserProfileRemote' ? r.result[name]('姓名', '13800138000', 'a@example.com')
+  : name === 'updateUserAvatarRemote' ? r.result[name]('/uploads/avatar.jpg') : r.result[name](20);
 
 test('account, logout and session changes discard late identity, favorites, address and order responses', async () => {
   for (const name of names) for (const change of ['account', 'logout', 'session']) {
@@ -76,4 +77,13 @@ test('profile save invalidates an older current-user response', async () => {
   r.pending[1]({ id: 1, role: 0, username: '新资料' }); await save;
   r.pending[0]({ id: 1, role: 0, username: '旧资料' }); await old;
   assert.equal(r.storage.get('user').username, '新资料');
+});
+
+test('avatar save invalidates a stale profile response and failed save retains the old avatar', async () => {
+  const r = runtime(), old = r.result.syncCurrentUserFromServer(), save = invoke(r, 'updateUserAvatarRemote');
+  r.pending[1]({ id: 1, role: 0, avatar: '/uploads/new.jpg' }); await save;
+  r.pending[0]({ id: 1, role: 0, avatar: '/uploads/old.jpg' }); await old;
+  assert.equal(r.storage.get('user').avatar, '/uploads/new.jpg');
+  const failed = invoke(r, 'updateUserAvatarRemote'); r.pending[2](undefined); await failed;
+  assert.equal(r.storage.get('user').avatar, '/uploads/new.jpg');
 });

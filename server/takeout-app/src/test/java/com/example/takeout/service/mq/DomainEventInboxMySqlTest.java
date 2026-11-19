@@ -165,8 +165,8 @@ class DomainEventInboxMySqlTest {
     void realBrokerRetainsBacklogAndRedeliversFailureWithoutRepeatingCommittedEffect() throws Exception {
         var configuration = new RocketMqConfiguration();
         String namesrv = System.getenv().getOrDefault("TAKEOUT_ROCKETMQ_NAMESRV_ADDR", "localhost:9876");
-        String topic = System.getenv().getOrDefault("TAKEOUT_ROCKETMQ_TOPIC", "takeout-test-domain-events");
-        String group = System.getenv().getOrDefault("TAKEOUT_ROCKETMQ_CONSUMER_GROUP", "takeout-test-notifications");
+        String topic = "takeout-durable-" + UUID.randomUUID();
+        String group = "takeout-durable-group-" + UUID.randomUUID();
         ReflectionTestUtils.setField(configuration, "namesrvAddr", namesrv);
         ReflectionTestUtils.setField(configuration, "topic", topic);
         ReflectionTestUtils.setField(configuration, "consumerGroup", group);
@@ -176,11 +176,19 @@ class DomainEventInboxMySqlTest {
         producer.setInstanceName(UUID.randomUUID().toString());
         producer.setSendMsgTimeout(3000);
         var brokerConsumer = configuration.newConsumer();
+        var bootstrap = configuration.newAdmin();
+        bootstrap.setInstanceName(UUID.randomUUID().toString());
         brokerConsumer.setInstanceName(UUID.randomUUID().toString());
         var delivered = new CountDownLatch(2);
         var retried = new CountDownLatch(1);
         var attempts = new java.util.concurrent.atomic.AtomicInteger();
         try {
+            bootstrap.start();
+            String broker = System.getenv().getOrDefault("TAKEOUT_ROCKETMQ_BROKER_ADDR", "127.0.0.1:10911");
+            bootstrap.createAndUpdateTopicConfig(broker, new org.apache.rocketmq.common.TopicConfig(topic, 1, 1));
+            var subscription = new org.apache.rocketmq.remoting.protocol.subscription.SubscriptionGroupConfig();
+            subscription.setGroupName(group);
+            bootstrap.createAndUpdateSubscriptionGroupConfig(broker, subscription);
             producer.start();
             ObjectProvider<DefaultMQProducer> producers = mock(ObjectProvider.class);
             when(producers.getIfAvailable()).thenReturn(producer);
@@ -209,7 +217,8 @@ class DomainEventInboxMySqlTest {
                 publisher.publish(DomainEventPublisher.ORDER_PAID, 21, Map.of("amount", 100));
             });
             var event = outbox.listPending(1).getFirst();
-            new OutboxRelayJob(outbox, publisher, mock(com.example.takeout.common.SchedulerLock.class)).relay();
+            var relay = new OutboxRelayJob(outbox, publisher, mock(com.example.takeout.common.SchedulerLock.class));
+            try { relay.relay(); } finally { relay.close(); }
             assertEquals(0, outbox.countPending());
             assertEquals(1, outbox.findById(event.id()).orElseThrow().status());
             assertTrue(publisher.deliver(event.id(), event.eventType(), event.orderId(), event.payload()));
@@ -223,6 +232,7 @@ class DomainEventInboxMySqlTest {
         } finally {
             brokerConsumer.shutdown();
             producer.shutdown();
+            bootstrap.shutdown();
         }
     }
 
@@ -318,6 +328,39 @@ class DomainEventInboxMySqlTest {
             bootstrap.shutdown();
             registry.close();
         }
+    }
+
+    @Test @SuppressWarnings("unchecked")
+    @EnabledIfEnvironmentVariable(named = "TAKEOUT_ROCKETMQ_TEST", matches = "1")
+    void realConsumerStartsFourBoundedWorkersBeforeTheFirstHandlerCompletes() throws Exception {
+        var first=new CountDownLatch(1);var entered=new CountDownLatch(4);var release=new CountDownLatch(1);
+        var active=new java.util.concurrent.atomic.AtomicInteger();var peak=new java.util.concurrent.atomic.AtomicInteger();
+        try(var broker=new MqFixture()) {
+            var pushes=mock(PushNotificationService.class);
+            doAnswer(call -> {
+                int count=active.incrementAndGet();peak.accumulateAndGet(count,Math::max);
+                first.countDown();entered.countDown();
+                try { assertTrue(release.await(15,TimeUnit.SECONDS)); }
+                finally { active.decrementAndGet(); }
+                return null;
+            }).when(pushes).notifyOrderEvent(anyString(),anyLong());
+            ObjectProvider<PushNotificationService> provider=mock(ObjectProvider.class);
+            when(provider.getIfAvailable()).thenReturn(pushes);
+            var handler=new DomainEventConsumer(broker.configuration("parallel"),inbox,new ObjectMapper(),provider);
+            broker.consumer=broker.configuration("parallel-consumer").newConsumer();
+            broker.consumer.registerMessageListener(handler);
+            for(int i=1;i<=4;i++) broker.producer.send(broker.envelope(broker.topic,i));
+            broker.consumer.start();
+            try {
+                assertTrue(first.await(45,TimeUnit.SECONDS));
+                assertTrue(entered.await(5,TimeUnit.SECONDS),"Four broker handlers must overlap before any handler completes");
+                assertEquals(4,peak.get());assertEquals(4,broker.consumer.getConsumeThreadMax());
+            } finally { release.countDown(); }
+            long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(10);
+            while(completed()<4 && System.nanoTime()<deadline) Thread.sleep(50);
+            assertEquals(4,completed());assertEquals(0,inbox.failures(broker.group).count());
+            System.out.println("[MQ worker capacity] real broker overlapping handlers=4 durable receipts=4 failures=0");
+        } finally { release.countDown(); }
     }
 
     @Test @SuppressWarnings("unchecked")
@@ -509,12 +552,15 @@ class DomainEventInboxMySqlTest {
             var attempts = new CountDownLatch(2);
             var firstAttempt = new CountDownLatch(1);
             var identity = new java.util.concurrent.atomic.AtomicReference<String>();
+            long started = System.nanoTime();
             broker.consumer = broker.configuration("poison-consumer").newConsumer();
             broker.consumer.registerMessageListener((MessageListenerConcurrently) (messages, context) -> {
                 identity.compareAndSet(null, messages.getFirst().getProperty(
                         org.apache.rocketmq.common.message.MessageConst.PROPERTY_UNIQ_CLIENT_MESSAGE_ID_KEYIDX));
                 var result = handler.consumeMessage(messages, context);
                 context.setDelayLevelWhenNextConsume(1); // Test-only acceleration; production retains Broker retry defaults.
+                System.out.println("[MQ poison] attempt=" + messages.getFirst().getReconsumeTimes()
+                        + " elapsedMs=" + TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
                 attempts.countDown();
                 firstAttempt.countDown();
                 return result;
@@ -523,7 +569,8 @@ class DomainEventInboxMySqlTest {
                     "invalid JSON".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
             broker.consumer.start();
             assertTrue(firstAttempt.await(45, TimeUnit.SECONDS), "the message must first be assigned to this new client");
-            assertTrue(attempts.await(15, TimeUnit.SECONDS));
+            // This checks durable identity, not delivery latency. Empty retry queues can add a 15s long poll.
+            assertTrue(attempts.await(45, TimeUnit.SECONDS), "the broker must redeliver the malformed message");
             assertNotNull(identity.get());
             assertEquals(1, inbox.failures(broker.group).count());
             assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM mq_consumer_failures WHERE consumer_group=? "

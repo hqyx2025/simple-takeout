@@ -6,7 +6,6 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.transaction.TransactionStatus;
-import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
@@ -41,16 +40,15 @@ import static org.mockito.Mockito.when;
 class OutboxEventDaoClaimSqlTest {
 
     private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
-    private final TransactionTemplate tx = mock(TransactionTemplate.class);
+    private final org.springframework.transaction.PlatformTransactionManager manager =
+            mock(org.springframework.transaction.PlatformTransactionManager.class);
+    private final TransactionTemplate tx = new TransactionTemplate(manager);
     private final OutboxEventDao dao = new OutboxEventDao(jdbc, tx);
 
     @BeforeEach
     void runCallbackInline() {
-        // TransactionTemplate 在测试里同步执行回调，等价于「事务内」的一次调用
-        when(tx.execute(any(TransactionCallback.class))).thenAnswer(inv -> {
-            TransactionCallback<?> callback = inv.getArgument(0);
-            return callback.doInTransaction(mock(TransactionStatus.class));
-        });
+        // Only SQL shape is checked here; real locking is covered by OutboxClaimConcurrencyMySqlTest.
+        when(manager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
     }
 
     @SuppressWarnings("unchecked")

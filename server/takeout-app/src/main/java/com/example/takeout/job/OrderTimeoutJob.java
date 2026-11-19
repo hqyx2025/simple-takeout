@@ -39,7 +39,7 @@ public class OrderTimeoutJob {
         this.schedulerLock = schedulerLock;
     }
 
-    @Scheduled(fixedDelayString = "${takeout.order.timeout-scan-ms:60000}",
+    @Scheduled(scheduler = "orderScheduler", fixedDelayString = "${takeout.order.timeout-scan-ms:60000}",
             initialDelayString = "${takeout.order.timeout-scan-initial-ms:30000}")
     public void cancelExpiredPendingOrders() {
         try {

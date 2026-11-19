@@ -22,12 +22,14 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 购物车业务：每个用户只能操作自己的购物车，商品详情由现有 JdbcTemplate DAO 查询。
  * 多规格：购物车行按 (用户, 菜品, 规格) 唯一；多规格菜品必须带 specId 才能加入。
  * 加购/改数量使用 READ_COMMITTED：空购物车行不加 gap lock，避免不同商品首次插入互相死锁。
- * 同商品的数量更新仍由商品行锁串行化，已有购物车行使用 FOR UPDATE 保护。
+ * 账号生命周期行锁串行化同一账号的更新；购物车不预占库存，不锁商品。
  */
 @Service
 public class CartService {
@@ -52,9 +54,14 @@ public class CartService {
         List<CartItemEntity> entities = cartItemMapper.selectList(new LambdaQueryWrapper<CartItemEntity>()
                 .eq(CartItemEntity::getUserId, userId)
                 .orderByDesc(CartItemEntity::getId));
+        if (entities.isEmpty()) return List.of();
+        List<Goods> loaded = goodsDao.findForCartByIds(entities.stream().map(CartItemEntity::getGoodsId).toList());
+        Map<Long, Goods> goodsById = loaded.stream().collect(Collectors.toMap(Goods::id, goods -> goods));
+        Map<Long, String> storeNames = storeDao.findForDispatchByIds(loaded.stream().map(Goods::storeId).toList())
+                .stream().collect(Collectors.toMap(Store::id, Store::name));
         List<CartItemView> result = new ArrayList<>();
         for (CartItemEntity entity : entities) {
-            Goods goods = goodsDao.findById(entity.getGoodsId()).orElse(null);
+            Goods goods = goodsById.get(entity.getGoodsId());
             if (goods == null) {
                 continue;
             }
@@ -67,7 +74,7 @@ public class CartService {
                     continue;
                 }
             }
-            result.add(toView(entity, goods, spec));
+            result.add(toView(entity, goods, spec, storeNames.getOrDefault(goods.storeId(), "店铺")));
         }
         return result;
     }
@@ -79,11 +86,9 @@ public class CartService {
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public List<CartItemView> add(long userId, long goodsId, long specId, int quantity) {
+        users.lockActiveCustomerLifecycle(userId);
         requirePositiveQuantity(quantity);
-        // 购物车的数量更新与下单扣库存共用商品行作为第一把锁。
-        // 先锁商品、再锁购物车行，避免两个进程同时首次加购时都读到空行，
-        // 也避免购物车更新与下单/补库存形成反向等待。
-        goodsDao.lockStockRows(List.of(goodsId));
+        // The account lock also serializes first inserts across instances; carts do not reserve stock.
         Goods goods = requireAvailableGoods(goodsId);
         GoodsSpec spec = requireSpec(goods, specId);
         CartItemEntity existing = findEntityForUpdate(userId, goodsId, specId);
@@ -107,12 +112,11 @@ public class CartService {
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public List<CartItemView> setQuantity(long userId, long goodsId, long specId, int quantity) {
+        users.lockActiveCustomerLifecycle(userId);
         if (quantity <= 0) {
             requireOperation(userId, CrudOperation.DELETE);
             return deleteOne(userId, goodsId, specId);
         }
-        // 与 add 保持完全相同的锁顺序，避免并发下单/改数量互相死锁。
-        goodsDao.lockStockRows(List.of(goodsId));
         Goods goods = requireAvailableGoods(goodsId);
         GoodsSpec spec = requireSpec(goods, specId);
         validateStock(goods, spec, quantity);
@@ -185,7 +189,7 @@ public class CartService {
     }
 
     private Goods requireAvailableGoods(long goodsId) {
-        Goods goods = goodsDao.findById(goodsId)
+        Goods goods = goodsDao.findForCart(goodsId)
                 .orElseThrow(() -> new BizException("商品不存在"));
         if (goods.status() != 1) {
             throw new BizException("商品已下架，无法加入购物车");
@@ -223,8 +227,7 @@ public class CartService {
         }
     }
 
-    private CartItemView toView(CartItemEntity entity, Goods goods, GoodsSpec spec) {
-        String storeName = storeDao.findById(goods.storeId()).map(Store::name).orElse("店铺");
+    private CartItemView toView(CartItemEntity entity, Goods goods, GoodsSpec spec, String storeName) {
         long specId = spec == null ? 0 : spec.id();
         String specName = spec == null ? "" : spec.name();
         double price = spec == null ? goods.price() : spec.price();

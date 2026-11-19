@@ -84,6 +84,8 @@ export interface StoreItem {
   name: string
   image: string
   rating: number
+  ratingCount?: number
+  distanceKm?: number
   monthlySales: number
   deliveryFee: number
   minOrder: number
@@ -102,7 +104,7 @@ export interface StoreItem {
   platformStatus?: number // 0 平台停用 / 1 正常
   reviewReason?: string
   recommended?: number // 平台是否推荐到发现页：0否 1是
-  deliveryRadius?: number // 配送半径（米，0=不限）
+  deliveryRadius?: number // 服务端返回的生效配送半径（米）
   deliverable?: boolean // 当前定位下是否在配送范围内（服务端判定）
 }
 
@@ -320,7 +322,7 @@ export interface Rider {
   totalOrders: number  // 累计完成配送单量
   totalIncome: number  // 累计配送收入
   status: number
-  deliveryRadius?: number   // 配送半径（米）：默认 25 公里
+  deliveryRadius?: number   // 骑手到门店的取餐半径（米）
   latitude?: number         // 接单位置（抢单圆心）
   longitude?: number
   locationAddress?: string

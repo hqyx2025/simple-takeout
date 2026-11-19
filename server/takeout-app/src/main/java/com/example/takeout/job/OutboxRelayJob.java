@@ -69,50 +69,54 @@ public class OutboxRelayJob {
         this.schedulerLock = schedulerLock;
     }
 
-    @Scheduled(fixedDelayString = "${takeout.mq.relay-scan-ms:2000}",
+    // Four bounded workers; each claims only the next small batch it can actually process.
+    private final java.util.concurrent.ExecutorService workers = java.util.concurrent.Executors.newFixedThreadPool(4,
+            Thread.ofPlatform().name("outbox-delivery-", 0).factory());
+    @Value("${takeout.mq.relay-budget-ms:1000}")
+    private long budgetMs = 1000;
+
+    @jakarta.annotation.PreDestroy
+    public void close() {
+        workers.shutdown();
+        try { if (!workers.awaitTermination(15, java.util.concurrent.TimeUnit.SECONDS)) workers.shutdownNow(); }
+        catch (InterruptedException e) { workers.shutdownNow(); Thread.currentThread().interrupt(); }
+    }
+
+    @Scheduled(scheduler = "outboxScheduler", fixedDelayString = "${takeout.mq.relay-scan-ms:100}",
             initialDelayString = "${takeout.mq.relay-initial-ms:10000}")
     public void relay() {
-        if (!publisher.isEnabled()) {
-            return;
+        if (!publisher.isEnabled()) return;
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(Math.clamp(budgetMs, 100, 5000));
+        var remaining = new java.util.concurrent.atomic.AtomicInteger(Math.clamp(batchSize, 1, 2000));
+        var futures = new java.util.ArrayList<java.util.concurrent.Future<?>>();
+        for (int i = 0; i < 4; i++) futures.add(workers.submit(() -> drain(deadline, remaining)));
+        for (var future : futures) {
+            try { future.get(); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); return; }
+            catch (java.util.concurrent.ExecutionException e) { log.warn("[Outbox] 中继工作失败", e.getCause()); }
         }
-        try {
+    }
+
+    private void drain(long deadline, java.util.concurrent.atomic.AtomicInteger remaining) {
+        String owner = java.util.UUID.randomUUID().toString();
+        while (!Thread.currentThread().isInterrupted() && System.nanoTime() < deadline) {
+            int reserved = remaining.getAndUpdate(value -> Math.max(0, value - 5));
+            if (reserved <= 0) return;
             long now = System.currentTimeMillis();
-            String owner = InstanceId.current();
-            // 行级认领：事务内 SELECT ... FOR UPDATE SKIP LOCKED 并盖认领戳。
-            // 多实例下同一事件只会出现在一个实例的返回结果里，从根上消除重复搬运。
-            // Bound each scan; reserve HTTP/RocketMQ/SQL time for the whole batch, not just one event.
-            List<OutboxEventDao.OutboxEvent> pending = outboxDao.claimPending(Math.max(1,Math.min(batchSize,10)), owner, now,
-                    now + Math.max(claimLeaseMs,105000));
-            if (pending.isEmpty()) {
-                return;
-            }
-            int sent = 0;
-            int retried = 0;
-            for (OutboxEventDao.OutboxEvent event : pending) {
-                // 事件已持久化在数据库中，重试几乎零成本；
-                // 因此这里【永不放弃】投递，只统计重试次数用于告警。
-                // 若因重试上限而跳过，RocketMQ 的短暂故障就会变成事件的永久丢失（实测踩过）。
-                if (publisher.deliver(event.id(), event.eventType(), event.orderId(), event.payload())) {
-                    outboxDao.markSent(event.id(),owner);
-                    sent++;
-                } else {
-                    // markRetry 同时释放租约，让其他健康实例立刻能接手重试
-                    outboxDao.markRetry(event.id(),owner,event.retryCount());
-                    retried++;
+            List<OutboxEventDao.OutboxEvent> pending = outboxDao.claimPending(Math.min(reserved, 5), owner, now,
+                    now + Math.max(claimLeaseMs, 105000));
+            if (pending.isEmpty()) return;
+            for (var event : pending) {
+                try {
+                    if (publisher.deliver(event.id(), event.eventType(), event.orderId(), event.payload())) {
+                        outboxDao.markSent(event.id(), owner);
+                    } else outboxDao.markRetry(event.id(), owner, event.retryCount());
+                } catch (RuntimeException failure) {
+                    log.warn("[Outbox] 投递失败 eventId={}，保留租约恢复", event.id(), failure);
+                    try { outboxDao.markRetry(event.id(), owner, event.retryCount()); }
+                    catch (RuntimeException ignored) { /* The durable lease permits recovery after expiry. */ }
                 }
             }
-            if (sent > 0) {
-                log.info("[Outbox] 投递完成 sent={} retried={} claimed={} owner={}",
-                        sent, retried, pending.size(), owner);
-            }
-            // 重试次数偏高说明 RocketMQ 长期不可用，需要运维介入
-            if (retried > 0 && outboxDao.countExhausted(maxRetry) > 0) {
-                log.warn("[Outbox] 存在重试超过 {} 次仍未投递成功的事件 count={}，请检查 ERP/RocketMQ 下游及管理端补偿入口",
-                        maxRetry, outboxDao.countExhausted(maxRetry));
-            }
-        } catch (Exception e) {
-            // 定时任务异常不得中断调度
-            log.warn("[Outbox] 中继扫描失败", e);
         }
     }
 

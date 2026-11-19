@@ -17,7 +17,7 @@ import java.util.Optional;
  *
  * <p><b>多实例行级认领</b>：原实现在多实例下会让两个中继同时捞到同一批事件（重复搬运）。
  * 现改为 {@code SELECT ... FOR UPDATE SKIP LOCKED} 在事务内一次性「选出并盖认领戳」：
- * 被实例 A 锁住的行会被实例 B 直接跳过（而不是排队等待），因此吞吐随实例数线性增长。</p>
+ * 被实例 A 锁住的行会被实例 B 直接跳过，使多个实例能够并行领取。</p>
  */
 @Repository
 public class OutboxEventDao {
@@ -49,7 +49,10 @@ public class OutboxEventDao {
 
     public OutboxEventDao(JdbcTemplate jdbc, TransactionTemplate tx) {
         this.jdbc = jdbc;
-        this.tx = tx;
+        this.tx = new TransactionTemplate(java.util.Objects.requireNonNull(tx.getTransactionManager()), tx);
+        // Queue scans must not take next-key locks that block new business-event inserts.
+        // Keep this local: order/funds transactions retain their configured isolation.
+        this.tx.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
 
     public long insert(String eventType, long orderId, String payload, String now) {

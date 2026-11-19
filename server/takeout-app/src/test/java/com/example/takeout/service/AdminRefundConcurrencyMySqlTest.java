@@ -57,6 +57,7 @@ class AdminRefundConcurrencyMySqlTest {
         jdbc.update("INSERT INTO orders(id,order_no,user_id,store_id,store_name,status,items,address,delivery_fee," +
                 "pay_amount,escrow_status,reviewed,create_time,complete_time) VALUES(7,'NO7',2,3,'store',4,'[]','{}',3,13,1,1,NOW(),NOW())");
         payments = mock(ExternalPaymentService.class);
+        when(payments.prepareAfterSalesRefund(any(), any(), anyLong())).thenReturn(true);
         when(payments.refundOriginalPayment(any(), any(), anyLong(), anyBoolean())).thenReturn("BALANCE");
     }
 
@@ -67,6 +68,8 @@ class AdminRefundConcurrencyMySqlTest {
         var target = new AfterSalesService(orders, new StoreDao(jdbc), new RefundDao(jdbc), new AfterSalesDao(jdbc),
                 payments, new PaymentRecordDao(jdbc), mock(DomainEventPublisher.class), new ObjectMapper());
         var proxy = new ProxyFactory(target);
+        target.configureTransactions(new org.springframework.transaction.support.TransactionTemplate(new DataSourceTransactionManager(source)));
+        target.configureAccountLifecycle(new UserDao(jdbc));
         proxy.addAdvice(new TransactionInterceptor(new DataSourceTransactionManager(source), new AnnotationTransactionAttributeSource()));
         return (AfterSalesService) proxy.getProxy();
     }

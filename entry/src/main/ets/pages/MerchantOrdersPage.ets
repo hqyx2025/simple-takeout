@@ -74,6 +74,7 @@ export struct MerchantOrdersPage {
   @State totalOrders: number = 0
   @State hasMoreOrders: boolean = false
   @State loading: boolean = false
+  private lastOrdersLoadedAt: number = 0
   private rejectDialog: CustomDialogController | undefined = undefined
   // 列表重建触发器：syncMerchantOrdersFromServer 是**原地修改**同一批 Order 对象，
   // 只重新赋值数组时 ArkUI 按 id 复用旧列表项、不会重绘，于是「点了接单界面仍显示待接单」
@@ -107,7 +108,9 @@ export struct MerchantOrdersPage {
 
   onPageShow(): void {
     this.pageActive = true
-    this.loadOrders()
+    if (!this.loading && (this.ordersError || this.lastOrdersLoadedAt === 0 || Date.now() - this.lastOrdersLoadedAt >= 15000)) {
+      this.loadOrders()
+    }
   }
 
   onPageHide(): void {
@@ -121,6 +124,7 @@ export struct MerchantOrdersPage {
   aboutToDisappear(): void { this.onPageHide() }
 
   onOrdersOwnerChange(): void {
+    this.lastOrdersLoadedAt = 0
     this.ordersRequestVersion += 1
     this.loading = false
     this.allOrders = []
@@ -152,6 +156,7 @@ export struct MerchantOrdersPage {
       this.currentPage = result.page
       this.totalOrders = result.total
       this.hasMoreOrders = result.hasMore
+      this.lastOrdersLoadedAt = Date.now()
 
     } catch (_) {
       if (this.canApplyOrders(epoch, owner, version)) { this.ordersError = true }
@@ -174,6 +179,7 @@ export struct MerchantOrdersPage {
   }
 
   private selectStatus(status: number): void {
+    this.lastOrdersLoadedAt = 0
     this.currentStatus = status
     this.loadOrders()
   }
@@ -352,7 +358,7 @@ export struct MerchantOrdersPage {
                 .fontSize(FONT_SIZE.XS).fontColor(COLORS.TEXT_HINT).layoutWeight(1)
               if (this.hasMoreOrders) {
                 Button(this.loading ? '加载中' : '加载更多')
-                  .attributeModifier(new AppButtonStyle()).height(40).fontSize(FONT_SIZE.XS)
+                  .attributeModifier(new AppButtonStyle()).height(44).fontSize(FONT_SIZE.XS)
                   .enabled(!this.loading).id('merchant-order-load-more')
                   .onClick(() => { this.loadMoreOrders() })
               }
@@ -560,7 +566,7 @@ export struct MerchantOrdersPage {
       } else if (this.canMerchantAction(order, 'MERCHANT_COMPLETE')) {
         // 服务端能力优先，旧服务端兼容无骑手自配送。
         Button('确认送达')
-          .attributeModifier(new AppButtonStyle()).height(40)
+          .attributeModifier(new AppButtonStyle()).height(44)
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.ON_PRIMARY)
           .backgroundColor(MODULE_COLOR.MERCHANT)
           .borderRadius(BORDER_RADIUS.ROUND)

@@ -5,7 +5,7 @@ try { ({chromium}=require('playwright')); } catch(error) { if(error.code!=='MODU
 const testUI=(name,body)=>test(name,{skip:!chromium && 'Playwright is required for browser interaction checks'},body);
 const fs=require('node:fs');
 const path=require('node:path');
-const root=path.join(__dirname,'../server/takeout-gateway/src/main/resources/static');
+const root=path.join(__dirname,'../web');
 let browser;
 before(async()=>{if(chromium)browser=await chromium.launch({headless:true,executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH});});
 after(async()=>{await browser?.close();});
@@ -59,6 +59,14 @@ testUI('searchable select preserves original value/index and highlights literal 
  await page.getByRole('textbox').fill('分类 10');
  assert.equal(await page.locator('.form-options button').count(),1);assert.equal(await page.locator('mark').textContent(),'分类 10');
  await page.locator('.form-options button').click();assert.equal(await page.locator('select').inputValue(),'10');await page.close();
+});
+
+testUI('a native category filter keeps one control when the server returns many categories',async()=>{
+ const options=Array.from({length:12},(_,i)=>`<option value="${i}">分类 ${i}</option>`).join('');
+ const page=await fixture(`<label class="field">店铺分类<select name="category" data-native-select>${options}</select></label>`);
+ assert.equal(await page.getByRole('textbox').count(),0);
+ await page.getByRole('combobox').selectOption('10');
+ assert.equal(await page.locator('select').inputValue(),'10');await page.close();
 });
 testUI('Enter creates deduplicated removable tags without submitting the form',async()=>{
  const page=await fixture('<label class="field">标签<input name="tag" value="新品"></label>');

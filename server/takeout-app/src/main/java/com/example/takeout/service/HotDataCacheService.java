@@ -54,6 +54,12 @@ public class HotDataCacheService implements org.springframework.beans.factory.In
     private final java.util.concurrent.atomic.AtomicLongArray oversizeWarningAt =
             new java.util.concurrent.atomic.AtomicLongArray(CACHE_SLOTS);
     private record CacheEntry(String key, String value) {}
+    private record StaleEntry(String key, String value, long expiresAt) {}
+    private final java.util.concurrent.atomic.AtomicReferenceArray<StaleEntry> stale =
+            new java.util.concurrent.atomic.AtomicReferenceArray<>(CACHE_SLOTS);
+    private final java.util.concurrent.Semaphore loaders = new java.util.concurrent.Semaphore(4);
+    private final com.example.takeout.security.AvailabilityCircuit redisHealth =
+            new com.example.takeout.security.AvailabilityCircuit("browse-cache",1,Duration.ofSeconds(5),System::nanoTime);
     private static final java.util.Map<String,Integer> SHARED_SLOTS = java.util.Map.of(
             Keys.CATEGORIES, 0, Keys.BANNERS, 1, Keys.ANNOUNCEMENTS, 2, Keys.ALL_STORES, 3,
             Keys.RECOMMENDED_STORES, 4, Keys.SPECIAL_GOODS, 5, Keys.RANK_GOODS, 6, Keys.SECKILLS, 7);
@@ -115,12 +121,14 @@ public class HotDataCacheService implements org.springframework.beans.factory.In
         if (redis != null) {
             String cached = safeGet(redis, redisKey, key);
             if (NULL_MARKER.equals(cached)) {
+                remember(key, cached);
                 // 空值占位命中：直接返回「不存在」，不查库（防穿透）
                 return null;
             }
             if (cached != null) {
                 T parsed = deserialize(cached, typeRef);
                 if (parsed != null) {
+                    remember(key, cached);
                     return parsed;
                 }
                 // 反序列化失败（如模型结构变更）：删除脏缓存并按未命中处理
@@ -134,6 +142,10 @@ public class HotDataCacheService implements org.springframework.beans.factory.In
         if (redis != null) {
             token = tryLock(redis, redisKey, key);
             if (token == null) {
+                StaleEntry previous = stale.get(slot(key));
+                if (previous != null && key.equals(previous.key()) && System.nanoTime() < previous.expiresAt()) {
+                    return staleOrReject(key, typeRef);
+                }
                 // 没抢到锁：等一会儿看别人是否已回填，避免重复查库
                 T waited = awaitRebuild(redis, redisKey, key, typeRef);
                 if (waited != null || isNullMarked(redis, redisKey, key)) {
@@ -158,24 +170,47 @@ public class HotDataCacheService implements org.springframework.beans.factory.In
     private <T> T loadAndFill(StringRedisTemplate redis, String redisKey, String key,
                               com.fasterxml.jackson.core.type.TypeReference<T> typeRef, Supplier<T> loader) {
         T loaded;
+        if (!loaders.tryAcquire()) return staleOrReject(key, typeRef);
         try {
             loaded = loader.get();
         } catch (RuntimeException e) {
-            // 回源失败：不写缓存，异常照常上抛，避免把失败结果缓存成空值
+            if (com.example.takeout.common.DatabaseAvailability.unavailable(e)) return staleOrReject(key, typeRef);
             throw e;
-        }
-        if (redis == null) {
-            return loaded;
+        } finally {
+            loaders.release();
         }
         if (loaded == null) {
-            safeSet(redis, redisKey, key, NULL_MARKER, nullTtlSeconds);
+            remember(key, NULL_MARKER);
+            if (redis != null) safeSet(redis, redisKey, key, NULL_MARKER, nullTtlSeconds);
             return null;
         }
         String json = serialize(loaded);
         if (json != null) {
-            safeSet(redis, redisKey, key, json, ttlWithJitter());
+            remember(key, json);
+            if (redis != null) safeSet(redis, redisKey, key, json, stockCatalog(key) ? 1 : ttlWithJitter());
         }
         return loaded;
+    }
+
+    private void remember(String key, String json) {
+        long limit = SHARED_SLOTS.containsKey(key) ? maxEntryBytes : Math.min(maxEntryBytes, MAX_DYNAMIC_ENTRY_BYTES);
+        if (json.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= limit) {
+            stale.set(slot(key), new StaleEntry(key, json, System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(15)));
+        }
+    }
+
+    private boolean stockCatalog(String key) {
+        return Keys.STOCK_DEPENDENT_PATTERNS.stream().anyMatch(pattern -> key.startsWith(pattern.substring(0,pattern.length()-1)));
+    }
+
+    private <T> T staleOrReject(String key, com.fasterxml.jackson.core.type.TypeReference<T> type) {
+        StaleEntry previous = stale.get(slot(key));
+        if (previous != null && key.equals(previous.key()) && System.nanoTime() < previous.expiresAt()) {
+            if (NULL_MARKER.equals(previous.value())) return null;
+            T value = deserialize(previous.value(), type);
+            if (value != null) return value;
+        }
+        throw new com.example.takeout.common.BizException(503, "浏览服务繁忙，请稍后刷新");
     }
 
     /**
@@ -215,6 +250,7 @@ public class HotDataCacheService implements org.springframework.beans.factory.In
 
     /** 只删除缓存，不写空值：用于「写操作后失效」场景，避免失效瞬间的读请求被占位挡住。 */
     public void evict(String... keys) {
+        if (keys != null) for (String key : keys) if (key != null) stale.set(slot(key), null);
         StringRedisTemplate redis = redis();
         if (redis == null || keys == null) {
             return;
@@ -228,35 +264,30 @@ public class HotDataCacheService implements org.springframework.beans.factory.In
 
     /**
      * 按模式请求失效；固定槽位可能承载任意业务键，因此保守清除整个热点数据区。
-     * 使用 SCAN 而非 KEYS，避免在大 key 空间下阻塞 Redis。
+     * 固定的值槽可以一次删除；不会扫描其他业务键或删除重建锁。
      */
     public void evictByPattern(String pattern) {
+        for (int i = 0; i < stale.length(); i++) stale.set(i, null);
         StringRedisTemplate redis = redis();
         if (redis == null || pattern == null) {
             return;
         }
-        String match = keyPrefix + "hot:v3:*";
-        try {
-            var options = org.springframework.data.redis.core.ScanOptions.scanOptions().match(match).count(200).build();
-            try (var cursor = redis.scan(options)) {
-                while (cursor.hasNext()) {
-                    String key = cursor.next();
-                    if (!key.endsWith(LOCK_SUFFIX)) safeDelete(redis, key);
-                }
-            }
-        } catch (Exception e) {
-            log.warn("[缓存失效] 按模式清理失败 pattern={}", match, e);
-        }
+        List<String> keys = java.util.stream.IntStream.range(0,CACHE_SLOTS)
+                .mapToObj(slot -> keyPrefix + "hot:v4:" + slot).toList();
+        redisCall(() -> redis.delete(keys), 0L);
     }
 
     // ============ 内部工具：所有 Redis 操作都不允许抛出业务可见异常 ============
 
     /** 固定物理键空间：512 个值槽 + 512 个回源锁，碰撞按完整业务键判为未命中。 */
     String storageKey(String businessKey) {
+        return keyPrefix + "hot:v4:" + slot(businessKey);
+    }
+
+    private int slot(String businessKey) {
         Integer shared = SHARED_SLOTS.get(businessKey);
-        int slot = shared != null ? shared : SHARED_SLOTS.size()
+        return shared != null ? shared : SHARED_SLOTS.size()
                 + Math.floorMod(businessKey.hashCode(), CACHE_SLOTS - SHARED_SLOTS.size());
-        return keyPrefix + "hot:v3:" + slot;
     }
 
     /** 取 Redis 客户端；未配置或总开关关闭时返回 null，调用方回源数据库。 */
@@ -269,10 +300,11 @@ public class HotDataCacheService implements org.springframework.beans.factory.In
 
     private String safeGet(StringRedisTemplate redis, String key, String businessKey) {
         try {
-            String raw = redis.opsForValue().get(key);
+            String raw = redisCall(() -> redis.opsForValue().get(key), null);
             if (raw == null) return null;
             CacheEntry entry = objectMapper.readValue(raw, CacheEntry.class);
-            return businessKey.equals(entry.key()) ? entry.value() : null;
+            if (!businessKey.equals(entry.key())) return null;
+            return entry.value();
         } catch (Exception e) {
             log.warn("[缓存读取] 失败 key={}，本次回源数据库", key, e);
             return null;
@@ -288,7 +320,7 @@ public class HotDataCacheService implements org.springframework.beans.factory.In
                 warnOversize(businessKey, key, bytes, limit);
                 return;
             }
-            redis.opsForValue().set(key, encoded, Duration.ofSeconds(Math.max(ttl, 1)));
+            redisCall(() -> { redis.opsForValue().set(key, encoded, Duration.ofSeconds(Math.max(ttl, 1))); return true; }, false);
         } catch (Exception e) {
             log.warn("[缓存写入] 失败 key={}", key, e);
         }
@@ -307,7 +339,7 @@ public class HotDataCacheService implements org.springframework.beans.factory.In
 
     private void safeDelete(StringRedisTemplate redis, String key) {
         try {
-            redis.delete(key);
+            redisCall(() -> redis.delete(key), false);
         } catch (Exception e) {
             log.warn("[缓存删除] 失败 key={}", key, e);
         }
@@ -317,8 +349,8 @@ public class HotDataCacheService implements org.springframework.beans.factory.In
     private String tryLock(StringRedisTemplate redis, String redisKey, String businessKey) {
         try {
             String token = objectMapper.writeValueAsString(new CacheEntry(businessKey, java.util.UUID.randomUUID().toString()));
-            Boolean ok = redis.opsForValue().setIfAbsent(redisKey + LOCK_SUFFIX, token,
-                    Duration.ofMillis(Math.max(rebuildLockMs, 1)));
+            Boolean ok = redisCall(() -> redis.opsForValue().setIfAbsent(redisKey + LOCK_SUFFIX, token,
+                    Duration.ofMillis(Math.max(rebuildLockMs, 1))), false);
             return Boolean.TRUE.equals(ok) ? token : null;
         } catch (Exception e) {
             log.warn("[缓存击穿保护] 加锁失败 key={}，本次直接回源", redisKey, e);
@@ -328,7 +360,7 @@ public class HotDataCacheService implements org.springframework.beans.factory.In
 
     private String lockOwner(StringRedisTemplate redis, String redisKey) {
         try {
-            String raw = redis.opsForValue().get(redisKey + LOCK_SUFFIX);
+            String raw = redisCall(() -> redis.opsForValue().get(redisKey + LOCK_SUFFIX), null);
             return raw == null ? null : objectMapper.readValue(raw, CacheEntry.class).key();
         } catch (Exception e) {
             // 不认识的锁或故障不能让无关请求等待；仍保留原锁，不擅自释放。
@@ -342,13 +374,26 @@ public class HotDataCacheService implements org.springframework.beans.factory.In
         try {
             // GET 后再 DEL 在 TTL 到期并被新请求抢锁的窗口里可能误删新锁，
             // 用 Redis Lua 保证「校验 token + 删除」是一个原子操作。
-            redis.execute(UNLOCK_SCRIPT, List.of(lockKey), token);
+            redisCall(() -> redis.execute(UNLOCK_SCRIPT, List.of(lockKey), token), 0L);
         } catch (Exception e) {
             log.warn("[缓存击穿保护] 释放锁失败 key={}（将由 TTL 自动过期）", lockKey, e);
         }
     }
 
     /** 计算带随机抖动的 TTL，打散过期时刻，防缓存雪崩。 */
+    private <T> T redisCall(Supplier<T> operation, T fallback) {
+        var ticket = redisHealth.acquire();
+        if (ticket == null) return fallback;
+        try {
+            T result = operation.get();
+            redisHealth.success(ticket);
+            return result;
+        } catch (RuntimeException failure) {
+            redisHealth.failure(ticket);
+            return fallback;
+        }
+    }
+
     private long ttlWithJitter() {
         long base = Math.max(ttlSeconds, 1);
         long jitter = Math.max(jitterSeconds, 0);
@@ -426,9 +471,8 @@ public class HotDataCacheService implements org.springframework.beans.factory.In
                 "stores:*", "store:*", "goods:*", "rank:*", "seckills:*", "categories");
 
         /**
-         * 库存/秒杀名额变化时需要失效的缓存模式。
-         * 菜品库存与秒杀 sold 参与店铺列表、店内菜品、特价菜、榜单与秒杀专区的展示筛选，
-         * 下单扣减与取消回滚后必须让这些视图重新计算。
+         * 库存、销量与秒杀展示最多缓存一秒。交易始终查库；
+         * 避免每笔交易清空公共目录、触发并发重建，资料编辑仍显式失效。
          */
         public static final List<String> STOCK_DEPENDENT_PATTERNS = List.of(
                 "stores:*", "store:*", "goods:*", "rank:*", "seckills:*");

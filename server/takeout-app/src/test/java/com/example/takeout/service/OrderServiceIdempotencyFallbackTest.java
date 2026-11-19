@@ -44,6 +44,8 @@ import static org.mockito.Mockito.when;
  * Redis 故障不阻断下单，数据库唯一键继续保证请求防重。
  */
 class OrderServiceIdempotencyFallbackTest {
+    @org.junit.jupiter.api.BeforeEach
+    void admissionFixture() { OrderTestFixture.admission(storeDao); OrderTestFixture.goods(goodsDao); }
 
     @Test
     void databaseReturnsCompletedReplayBeforeReservingStockEvenWithoutRedis() {
@@ -121,10 +123,12 @@ class OrderServiceIdempotencyFallbackTest {
     private OrderService serviceWithRedis(StringRedisTemplate redis) {
         ObjectProvider<StringRedisTemplate> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(redis);
-        return new OrderService(orderDao, storeDao, goodsDao, addressDao,
+        var service = new OrderService(orderDao, storeDao, goodsDao, addressDao,
                 couponDao, reviewDao, userDao, refundDao, new ObjectMapper(), mock(CartItemMapper.class),
                 mock(RiderDao.class), specDao, seckillDao, cache,
                 mock(DomainEventPublisher.class), provider, mock(PaymentRecordDao.class));
+        service.configureTransactions(OrderTestFixture.transactions());
+        return service;
     }
 
     private void stubCommon() {

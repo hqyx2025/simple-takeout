@@ -35,6 +35,8 @@ import static org.mockito.Mockito.when;
  * 「不支持的订单操作：ready」——比原来更糟。本测试钉住 admin 端与商户端在出餐语义上一致。
  */
 class AdminServiceOrderFlowTest {
+    @org.junit.jupiter.api.BeforeEach
+    void transactionFixture() { when(orderService.inTransaction(any())).thenAnswer(call -> ((java.util.function.Supplier<?>)call.getArgument(0)).get()); }
 
     private static final long ORDER_ID = 500L;
 

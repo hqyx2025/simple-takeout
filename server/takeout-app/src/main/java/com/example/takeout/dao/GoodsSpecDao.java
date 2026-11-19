@@ -41,6 +41,11 @@ public class GoodsSpecDao {
                 MAPPER, goodsId);
     }
 
+    /** Parent goods row must be locked first; current reads avoid an older REPEATABLE READ pricing snapshot. */
+    public List<GoodsSpec> listByGoodsForOrder(long goodsId) {
+        return jdbc.query("SELECT * FROM goods_specs WHERE goods_id=? AND status=1 ORDER BY id FOR SHARE", MAPPER, goodsId);
+    }
+
     public List<GoodsSpec> listByGoodsIds(List<Long> goodsIds) {
         if (goodsIds == null || goodsIds.isEmpty()) {
             return List.of();
@@ -61,9 +66,21 @@ public class GoodsSpecDao {
         return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 
-    public void update(long id, String name, double price, int stock, int sort) {
-        jdbc.update("UPDATE goods_specs SET name = ?, price = ?, stock = ?, sort = ? WHERE id = ?",
-                name, price, stock, sort, id);
+    public void update(long id, String name, double price, int sort) {
+        jdbc.update("UPDATE goods_specs SET name = ?, price = ?, sort = ? WHERE id = ?",
+                name, price, sort, id);
+    }
+
+    public boolean countStock(long goodsId, long specId, int stock, int expectedVersion) {
+        return jdbc.update("UPDATE goods_specs SET stock = ?, version = version + 1 " +
+                        "WHERE id = ? AND goods_id = ? AND version = ? AND status = 1",
+                stock, specId, goodsId, expectedVersion) == 1;
+    }
+
+    public boolean replenishStock(long goodsId, long specId, int quantity, int expectedVersion) {
+        return jdbc.update("UPDATE goods_specs SET stock = stock + ?, version = version + 1 " +
+                        "WHERE id = ? AND goods_id = ? AND version = ? AND status = 1 AND stock <= ?",
+                quantity, specId, goodsId, expectedVersion, Integer.MAX_VALUE - quantity) == 1;
     }
 
     public void deleteByGoods(long goodsId) {
@@ -75,7 +92,8 @@ public class GoodsSpecDao {
             return;
         }
         String placeholders = String.join(",", ids.stream().map(id -> "?").toList());
-        jdbc.update("DELETE FROM goods_specs WHERE id IN (" + placeholders + ")", ids.toArray());
+        // 已下单的规格仍可能退款/取消，保留原行以便恢复库存及追溯。
+        jdbc.update("UPDATE goods_specs SET status = 0, version = version + 1 WHERE id IN (" + placeholders + ")", ids.toArray());
     }
 
     /** 扣减规格库存（乐观锁条件更新，防超卖）。 */
@@ -86,11 +104,11 @@ public class GoodsSpecDao {
 
     /** 回滚规格库存（取消订单/超时取消时恢复）。 */
     public void restoreStock(long specId, int quantity) {
-        jdbc.update("UPDATE goods_specs SET stock = stock + ? WHERE id = ?", quantity, specId);
+        jdbc.update("UPDATE goods_specs SET stock = stock + ?, version = version + 1 WHERE id = ?", quantity, specId);
     }
 
     /** 缺货拒单仅下架指定商品下的对应规格，goods_id 条件防止跨商品误操作。 */
     public void disable(long goodsId, long specId) {
-        jdbc.update("UPDATE goods_specs SET status = 0 WHERE id = ? AND goods_id = ?", specId, goodsId);
+        jdbc.update("UPDATE goods_specs SET status = 0, version = version + 1 WHERE id = ? AND goods_id = ?", specId, goodsId);
     }
 }

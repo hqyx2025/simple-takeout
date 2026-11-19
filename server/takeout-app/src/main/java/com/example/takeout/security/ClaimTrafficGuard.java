@@ -21,7 +21,7 @@ import java.time.Duration;
 @Component
 @EnableConfigurationProperties(ClaimTrafficSettings.class)
 public class ClaimTrafficGuard {
-    public enum Action { COUPON, RIDER }
+    public enum Action { COUPON, RIDER, ORDER, PAYMENT }
     private static final String PREFIX = "takeout:claim:{traffic}:";
     private static final DefaultRedisScript<Long> ADMIT = new DefaultRedisScript<>(
             "local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('PEXPIRE',KEYS[1],1000) end; " +
@@ -35,9 +35,13 @@ public class ClaimTrafficGuard {
     private final ClaimTrafficSettings settings;
     private final LongSupplier clock;
     private final Semaphore capacity;
+    private final Semaphore orderCapacity;
+    private final Semaphore paymentCapacity;
     private final ConcurrentHashMap<String, String> orders = new ConcurrentHashMap<>();
     private final Window couponWindow = new Window();
     private final Window riderWindow = new Window();
+    private final Window orderWindow = new Window();
+    private final Window paymentWindow = new Window();
     private final AvailabilityCircuit database;
     private final AvailabilityCircuit redisHealth;
 
@@ -53,6 +57,8 @@ public class ClaimTrafficGuard {
         this.settings = settings;
         this.clock = clock;
         capacity = new Semaphore(settings.maxConcurrentPerInstance());
+        orderCapacity = new Semaphore(settings.orderConcurrentPerInstance());
+        paymentCapacity = new Semaphore(settings.paymentConcurrentPerInstance());
         database = new AvailabilityCircuit("database", settings.databaseFailureThreshold(), settings.databaseCooldown(), clock);
         redisHealth = new AvailabilityCircuit("redis", 1, settings.redisCooldown(), clock);
     }
@@ -60,19 +66,25 @@ public class ClaimTrafficGuard {
     /** 非阻塞准入；许可覆盖认证、业务事务提交以及请求结束，不在数据库连接池外另建等待队列。 */
     public Lease enter(Action action) {
         int limit = limit(action);
-        if (!(action == Action.COUPON ? couponWindow : riderWindow).take(clock.getAsLong(), limit)) {
+        Window window = switch (action) { case COUPON -> couponWindow; case RIDER -> riderWindow; case ORDER -> orderWindow; case PAYMENT -> paymentWindow; };
+        Semaphore permits = capacity(action);
+        if (!window.take(clock.getAsLong(), limit)) {
             throw new BizException(429, "请求较多，请稍后再试");
         }
-        if (!capacity.tryAcquire()) throw new BizException(503, "当前请求较多，请稍后重试");
+        if (!permits.tryAcquire()) throw new BizException(503, "当前请求较多，请稍后重试");
         AvailabilityCircuit.Ticket ticket = database.acquire();
         if (ticket == null) {
-            capacity.release();
+            permits.release();
             throw unavailable();
         }
         return new Lease(action, ticket);
     }
 
-    private int limit(Action action) { return action == Action.COUPON ? settings.couponPerSecond() : settings.riderPerSecond(); }
+    private Semaphore capacity(Action action) { return switch (action) { case ORDER -> orderCapacity; case PAYMENT -> paymentCapacity; default -> capacity; }; }
+    private int limit(Action action) { return switch (action) {
+        case COUPON -> settings.couponPerSecond(); case RIDER -> settings.riderPerSecond();
+        case ORDER -> settings.orderPerSecond(); case PAYMENT -> settings.paymentPerSecond();
+    }; }
     private static BizException unavailable() { return new BizException(503, "服务暂时不可用，请稍后查询操作结果或重试"); }
 
     private static final class Window {
@@ -165,7 +177,7 @@ public class ClaimTrafficGuard {
                 }
             } finally {
                 if (orderKey != null) orders.remove(orderKey, owner);
-                capacity.release();
+                capacity(action).release();
             }
         }
     }

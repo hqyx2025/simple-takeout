@@ -17,6 +17,8 @@ import { calculatePayAmount } from '../service/OrderCalculations'
 import { getAuthSessionEpoch, getServerNowEpochMs } from '../service/HttpClient'
 import { checkoutCents, checkoutCouponReason } from '../service/CheckoutCouponRules'
 import { OrderCreateFeedback } from '../service/api/OrdersApi'
+import { storeDeliveryText } from '../common/StorePresentation'
+import { fetchStoreDetailApi } from '../service/api/CatalogApi'
 
 interface UnavailableCheckoutCoupon {
   coupon: Coupon
@@ -60,6 +62,7 @@ export struct CheckoutPage {
   @State storeItems: CartItem[] = []
   @State storeInfo: StoreItem | null = null
   @State currentAddress: Address | null = null
+  @State deliveryStores: StoreItem[] = []
   @StorageLink('couponList') @Watch('onCouponListChanged') couponList: Coupon[] = []
   @State selectedCoupon: Coupon | null = null
   @State availableCoupons: Coupon[] = []
@@ -87,6 +90,7 @@ export struct CheckoutPage {
   private pageOwnerId: number = 0
   private pageSessionEpoch: number = 0
   private requestVersion: number = 0
+  private deliveryRequestVersion: number = -1
 
   async aboutToAppear(): Promise<void> {
     this.pageActive = true
@@ -124,6 +128,7 @@ export struct CheckoutPage {
     this.couponChoiceMode = storedCoupon === null ? 'AUTO' : 'COUPON'
     this.couponOptionsReady = true
     this.refreshCouponOptions()
+    this.refreshDeliveryStores(requestVersion)
     // 结算权益以服务端为准；拉取失败时 syncCouponsRemote 会保留账号隔离后的本地缓存。
     await syncCouponsRemote(false)
     if (!this.isCheckoutCurrent(requestVersion)) { return }
@@ -140,6 +145,7 @@ export struct CheckoutPage {
     if (this.submitting || this.submissionUncertain) { return }
     this.currentAddress = AppStorage.get<Address>('currentAddress') ?? null
     this.refreshCouponOptions()
+    this.refreshDeliveryStores(this.requestVersion)
   }
 
   onPageHide(): void {
@@ -187,6 +193,7 @@ export struct CheckoutPage {
     this.storeItems = []
     this.checkoutStoreIds = []
     this.storeInfo = null
+    this.deliveryStores = []
     this.createdOrderCount = 0
     this.reconciledOrderStatus = ''
     this.retryNeedsReview = false
@@ -198,6 +205,24 @@ export struct CheckoutPage {
     if (this.submitting || this.submissionUncertain || !this.isCheckoutCurrent(this.requestVersion)) { return }
     AppStorage.setOrCreate<boolean>('addressSelectionMode', true)
     router.pushUrl({ url: 'pages/AddressListPage' })
+  }
+
+  private async refreshDeliveryStores(version: number): Promise<void> {
+    if (this.deliveryRequestVersion === version) { return }
+    this.deliveryRequestVersion = version
+    const ids: number[] = this.checkoutStoreIds.slice()
+    const stores: StoreItem[] = []
+    for (const id of ids) {
+      if (!this.isCheckoutCurrent(version)) { return }
+      const store: StoreItem | null = await fetchStoreDetailApi(id)
+      if (store !== null) { stores.push(store) }
+    }
+    if (this.isCheckoutCurrent(version)) { this.deliveryStores = stores }
+  }
+
+  private deliveryPreview(storeId: number): string {
+    const store: StoreItem | undefined = this.deliveryStores.find((item: StoreItem): boolean => item.id === storeId)
+    return storeDeliveryText(store ?? null, this.currentAddress)
   }
 
   // ============ 金额计算 ============
@@ -794,6 +819,13 @@ Image($r('app.media.home_location')).width(FONT_SIZE.XL).height(FONT_SIZE.XL).ob
       }
       .width('100%')
       .padding({ bottom: SPACING.SM })
+
+      if (!this.submissionUncertain) {
+        ForEach(this.checkoutStoreIds, (storeId: number) => {
+          Text((this.checkoutStoreIds.length > 1 ? `${this.getStoreName(storeId)}：` : '') + this.deliveryPreview(storeId))
+            .width('100%').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).id(`checkout-delivery-preview-${storeId}`)
+        }, (storeId: number) => storeId.toString())
+      }
 
       ForEach(this.storeItems, (item: CartItem) => {
         Row() {
