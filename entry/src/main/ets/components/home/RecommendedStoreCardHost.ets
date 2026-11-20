@@ -6,7 +6,7 @@ import { AppCardStyle, AppTheme } from '../../common/theme/AppTheme'
 import { StoreItem } from '../../model/Models'
 import { storeRatingText } from '../../common/StorePresentation'
 
-import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, formatSales, merchantImageSource } from '../../common/Constants'
+import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, merchantImageSource } from '../../common/Constants'
 
 import { RatingStars } from '../../components/RatingStars'
 
@@ -18,17 +18,8 @@ export struct RecommendedStoreCardHost {
     id: 0, name: '', image: '', rating: 0, monthlySales: 0, deliveryFee: 0, minOrder: 0,
     deliveryTime: '', distance: '', tags: [], notice: '', categoryId: 0, ownerId: 0
   }
+  @Prop deliveryText: string = ''
   onStoreClick: (store: StoreItem) => void = () => {}
-
-  /**
-   * 距离文案：只有服务端用「用户定位 + 门店坐标」真算出来的距离才显示「距你 X」，
-   * 门店没坐标或未定位时是「未知距离」——不能沿用历史值假装很近。
-   */
-  private distanceText(): string {
-    const distance: number = this.store.distanceKm ?? -1
-    if (distance < 0) { return '暂无法判断配送范围' }
-    return `直线 ${distance.toFixed(1)} 公里 · ${this.store.deliverable === false ? '超出配送范围' : '可配送'}`
-  }
 
   build() {
     Row({ space: SPACING.MD }) {
@@ -45,7 +36,7 @@ export struct RecommendedStoreCardHost {
           Text(storeRatingText(this.store.rating, this.store.ratingCount ?? 0)).fontSize(FONT_SIZE.SM)
             .fontColor(COLORS.TEXT_SECONDARY).margin({ left: (this.store.ratingCount ?? 0) > 0 ? SPACING.XS : 0 })
         }.width('100%')
-        Text(this.distanceText())
+        Text(this.deliveryText)
           .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
       }.layoutWeight(1).alignItems(HorizontalAlign.Start)
     }

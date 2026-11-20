@@ -26,6 +26,7 @@ import { AppMotion } from '../../common/theme/AppMotion'
 import { common } from '@kit.AbilityKit'
 import { display } from '@kit.ArkUI'
 import { RecommendedStoreCardHost } from './RecommendedStoreCardHost'
+import { canDeliverTo, hasLocatedAddress, storeDeliveryText } from '../../common/StorePresentation'
 
 const HOME_REFRESH_WINDOW_MS: number = 5000
 // Leave one of the backend's four cold-cache loader slots available for other traffic.
@@ -79,6 +80,7 @@ export struct HomePage {
   @State catalogMode: number = 0
   @State catalogCount: number = 0
   @State catalogLoading: boolean = false
+  @State deliverableOnly: boolean = false
   private catalog: StoreItem[] = []
   private storeRows: SearchStoreDataSource = new SearchStoreDataSource()
   private catalogScroller: Scroller = new Scroller()
@@ -105,6 +107,7 @@ export struct HomePage {
     if (this.loggedIn) {
       this.refreshHomeData()
     } else {
+      this.deliverableOnly = false
       this.homeEpoch = -1
       this.resetHomeSections()
       this.resetLocationSections()
@@ -113,6 +116,7 @@ export struct HomePage {
   }
 
   onCurrentAddressChange(): void {
+    if (!hasLocatedAddress(this.currentAddress)) { this.deliverableOnly = false }
     this.refreshHomeData(false, true)
   }
 
@@ -146,6 +150,9 @@ export struct HomePage {
       visible = this.catalog.filter((store: StoreItem): boolean => (store.ratingCount ?? 0) > 0 && store.rating >= 4)
         .sort((a: StoreItem, b: StoreItem): number => b.rating - a.rating ||
           (b.ratingCount ?? 0) - (a.ratingCount ?? 0) || a.id - b.id)
+    }
+    if (this.deliverableOnly && hasLocatedAddress(this.currentAddress)) {
+      visible = visible.filter((store: StoreItem): boolean => canDeliverTo(store, this.currentAddress))
     }
     this.storeRows.setData(visible)
     this.catalogCount = visible.length
@@ -250,6 +257,7 @@ export struct HomePage {
       this.resetHomeSections()
     }
     if (changedSession || key !== this.locationKey) {
+      if (changedSession) { this.deliverableOnly = false }
       this.locationKey = key
       this.resetLocationSections()
       return true
@@ -748,6 +756,17 @@ export struct HomePage {
                   .height(HomeTheme.TOUCH_HEIGHT).id('home-recommend-refresh')
                   .enabled(this.loggedIn && !this.catalogLoading).onClick(() => { this.refreshStores(true) })
               }.width('100%')
+              if (this.loggedIn && hasLocatedAddress(this.currentAddress)) {
+                Row({ space: SPACING.SM }) {
+                  Checkbox({ name: 'home-deliverable-only' }).id('home-deliverable-only')
+                    .select(this.deliverableOnly).accessibilityText('只看可配送')
+                    .onChange((checked: boolean) => {
+                      this.deliverableOnly = checked
+                      this.updateCatalog()
+                    })
+                  Text('只看可配送').fontSize(FONT_SIZE.SM).fontColor(HomeTheme.TEXT)
+                }
+              }
               if (!this.loggedIn) {
                 Text('登录后查看店铺').fontColor(HomeTheme.MUTED).fontSize(FONT_SIZE.SM)
               } else if (this.catalogMode === 0 && !this.hasCurrentLocation()) {
@@ -755,6 +774,7 @@ export struct HomePage {
                   .id('home-recommend-location').onClick(() => { router.pushUrl({ url: 'pages/LocationPage' }) })
               } else if (this.catalogCount === 0) {
                 Text(this.catalogLoading ? '正在加载店铺…' : this.storesRequest.failed ? '店铺加载失败' :
+                  this.deliverableOnly ? '当前分组没有可配送的店铺' :
                   this.catalogMode === 0 ? `${DELIVERY_RANGE.NEARBY_KM} 公里内暂无店铺` :
                     this.catalogMode === 1 ? '暂无 4 分及以上的店铺' : '暂无店铺')
                   .fontColor(HomeTheme.MUTED).fontSize(FONT_SIZE.SM)
@@ -809,7 +829,8 @@ export struct HomePage {
 
   @Builder
   CatalogCard(store: StoreItem) {
-    RecommendedStoreCardHost({ store: store, onStoreClick: (item: StoreItem) => { this.onStoreClick(item) } })
+    RecommendedStoreCardHost({ store: store, deliveryText: storeDeliveryText(store, this.currentAddress, true),
+      onStoreClick: (item: StoreItem) => { this.onStoreClick(item) } })
       .padding({ left: SPACING.LG, right: SPACING.LG, bottom: SPACING.SM })
   }
 

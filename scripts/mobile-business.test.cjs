@@ -74,19 +74,46 @@ function searchRuntime() {
   if(process.env.SEARCH_MUTATION==='key') dataSource=dataSource.replace(" + ':' + this.revision.toString()",'');
   if(process.env.SEARCH_MUTATION==='request') text=text.replace('request !== this.searchRequest || !this.loggedIn || ownerId !== this.searchOwner.id ||','!this.loggedIn || ownerId !== this.searchOwner.id ||');
   const exports={},pending=[],state={epoch:1,tops:0}, history=[];
-  const names=['doSearch','resetSearch','onSearchOwnerChange','onPageHide','aboutToDisappear','retrySearch'];
-  const code=dataSource+'\nexport class Page {'+names.map(name=>method(text,name)).join('\n')+'}';
+  const names=['doSearch','resetSearch','updateResults','onAddressChange','onSearchOwnerChange','onPageHide','aboutToDisappear','retrySearch'];
+  let presentation=source('common/StorePresentation.ets').replace(/^import.*\r?\n/gm,'');
+  if(process.env.SEARCH_MUTATION==='delivery-filter') presentation=presentation.replace('distance <= meters / 1000 + 1e-9', 'true');
+  const code=presentation+'\n'+dataSource+'\nexport class Page {'+names.map(name=>method(text,name)).join('\n')+'}';
   vm.runInNewContext(ts.transpileModule(code,{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{
-    exports,clearTimeout,Edge:{Top:0},getAuthSessionEpoch:()=>state.epoch,
+    exports,clearTimeout,Edge:{Top:0},DELIVERY_RANGE:{ORDER_CONFIRM_KM:5},getAuthSessionEpoch:()=>state.epoch,
     searchStoresResultApi:(keyword)=>new Promise(resolve=>pending.push({keyword,resolve})),
     AppStorage:{get:()=>null},addSearchHistory:async keyword=>history.push(keyword),logInfo(){},promptAction:{showToast(){}}
   });
   const page=Object.assign(new exports.Page(),{loggedIn:true,ownerId:1,searchOwner:{id:1},searchText:'first',searchRequest:0,
     suggestTimer:-1,results:new exports.SearchStoreDataSource(),resultCount:0,loadHistory:async()=>{},
+    currentAddress:null,deliverableOnly:false,matchedStores:[],
     resultScroller:{scrollEdge:()=>{state.tops++;}}});
-  return {page,pending,state,history};
+  return {page,pending,state,history,presentation:exports};
 }
 const searchReply=(stores)=>({success:true,stores});
+
+test('search delivery filter uses the current delivery address and preserves the original order and match set',async()=>{
+  const {page,pending,presentation}=searchRuntime();
+  const first={id:1,latitude:22,longitude:108,deliveryRadius:8000,deliverable:false};
+  const second={id:2,latitude:22.1,longitude:108,deliveryRadius:2000,deliverable:true};
+  const unknown={id:3,latitude:22,longitude:108,deliveryRadius:0,deliverable:true};
+  page.currentAddress={latitude:22.05,longitude:108};
+  const request=page.doSearch();
+  page.deliverableOnly=true;
+  pending[0].resolve(searchReply([second,unknown,first])); await request;
+  assert.deepEqual(Array.from({length:page.resultCount},(_,i)=>page.results.getData(i).id),[1]);
+  assert.match(presentation.storeDeliveryText(first,page.currentAddress),/可配送，下单需确认/);
+  assert.match(presentation.storeDeliveryText(second,page.currentAddress),/超出配送范围/);
+  page.currentAddress={latitude:22.1,longitude:108};page.onAddressChange();
+  assert.equal(page.resultCount,1);assert.equal(page.results.getData(0).id,2);
+  page.currentAddress={latitude:0,longitude:0};page.onAddressChange();
+  assert.equal(page.deliverableOnly,false);
+  assert.deepEqual(Array.from({length:page.resultCount},(_,i)=>page.results.getData(i).id),[2,3,1]);
+  assert.match(presentation.storeDeliveryText(unknown,page.currentAddress,true),/收货地址未定位/);
+  assert.equal(pending.length,1);
+  assert.match(presentation.storeRatingText(5,4),/4 人评分 · 评价较少/);
+  assert.doesNotMatch(presentation.storeRatingText(4,5),/评价较少/);
+  assert.equal(presentation.storeRatingText(5,0),'暂无评分');
+});
 
 test('search replaces same-store rows with a new key, notifies the list and starts new results at the top',async()=>{
   const {page,pending,state}=searchRuntime();let reloads=0;

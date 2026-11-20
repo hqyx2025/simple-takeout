@@ -15,6 +15,7 @@ import { getSearchHistory, addSearchHistory, clearSearchHistory } from '../servi
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, MODULE_COLOR, accentFg, accentIndexFromText, merchantImageSource, DEFAULT_MERCHANT_IMAGE } from '../common/Constants'
 import { promptCompat as promptAction, routerCompat as router } from '../common/UiNavigation'
 import { logInfo } from '../service/AppLogger'
+import { canDeliverTo, hasLocatedAddress, storeDeliveryText, storeRatingText } from '../common/StorePresentation'
 
 @Entry
 @Component
@@ -36,6 +37,7 @@ export struct SearchPage {
 
   @StorageLink('isLoggedIn') @Watch('resetSearch') loggedIn: boolean = false
   @StorageProp('user') @Watch('onSearchOwnerChange') searchOwner: User = createEmptyUser()
+  @StorageProp('currentAddress') @Watch('onAddressChange') currentAddress: Address | null = null
   @State searchText: string = ''
   @State hotWords: string[] = []
   @State historyWords: string[] = []
@@ -43,6 +45,8 @@ export struct SearchPage {
   @State hasSearched: boolean = false
   @State searching: boolean = false
   @State searchFailed: boolean = false
+  @State deliverableOnly: boolean = false
+  private matchedStores: StoreItem[] = []
   private lastSearchKeyword: string = ''
   private ownerId: number = 0
   private readonly results: SearchStoreDataSource = new SearchStoreDataSource()
@@ -91,7 +95,7 @@ export struct SearchPage {
     this.lastSearchKeyword = keyword
     try {
       // 清除输入、切换关键词或退出登录后，旧请求不能覆盖新界面。
-      const currentAddress: Address | null = AppStorage.get<Address>('currentAddress') ?? null
+      const currentAddress: Address | null = this.currentAddress
       const latitude: number | undefined = currentAddress !== null ? currentAddress.latitude : undefined
       const longitude: number | undefined = currentAddress !== null ? currentAddress.longitude : undefined
       const remote: StoreSearchResult = await searchStoresResultApi(keyword, latitude, longitude)
@@ -100,8 +104,8 @@ export struct SearchPage {
         return
       }
       this.searchFailed = !remote.success
-      this.results.setData(remote.stores)
-      this.resultCount = this.results.totalCount()
+      this.matchedStores = remote.stores
+      this.updateResults()
       if (!remote.success) {
         logInfo('Search', `搜索请求失败 keyword=${keyword}`)
         return
@@ -123,8 +127,22 @@ export struct SearchPage {
     this.hasSearched = false
     this.searchFailed = false
     this.lastSearchKeyword = ''
-    this.results.setData([])
-    this.resultCount = 0
+    this.deliverableOnly = false
+    this.matchedStores = []
+    this.updateResults()
+  }
+
+  private updateResults(): void {
+    const visible: StoreItem[] = this.deliverableOnly && hasLocatedAddress(this.currentAddress) ?
+      this.matchedStores.filter((store: StoreItem): boolean => canDeliverTo(store, this.currentAddress)) : this.matchedStores
+    this.results.setData(visible)
+    this.resultCount = visible.length
+  }
+
+  onAddressChange(): void {
+    if (!this.deliverableOnly) { return }
+    if (!hasLocatedAddress(this.currentAddress)) { this.deliverableOnly = false }
+    this.updateResults()
   }
 
   onSearchOwnerChange(): void {
@@ -210,13 +228,32 @@ export struct SearchPage {
           }
         } else {
           // 搜索结果
+          if (!this.searchFailed && hasLocatedAddress(this.currentAddress)) {
+            ListItem() {
+              Row({ space: SPACING.SM }) {
+                Checkbox({ name: 'search-deliverable-only' }).id('search-deliverable-only')
+                  .select(this.deliverableOnly).accessibilityText('只看可配送')
+                  .onChange((checked: boolean) => {
+                    this.deliverableOnly = checked
+                    this.updateResults()
+                    this.resultScroller.scrollEdge(Edge.Top)
+                  })
+                Text('只看可配送').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_PRIMARY)
+              }
+            }
+          }
           if (this.searchFailed) {
             ListItem() {
               this.FailedResult()
             }
           } else if (this.resultCount === 0) {
             ListItem() {
-              this.EmptyResult()
+              if (this.deliverableOnly && this.matchedStores.length > 0) {
+                Text('没有可配送的匹配店铺').fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
+                  .padding(SPACING.LG)
+              } else {
+                this.EmptyResult()
+              }
             }
           } else {
             LazyForEach(this.results, (store: StoreItem) => {
@@ -397,11 +434,9 @@ export struct SearchPage {
       Column({ space: SPACING.XS }) {
         MatchText({ text: store.name, query: this.searchText })
 
+        Text(storeRatingText(store.rating, store.ratingCount ?? 0))
+          .fontSize(FONT_SIZE.SM).fontColor(COLORS.PRIMARY)
         Row({ space: SPACING.SM }) {
-          Text(`${store.rating}分`)
-            .fontSize(FONT_SIZE.SM)
-            .fontColor(COLORS.PRIMARY)
-            .fontWeight(FontWeight.Bold)
           Text(`月售${formatSales(store.monthlySales)}`)
             .fontSize(FONT_SIZE.SM)
             .fontColor(COLORS.TEXT_SECONDARY)
@@ -423,13 +458,9 @@ export struct SearchPage {
           Text(`${store.minOrder}元起送`)
             .fontSize(FONT_SIZE.SM)
             .fontColor(COLORS.TEXT_SECONDARY)
-          Text('|')
-            .fontSize(FONT_SIZE.SM)
-            .fontColor(COLORS.DIVIDER)
-          Text(store.distance)
-            .fontSize(FONT_SIZE.SM)
-            .fontColor(COLORS.TEXT_SECONDARY)
         }
+        Text(storeDeliveryText(store, this.currentAddress, true))
+          .fontSize(FONT_SIZE.SM).fontColor(COLORS.TEXT_SECONDARY)
 
         Flex({ wrap: FlexWrap.Wrap }) {
           ForEach(store.tags, (tag: string) => {

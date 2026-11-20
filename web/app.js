@@ -26,6 +26,7 @@
     sidebarCollapsed: localStorage.getItem('takeout.demo.sidebarCollapsed') === '1',
     user: null, role: 0, page: 'home', search: '', categoryId: 0, stores: [], categories: [], storeId: 0, checkoutStoreId: 0,
     location: null, locationLabel: '', locating: false, locationVersion: 0,
+    browseAddress: null, deliverableOnly: false,
     goods: [], cart: [], addresses: [], coupons: [], orders: [], favorites: [], rider: null, riderOrders: [], riderPool: [],
     merchantStores: [], activeStoreId: 0, merchantGoods: [], merchantOrders: [], editGoods: null, editAddress: null, reviewOrder: null,
     adminUsers: [], adminProducts: [], adminStores: [], adminCategories: [], adminOrders: [], adminRefunds: [],
@@ -72,7 +73,7 @@
     Object.assign(state, {
       token: '', refreshToken: '', user: null, role: 0, page: 'home',
       search: '', categoryId: 0, stores: [], categories: [], storeId: 0, goods: [],
-      location: null, locationLabel: '', locating: false,
+      location: null, locationLabel: '', locating: false, browseAddress: null, deliverableOnly: false,
       cart: [], addresses: [], coupons: [], orders: [], favorites: [],
       rider: null, riderOrders: [], riderPool: [], merchantStores: [], activeStoreId: 0,
       merchantGoods: [], merchantOrders: [], merchantStoreEdit: null, editGoods: null, editAddress: null, reviewOrder: null,
@@ -113,21 +114,24 @@
   const hasCityStoreRules = store => Number.isInteger(store?.ratingCount);
   const storeRatingText = store => !hasCityStoreRules(store)
     ? (Number(store.rating) > 0 ? `★ ${Number(store.rating).toFixed(1)}` : '暂无评分')
-    : Number(store.ratingCount) > 0 ? `${Number(store.rating).toFixed(1)} 分 · ${Number(store.ratingCount)} 人评分` : '暂无评分';
-  const storeDeliveryText = (store, address) => {
-    const validPoint = point => Number.isFinite(point?.latitude) && Number.isFinite(point?.longitude)
-      && Math.abs(point.latitude) <= 90 && Math.abs(point.longitude) <= 180 && (point.latitude !== 0 || point.longitude !== 0);
-    if (!validPoint(address)) return '收货地址未定位，无法判断配送范围';
+    : store.ratingCount > 0 ? `${Number(store.rating).toFixed(1)} 分 · ${store.ratingCount} 人评分${store.ratingCount < 5 ? ' · 评价较少' : ''}` : '暂无评分';
+  const validPoint = point => Number.isFinite(point?.latitude) && Number.isFinite(point?.longitude)
+    && Math.abs(point.latitude) <= 90 && Math.abs(point.longitude) <= 180 && (point.latitude !== 0 || point.longitude !== 0);
+  const storeDelivery = (store, address) => {
+    if (!validPoint(address)) return {text:'收货地址未定位，无法判断配送范围', available:false};
     const cityRules = hasCityStoreRules(store);
     const radiusKm = cityRules ? Number(store?.deliveryRadius) / 1000 : 500;
     const confirmKm = cityRules ? 5 : 200;
-    if (!validPoint(store) || !Number.isFinite(radiusKm) || radiusKm <= 0) return '暂无法判断配送范围';
+    if (!validPoint(store) || !Number.isFinite(radiusKm) || radiusKm <= 0) return {text:'暂无法判断配送范围', available:false};
     const r = Math.PI / 180;
     const a = Math.sin((store.latitude - address.latitude) * r / 2) ** 2 +
       Math.cos(address.latitude * r) * Math.cos(store.latitude * r) * Math.sin((store.longitude - address.longitude) * r / 2) ** 2;
     const km = 12742 * Math.asin(Math.sqrt(Math.min(1, Math.max(0, a))));
-    return `直线 ${km.toFixed(1)} 公里 · ${km > radiusKm + 1e-9 ? '超出配送范围' : km > confirmKm + 1e-9 ? '可配送，下单需确认' : '可配送'}`;
+    const available = km <= radiusKm + 1e-9;
+    return {available, text:`直线 ${km.toFixed(1)} 公里 · ${!available ? '超出配送范围' : km > confirmKm + 1e-9 ? '可配送，下单需确认' : '可配送'}`};
   };
+  const storeDeliveryText = (store, address) => storeDelivery(store, address).text;
+  const riderRadiusKm = meters => Number.isFinite(meters) && meters > 0 ? Math.min(5, Math.max(1, meters / 1000)) : 3;
   const toast = (message, error = false) => { const el = $('notice'); el.textContent = message; el.classList.toggle('error', error); el.hidden = false; clearTimeout(toast.timer); toast.timer = setTimeout(() => { el.hidden = true; }, 3600); };
   const api = async (path, options = {}) => {
     const requestToken = state.token;
@@ -148,7 +152,7 @@
       error.responseReceived = false;
       throw error;
     } finally {
-      if (mutation) invalidatePageData();
+      if (mutation && requestToken === state.token) invalidatePageData();
     }
     let body;
     try { body = await response.json(); }
@@ -1092,20 +1096,29 @@
     if (page === 'assistant') return renderAssistant();
   };
   const renderBrowse = async (page, load = get) => {
-    ++browseVersion;
+    const version = ++browseVersion, context = asyncContext();
     const previousStores = JSON.stringify(state.stores), previousGrid = document.getElementById('storeGrid');
+    const previousAddress = JSON.stringify(state.browseAddress);
     const sameView = drawnPageKey === pageViewKey();
-    const [categories, stores, banners, announcements] = await Promise.all([
+    const addressesRequest = state.user && state.role === 0 ? load('/api/addresses').catch(error => {
+      if (error === staleRender) throw error;
+      return [];
+    }) : [];
+    const [categories, stores, banners, announcements, addresses] = await Promise.all([
       load('/api/categories'), load(page === 'discover' && state.search.trim() ? `/api/search?keyword=${encodeURIComponent(state.search.trim())}` : state.categoryId ? `/api/stores?categoryId=${state.categoryId}` : '/api/stores'),
       load('/api/banners').catch(error => error === staleRender ? Promise.reject(error) : []),
-      load('/api/announcements').catch(error => error === staleRender ? Promise.reject(error) : [])
+      load('/api/announcements').catch(error => error === staleRender ? Promise.reject(error) : []),
+      addressesRequest
     ]);
+    if (version !== browseVersion || !isCurrentContext(context)) return;
+    state.browseAddress = addresses?.find(address => address.isDefault) || addresses?.[0] || null;
+    if (!validPoint(state.browseAddress)) state.deliverableOnly = false;
     state.categories = categories || [];
     state.stores = (stores || []).filter(store => !state.categoryId || Number(store.categoryId) === state.categoryId || (store.categoryIds || []).map(Number).includes(state.categoryId));
     const shortcuts = `<div class="toolbar" id="browseShortcuts" role="group" aria-label="浏览专区">${browseViews.map(([action, label]) => `<button class="btn ${action === 'browse-all' ? 'primary' : ''}" type="button" data-action="${action}" aria-pressed="${action === 'browse-all'}">${label}</button>`).join('')}${state.user ? btn('优惠券','go','perks') : ''}</div>`;
     const bannersHtml = (banners || []).filter(b => b.status === 1).slice(0, 3).map(b => `<div class="surface"><strong>${esc(b.title)}</strong><div class="subtle">${esc(b.subtitle || '')}</div></div>`).join('');
     const annHtml = (announcements || []).filter(a => a.status === 1).slice(0, 3).map(a => `<div class="notice-line" style="margin-bottom:8px"><strong>${esc(a.title)}</strong> · ${esc(a.content)}</div>`).join('');
-    drawPage(`${pageHead(page === 'home' ? '全部店铺' : '发现好味道', '', `${state.user ? btn('我的订单','go','orders') : btn('登录点餐','login','','primary')}`)}${annHtml}${bannersHtml ? `<div class="grid section">${bannersHtml}</div>` : ''}<form class="toolbar section" id="storeSearchForm" role="search"><input class="input" id="storeSearch" name="keyword" aria-label="搜索店铺或菜品" placeholder="搜索店铺或菜品" value="${esc(state.browseDrafts[page] ?? state.search)}"><button class="btn primary" type="submit">搜索</button><select class="select" id="categoryFilter" aria-label="店铺分类" data-native-select><option value="0">全部分类</option>${state.categories.map(c => `<option value="${c.id}" ${Number(state.categoryId) === Number(c.id) ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></form>${shortcuts}<section class="section" id="browseResult" aria-label="浏览结果" aria-live="polite"></section>${locationNotice()}${secureLocationLink()}<div class="grid" id="storeGrid"></div><div class="form-actions"><button class="btn" id="storeLoadMore" data-action="stores-more" type="button">加载更多店铺</button></div>`);
+    drawPage(`${pageHead(page === 'home' ? '全部店铺' : '发现好味道', '', `${state.user ? btn('我的订单','go','orders') : btn('登录点餐','login','','primary')}`)}${annHtml}${bannersHtml ? `<div class="grid section">${bannersHtml}</div>` : ''}<form class="toolbar section" id="storeSearchForm" role="search"><input class="input" id="storeSearch" name="keyword" aria-label="搜索店铺或菜品" placeholder="搜索店铺或菜品" value="${esc(state.browseDrafts[page] ?? state.search)}"><button class="btn primary" type="submit">搜索</button><select class="select" id="categoryFilter" aria-label="店铺分类" data-native-select><option value="0">全部分类</option>${state.categories.map(c => `<option value="${c.id}" ${Number(state.categoryId) === Number(c.id) ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></form>${shortcuts}<section class="section" id="browseResult" aria-label="浏览结果" aria-live="polite"></section>${locationNotice()}${secureLocationLink()}<div class="toolbar" id="browseDelivery" hidden><button class="btn" type="button" data-action="deliverable-only" id="browseDeliveryOnly" aria-pressed="false">只看可配送</button><span class="subtle">${esc(state.browseAddress?.mapAddress || state.browseAddress?.detail || '收货地址')}</span></div><div class="grid" id="storeGrid"></div><div class="form-actions"><button class="btn" id="storeLoadMore" data-action="stores-more" type="button">加载更多店铺</button></div>`);
     $('storeSearch').oninput = () => { state.browseDrafts[page] = $('storeSearch').value; };
     $('storeSearchForm').onsubmit = async event => {
       event.preventDefault(); state.search = $('storeSearch').value.trim();
@@ -1124,7 +1137,8 @@
         const selected = button.dataset.action === 'browse-all';
         button.setAttribute('aria-pressed', String(selected)); button.classList.toggle('primary', selected);
       });
-      resetStoreCards(sameView && previousGrid === $('storeGrid') && previousStores === JSON.stringify(state.stores));
+      resetStoreCards(sameView && previousGrid === $('storeGrid') && previousStores === JSON.stringify(state.stores)
+        && previousAddress === JSON.stringify(state.browseAddress));
     } else await showBrowseView(mode, load);
   };
   const showBrowseView = async (action, load = fetchPageData) => {
@@ -1138,7 +1152,7 @@
     const result = $('browseResult');
     const heading = `<h2 class="section-title">${title}</h2>`;
     storeObserver?.disconnect(); storeObserver = null;
-    $('storeGrid').hidden = true; $('storeLoadMore').hidden = true;
+    $('storeGrid').hidden = true; $('storeLoadMore').hidden = true; $('browseDelivery').hidden = true;
     $('browseShortcuts').querySelectorAll('button[data-action]').forEach(button => {
       const selected = button.dataset.action === action;
       button.setAttribute('aria-pressed', String(selected));
@@ -1171,26 +1185,30 @@
     }
     return;
   };
-  const renderStoreCards = (stores) => (stores || []).map(s => `<article class="store-card"><div class="store-image">${storeImage(s)}</div><div class="store-body"><h3>${esc(s.name)}</h3><div class="subtle">${storeRatingText(s)} · 月售 ${Number(s.monthlySales || 0)} · ${esc(s.deliveryTime || '配送信息待更新')}</div><div class="tag-list">${(s.tags || []).slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div><div class="row-between"><span class="subtle">起送 ¥${cash(s.minOrder)} · 配送 ¥${cash(s.deliveryFee)}</span><button class="btn small primary" data-action="open-store" data-id="${s.id}">进店</button></div></div></article>`).join('') || empty('暂时没有符合条件的店铺');
+  const renderStoreCards = (stores) => (stores || []).map(s => `<article class="store-card"><div class="store-image">${storeImage(s)}</div><div class="store-body"><h3>${esc(s.name)}</h3><div class="subtle">${storeRatingText(s)} · 月售 ${Number(s.monthlySales || 0)} · ${esc(s.deliveryTime || '配送信息待更新')}</div><div class="subtle">${storeDeliveryText(s, state.browseAddress)}</div><div class="tag-list">${(s.tags || []).slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div><div class="row-between"><span class="subtle">起送 ¥${cash(s.minOrder)} · 配送 ¥${cash(s.deliveryFee)}</span><button class="btn small primary" data-action="open-store" data-id="${s.id}">进店</button></div></div></article>`).join('') || empty('暂时没有符合条件的店铺');
   const appendStoreCards = () => {
     const grid = $('storeGrid'), more = $('storeLoadMore');
     if (!grid || !more) return;
-    const batch = state.stores.slice(visibleStoreCount, visibleStoreCount + 24);
+    const stores = state.deliverableOnly ? state.stores.filter(store => storeDelivery(store, state.browseAddress).available) : state.stores;
+    const batch = stores.slice(visibleStoreCount, visibleStoreCount + 24);
     if (batch.length) grid.insertAdjacentHTML('beforeend', renderStoreCards(batch));
-    else if (!visibleStoreCount) grid.innerHTML = empty('暂时没有符合条件的店铺');
+    else if (!visibleStoreCount) grid.innerHTML = empty(state.deliverableOnly ? '没有可配送的匹配店铺' : '暂时没有符合条件的店铺');
     visibleStoreCount += batch.length;
     state.browseCounts[state.page + ':' + (state.browseModes[state.page] || 'browse-all')] = visibleStoreCount;
-    more.hidden = visibleStoreCount >= state.stores.length;
-    more.textContent = `加载更多店铺（已显示 ${visibleStoreCount} / ${state.stores.length}）`;
+    more.hidden = visibleStoreCount >= stores.length;
+    more.textContent = `加载更多店铺（已显示 ${visibleStoreCount} / ${stores.length}）`;
     if (more.hidden) storeObserver?.disconnect();
   };
   const resetStoreCards = (keepCards = false) => {
     storeObserver?.disconnect(); storeObserver = null;
+    $('browseDelivery').hidden = !validPoint(state.browseAddress);
+    $('browseDeliveryOnly').setAttribute('aria-pressed', String(state.deliverableOnly));
+    $('browseDeliveryOnly').classList.toggle('primary', state.deliverableOnly);
     const count = state.browseCounts[state.page + ':' + (state.browseModes[state.page] || 'browse-all')] || 24;
     if (!keepCards) {
       visibleStoreCount = 0; $('storeGrid').innerHTML = '';
       appendStoreCards();
-      while (visibleStoreCount < count && visibleStoreCount < state.stores.length) appendStoreCards();
+      while (visibleStoreCount < count && !$('storeLoadMore').hidden) appendStoreCards();
     }
     if ('IntersectionObserver' in window && !$('storeLoadMore').hidden) {
       const observer = new IntersectionObserver(entries => {
@@ -1459,7 +1477,7 @@
   const renderRider = async (page, load = get) => {
     if (page === 'rider-profile') {
       state.rider = await load('/api/rider/profile'); const r=state.rider;
-      drawPage(`${pageHead('骑手资料','在线状态将影响是否可以抢单')}${!r?empty('暂时无法读取骑手资料'):`<div class="grid four"><div class="metric"><div class="metric-label">配送状态</div><div class="metric-value">${r.online?'在线':'离线'}</div><button class="btn ${r.online?'danger':'primary'}" style="margin-top:10px" data-action="rider-online" data-id="${r.online?0:1}">${r.online?'下线':'上线'}</button></div><div class="metric"><div class="metric-label">已完成配送</div><div class="metric-value">${r.totalOrders||0}</div></div><div class="metric"><div class="metric-label">累计配送收入</div><div class="metric-value">¥${cash(r.totalIncome)}</div></div><div class="metric"><div class="metric-label">账号状态</div><div class="metric-value">${r.status===1?'正常':'停用'}</div></div></div><div class="page-panel section"><h2 class="section-title">接单范围</h2><form data-form="rider-settings" class="form-grid"><label class="field">取餐半径（米）<input class="input" name="radiusMeters" type="number" min="1000" value="${r.deliveryRadius||25000}"></label><label class="field">接单位置<input class="input" name="address" value="${esc(r.locationAddress||'')}"></label><label class="field">纬度<input class="input" name="latitude" type="number" step="any" value="${r.latitude||0}"></label><label class="field">经度<input class="input" name="longitude" type="number" step="any" value="${r.longitude||0}"></label><div class="form-actions full"><button class="btn primary">保存接单范围</button></div></form></div>`}`); return;
+      drawPage(`${pageHead('骑手资料','在线状态将影响是否可以抢单')}${!r?empty('暂时无法读取骑手资料'):`<div class="grid four"><div class="metric"><div class="metric-label">配送状态</div><div class="metric-value">${r.online?'在线':'离线'}</div><button class="btn ${r.online?'danger':'primary'}" style="margin-top:10px" data-action="rider-online" data-id="${r.online?0:1}">${r.online?'下线':'上线'}</button></div><div class="metric"><div class="metric-label">已完成配送</div><div class="metric-value">${r.totalOrders||0}</div></div><div class="metric"><div class="metric-label">累计配送收入</div><div class="metric-value">¥${cash(r.totalIncome)}</div></div><div class="metric"><div class="metric-label">账号状态</div><div class="metric-value">${r.status===1?'正常':'停用'}</div></div></div><div class="page-panel section"><h2 class="section-title">接单范围</h2><form data-form="rider-settings" class="form-grid"><label class="field">取餐半径（公里）<input class="input" name="radiusKm" type="number" required min="1" max="5" step="0.001" value="${riderRadiusKm(r.deliveryRadius)}"></label><label class="field">接单位置<input class="input" name="address" maxlength="255" value="${esc(r.locationAddress||'')}"></label><label class="field">纬度<input class="input" name="latitude" type="number" required min="-90" max="90" step="any" value="${esc(r.latitude ?? '')}"></label><label class="field">经度<input class="input" name="longitude" type="number" required min="-180" max="180" step="any" value="${esc(r.longitude ?? '')}"></label><div class="form-actions full"><button class="btn primary">保存接单范围</button></div></form></div>`}`); return;
     }
     if (page === 'rider-pool') {
       const [profile,pool]=await Promise.all([load('/api/rider/profile'),load('/api/rider/orders/pool')]); state.rider=profile;state.riderPool=pool||[];
@@ -1602,7 +1620,26 @@
         else if (name === 'merchant-activity') { await formSend(`/api/merchant/activities?storeId=${state.activeStoreId}`,'POST',{type:data.type,title:data.title,discountRate:Number(data.discountRate||0),reduceAmount:Number(data.reduceAmount||0),threshold:Number(data.threshold||0),giftGoodsId:Number(data.giftGoodsId||0),startTime:data.startTime,endTime:data.endTime,status:1});state.editGoods=null;toast('活动已创建');await renderPage(); }
         else if (name === 'merchant-seckill') { await formSend(`/api/merchant/seckills?storeId=${state.activeStoreId}`,'POST',{goodsId:Number(data.goodsId),price:Number(data.price),quota:Number(data.quota),startTime:data.startTime,endTime:data.endTime,status:1});state.editGoods=null;toast('秒杀已创建');await renderPage(); }
         else if (name === 'merchant-reply') { await formSend(`/api/merchant/reviews/${form.dataset.id}`,'PUT',{reply:data.reply});toast('回复已保存');await renderPage(); }
-        else if (name === 'rider-settings') { await formSend('/api/rider/range/radius','PUT',{radiusMeters:Number(data.radiusMeters)});await formSend('/api/rider/range/location','PUT',{latitude:Number(data.latitude||0),longitude:Number(data.longitude||0),address:data.address||''});toast('配送范围已保存');await renderPage(); }
+        else if (name === 'rider-settings') {
+          const km = Number(data.radiusKm), radiusMeters = Math.round(km * 1000);
+          if (!Number.isFinite(km) || km < 1 || km > 5 || Math.abs(km * 1000 - radiusMeters) > 1e-9) {
+            throw new Error('取餐半径须在 1–5 公里之间，最多三位小数');
+          }
+          const location = {latitude:Number(data.latitude), longitude:Number(data.longitude), address:String(data.address || '').trim()};
+          if (!String(data.latitude ?? '').trim() || !String(data.longitude ?? '').trim() || !validPoint(location)) {
+            throw new Error('接单位置无效，请重新定位');
+          }
+          if (location.address.length > 255) throw new Error('接单地址最多 255 个字符');
+          await formSend('/api/rider/range/radius','PUT',{radiusMeters});
+          try {
+            await formSend('/api/rider/range/location','PUT',location);
+          } catch (error) {
+            if (error === staleRender) throw error;
+            throw new Error(error.responseReceived ? '半径已保存，位置未更新：' + error.message :
+              '半径已保存，位置更新结果待确认，请刷新核对');
+          }
+          toast('接单范围已保存'); await renderPage();
+        }
         else if (name === 'admin-category') { await formSend('/api/admin/categories','POST',{name:data.name,icon:data.icon||'',color:data.color||''});state.editGoods=null;toast('分类已创建');await renderPage(); }
         else if (name === 'admin-banner') { await formSend('/api/admin/banners','POST',{title:data.title,subtitle:data.subtitle||'',image:data.image||'',color:data.color||'',linkType:data.linkType||'NONE',linkValue:data.linkValue||'',sort:Number(data.sort||0)});state.editGoods=null;toast('Banner 已创建');await renderPage(); }
         else if (name === 'admin-announcement') { await formSend('/api/admin/announcements','POST',{title:data.title,content:data.content});state.editGoods=null;toast('公告已创建');await renderPage(); }
@@ -1725,6 +1762,13 @@
         toast('浏览位置已切换'); return renderPage();
       }
       if (action === 'location-clear') { state.locationVersion++; state.location = null; state.locationLabel = ''; return renderPage(); }
+      if (action === 'deliverable-only' && ['home','discover'].includes(state.page) &&
+          validPoint(state.browseAddress) && !$('storeGrid').hidden) {
+        state.deliverableOnly = !state.deliverableOnly;
+        state.browseCounts[state.page + ':' + (state.browseModes[state.page] || 'browse-all')] = 24;
+        resetStoreCards();
+        return;
+      }
       if (action === 'stores-more') return appendStoreCards();
       if (action === 'open-store') { state.storeId=Number(id);return navigate('store'); }
       if (action === 'add-cart') { if(!requireUser())return;const spec=document.querySelector(`[data-spec-for="${id}"]`);await actionSend('/api/cart/items','POST',{goodsId:Number(id),specId:Number(spec?.value||0),quantity:1});await refreshCart(actionLoad);toast('已加入服务端购物车');return; }

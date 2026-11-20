@@ -470,6 +470,62 @@ test('checkout on the legacy API retains the public score and the server distanc
   }
 });
 
+test('browse and search filter against the default delivery address, not device location',async()=>{
+  const stores=[
+    {id:1,name:'近店可送',latitude:22,longitude:108,rating:5,ratingCount:4,deliveryRadius:8000},
+    {id:2,name:'收货地址太远',latitude:22.09,longitude:108,rating:4,ratingCount:5,deliveryRadius:1000},
+    {id:3,name:'未定位门店',rating:5,ratingCount:0,deliveryRadius:10000}
+  ];
+  const b=browser('0',{stores,addresses:[{latitude:22.09,longitude:108},{isDefault:true,latitude:22.05,longitude:108}]});
+  b.state.location={latitude:22.09,longitude:108};
+  for(const page of ['home','discover']){
+    b.state.page=page;await b.renderPage();
+    const grid=b.element('storeGrid');
+    assert.match(grid.innerHTML,/4 人评分 · 评价较少/);
+    assert.doesNotMatch(grid.innerHTML,/5 人评分 · 评价较少/);
+    assert.match(grid.innerHTML,/超出配送范围/);
+    assert.match(grid.innerHTML,/暂无法判断配送范围/);
+    const before=b.requests.length;
+    await b.handleAction('deliverable-only');
+    assert.equal(b.requests.length,before);
+    assert.equal(b.element('browseDeliveryOnly').attributes['aria-pressed'],'true');
+    assert.match(grid.innerHTML,/近店可送/);
+    assert.doesNotMatch(grid.innerHTML,/收货地址太远|未定位门店/);
+    await b.handleAction('deliverable-only');
+    assert.equal(cardCount(grid.innerHTML),3);
+  }
+  await b.logout();
+  assert.equal(b.state.browseAddress,null);
+  assert.equal(b.element('browseDelivery').hidden,true);
+  assert.match(b.element('storeGrid').innerHTML,/收货地址未定位/);
+});
+
+test('rider form validates both inputs, sends meters and distinguishes a rejected location',async()=>{
+  const b=browser('0',{onRequest(path){
+    if(path==='/api/rider/range/location') return {ok:true,status:200,json:async()=>({code:400,message:'位置不可用'})};
+  }});
+  Object.assign(b.state,{role:3,page:'rider-profile',user:{id:5,role:3}});
+  await b.renderPage();
+  assert.match(b.element('app').innerHTML,/name="radiusKm"[^>]*min="1" max="5"[^>]*value="3"/);
+  const form=b.element('rider-form'), submitter=b.element('rider-submit');
+  form.dataset.form='rider-settings';
+  b.context.document.querySelectorAll=selector=>selector==='#app form[data-form]'?[form]:[];
+  b.bindForms();
+  const updates=()=>b.calls.filter(c=>c.path.startsWith('/api/rider/range/'));
+  for(const data of [{radiusKm:'5.001',latitude:'22',longitude:'108'},
+    {radiusKm:'1.2345',latitude:'22',longitude:'108'},{radiusKm:'3',latitude:'',longitude:'108'}]){
+    form.formData=data;await form.onsubmit({preventDefault(){},submitter});
+    assert.equal(updates().length,0);
+  }
+  form.formData={radiusKm:'3.125',latitude:'22',longitude:'108',address:' 北门 '};
+  await form.onsubmit({preventDefault(){},submitter});
+  assert.deepEqual(updates().map(c=>[c.path,JSON.parse(c.init.body)]),[
+    ['/api/rider/range/radius',{radiusMeters:3125}],['/api/rider/range/location',{latitude:22,longitude:108,address:'北门'}]
+  ]);
+  assert.match(b.element('notice').textContent,/半径已保存，位置未更新：位置不可用/);
+  assert.equal(submitter.disabled,false);
+});
+
 test('checkout locks duplicate submits and keeps one idempotency key for retries',async()=>{
   let releaseOrder;
   const pendingOrder=new Promise(resolve=>{releaseOrder=resolve;});

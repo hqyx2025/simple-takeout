@@ -45,6 +45,8 @@ label.field{display:grid;gap:6px;color:var(--muted);font-size:12px}
 .form-grid .full{grid-column:1/-1}
 .form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
 .toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:16px}
+#browseDelivery{margin-top:12px}
+#browseDelivery[hidden]{display:none}
 .toolbar .input{max-width:340px}
 .tabs{display:flex;gap:4px;padding:4px;border:1px solid var(--line);border-radius:var(--radius-control);background:var(--paper)}
 .tab{padding:7px 11px;border:0;border-radius:var(--radius-control);background:transparent;color:var(--muted)}

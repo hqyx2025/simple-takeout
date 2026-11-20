@@ -28,7 +28,7 @@ const check=(name,body)=>test(name,{skip:!chromium&&'Playwright is required',tim
 const user={id:2,role:0,username:'隔离用户',phone:'13800138000',email:'test@example.com',balance:100};
 const pendingOrder={id:10,storeName:'隔离订单',status:0,payAmount:21,items:[],capabilities:{allowedActions:['PAY','CANCEL']}};
 async function setup(options={}){
- const page=await browser.newPage({viewport:{width:1100,height:850},reducedMotion:'reduce'});
+ const page=await browser.newPage({viewport:options.viewport||{width:1100,height:850},reducedMotion:'reduce'});
  const calls=[],errors=[];
  let orders=[pendingOrder],delayProfile=null,orderReads=0;
  page.on('pageerror',error=>errors.push(error.message));
@@ -39,7 +39,13 @@ async function setup(options={}){
   let data=[];
   if(endpoint==='/api/auth/me'){
    if(request.method()==='PUT'&&delayProfile)await delayProfile();
-   data=user;
+   data=options.user||user;
+  }
+  if(endpoint==='/api/stores'||endpoint==='/api/search')data=options.stores||[];
+  if(endpoint==='/api/addresses')data=options.addresses||[];
+  if(endpoint==='/api/rider/profile')data={online:1,status:1,latitude:22,longitude:108};
+  if(endpoint==='/api/rider/range/location'&&options.locationError){
+   await route.fulfill({status:400,json:{code:400,message:options.locationError}});return;
   }
   if(endpoint==='/api/orders'){orderReads++;data=orders;}
   if(endpoint==='/api/auth/me/contacts')data={phoneAvailable:false,phoneVerified:false,emailVerified:true};
@@ -55,6 +61,60 @@ async function setup(options={}){
  await page.waitForFunction(()=>window.refreshTest?.state.user?.id===2&&document.querySelector('#app h1'));
  return {page,calls,errors,setOrders:value=>{orders=value;},holdProfile:fn=>{delayProfile=fn;},orderReadCount:()=>orderReads};
 }
+
+check('narrow browse and search show delivery status, restore all cards, and hide the filter after logout',async()=>{
+ const stores=[{id:1,name:'三公里餐厅',rating:5,ratingCount:1,latitude:22.03,longitude:108,deliveryRadius:8000},
+  {id:2,name:'超出范围餐厅',rating:4,ratingCount:5,latitude:22.09,longitude:108,deliveryRadius:1000}];
+ const {page,errors}=await setup({viewport:{width:390,height:844},stores,addresses:[{isDefault:true,latitude:22,longitude:108,mapAddress:'南宁学院北门'}]});
+ try{
+  for(const mode of ['home','discover']){
+   await page.evaluate(mode=>window.refreshTest.navigate(mode),mode);
+   if(mode==='discover'){
+    await page.locator('#storeSearch').fill('餐厅');
+    await Promise.all([
+     page.waitForResponse(r=>r.url().includes('/api/search?keyword=')),
+     page.locator('#storeSearchForm button[type=submit]').click()
+    ]);
+   }
+   const cards=page.locator('#storeGrid .store-card'), filter=page.getByRole('button',{name:'只看可配送',exact:true});
+   await cards.last().waitFor();
+   assert.equal(await cards.count(),2);
+   assert.match(await cards.first().innerText(),/评价较少[\s\S]*可配送/);
+   assert.match(await cards.last().innerText(),/超出配送范围/);
+   await filter.click();
+   assert.equal(await filter.getAttribute('aria-pressed'),'true');
+   assert.equal(await cards.count(),1);
+   if(mode==='discover'&&process.env.DELIVERY_UI_EVIDENCE){
+    await filter.evaluate(button=>button.scrollIntoView({block:'start'}));
+    await page.screenshot({path:path.join(process.env.DELIVERY_UI_EVIDENCE,'browse-mobile.png')});
+   }
+   await filter.click();
+   assert.equal(await cards.count(),2);
+  }
+  await page.locator('#topLogout').click();
+  await page.waitForFunction(()=>!window.refreshTest.state.user&&document.querySelector('#browseDelivery')?.hidden);
+  assert.equal(await page.locator('#browseDelivery').isVisible(),false);
+  assert.deepEqual(errors,[]);
+ }finally{await page.close();}
+});
+
+check('rider settings block invalid radius and show partial save feedback',async()=>{
+ const {page,calls,errors}=await setup({user:{...user,role:3},locationError:'位置不可用'});
+ try{
+  await page.evaluate(()=>window.refreshTest.navigate('rider-profile'));
+  const form=page.locator('form[data-form=rider-settings]'), radius=form.locator('[name=radiusKm]');
+  assert.equal(await radius.inputValue(),'3');
+  await radius.fill('5.001');
+  await form.getByRole('button',{name:'保存接单范围'}).click();
+  assert.equal(calls.filter(c=>c.path.startsWith('/api/rider/range/')).length,0);
+  await radius.fill('3.125');
+  await form.getByRole('button',{name:'保存接单范围'}).click();
+  await page.getByText('半径已保存，位置未更新：位置不可用').waitFor();
+  assert.equal(calls.find(c=>c.path.endsWith('/range/radius')).body.radiusMeters,3125);
+  if(process.env.DELIVERY_UI_EVIDENCE)await page.screenshot({path:path.join(process.env.DELIVERY_UI_EVIDENCE,'rider-desktop.png')});
+  assert.deepEqual(errors,[]);
+ }finally{await page.close();}
+});
 async function advanceAndRefresh(page){
  await page.evaluate(()=>{
   const now=Date.now.bind(Date);Date.now=()=>now()+20000;

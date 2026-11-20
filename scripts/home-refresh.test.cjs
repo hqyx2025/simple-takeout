@@ -24,7 +24,8 @@ function createHome() {
   const stores = storage.slice(storage.indexOf('export async function syncStoresFromServer'), storage.indexOf('/**\n * 从后端拉取指定店铺商品'));
   const categories = storage.slice(storage.indexOf('export async function syncCategoriesFromServer'), storage.indexOf('/**\n * 从后端拉取店铺列表'));
   const stateAccess = storage.slice(storage.indexOf('function getCurrentLatitude'), storage.indexOf('/**\n * 远程确认收货'));
-  let code = read('model/SearchStoreDataSource.ets').replace(/^import.*\n/, '') +
+  let code = read('common/StorePresentation.ets').replace(/^import.*\r?\n/gm, '') +
+    read('model/SearchStoreDataSource.ets').replace(/^import.*\n/, '') +
     read('common/Constants.ets').match(/export const DELIVERY_RANGE: DeliveryRange = \{[^}]+\}/)[0] + '\n' +
     runtime + cls + coordinateCheck + '}\n' + categories + stores + stateAccess + '\nlet storesSyncVersion = 0;';
   if (process.env.HOME_REFRESH_MUTATION === 'dedupe') code = code.replace('section.pending !== null || (!force', '(!force');
@@ -61,6 +62,24 @@ function createHome() {
     }
   };
 }
+
+test('homepage delivery filtering does not widen the nearby tab or change the high-score order', async () => {
+  const {page, state}=createHome();
+  page.catalog=[
+    {id:1,latitude:30.06,longitude:114,distanceKm:6.67,deliveryRadius:10000,rating:5,ratingCount:1},
+    {id:2,latitude:30.02,longitude:114,distanceKm:2.22,deliveryRadius:1000,rating:5,ratingCount:10},
+    {id:3,latitude:30.01,longitude:114,distanceKm:1.11,deliveryRadius:10000,rating:4,ratingCount:5}
+  ];
+  const ids=()=>Array.from({length:page.catalogCount},(_,i)=>page.storeRows.getData(i).id);
+  page.currentAddress=state.address;
+  page.updateCatalog(); assert.deepEqual(ids(),[3,2]);
+  page.deliverableOnly=true;
+  page.updateCatalog(); assert.deepEqual(ids(),[3]);
+  page.catalogMode=1;
+  page.updateCatalog(); assert.deepEqual(ids(),[1,3]);
+  page.deliverableOnly=false;
+  page.updateCatalog(); assert.deepEqual(ids(),[2,1,3]);
+});
 
 test('homepage coalesces in-flight events, reuses recent results and refreshes only the necessary endpoints', async () => {
   const r = createHome();
